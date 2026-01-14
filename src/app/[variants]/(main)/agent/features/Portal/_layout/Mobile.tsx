@@ -16,10 +16,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 const Layout = () => {
-  const [showMobilePortal, isPortalThread, togglePortal] = useChatStore((s) => [
+  const [showMobilePortal, isPortalThread, clearPortalStack] = useChatStore((s) => [
     s.showPortal,
     portalThreadSelectors.showThread(s),
-    s.togglePortal,
+    s.clearPortalStack,
   ]);
   const { t } = useTranslation('portal');
 
@@ -39,9 +39,10 @@ const Layout = () => {
     <Modal
       allowFullscreen
       className={cx(isPortalThread && styles.container)}
+      destroyOnHidden
       footer={null}
       height={'95%'}
-      onCancel={() => togglePortal(false)}
+      onCancel={() => clearPortalStack()}
       open={showMobilePortal}
       styles={{
         body: { padding: 0 },

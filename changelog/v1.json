@@ -1,6 +1,67 @@
 [
   {
     "children": {
+      "improvements": ["Add MiniMax-M2.1 and GLM-4.7 for Qiniu provider."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.280"
+  },
+  {
+    "children": {
+      "fixes": ["Fix new topic flick issue, fix thread portal not open correctly."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.279"
+  },
+  {
+    "children": {},
+    "date": "2026-01-13",
+    "version": "2.0.0-next.278"
+  },
+  {
+    "children": {
+      "features": [
+        "Update the community user layout action button, update the cron job visiual way."
+      ]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.277"
+  },
+  {
+    "children": {},
+    "date": "2026-01-13",
+    "version": "2.0.0-next.276"
+  },
+  {
+    "children": {
+      "features": ["Improve PageEditor header UX with DropdownMenu and i18n support."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.275"
+  },
+  {
+    "children": {
+      "features": ["Improve group profile builder, update model definitions and sync i18n."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.274"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.273"
+  },
+  {
+    "children": {
+      "fixes": ["Refresh sidebar after sendAsGroup and add E2E tests."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.272"
+  },
+  {
+    "children": {
       "features": ["Improve baseline alignment for tool items."]
     },
     "date": "2026-01-12",

@@ -49,6 +49,12 @@ type CronTopicsGroupWithJobInfo = {
  */
 export interface SwitchTopicOptions {
   /**
+   * Clear the _new key data even when switching to an existing topic
+   * This is useful when creating a new topic, where the _new key data should be cleared
+   * @default false
+   */
+  clearNewKey?: boolean;
+  /**
    * Explicit scope for clearing new key data
    * If not provided, will be inferred from store state (activeGroupId)
    */
@@ -81,10 +87,10 @@ export interface ChatTopicAction {
   summaryTopicTitle: (topicId: string, messages: UIChatMessage[]) => Promise<void>;
   /**
    * Switch to a topic or create new topic state
-   * @param id - Topic ID to switch to, or undefined/null to switch to "new" state
-   * @param options - Options object or boolean for backward compatibility (skipRefreshMessage)
+   * @param id - Topic ID to switch to, or null to switch to "new" state (clears _new key data)
+   * @param options - Options object for configuring the switch behavior
    */
-  switchTopic: (id?: string, options?: boolean | SwitchTopicOptions) => Promise<void>;
+  switchTopic: (id?: string | null, options?: SwitchTopicOptions) => Promise<void>;
   /**
    * Update topic metadata
    * @param id - Topic ID to update
@@ -151,7 +157,7 @@ export const chatTopic: StateCreator<
     const { switchTopic, saveToTopic, refreshMessages, activeTopicId } = get();
     const hasTopic = !!activeTopicId;
 
-    if (hasTopic) switchTopic();
+    if (hasTopic) switchTopic(null);
     else {
       await saveToTopic();
       refreshMessages();
@@ -521,15 +527,17 @@ export const chatTopic: StateCreator<
     ),
 
   switchTopic: async (id, options) => {
-    // Backward compatibility: support both boolean and options object
-    const opts: SwitchTopicOptions =
-      typeof options === 'boolean' ? { skipRefreshMessage: options } : (options ?? {});
+    const opts = options ?? {};
 
     const { activeAgentId, activeGroupId } = get();
 
-    // When switching to "new" state (id is undefined/null), clear the new key data
+    // Clear the _new key data in the following cases:
+    // 1. When id is explicitly null (switching to empty topic state)
+    // 2. When clearNewKey option is explicitly true
     // This prevents stale data from previous conversations showing up
-    if (!id && activeAgentId) {
+    const shouldClearNewKey = id === null || opts.clearNewKey;
+
+    if (shouldClearNewKey && activeAgentId) {
       // Determine scope: use explicit scope from options, or infer from activeGroupId
       const scope = opts.scope ?? (activeGroupId ? 'group' : 'main');
 
@@ -562,7 +570,7 @@ export const chatTopic: StateCreator<
     await refreshTopic();
 
     // switch to default topic
-    switchTopic();
+    switchTopic(null);
   },
 
   removeGroupTopics: async (groupId: string) => {
@@ -580,7 +588,7 @@ export const chatTopic: StateCreator<
     await refreshTopic();
 
     // switch to default topic
-    switchTopic();
+    switchTopic(null);
   },
   removeAllTopics: async () => {
     const { refreshTopic } = get();
@@ -598,7 +606,7 @@ export const chatTopic: StateCreator<
     await refreshTopic();
 
     // switch back to default topic
-    if (activeTopicId === id) switchTopic();
+    if (activeTopicId === id) switchTopic(null);
   },
   removeUnstarredTopic: async () => {
     const { refreshTopic, switchTopic } = get();
@@ -608,7 +616,7 @@ export const chatTopic: StateCreator<
     await refreshTopic();
 
     // 切换到默认 topic
-    switchTopic();
+    switchTopic(null);
   },
 
   // Internal process method of the topics

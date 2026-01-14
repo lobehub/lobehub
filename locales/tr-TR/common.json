@@ -134,6 +134,8 @@
   "cmdk.search.communityAgent": "Topluluk Ajani",
   "cmdk.search.file": "Dosya",
   "cmdk.search.files": "Dosyalar",
+  "cmdk.search.folder": "Klasör",
+  "cmdk.search.folders": "Klasörler",
   "cmdk.search.loading": "Aranıyor...",
   "cmdk.search.market": "Topluluk",
   "cmdk.search.mcp": "MCP Sunucusu",

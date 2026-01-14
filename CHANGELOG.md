@@ -2,6 +2,234 @@
 
 # Changelog
 
+## [Version 2.0.0-next.280](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.279...v2.0.0-next.280)
+
+<sup>Released on **2026-01-13**</sup>
+
+#### 💄 Styles
+
+- **misc**: Add MiniMax-M2.1 and GLM-4.7 for Qiniu provider.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Styles
+
+- **misc**: Add MiniMax-M2.1 and GLM-4.7 for Qiniu provider, closes [#10982](https://github.com/lobehub/lobe-chat/issues/10982) ([695784d](https://github.com/lobehub/lobe-chat/commit/695784d))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.279](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.278...v2.0.0-next.279)
+
+<sup>Released on **2026-01-13**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix new topic flick issue, fix thread portal not open correctly.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fix new topic flick issue, closes [#11473](https://github.com/lobehub/lobe-chat/issues/11473) ([c53d372](https://github.com/lobehub/lobe-chat/commit/c53d372))
+- **misc**: Fix thread portal not open correctly, closes [#11475](https://github.com/lobehub/lobe-chat/issues/11475) ([e6ff90b](https://github.com/lobehub/lobe-chat/commit/e6ff90b))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.278](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.277...v2.0.0-next.278)
+
+<sup>Released on **2026-01-13**</sup>
+
+#### ✨ Features
+
+- **share**: Add topic sharing functionality.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **share**: Add topic sharing functionality, closes [#11448](https://github.com/lobehub/lobe-chat/issues/11448) ([ddca165](https://github.com/lobehub/lobe-chat/commit/ddca165))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.277](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.276...v2.0.0-next.277)
+
+<sup>Released on **2026-01-13**</sup>
+
+#### ✨ Features
+
+- **misc**: Update the community user layout action button, update the cron job visiual way.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Update the community user layout action button, closes [#11472](https://github.com/lobehub/lobe-chat/issues/11472) ([2dd6d42](https://github.com/lobehub/lobe-chat/commit/2dd6d42))
+- **misc**: Update the cron job visiual way, closes [#11466](https://github.com/lobehub/lobe-chat/issues/11466) ([63d81de](https://github.com/lobehub/lobe-chat/commit/63d81de))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.276](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.275...v2.0.0-next.276)
+
+<sup>Released on **2026-01-13**</sup>
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.275](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.274...v2.0.0-next.275)
+
+<sup>Released on **2026-01-13**</sup>
+
+#### ✨ Features
+
+- **misc**: Improve PageEditor header UX with DropdownMenu and i18n support.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Improve PageEditor header UX with DropdownMenu and i18n support, closes [#11462](https://github.com/lobehub/lobe-chat/issues/11462) ([ae499c9](https://github.com/lobehub/lobe-chat/commit/ae499c9))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.274](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.273...v2.0.0-next.274)
+
+<sup>Released on **2026-01-13**</sup>
+
+#### ✨ Features
+
+- **misc**: Improve group profile builder, update model definitions and sync i18n.
+
+#### 🐛 Bug Fixes
+
+- **@upstash/qstash**: Should properly extract Error message from thrown one.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Improve group profile builder, closes [#11452](https://github.com/lobehub/lobe-chat/issues/11452) ([9012b40](https://github.com/lobehub/lobe-chat/commit/9012b40))
+- **misc**: Update model definitions and sync i18n, closes [#11468](https://github.com/lobehub/lobe-chat/issues/11468) ([484ffb3](https://github.com/lobehub/lobe-chat/commit/484ffb3))
+
+#### What's fixed
+
+- **@upstash/qstash**: Should properly extract Error message from thrown one, closes [#11465](https://github.com/lobehub/lobe-chat/issues/11465) ([a8142b4](https://github.com/lobehub/lobe-chat/commit/a8142b4))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.273](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.272...v2.0.0-next.273)
+
+<sup>Released on **2026-01-13**</sup>
+
+#### 💄 Styles
+
+- **misc**: Update i18n.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Styles
+
+- **misc**: Update i18n, closes [#11425](https://github.com/lobehub/lobe-chat/issues/11425) ([87fbed2](https://github.com/lobehub/lobe-chat/commit/87fbed2))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.272](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.271...v2.0.0-next.272)
+
+<sup>Released on **2026-01-13**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Refresh sidebar after sendAsGroup and add E2E tests.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Refresh sidebar after sendAsGroup and add E2E tests, closes [#11450](https://github.com/lobehub/lobe-chat/issues/11450) ([8376a80](https://github.com/lobehub/lobe-chat/commit/8376a80))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.271](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.270...v2.0.0-next.271)
 
 <sup>Released on **2026-01-12**</sup>

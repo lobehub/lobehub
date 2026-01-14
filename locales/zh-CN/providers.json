@@ -29,7 +29,6 @@
   "internlm.description": "一个专注于大模型研究与工具链的开源组织，提供高效、易用的平台，让前沿模型与算法触手可及。",
   "jina.description": "Jina AI 成立于 2020 年，是领先的搜索 AI 公司，其搜索技术栈包括向量模型、重排序器与小型语言模型，支持构建高质量的生成式与多模态搜索应用。",
   "lmstudio.description": "LM Studio 是一款桌面应用，支持在本地开发与实验大语言模型。",
-  "lobehub.description": "LobeHub Cloud 使用官方 API 访问 AI 模型，并通过与模型令牌相关的积分来计量使用情况。",
   "minimax.description": "MiniMax 成立于 2021 年，致力于构建通用 AI，拥有多模态基础模型，包括万亿参数的 MoE 文本模型、语音模型与视觉模型，并推出海螺 AI 等应用。",
   "mistral.description": "Mistral 提供先进的通用、专业与研究型模型，支持复杂推理、多语言任务与代码生成，具备函数调用能力以实现定制集成。",
   "modelscope.description": "ModelScope 是阿里云的模型即服务平台，提供丰富的 AI 模型与推理服务。",

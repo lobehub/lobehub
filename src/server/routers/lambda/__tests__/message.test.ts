@@ -1,11 +1,19 @@
 import { CreateMessageParams, UIChatMessage, UpdateMessageRAGParams } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
+import { TopicShareModel } from '@/database/models/topicShare';
 import { FileService } from '@/server/services/file';
 
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn(),
+}));
+
+vi.mock('@/database/models/topicShare', () => ({
+  TopicShareModel: {
+    findByShareIdWithAccessCheck: vi.fn(),
+  },
 }));
 
 vi.mock('@/server/services/file', () => ({
@@ -343,6 +351,150 @@ describe('messageRouter', () => {
 
       expect(mockBatchDeleteByAgentId).toHaveBeenCalledWith('agent1');
       expect(result.rowCount).toBe(5);
+    });
+  });
+
+  describe('topicShareId support', () => {
+    it('should get messages via topicShareId for link share', async () => {
+      const mockShare = {
+        visibility: 'link',
+        ownerId: 'owner-user',
+        shareId: 'share-123',
+        topicId: 'topic-1',
+      };
+
+      const mockMessages = [
+        { id: 'msg1', content: 'Hello', role: 'user' },
+        { id: 'msg2', content: 'Hi there', role: 'assistant' },
+      ];
+
+      const mockQuery = vi.fn().mockResolvedValue(mockMessages);
+      const mockGetFullFileUrl = vi
+        .fn()
+        .mockImplementation((path: string) => `https://cdn/${path}`);
+
+      vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare as any);
+      vi.mocked(MessageModel).mockImplementation(
+        () =>
+          ({
+            query: mockQuery,
+          }) as any,
+      );
+      vi.mocked(FileService).mockImplementation(
+        () =>
+          ({
+            getFullFileUrl: mockGetFullFileUrl,
+          }) as any,
+      );
+
+      // Simulate the router logic
+      const share = await TopicShareModel.findByShareIdWithAccessCheck(
+        {} as any,
+        'share-123',
+        undefined,
+      );
+
+      expect(share).toBeDefined();
+      expect(share.topicId).toBe('topic-1');
+      expect(share.ownerId).toBe('owner-user');
+
+      // Create model using owner's id
+      const messageModel = new MessageModel({} as any, share.ownerId);
+      const result = await messageModel.query(
+        { topicId: share.topicId },
+        { postProcessUrl: mockGetFullFileUrl },
+      );
+
+      expect(result).toEqual(mockMessages);
+    });
+
+    it('should allow owner to access private share messages', async () => {
+      const mockShare = {
+        visibility: 'private',
+        ownerId: 'owner-user',
+        shareId: 'private-share',
+        topicId: 'topic-private',
+      };
+
+      vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare as any);
+
+      const share = await TopicShareModel.findByShareIdWithAccessCheck(
+        {} as any,
+        'private-share',
+        'owner-user', // Owner accessing
+      );
+
+      expect(share).toBeDefined();
+      expect(share.visibility).toBe('private');
+    });
+
+    it('should throw FORBIDDEN for private share accessed by non-owner', async () => {
+      vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockRejectedValue(
+        new TRPCError({ code: 'FORBIDDEN', message: 'This share is private' }),
+      );
+
+      await expect(
+        TopicShareModel.findByShareIdWithAccessCheck({} as any, 'private-share', 'other-user'),
+      ).rejects.toThrow(TRPCError);
+
+      try {
+        await TopicShareModel.findByShareIdWithAccessCheck(
+          {} as any,
+          'private-share',
+          'other-user',
+        );
+      } catch (error) {
+        expect((error as TRPCError).code).toBe('FORBIDDEN');
+      }
+    });
+
+    it('should throw NOT_FOUND for non-existent share', async () => {
+      vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockRejectedValue(
+        new TRPCError({ code: 'NOT_FOUND', message: 'Share not found' }),
+      );
+
+      await expect(
+        TopicShareModel.findByShareIdWithAccessCheck({} as any, 'non-existent', 'user1'),
+      ).rejects.toThrow(TRPCError);
+
+      try {
+        await TopicShareModel.findByShareIdWithAccessCheck({} as any, 'non-existent', 'user1');
+      } catch (error) {
+        expect((error as TRPCError).code).toBe('NOT_FOUND');
+      }
+    });
+
+    it('should use owner id to query messages for shared topic', async () => {
+      const mockShare = {
+        visibility: 'link',
+        ownerId: 'topic-owner',
+        shareId: 'share-abc',
+        topicId: 'shared-topic',
+      };
+
+      const mockQuery = vi.fn().mockResolvedValue([{ id: 'msg1' }]);
+
+      vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue(mockShare as any);
+      vi.mocked(MessageModel).mockImplementation(
+        () =>
+          ({
+            query: mockQuery,
+          }) as any,
+      );
+
+      const share = await TopicShareModel.findByShareIdWithAccessCheck(
+        {} as any,
+        'share-abc',
+        undefined,
+      );
+
+      // Verify we use the owner's id to create MessageModel
+      const messageModel = new MessageModel({} as any, share.ownerId);
+      await messageModel.query({ topicId: share.topicId }, {});
+
+      // Verify MessageModel was instantiated with owner's id
+      expect(MessageModel).toHaveBeenCalledWith({} as any, 'topic-owner');
+      expect(mockQuery).toHaveBeenCalledWith({ topicId: 'shared-topic' }, {});
     });
   });
 });

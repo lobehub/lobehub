@@ -3,6 +3,7 @@ import { type KnowledgeItem, KnowledgeType } from '@lobechat/types';
 import { z } from 'zod';
 
 import { AgentModel } from '@/database/models/agent';
+import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { SessionModel } from '@/database/models/session';
@@ -20,6 +21,7 @@ const agentProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
     ctx: {
       agentModel: new AgentModel(ctx.serverDB, ctx.userId),
       agentService: new AgentService(ctx.serverDB, ctx.userId),
+      chatGroupModel: new ChatGroupModel(ctx.serverDB, ctx.userId),
       fileModel: new FileModel(ctx.serverDB, ctx.userId),
       knowledgeBaseModel: new KnowledgeBaseModel(ctx.serverDB, ctx.userId),
       sessionModel: new SessionModel(ctx.serverDB, ctx.userId),
@@ -106,6 +108,28 @@ export const agentRouter = router({
         input.knowledgeBaseId,
         input.enabled,
       );
+    }),
+
+  /**
+   * Create an agent without session.
+   * Used for Group Agent Builder to create agents for groups.
+   * Returns only the agent ID.
+   */
+  createAgentOnly: agentProcedure
+    .input(
+      z.object({
+        config: z.object({}).passthrough().optional(),
+        groupId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Create the agent entity only (no session)
+      const agent = await ctx.agentModel.create(input.config ?? {});
+
+      // Add the agent to the group
+      await ctx.chatGroupModel.addAgentToGroup(input.groupId, agent.id);
+
+      return { agentId: agent.id };
     }),
 
   deleteAgentFile: agentProcedure

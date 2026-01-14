@@ -1,7 +1,7 @@
 'use client';
 
-import { ActionIcon, Avatar, Dropdown, Text } from '@lobehub/ui';
-import { ArrowLeftIcon, BotMessageSquareIcon, MoreHorizontal } from 'lucide-react';
+import { ActionIcon, Avatar, DropdownMenu, Text } from '@lobehub/ui';
+import { ArrowLeftIcon, MoreHorizontal } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -49,18 +49,20 @@ const Header = memo(() => {
       }
       right={
         <>
-          <ToggleRightPanelButton icon={BotMessageSquareIcon} showActive={true} />
           {/* Three-dot menu */}
-          <Dropdown
-            menu={{
-              items: menuItems,
-              style: { minWidth: 200 },
-            }}
+          <DropdownMenu
+            items={menuItems}
+            nativeButton={false}
             placement="bottomRight"
-            trigger={['click']}
+            popupProps={{
+              style: {
+                minWidth: 200,
+              },
+            }}
           >
             <ActionIcon icon={MoreHorizontal} size={DESKTOP_HEADER_ICON_SIZE} />
-          </Dropdown>
+          </DropdownMenu>
+          <ToggleRightPanelButton hideWhenExpanded showActive={false} />
         </>
       }
     />

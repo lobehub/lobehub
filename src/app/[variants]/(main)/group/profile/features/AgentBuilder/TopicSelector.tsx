@@ -1,6 +1,6 @@
 import { ActionIcon, DropdownMenu, type DropdownMenuCheckboxItem, Tag } from '@lobehub/ui';
 import { Clock3Icon, PlusIcon } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
@@ -18,11 +18,17 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
   // Fetch topics for the group agent builder
   useChatStore((s) => s.useFetchTopics)(true, { agentId });
 
-  const [activeTopicId, switchTopic, topics] = useChatStore((s) => [
-    s.activeTopicId,
-    s.switchTopic,
-    topicSelectors.getTopicsByAgentId(agentId)(s),
-  ]);
+  // Use activeTopicId from chatStore (synced with URL query 'bt' via ProfileHydration)
+  const [activeTopicId, switchTopic] = useChatStore((s) => [s.activeTopicId, s.switchTopic]);
+  const topics = useChatStore((s) => topicSelectors.getTopicsByAgentId(agentId)(s));
+
+  // Switch topic - ProfileHydration handles URL sync automatically
+  const handleSwitchTopic = useCallback(
+    (topicId?: string) => {
+      switchTopic(topicId);
+    },
+    [switchTopic],
+  );
 
   // Find active topic from the agent's topics list directly
   const activeTopic = useMemo(
@@ -39,12 +45,12 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
         label: topic.title,
         onCheckedChange: (checked) => {
           if (checked) {
-            switchTopic(topic.id);
+            handleSwitchTopic(topic.id);
           }
         },
         type: 'checkbox',
       })),
-    [topics, switchTopic, activeTopicId],
+    [topics, handleSwitchTopic, activeTopicId],
   );
   const isEmpty = !topics || topics.length === 0;
 
@@ -55,7 +61,7 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
         <>
           <ActionIcon
             icon={PlusIcon}
-            onClick={() => switchTopic()}
+            onClick={() => handleSwitchTopic(undefined)}
             size={DESKTOP_HEADER_ICON_SIZE}
             title={t('actions.addNewTopic')}
           />

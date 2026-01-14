@@ -75,7 +75,7 @@ const SharePdf = memo((props: { message?: UIChatMessage }) => {
   const [systemRole] = useAgentStore((s) => [agentSelectors.currentAgentSystemRole(s)]);
   const messages = useChatStore(chatSelectors.activeBaseChats, isEqual);
   const topic = useChatStore(topicSelectors.currentActiveTopic, isEqual);
-  const activeId = useChatStore((s) => s.activeId);
+  const activeId = useChatStore((s) => s.activeAgentId);
   const topicId = useChatStore((s) => s.activeTopicId);
 
   const title = topic?.title || t('shareModal.exportTitle');

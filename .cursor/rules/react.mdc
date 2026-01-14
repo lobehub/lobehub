@@ -107,7 +107,7 @@ This project uses a **hybrid routing architecture**: Next.js App Router for stat
 | Router           | oauth, reset-password, etc.)   | src/app/[variants]/(auth)/     |
 +------------------+--------------------------------+--------------------------------+
 | React Router     | Main SPA features              | BrowserRouter + Routes         |
-| DOM              | (chat, discover, settings)     | desktopRouter.config.tsx       |
+| DOM              | (chat, community, settings)     | desktopRouter.config.tsx       |
 |                  |                                | mobileRouter.config.tsx        |
 +------------------+--------------------------------+--------------------------------+
 ```
@@ -122,16 +122,16 @@ This project uses a **hybrid routing architecture**: Next.js App Router for stat
 ### Router Utilities
 
 ```tsx
-import { dynamicElement, redirectElement, ErrorBoundary, RouteConfig } from '@/utils/router';
+import { ErrorBoundary, RouteConfig, dynamicElement, redirectElement } from '@/utils/router';
 
 // Lazy load a page component
-element: dynamicElement(() => import('./chat'), 'Desktop > Chat')
+element: dynamicElement(() => import('./chat'), 'Desktop > Chat');
 
 // Create a redirect
-element: redirectElement('/settings/profile')
+element: redirectElement('/settings/profile');
 
 // Error boundary for route
-errorElement: <ErrorBoundary resetPath="/chat" />
+errorElement: <ErrorBoundary resetPath="/chat" />;
 ```
 
 ### Adding New Routes
@@ -141,6 +141,18 @@ errorElement: <ErrorBoundary resetPath="/chat" />
 3. Use `dynamicElement()` for lazy loading
 
 ### Navigation
+
+**Important**: For SPA pages (React Router DOM routes), use `Link` from `react-router-dom`, NOT from `next/link`.
+
+```tsx
+// ❌ Wrong - next/link in SPA pages
+import Link from 'next/link';
+<Link href="/">Home</Link>
+
+// ✅ Correct - react-router-dom Link in SPA pages
+import { Link } from 'react-router-dom';
+<Link to="/">Home</Link>
+```
 
 ```tsx
 // In components - use react-router-dom hooks

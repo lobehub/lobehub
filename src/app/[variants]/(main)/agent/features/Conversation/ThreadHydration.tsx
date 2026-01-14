@@ -6,6 +6,7 @@ import { createStoreUpdater } from 'zustand-utils';
 import { useFetchThreads } from '@/hooks/useFetchThreads';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useChatStore } from '@/store/chat';
+import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 
 // sync outside state to useChatStore
 const ThreadHydration = memo(() => {
@@ -31,7 +32,7 @@ const ThreadHydration = memo(() => {
   // should open portal automatically when portalThread is set
   useEffect(() => {
     if (!!portalThread && !useChatStore.getState().showPortal) {
-      useChatStore.getState().togglePortal(true);
+      useChatStore.getState().pushPortalView({ threadId: portalThread, type: PortalViewType.Thread });
     }
   }, [portalThread]);
 

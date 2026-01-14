@@ -28,6 +28,7 @@ export interface MessageQueryContext {
   groupId?: string;
   threadId?: string | null;
   topicId?: string | null;
+  topicShareId?: string;
 }
 
 export class MessageService {

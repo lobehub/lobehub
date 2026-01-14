@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiChatService } from '@/services/aiChat';
 import * as agentGroupStore from '@/store/agentGroup';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getSessionStoreState } from '@/store/session';
 
 import { useChatStore } from '../../../../store';
@@ -351,6 +352,70 @@ describe('ConversationLifecycle actions', () => {
           }),
           expect.any(AbortController),
         );
+      });
+    });
+
+    describe('new topic creation cleanup', () => {
+      it('should clear _new key data when new topic is created', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const agentId = TEST_IDS.SESSION_ID;
+        const newTopicId = 'created-topic-id';
+
+        // Setup initial state: messages exist in the _new key (no topicId)
+        const newKey = messageMapKey({ agentId, topicId: null });
+        const existingMessages = [
+          createMockMessage({ id: 'old-msg-1', role: 'user' }),
+          createMockMessage({ id: 'old-msg-2', role: 'assistant' }),
+        ];
+
+        await act(async () => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: undefined,
+            messagesMap: {
+              [newKey]: existingMessages,
+            },
+            dbMessagesMap: {
+              [newKey]: existingMessages,
+            },
+          });
+        });
+
+        // Verify messages exist in _new key before sending
+        expect(useChatStore.getState().messagesMap[newKey]).toHaveLength(2);
+
+        // Mock server response with new topic creation
+        vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
+          messages: [
+            createMockMessage({ id: 'new-user-msg', role: 'user', topicId: newTopicId }),
+            createMockMessage({ id: 'new-assistant-msg', role: 'assistant', topicId: newTopicId }),
+          ],
+          topics: { items: [{ id: newTopicId, title: 'New Topic' }], total: 1 },
+          topicId: newTopicId,
+          isCreateNewTopic: true,
+          assistantMessageId: 'new-assistant-msg',
+          userMessageId: 'new-user-msg',
+        } as any);
+
+        // Mock switchTopic to verify it's called correctly
+        const switchTopicSpy = vi.spyOn(result.current, 'switchTopic');
+
+        await act(async () => {
+          await result.current.sendMessage({
+            message: TEST_CONTENT.USER_MESSAGE,
+            context: { agentId, topicId: null, threadId: null },
+          });
+        });
+
+        // switchTopic should be called with the new topicId and clearNewKey option
+        expect(switchTopicSpy).toHaveBeenCalledWith(newTopicId, {
+          clearNewKey: true,
+          skipRefreshMessage: true,
+        });
+
+        // After new topic creation, the _new key should be cleared
+        const messagesInNewKey = useChatStore.getState().messagesMap[newKey];
+        expect(messagesInNewKey ?? []).toHaveLength(0);
       });
     });
   });

@@ -1,7 +1,15 @@
 import {
+  AgentBuilderInspectors,
+  AgentBuilderManifest,
+} from '@lobechat/builtin-tool-agent-builder/client';
+import {
   CloudSandboxIdentifier,
   CloudSandboxInspectors,
 } from '@lobechat/builtin-tool-cloud-sandbox/client';
+import {
+  GroupAgentBuilderInspectors,
+  GroupAgentBuilderManifest,
+} from '@lobechat/builtin-tool-group-agent-builder/client';
 import {
   GroupManagementInspectors,
   GroupManagementManifest,
@@ -31,7 +39,12 @@ import { type BuiltinInspector } from '@lobechat/types';
  * of tool calls in the conversation UI.
  */
 const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = {
+  [AgentBuilderManifest.identifier]: AgentBuilderInspectors as Record<string, BuiltinInspector>,
   [CloudSandboxIdentifier]: CloudSandboxInspectors as Record<string, BuiltinInspector>,
+  [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderInspectors as Record<
+    string,
+    BuiltinInspector
+  >,
   [GroupManagementManifest.identifier]: GroupManagementInspectors as Record<
     string,
     BuiltinInspector

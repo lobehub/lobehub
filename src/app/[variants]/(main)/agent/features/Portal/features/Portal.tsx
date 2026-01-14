@@ -3,7 +3,7 @@
 import { DraggablePanel, type DraggablePanelProps } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { type PropsWithChildren, memo, useState } from 'react';
+import { Activity, type PropsWithChildren, memo, useState } from 'react';
 
 import {
   CHAT_PORTAL_MAX_WIDTH,
@@ -81,7 +81,9 @@ const PortalPanel = memo(({ children }: PropsWithChildren) => {
       showHandleWideArea={false}
       size={{ height: '100%', width: portalWidth }}
     >
-      {children}
+      <Activity mode={showPortal ? 'visible' : 'hidden'} name="AgentPortal">
+        {children}
+      </Activity>
     </DraggablePanel>
   );
 });

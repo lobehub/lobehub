@@ -483,6 +483,13 @@
       "when": 1768189437504,
       "tag": "0068_update_group_data",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1768303764632,
+      "tag": "0069_add_topic_shares_table",
+      "breakpoints": true
     }
   ],
   "version": "6"

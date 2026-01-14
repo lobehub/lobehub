@@ -60,7 +60,7 @@ export const createRuntimeExecutors = (
       throw new Error('Model and provider are required for call_llm instruction');
     }
 
-    // 类型断言确保 payload 的正确性
+    // Type assertion to ensure payload correctness
     const operationLogId = `${operationId}:${stepIndex}`;
 
     const stagePrefix = `[${operationLogId}][call_llm]`;
@@ -94,7 +94,7 @@ export const createRuntimeExecutors = (
       log(`${stagePrefix} Created new assistant message: %s`, assistantMessageItem.id);
     }
 
-    // 发布流式开始事件
+    // Publish stream start event
     await streamManager.publishStreamEvent(operationId, {
       data: {
         assistantMessage: assistantMessageItem,
@@ -121,10 +121,10 @@ export const createRuntimeExecutors = (
       let hasContentImages = false;
       let hasReasoningImages = false;
 
-      // 初始化 ModelRuntime (从数据库读取用户的 keyVaults)
+      // Initialize ModelRuntime (read user's keyVaults from database)
       const modelRuntime = await initModelRuntimeFromDB(ctx.serverDB, ctx.userId!, provider);
 
-      // 构造 ChatStreamPayload
+      // Construct ChatStreamPayload
       const chatPayload = {
         messages: llmPayload.messages,
         model,
@@ -138,7 +138,7 @@ export const createRuntimeExecutors = (
         llmPayload.tools?.length ?? 0,
       );
 
-      // Buffer：累积 text 和 reasoning，每 50ms 发送一次
+      // Buffer: accumulate text and reasoning, send every 50ms
       const BUFFER_INTERVAL = 50;
       let textBuffer = '';
       let reasoningBuffer = '';
@@ -154,7 +154,7 @@ export const createRuntimeExecutors = (
         if (!!delta) {
           log(`[${operationLogId}] flushTextBuffer:`, delta);
 
-          // 构建标准 Agent Runtime 事件
+          // Build standard Agent Runtime event
           events.push({
             chunk: { text: delta, type: 'text' },
             type: 'llm_stream',
@@ -203,11 +203,11 @@ export const createRuntimeExecutors = (
         }
       };
 
-      // 调用 model-runtime chat
+      // Call model-runtime chat
       const response = await modelRuntime.chat(chatPayload, {
         callback: {
           onCompletion: async (data) => {
-            // 捕获 usage (可能包含 cost，也可能不包含)
+            // Capture usage (may or may not include cost)
             if (data.usage) {
               currentStepUsage = data.usage;
             }
@@ -232,7 +232,7 @@ export const createRuntimeExecutors = (
 
             textBuffer += text;
 
-            // 如果没有定时器，创建一个
+            // If no timer exists, create one
             if (!textBufferTimer) {
               textBufferTimer = setTimeout(async () => {
                 await flushTextBuffer();
@@ -249,10 +249,10 @@ export const createRuntimeExecutors = (
             );
             thinkingContent += reasoning;
 
-            // Buffer reasoning 内容
+            // Buffer reasoning content
             reasoningBuffer += reasoning;
 
-            // 如果没有定时器，创建一个
+            // If no timer exists, create one
             if (!reasoningBufferTimer) {
               reasoningBufferTimer = setTimeout(async () => {
                 await flushReasoningBuffer();
@@ -266,7 +266,7 @@ export const createRuntimeExecutors = (
             toolsCalling = payload;
             tool_calls = raw;
 
-            // 如果有 textBuffer,先推一次
+            // If textBuffer exists, flush it first
             if (!!textBuffer) {
               await flushTextBuffer();
             }
@@ -280,13 +280,13 @@ export const createRuntimeExecutors = (
         user: ctx.userId,
       });
 
-      // 消费流确保所有回调执行完成
+      // Consume stream to ensure all callbacks complete execution
       await consumeStreamUntilDone(response);
 
       await flushTextBuffer();
       await flushReasoningBuffer();
 
-      // 清理定时器并 flush 剩余 buffer
+      // Clean up timers and flush remaining buffers
       if (textBufferTimer) {
         clearTimeout(textBufferTimer);
         textBufferTimer = null;
@@ -309,18 +309,18 @@ export const createRuntimeExecutors = (
         log(`[${operationLogId}][toolsCalling] `, toolsCalling);
       }
 
-      // 日志输出 usage
+      // Log usage information
       if (currentStepUsage) {
         log(`[${operationLogId}][usage] %O`, currentStepUsage);
       }
 
-      // 添加一个完整的 llm_stream 事件（包含所有流式块）
+      // Add a complete llm_stream event (including all streaming chunks)
       events.push({
         result: { content, reasoning: thinkingContent, tool_calls, usage: currentStepUsage },
         type: 'llm_result',
       });
 
-      // 发布流式结束事件
+      // Publish stream end event
       await streamManager.publishStreamEvent(operationId, {
         data: {
           finalContent: content,
@@ -336,7 +336,7 @@ export const createRuntimeExecutors = (
 
       log('[%s:%d] call_llm completed', operationId, stepIndex);
 
-      // ===== 1. 先保存原始 usage 到 message.metadata =====
+      // ===== 1. First save original usage to message.metadata =====
       // Determine final content - use serialized parts if has images, otherwise plain text
       const finalContent = hasContentImages ? serializePartsForStorage(contentParts) : content;
 
@@ -377,7 +377,7 @@ export const createRuntimeExecutors = (
         console.error('[call_llm] Failed to update message:', error);
       }
 
-      // ===== 2. 然后累加到 AgentState =====
+      // ===== 2. Then accumulate to AgentState =====
       let newState = structuredClone(state);
 
       newState.messages.push({
@@ -387,7 +387,7 @@ export const createRuntimeExecutors = (
       });
 
       if (currentStepUsage) {
-        // 使用 UsageCounter 统一累加 usage 和 cost
+        // Use UsageCounter to uniformly accumulate usage and cost
         const { usage, cost } = UsageCounter.accumulateLLM({
           cost: newState.cost,
           model: llmPayload.model,
@@ -423,7 +423,7 @@ export const createRuntimeExecutors = (
         },
       };
     } catch (error) {
-      // 发布错误事件
+      // Publish error event
       await streamManager.publishStreamEvent(operationId, {
         data: {
           error: (error as Error).message,
@@ -441,7 +441,7 @@ export const createRuntimeExecutors = (
     }
   },
   /**
-   * 工具执行
+   * Tool execution
    */
   call_tool: async (instruction, state) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_tool' }>;
@@ -451,7 +451,7 @@ export const createRuntimeExecutors = (
     const operationLogId = `${operationId}:${stepIndex}`;
     log(`[${operationLogId}] payload: %O`, payload);
 
-    // 发布工具执行开始事件
+    // Publish tool execution start event
     await streamManager.publishStreamEvent(operationId, {
       data: payload,
       stepIndex,
@@ -477,7 +477,7 @@ export const createRuntimeExecutors = (
         executionResult,
       );
 
-      // 发布工具执行结果事件
+      // Publish tool execution result event
       await streamManager.publishStreamEvent(operationId, {
         data: {
           executionTime,
@@ -490,7 +490,7 @@ export const createRuntimeExecutors = (
         type: 'tool_end',
       });
 
-      // 最终更新数据库
+      // Finally update database
       let toolMessageId: string | undefined;
       try {
         const toolMessage = await ctx.messageModel.create({
@@ -520,10 +520,10 @@ export const createRuntimeExecutors = (
 
       events.push({ id: chatToolPayload.id, result: executionResult, type: 'tool_result' });
 
-      // 获取工具单价
+      // Get tool unit price
       const toolCost = TOOL_PRICING[toolName] || 0;
 
-      // 使用 UsageCounter 统一累加 tool usage
+      // Use UsageCounter to uniformly accumulate tool usage
       const { usage, cost } = UsageCounter.accumulateTool({
         cost: newState.cost,
         executionTime,
@@ -536,10 +536,10 @@ export const createRuntimeExecutors = (
       newState.usage = usage;
       if (cost) newState.cost = cost;
 
-      // 查找当前工具的统计信息
+      // Find current tool statistics
       const currentToolStats = usage.tools.byTool.find((t) => t.name === toolName);
 
-      // 日志输出 usage
+      // Log usage information
       log(
         `[${operationLogId}][tool usage] %s: calls=%d, time=%dms, success=%s, cost=$%s`,
         toolName,
@@ -581,7 +581,7 @@ export const createRuntimeExecutors = (
         },
       };
     } catch (error) {
-      // 发布工具执行错误事件
+      // Publish tool execution error event
       await streamManager.publishStreamEvent(operationId, {
         data: {
           error: (error as Error).message,
@@ -603,12 +603,12 @@ export const createRuntimeExecutors = (
 
       return {
         events,
-        newState: state, // 状态不变
+        newState: state, // State unchanged
       };
     }
   },
   /**
-   * 完成 runtime 运行
+   * Complete runtime execution
    */
   finish: async (instruction, state) => {
     const { reason, reasonDetail } = instruction as Extract<AgentInstruction, { type: 'finish' }>;
@@ -616,7 +616,7 @@ export const createRuntimeExecutors = (
 
     log('[%s:%d] Finishing execution: (%s)', operationId, stepIndex, reason);
 
-    // 发布执行完成事件
+    // Publish execution complete event
     await streamManager.publishStreamEvent(operationId, {
       data: {
         finalState: { ...state, status: 'done' },
@@ -645,7 +645,7 @@ export const createRuntimeExecutors = (
   },
 
   /**
-   * 人工审批
+   * Human approval
    */
   request_human_approve: async (instruction, state) => {
     const { pendingToolsCalling } = instruction as Extract<
@@ -656,7 +656,7 @@ export const createRuntimeExecutors = (
 
     log('[%s:%d] Requesting human approval for %O', operationId, stepIndex, pendingToolsCalling);
 
-    // 发布人工审批请求事件
+    // Publish human approval request event
     await streamManager.publishStreamEvent(operationId, {
       data: {
         pendingToolsCalling,
@@ -672,9 +672,9 @@ export const createRuntimeExecutors = (
     newState.status = 'waiting_for_human';
     newState.pendingToolsCalling = pendingToolsCalling;
 
-    // 通过流式系统通知前端显示审批 UI
+    // Notify frontend to display approval UI through streaming system
     await streamManager.publishStreamChunk(operationId, stepIndex, {
-      // 使用 operationId 作为 messageId
+      // Use operationId as messageId
       chunkType: 'tools_calling',
       toolsCalling: pendingToolsCalling as any,
     });
@@ -698,13 +698,13 @@ export const createRuntimeExecutors = (
     return {
       events,
       newState,
-      // 不提供 nextContext，因为需要等待人工干预
+      // Do not provide nextContext as it requires waiting for human intervention
     };
   },
 
   /**
-   * 解决被取消的工具调用
-   * 为取消的工具调用创建带有 'aborted' 干预状态的工具消息
+   * Resolve aborted tool calls
+   * Create tool messages with 'aborted' intervention status for canceled tool calls
    */
   resolve_aborted_tools: async (instruction, state) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'resolve_aborted_tools' }>;
@@ -714,7 +714,7 @@ export const createRuntimeExecutors = (
 
     log('[%s:%d] Resolving %d aborted tools', operationId, stepIndex, toolsCalling.length);
 
-    // 发布工具取消事件
+    // Publish tool cancellation event
     await streamManager.publishStreamEvent(operationId, {
       data: {
         parentMessageId,
@@ -727,7 +727,7 @@ export const createRuntimeExecutors = (
 
     const newState = structuredClone(state);
 
-    // 为每个取消的工具调用创建 tool message
+    // Create tool message for each canceled tool call
     for (const toolPayload of toolsCalling) {
       const toolName = `${toolPayload.identifier}/${toolPayload.apiName}`;
       log('[%s:%d] Creating aborted tool message for %s', operationId, stepIndex, toolName);
@@ -753,7 +753,7 @@ export const createRuntimeExecutors = (
           toolName,
         );
 
-        // 更新 state messages
+        // Update state messages
         newState.messages.push({
           content: 'Tool execution was aborted by user.',
           role: 'tool',
@@ -770,11 +770,11 @@ export const createRuntimeExecutors = (
 
     log('[%s:%d] All aborted tool messages created', operationId, stepIndex);
 
-    // 标记状态为完成
+    // Mark status as complete
     newState.lastModified = new Date().toISOString();
     newState.status = 'done';
 
-    // 发布完成事件
+    // Publish completion event
     await streamManager.publishStreamEvent(operationId, {
       data: {
         finalState: newState,

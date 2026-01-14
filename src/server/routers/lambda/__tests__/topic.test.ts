@@ -1,9 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { TopicModel } from '@/database/models/topic';
+import { TopicShareModel } from '@/database/models/topicShare';
 
 vi.mock('@/database/models/topic', () => ({
   TopicModel: vi.fn(),
+}));
+
+vi.mock('@/database/models/topicShare', () => ({
+  TopicShareModel: vi.fn(),
 }));
 
 vi.mock('@/database/server', () => ({
@@ -258,6 +263,175 @@ describe('topicRouter', () => {
 
       expect(mockQueryByKeyword).toHaveBeenCalledWith('test', 'session1');
       expect(result).toEqual([{ id: 'topic1', title: 'Test' }]);
+    });
+  });
+
+  describe('topic sharing', () => {
+    it('should handle enableSharing with default visibility', async () => {
+      const mockCreate = vi.fn().mockResolvedValue({
+        id: 'share-123',
+        topicId: 'topic1',
+        userId: 'user1',
+        visibility: 'private',
+      });
+
+      vi.mocked(TopicShareModel).mockImplementation(
+        () =>
+          ({
+            create: mockCreate,
+          }) as any,
+      );
+
+      const ctx = {
+        topicShareModel: new TopicShareModel({} as any, 'user1'),
+      };
+
+      const result = await ctx.topicShareModel.create('topic1');
+
+      expect(mockCreate).toHaveBeenCalledWith('topic1');
+      expect(result.id).toBe('share-123');
+      expect(result.visibility).toBe('private');
+    });
+
+    it('should handle enableSharing with link visibility', async () => {
+      const mockCreate = vi.fn().mockResolvedValue({
+        id: 'share-456',
+        topicId: 'topic1',
+        userId: 'user1',
+        visibility: 'link',
+      });
+
+      vi.mocked(TopicShareModel).mockImplementation(
+        () =>
+          ({
+            create: mockCreate,
+          }) as any,
+      );
+
+      const ctx = {
+        topicShareModel: new TopicShareModel({} as any, 'user1'),
+      };
+
+      const result = await ctx.topicShareModel.create('topic1', 'link');
+
+      expect(mockCreate).toHaveBeenCalledWith('topic1', 'link');
+      expect(result.visibility).toBe('link');
+    });
+
+    it('should handle disableSharing', async () => {
+      const mockDeleteByTopicId = vi.fn().mockResolvedValue(undefined);
+
+      vi.mocked(TopicShareModel).mockImplementation(
+        () =>
+          ({
+            deleteByTopicId: mockDeleteByTopicId,
+          }) as any,
+      );
+
+      const ctx = {
+        topicShareModel: new TopicShareModel({} as any, 'user1'),
+      };
+
+      await ctx.topicShareModel.deleteByTopicId('topic1');
+
+      expect(mockDeleteByTopicId).toHaveBeenCalledWith('topic1');
+    });
+
+    it('should handle updateShareVisibility', async () => {
+      const mockUpdateVisibility = vi.fn().mockResolvedValue({
+        id: 'share-123',
+        topicId: 'topic1',
+        visibility: 'link',
+      });
+
+      vi.mocked(TopicShareModel).mockImplementation(
+        () =>
+          ({
+            updateVisibility: mockUpdateVisibility,
+          }) as any,
+      );
+
+      const ctx = {
+        topicShareModel: new TopicShareModel({} as any, 'user1'),
+      };
+
+      const result = await ctx.topicShareModel.updateVisibility('topic1', 'link');
+
+      expect(mockUpdateVisibility).toHaveBeenCalledWith('topic1', 'link');
+      expect(result.visibility).toBe('link');
+    });
+
+    it('should handle getShareInfo', async () => {
+      const mockGetByTopicId = vi.fn().mockResolvedValue({
+        id: 'share-123',
+        topicId: 'topic1',
+        visibility: 'link',
+      });
+
+      vi.mocked(TopicShareModel).mockImplementation(
+        () =>
+          ({
+            getByTopicId: mockGetByTopicId,
+          }) as any,
+      );
+
+      const ctx = {
+        topicShareModel: new TopicShareModel({} as any, 'user1'),
+      };
+
+      const result = await ctx.topicShareModel.getByTopicId('topic1');
+
+      expect(mockGetByTopicId).toHaveBeenCalledWith('topic1');
+      expect(result).toEqual({
+        id: 'share-123',
+        topicId: 'topic1',
+        visibility: 'link',
+      });
+    });
+
+    it('should return null when getShareInfo for non-shared topic', async () => {
+      const mockGetByTopicId = vi.fn().mockResolvedValue(null);
+
+      vi.mocked(TopicShareModel).mockImplementation(
+        () =>
+          ({
+            getByTopicId: mockGetByTopicId,
+          }) as any,
+      );
+
+      const ctx = {
+        topicShareModel: new TopicShareModel({} as any, 'user1'),
+      };
+
+      const result = await ctx.topicShareModel.getByTopicId('non-shared-topic');
+
+      expect(mockGetByTopicId).toHaveBeenCalledWith('non-shared-topic');
+      expect(result).toBeNull();
+    });
+
+    it('should handle all visibility types', async () => {
+      const mockCreate = vi.fn();
+
+      vi.mocked(TopicShareModel).mockImplementation(
+        () =>
+          ({
+            create: mockCreate,
+          }) as any,
+      );
+
+      const ctx = {
+        topicShareModel: new TopicShareModel({} as any, 'user1'),
+      };
+
+      // Test private visibility
+      mockCreate.mockResolvedValueOnce({ visibility: 'private' });
+      await ctx.topicShareModel.create('topic1', 'private');
+      expect(mockCreate).toHaveBeenLastCalledWith('topic1', 'private');
+
+      // Test link visibility
+      mockCreate.mockResolvedValueOnce({ visibility: 'link' });
+      await ctx.topicShareModel.create('topic2', 'link');
+      expect(mockCreate).toHaveBeenLastCalledWith('topic2', 'link');
     });
   });
 });

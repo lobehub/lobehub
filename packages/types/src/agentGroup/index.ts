@@ -5,6 +5,8 @@ import { TaskDetail, UIChatMessage } from '../message';
 import { ChatTopic } from '../topic';
 
 export interface LobeChatGroupMetaConfig {
+  avatar?: string;
+  backgroundColor?: string;
   description: string;
   title: string;
 }
@@ -75,6 +77,8 @@ export interface NewChatGroupAgent {
 
 // New Chat Group type for creating groups (independent from schema)
 export interface NewChatGroup {
+  avatar?: string | null;
+  backgroundColor?: string | null;
   clientId?: string | null;
   config?: LobeChatGroupConfig | null;
   description?: string | null;
@@ -88,10 +92,14 @@ export interface NewChatGroup {
 // Chat Group Item type (independent from schema)
 export interface ChatGroupItem {
   accessedAt?: Date;
+  avatar?: string | null;
+  backgroundColor?: string | null;
   clientId?: string | null;
   config?: LobeChatGroupConfig | null;
+  content?: string | null;
   createdAt: Date;
   description?: string | null;
+  editorData?: Record<string, any> | null;
   groupId?: string | null;
   id: string;
   pinned?: boolean | null;

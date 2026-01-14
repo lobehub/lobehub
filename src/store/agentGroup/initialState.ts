@@ -1,6 +1,11 @@
 import type { AgentGroupDetail } from '@lobechat/types';
+import type { ParsedQuery } from 'query-string';
 
 import type { ChatGroupItem } from '@/database/schemas/chatGroup';
+
+export interface QueryRouter {
+  push: (url: string, options?: { query?: ParsedQuery }) => void;
+}
 
 export interface ChatGroupState {
   activeGroupId?: string;
@@ -8,6 +13,7 @@ export interface ChatGroupState {
   groupMap: Record<string, AgentGroupDetail>;
   groups: ChatGroupItem[];
   groupsInit: boolean;
+  router?: QueryRouter;
   showGroupSetting: boolean;
   /**
    * Content being streamed for system prompt update (for GroupAgentBuilder)
