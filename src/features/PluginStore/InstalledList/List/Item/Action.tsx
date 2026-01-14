@@ -1,10 +1,11 @@
-import { ActionIcon, Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, Dropdown, Flexbox, Icon, Modal } from '@lobehub/ui';
 import { App } from 'antd';
-import { InfoIcon, MoreVerticalIcon, PackageSearch, Settings, Trash2 } from 'lucide-react';
+import { InfoIcon, MoreVerticalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginDetailModal from '@/features/PluginDetailModal';
+import McpDetail from '@/features/PluginStore/McpList/Detail';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -45,70 +46,86 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
   const hasSettings = pluginHelpers.isSettingSchemaNonEmpty(plugin?.settings);
 
   const [showModal, setModal] = useState(false);
+  const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
+
+  // 自定义插件（包括自定义 MCP）使用 EditCustomPlugin
+  // 社区 MCP 使用 McpSettings
+  // 传统插件使用 PluginDetailModal
+  const isCommunityMCP = !isCustomPlugin && isMCP;
+  const showConfigureButton = isCustomPlugin || isMCP || hasSettings;
+
+  const configureButton = (
+    <Button
+      onClick={() => {
+        if (isCustomPlugin) {
+          setModal(true);
+        } else if (isCommunityMCP) {
+          setMcpSettingsOpen(true);
+        } else {
+          setOpen(true);
+          setTab('settings');
+        }
+      }}
+      size="small"
+      type="text"
+    >
+      {t('store.actions.configure')}
+    </Button>
+  );
 
   return (
     <>
-      <Flexbox align={'center'} horizontal>
+      <Flexbox align={'center'} horizontal onClick={(e) => e.stopPropagation()}>
         {installed ? (
           <>
-            {isCustomPlugin && (
-              <EditCustomPlugin identifier={identifier} onOpenChange={setModal} open={showModal}>
-                <ActionIcon
-                  icon={PackageSearch}
-                  onClick={() => {
-                    setModal(true);
-                  }}
-                  title={t('store.actions.manifest')}
-                />
-              </EditCustomPlugin>
-            )}
-            {hasSettings && (
-              <ActionIcon
-                icon={Settings}
-                onClick={() => {
-                  setOpen(true);
-                  setTab('settings');
-                }}
-                title={t('store.actions.settings')}
-              />
-            )}
-            <DropdownMenu
-              items={[
-                {
-                  icon: <Icon icon={InfoIcon} />,
-                  key: 'detail',
-                  label: t('store.actions.detail'),
-                  onClick: () => {
-                    setOpen(true);
-                    setTab('info');
+            {showConfigureButton &&
+              (isCustomPlugin ? (
+                <EditCustomPlugin identifier={identifier} onOpenChange={setModal} open={showModal}>
+                  {configureButton}
+                </EditCustomPlugin>
+              ) : (
+                configureButton
+              ))}
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    icon: <Icon icon={InfoIcon} />,
+                    key: 'detail',
+                    label: t('store.actions.detail'),
+                    onClick: () => {
+                      setOpen(true);
+                      setTab('info');
+                    },
                   },
-                },
-                {
-                  danger: true,
-                  icon: <Icon icon={Trash2} />,
-                  key: 'uninstall',
-                  label: t('store.actions.uninstall'),
-                  onClick: () => {
-                    modal.confirm({
-                      centered: true,
-                      okButtonProps: { danger: true },
-                      onOk: async () => {
-                        // If plugin is enabled in current agent, disable it first
-                        if (isPluginEnabledInAgent) {
-                          await togglePlugin(identifier, false);
-                        }
-                        await unInstallPlugin(identifier);
-                      },
-                      title: t('store.actions.confirmUninstall'),
-                      type: 'error',
-                    });
+                  {
+                    danger: true,
+                    icon: <Icon icon={Trash2} />,
+                    key: 'uninstall',
+                    label: t('store.actions.uninstall'),
+                    onClick: () => {
+                      modal.confirm({
+                        centered: true,
+                        okButtonProps: { danger: true },
+                        onOk: async () => {
+                          // If plugin is enabled in current agent, disable it first
+                          if (isPluginEnabledInAgent) {
+                            await togglePlugin(identifier, false);
+                          }
+                          await unInstallPlugin(identifier);
+                        },
+                        title: t('store.actions.confirmUninstall'),
+                        type: 'error',
+                      });
+                    },
                   },
-                },
-              ]}
+                ],
+              }}
               placement="bottomRight"
+              trigger={['click']}
             >
               <ActionIcon icon={MoreVerticalIcon} loading={installing} />
-            </DropdownMenu>
+            </Dropdown>
           </>
         ) : (
           <Button
@@ -138,6 +155,17 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
         schema={plugin?.settings}
         tab={tab}
       />
+      <Modal
+        allowFullscreen
+        destroyOnClose
+        footer={null}
+        onCancel={() => setMcpSettingsOpen(false)}
+        open={mcpSettingsOpen}
+        title={null}
+        width={800}
+      >
+        <McpDetail identifier={identifier} />
+      </Modal>
     </>
   );
 });

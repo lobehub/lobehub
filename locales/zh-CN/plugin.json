@@ -481,6 +481,7 @@
   "settings.title": "设置技能社区",
   "showInPortal": "请在工作区中查看详情",
   "store.actions.cancel": "取消安装",
+  "store.actions.configure": "配置",
   "store.actions.confirmUninstall": "即将卸载该技能，卸载后将清除该技能配置，请确认你的操作",
   "store.actions.detail": "详情",
   "store.actions.install": "安装",

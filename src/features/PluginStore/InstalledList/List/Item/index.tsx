@@ -22,7 +22,7 @@ const Item = memo<PluginItemProps>(
     return (
       <Block
         align={'center'}
-        clickable
+        clickable={!!onClick}
         gap={8}
         horizontal
         justify={'space-between'}

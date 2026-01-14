@@ -8,9 +8,10 @@ import SkillList from './features/SkillList';
 
 const Page = () => {
   const { t } = useTranslation('setting');
+
   return (
     <>
-      <SettingHeader title={t('tab.skills')} />
+      <SettingHeader title={t('tab.skill')} />
       <SkillList />
     </>
   );

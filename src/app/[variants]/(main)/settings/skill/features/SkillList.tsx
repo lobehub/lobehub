@@ -23,9 +23,9 @@ import {
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
-import CustomSkillItem from './CustomSkillItem';
-import LobehubSkillItem from './LobehubSkillItem';
+import InstalledSkillList from './InstalledSkillList';
 import KlavisSkillItem from './KlavisSkillItem';
+import LobehubSkillItem from './LobehubSkillItem';
 
 const useStyles = createStyles(({ css, token }) => ({
   container: css`
@@ -52,7 +52,7 @@ const SkillList = memo(() => {
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
   const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
   const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
-  const customPluginList = useToolStore(pluginSelectors.installedCustomPluginMetaList, isEqual);
+  const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
 
   const [useFetchLobehubSkillConnections, useFetchUserKlavisServers] = useToolStore((s) => [
     s.useFetchLobehubSkillConnections,
@@ -110,25 +110,33 @@ const SkillList = memo(() => {
   }, [isLobehubSkillEnabled, isKlavisEnabled, allLobehubSkillServers, allKlavisServers]);
 
   const hasIntegrations = sortedIntegrationSkills.length > 0;
-  const hasCustomSkills = customPluginList.length > 0;
-  const hasAnySkills = hasIntegrations || hasCustomSkills;
+  const hasInstalledPlugins = installedPluginList.length > 0;
+  const hasAnySkills = hasIntegrations || hasInstalledPlugins;
 
   if (!hasAnySkills) {
     return (
       <div className={styles.container}>
-        <p className={styles.description}>{t('tab.skillsDesc')}</p>
-        <div className={styles.empty}>{t('tab.skillsEmpty')}</div>
+        <p className={styles.description}>{t('tab.skillDesc')}</p>
+        <div className={styles.empty}>{t('tab.skillEmpty')}</div>
       </div>
     );
   }
 
   return (
     <div className={styles.container}>
-      <p className={styles.description}>{t('tab.skillsDesc')}</p>
+      <p className={styles.description}>{t('tab.skillDesc')}</p>
+
+      {hasInstalledPlugins && (
+        <Form>
+          <FormGroup title={t('tab.skillInstalled')}>
+            <InstalledSkillList />
+          </FormGroup>
+        </Form>
+      )}
 
       {hasIntegrations && (
         <Form>
-          <FormGroup title={t('tab.skillsIntegrations')}>
+          <FormGroup title={t('tab.skillIntegration')}>
             {sortedIntegrationSkills.map((item) =>
               item.type === 'lobehub' ? (
                 <LobehubSkillItem
@@ -144,16 +152,6 @@ const SkillList = memo(() => {
                 />
               ),
             )}
-          </FormGroup>
-        </Form>
-      )}
-
-      {hasCustomSkills && (
-        <Form>
-          <FormGroup title={t('tab.skillsCustom')}>
-            {customPluginList.map((plugin) => (
-              <CustomSkillItem key={plugin.identifier} plugin={plugin} />
-            ))}
           </FormGroup>
         </Form>
       )}

@@ -185,8 +185,8 @@ export const useCategory = () => {
       },
       {
         icon: Blocks,
-        key: SettingsTabs.Skills,
-        label: t('tab.skills'),
+        key: SettingsTabs.Skill,
+        label: t('tab.skill'),
       },
       {
         icon: BrainCircuit,
