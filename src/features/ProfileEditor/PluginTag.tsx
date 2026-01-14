@@ -1,6 +1,11 @@
 'use client';
 
-import { KLAVIS_SERVER_TYPES, type KlavisServerType } from '@lobechat/const';
+import {
+  KLAVIS_SERVER_TYPES,
+  type KlavisServerType,
+  LOBEHUB_SKILL_PROVIDERS,
+  type LobehubSkillProviderType,
+} from '@lobechat/const';
 import { Avatar, Icon, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -16,6 +21,7 @@ import { useToolStore } from '@/store/tool';
 import {
   builtinToolSelectors,
   klavisStoreSelectors,
+  lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
@@ -30,6 +36,19 @@ const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label
 
   return <Icon fill={cssVar.colorText} icon={icon} size={16} />;
 });
+
+/**
+ * LobeHub Skill Provider 图标组件
+ */
+const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
+  ({ icon, label }) => {
+    if (typeof icon === 'string') {
+      return <img alt={label} height={16} src={icon} style={{ flexShrink: 0 }} width={16} />;
+    }
+
+    return <Icon fill={cssVar.colorText} icon={icon} size={16} />;
+  },
+);
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   notInstalledTag: css`
@@ -80,10 +99,14 @@ const PluginTag = memo<PluginTagProps>(
     const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
     const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableKlavis);
 
+    // LobeHub Skill 相关状态
+    const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
+    const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
+
     // Check if plugin is installed
     const isInstalled = useToolStore(pluginSelectors.isPluginInstalled(identifier));
 
-    // Try to find in local lists first (including Klavis)
+    // Try to find in local lists first (including Klavis and LobehubSkill)
     const localMeta = useMemo(() => {
       // Check if it's a Klavis server type
       if (isKlavisEnabledInEnv) {
@@ -98,6 +121,23 @@ const PluginTag = memo<PluginTagProps>(
             label: klavisType.label,
             title: klavisType.label,
             type: 'klavis' as const,
+          };
+        }
+      }
+
+      // Check if it's a LobeHub Skill provider
+      if (isLobehubSkillEnabled) {
+        const lobehubSkillProvider = LOBEHUB_SKILL_PROVIDERS.find((p) => p.id === identifier);
+        if (lobehubSkillProvider) {
+          // Check if this LobehubSkill provider is connected
+          const connectedServer = allLobehubSkillServers.find((s) => s.identifier === identifier);
+          return {
+            availableInWeb: true,
+            icon: lobehubSkillProvider.icon,
+            isInstalled: !!connectedServer,
+            label: lobehubSkillProvider.label,
+            title: lobehubSkillProvider.label,
+            type: 'lobehub-skill' as const,
           };
         }
       }
@@ -130,7 +170,15 @@ const PluginTag = memo<PluginTagProps>(
       }
 
       return null;
-    }, [identifier, builtinList, installedPluginList, isKlavisEnabledInEnv, allKlavisServers]);
+    }, [
+      identifier,
+      builtinList,
+      installedPluginList,
+      isKlavisEnabledInEnv,
+      allKlavisServers,
+      isLobehubSkillEnabled,
+      allLobehubSkillServers,
+    ]);
 
     // Fetch from remote if not found locally
     const usePluginDetail = useDiscoverStore((s) => s.usePluginDetail);
@@ -160,6 +208,11 @@ const PluginTag = memo<PluginTagProps>(
       // Klavis type has icon property
       if (meta.type === 'klavis' && 'icon' in meta && 'label' in meta) {
         return <KlavisIcon icon={meta.icon} label={meta.label} />;
+      }
+
+      // LobeHub Skill type has icon property
+      if (meta.type === 'lobehub-skill' && 'icon' in meta && 'label' in meta) {
+        return <LobehubSkillIcon icon={meta.icon} label={meta.label} />;
       }
 
       // Builtin type has avatar
