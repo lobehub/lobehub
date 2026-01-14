@@ -412,7 +412,10 @@ describe('resolveAgentConfig', () => {
         vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(() => 'inbox');
       });
 
-      it('should include GTD and Notebook tools in plugins', () => {
+      it('should use plugins from runtime config (which reflects database config)', () => {
+        // After the fix, runtime returns plugins from ctx.plugins (database)
+        // GTD and Notebook are stored in persist config, loaded into database,
+        // then passed to runtime via ctx.plugins
         vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
           plugins: [GTDIdentifier, NotebookIdentifier],
           systemRole: 'Inbox system role',
@@ -426,7 +429,21 @@ describe('resolveAgentConfig', () => {
         expect(result.slug).toBe('inbox');
       });
 
-      it('should preserve user plugins while including GTD and Notebook', () => {
+      it('should respect user disabled plugins (empty plugins from database)', () => {
+        // When user disables all default plugins, runtime returns empty array
+        vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+          plugins: [],
+          systemRole: 'Inbox system role',
+        });
+
+        const result = resolveAgentConfig({ agentId: 'inbox-agent' });
+
+        // Should fallback to base plugins from agent config
+        expect(result.plugins).toEqual(['plugin-a', 'plugin-b']);
+        expect(result.isBuiltinAgent).toBe(true);
+      });
+
+      it('should preserve user plugins alongside default tools', () => {
         vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
           plugins: [GTDIdentifier, NotebookIdentifier, 'user-plugin'],
           systemRole: 'Inbox system role',

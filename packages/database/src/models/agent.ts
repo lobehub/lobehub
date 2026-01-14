@@ -509,7 +509,21 @@ export class AgentModel {
       where: and(eq(agents.slug, slug), eq(agents.userId, this.userId)),
     });
 
-    if (existing) return existing;
+    if (existing) {
+      // For existing builtin agents, check if plugins need to be backfilled
+      // This handles users created before persist.plugins was added
+      // If plugins is null, update with default plugins so user can see and control them in UI
+      const persistConfig = getAgentPersistConfig(slug);
+      if (persistConfig?.plugins && existing.plugins === null) {
+        const [updatedAgent] = await this.db
+          .update(agents)
+          .set({ plugins: persistConfig.plugins })
+          .where(eq(agents.id, existing.id))
+          .returning();
+        return updatedAgent;
+      }
+      return existing;
+    }
 
     // For inbox agent, it has special compatibility handling:
     // Historical inbox was stored as session with slug='inbox' and linked agent via agentsToSessions
@@ -526,10 +540,15 @@ export class AgentModel {
 
       if (result.length > 0 && result[0].agent) {
         // Update the agent's slug to 'inbox' for future direct queries
-        // Use both id and userId to ensure we only update current user's agent
+        // Also backfill default plugins if not set
+        const persistConfig = getAgentPersistConfig(INBOX_SESSION_ID);
         const [updatedAgent] = await this.db
           .update(agents)
-          .set({ slug: INBOX_SESSION_ID, virtual: true })
+          .set({
+            plugins: result[0].agent.plugins ?? persistConfig?.plugins ?? [],
+            slug: INBOX_SESSION_ID,
+            virtual: true,
+          })
           .where(eq(agents.id, result[0].agent.id))
           .returning();
 
@@ -542,10 +561,13 @@ export class AgentModel {
     if (!persistConfig) return null;
 
     // 4. Create the builtin agent with persist config
+    // Include default plugins so they are visible and controllable by user in UI
+    // Default to empty array to keep stored shape consistent (avoid null vs [] confusion)
     const result = await this.db
       .insert(agents)
       .values({
         model: persistConfig.model,
+        plugins: persistConfig.plugins ?? [],
         provider: persistConfig.provider,
         slug: persistConfig.slug,
         userId: this.userId,
