@@ -1,6 +1,5 @@
 'use client';
 
-import { ENABLE_TOPIC_LINK_SHARE } from '@lobechat/business-const';
 import { ActionIcon } from '@lobehub/ui';
 import { Share2 } from 'lucide-react';
 import dynamic from 'next/dynamic';
@@ -10,6 +9,8 @@ import { useTranslation } from 'react-i18next';
 import { DESKTOP_HEADER_ICON_SIZE, MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useWorkspaceModal } from '@/hooks/useWorkspaceModal';
 import { useChatStore } from '@/store/chat';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 const ShareModal = dynamic(() => import('@/features/ShareModal'));
 const SharePopover = dynamic(() => import('@/features/SharePopover'));
@@ -24,6 +25,7 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
   const [isModalOpen, setIsModalOpen] = useWorkspaceModal(open, setOpen);
   const { t } = useTranslation('common');
   const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
   // Hide share button when no topic exists (no messages sent yet)
   if (!activeTopicId) return null;
@@ -31,7 +33,7 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
   const iconButton = (
     <ActionIcon
       icon={Share2}
-      onClick={ENABLE_TOPIC_LINK_SHARE ? undefined : () => setIsModalOpen(true)}
+      onClick={enableTopicLinkShare ? undefined : () => setIsModalOpen(true)}
       size={mobile ? MOBILE_HEADER_ICON_SIZE : DESKTOP_HEADER_ICON_SIZE}
       title={t('share')}
       tooltipProps={{
@@ -42,7 +44,7 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
 
   return (
     <>
-      {ENABLE_TOPIC_LINK_SHARE ? (
+      {enableTopicLinkShare ? (
         <SharePopover onOpenModal={() => setIsModalOpen(true)}>{iconButton}</SharePopover>
       ) : (
         iconButton
