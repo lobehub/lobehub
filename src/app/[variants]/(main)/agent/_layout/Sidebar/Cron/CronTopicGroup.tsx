@@ -9,6 +9,7 @@ import { useParams } from 'react-router-dom';
 import { useRouter } from '@/app/[variants]/(main)/hooks/useRouter';
 import type { AgentCronJob } from '@/database/schemas/agentCronJob';
 
+import Actions from './Actions';
 import CronTopicItem from './CronTopicItem';
 
 interface CronTopicGroupProps {
@@ -43,12 +44,15 @@ const CronTopicGroup = memo<CronTopicGroupProps>(({ cronJob, cronJobId, topics }
   return (
     <AccordionItem
       action={
-        <ActionIcon
-          icon={Settings2Icon}
-          onClick={handleOpenCronJob}
-          size="small"
-          title={t('agentCronJobs.editJob')}
-        />
+        <Flexbox align="center" gap={4} horizontal>
+          <ActionIcon
+            icon={Settings2Icon}
+            onClick={handleOpenCronJob}
+            size="small"
+            title={t('agentCronJobs.editJob')}
+          />
+          <Actions cronJobId={cronJobId} topics={topics} />
+        </Flexbox>
       }
       itemKey={cronJobId}
       paddingBlock={4}

@@ -25,13 +25,12 @@ export type MultiSelectActionType =
   | 'removeFromKnowledgeBase';
 
 interface BatchActionsDropdownProps {
-  disabled?: boolean;
   onActionClick: (type: MultiSelectActionType) => Promise<void>;
   selectCount: number;
 }
 
 const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
-  ({ selectCount, onActionClick, disabled }) => {
+  ({ selectCount, onActionClick }) => {
     const { t } = useTranslation(['components', 'common', 'file', 'knowledgeBase']);
     const { modal, message } = App.useApp();
 
@@ -54,7 +53,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
           danger: true,
           icon: <Icon icon={Trash2Icon} />,
           key: 'deleteLibrary',
-          label: t('delete', { ns: 'common' }),
+          label: t('header.actions.deleteLibrary', { ns: 'file' }),
           onClick: async () => {
             modal.confirm({
               okButtonProps: {
@@ -74,6 +73,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
       const availableKnowledgeBases = (knowledgeBases || []).filter((kb) => kb.id !== libraryId);
 
       const addToKnowledgeBaseSubmenu: DropdownItem[] = availableKnowledgeBases.map((kb) => ({
+        disabled: selectCount === 0,
         icon: <RepoIcon />,
         key: `add-to-kb-${kb.id}`,
         label: <span style={{ marginLeft: 8 }}>{kb.name}</span>,
@@ -95,6 +95,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
 
       if (libraryId) {
         items.push({
+          disabled: selectCount === 0,
           icon: <Icon icon={BookMinusIcon} />,
           key: 'removeFromKnowledgeBase',
           label: t('FileManager.actions.removeFromKnowledgeBase'),
@@ -117,6 +118,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
         if (availableKnowledgeBases.length > 0) {
           items.push({
             children: addToKnowledgeBaseSubmenu as any,
+            disabled: selectCount === 0,
             icon: <Icon icon={BookPlusIcon} />,
             key: 'addToOtherKnowledgeBase',
             label: t('FileManager.actions.addToOtherKnowledgeBase'),
@@ -125,6 +127,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
       } else if (availableKnowledgeBases.length > 0) {
         items.push({
           children: addToKnowledgeBaseSubmenu as any,
+          disabled: selectCount === 0,
           icon: <Icon icon={BookPlusIcon} />,
           key: 'addToKnowledgeBase',
           label: t('FileManager.actions.addToKnowledgeBase'),
@@ -133,6 +136,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
 
       items.push(
         {
+          disabled: selectCount === 0,
           icon: <Icon icon={FileBoxIcon} />,
           key: 'batchChunking',
           label: t('FileManager.actions.batchChunking'),
@@ -145,6 +149,7 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
         },
         {
           danger: true,
+          disabled: selectCount === 0,
           icon: <Icon icon={Trash2Icon} />,
           key: 'delete',
           label: t('delete', { ns: 'common' }),
@@ -177,9 +182,8 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(
     ]);
 
     return (
-      <DropdownMenu items={menuItems} placement="bottomLeft" triggerProps={{ disabled }}>
+      <DropdownMenu items={menuItems} placement="bottomLeft">
         <ActionIconWithChevron
-          disabled={disabled}
           icon={CircleEllipsisIcon}
           title={t('FileManager.actions.batchActions', 'Batch actions')}
         />

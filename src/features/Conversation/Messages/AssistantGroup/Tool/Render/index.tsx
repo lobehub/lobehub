@@ -16,6 +16,7 @@ import RejectedResponse from './RejectedResponse';
 interface RenderProps {
   apiName: string;
   arguments?: string;
+  disableEditing?: boolean;
   identifier: string;
   intervention?: ToolIntervention;
   isArgumentsStreaming?: boolean;
@@ -43,6 +44,7 @@ const Render = memo<RenderProps>(
     toolCallId,
     messageId,
     arguments: requestArgs,
+    disableEditing,
     showPluginRender,
     setShowPluginRender,
     identifier,
@@ -54,7 +56,7 @@ const Render = memo<RenderProps>(
     isArgumentsStreaming,
     isToolCalling,
   }) => {
-    if (toolMessageId && intervention?.status === 'pending') {
+    if (toolMessageId && intervention?.status === 'pending' && !disableEditing) {
       return (
         <Intervention
           apiName={apiName}
@@ -150,9 +152,11 @@ const Render = memo<RenderProps>(
             showPluginRender={showPluginRender}
             toolCallId={toolCallId}
           />
-          <div>
-            <ModeSelector />
-          </div>
+          {!disableEditing && (
+            <div>
+              <ModeSelector />
+            </div>
+          )}
         </Flexbox>
       </Suspense>
     );

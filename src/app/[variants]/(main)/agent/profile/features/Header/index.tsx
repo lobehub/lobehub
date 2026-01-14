@@ -5,7 +5,6 @@ import NavHeader from '@/features/NavHeader';
 import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
 
-import AgentPublishButton from './AgentPublishButton';
 import AutoSaveHint from './AutoSaveHint';
 
 const Header = memo(() => {
@@ -16,7 +15,6 @@ const Header = memo(() => {
         <>
           <WideScreenButton />
           <ToggleRightPanelButton icon={BotMessageSquareIcon} showActive={true} />
-          <AgentPublishButton />
         </>
       }
     />

@@ -57,6 +57,8 @@
   "funds.packages.noPackages": "暂无积分包",
   "funds.packages.purchaseFirst": "购买您的第一个积分包",
   "funds.packages.purchasedOn": "购买于 {{date}}",
+  "funds.packages.gift": "赠送",
+  "funds.packages.giftedOn": "赠送于 {{date}}",
   "funds.packages.sort.amountAsc": "金额：从低到高",
   "funds.packages.sort.amountDesc": "金额：从高到低",
   "funds.packages.sort.balanceAsc": "余额：从低到高",

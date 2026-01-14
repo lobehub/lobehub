@@ -4,7 +4,7 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { Modal } from 'antd';
 import { cssVar, useTheme } from 'antd-style';
-import { ArrowLeftIcon, BotMessageSquareIcon, DownloadIcon, InfoIcon } from 'lucide-react';
+import { ArrowLeftIcon, DownloadIcon, InfoIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,7 +13,6 @@ import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/featur
 import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
 import PageAgentProvider from '@/features/PageEditor/PageAgentProvider';
-import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
@@ -56,7 +55,7 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
             }
             right={
               <Flexbox gap={8} horizontal>
-                <ToggleRightPanelButton icon={BotMessageSquareIcon} showActive={true} size={20} />
+                {/* <ToggleRightPanelButton icon={BotMessageSquareIcon} showActive={true} size={20} /> */}
                 {fileDetail?.url && (
                   <ActionIcon
                     icon={DownloadIcon}

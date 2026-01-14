@@ -28,7 +28,6 @@ export interface ChatPortalAction {
   pushPortalView: (view: PortalViewData) => void;
   replacePortalView: (view: PortalViewData) => void;
   toggleNotebook: (open?: boolean) => void;
-  togglePortal: (open?: boolean) => void;
 }
 
 // Helper to get current view type from stack
@@ -220,30 +219,6 @@ pushPortalView: (view) => {
       get().openNotebook();
     } else {
       get().closeNotebook();
-    }
-  },
-
-  togglePortal: (open) => {
-    const nextOpen = open === undefined ? !get().showPortal : open;
-
-    if (!nextOpen) {
-      // When closing, clear the stack
-      set({ portalStack: [], showPortal: false }, false, 'togglePortal/close');
-    } else {
-      // When opening, if stack is empty, push Home view
-      const { portalStack } = get();
-      if (portalStack.length === 0) {
-        set(
-          {
-            portalStack: [{ type: PortalViewType.Home }],
-            showPortal: true,
-          },
-          false,
-          'togglePortal/openHome',
-        );
-      } else {
-        set({ showPortal: true }, false, 'togglePortal/open');
-      }
     }
   },
 });

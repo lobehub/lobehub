@@ -6,22 +6,11 @@ import {
   type UniformSearchResponse,
 } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { highlightTextStyles, shinyTextStyles } from '@/styles';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
+import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 export const SearchInspector = memo<BuiltinInspectorProps<SearchQuery, UniformSearchResponse>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading, pluginState }) => {
@@ -33,7 +22,7 @@ export const SearchInspector = memo<BuiltinInspectorProps<SearchQuery, UniformSe
 
     if (isArgumentsStreaming && !query) {
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-web-browsing.apiName.search')}</span>
         </div>
       );
@@ -42,7 +31,7 @@ export const SearchInspector = memo<BuiltinInspectorProps<SearchQuery, UniformSe
     return (
       <div
         className={cx(
-          styles.root,
+          inspectorTextStyles.root,
           (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
         )}
       >

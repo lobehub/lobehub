@@ -3,7 +3,7 @@ export default {
   'changelog.title': 'Changelog',
   'chat.description':
     '{{appName}} brings you the best UI experience for ChatGPT, Claude, Gemini, and OLLaMA.',
-  'chat.title': '{{appName}} · For Collaborative Agents',
+  'chat.title': '{{appName}} · Where Agents Collaborate',
   'discover.assistants.description':
     'Content, Q&A, images, video, voice, workflows—browse and add Agents from the Community.',
   'discover.assistants.title': 'Agent Community',
@@ -30,5 +30,5 @@ export default {
   'plugins.title': 'Skill Community',
   'welcome.description':
     '{{appName}} brings you the best UI experience for ChatGPT, Claude, Gemini, and OLLaMA.',
-  'welcome.title': 'Welcome to {{appName}} · For Collaborative Agents',
+  'welcome.title': 'Welcome to {{appName}} · Where Agents Collaborate',
 };

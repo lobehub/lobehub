@@ -398,6 +398,24 @@ export const desktopRoutes: RouteConfig[] = [
   // Onboarding route (outside main layout)
 
   ...BusinessDesktopRoutesWithoutMainLayout,
+
+  // Share topic route (outside main layout)
+  {
+    children: [
+      {
+        element: dynamicElement(
+          () => import('../share/t/[id]'),
+          'Desktop > Share > Topic',
+        ),
+        path: ':id',
+      },
+    ],
+    element: dynamicElement(
+      () => import('../share/t/[id]/_layout'),
+      'Desktop > Share > Topic > Layout',
+    ),
+    path: '/share/t',
+  },
 ];
 
 // Desktop onboarding route (SPA-only)

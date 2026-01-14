@@ -14,6 +14,7 @@ import {
   PencilIcon,
   PrinterIcon,
   TerminalSquareIcon,
+  CompassIcon,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,6 +26,11 @@ export const useCategory = () => {
 
   return useMemo(
     () => [
+      {
+        icon: CompassIcon,
+        key: AssistantCategory.Discover,
+        label: t('category.assistant.discover'),
+      },
       {
         icon: LayoutPanelTop,
         key: AssistantCategory.All,

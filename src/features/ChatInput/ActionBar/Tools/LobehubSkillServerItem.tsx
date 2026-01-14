@@ -331,7 +331,6 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
           handleToggle();
         }
       }}
-      style={{ paddingLeft: 8 }}
     >
       <Flexbox align={'center'} gap={8} horizontal>
         {label}

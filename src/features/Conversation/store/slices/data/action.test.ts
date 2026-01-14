@@ -505,6 +505,48 @@ describe('DataSlice', () => {
       );
     });
 
+    it('should not fetch when topicId is null (new conversation state)', () => {
+      const store = createStore({
+        context: { agentId: 'test-session', topicId: null, threadId: null },
+      });
+
+      store.getState().useFetchMessages({
+        agentId: 'test-session',
+        topicId: null,
+        threadId: null,
+      });
+
+      // SWR should be called with null key when topicId is null
+      // This prevents fetching empty data that would overwrite local optimistic updates
+      expect(vi.mocked(useClientDataSWRWithSync)).toHaveBeenCalledWith(
+        null,
+        expect.any(Function),
+        expect.any(Object),
+      );
+
+      // messageService.getMessages should NOT be called
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+    });
+
+    it('should not fetch when topicId is undefined (new conversation state)', () => {
+      const store = createStore({
+        context: { agentId: 'test-session', topicId: null, threadId: null },
+      });
+
+      store.getState().useFetchMessages({
+        agentId: 'test-session',
+        topicId: undefined as any,
+        threadId: null,
+      });
+
+      // SWR should be called with null key when topicId is undefined
+      expect(vi.mocked(useClientDataSWRWithSync)).toHaveBeenCalledWith(
+        null,
+        expect.any(Function),
+        expect.any(Object),
+      );
+    });
+
     it('should use different SWR keys for different threadIds', () => {
       const store1 = createStore({
         context: { agentId: 'session-1', topicId: 'topic-1', threadId: 'thread-1' },

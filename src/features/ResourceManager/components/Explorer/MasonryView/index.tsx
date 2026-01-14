@@ -9,24 +9,31 @@ import { useTranslation } from 'react-i18next';
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import { sortFileList } from '@/app/[variants]/(main)/resource/features/store/selectors';
 import { useFileStore } from '@/store/file';
+import { useFetchResources } from '@/store/file/slices/resource/hooks';
 import { type FileListItem } from '@/types/files';
 
 import { useMasonryColumnCount } from '../useMasonryColumnCount';
 import MasonryItemWrapper from './MasonryFileItem/MasonryItemWrapper';
+import MasonryViewSkeleton from './Skeleton';
 
-const MasonryView = memo(() => {
+const MasonryView = memo(function MasonryView() {
   // Access all state from Resource Manager store
   const [
     libraryId,
+    category,
+    searchQuery,
     selectedFileIds,
     setSelectedFileIds,
     loadMoreKnowledgeItems,
     fileListHasMore,
-    isMasonryReady,
+    storeIsMasonryReady,
     sorter,
     sortType,
+    storeIsTransitioning,
   ] = useResourceManagerStore((s) => [
     s.libraryId,
+    s.category,
+    s.searchQuery,
     s.selectedFileIds,
     s.setSelectedFileIds,
     s.loadMoreKnowledgeItems,
@@ -34,6 +41,7 @@ const MasonryView = memo(() => {
     s.isMasonryReady,
     s.sorter,
     s.sortType,
+    s.isTransitioning,
   ]);
 
   const { t } = useTranslation('file');
@@ -42,6 +50,33 @@ const MasonryView = memo(() => {
 
   // NEW: Read from resource store instead of fetching independently
   const resourceList = useFileStore((s) => s.resourceList);
+
+  const queryParams = useMemo(
+    () => ({
+      category: libraryId ? undefined : category,
+      libraryId,
+      parentId: null,
+      q: searchQuery ?? undefined,
+      showFilesInKnowledgeBase: false,
+      sortType,
+      sorter,
+    }),
+    [category, libraryId, searchQuery, sorter, sortType],
+  );
+
+  const { isLoading, isValidating } = useFetchResources(queryParams);
+  const { queryParams: currentQueryParams } = useFileStore();
+
+  const isNavigating = useMemo(() => {
+    if (!currentQueryParams || !queryParams) return false;
+
+    return (
+      currentQueryParams.libraryId !== queryParams.libraryId ||
+      currentQueryParams.parentId !== queryParams.parentId ||
+      currentQueryParams.category !== queryParams.category ||
+      currentQueryParams.q !== queryParams.q
+    );
+  }, [currentQueryParams, queryParams]);
 
   // Map ResourceItem[] to FileListItem[] for compatibility
   const rawData = resourceList?.map(
@@ -69,7 +104,20 @@ const MasonryView = memo(() => {
   );
 
   // Sort data using current sort settings
-  const data = sortFileList(rawData, sorter, sortType);
+  const data = sortFileList(rawData, sorter, sortType) || [];
+
+  const dataLength = data.length;
+  const effectiveIsLoading = isLoading ?? false;
+  const effectiveIsNavigating = isNavigating ?? false;
+  const effectiveIsValidating = isValidating ?? false;
+  const effectiveIsTransitioning = storeIsTransitioning ?? false;
+  const effectiveIsMasonryReady = storeIsMasonryReady;
+
+  const showSkeleton =
+    (effectiveIsLoading && dataLength === 0) ||
+    (effectiveIsNavigating && effectiveIsValidating) ||
+    effectiveIsTransitioning ||
+    !effectiveIsMasonryReady;
 
   const masonryContext = useMemo(
     () => ({
@@ -108,13 +156,15 @@ const MasonryView = memo(() => {
     [handleLoadMore],
   );
 
-  return (
+  return showSkeleton ? (
+    <MasonryViewSkeleton columnCount={columnCount} />
+  ) : (
     <div
       onScroll={handleScroll}
       style={{
         flex: 1,
         height: '100%',
-        opacity: isMasonryReady ? 1 : 0,
+        opacity: effectiveIsMasonryReady ? 1 : 0,
         overflowY: 'auto',
         transition: 'opacity 0.2s ease-in-out',
       }}
@@ -124,7 +174,7 @@ const MasonryView = memo(() => {
           ItemContent={MasonryItemWrapper}
           columnCount={columnCount}
           context={masonryContext}
-          data={data || []}
+          data={data}
           style={{
             gap: '16px',
             overflow: 'hidden',
@@ -146,5 +196,7 @@ const MasonryView = memo(() => {
     </div>
   );
 });
+
+MasonryView.displayName = 'MasonryView';
 
 export default MasonryView;

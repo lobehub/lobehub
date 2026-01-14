@@ -29,7 +29,6 @@
   "internlm.description": "Tổ chức mã nguồn mở tập trung vào nghiên cứu mô hình lớn và công cụ, cung cấp nền tảng hiệu quả, dễ sử dụng để tiếp cận các mô hình và thuật toán tiên tiến.",
   "jina.description": "Thành lập năm 2020, Jina AI là công ty hàng đầu về AI tìm kiếm. Bộ công cụ tìm kiếm của họ bao gồm mô hình vector, bộ xếp hạng lại và mô hình ngôn ngữ nhỏ để xây dựng ứng dụng tìm kiếm sinh và đa phương thức chất lượng cao.",
   "lmstudio.description": "LM Studio là ứng dụng máy tính để phát triển và thử nghiệm LLM ngay trên máy của bạn.",
-  "lobehub.description": "LobeHub Cloud sử dụng API chính thức để truy cập các mô hình AI và tính mức sử dụng bằng Tín dụng dựa trên số lượng token của mô hình.",
   "minimax.description": "Thành lập năm 2021, MiniMax xây dựng AI đa năng với các mô hình nền tảng đa phương thức, bao gồm mô hình văn bản MoE hàng nghìn tỷ tham số, mô hình giọng nói và thị giác, cùng các ứng dụng như Hailuo AI.",
   "mistral.description": "Mistral cung cấp các mô hình tổng quát, chuyên biệt và nghiên cứu tiên tiến cho suy luận phức tạp, tác vụ đa ngôn ngữ và tạo mã, với khả năng gọi hàm cho tích hợp tùy chỉnh.",
   "modelscope.description": "ModelScope là nền tảng mô hình dưới dạng dịch vụ của Alibaba Cloud, cung cấp nhiều mô hình AI và dịch vụ suy luận.",

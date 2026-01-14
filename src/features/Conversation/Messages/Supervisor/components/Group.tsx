@@ -29,7 +29,7 @@ interface GroupChildrenProps {
   messageIndex: number;
 }
 
-const Group = memo<GroupChildrenProps>(({ blocks, id, content }) => {
+const Group = memo<GroupChildrenProps>(({ blocks, id, content, disableEditing }) => {
   const isCollapsed = useConversationStore(messageStateSelectors.isMessageCollapsed(id));
   const contextValue = useMemo(() => ({ assistantGroupId: id }), [id]);
 
@@ -46,7 +46,9 @@ const Group = memo<GroupChildrenProps>(({ blocks, id, content }) => {
     <MessageAggregationContext value={contextValue}>
       <Flexbox className={styles.container} gap={8}>
         {blocks.map((item) => {
-          return <ContentBlock {...item} key={id + '.' + item.id} />;
+          return (
+            <ContentBlock {...item} disableEditing={disableEditing} key={id + '.' + item.id} />
+          );
         })}
       </Flexbox>
     </MessageAggregationContext>

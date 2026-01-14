@@ -1,6 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { CloudSandboxIdentifier, type ExportFileState } from '@lobechat/builtin-tool-cloud-sandbox';
-import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { type ChatToolPayload, type RuntimeStepContext } from '@lobechat/types';
 import { PluginErrorType } from '@lobehub/chat-plugin-sdk';
 import debug from 'debug';
@@ -124,9 +123,27 @@ export const pluginTypes: StateCreator<
       const context = operationId ? { operationId } : undefined;
 
       // Get agent ID, group ID, and topic ID from operation context
-      const agentId = operation?.context?.agentId;
-      const groupId = operation?.context?.groupId;
+      let agentId = operation?.context?.agentId;
+      let groupId = operation?.context?.groupId;
       const topicId = operation?.context?.topicId;
+
+      // For agent-builder tools, inject activeAgentId from store if not in context
+      // This is needed because AgentBuilderProvider uses a separate scope for messages
+      // but the tools need the correct agentId for execution
+      if (payload.identifier === 'lobe-agent-builder') {
+        const activeAgentId = get().activeAgentId;
+        if (activeAgentId) {
+          agentId = activeAgentId;
+        }
+      }
+
+      // For group-agent-builder tools, inject activeGroupId from store if not in context
+      // This is needed because AgentBuilderProvider uses a separate scope for messages
+      // but still needs groupId for tool execution
+      if (!groupId && payload.identifier === 'lobe-group-agent-builder') {
+        const { getChatGroupStoreState } = await import('@/store/agentGroup');
+        groupId = getChatGroupStoreState().activeGroupId;
+      }
 
       // Get group orchestration callbacks if available (for group management tools)
       const groupOrchestration = get().getGroupOrchestrationCallbacks?.();
@@ -209,25 +226,12 @@ export const pluginTypes: StateCreator<
       return result;
     }
 
-    // Route GroupAgentBuilder to its dedicated action
-    if (payload.identifier === GroupAgentBuilderIdentifier) {
-      log('[invokeBuiltinTool] Routing to GroupAgentBuilder: %s', payload.apiName);
-      return await get().internal_triggerGroupAgentBuilderToolCalling(id, payload.apiName, params);
-    }
-
-    // run tool api call (fallback for AgentBuilder and other legacy tools)
-    // @ts-ignore
-    const { [payload.apiName]: action } = get();
-    if (!action) {
-      console.error(`[invokeBuiltinTool] plugin Action not found: ${payload.apiName}`);
-      return;
-    }
-
-    const content = safeParseJSON(payload.arguments);
-
-    if (!content) return;
-
-    return await action(id, content);
+    // All builtin tools should be handled by the executor registry above
+    // If we reach here, it means the tool is not registered
+    console.error(
+      `[invokeBuiltinTool] No executor found for: ${payload.identifier}/${payload.apiName}`,
+    );
+    return;
   },
 
   invokeCloudCodeInterpreterTool: async (id, payload) => {

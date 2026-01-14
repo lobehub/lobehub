@@ -5,16 +5,16 @@ import type { StreamChunkData, StreamEvent } from './StreamEventManager';
 
 /**
  * Agent State Manager Interface
- * 用于状态持久化的抽象接口，支持 Redis 和内存实现
+ * Abstract interface for state persistence, supports Redis and in-memory implementations
  */
 export interface IAgentStateManager {
   /**
-   * 清理过期的操作数据
+   * Clean up expired operation data
    */
   cleanupExpiredOperations(): Promise<number>;
 
   /**
-   * 创建新的操作元数据
+   * Create new operation metadata
    */
   createOperationMetadata(
     operationId: string,
@@ -26,32 +26,32 @@ export interface IAgentStateManager {
   ): Promise<void>;
 
   /**
-   * 删除 Agent 操作的所有数据
+   * Delete all data for Agent operation
    */
   deleteAgentOperation(operationId: string): Promise<void>;
 
   /**
-   * 关闭连接
+   * Close connections
    */
   disconnect(): Promise<void>;
 
   /**
-   * 获取所有活跃操作
+   * Get all active operations
    */
   getActiveOperations(): Promise<string[]>;
 
   /**
-   * 获取执行历史
+   * Get execution history
    */
   getExecutionHistory(operationId: string, limit?: number): Promise<any[]>;
 
   /**
-   * 获取操作元数据
+   * Get operation metadata
    */
   getOperationMetadata(operationId: string): Promise<AgentOperationMetadata | null>;
 
   /**
-   * 获取统计信息
+   * Get statistics
    */
   getStats(): Promise<{
     activeOperations: number;
@@ -61,48 +61,48 @@ export interface IAgentStateManager {
   }>;
 
   /**
-   * 加载 Agent 状态
+   * Load Agent state
    */
   loadAgentState(operationId: string): Promise<AgentState | null>;
 
   /**
-   * 保存 Agent 状态
+   * Save Agent state
    */
   saveAgentState(operationId: string, state: AgentState): Promise<void>;
 
   /**
-   * 保存步骤执行结果
+   * Save step execution result
    */
   saveStepResult(operationId: string, stepResult: StepResult): Promise<void>;
 }
 
 /**
  * Stream Event Manager Interface
- * 用于流式事件发布的抽象接口，支持 Redis 和内存实现
+ * Abstract interface for stream event publishing, supports Redis and in-memory implementations
  */
 export interface IStreamEventManager {
   /**
-   * 清理操作的流式数据
+   * Clean up stream data for operation
    */
   cleanupOperation(operationId: string): Promise<void>;
 
   /**
-   * 关闭连接
+   * Close connections
    */
   disconnect(): Promise<void>;
 
   /**
-   * 获取活跃操作数量
+   * Get count of active operations
    */
   getActiveOperationsCount(): Promise<number>;
 
   /**
-   * 获取流式事件历史
+   * Get stream event history
    */
   getStreamHistory(operationId: string, count?: number): Promise<StreamEvent[]>;
 
   /**
-   * 发布 Agent 运行时结束事件
+   * Publish Agent runtime end event
    */
   publishAgentRuntimeEnd(
     operationId: string,
@@ -113,12 +113,12 @@ export interface IStreamEventManager {
   ): Promise<string>;
 
   /**
-   * 发布 Agent 运行时初始化事件
+   * Publish Agent runtime initialization event
    */
   publishAgentRuntimeInit(operationId: string, initialState: any): Promise<string>;
 
   /**
-   * 发布流式内容块
+   * Publish stream content chunk
    */
   publishStreamChunk(
     operationId: string,
@@ -127,7 +127,7 @@ export interface IStreamEventManager {
   ): Promise<string>;
 
   /**
-   * 发布流式事件
+   * Publish stream event
    */
   publishStreamEvent(
     operationId: string,

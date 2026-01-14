@@ -86,6 +86,7 @@ export class DocumentService {
       fileId,
       fileType,
       filename: title,
+      knowledgeBaseId, // Set knowledge_base_id column for all document types
       metadata: finalMetadata,
       pages: undefined,
       parentId,

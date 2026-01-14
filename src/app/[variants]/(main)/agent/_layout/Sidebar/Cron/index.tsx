@@ -1,6 +1,5 @@
 'use client';
 
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Accordion, AccordionItem, ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { Plus } from 'lucide-react';
 import { memo, useCallback } from 'react';
@@ -12,6 +11,7 @@ import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentStore } from '@/store/agent';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import CronTopicGroup from './CronTopicGroup';
 
@@ -22,24 +22,20 @@ interface CronTopicListProps {
 const CronTopicList = memo<CronTopicListProps>(({ itemKey }) => {
   const { t } = useTranslation('setting');
   const router = useQueryRoute();
-  const [agentId, createAgentCronJob, useFetchCronTopicsWithJobInfo] = useAgentStore((s) => [
+  const [agentId, useFetchCronTopicsWithJobInfo] = useAgentStore((s) => [
     s.activeAgentId,
-    s.createAgentCronJob,
     s.useFetchCronTopicsWithJobInfo,
   ]);
   const { data: cronTopicsGroupsWithJobInfo = [], isLoading } =
     useFetchCronTopicsWithJobInfo(agentId);
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
-  const handleCreateCronJob = useCallback(async () => {
+  const handleCreateCronJob = useCallback(() => {
     if (!agentId) return;
+    router.push(urlJoin('/agent', agentId, 'cron', 'new'));
+  }, [agentId, router]);
 
-    const cronJobId = await createAgentCronJob();
-    if (cronJobId) {
-      router.push(urlJoin('/agent', agentId, 'cron', cronJobId));
-    }
-  }, [agentId, createAgentCronJob, router]);
-
-  if (!ENABLE_BUSINESS_FEATURES) return null;
+  if (!enableBusinessFeatures) return null;
 
   const addAction = (
     <ActionIcon

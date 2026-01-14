@@ -141,7 +141,7 @@ describe('thread action', () => {
   describe('openThreadCreator', () => {
     it('should set thread creator state and open portal', () => {
       const { result } = renderHook(() => useChatStore());
-      const togglePortalSpy = vi.spyOn(result.current, 'togglePortal');
+      const pushPortalViewSpy = vi.spyOn(result.current, 'pushPortalView');
 
       act(() => {
         result.current.openThreadCreator('message-id');
@@ -150,14 +150,14 @@ describe('thread action', () => {
       expect(result.current.threadStartMessageId).toBe('message-id');
       expect(result.current.portalThreadId).toBeUndefined();
       expect(result.current.startToForkThread).toBe(true);
-      expect(togglePortalSpy).toHaveBeenCalledWith(true);
+      expect(pushPortalViewSpy).toHaveBeenCalledWith({ type: 'thread', startMessageId: 'message-id' });
     });
   });
 
   describe('openThreadInPortal', () => {
     it('should set portal thread state and open portal', () => {
       const { result } = renderHook(() => useChatStore());
-      const togglePortalSpy = vi.spyOn(result.current, 'togglePortal');
+      const pushPortalViewSpy = vi.spyOn(result.current, 'pushPortalView');
 
       act(() => {
         result.current.openThreadInPortal('thread-id', 'source-message-id');
@@ -166,7 +166,11 @@ describe('thread action', () => {
       expect(result.current.portalThreadId).toBe('thread-id');
       expect(result.current.threadStartMessageId).toBe('source-message-id');
       expect(result.current.startToForkThread).toBe(false);
-      expect(togglePortalSpy).toHaveBeenCalledWith(true);
+      expect(pushPortalViewSpy).toHaveBeenCalledWith({
+        type: 'thread',
+        threadId: 'thread-id',
+        startMessageId: 'source-message-id',
+      });
     });
   });
 
@@ -182,7 +186,7 @@ describe('thread action', () => {
         });
       });
 
-      const togglePortalSpy = vi.spyOn(result.current, 'togglePortal');
+      const clearPortalStackSpy = vi.spyOn(result.current, 'clearPortalStack');
 
       act(() => {
         result.current.closeThreadPortal();
@@ -191,7 +195,7 @@ describe('thread action', () => {
       expect(result.current.portalThreadId).toBeUndefined();
       expect(result.current.threadStartMessageId).toBeUndefined();
       expect(result.current.startToForkThread).toBeUndefined();
-      expect(togglePortalSpy).toHaveBeenCalledWith(false);
+      expect(clearPortalStackSpy).toHaveBeenCalled();
     });
   });
 

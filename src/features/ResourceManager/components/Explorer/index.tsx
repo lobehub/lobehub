@@ -12,11 +12,8 @@ import { useFetchResources, useResourceStore } from '@/store/file/slices/resourc
 import EmptyPlaceholder from './EmptyPlaceholder';
 import Header from './Header';
 import ListView from './ListView';
-import ListViewSkeleton from './ListView/Skeleton';
 import MasonryView from './MasonryView';
-import MasonryViewSkeleton from './MasonryView/Skeleton';
 import { useCheckTaskStatus } from './useCheckTaskStatus';
-import { useMasonryColumnCount } from './useMasonryColumnCount';
 import { useResourceExplorer } from './useResourceExplorer';
 
 /**
@@ -32,27 +29,16 @@ const ResourceExplorer = memo(() => {
   useResourceManagerUrlSync();
 
   // Get state from Resource Manager store
-  const [
-    libraryId,
-    category,
-    viewMode,
-    isTransitioning,
-    isMasonryReady,
-    searchQuery,
-    setSelectedFileIds,
-    sorter,
-    sortType,
-  ] = useResourceManagerStore((s) => [
-    s.libraryId,
-    s.category,
-    s.viewMode,
-    s.isTransitioning,
-    s.isMasonryReady,
-    s.searchQuery,
-    s.setSelectedFileIds,
-    s.sorter,
-    s.sortType,
-  ]);
+  const [libraryId, category, viewMode, searchQuery, setSelectedFileIds, sorter, sortType] =
+    useResourceManagerStore((s) => [
+      s.libraryId,
+      s.category,
+      s.viewMode,
+      s.searchQuery,
+      s.setSelectedFileIds,
+      s.sorter,
+      s.sortType,
+    ]);
 
   // Get folder path for empty state check
   const { currentFolderSlug } = useFolderPath();
@@ -77,19 +63,7 @@ const ResourceExplorer = memo(() => {
   const { isLoading, isValidating } = useFetchResources(queryParams);
 
   // Get resource data from store (updated by SWR hook)
-  const { resourceList, queryParams: currentQueryParams } = useResourceStore();
-
-  // Check if we're navigating to a different view (different query params)
-  const isNavigating = useMemo(() => {
-    if (!currentQueryParams || !queryParams) return false;
-
-    return (
-      currentQueryParams.libraryId !== queryParams.libraryId ||
-      currentQueryParams.parentId !== queryParams.parentId ||
-      currentQueryParams.category !== queryParams.category ||
-      currentQueryParams.q !== queryParams.q
-    );
-  }, [currentQueryParams, queryParams]);
+  const { resourceList } = useResourceStore();
 
   // Map ResourceItem[] to FileListItem[] for compatibility
   // TODO: Eventually update all consumers to use ResourceItem directly
@@ -119,19 +93,6 @@ const ResourceExplorer = memo(() => {
     setSelectedFileIds([]);
   }, [category, libraryId, searchQuery, setSelectedFileIds]);
 
-  // Computed values
-  const columnCount = useMasonryColumnCount();
-
-  // Show skeleton when:
-  // 1. Initial load with no data (isLoading && no data)
-  // 2. Navigating to different folder/category (isNavigating && isValidating)
-  // 3. View mode transitions
-  const showSkeleton =
-    (isLoading && (!data || data.length >= 5)) ||
-    (isNavigating && isValidating) ||
-    (viewMode === 'list' && isTransitioning) ||
-    (viewMode === 'masonry' && (isTransitioning || !isMasonryReady));
-
   const showEmptyStatus = !isLoading && !isValidating && data?.length === 0 && !currentFolderSlug;
 
   return (
@@ -139,12 +100,6 @@ const ResourceExplorer = memo(() => {
       <Header />
       {showEmptyStatus ? (
         <EmptyPlaceholder />
-      ) : showSkeleton ? (
-        viewMode === 'list' ? (
-          <ListViewSkeleton />
-        ) : (
-          <MasonryViewSkeleton columnCount={columnCount} />
-        )
       ) : viewMode === 'list' ? (
         <ListView />
       ) : (

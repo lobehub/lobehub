@@ -72,7 +72,8 @@ const vertexaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 65_536,
-    description: 'Gemini 3 Flash 是为速度而打造的最智能的模型，将前沿智能与卓越的搜索接地相结合。',
+    description:
+      'Gemini 3 Flash is the smartest model built for speed, combining cutting-edge intelligence with excellent search grounding.',
     displayName: 'Gemini 3 Flash Preview',
     enabled: true,
     id: 'gemini-3-flash-preview',

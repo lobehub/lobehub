@@ -34,6 +34,32 @@ const qiniuChatModels: AIChatModelCard[] = [
       search: true,
     },
     contextWindowTokens: 204_800,
+    description: 
+      'MiniMax-M2.1 is a lightweight, cutting-edge large language model optimized for coding, proxy workflows, and modern application development, providing cleaner, more concise output and faster perceptual response times.',
+    displayName: 'MiniMax M2.1',
+    enabled: true,
+    id: 'minimax/minimax-m2.1',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-24',
+    settings: {
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 204_800,
     description: 'Built for efficient coding and agent workflows.',
     displayName: 'MiniMax M2',
     enabled: true,
@@ -85,8 +111,35 @@ const qiniuChatModels: AIChatModelCard[] = [
       search: true,
     },
     contextWindowTokens: 200_000,
-    description:
-      "Zhipu’s latest flagship GLM-4.6 surpasses the previous generation in advanced coding, long-text processing, reasoning, and agent capabilities.",
+    description: 
+      'GLM-4.7 is Zhipu\'s latest flagship model, offering improved general capabilities, simpler and more natural replies, and a more immersive writing experience.',
+    displayName: 'GLM-4.7',
+    enabled: true,
+    id: 'z-ai/glm-4.7',
+    maxOutput: 128_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 3.168, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 12.528, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-23',
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 200_000,
+    description: 
+      'The flagship model of Zhipu, GLM-4.6, surpasses its predecessor in all aspects of advanced coding, long text processing, reasoning, and intelligent agent capabilities.',
     displayName: 'GLM-4.6',
     enabled: true,
     id: 'z-ai/glm-4.6',

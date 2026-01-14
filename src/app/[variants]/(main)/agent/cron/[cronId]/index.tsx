@@ -1,39 +1,19 @@
 'use client';
 
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
-import {
-  ReactCodePlugin,
-  ReactCodemirrorPlugin,
-  ReactHRPlugin,
-  ReactLinkPlugin,
-  ReactListPlugin,
-  ReactMathPlugin,
-  ReactTablePlugin,
-} from '@lobehub/editor';
-import { Editor, useEditor } from '@lobehub/editor/react';
-import { ActionIcon, Flexbox, Icon, Input, Tag, Text } from '@lobehub/ui';
+import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
-import { App, Card, Checkbox, Empty, InputNumber, Select, Switch, TimePicker, message } from 'antd';
+import { App, Empty, message } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
-import { Clock, Trash2 } from 'lucide-react';
-import {
-  memo,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { Trash2 } from 'lucide-react';
+import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
 import AutoSaveHint from '@/components/Editor/AutoSaveHint';
 import Loading from '@/components/Loading/BrandTextLoading';
-import type { ExecutionConditions, UpdateAgentCronJobData } from '@/database/schemas/agentCronJob';
-import TypoBar from '@/features/EditorModal/Typobar';
+import type { UpdateAgentCronJobData } from '@/database/schemas/agentCronJob';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
@@ -43,18 +23,27 @@ import { agentCronJobService } from '@/services/agentCronJob';
 import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
+
+import { type ScheduleType, buildCronPattern, parseCronPattern } from './CronConfig';
+import CronJobContentEditor from './features/CronJobContentEditor';
+import CronJobHeader from './features/CronJobHeader';
+import CronJobSaveButton from './features/CronJobSaveButton';
+import CronJobScheduleConfig from './features/CronJobScheduleConfig';
 
 interface CronJobDraft {
   content: string;
   cronPattern: string;
   description: string;
+  hourlyInterval?: number; // For hourly: interval in hours (1, 2, 6, 12)
   maxExecutions?: number | null;
-  maxExecutionsPerDay?: number | null;
   name: string;
-  timeRange?: [Dayjs, Dayjs];
-  weekdays: number[];
+  scheduleType: ScheduleType;
+  timezone: string;
+  triggerTime: Dayjs; // Trigger time (HH:mm)
+  weekdays: number[]; // For weekly: selected days
 }
 
 type AutoSaveStatus = 'idle' | 'saving' | 'saved';
@@ -85,52 +74,6 @@ const AutoSaveHintSlot = memo(() => {
   return <AutoSaveHint lastUpdatedTime={lastUpdatedTime} saveStatus={status} />;
 });
 
-// Standard cron format: minute hour day month weekday
-const CRON_PATTERNS = [
-  { label: 'agentCronJobs.interval.30min', value: '*/30 * * * *' },
-  { label: 'agentCronJobs.interval.1hour', value: '0 * * * *' },
-  { label: 'agentCronJobs.interval.2hours', value: '0 */2 * * *' },
-  { label: 'agentCronJobs.interval.6hours', value: '0 */6 * * *' },
-  { label: 'agentCronJobs.interval.12hours', value: '0 */12 * * *' },
-  { label: 'agentCronJobs.interval.daily', value: '0 0 * * *' },
-  { label: 'agentCronJobs.interval.weekly', value: '0 0 * * 0' },
-];
-
-const WEEKDAY_OPTIONS = [
-  { label: 'Mon', value: 1 },
-  { label: 'Tue', value: 2 },
-  { label: 'Wed', value: 3 },
-  { label: 'Thu', value: 4 },
-  { label: 'Fri', value: 5 },
-  { label: 'Sat', value: 6 },
-  { label: 'Sun', value: 0 },
-];
-
-const WEEKDAY_LABELS: Record<number, string> = {
-  0: 'Sunday',
-  1: 'Monday',
-  2: 'Tuesday',
-  3: 'Wednesday',
-  4: 'Thursday',
-  5: 'Friday',
-  6: 'Saturday',
-};
-
-const getIntervalText = (cronPattern: string) => {
-  // Standard cron format mapping
-  const intervalMap: Record<string, string> = {
-    '*/30 * * * *': 'agentCronJobs.interval.30min',
-    '0 * * * *': 'agentCronJobs.interval.1hour',
-    '0 */12 * * *': 'agentCronJobs.interval.12hours',
-    '0 */2 * * *': 'agentCronJobs.interval.2hours',
-    '0 */6 * * *': 'agentCronJobs.interval.6hours',
-    '0 0 * * *': 'agentCronJobs.interval.daily',
-    '0 0 * * 0': 'agentCronJobs.interval.weekly',
-  };
-
-  return intervalMap[cronPattern] || cronPattern;
-};
-
 const resolveDate = (value?: Date | string | null) => {
   if (!value) return null;
   return typeof value === 'string' ? new Date(value) : value;
@@ -141,14 +84,14 @@ const CronJobDetailPage = memo(() => {
   const { aid, cronId } = useParams<{ aid?: string; cronId?: string }>();
   const router = useQueryRoute();
   const { modal } = App.useApp();
-  const editor = useEditor();
   const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
-  const [editorReady, setEditorReady] = useState(false);
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
+
+  const isNewJob = cronId === 'new';
 
   const [draft, setDraft] = useState<CronJobDraft | null>(null);
   const draftRef = useRef<CronJobDraft | null>(null);
   const contentRef = useRef('');
-  const pendingContentRef = useRef<string | null>(null);
   const pendingSaveRef = useRef(false);
   const initializedIdRef = useRef<string | null>(null);
   const readyRef = useRef(false);
@@ -169,9 +112,9 @@ const CronJobDetailPage = memo(() => {
   const cronListAgentId = activeAgentId || aid;
 
   const { data: cronJob, isLoading } = useSWR(
-    ENABLE_BUSINESS_FEATURES && cronId ? ['cronJob', cronId] : null,
+    enableBusinessFeatures && cronId && !isNewJob ? ['cronJob', cronId] : null,
     async () => {
-      if (!cronId) return null;
+      if (!cronId || isNewJob) return null;
       const result = await agentCronJobService.getById(cronId);
       return result.success ? result.data : null;
     },
@@ -183,74 +126,28 @@ const CronJobDetailPage = memo(() => {
     },
   );
 
-  const resolvedCronPattern = draft ? draft.cronPattern : cronJob?.cronPattern;
-  const resolvedWeekdays = draft ? draft.weekdays : cronJob?.executionConditions?.weekdays || [];
-  const resolvedTimeRange = draft
-    ? draft.timeRange
-    : cronJob?.executionConditions?.timeRange
-      ? [
-          dayjs(cronJob.executionConditions.timeRange.start, 'HH:mm'),
-          dayjs(cronJob.executionConditions.timeRange.end, 'HH:mm'),
-        ]
-      : undefined;
-
-  const summaryTags = useMemo(() => {
-    const tags: Array<{ key: string; label: string }> = [];
-
-    if (resolvedCronPattern) {
-      tags.push({
-        key: 'interval',
-        label: t(getIntervalText(resolvedCronPattern) as any),
-      });
-    }
-
-    if (resolvedWeekdays.length > 0) {
-      tags.push({
-        key: 'weekdays',
-        label: resolvedWeekdays.map((day) => WEEKDAY_LABELS[day]).join(', '),
-      });
-    }
-
-    if (resolvedTimeRange && resolvedTimeRange.length === 2) {
-      tags.push({
-        key: 'timeRange',
-        label: `${resolvedTimeRange[0].format('HH:mm')} - ${resolvedTimeRange[1].format('HH:mm')}`,
-      });
-    }
-
-    return tags;
-  }, [resolvedCronPattern, resolvedTimeRange, resolvedWeekdays, t]);
-
   const buildUpdateData = useCallback(
     (snapshot: CronJobDraft | null, content: string): UpdateAgentCronJobData | null => {
       if (!snapshot) return null;
       if (!snapshot.content) return null;
       if (!snapshot.name) return null;
 
-      const executionConditions: ExecutionConditions = {};
-      if (snapshot.timeRange && snapshot.timeRange.length === 2) {
-        executionConditions.timeRange = {
-          end: snapshot.timeRange[1].format('HH:mm'),
-          start: snapshot.timeRange[0].format('HH:mm'),
-        };
-      }
-
-      if (snapshot.weekdays && snapshot.weekdays.length > 0) {
-        executionConditions.weekdays = snapshot.weekdays;
-      }
-
-      if (snapshot.maxExecutionsPerDay) {
-        executionConditions.maxExecutionsPerDay = snapshot.maxExecutionsPerDay;
-      }
+      // Build cron pattern from schedule configuration
+      const cronPattern = buildCronPattern(
+        snapshot.scheduleType,
+        snapshot.triggerTime,
+        snapshot.hourlyInterval,
+        snapshot.weekdays,
+      );
 
       return {
         content,
-        cronPattern: snapshot.cronPattern,
+        cronPattern,
         description: snapshot.description?.trim() || null,
-        executionConditions:
-          Object.keys(executionConditions).length > 0 ? executionConditions : null,
+        executionConditions: null, // No longer using executionConditions for time/weekdays
         maxExecutions: snapshot.maxExecutions ?? null,
         name: snapshot.name?.trim() || null,
+        timezone: snapshot.timezone,
       };
     },
     [],
@@ -271,11 +168,11 @@ const CronJobDetailPage = memo(() => {
         (current) =>
           current
             ? {
-                ...current,
-                ...payload,
-                executionConditions: payload.executionConditions ?? null,
-                ...(updatedAt ? { updatedAt } : null),
-              }
+              ...current,
+              ...payload,
+              executionConditions: payload.executionConditions ?? null,
+              ...(updatedAt ? { updatedAt } : null),
+            }
             : current,
         false,
       );
@@ -290,6 +187,7 @@ const CronJobDetailPage = memo(() => {
 
   const { run: debouncedSave, cancel: cancelDebouncedSave } = useDebounceFn(
     async () => {
+      if (isNewJob) return; // Don't auto-save new jobs
       if (!cronId || initializedIdRef.current !== cronId) return;
       const payload = buildUpdateData(draftRef.current, contentRef.current);
       if (!payload) return;
@@ -322,6 +220,7 @@ const CronJobDetailPage = memo(() => {
   }, [cancelDebouncedSave, cronId]);
 
   const scheduleSave = useCallback(() => {
+    if (isNewJob) return; // Don't auto-save new jobs
     if (!readyRef.current || !draftRef.current) {
       pendingSaveRef.current = true;
       return;
@@ -329,15 +228,16 @@ const CronJobDetailPage = memo(() => {
     isDirtyRef.current = true;
     setAutoSaveState({ status: 'saving' });
     debouncedSave();
-  }, [debouncedSave]);
+  }, [debouncedSave, isNewJob]);
 
   const flushPendingSave = useCallback(() => {
+    if (isNewJob) return; // Don't auto-save new jobs
     if (!pendingSaveRef.current || !draftRef.current) return;
     pendingSaveRef.current = false;
     isDirtyRef.current = true;
     setAutoSaveState({ status: 'saving' });
     debouncedSave();
-  }, [debouncedSave]);
+  }, [debouncedSave, isNewJob]);
 
   const updateDraft = useCallback(
     (patch: Partial<CronJobDraft>) => {
@@ -352,14 +252,13 @@ const CronJobDetailPage = memo(() => {
     [scheduleSave],
   );
 
-  const handleContentChange = useCallback(() => {
-    if (!readyRef.current || !editor || !editorReady) return;
-    const nextContent = enableRichRender
-      ? (editor.getDocument('markdown') as unknown as string)
-      : (editor.getDocument('text') as unknown as string);
-    contentRef.current = nextContent || '';
-    scheduleSave();
-  }, [editor, editorReady, enableRichRender, scheduleSave]);
+  const handleContentChange = useCallback(
+    (content: string) => {
+      contentRef.current = content;
+      updateDraft({ content });
+    },
+    [updateDraft],
+  );
 
   const handleToggleEnabled = useCallback(
     async (enabled: boolean) => {
@@ -377,12 +276,15 @@ const CronJobDetailPage = memo(() => {
     [cronId, mutate, refreshCronList],
   );
 
-  const handleDeleteCronJob = useCallback(() => {
+  const handleDeleteCronJob = useCallback(async () => {
     if (!cronId) return;
 
     modal.confirm({
+      cancelText: t('cancel', { ns: 'common' }),
       centered: true,
+      content: t('agentCronJobs.confirmDeleteCronJob' as any),
       okButtonProps: { danger: true },
+      okText: t('ok', { ns: 'common' }),
       onOk: async () => {
         try {
           let topicIds: string[] = [];
@@ -415,9 +317,81 @@ const CronJobDetailPage = memo(() => {
           message.error('Failed to delete scheduled task');
         }
       },
-      title: t('agentCronJobs.confirmDelete'),
+      title: t('agentCronJobs.deleteCronJob' as any),
     });
   }, [activeTopicId, cronId, cronListAgentId, modal, refreshTopic, router, switchTopic, t]);
+
+  const handleSaveNewJob = useCallback(async () => {
+    if (!aid) {
+      message.error('Agent ID is required');
+      return;
+    }
+
+    const payload = buildUpdateData(draftRef.current, contentRef.current);
+    if (!payload) {
+      message.error('Please fill in all required fields');
+      return;
+    }
+
+    if (!payload.content || !payload.name || !payload.cronPattern) {
+      message.error('Name and content are required');
+      return;
+    }
+
+    setAutoSaveState({ status: 'saving' });
+    try {
+      const result = await agentCronJobService.create({
+        agentId: aid,
+        content: payload.content,
+        cronPattern: payload.cronPattern,
+        description: payload.description,
+        enabled: true,
+        executionConditions: payload.executionConditions,
+        maxExecutions: payload.maxExecutions,
+        name: payload.name,
+        timezone: payload.timezone,
+      });
+
+      if (result.success && result.data) {
+        setAutoSaveState({ lastUpdatedTime: new Date(), status: 'saved' });
+        message.success('Scheduled task created successfully');
+        refreshCronList();
+        // Navigate to the newly created job
+        router.push(`/agent/${aid}/cron/${result.data.id}`);
+      } else {
+        throw new Error('Failed to create job');
+      }
+    } catch (error) {
+      console.error('Failed to create cron job:', error);
+      setAutoSaveState({ status: 'idle' });
+      message.error('Failed to create scheduled task');
+    }
+  }, [aid, buildUpdateData, refreshCronList, router]);
+
+  // Initialize draft for new jobs
+  useEffect(() => {
+    if (!isNewJob || draft) return;
+
+    // Get browser timezone
+    const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+    const defaultDraft: CronJobDraft = {
+      content: '',
+      cronPattern: '0 0 * * *', // Default: daily at midnight
+      description: '',
+      maxExecutions: null,
+      name: '',
+      scheduleType: 'daily',
+      timezone: browserTimezone,
+      triggerTime: dayjs().hour(0).minute(0),
+      weekdays: [0, 1, 2, 3, 4, 5, 6],
+    };
+
+    setDraft(defaultDraft);
+    draftRef.current = defaultDraft;
+    contentRef.current = '';
+    readyRef.current = true;
+  }, [isNewJob, draft]);
 
   useEffect(() => {
     if (!cronJob) return;
@@ -433,230 +407,99 @@ const CronJobDetailPage = memo(() => {
     readyRef.current = false;
     lastSavedNameRef.current = cronJob.name ?? null;
 
+    // Parse cron pattern to extract schedule configuration
+    const parsed = parseCronPattern(cronJob.cronPattern);
+
     const nextDraft: CronJobDraft = {
       content: cronJob.content || '',
       cronPattern: cronJob.cronPattern,
       description: cronJob.description || '',
+      hourlyInterval: parsed.hourlyInterval,
       maxExecutions: cronJob.maxExecutions ?? null,
-      maxExecutionsPerDay: cronJob.executionConditions?.maxExecutionsPerDay ?? null,
       name: cronJob.name || '',
-      timeRange: cronJob.executionConditions?.timeRange
-        ? [
-            dayjs(cronJob.executionConditions.timeRange.start, 'HH:mm'),
-            dayjs(cronJob.executionConditions.timeRange.end, 'HH:mm'),
-          ]
-        : undefined,
-      weekdays: cronJob.executionConditions?.weekdays || [],
+      scheduleType: parsed.scheduleType,
+      timezone: cronJob.timezone || 'UTC',
+      triggerTime: dayjs().hour(parsed.triggerHour).minute(parsed.triggerMinute),
+      weekdays:
+        parsed.scheduleType === 'weekly' && parsed.weekdays
+          ? parsed.weekdays
+          : [0, 1, 2, 3, 4, 5, 6], // Default: all days for weekly
     };
 
     setDraft(nextDraft);
     draftRef.current = nextDraft;
 
     contentRef.current = nextDraft.content;
-    pendingContentRef.current = nextDraft.content;
 
     setAutoSaveState({
       lastUpdatedTime: resolveDate(cronJob.updatedAt),
       status: 'saved',
     });
 
-    if (editorReady && editor) {
-      try {
-        setTimeout(() => {
-          editor.setDocument(enableRichRender ? 'markdown' : 'text', nextDraft.content);
-        }, 100);
-        pendingContentRef.current = null;
-        readyRef.current = true;
-        flushPendingSave();
-      } catch (error) {
-        console.error('[CronJobDetailPage] Failed to init editor content:', error);
-        setTimeout(() => {
-          editor.setDocument(enableRichRender ? 'markdown' : 'text', nextDraft.content);
-        }, 100);
-      }
-    }
-  }, [cronJob, editor, editorReady, enableRichRender]);
+    readyRef.current = true;
+    flushPendingSave();
+  }, [cronJob, flushPendingSave]);
 
-  useEffect(() => {
-    if (!editorReady || !editor || pendingContentRef.current === null) return;
-    try {
-      setTimeout(() => {
-        editor.setDocument(enableRichRender ? 'markdown' : 'text', pendingContentRef.current);
-      }, 100);
-      pendingContentRef.current = null;
-      readyRef.current = true;
-      flushPendingSave();
-    } catch (error) {
-      console.error('[CronJobDetailPage] Failed to init editor content:', error);
-      setTimeout(() => {
-        console.log('setDocument timeout', pendingContentRef.current);
-        editor.setDocument(enableRichRender ? 'markdown' : 'text', pendingContentRef.current);
-      }, 100);
-    }
-  }, [editor, editorReady, enableRichRender]);
-
-  if (!ENABLE_BUSINESS_FEATURES) {
+  if (!enableBusinessFeatures) {
     return null;
   }
 
   return (
     <Flexbox flex={1} height={'100%'}>
-      <NavHeader left={<AutoSaveHintSlot />} />
+      <NavHeader
+        left={!isNewJob ? <AutoSaveHintSlot /> : undefined}
+        right={
+          !isNewJob ? (
+            <ActionIcon
+              icon={Trash2}
+              onClick={handleDeleteCronJob}
+              title={t('delete', { ns: 'common' })}
+            />
+          ) : undefined
+        }
+      />
       <Flexbox flex={1} style={{ overflowY: 'auto' }}>
         <WideScreenContainer paddingBlock={16}>
           {isLoading && <Loading debugId="CronJobDetailPage" />}
-          {!isLoading && !cronJob && (
+          {!isLoading && !cronJob && !isNewJob && (
             <Empty
               description={t('agentCronJobs.empty.description')}
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             />
           )}
-          {!isLoading && cronJob && (
+          {!isLoading && (cronJob || isNewJob) && draft && (
             <Flexbox gap={24}>
-              <Flexbox align="center" gap={16} horizontal justify="space-between">
-                <Flexbox gap={6} style={{ flex: 1, minWidth: 0 }}>
-                  <Input
-                    onChange={(e) => updateDraft({ name: e.target.value })}
-                    placeholder={t('agentCronJobs.form.name.placeholder')}
-                    style={{
-                      fontSize: 28,
-                      fontWeight: 600,
-                      padding: 0,
-                    }}
-                    value={draft?.name ?? cronJob.name ?? ''}
-                    variant={'borderless'}
-                  />
-                </Flexbox>
-                <Flexbox align="center" gap={8} horizontal>
-                  <ActionIcon
-                    icon={Trash2}
-                    onClick={handleDeleteCronJob}
-                    size={'small'}
-                    title={t('delete', { ns: 'common' })}
-                  />
-                  <Text type="secondary">
-                    {t(
-                      cronJob?.enabled
-                        ? 'agentCronJobs.status.enabled'
-                        : 'agentCronJobs.status.disabled',
-                    )}
-                  </Text>
-                  <Switch
-                    defaultChecked={cronJob?.enabled ?? false}
-                    disabled={!cronJob}
-                    key={cronJob?.id ?? 'cron-switch'}
-                    onChange={handleToggleEnabled}
-                    size="small"
-                  />
-                </Flexbox>
-              </Flexbox>
+              <CronJobHeader
+                enabled={cronJob?.enabled ?? false}
+                isNewJob={isNewJob}
+                name={draft.name}
+                onNameChange={(name) => updateDraft({ name })}
+                onToggleEnabled={handleToggleEnabled}
+              />
 
-              <Card size="small" style={{ borderRadius: 12 }} styles={{ body: { padding: 12 } }}>
-                <Flexbox gap={12}>
-                  {summaryTags.length > 0 && (
-                    <Flexbox align="center" gap={8} horizontal style={{ flexWrap: 'wrap' }}>
-                      {summaryTags.map((tag) => (
-                        <Tag key={tag.key} variant={'filled'}>
-                          {tag.label}
-                        </Tag>
-                      ))}
-                    </Flexbox>
-                  )}
+              <CronJobScheduleConfig
+                hourlyInterval={draft.hourlyInterval}
+                maxExecutions={draft.maxExecutions}
+                onScheduleChange={(updates) => updateDraft(updates)}
+                scheduleType={draft.scheduleType}
+                timezone={draft.timezone}
+                triggerTime={draft.triggerTime}
+                weekdays={draft.weekdays}
+              />
 
-                  <Flexbox align="center" gap={8} horizontal style={{ flexWrap: 'wrap' }}>
-                    <Tag variant={'borderless'}>{t('agentCronJobs.schedule')}</Tag>
-                    <Select
-                      onChange={(value) => updateDraft({ cronPattern: value })}
-                      options={CRON_PATTERNS.map((pattern) => ({
-                        label: t(pattern.label as any),
-                        value: pattern.value,
-                      }))}
-                      size="small"
-                      style={{ minWidth: 160 }}
-                      value={draft?.cronPattern ?? cronJob.cronPattern}
-                    />
-                    <TimePicker.RangePicker
-                      format="HH:mm"
-                      onChange={(value) =>
-                        updateDraft({
-                          timeRange:
-                            value && value.length === 2
-                              ? [value[0] as Dayjs, value[1] as Dayjs]
-                              : undefined,
-                        })
-                      }
-                      placeholder={[
-                        t('agentCronJobs.form.timeRange.start'),
-                        t('agentCronJobs.form.timeRange.end'),
-                      ]}
-                      size="small"
-                      value={
-                        draft?.timeRange ??
-                        (resolvedTimeRange as [Dayjs, Dayjs] | undefined) ??
-                        null
-                      }
-                    />
-                    <Checkbox.Group
-                      onChange={(values) => updateDraft({ weekdays: values as number[] })}
-                      options={WEEKDAY_OPTIONS}
-                      style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}
-                      value={draft?.weekdays ?? resolvedWeekdays}
-                    />
-                  </Flexbox>
+              <CronJobContentEditor
+                enableRichRender={enableRichRender}
+                initialValue={cronJob?.content || ''}
+                onChange={handleContentChange}
+              />
 
-                  <Flexbox align="center" gap={8} horizontal style={{ flexWrap: 'wrap' }}>
-                    <Tag variant={'borderless'}>{t('agentCronJobs.maxExecutions')}</Tag>
-                    <InputNumber
-                      min={1}
-                      onChange={(value) => updateDraft({ maxExecutions: value ?? null })}
-                      placeholder={t('agentCronJobs.form.maxExecutions.placeholder')}
-                      size="small"
-                      style={{ width: 160 }}
-                      value={draft?.maxExecutions ?? cronJob.maxExecutions ?? null}
-                    />
-                  </Flexbox>
-                </Flexbox>
-              </Card>
-
-              <Flexbox gap={12}>
-                <Flexbox align="center" gap={6} horizontal>
-                  <Icon icon={Clock} size={16} />
-                  <Text style={{ fontWeight: 600 }}>{t('agentCronJobs.content')}</Text>
-                </Flexbox>
-                <Card
-                  size="small"
-                  style={{ borderRadius: 12, overflow: 'hidden' }}
-                  styles={{ body: { padding: 0 } }}
-                >
-                  {enableRichRender && <TypoBar editor={editor} />}
-                  <Flexbox padding={16} style={{ minHeight: 220 }}>
-                    <Editor
-                      content={''}
-                      editor={editor}
-                      lineEmptyPlaceholder={t('agentCronJobs.form.content.placeholder')}
-                      onInit={() => setEditorReady(true)}
-                      onTextChange={handleContentChange}
-                      placeholder={t('agentCronJobs.form.content.placeholder')}
-                      plugins={
-                        enableRichRender
-                          ? [
-                              ReactListPlugin,
-                              ReactCodePlugin,
-                              ReactCodemirrorPlugin,
-                              ReactHRPlugin,
-                              ReactLinkPlugin,
-                              ReactTablePlugin,
-                              ReactMathPlugin,
-                            ]
-                          : undefined
-                      }
-                      style={{ paddingBottom: 48 }}
-                      type={'text'}
-                      variant={'chat'}
-                    />
-                  </Flexbox>
-                </Card>
-              </Flexbox>
+              {isNewJob && (
+                <CronJobSaveButton
+                  disabled={!draft.name || !draft.content}
+                  loading={false}
+                  onSave={handleSaveNewJob}
+                />
+              )}
             </Flexbox>
           )}
         </WideScreenContainer>

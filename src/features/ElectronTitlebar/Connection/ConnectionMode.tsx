@@ -82,12 +82,12 @@ const ConnectionMode = memo<ConnectionModeProps>(({ setWaiting }) => {
 
   const connect = useElectronStore((s) => s.connectRemoteServer);
   const storageMode = useElectronStore(electronSyncSelectors.storageMode);
-  const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
+  const rawRemoteServerUrl = useElectronStore(electronSyncSelectors.rawRemoteServerUrl);
 
   const [selectedOption, setSelectedOption] = useState<RemoteStorageMode>(
     storageMode === StorageModeEnum.SelfHost ? StorageModeEnum.SelfHost : StorageModeEnum.Cloud,
   );
-  const [selfHostedUrl, setSelfHostedUrl] = useState(remoteServerUrl);
+  const [selfHostedUrl, setSelfHostedUrl] = useState(rawRemoteServerUrl);
 
   const validateUrl = useCallback((url: string) => {
     if (!url) {
