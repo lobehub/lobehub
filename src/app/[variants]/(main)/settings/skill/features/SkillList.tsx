@@ -97,18 +97,27 @@ const SkillList = memo(() => {
       }
     }
 
+    // Filter integrations: show all lobehub skills, but only connected klavis
+    const filteredIntegrations = integrationItems.filter((item) => {
+      if (item.type === 'lobehub') {
+        return true;
+      }
+      return (
+        getKlavisServerByIdentifier(item.serverType.identifier)?.status ===
+        KlavisServerStatus.CONNECTED
+      );
+    });
+
     // Sort integrations: connected ones first
-    const sortedIntegrations = integrationItems.sort((a, b) => {
+    const sortedIntegrations = filteredIntegrations.sort((a, b) => {
       const isConnectedA =
         a.type === 'lobehub'
           ? getLobehubSkillServerByProvider(a.provider.id)?.status === LobehubSkillStatus.CONNECTED
-          : getKlavisServerByIdentifier(a.serverType.identifier)?.status ===
-            KlavisServerStatus.CONNECTED;
+          : true;
       const isConnectedB =
         b.type === 'lobehub'
           ? getLobehubSkillServerByProvider(b.provider.id)?.status === LobehubSkillStatus.CONNECTED
-          : getKlavisServerByIdentifier(b.serverType.identifier)?.status ===
-            KlavisServerStatus.CONNECTED;
+          : true;
 
       if (isConnectedA && !isConnectedB) return -1;
       if (!isConnectedA && isConnectedB) return 1;
