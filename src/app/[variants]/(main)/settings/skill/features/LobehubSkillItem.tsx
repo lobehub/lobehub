@@ -131,7 +131,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
 
   const startWindowMonitor = useCallback(
     (oauthWindow: Window) => {
-      windowCheckIntervalRef.current = setInterval(() => {
+      windowCheckIntervalRef.current = setInterval(async () => {
         try {
           if (oauthWindow.closed) {
             if (windowCheckIntervalRef.current) {
@@ -139,7 +139,8 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
               windowCheckIntervalRef.current = null;
             }
             oauthWindowRef.current = null;
-            checkStatus(provider.id);
+            await checkStatus(provider.id);
+            setIsWaitingAuth(false);
           }
         } catch {
           console.log('[LobehubSkill] COOP blocked window.closed access, falling back to polling');

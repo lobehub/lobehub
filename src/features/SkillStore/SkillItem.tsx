@@ -128,6 +128,26 @@ const SkillItem = memo<SkillItemProps>(
       }
     }, [type, lobehubServer?.status, klavisServer?.status, isWaitingAuth, cleanup]);
 
+    // Listen for OAuth success message from popup window (for LobeHub skills)
+    useEffect(() => {
+      if (type !== 'lobehub') return;
+
+      const handleMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+
+        if (
+          event.data?.type === 'LOBEHUB_SKILL_AUTH_SUCCESS' &&
+          event.data?.provider === identifier
+        ) {
+          cleanup();
+          await checkLobehubStatus(identifier);
+        }
+      };
+
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    }, [type, identifier, cleanup, checkLobehubStatus]);
+
     const startFallbackPolling = useCallback(
       (serverIdOrName: string) => {
         if (pollIntervalRef.current) return;
@@ -157,7 +177,7 @@ const SkillItem = memo<SkillItemProps>(
 
     const startWindowMonitor = useCallback(
       (oauthWindow: Window, serverIdOrName: string) => {
-        windowCheckIntervalRef.current = setInterval(() => {
+        windowCheckIntervalRef.current = setInterval(async () => {
           try {
             if (oauthWindow.closed) {
               if (windowCheckIntervalRef.current) {
@@ -165,11 +185,13 @@ const SkillItem = memo<SkillItemProps>(
                 windowCheckIntervalRef.current = null;
               }
               oauthWindowRef.current = null;
+              // Check status and then reset waiting state
               if (type === 'lobehub') {
-                checkLobehubStatus(serverIdOrName);
+                await checkLobehubStatus(serverIdOrName);
               } else {
-                refreshKlavisServerTools(serverIdOrName);
+                await refreshKlavisServerTools(serverIdOrName);
               }
+              setIsWaitingAuth(false);
             }
           } catch {
             if (windowCheckIntervalRef.current) {

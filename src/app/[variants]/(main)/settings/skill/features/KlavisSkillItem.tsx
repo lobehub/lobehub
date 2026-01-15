@@ -132,7 +132,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
 
   const startWindowMonitor = useCallback(
     (oauthWindow: Window, serverName: string) => {
-      windowCheckIntervalRef.current = setInterval(() => {
+      windowCheckIntervalRef.current = setInterval(async () => {
         try {
           if (oauthWindow.closed) {
             if (windowCheckIntervalRef.current) {
@@ -140,7 +140,8 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
               windowCheckIntervalRef.current = null;
             }
             oauthWindowRef.current = null;
-            refreshKlavisServerTools(serverName);
+            await refreshKlavisServerTools(serverName);
+            setIsWaitingAuth(false);
           }
         } catch {
           console.log('[Klavis] COOP blocked window.closed access, falling back to polling');
