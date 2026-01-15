@@ -1,13 +1,13 @@
 import { Flexbox, Text } from '@lobehub/ui';
-import { cx } from 'antd-style';
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BubblesLoading from '@/components/BubblesLoading';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import type { OperationType } from '@/store/chat/slices/operation/types';
-import { dotLoading } from '@/styles/loading';
+
+const ELAPSED_TIME_THRESHOLD = 2100; // Show elapsed time after 2 seconds
 
 interface ContentLoadingProps {
   id: string;
@@ -16,22 +16,45 @@ interface ContentLoadingProps {
 const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
   const { t } = useTranslation('chat');
   const operations = useChatStore(operationSelectors.getOperationsByMessage(id));
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  // Get the running operation's type
+  // Get the running operation
   const runningOp = operations.find((op) => op.status === 'running');
   const operationType = runningOp?.type as OperationType | undefined;
+  const startTime = runningOp?.metadata?.startTime;
+
+  // Track elapsed time, reset when operation type changes
+  useEffect(() => {
+    if (!startTime) {
+      setElapsedSeconds(0);
+      return;
+    }
+
+    const updateElapsed = () => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      setElapsedSeconds(elapsed);
+    };
+
+    updateElapsed();
+    const interval = setInterval(updateElapsed, 1000);
+
+    return () => clearInterval(interval);
+  }, [startTime, operationType]);
 
   // Get localized label based on operation type
   const operationLabel = operationType
     ? (t(`operation.${operationType}` as any) as string)
     : undefined;
 
+  const showElapsedTime = elapsedSeconds >= ELAPSED_TIME_THRESHOLD / 1000;
+
   return (
     <Flexbox align={'center'} horizontal>
       <BubblesLoading />
       {operationLabel && (
-        <Text className={cx(dotLoading)} type={'secondary'}>
-          {operationLabel}
+        <Text type={'secondary'}>
+          {operationLabel}...
+          {showElapsedTime && ` (${elapsedSeconds}s)`}
         </Text>
       )}
     </Flexbox>
