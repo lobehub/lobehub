@@ -6,7 +6,7 @@ import { type FC } from 'react';
 import { ProductLogo } from '@/components/Branding/ProductLogo';
 import { electronStylish } from '@/styles/electron';
 
-import { TITLE_BAR_HEIGHT } from './const';
+import { TITLE_BAR_HEIGHT } from './constants';
 
 /**
  * A simple, minimal TitleBar for Electron windows.

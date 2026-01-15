@@ -7,13 +7,13 @@ import { useElectronStore } from '@/store/electron';
 import { electronStylish } from '@/styles/electron';
 import { isMacOS } from '@/utils/platform';
 
-import Connection from './Connection';
+import Connection from '../connection/Connection';
+import { useWatchThemeUpdate } from '../system/useWatchThemeUpdate';
+import { useUpdateModal } from '../updater/UpdateModal';
+import { UpdateNotification } from '../updater/UpdateNotification';
 import NavigationBar from './NavigationBar';
-import { useUpdateModal } from './UpdateModal';
-import { UpdateNotification } from './UpdateNotification';
 import WinControl from './WinControl';
-import { TITLE_BAR_HEIGHT } from './const';
-import { useWatchThemeUpdate } from './hooks/useWatchThemeUpdate';
+import { TITLE_BAR_HEIGHT } from './constants';
 
 const isMac = isMacOS();
 
@@ -78,6 +78,3 @@ const TitleBar = memo(() => {
 });
 
 export default TitleBar;
-
-export { TITLE_BAR_HEIGHT } from './const';
-export { default as SimpleTitleBar } from './SimpleTitleBar';

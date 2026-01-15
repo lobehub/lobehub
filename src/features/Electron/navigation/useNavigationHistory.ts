@@ -7,7 +7,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { useElectronStore } from '@/store/electron';
 
-import { getRouteMetadata } from '../helpers/routeMetadata';
+import { getRouteMetadata } from './routeMetadata';
 
 /**
  * Hook to manage navigation history in Electron desktop app

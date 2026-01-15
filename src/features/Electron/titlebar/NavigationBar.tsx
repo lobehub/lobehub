@@ -10,7 +10,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { electronStylish } from '@/styles/electron';
 import { isMacOS } from '@/utils/platform';
 
-import { useNavigationHistory } from '../hooks/useNavigationHistory';
+import { useNavigationHistory } from '../navigation/useNavigationHistory';
 import RecentlyViewed from './RecentlyViewed';
 
 const isMac = isMacOS();

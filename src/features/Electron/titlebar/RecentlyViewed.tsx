@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { useElectronStore } from '@/store/electron';
 import type { HistoryEntry } from '@/store/electron/actions/navigationHistory';
 
-import { getRouteIcon } from '../helpers/routeMetadata';
+import { getRouteIcon } from '../navigation/routeMetadata';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`

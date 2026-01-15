@@ -7,7 +7,7 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
-import { TITLE_BAR_HEIGHT } from '@/features/ElectronTitlebar';
+import { TITLE_BAR_HEIGHT } from '@/features/Electron/titlebar/constants';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`

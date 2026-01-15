@@ -19,7 +19,7 @@ import { type ReactNode, memo, useEffect, useMemo, useState } from 'react';
 import AntdStaticMethods from '@/components/AntdStaticMethods';
 import { LOBE_THEME_NEUTRAL_COLOR, LOBE_THEME_PRIMARY_COLOR } from '@/const/theme';
 import { isDesktop } from '@/const/version';
-import { TITLE_BAR_HEIGHT } from '@/features/ElectronTitlebar';
+import { TITLE_BAR_HEIGHT } from '@/features/Electron/titlebar/constants';
 import { useIsDark } from '@/hooks/useIsDark';
 import { getUILocaleAndResources } from '@/libs/getUILocaleAndResources';
 import { useGlobalStore } from '@/store/global';
