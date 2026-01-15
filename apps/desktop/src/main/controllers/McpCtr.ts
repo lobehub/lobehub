@@ -395,8 +395,9 @@ export default class McpCtr extends ControllerModule {
   }
 
   private async checkSystemDependency(dependency: any) {
+    const checkCommand = dependency.checkCommand || `${dependency.name} --version`;
+
     try {
-      const checkCommand = dependency.checkCommand || `${dependency.name} --version`;
       const { stdout, stderr } = await execPromise(checkCommand);
 
       if (stderr && !stdout) {
@@ -478,22 +479,19 @@ export default class McpCtr extends ControllerModule {
       const packageName = details?.packageName;
       if (!packageName) return { installed: false };
 
+      // Only check global npm list - do NOT use npx as it may download packages
       try {
         const { stdout } = await execPromise(`npm list -g ${packageName} --depth=0`);
-        if (!stdout.includes('(empty)') && stdout.includes(packageName)) return { installed: true };
+        if (!stdout.includes('(empty)') && stdout.includes(packageName)) {
+          return { installed: true };
+        }
       } catch {
-        // ignore
+        // ignore - package not found in global list
       }
 
-      try {
-        await execPromise(`npx -y ${packageName} --version`);
-        return { installed: true };
-      } catch (error) {
-        return {
-          error: error instanceof Error ? error.message : 'Unknown error',
-          installed: false,
-        };
-      }
+      // For npm packages, we don't require pre-installation
+      // npx will handle downloading and running on-demand during actual MCP connection
+      return { installed: false };
     }
 
     if (installationMethod === 'python') {

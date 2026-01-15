@@ -303,8 +303,6 @@ export const createMCPPluginStoreSlice: StateCreator<
         // Check if cloudEndPoint is available: web + stdio type + haveCloudEndpoint exists
         const hasCloudEndpoint = !isDesktop && stdioOption && haveCloudEndpoint;
 
-        console.log('hasCloudEndpoint', hasCloudEndpoint);
-
         let shouldUseHttpDeployment = !!httpOption && (!hasNonHttpDeployment || !isDesktop);
 
         if (hasCloudEndpoint) {
