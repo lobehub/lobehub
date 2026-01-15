@@ -75,6 +75,7 @@ jobs:
       is_stable: ${{ steps.check.outputs.is_stable }}
       version: ${{ steps.check.outputs.version }}
       is_manual: ${{ steps.check.outputs.is_manual }}
+      release_notes: ${{ steps.check.outputs.release_notes }}
     steps:
       - name: Check release info
         id: check
@@ -86,6 +87,7 @@ jobs:
             echo "is_manual=true" >> $GITHUB_OUTPUT
             echo "is_stable=true" >> $GITHUB_OUTPUT
             echo "version=${version}" >> $GITHUB_OUTPUT
+            echo "release_notes=" >> $GITHUB_OUTPUT
             echo "🔧 Manual trigger: version=${version}"
           else
             # Release 触发: 从 tag 提取版本号
@@ -93,6 +95,12 @@ jobs:
             version="${version#v}"
             echo "is_manual=false" >> $GITHUB_OUTPUT
             echo "version=${version}" >> $GITHUB_OUTPUT
+            release_body="${{ github.event.release.body }}"
+            {
+              echo "release_notes<<EOF"
+              printf '%s\n' "$release_body"
+              echo "EOF"
+            } >> $GITHUB_OUTPUT
 
             # 检查是否为 stable 版本 (不含 beta/alpha/rc/nightly)
             if [[ "$version" == *"beta"* ]] || [[ "$version" == *"alpha"* ]] || [[ "$version" == *"rc"* ]] || [[ "$version" == *"nightly"* ]]; then
@@ -173,6 +181,7 @@ jobs:
         env:
           UPDATE_CHANNEL: stable
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -192,6 +201,7 @@ jobs:
         env:
           UPDATE_CHANNEL: stable
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
@@ -209,6 +219,7 @@ jobs:
         env:
           UPDATE_CHANNEL: stable
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
+          RELEASE_NOTES: ${{ needs.check-stable.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
           KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
