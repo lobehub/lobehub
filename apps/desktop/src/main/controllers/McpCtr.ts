@@ -7,7 +7,7 @@ import superjson from 'superjson';
 import FileService from '@/services/fileSrv';
 import { createLogger } from '@/utils/logger';
 
-import { MCPClient } from '../libs/mcp/client';
+import { MCPClient, MCPConnectionError } from '../libs/mcp/client';
 import type { MCPClientParams, ToolCallContent, ToolCallResult } from '../libs/mcp/types';
 import { ControllerModule, IpcMethod } from './index';
 
@@ -228,8 +228,9 @@ export default class McpCtr extends ControllerModule {
       type: 'stdio',
     };
 
-    const client = await this.createClient(params);
+    let client: MCPClient | undefined;
     try {
+      client = await this.createClient(params);
       const manifest = await client.listManifests();
       const identifier = input.name;
 
@@ -257,8 +258,25 @@ export default class McpCtr extends ControllerModule {
         mcpParams: params,
         type: 'mcp' as any,
       });
+    } catch (error) {
+      // If it's an MCPConnectionError with stderr logs, enhance the error message
+      if (error instanceof MCPConnectionError && error.stderrLogs.length > 0) {
+        const stderrOutput = error.stderrLogs.join('\n');
+        const enhancedError = new Error(
+          `${error.message}\n\n--- STDIO Process Output ---\n${stderrOutput}`,
+        );
+        enhancedError.name = error.name;
+        logger.error('getStdioMcpServerManifest failed with STDIO logs:', {
+          message: error.message,
+          stderrLogs: error.stderrLogs,
+        });
+        throw enhancedError;
+      }
+      throw error;
     } finally {
-      await client.disconnect();
+      if (client) {
+        await client.disconnect();
+      }
     }
   }
 
@@ -313,8 +331,9 @@ export default class McpCtr extends ControllerModule {
       type: 'stdio',
     };
 
-    const client = await this.createClient(params);
+    let client: MCPClient | undefined;
     try {
+      client = await this.createClient(params);
       const args = safeParseToRecord(input.args);
 
       const raw = (await client.callTool(input.toolName, args)) as ToolCallResult;
@@ -328,10 +347,25 @@ export default class McpCtr extends ControllerModule {
         success: true,
       });
     } catch (error) {
+      // If it's an MCPConnectionError with stderr logs, enhance the error message
+      if (error instanceof MCPConnectionError && error.stderrLogs.length > 0) {
+        const stderrOutput = error.stderrLogs.join('\n');
+        const enhancedError = new Error(
+          `${error.message}\n\n--- STDIO Process Output ---\n${stderrOutput}`,
+        );
+        enhancedError.name = error.name;
+        logger.error('callTool failed with STDIO logs:', {
+          message: error.message,
+          stderrLogs: error.stderrLogs,
+        });
+        throw enhancedError;
+      }
       logger.error('callTool failed:', error);
       throw error;
     } finally {
-      await client.disconnect();
+      if (client) {
+        await client.disconnect();
+      }
     }
   }
 
@@ -553,7 +587,7 @@ export default class McpCtr extends ControllerModule {
       const bestResult = recommendedResult || firstInstallableResult || results[0];
 
       const checkResult: CheckMcpInstallResult = {
-        ...(bestResult || {}),
+        ...bestResult,
         allOptions: results as any,
         platform: process.platform,
         success: true,

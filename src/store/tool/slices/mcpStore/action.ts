@@ -9,7 +9,7 @@ import { gt, valid } from 'semver';
 import useSWR, { type SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
 
-import { type MCPErrorData } from '@/libs/mcp/types';
+import { type MCPErrorData, parseStdioErrorMessage } from '@/libs/mcp/types';
 import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
@@ -132,6 +132,8 @@ const buildCloudMcpManifest = (params: {
 // Test connection result type
 export interface TestMcpConnectionResult {
   error?: string;
+  /** STDIO process output logs for debugging */
+  errorLog?: string;
   manifest?: LobeChatPluginManifest;
   success: boolean;
 }
@@ -592,7 +594,7 @@ export const createMCPPluginStoreSlice: StateCreator<
         event: 'install',
         identifier: plugin.identifier,
         source: 'self',
-      })
+      });
 
       discoverService.reportMcpInstallResult({
         identifier: plugin.identifier,
@@ -653,10 +655,22 @@ export const createMCPPluginStoreSlice: StateCreator<
         };
       } else {
         // Fallback handling for normal errors
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const rawErrorMessage = error instanceof Error ? error.message : String(error);
+
+        // Parse STDIO error message to extract process output logs
+        const { originalMessage, errorLog } = parseStdioErrorMessage(rawErrorMessage);
+
         errorInfo = {
-          message: errorMessage,
+          message: originalMessage,
           metadata: {
+            errorLog,
+            params: connection
+              ? {
+                  args: connection.args,
+                  command: connection.command,
+                  type: connection.type,
+                }
+              : undefined,
             step: 'installation_error',
             timestamp: Date.now(),
           },
@@ -800,7 +814,7 @@ export const createMCPPluginStoreSlice: StateCreator<
         event: 'activate',
         identifier: identifier,
         source: 'self',
-      })
+      });
 
       return { manifest, success: true };
     } catch (error) {
@@ -809,20 +823,23 @@ export const createMCPPluginStoreSlice: StateCreator<
         return { error: 'Test cancelled', success: false };
       }
 
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const rawErrorMessage = error instanceof Error ? error.message : String(error);
+
+      // Parse STDIO error message to extract process output logs
+      const { originalMessage, errorLog } = parseStdioErrorMessage(rawErrorMessage);
 
       // Set error state
       set(
         produce((draft: MCPStoreState) => {
           draft.mcpTestLoading[identifier] = false;
-          draft.mcpTestErrors[identifier] = errorMessage;
+          draft.mcpTestErrors[identifier] = originalMessage;
           delete draft.mcpTestAbortControllers[identifier];
         }),
         false,
         n('testMcpConnection/error'),
       );
 
-      return { error: errorMessage, success: false };
+      return { error: originalMessage, errorLog, success: false };
     }
   },
 
@@ -834,7 +851,7 @@ export const createMCPPluginStoreSlice: StateCreator<
       event: 'uninstall',
       identifier: identifier,
       source: 'self',
-    })
+    });
   },
 
   updateMCPInstallProgress: (identifier, progress) => {
