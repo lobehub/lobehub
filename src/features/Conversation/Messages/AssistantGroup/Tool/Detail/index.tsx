@@ -122,7 +122,9 @@ const Render = memo<RenderProps>(
         apiName={apiName}
         identifier={identifier}
         loading
+        messageId={messageId}
         requestArgs={requestArgs}
+        toolCallId={toolCallId}
       />
     );
 

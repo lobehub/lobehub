@@ -15,6 +15,7 @@ import {
   LocalSystemManifest,
   LocalSystemRenders,
 } from '@lobechat/builtin-tool-local-system/client';
+import { MemoryManifest, MemoryRenders } from '@lobechat/builtin-tool-memory/client';
 import { NotebookManifest, NotebookRenders } from '@lobechat/builtin-tool-notebook/client';
 import {
   WebBrowsingManifest,
@@ -32,9 +33,10 @@ const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderRenders as Record<string, BuiltinRender>,
   [GroupManagementManifest.identifier]: GroupManagementRenders as Record<string, BuiltinRender>,
   [GTDManifest.identifier]: GTDRenders as Record<string, BuiltinRender>,
-  [NotebookManifest.identifier]: NotebookRenders as Record<string, BuiltinRender>,
   [KnowledgeBaseManifest.identifier]: KnowledgeBaseRenders as Record<string, BuiltinRender>,
   [LocalSystemManifest.identifier]: LocalSystemRenders as Record<string, BuiltinRender>,
+  [MemoryManifest.identifier]: MemoryRenders as Record<string, BuiltinRender>,
+  [NotebookManifest.identifier]: NotebookRenders as Record<string, BuiltinRender>,
   [WebBrowsingManifest.identifier]: WebBrowsingRenders as Record<string, BuiltinRender>,
 };
 
