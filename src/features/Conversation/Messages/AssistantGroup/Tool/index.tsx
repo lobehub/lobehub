@@ -21,7 +21,7 @@ const Debug = dynamic(() => import('./Debug'), {
   ssr: false,
 });
 
-const Render = dynamic(() => import('./Render'), {
+const Detail = dynamic(() => import('./Detail'), {
   loading: () => <Skeleton.Block active height={120} width={'100%'} />,
   ssr: false,
 });
@@ -152,7 +152,7 @@ const Tool = memo<GroupToolProps>(
             />
           )}
           <ToolErrorBoundary apiName={apiName} identifier={identifier}>
-            <Render
+            <Detail
               apiName={apiName}
               arguments={requestArgs}
               disableEditing={disableEditing}
