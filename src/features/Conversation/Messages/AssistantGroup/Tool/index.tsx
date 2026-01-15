@@ -57,15 +57,15 @@ const Tool = memo<GroupToolProps>(
       toolSelectors.getRenderDisplayControl(identifier, apiName),
     );
     const [showDebug, setShowDebug] = useState(false);
-    const [showPluginRender, setShowPluginRender] = useState(false);
+    const [showToolRender, setShowToolRender] = useState(false);
+    // Controls switching between custom render and fallback ArgumentRender
+    const [showCustomToolRender, setShowCustomToolRender] = useState(true);
 
     const isPending = intervention?.status === 'pending';
     const isReject = intervention?.status === 'rejected';
     const isAbort = intervention?.status === 'aborted';
     const needExpand = renderDisplayControl !== 'collapsed' || isPending;
     const isAlwaysExpand = renderDisplayControl === 'alwaysExpand';
-
-    const showCustomPluginRender = !isPending && !isReject && !isAbort;
 
     let isArgumentsStreaming = false;
     try {
@@ -88,14 +88,16 @@ const Tool = memo<GroupToolProps>(
     const isToolCalling = isToolCallingFromOperation || isToolCallingFallback;
 
     const hasCustomRender = !!getBuiltinRender(identifier, apiName);
+    // Only allow toggle when has custom render and not in pending/reject/abort state
+    const canToggleCustomToolRender = hasCustomRender && !isPending && !isReject && !isAbort;
 
-    // Handle expand state changes with showPluginRender
+    // Handle expand state changes
     const handleExpand = (expand?: boolean) => {
       // Block collapse action when alwaysExpand is set
       if (isAlwaysExpand && expand === false) {
         return;
       }
-      setShowPluginRender(!!expand);
+      setShowToolRender(!!expand);
     };
 
     useEffect(() => {
@@ -104,27 +106,26 @@ const Tool = memo<GroupToolProps>(
       }
     }, [needExpand]);
 
-    const isToolRenderExpand = forceShowStreamingRender || showPluginRender;
+    const isToolDetailExpand = forceShowStreamingRender || showToolRender || showDebug;
+
     return (
       <AccordionItem
         action={
           !disableEditing && (
             <Actions
               assistantMessageId={assistantMessageId}
-              handleExpand={handleExpand}
+              canToggleCustomToolRender={canToggleCustomToolRender}
               identifier={identifier}
+              setShowCustomToolRender={setShowCustomToolRender}
               setShowDebug={setShowDebug}
-              setShowPluginRender={setShowPluginRender}
-              showCustomPluginRender={showCustomPluginRender}
+              showCustomToolRender={showCustomToolRender}
               showDebug={showDebug}
-              showPluginRender={showPluginRender}
             />
           )
         }
-        allowExpand={hasCustomRender}
-        expand={isToolRenderExpand}
+        expand={isToolDetailExpand}
         itemKey={id}
-        onExpandChange={setShowPluginRender}
+        onExpandChange={handleExpand}
         paddingBlock={4}
         paddingInline={4}
         title={
@@ -155,14 +156,14 @@ const Tool = memo<GroupToolProps>(
               apiName={apiName}
               arguments={requestArgs}
               disableEditing={disableEditing}
+              hasCustomRender={hasCustomRender}
               identifier={identifier}
               intervention={intervention}
               isArgumentsStreaming={isArgumentsStreaming}
               isToolCalling={isToolCalling}
               messageId={assistantMessageId}
               result={result}
-              setShowPluginRender={setShowPluginRender}
-              showPluginRender={showPluginRender}
+              showCustomToolRender={showCustomToolRender}
               toolCallId={id}
               toolMessageId={toolMessageId}
               type={type}
