@@ -129,7 +129,7 @@ const DevModal = memo<DevModalProps>(
               height: '100%',
             },
           }}
-          title={t(isEditMode ? 'dev.title.edit' : 'dev.title.create')}
+          title={t(isEditMode ? 'dev.title.skillSettings' : 'dev.title.create')}
           width={mobile ? '100%' : 800}
         >
           <Flexbox

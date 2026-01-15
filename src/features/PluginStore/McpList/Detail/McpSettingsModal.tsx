@@ -1,10 +1,10 @@
 'use client';
 
-import { Modal } from '@lobehub/ui';
-import { memo } from 'react';
+import { Button, Flexbox, Modal } from '@lobehub/ui';
+import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Settings from './Settings';
+import Settings, { type SettingsRef } from './Settings';
 
 interface McpSettingsModalProps {
   identifier: string;
@@ -13,18 +13,42 @@ interface McpSettingsModalProps {
 }
 
 const McpSettingsModal = memo<McpSettingsModalProps>(({ identifier, open, onClose }) => {
-  const { t } = useTranslation('plugin');
+  const { t } = useTranslation(['plugin', 'common']);
+  const settingsRef = useRef<SettingsRef>(null);
+
+  const footer = (
+    <Flexbox horizontal justify="space-between" style={{ width: '100%' }}>
+      <Button
+        onClick={() => {
+          settingsRef.current?.reset();
+        }}
+      >
+        {t('common:reset')}
+      </Button>
+      <Flexbox gap={8} horizontal>
+        <Button onClick={onClose}>{t('common:cancel')}</Button>
+        <Button
+          onClick={() => {
+            settingsRef.current?.save();
+          }}
+          type="primary"
+        >
+          {t('common:save')}
+        </Button>
+      </Flexbox>
+    </Flexbox>
+  );
 
   return (
     <Modal
       destroyOnHidden
-      footer={null}
+      footer={footer}
       onCancel={onClose}
       open={open}
-      title={t('dev.title.skillSettings')}
+      title={t('plugin:dev.title.skillSettings')}
       width={600}
     >
-      <Settings identifier={identifier} />
+      <Settings hideFooter identifier={identifier} ref={settingsRef} />
     </Modal>
   );
 });

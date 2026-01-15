@@ -1,8 +1,8 @@
 import { Button, Flexbox, Icon, Input, Text } from '@lobehub/ui';
-import { Form as AForm, App, Space } from 'antd';
+import { Form as AForm, App } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { EditIcon, LinkIcon, SaveIcon, Settings2Icon, TerminalIcon } from 'lucide-react';
-import { memo, useState } from 'react';
+import { EditIcon, LinkIcon, Settings2Icon, TerminalIcon } from 'lucide-react';
+import { forwardRef, useImperativeHandle, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import KeyValueEditor from '@/components/KeyValueEditor';
@@ -148,7 +148,17 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const Settings = memo<{ identifier: string }>(({ identifier }) => {
+export interface SettingsRef {
+  reset: () => void;
+  save: () => Promise<void>;
+}
+
+interface SettingsProps {
+  hideFooter?: boolean;
+  identifier: string;
+}
+
+const Settings = forwardRef<SettingsRef, SettingsProps>(({ identifier, hideFooter }, ref) => {
   const { t } = useTranslation(['plugin', 'common']);
   const [connectionForm] = AForm.useForm();
   const [envForm] = AForm.useForm();
@@ -161,6 +171,20 @@ const Settings = memo<{ identifier: string }>(({ identifier }) => {
     s.updateInstallMcpPlugin,
   ]);
   const { message } = App.useApp();
+
+  useImperativeHandle(ref, () => ({
+    reset: () => {
+      connectionForm.resetFields();
+      envForm.resetFields();
+      setIsEditingConnection(false);
+    },
+    save: async () => {
+      if (isEditingConnection) {
+        await connectionForm.submit();
+      }
+      await envForm.submit();
+    },
+  }));
 
   // 获取已安装插件信息
   const installedPlugin = useToolStore(pluginSelectors.getInstalledPluginById(identifier));
@@ -305,19 +329,12 @@ const Settings = memo<{ identifier: string }>(({ identifier }) => {
                     </AForm.Item>
                   </>
                 )}
-                <div className={styles.footer}>
-                  <Space>
-                    <Button
-                      htmlType="submit"
-                      icon={<SaveIcon size={12} />}
-                      loading={connectionLoading}
-                      type="primary"
-                    >
-                      {t('common:save')}
-                    </Button>
-                    <Button onClick={handleCancelEdit}>{t('common:cancel')}</Button>
-                  </Space>
-                </div>
+                <Flexbox className={styles.footer} gap={8} horizontal>
+                  <Button htmlType="submit" loading={connectionLoading} type="primary">
+                    {t('common:save')}
+                  </Button>
+                  <Button onClick={handleCancelEdit}>{t('common:cancel')}</Button>
+                </Flexbox>
               </AForm>
             </div>
           )}
@@ -345,19 +362,14 @@ const Settings = memo<{ identifier: string }>(({ identifier }) => {
                   keyPlaceholder="VARIABLE_NAME"
                 />
               </AForm.Item>
-              <div className={styles.footer}>
-                <Space>
-                  <Button
-                    htmlType="submit"
-                    icon={<SaveIcon size={14} />}
-                    loading={loading}
-                    type="primary"
-                  >
+              {!hideFooter && (
+                <Flexbox className={styles.footer} gap={8} horizontal>
+                  <Button htmlType="submit" loading={loading} type="primary">
                     {t('common:save')}
                   </Button>
                   <Button onClick={() => envForm.resetFields()}>{t('common:reset')}</Button>
-                </Space>
-              </div>
+                </Flexbox>
+              )}
             </AForm>
           </Flexbox>
         )}
