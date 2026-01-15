@@ -1,10 +1,10 @@
 'use client';
 
 import { type KlavisServerType } from '@lobechat/const';
-import { Flexbox, Icon, Image } from '@lobehub/ui';
+import { ActionIcon, Dropdown, Flexbox, Icon, Image } from '@lobehub/ui';
 import { Button } from 'antd';
 import { createStyles, cssVar } from 'antd-style';
-import { Loader2, SquareArrowOutUpRight, Unplug } from 'lucide-react';
+import { Loader2, MoreVerticalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,7 +23,7 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   container: css`
     padding-block: 12px;
-padding-inline: 0;
+    padding-inline: 0;
   `,
   disconnected: css`
     font-size: 14px;
@@ -273,14 +273,29 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
 
     if (server.status === KlavisServerStatus.CONNECTED) {
       return (
-        <Button icon={<Icon icon={Unplug} />} onClick={handleDisconnect} type="default">
-          {t('tools.klavis.disconnect', { defaultValue: 'Disconnect' })}
-        </Button>
+        <Dropdown
+          menu={{
+            items: [
+              {
+                icon: <Icon icon={Unplug} />,
+                key: 'disconnect',
+                label: t('tools.klavis.disconnect', { defaultValue: 'Disconnect' }),
+                onClick: handleDisconnect,
+              },
+            ],
+          }}
+          placement="bottomRight"
+          trigger={['click']}
+        >
+          <ActionIcon icon={MoreVerticalIcon} />
+        </Dropdown>
       );
     }
 
     return null;
   };
+
+  const isConnected = server?.status === KlavisServerStatus.CONNECTED;
 
   return (
     <Flexbox
@@ -292,10 +307,13 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
     >
       <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
         <div className={styles.icon}>{renderIcon()}</div>
-        <span className={styles.title}>{serverType.label}</span>
+        <Flexbox gap={4} style={{ overflow: 'hidden' }}>
+          <span className={styles.title}>{serverType.label}</span>
+          {!isConnected && renderStatus()}
+        </Flexbox>
       </Flexbox>
       <Flexbox align="center" gap={12} horizontal>
-        {renderStatus()}
+        {isConnected && renderStatus()}
         {renderAction()}
       </Flexbox>
     </Flexbox>

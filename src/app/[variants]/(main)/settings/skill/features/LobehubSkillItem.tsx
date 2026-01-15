@@ -1,10 +1,10 @@
 'use client';
 
 import { type LobehubSkillProviderType } from '@lobechat/const';
-import { Flexbox, Icon, Image } from '@lobehub/ui';
+import { ActionIcon, Dropdown, Flexbox, Icon, Image } from '@lobehub/ui';
 import { Button } from 'antd';
 import { createStyles, cssVar } from 'antd-style';
-import { Loader2, SquareArrowOutUpRight, Unplug } from 'lucide-react';
+import { Loader2, MoreVerticalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -262,9 +262,22 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
     }
 
     return (
-      <Button icon={<Icon icon={Unplug} />} onClick={handleDisconnect} type="default">
-        {t('tools.lobehubSkill.disconnect', { defaultValue: 'Disconnect' })}
-      </Button>
+      <Dropdown
+        menu={{
+          items: [
+            {
+              icon: <Icon icon={Unplug} />,
+              key: 'disconnect',
+              label: t('tools.lobehubSkill.disconnect', { defaultValue: 'Disconnect' }),
+              onClick: handleDisconnect,
+            },
+          ],
+        }}
+        placement="bottomRight"
+        trigger={['click']}
+      >
+        <ActionIcon icon={MoreVerticalIcon} />
+      </Dropdown>
     );
   };
 
@@ -282,12 +295,15 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
         <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
           {renderIcon()}
         </div>
-        <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
-          {provider.label}
-        </span>
+        <Flexbox gap={4} style={{ overflow: 'hidden' }}>
+          <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
+            {provider.label}
+          </span>
+          {!isConnected && renderStatus()}
+        </Flexbox>
       </Flexbox>
       <Flexbox align="center" gap={12} horizontal>
-        {renderStatus()}
+        {isConnected && renderStatus()}
         {renderAction()}
       </Flexbox>
     </Flexbox>
