@@ -24,7 +24,7 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   container: css`
     padding-block: 12px;
-padding-inline: 0;
+    padding-inline: 0;
   `,
   disconnected: css`
     font-size: 14px;
@@ -282,14 +282,14 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
         <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
           {renderIcon()}
         </div>
-        <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-          <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
-            {provider.label}
-          </span>
-          {renderStatus()}
-        </Flexbox>
+        <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
+          {provider.label}
+        </span>
       </Flexbox>
-      {renderAction()}
+      <Flexbox align="center" gap={12} horizontal>
+        {renderStatus()}
+        {renderAction()}
+      </Flexbox>
     </Flexbox>
   );
 });

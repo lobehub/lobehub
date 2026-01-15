@@ -22,7 +22,8 @@ const useStyles = createStyles(({ css, token }) => ({
     color: ${token.colorSuccess};
   `,
   container: css`
-    padding: 12px 0;
+    padding-block: 12px;
+padding-inline: 0;
   `,
   disconnected: css`
     font-size: 14px;
@@ -40,9 +41,9 @@ const useStyles = createStyles(({ css, token }) => ({
 
     width: 48px;
     height: 48px;
+    border-radius: 12px;
 
     background: ${token.colorFillTertiary};
-    border-radius: 12px;
   `,
   pending: css`
     font-size: 14px;
@@ -291,12 +292,12 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
     >
       <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
         <div className={styles.icon}>{renderIcon()}</div>
-        <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-          <span className={styles.title}>{serverType.label}</span>
-          {renderStatus()}
-        </Flexbox>
+        <span className={styles.title}>{serverType.label}</span>
       </Flexbox>
-      {renderAction()}
+      <Flexbox align="center" gap={12} horizontal>
+        {renderStatus()}
+        {renderAction()}
+      </Flexbox>
     </Flexbox>
   );
 });

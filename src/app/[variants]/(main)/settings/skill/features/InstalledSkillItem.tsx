@@ -11,17 +11,8 @@ import { type LobeToolType } from '@/types/tool/tool';
 
 const useStyles = createStyles(({ css, token }) => ({
   container: css`
-    padding: 12px 0;
-  `,
-  desc: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    font-size: 14px;
-    color: ${token.colorTextTertiary};
-    text-overflow: ellipsis;
+    padding-block: 12px;
+padding-inline: 0;
   `,
   icon: css`
     display: flex;
@@ -31,9 +22,9 @@ const useStyles = createStyles(({ css, token }) => ({
 
     width: 48px;
     height: 48px;
+    border-radius: 12px;
 
     background: ${token.colorFillTertiary};
-    border-radius: 12px;
   `,
   title: css`
     font-size: 15px;
@@ -45,7 +36,6 @@ const useStyles = createStyles(({ css, token }) => ({
 interface InstalledSkillItemProps {
   author?: string;
   avatar?: string;
-  description?: string;
   identifier: string;
   runtimeType?: string;
   title: string;
@@ -53,7 +43,7 @@ interface InstalledSkillItemProps {
 }
 
 const InstalledSkillItem = memo<InstalledSkillItemProps>(
-  ({ identifier, title, description, avatar, type, runtimeType, author }) => {
+  ({ identifier, title, avatar, type, runtimeType, author }) => {
     const { styles } = useStyles();
     const isMCP = runtimeType === 'mcp';
 
@@ -69,12 +59,9 @@ const InstalledSkillItem = memo<InstalledSkillItemProps>(
           <div className={styles.icon}>
             <PluginAvatar avatar={avatar} size={32} />
           </div>
-          <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-            <Flexbox align="center" gap={8} horizontal>
-              <span className={styles.title}>{title}</span>
-              <PluginTag author={author} isMCP={isMCP} type={type} />
-            </Flexbox>
-            <span className={styles.desc}>{description}</span>
+          <Flexbox align="center" gap={8} horizontal style={{ overflow: 'hidden' }}>
+            <span className={styles.title}>{title}</span>
+            <PluginTag author={author} isMCP={isMCP} type={type} />
           </Flexbox>
         </Flexbox>
         <Actions identifier={identifier} isMCP={isMCP} type={type} />

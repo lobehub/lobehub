@@ -177,7 +177,6 @@ const SkillList = memo(() => {
       <InstalledSkillItem
         author={plugin.author}
         avatar={plugin.avatar}
-        description={plugin.description}
         identifier={plugin.identifier}
         key={plugin.identifier}
         runtimeType={plugin.runtimeType}
@@ -191,7 +190,6 @@ const SkillList = memo(() => {
       <InstalledSkillItem
         author={plugin.author}
         avatar={plugin.avatar}
-        description={plugin.description}
         identifier={plugin.identifier}
         key={plugin.identifier}
         runtimeType={plugin.runtimeType}
