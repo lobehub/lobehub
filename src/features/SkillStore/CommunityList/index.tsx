@@ -8,9 +8,10 @@ import { Virtuoso } from 'react-virtuoso';
 
 import { useToolStore } from '@/store/tool';
 
-import Loading from '../PluginStore/Loading';
-import VirtuosoLoading from '../PluginStore/VirtuosoLoading';
-import CommunityItem from './CommunityItem';
+import Empty from '../Empty';
+import Loading from '../Loading';
+import VirtuosoLoading from '../VirtuosoLoading';
+import Item from './Item';
 
 interface CommunityListProps {
   keywords: string;
@@ -60,13 +61,9 @@ export const CommunityList = memo<CommunityListProps>(({ keywords }) => {
     );
   }
 
-  if (allItems.length === 0) {
-    return (
-      <Flexbox align={'center'} gap={8} padding={48}>
-        <Text type={'secondary'}>{t('skillStore.empty')}</Text>
-      </Flexbox>
-    );
-  }
+  const hasSearchKeywords = Boolean(keywords && keywords.trim());
+
+  if (allItems.length === 0) return <Empty search={hasSearchKeywords} />;
 
   return (
     <Virtuoso
@@ -84,8 +81,8 @@ export const CommunityList = memo<CommunityListProps>(({ keywords }) => {
         const nextItem = allItems[index + 1];
         return (
           <Flexbox gap={12} horizontal paddingBlock={6} paddingInline={16}>
-            <CommunityItem {...item} />
-            {nextItem && <CommunityItem {...nextItem} />}
+            <Item {...item} />
+            {nextItem && <Item {...nextItem} />}
           </Flexbox>
         );
       }}

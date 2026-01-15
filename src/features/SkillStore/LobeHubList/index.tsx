@@ -1,11 +1,9 @@
 'use client';
 
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import { Text } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
@@ -13,15 +11,10 @@ import { klavisStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/s
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
-import SkillItem from './SkillItem';
+import Empty from '../Empty';
+import Item from './Item';
 
-const useStyles = createStyles(({ css, token }) => ({
-  empty: css`
-    padding-block: 48px;
-    padding-inline: 24px;
-    color: ${token.colorTextTertiary};
-    text-align: center;
-  `,
+const useStyles = createStyles(({ css }) => ({
   grid: css`
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -41,7 +34,6 @@ interface LobeHubListProps {
 }
 
 export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
-  const { t } = useTranslation('setting');
   const { styles } = useStyles();
 
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
@@ -95,13 +87,9 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
     });
   }, [keywords, isLobehubSkillEnabled, isKlavisEnabled]);
 
-  if (filteredItems.length === 0) {
-    return (
-      <div className={styles.empty}>
-        <Text type={'secondary'}>{t('skillStore.empty')}</Text>
-      </div>
-    );
-  }
+  const hasSearchKeywords = Boolean(keywords && keywords.trim());
+
+  if (filteredItems.length === 0) return <Empty search={hasSearchKeywords} />;
 
   return (
     <div className={styles.grid}>
@@ -110,7 +98,7 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
           const server = getLobehubSkillServerByProvider(item.provider.id);
           const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
           return (
-            <SkillItem
+            <Item
               icon={item.provider.icon}
               identifier={item.provider.id}
               isConnected={isConnected}
@@ -123,7 +111,7 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
         const server = getKlavisServerByIdentifier(item.serverType.identifier);
         const isConnected = server?.status === KlavisServerStatus.CONNECTED;
         return (
-          <SkillItem
+          <Item
             icon={item.serverType.icon}
             identifier={item.serverType.identifier}
             isConnected={isConnected}
