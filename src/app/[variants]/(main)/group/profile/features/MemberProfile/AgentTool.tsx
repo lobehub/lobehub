@@ -5,12 +5,14 @@ import { useGroupProfileStore } from '@/store/groupProfile';
 
 /**
  * AgentTool for group profile editor
- * - Uses default settings (no web browsing, no filterAvailableInWeb, uses metaList)
+ * - showWebBrowsing: Group member profile supports web browsing toggle
+ * - filterAvailableInWeb: Filter out desktop-only tools in web version
+ * - useAllMetaList: Use allMetaList to include hidden tools
  * - Passes agentId from group profile store to display the correct member's plugins
  */
 const AgentTool = () => {
   const agentId = useGroupProfileStore((s) => s.activeTabId);
-  return <SharedAgentTool agentId={agentId} />;
+  return <SharedAgentTool agentId={agentId} filterAvailableInWeb showWebBrowsing useAllMetaList />;
 };
 
 export default AgentTool;

@@ -462,7 +462,7 @@ describe('topic action', () => {
       });
     });
 
-    it('should NOT clear new key data when switching with undefined (backward compatibility)', async () => {
+    it('should clear new key data when switching with undefined (same as null)', async () => {
       const { result } = renderHook(() => useChatStore());
       const activeAgentId = 'test-agent-id';
 
@@ -475,13 +475,19 @@ describe('topic action', () => {
 
       const replaceMessagesSpy = vi.spyOn(result.current, 'replaceMessages');
 
-      // Switch with undefined (should NOT clear because id !== null)
+      // Switch with undefined (should clear because id == null matches both null and undefined)
       await act(async () => {
         await result.current.switchTopic(undefined, { skipRefreshMessage: true });
       });
 
-      // replaceMessages should NOT be called when switching with undefined
-      expect(replaceMessagesSpy).not.toHaveBeenCalled();
+      // replaceMessages SHOULD be called when switching with undefined
+      expect(replaceMessagesSpy).toHaveBeenCalledWith([], {
+        context: expect.objectContaining({
+          agentId: activeAgentId,
+          topicId: null,
+        }),
+        action: expect.any(String),
+      });
     });
 
     it('should not clear new key data when switching to an existing topic', async () => {

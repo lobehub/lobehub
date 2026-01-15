@@ -27,6 +27,7 @@ export const AgentBuilderManifest: BuiltinToolManifest = {
     {
       description:
         'Search for tools (MCP plugins) in the marketplace. Users can browse and install tools directly from the search results. Use this when users want to find new tools or capabilities.',
+      humanIntervention: 'always',
       name: AgentBuilderApiName.searchMarketTools,
       parameters: {
         properties: {
@@ -55,7 +56,7 @@ export const AgentBuilderManifest: BuiltinToolManifest = {
     // ==================== Write Operations ====================
     {
       description:
-        'Install a plugin for the agent. This tool ALWAYS REQUIRES user approval before installation, even in auto-run mode. For MCP marketplace plugins, it will install and enable the plugin. For Klavis tools that need OAuth, it will initiate the connection flow and wait for user to complete authorization.',
+        'Install a plugin for the agent. This tool ALWAYS REQUIRES user approval before installation, even in auto-run mode. For MCP marketplace plugins, it will install and enable the plugin. For Klavis tools and LobehubSkill providers that need OAuth, it will initiate the connection flow and wait for user to complete authorization.',
       humanIntervention: 'always',
       name: AgentBuilderApiName.installPlugin,
       parameters: {
@@ -67,7 +68,7 @@ export const AgentBuilderManifest: BuiltinToolManifest = {
           },
           source: {
             description:
-              'Plugin source type: "market" for MCP marketplace plugins, "official" for builtin/Klavis tools',
+              'Plugin source type: "market" for MCP marketplace plugins, "official" for builtin/Klavis/LobehubSkill tools',
             enum: ['market', 'official'],
             type: 'string',
           },

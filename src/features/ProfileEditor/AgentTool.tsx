@@ -1,6 +1,11 @@
 'use client';
 
-import { KLAVIS_SERVER_TYPES, type KlavisServerType } from '@lobechat/const';
+import {
+  KLAVIS_SERVER_TYPES,
+  type KlavisServerType,
+  LOBEHUB_SKILL_PROVIDERS,
+  type LobehubSkillProviderType,
+} from '@lobechat/const';
 import { Avatar, Button, Flexbox, Icon, type ItemType, Segmented } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -10,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import KlavisServerItem from '@/features/ChatInput/ActionBar/Tools/KlavisServerItem';
+import LobehubSkillServerItem from '@/features/ChatInput/ActionBar/Tools/LobehubSkillServerItem';
 import ToolItem from '@/features/ChatInput/ActionBar/Tools/ToolItem';
 import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
 import PluginStore from '@/features/PluginStore';
@@ -22,6 +28,7 @@ import { useToolStore } from '@/store/tool';
 import {
   builtinToolSelectors,
   klavisStoreSelectors,
+  lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
@@ -81,6 +88,19 @@ const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label
   return <Icon className={styles.icon} fill={cssVar.colorText} icon={icon} size={18} />;
 });
 
+/**
+ * LobeHub Skill Provider 图标组件
+ */
+const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
+  ({ icon, label }) => {
+    if (typeof icon === 'string') {
+      return <img alt={label} className={styles.icon} height={18} src={icon} width={18} />;
+    }
+
+    return <Icon className={styles.icon} fill={cssVar.colorText} icon={icon} size={18} />;
+  },
+);
+
 export interface AgentToolProps {
   /**
    * Optional agent ID to use instead of currentAgentConfig
@@ -125,11 +145,17 @@ const AgentTool = memo<AgentToolProps>(
     );
 
     // Web browsing uses searchMode instead of plugins array - use byId selector
-    const isSearchEnabled = useAgentStore(chatConfigByIdSelectors.isEnableSearchById(effectiveAgentId));
+    const isSearchEnabled = useAgentStore(
+      chatConfigByIdSelectors.isEnableSearchById(effectiveAgentId),
+    );
 
     // Klavis 相关状态
     const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
     const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableKlavis);
+
+    // LobeHub Skill 相关状态
+    const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
+    const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
 
     // Plugin store modal state
     const [modalOpen, setModalOpen] = useState(false);
@@ -140,16 +166,21 @@ const AgentTool = memo<AgentToolProps>(
     const isInitializedRef = useRef(false);
 
     // Fetch plugins
-    const [useFetchPluginStore, useFetchUserKlavisServers] = useToolStore((s) => [
-      s.useFetchPluginStore,
-      s.useFetchUserKlavisServers,
-    ]);
+    const [useFetchPluginStore, useFetchUserKlavisServers, useFetchLobehubSkillConnections] =
+      useToolStore((s) => [
+        s.useFetchPluginStore,
+        s.useFetchUserKlavisServers,
+        s.useFetchLobehubSkillConnections,
+      ]);
     useFetchPluginStore();
     useFetchInstalledPlugins();
     useCheckPluginsIsInstalled(plugins);
 
     // 使用 SWR 加载用户的 Klavis 集成（从数据库）
     useFetchUserKlavisServers(isKlavisEnabledInEnv);
+
+    // 使用 SWR 加载用户的 LobeHub Skill 连接
+    useFetchLobehubSkillConnections(isLobehubSkillEnabled);
 
     // Toggle web browsing via searchMode - use byId action
     const toggleWebBrowsing = useCallback(async () => {
@@ -270,6 +301,19 @@ const AgentTool = memo<AgentToolProps>(
       [isKlavisEnabledInEnv, allKlavisServers],
     );
 
+    // LobeHub Skill Provider 列表项
+    const lobehubSkillItems = useMemo(
+      () =>
+        isLobehubSkillEnabled
+          ? LOBEHUB_SKILL_PROVIDERS.map((provider) => ({
+              icon: <LobehubSkillIcon icon={provider.icon} label={provider.label} />,
+              key: provider.id, // 使用 provider.id 作为 key，与 pluginId 保持一致
+              label: <LobehubSkillServerItem label={provider.label} provider={provider.id} />,
+            }))
+          : [],
+      [isLobehubSkillEnabled, allLobehubSkillServers],
+    );
+
     // Handle plugin remove via Tag close - use byId actions
     const handleRemovePlugin =
       (
@@ -292,7 +336,7 @@ const AgentTool = memo<AgentToolProps>(
       (id) => !builtinList.some((b) => b.identifier === id),
     ).length;
 
-    // 合并 builtin 工具和 Klavis 服务器
+    // 合并 builtin 工具、LobeHub Skill Providers 和 Klavis 服务器
     const builtinItems = useMemo(
       () => [
         // 原有的 builtin 工具
@@ -312,10 +356,12 @@ const AgentTool = memo<AgentToolProps>(
             />
           ),
         })),
+        // LobeHub Skill Providers
+        ...lobehubSkillItems,
         // Klavis 服务器
         ...klavisServerItems,
       ],
-      [filteredBuiltinList, klavisServerItems, isToolEnabled, handleToggleTool],
+      [filteredBuiltinList, klavisServerItems, lobehubSkillItems, isToolEnabled, handleToggleTool],
     );
 
     // Plugin items for dropdown
@@ -413,8 +459,17 @@ const AgentTool = memo<AgentToolProps>(
         plugins.includes(item.key as string),
       );
 
-      // 合并 builtin 和 Klavis
-      const allBuiltinItems = [...enabledBuiltinItems, ...connectedKlavisItems];
+      // 已连接的 LobeHub Skill Providers
+      const connectedLobehubSkillItems = lobehubSkillItems.filter((item) =>
+        plugins.includes(item.key as string),
+      );
+
+      // 合并 builtin、LobeHub Skill 和 Klavis
+      const allBuiltinItems = [
+        ...enabledBuiltinItems,
+        ...connectedKlavisItems,
+        ...connectedLobehubSkillItems,
+      ];
 
       if (allBuiltinItems.length > 0) {
         items.push({
@@ -462,6 +517,7 @@ const AgentTool = memo<AgentToolProps>(
     }, [
       filteredBuiltinList,
       klavisServerItems,
+      lobehubSkillItems,
       installedPluginList,
       plugins,
       isToolEnabled,
@@ -526,7 +582,7 @@ const AgentTool = memo<AgentToolProps>(
                   overflowY: 'visible',
                 },
               }}
-              minHeight={isKlavisEnabledInEnv ? 500 : undefined}
+              minHeight={isKlavisEnabledInEnv || isLobehubSkillEnabled ? 500 : undefined}
               minWidth={400}
               placement={'bottomLeft'}
               popupRender={(menu) => (
@@ -554,7 +610,7 @@ const AgentTool = memo<AgentToolProps>(
                     className={styles.scroller}
                     style={{
                       maxHeight: 500,
-                      minHeight: isKlavisEnabledInEnv ? 500 : undefined,
+                      minHeight: isKlavisEnabledInEnv || isLobehubSkillEnabled ? 500 : undefined,
                     }}
                   >
                     {menu}

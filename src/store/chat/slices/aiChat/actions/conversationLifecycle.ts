@@ -197,6 +197,8 @@ export const conversationLifecycle: StateCreator<
         // if there is topicId，then add topicId to message
         topicId: operationContext.topicId ?? undefined,
         threadId: operationContext.threadId ?? undefined,
+        // Pass isSupervisor metadata for group orchestration (consistent with server)
+        metadata: operationContext.isSupervisor ? { isSupervisor: true } : undefined,
       },
       { operationId, tempMessageId: tempAssistantId },
     );

@@ -1,20 +1,14 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Suspense, memo, useEffect, useMemo } from 'react';
+import { Suspense, memo, useMemo } from 'react';
 
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
 import ZenModeToast from '@/features/ZenModeToast';
 import { useOperationState } from '@/hooks/useOperationState';
-import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { topicSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/selectors';
-import { useUserMemoryStore } from '@/store/userMemory';
 
 import WelcomeChatItem from './AgentWelcome';
 import ChatHydration from './ChatHydration';
@@ -38,28 +32,6 @@ interface ConversationAreaProps {
  */
 const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
   const context = useGroupContext();
-
-  const [useFetchUserMemory, setActiveMemoryContext] = useUserMemoryStore((s) => [
-    s.useFetchUserMemory,
-    s.setActiveMemoryContext,
-  ]);
-  const [currentAgentMeta, activeTopic] = [
-    useAgentStore(agentSelectors.currentAgentMeta),
-    useChatStore(topicSelectors.currentActiveTopic),
-  ];
-
-  const enableUserMemories = useUserStore(settingsSelectors.memoryEnabled);
-
-  useEffect(() => {
-    if (!enableUserMemories) {
-      setActiveMemoryContext(undefined);
-      return;
-    }
-
-    setActiveMemoryContext({ agent: currentAgentMeta, topic: activeTopic });
-  }, [activeTopic, currentAgentMeta, enableUserMemories, setActiveMemoryContext]);
-
-  useFetchUserMemory(Boolean(enableUserMemories && context.agentId));
 
   // Get raw dbMessages from ChatStore for this context
   // ConversationStore will parse them internally to generate displayMessages

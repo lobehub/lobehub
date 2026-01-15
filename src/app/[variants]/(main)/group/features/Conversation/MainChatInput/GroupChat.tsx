@@ -92,9 +92,6 @@ const Desktop = memo((props: { targetMemberId?: string }) => {
       onMarkdownContentChange={(content) => {
         useChatStore.setState({ inputMessage: content });
       }}
-      onSend={() => {
-        // send({ targetMemberId: props.targetMemberId });
-      }}
       rightActions={isDMPortal ? [] : rightActions}
       // sendButtonProps={{ disabled, generating, onStop: stop }}
       sendMenu={{

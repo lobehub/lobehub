@@ -7,7 +7,7 @@ import { ContextEngine } from '../../pipeline';
 import {
   AgentCouncilFlattenProcessor,
   GroupMessageFlattenProcessor,
-  GroupMessageSenderProcessor,
+  GroupRoleTransformProcessor,
   HistoryTruncateProcessor,
   InputTemplateProcessor,
   MessageCleanupProcessor,
@@ -274,11 +274,13 @@ export class MessagesEngine {
       // 15. Supervisor role restore (convert role=supervisor back to role=assistant for model)
       new SupervisorRoleRestoreProcessor(),
 
-      // 16. Group message sender identity injection (for multi-agent chat)
-      ...(isAgentGroupEnabled
+      // 16. Group role transform (convert other agents' messages to user role with speaker tags)
+      // This must be BEFORE ToolCallProcessor so other agents' tool messages are converted first
+      ...(isAgentGroupEnabled && agentGroup.currentAgentId
         ? [
-            new GroupMessageSenderProcessor({
+            new GroupRoleTransformProcessor({
               agentMap: agentGroup.agentMap!,
+              currentAgentId: agentGroup.currentAgentId,
             }),
           ]
         : []),

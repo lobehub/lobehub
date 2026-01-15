@@ -12,8 +12,9 @@ import {
   Text,
 } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Loader2Icon } from 'lucide-react';
 import { type ReactNode, memo } from 'react';
+
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
 const ACTION_CLASS_NAME = 'nav-item-actions';
 
@@ -50,6 +51,10 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
   contextMenuItems?: GenericItemType[] | (() => GenericItemType[]);
   disabled?: boolean;
   extra?: ReactNode;
+  /**
+   * Optional href for cmd+click to open in new tab
+   */
+  href?: string;
   icon?: IconProps['icon'];
   loading?: boolean;
   title: ReactNode;
@@ -61,6 +66,7 @@ const NavItem = memo<NavItemProps>(
     actions,
     contextMenuItems,
     active,
+    href,
     icon,
     title,
     onClick,
@@ -72,7 +78,15 @@ const NavItem = memo<NavItemProps>(
     const iconColor = active ? cssVar.colorText : cssVar.colorTextDescription;
     const textColor = active ? cssVar.colorText : cssVar.colorTextSecondary;
     const variant = active ? 'filled' : 'borderless';
-    const iconComponent = loading ? Loader2Icon : icon;
+
+    // Link props for cmd+click support
+    const linkProps = href
+      ? {
+          as: 'a' as const,
+          href,
+          style: { color: 'inherit', textDecoration: 'none' },
+        }
+      : {};
 
     const Content = (
       <Block
@@ -84,15 +98,25 @@ const NavItem = memo<NavItemProps>(
         horizontal
         onClick={(e) => {
           if (disabled || loading) return;
+          // Prevent default link behavior for normal clicks (let onClick handle it)
+          // But allow cmd+click to open in new tab
+          if (href && !e.metaKey && !e.ctrlKey) {
+            e.preventDefault();
+          }
           onClick?.(e);
         }}
         paddingInline={4}
         variant={variant}
+        {...linkProps}
         {...rest}
       >
         {icon && (
           <Center flex={'none'} height={28} width={28}>
-            <Icon color={iconColor} icon={iconComponent} size={18} spin={loading} />
+            {loading ? (
+              <NeuralNetworkLoading size={18} />
+            ) : (
+              <Icon color={iconColor} icon={icon} size={18} />
+            )}
           </Center>
         )}
 

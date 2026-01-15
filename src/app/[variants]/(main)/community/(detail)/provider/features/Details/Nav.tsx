@@ -1,6 +1,6 @@
 'use client';
 
-import { SOCIAL_URL } from '@lobechat/business-const';
+import { BRANDING_PROVIDER, SOCIAL_URL } from '@lobechat/business-const';
 import { Flexbox, Icon, Tabs } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { BookOpenIcon, BrainCircuitIcon, ListIcon } from 'lucide-react';
@@ -38,27 +38,36 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = ProviderNavKey.O
   const { t } = useTranslation('discover');
   const { identifier } = useDetailContext();
 
+  // Hide Guide tab for branding provider as it doesn't have integration docs
+  const showGuideTab = identifier !== BRANDING_PROVIDER;
+
+  const items = [
+    {
+      icon: <Icon icon={BookOpenIcon} size={16} />,
+      key: ProviderNavKey.Overview,
+      label: t('providers.details.overview.title'),
+    },
+    ...(showGuideTab
+      ? [
+          {
+            icon: <Icon icon={BrainCircuitIcon} size={16} />,
+            key: ProviderNavKey.Guide,
+            label: t('providers.details.guide.title'),
+          },
+        ]
+      : []),
+    {
+      icon: <Icon icon={ListIcon} size={16} />,
+      key: ProviderNavKey.Related,
+      label: t('providers.details.related.title'),
+    },
+  ];
+
   const nav = (
     <Tabs
       activeKey={activeTab}
       compact={mobile}
-      items={[
-        {
-          icon: <Icon icon={BookOpenIcon} size={16} />,
-          key: ProviderNavKey.Overview,
-          label: t('providers.details.overview.title'),
-        },
-        {
-          icon: <Icon icon={BrainCircuitIcon} size={16} />,
-          key: ProviderNavKey.Guide,
-          label: t('providers.details.guide.title'),
-        },
-        {
-          icon: <Icon icon={ListIcon} size={16} />,
-          key: ProviderNavKey.Related,
-          label: t('providers.details.related.title'),
-        },
-      ]}
+      items={items}
       onChange={(key) => setActiveTab?.(key as ProviderNavKey)}
     />
   );

@@ -124,9 +124,41 @@ When('用户点击新建对话按钮', async function (this: CustomWorld) {
 When('用户点击另一个对话', async function (this: CustomWorld) {
   console.log('   📍 Step: 点击另一个对话...');
 
-  // Find topic items in the sidebar
+  // Check if we're on the home page (has Recent Topics section)
+  const recentTopicsSection = this.page.locator('text=Recent Topics');
+  const isOnHomePage = (await recentTopicsSection.count()) > 0;
+  console.log(`   📍 Is on home page: ${isOnHomePage}`);
+
+  if (isOnHomePage) {
+    // Click the second topic card in Recent Topics section
+    // Cards are wrapped in Link components and contain "Hello! I am a mock AI" text from the mock
+    const recentTopicCards = this.page.locator('a[href*="topic="]');
+    const cardCount = await recentTopicCards.count();
+    console.log(`   📍 Found ${cardCount} recent topic cards (by href)`);
+
+    if (cardCount >= 2) {
+      // Click the second card (different from current topic)
+      await recentTopicCards.nth(1).click();
+      console.log('   ✅ 已点击首页 Recent Topics 中的另一个对话');
+      await this.page.waitForTimeout(2000);
+      return;
+    }
+
+    // Fallback: try to find by text content
+    const topicTextCards = this.page.locator('text=Hello! I am a mock AI');
+    const textCardCount = await topicTextCards.count();
+    console.log(`   📍 Found ${textCardCount} topic cards by text`);
+
+    if (textCardCount >= 2) {
+      await topicTextCards.nth(1).click();
+      console.log('   ✅ 已点击首页 Recent Topics 中的另一个对话 (by text)');
+      await this.page.waitForTimeout(2000);
+      return;
+    }
+  }
+
+  // Fallback: try to find topic items in the sidebar
   // Topics are displayed with star icons (lucide-star) in the left sidebar
-  // Each topic item has a star icon as part of it
   const sidebarTopics = this.page.locator('svg.lucide-star').locator('..').locator('..');
   let topicCount = await sidebarTopics.count();
   console.log(`   📍 Found ${topicCount} topics with star icons`);
@@ -505,8 +537,20 @@ Then('应该切换到该对话', async function (this: CustomWorld) {
 Then('显示该对话的历史消息', async function (this: CustomWorld) {
   console.log('   📍 Step: 验证显示历史消息...');
 
+  // Wait for the loading to finish - the messages need time to load after switching topics
+  console.log('   📍 等待消息加载...');
+  await this.page.waitForTimeout(2000);
+
+  // Wait for the message wrapper to appear (ChatItem component uses message-wrapper class)
+  const messageSelector = '.message-wrapper';
+  try {
+    await this.page.waitForSelector(messageSelector, { timeout: 10_000 });
+  } catch {
+    console.log('   ⚠️ 等待消息选择器超时，尝试备用选择器...');
+  }
+
   // There should be messages in the chat area
-  const messages = this.page.locator('[class*="message"], [data-role]');
+  const messages = this.page.locator(messageSelector);
   const messageCount = await messages.count();
 
   console.log(`   📍 找到 ${messageCount} 条消息`);

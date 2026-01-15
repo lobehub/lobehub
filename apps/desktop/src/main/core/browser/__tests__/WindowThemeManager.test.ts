@@ -38,13 +38,16 @@ vi.mock('@/const/env', () => ({
   isWindows: true,
 }));
 
+vi.mock('@lobechat/desktop-bridge', () => ({
+  TITLE_BAR_HEIGHT: 38,
+}));
+
 vi.mock('@/const/theme', () => ({
   BACKGROUND_DARK: '#1a1a1a',
   BACKGROUND_LIGHT: '#ffffff',
   SYMBOL_COLOR_DARK: '#ffffff',
   SYMBOL_COLOR_LIGHT: '#000000',
   THEME_CHANGE_DELAY: 0,
-  TITLE_BAR_HEIGHT: 32,
 }));
 
 describe('WindowThemeManager', () => {
@@ -89,7 +92,7 @@ describe('WindowThemeManager', () => {
         icon: undefined,
         titleBarOverlay: {
           color: '#1a1a1a',
-          height: 32,
+          height: 36,
           symbolColor: '#ffffff',
         },
         titleBarStyle: 'hidden',
@@ -106,7 +109,7 @@ describe('WindowThemeManager', () => {
         icon: undefined,
         titleBarOverlay: {
           color: '#ffffff',
-          height: 32,
+          height: 36,
           symbolColor: '#000000',
         },
         titleBarStyle: 'hidden',
@@ -183,7 +186,7 @@ describe('WindowThemeManager', () => {
       expect(mockBrowserWindow.setBackgroundColor).toHaveBeenCalledWith('#1a1a1a');
       expect(mockBrowserWindow.setTitleBarOverlay).toHaveBeenCalledWith({
         color: '#1a1a1a',
-        height: 32,
+        height: 36,
         symbolColor: '#ffffff',
       });
     });
@@ -195,7 +198,7 @@ describe('WindowThemeManager', () => {
       expect(mockBrowserWindow.setBackgroundColor).toHaveBeenCalledWith('#ffffff');
       expect(mockBrowserWindow.setTitleBarOverlay).toHaveBeenCalledWith({
         color: '#ffffff',
-        height: 32,
+        height: 36,
         symbolColor: '#000000',
       });
     });

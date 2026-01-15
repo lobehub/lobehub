@@ -60,16 +60,53 @@ export function attributesCommon(): DetectedResourceAttributes {
   }
 }
 
-export function register(options?: { debug?: true | DiagLogLevel; version?: string }) {
+function debugLogLevelFromString(level?: string | null): DiagLogLevel | undefined {
+  if (!level) {
+    return undefined;
+  }
+  if (typeof level !== 'string') {
+    return undefined;
+  }
+
+  switch (level.toLowerCase()) {
+    case 'none':
+      return DiagLogLevel.NONE;
+    case 'error':
+      return DiagLogLevel.ERROR;
+    case 'warn':
+      return DiagLogLevel.WARN;
+    case 'info':
+      return DiagLogLevel.INFO;
+    case 'debug':
+      return DiagLogLevel.DEBUG;
+    case 'verbose':
+      return DiagLogLevel.VERBOSE;
+    case 'all':
+      return DiagLogLevel.ALL;
+    default:
+      return undefined;
+  }
+}
+
+export function register(options?: { debug?: true | DiagLogLevel; name?: string; version?: string }) {
   const attributes = attributesCommon();
 
+  if (typeof options?.name !== 'undefined') {
+    attributes[ATTR_SERVICE_NAME] = options.name;
+  }
   if (typeof options?.version !== 'undefined') {
     attributes[ATTR_SERVICE_VERSION] = options.version;
   }
-  if (typeof options?.debug !== 'undefined') {
+  if (typeof options?.debug !== 'undefined' || env.OTEL_JS_LOBEHUB_DIAG) {
+    const levelFromEnv = debugLogLevelFromString(env.OTEL_JS_LOBEHUB_DIAG);
+
     diag.setLogger(
       new DiagConsoleLogger(),
-      options.debug === true ? DiagLogLevel.DEBUG : options.debug,
+      !!levelFromEnv
+        ? levelFromEnv
+        : options?.debug === true
+          ? DiagLogLevel.DEBUG
+          : options?.debug,
     );
   }
 

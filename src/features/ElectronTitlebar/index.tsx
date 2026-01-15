@@ -1,3 +1,4 @@
+import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { memo, useMemo } from 'react';
@@ -11,7 +12,6 @@ import NavigationBar from './NavigationBar';
 import { UpdateModal } from './UpdateModal';
 import { UpdateNotification } from './UpdateNotification';
 import WinControl from './WinControl';
-import { TITLE_BAR_HEIGHT } from './const';
 import { useWatchThemeUpdate } from './hooks/useWatchThemeUpdate';
 
 const isMac = isMacOS();
@@ -66,5 +66,5 @@ const TitleBar = memo(() => {
 
 export default TitleBar;
 
-export { TITLE_BAR_HEIGHT } from './const';
 export { default as SimpleTitleBar } from './SimpleTitleBar';
+export { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';

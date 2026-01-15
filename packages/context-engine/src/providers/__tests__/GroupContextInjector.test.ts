@@ -57,11 +57,6 @@ describe('GroupContextInjector', () => {
       expect(systemContent).toContain('<member name="Writer" id="agt_writer" />');
       expect(systemContent).toContain('<member name="Editor" id="agt_editor" you="true" />');
 
-      // Output rules section (important for LOBE-1866)
-      expect(systemContent).toContain('<critical_output_rules>');
-      expect(systemContent).toContain('<group_context>');
-      expect(systemContent).toContain('NEVER start your response with');
-
       // Identity rules
       expect(systemContent).toContain('<identity_rules>');
       expect(systemContent).toContain('NEVER expose or display agent IDs');
@@ -156,8 +151,8 @@ describe('GroupContextInjector', () => {
     });
   });
 
-  describe('Output Rules Section (LOBE-1866)', () => {
-    it('should always include critical output rules', async () => {
+  describe('Identity Rules Section', () => {
+    it('should always include identity rules', async () => {
       const injector = new GroupContextInjector({
         enabled: true,
         // Minimal config
@@ -170,15 +165,8 @@ describe('GroupContextInjector', () => {
 
       const systemContent = result.messages[0].content;
 
-      // Even with minimal config, critical output rules should be present
-      expect(systemContent).toContain('<critical_output_rules>');
-      expect(systemContent).toContain('Your responses must contain ONLY your actual reply content');
-      expect(systemContent).toContain('NEVER start your response with');
-      expect(systemContent).toContain('<speaker');
-
-      // Identity rules should also be present
-      expect(systemContent).toContain('<identity_rules>');
-      expect(systemContent).toContain('NEVER expose or display agent IDs');
+      // Even with minimal config, identity rules should be present
+      expect(systemContent).toMatchSnapshot();
     });
   });
 

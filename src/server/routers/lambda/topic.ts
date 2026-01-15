@@ -3,6 +3,7 @@ import {
   type RecentTopicGroup,
   type RecentTopicGroupMember,
 } from '@lobechat/types';
+import { cleanObject } from '@lobechat/utils';
 import { eq, inArray } from 'drizzle-orm';
 import { after } from 'next/server';
 import { z } from 'zod';
@@ -410,8 +411,14 @@ export const topicRouter = router({
         const agentId = topicAgentIdMap.get(topic.id);
         const agentInfo = agentId ? agentInfoMap.get(agentId) : null;
 
+        // Clean agent info - if avatar/title are all null, return null
+        const cleanedAgent = agentInfo ? cleanObject(agentInfo) : null;
+        // Only return agent if it has meaningful display info (avatar or title)
+        const validAgent =
+          cleanedAgent && (cleanedAgent.avatar || cleanedAgent.title) ? cleanedAgent : null;
+
         return {
-          agent: agentInfo ?? null,
+          agent: validAgent,
           group: null,
           id: topic.id,
           title: topic.title,
