@@ -330,9 +330,14 @@ const ListView = memo(function ListView() {
 
   // Memoize footer component to show skeleton loaders when loading more
   const Footer = useCallback(() => {
-    if (!isLoadingMore || !fileListHasMore) return null;
-    return <ListViewSkeleton columnWidths={columnWidths} />;
-  }, [isLoadingMore, fileListHasMore, columnWidths]);
+    if (isLoadingMore && fileListHasMore) return <ListViewSkeleton columnWidths={columnWidths} />;
+
+    // Leave some padding at the end when there are no more pages,
+    // so users can clearly feel they've reached the end of the list.
+    if (fileListHasMore === false && dataLength > 0) return <div aria-hidden style={{ height: 96 }} />;
+
+    return null;
+  }, [columnWidths, dataLength, fileListHasMore, isLoadingMore]);
 
   if (showSkeleton) return <ListViewSkeleton columnWidths={columnWidths} />;
 
