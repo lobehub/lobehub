@@ -74,6 +74,7 @@ const ProviderList = memo(() => {
                   : record.model?.maxDimension
                     ? formatTokenNumber(record.model.maxDimension)
                     : '--',
+              showSorterTooltip: false,
               sorter: (a, b) => {
                 const aValue = a.model?.maxOutput || a.model?.maxDimension || 0;
                 const bValue = b.model?.maxOutput || b.model?.maxDimension || 0;
@@ -81,7 +82,7 @@ const ProviderList = memo(() => {
               },
               title: (
                 <Tooltip title={t('models.providerInfo.maxOutputTooltip')}>
-                  {t('models.providerInfo.maxOutput')}
+                  <span>{t('models.providerInfo.maxOutput')}</span>
                 </Tooltip>
               ),
               width: 120,
@@ -95,6 +96,7 @@ const ProviderList = memo(() => {
                   ? '$' + formatPriceByCurrency(inputRate, record.model.pricing?.currency)
                   : '--';
               },
+              showSorterTooltip: false,
               sorter: (a, b) => {
                 const aRate = getTextInputUnitRate(a.model?.pricing) || 0;
                 const bRate = getTextInputUnitRate(b.model?.pricing) || 0;
@@ -102,7 +104,7 @@ const ProviderList = memo(() => {
               },
               title: (
                 <Tooltip title={t('models.providerInfo.inputTooltip')}>
-                  {t('models.providerInfo.input')}
+                  <span>{t('models.providerInfo.input')}</span>
                 </Tooltip>
               ),
               width: 100,
@@ -116,6 +118,7 @@ const ProviderList = memo(() => {
                   ? '$' + formatPriceByCurrency(outputRate, record.model.pricing?.currency)
                   : '--';
               },
+              showSorterTooltip: false,
               sorter: (a, b) => {
                 const aRate = getTextOutputUnitRate(a.model?.pricing) || 0;
                 const bRate = getTextOutputUnitRate(b.model?.pricing) || 0;
@@ -123,7 +126,7 @@ const ProviderList = memo(() => {
               },
               title: (
                 <Tooltip title={t('models.providerInfo.outputTooltip')}>
-                  {t('models.providerInfo.output')}
+                  <span>{t('models.providerInfo.output')}</span>
                 </Tooltip>
               ),
               width: 100,

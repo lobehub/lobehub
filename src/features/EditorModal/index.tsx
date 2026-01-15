@@ -3,7 +3,11 @@ import { Modal, ModalProps, createRawModal } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { EditorCanvas } from '@/features/EditorCanvas';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
+
+import EditorCanvas from './EditorCanvas';
+import TextareCanvas from './TextArea';
 
 interface EditorModalProps extends ModalProps {
   onConfirm?: (value: string) => Promise<void>;
@@ -13,7 +17,8 @@ interface EditorModalProps extends ModalProps {
 export const EditorModal = memo<EditorModalProps>(({ value, onConfirm, ...rest }) => {
   const [confirmLoading, setConfirmLoading] = useState(false);
   const { t } = useTranslation('common');
-
+  const [v, setV] = useState(value);
+  const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
   const editor = useEditor();
 
   return (
@@ -25,12 +30,13 @@ export const EditorModal = memo<EditorModalProps>(({ value, onConfirm, ...rest }
       okText={t('ok')}
       onOk={async () => {
         setConfirmLoading(true);
-        try {
-          await onConfirm?.((editor?.getDocument('markdown') as unknown as string) || '');
-        } catch (e) {
-          console.error('EditorModal onOk error:', e);
-          onConfirm?.(value || '');
+        let finalValue;
+        if (enableRichRender) {
+          finalValue = editor?.getDocument('markdown') as unknown as string;
+        } else {
+          finalValue = v;
         }
+        await onConfirm?.(finalValue || '');
         setConfirmLoading(false);
       }}
       styles={{
@@ -43,7 +49,11 @@ export const EditorModal = memo<EditorModalProps>(({ value, onConfirm, ...rest }
       width={'min(90vw, 920px)'}
       {...rest}
     >
-      <EditorCanvas editor={editor} editorData={{ content: value }} />
+      {enableRichRender ? (
+        <EditorCanvas defaultValue={value} editor={editor} />
+      ) : (
+        <TextareCanvas defaultValue={value} onChange={(v) => setV(v)} value={v} />
+      )}
     </Modal>
   );
 });

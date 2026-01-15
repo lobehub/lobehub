@@ -7,13 +7,16 @@ import { Users } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import ToolTag from '@/features/ToolTag';
+
 import type { BatchCreateAgentsParams, BatchCreateAgentsState } from '../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    padding: 4px 16px;
-    background: ${cssVar.colorFillQuaternary};
+    padding-block: 4px;
+    padding-inline: 16px;
     border-radius: 8px;
+    background: ${cssVar.colorFillQuaternary};
   `,
   description: css`
     overflow: hidden;
@@ -57,19 +60,33 @@ interface AgentItemProps {
     avatar?: string;
     description?: string;
     title: string;
+    tools?: string[];
   };
 }
 
 const AgentItem = memo<AgentItemProps>(({ agent, definition }) => {
   const avatar = definition?.avatar;
   const description = definition?.description;
+  const tools = definition?.tools;
 
   return (
-    <Flexbox align="center" className={styles.item} gap={12} horizontal>
-      <Avatar avatar={avatar} size={24} style={{ flexShrink: 0 }} title={agent.title} />
-      <Flexbox flex={1} gap={2} style={{ minWidth: 0, overflow: 'hidden' }}>
+    <Flexbox align="flex-start" className={styles.item} gap={12} horizontal>
+      <Avatar
+        avatar={avatar}
+        size={24}
+        style={{ flexShrink: 0, marginTop: 4 }}
+        title={agent.title}
+      />
+      <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
         <span className={styles.title}>{agent.title}</span>
         {description && <span className={styles.description}>{description}</span>}
+        {tools && tools.length > 0 && (
+          <Flexbox gap={4} horizontal style={{ marginTop: 8 }} wrap={'wrap'}>
+            {tools.map((tool) => (
+              <ToolTag identifier={tool} key={tool} variant={'compact'} />
+            ))}
+          </Flexbox>
+        )}
       </Flexbox>
     </Flexbox>
   );

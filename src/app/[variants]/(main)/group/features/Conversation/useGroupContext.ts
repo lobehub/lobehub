@@ -23,9 +23,12 @@ export function useGroupContext(): ConversationContext {
   const supervisorAgentId = currentGroup?.supervisorAgentId;
 
   // Group context uses supervisorAgentId as agentId for message storage
+  // When in group mode (not group_agent thread mode), the supervisor is responding
+  // so we mark isSupervisor: true for proper UI rendering
   return {
     agentId: supervisorAgentId || '',
     groupId: groupId ?? undefined,
+    isSupervisor: !threadId, // Supervisor responds in main group chat, not in agent threads
     scope: threadId ? 'group_agent' : 'group',
     threadId,
     topicId,

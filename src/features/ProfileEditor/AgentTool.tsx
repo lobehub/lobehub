@@ -1,6 +1,11 @@
 'use client';
 
-import { KLAVIS_SERVER_TYPES, type KlavisServerType } from '@lobechat/const';
+import {
+  KLAVIS_SERVER_TYPES,
+  type KlavisServerType,
+  LOBEHUB_SKILL_PROVIDERS,
+  type LobehubSkillProviderType,
+} from '@lobechat/const';
 import { Avatar, Button, Flexbox, Icon, type ItemType, Segmented } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -10,18 +15,20 @@ import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import KlavisServerItem from '@/features/ChatInput/ActionBar/Tools/KlavisServerItem';
+import LobehubSkillServerItem from '@/features/ChatInput/ActionBar/Tools/LobehubSkillServerItem';
 import ToolItem from '@/features/ChatInput/ActionBar/Tools/ToolItem';
 import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
 import PluginStore from '@/features/PluginStore';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useAgentStore } from '@/store/agent';
-import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
+import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
   builtinToolSelectors,
   klavisStoreSelectors,
+  lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
@@ -81,7 +88,25 @@ const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label
   return <Icon className={styles.icon} fill={cssVar.colorText} icon={icon} size={18} />;
 });
 
+/**
+ * LobeHub Skill Provider 图标组件
+ */
+const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
+  ({ icon, label }) => {
+    if (typeof icon === 'string') {
+      return <img alt={label} className={styles.icon} height={18} src={icon} width={18} />;
+    }
+
+    return <Icon className={styles.icon} fill={cssVar.colorText} icon={icon} size={18} />;
+  },
+);
+
 export interface AgentToolProps {
+  /**
+   * Optional agent ID to use instead of currentAgentConfig
+   * Used in group profile to specify which member's plugins to display
+   */
+  agentId?: string;
   /**
    * Whether to filter tools by availableInWeb property
    * @default false
@@ -100,15 +125,17 @@ export interface AgentToolProps {
 }
 
 const AgentTool = memo<AgentToolProps>(
-  ({ showWebBrowsing = false, filterAvailableInWeb = false, useAllMetaList = false }) => {
+  ({ agentId, showWebBrowsing = false, filterAvailableInWeb = false, useAllMetaList = false }) => {
     const { t } = useTranslation('setting');
-    const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
+    const activeAgentId = useAgentStore((s) => s.activeAgentId);
+    const effectiveAgentId = agentId || activeAgentId || '';
+    const config = useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId), isEqual);
 
     // Plugin state management
     const plugins = config?.plugins || [];
 
-    const toggleAgentPlugin = useAgentStore((s) => s.toggleAgentPlugin);
-    const updateAgentChatConfig = useAgentStore((s) => s.updateAgentChatConfig);
+    const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
+    const updateAgentChatConfigById = useAgentStore((s) => s.updateAgentChatConfigById);
     const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
 
     // Use appropriate builtin list based on prop
@@ -117,12 +144,18 @@ const AgentTool = memo<AgentToolProps>(
       isEqual,
     );
 
-    // Web browsing uses searchMode instead of plugins array
-    const isSearchEnabled = useAgentStore(agentChatConfigSelectors.isAgentEnableSearch);
+    // Web browsing uses searchMode instead of plugins array - use byId selector
+    const isSearchEnabled = useAgentStore(
+      chatConfigByIdSelectors.isEnableSearchById(effectiveAgentId),
+    );
 
     // Klavis 相关状态
     const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
     const isKlavisEnabledInEnv = useServerConfigStore(serverConfigSelectors.enableKlavis);
+
+    // LobeHub Skill 相关状态
+    const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
+    const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
 
     // Plugin store modal state
     const [modalOpen, setModalOpen] = useState(false);
@@ -133,10 +166,12 @@ const AgentTool = memo<AgentToolProps>(
     const isInitializedRef = useRef(false);
 
     // Fetch plugins
-    const [useFetchPluginStore, useFetchUserKlavisServers] = useToolStore((s) => [
-      s.useFetchPluginStore,
-      s.useFetchUserKlavisServers,
-    ]);
+    const [useFetchPluginStore, useFetchUserKlavisServers, useFetchLobehubSkillConnections] =
+      useToolStore((s) => [
+        s.useFetchPluginStore,
+        s.useFetchUserKlavisServers,
+        s.useFetchLobehubSkillConnections,
+      ]);
     useFetchPluginStore();
     useFetchInstalledPlugins();
     useCheckPluginsIsInstalled(plugins);
@@ -144,11 +179,37 @@ const AgentTool = memo<AgentToolProps>(
     // 使用 SWR 加载用户的 Klavis 集成（从数据库）
     useFetchUserKlavisServers(isKlavisEnabledInEnv);
 
-    // Toggle web browsing via searchMode
+    // 使用 SWR 加载用户的 LobeHub Skill 连接
+    useFetchLobehubSkillConnections(isLobehubSkillEnabled);
+
+    // Toggle web browsing via searchMode - use byId action
     const toggleWebBrowsing = useCallback(async () => {
+      if (!effectiveAgentId) return;
       const nextMode = isSearchEnabled ? 'off' : 'auto';
-      await updateAgentChatConfig({ searchMode: nextMode });
-    }, [isSearchEnabled, updateAgentChatConfig]);
+      await updateAgentChatConfigById(effectiveAgentId, { searchMode: nextMode });
+    }, [isSearchEnabled, updateAgentChatConfigById, effectiveAgentId]);
+
+    // Toggle a plugin - use byId action
+    const togglePlugin = useCallback(
+      async (pluginId: string, state?: boolean) => {
+        if (!effectiveAgentId) return;
+        const currentPlugins = plugins;
+        const hasPlugin = currentPlugins.includes(pluginId);
+        const shouldEnable = state !== undefined ? state : !hasPlugin;
+
+        let newPlugins: string[];
+        if (shouldEnable && !hasPlugin) {
+          newPlugins = [...currentPlugins, pluginId];
+        } else if (!shouldEnable && hasPlugin) {
+          newPlugins = currentPlugins.filter((id) => id !== pluginId);
+        } else {
+          return;
+        }
+
+        await updateAgentConfigById(effectiveAgentId, { plugins: newPlugins });
+      },
+      [effectiveAgentId, plugins, updateAgentConfigById],
+    );
 
     // Check if a tool is enabled (handles web browsing specially)
     const isToolEnabled = useCallback(
@@ -167,10 +228,10 @@ const AgentTool = memo<AgentToolProps>(
         if (showWebBrowsing && identifier === WEB_BROWSING_IDENTIFIER) {
           await toggleWebBrowsing();
         } else {
-          await toggleAgentPlugin(identifier);
+          await togglePlugin(identifier);
         }
       },
-      [toggleWebBrowsing, toggleAgentPlugin, showWebBrowsing],
+      [toggleWebBrowsing, togglePlugin, showWebBrowsing],
     );
 
     // Set default tab based on installed plugins (only on first load)
@@ -240,7 +301,20 @@ const AgentTool = memo<AgentToolProps>(
       [isKlavisEnabledInEnv, allKlavisServers],
     );
 
-    // Handle plugin remove via Tag close
+    // LobeHub Skill Provider 列表项
+    const lobehubSkillItems = useMemo(
+      () =>
+        isLobehubSkillEnabled
+          ? LOBEHUB_SKILL_PROVIDERS.map((provider) => ({
+              icon: <LobehubSkillIcon icon={provider.icon} label={provider.label} />,
+              key: provider.id, // 使用 provider.id 作为 key，与 pluginId 保持一致
+              label: <LobehubSkillServerItem label={provider.label} provider={provider.id} />,
+            }))
+          : [],
+      [isLobehubSkillEnabled, allLobehubSkillServers],
+    );
+
+    // Handle plugin remove via Tag close - use byId actions
     const handleRemovePlugin =
       (
         pluginId: string | { enabled: boolean; identifier: string; settings: Record<string, any> },
@@ -250,9 +324,10 @@ const AgentTool = memo<AgentToolProps>(
         e.stopPropagation();
         const identifier = typeof pluginId === 'string' ? pluginId : pluginId?.identifier;
         if (showWebBrowsing && identifier === WEB_BROWSING_IDENTIFIER) {
-          await updateAgentChatConfig({ searchMode: 'off' });
+          if (!effectiveAgentId) return;
+          await updateAgentChatConfigById(effectiveAgentId, { searchMode: 'off' });
         } else {
-          toggleAgentPlugin(identifier, false);
+          await togglePlugin(identifier, false);
         }
       };
 
@@ -261,7 +336,7 @@ const AgentTool = memo<AgentToolProps>(
       (id) => !builtinList.some((b) => b.identifier === id),
     ).length;
 
-    // 合并 builtin 工具和 Klavis 服务器
+    // 合并 builtin 工具、LobeHub Skill Providers 和 Klavis 服务器
     const builtinItems = useMemo(
       () => [
         // 原有的 builtin 工具
@@ -281,10 +356,12 @@ const AgentTool = memo<AgentToolProps>(
             />
           ),
         })),
+        // LobeHub Skill Providers
+        ...lobehubSkillItems,
         // Klavis 服务器
         ...klavisServerItems,
       ],
-      [filteredBuiltinList, klavisServerItems, isToolEnabled, handleToggleTool],
+      [filteredBuiltinList, klavisServerItems, lobehubSkillItems, isToolEnabled, handleToggleTool],
     );
 
     // Plugin items for dropdown
@@ -304,13 +381,13 @@ const AgentTool = memo<AgentToolProps>(
               label={item.title}
               onUpdate={async () => {
                 setUpdating(true);
-                await toggleAgentPlugin(item.identifier);
+                await togglePlugin(item.identifier);
                 setUpdating(false);
               }}
             />
           ),
         })),
-      [installedPluginList, plugins, toggleAgentPlugin],
+      [installedPluginList, plugins, togglePlugin],
     );
 
     // All tab items (市场 tab)
@@ -382,8 +459,17 @@ const AgentTool = memo<AgentToolProps>(
         plugins.includes(item.key as string),
       );
 
-      // 合并 builtin 和 Klavis
-      const allBuiltinItems = [...enabledBuiltinItems, ...connectedKlavisItems];
+      // 已连接的 LobeHub Skill Providers
+      const connectedLobehubSkillItems = lobehubSkillItems.filter((item) =>
+        plugins.includes(item.key as string),
+      );
+
+      // 合并 builtin、LobeHub Skill 和 Klavis
+      const allBuiltinItems = [
+        ...enabledBuiltinItems,
+        ...connectedKlavisItems,
+        ...connectedLobehubSkillItems,
+      ];
 
       if (allBuiltinItems.length > 0) {
         items.push({
@@ -411,7 +497,7 @@ const AgentTool = memo<AgentToolProps>(
               label={item.title}
               onUpdate={async () => {
                 setUpdating(true);
-                await toggleAgentPlugin(item.identifier);
+                await togglePlugin(item.identifier);
                 setUpdating(false);
               }}
             />
@@ -431,11 +517,12 @@ const AgentTool = memo<AgentToolProps>(
     }, [
       filteredBuiltinList,
       klavisServerItems,
+      lobehubSkillItems,
       installedPluginList,
       plugins,
       isToolEnabled,
       handleToggleTool,
-      toggleAgentPlugin,
+      togglePlugin,
       t,
     ]);
 
@@ -495,7 +582,7 @@ const AgentTool = memo<AgentToolProps>(
                   overflowY: 'visible',
                 },
               }}
-              minHeight={isKlavisEnabledInEnv ? 500 : undefined}
+              minHeight={isKlavisEnabledInEnv || isLobehubSkillEnabled ? 500 : undefined}
               minWidth={400}
               placement={'bottomLeft'}
               popupRender={(menu) => (
@@ -523,7 +610,7 @@ const AgentTool = memo<AgentToolProps>(
                     className={styles.scroller}
                     style={{
                       maxHeight: 500,
-                      minHeight: isKlavisEnabledInEnv ? 500 : undefined,
+                      minHeight: isKlavisEnabledInEnv || isLobehubSkillEnabled ? 500 : undefined,
                     }}
                   >
                     {menu}

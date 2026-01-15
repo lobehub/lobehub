@@ -238,7 +238,8 @@ class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApi
 
     if (!agentId) {
       return {
-        content: 'No agent found. Please provide an agentId or ensure supervisor context is available.',
+        content:
+          'No agent found. Please provide an agentId or ensure supervisor context is available.',
         error: { message: 'No agent found', type: 'NoAgentContext' },
         success: false,
       };

@@ -1,7 +1,7 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
-import { KLAVIS_SERVER_TYPES, isDesktop } from '@lobechat/const';
+import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS, isDesktop } from '@lobechat/const';
 import {
   type AgentBuilderContext,
   type AgentGroupConfig,
@@ -29,7 +29,11 @@ import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { getChatStoreState } from '@/store/chat';
 import { getToolStoreState } from '@/store/tool';
-import { builtinToolSelectors, klavisStoreSelectors } from '@/store/tool/selectors';
+import {
+  builtinToolSelectors,
+  klavisStoreSelectors,
+  lobehubSkillStoreSelectors,
+} from '@/store/tool/selectors';
 
 import { isCanUseVideo, isCanUseVision } from '../helper';
 import {
@@ -139,7 +143,8 @@ export const contextEngineering = async ({
         currentAgentRole,
         groupTitle: groupDetail.title || undefined,
         members,
-        systemPrompt: groupDetail.config?.systemPrompt || undefined,
+        // Use group.content as the group description (shared prompt/content)
+        systemPrompt: groupDetail.content || undefined,
       };
       log('agentGroup built: %o', agentGroup);
     }
@@ -217,6 +222,28 @@ export const contextEngineering = async ({
           }
         }
 
+        // Get LobehubSkill providers (if enabled)
+        const isLobehubSkillEnabled =
+          typeof window !== 'undefined' &&
+          window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill;
+
+        if (isLobehubSkillEnabled) {
+          const allLobehubSkillServers = lobehubSkillStoreSelectors.getServers(toolState);
+
+          for (const provider of LOBEHUB_SKILL_PROVIDERS) {
+            const server = allLobehubSkillServers.find((s) => s.identifier === provider.id);
+
+            officialTools.push({
+              description: `LobeHub Skill Provider: ${provider.label}`,
+              enabled: enabledPlugins.includes(provider.id),
+              identifier: provider.id,
+              installed: !!server,
+              name: provider.label,
+              type: 'lobehub-skill',
+            });
+          }
+        }
+
         groupAgentBuilderContext = {
           config: {
             openingMessage: activeGroupDetail.config?.openingMessage || undefined,
@@ -252,12 +279,11 @@ export const contextEngineering = async ({
     .map((kb) => ({ description: kb.description, id: kb.id, name: kb.name }));
 
   // Resolve user memories: topic memories and global identities are independent layers
+  // Both functions now read from cache only (no network requests) to avoid blocking sendMessage
   let userMemoryData;
   if (enableUserMemories) {
-    const [topicMemories, globalIdentities] = await Promise.all([
-      resolveTopicMemories(),
-      Promise.resolve(resolveGlobalIdentities()),
-    ]);
+    const topicMemories = resolveTopicMemories();
+    const globalIdentities = resolveGlobalIdentities();
     userMemoryData = combineUserMemoryData(topicMemories, globalIdentities);
   }
 

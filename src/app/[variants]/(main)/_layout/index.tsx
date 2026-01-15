@@ -1,5 +1,6 @@
 'use client';
 
+import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import dynamic from 'next/dynamic';
@@ -13,7 +14,6 @@ import { isDesktop } from '@/const/version';
 import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
 import DesktopNavigationBridge from '@/features/DesktopNavigationBridge';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
-import { TITLE_BAR_HEIGHT } from '@/features/Electron/titlebar/constants';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import NavPanel from '@/features/NavPanel';
 import { useFeedbackModal } from '@/hooks/useFeedbackModal';

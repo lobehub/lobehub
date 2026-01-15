@@ -151,12 +151,14 @@ export const createEditorSlice: StateCreator<
       }
     }
 
-    // Load markdown content or set empty placeholder
-    const mdContent = doc.content?.trim() ? doc.content : ' ';
-    try {
-      editor.setDocument('markdown', mdContent);
-    } catch (err) {
-      console.error('[DocumentStore] Failed to load markdown content:', err);
+    // Load markdown content if available
+    // Skip setDocument for empty content - let editor use its default empty state
+    if (doc.content?.trim()) {
+      try {
+        editor.setDocument('markdown', doc.content);
+      } catch (err) {
+        console.error('[DocumentStore] Failed to load markdown content:', err);
+      }
     }
 
     set({ editor });

@@ -203,7 +203,6 @@ describe('chatDockSlice', () => {
     });
   });
 
-
   describe('closeToolUI', () => {
     it('should pop ToolUI view from stack', () => {
       const { result } = renderHook(() => useChatStore());
@@ -264,48 +263,6 @@ describe('chatDockSlice', () => {
         messageId: 'test-id-2',
         identifier: 'identifier-2',
       });
-      expect(result.current.showPortal).toBe(true);
-    });
-  });
-
-  describe('toggleDock', () => {
-    it('should toggle dock state when no argument is provided', () => {
-      const { result } = renderHook(() => useChatStore());
-
-      expect(result.current.showPortal).toBe(false);
-
-      act(() => {
-        result.current.togglePortal();
-      });
-
-      expect(result.current.showPortal).toBe(true);
-
-      act(() => {
-        result.current.togglePortal();
-      });
-
-      expect(result.current.showPortal).toBe(false);
-    });
-
-    it('should set dock state to the provided value', () => {
-      const { result } = renderHook(() => useChatStore());
-
-      act(() => {
-        result.current.togglePortal(true);
-      });
-
-      expect(result.current.showPortal).toBe(true);
-
-      act(() => {
-        result.current.togglePortal(false);
-      });
-
-      expect(result.current.showPortal).toBe(false);
-
-      act(() => {
-        result.current.togglePortal(true);
-      });
-
       expect(result.current.showPortal).toBe(true);
     });
   });

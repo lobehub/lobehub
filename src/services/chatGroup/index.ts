@@ -89,10 +89,7 @@ class ChatGroupService {
    * Batch create virtual agents and add them to an existing group.
    * This is more efficient than calling createAgentOnly multiple times.
    */
-  batchCreateAgentsInGroup = (
-    groupId: string,
-    agents: GroupMemberConfig[],
-  ) => {
+  batchCreateAgentsInGroup = (groupId: string, agents: GroupMemberConfig[]) => {
     return lambdaClient.group.batchCreateAgentsInGroup.mutate({
       agents: agents as Partial<AgentItem>[],
       groupId,

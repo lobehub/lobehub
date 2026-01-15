@@ -8,100 +8,10 @@ export const GroupManagementIdentifier = 'lobe-group-management';
 export const GroupManagementManifest: BuiltinToolManifest = {
   /* eslint-disable sort-keys-fix/sort-keys-fix */
   api: [
-    // ==================== Member Management ====================
+    // ==================== Agent Info ====================
     {
       description:
-        "Search for agents that can be invited to the group. Returns agents from both the user's collection and the community marketplace. Use this to find suitable agents before inviting them.",
-      name: GroupManagementApiName.searchAgent,
-      parameters: {
-        properties: {
-          query: {
-            description:
-              'Search query to find agents by name, description, or capabilities. Leave empty to browse all available agents.',
-            type: 'string',
-          },
-          source: {
-            description:
-              'Filter by agent source: "user" for user\'s own agents, "community" for marketplace agents, or omit for all sources.',
-            enum: ['user', 'community'],
-            type: 'string',
-          },
-          limit: {
-            default: 10,
-            description: 'Maximum number of results to return (default: 10, max: 20).',
-            maximum: 20,
-            minimum: 1,
-            type: 'number',
-          },
-        },
-        required: [],
-        type: 'object',
-      },
-    },
-    {
-      description:
-        'Invite an agent to join the current group. The agent must be found via searchAgent first. Once invited, the agent becomes available for orchestration.',
-      name: GroupManagementApiName.inviteAgent,
-      humanIntervention: 'always',
-      parameters: {
-        properties: {
-          agentId: {
-            description: 'The ID of the agent to invite. Get this from searchAgent results.',
-            type: 'string',
-          },
-        },
-        required: ['agentId'],
-        type: 'object',
-      },
-    },
-    {
-      description:
-        'Create a new agent dynamically based on user requirements and add it to the group. Use this when no existing agent matches the needed expertise.',
-      humanIntervention: 'required',
-      name: GroupManagementApiName.createAgent,
-      parameters: {
-        properties: {
-          title: {
-            description: 'The display name for the new agent.',
-            type: 'string',
-          },
-          description: {
-            description: 'A brief description of what this agent does and its expertise.',
-            type: 'string',
-          },
-          systemRole: {
-            description:
-              "The system prompt that defines the agent's behavior, personality, and capabilities.",
-            type: 'string',
-          },
-          avatar: {
-            description: "An emoji or image URL for the agent's avatar (optional).",
-            type: 'string',
-          },
-        },
-        required: ['title', 'systemRole'],
-        type: 'object',
-      },
-    },
-    {
-      description:
-        'Remove an agent from the current group. The agent will no longer be available for orchestration but is not deleted from the system.',
-      name: GroupManagementApiName.removeAgent,
-      humanIntervention: 'always',
-      parameters: {
-        properties: {
-          agentId: {
-            description: 'The ID of the agent to remove from the group.',
-            type: 'string',
-          },
-        },
-        required: ['agentId'],
-        type: 'object',
-      },
-    },
-    {
-      description:
-        'Get detailed information about a specific agent, including their capabilities, available tools, and configuration.',
+        'Get detailed information about a specific agent, including their capabilities, available tools, and configuration. Use this to check if an agent has tools before deciding between speak vs executeAgentTask.',
       name: GroupManagementApiName.getAgentInfo,
       parameters: {
         properties: {
@@ -194,8 +104,8 @@ export const GroupManagementManifest: BuiltinToolManifest = {
     {
       description:
         'Assign an asynchronous task to an agent. The task runs in the background and results are returned to the conversation context upon completion. Ideal for longer operations.',
-      name: GroupManagementApiName.executeTask,
-      humanIntervention: 'always',
+      name: GroupManagementApiName.executeAgentTask,
+      humanIntervention: 'required',
       parameters: {
         properties: {
           agentId: {
@@ -221,6 +131,52 @@ export const GroupManagementManifest: BuiltinToolManifest = {
           },
         },
         required: ['agentId', 'task'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Assign multiple tasks to different agents to run in parallel. Each agent works independently in their own context. Use this when you need multiple agents to work on different parts of a problem simultaneously.',
+      name: GroupManagementApiName.executeAgentTasks,
+      humanIntervention: 'required',
+      parameters: {
+        properties: {
+          tasks: {
+            description: 'Array of tasks, each assigned to a specific agent.',
+            items: {
+              properties: {
+                agentId: {
+                  description: 'The ID of the agent to execute this task.',
+                  type: 'string',
+                },
+                title: {
+                  description: 'Brief title describing what this task does (shown in UI).',
+                  type: 'string',
+                },
+                instruction: {
+                  description:
+                    'Detailed instruction/prompt for the task execution. Be specific about expected deliverables.',
+                  type: 'string',
+                },
+                timeout: {
+                  description:
+                    'Optional timeout in milliseconds for this task (default: 1800000, 30 minutes).',
+                  type: 'number',
+                },
+              },
+              required: ['agentId', 'title', 'instruction'],
+              type: 'object',
+            },
+            type: 'array',
+          },
+          skipCallSupervisor: {
+            default: false,
+            description:
+              'If true, the orchestration will end after all tasks complete, without calling the supervisor again.',
+            type: 'boolean',
+          },
+        },
+        required: ['tasks'],
         type: 'object',
       },
     },

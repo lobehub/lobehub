@@ -8,7 +8,7 @@ import SpeakRender from './Speak';
  */
 export const GroupManagementRenders = {
   [GroupManagementApiName.broadcast]: BroadcastRender,
-  [GroupManagementApiName.executeTask]: ExecuteTaskRender,
+  [GroupManagementApiName.executeAgentTask]: ExecuteTaskRender,
   [GroupManagementApiName.speak]: SpeakRender,
 };
 

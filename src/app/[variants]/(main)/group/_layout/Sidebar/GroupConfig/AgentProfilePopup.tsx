@@ -136,12 +136,7 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(({ agent, groupId, childr
             </Text>
 
             {/* Settings Button */}
-            <Flexbox
-              align="center"
-              horizontal
-              justify="flex-end"
-              style={{ paddingBlockStart: 0 }}
-            >
+            <Flexbox align="center" horizontal justify="flex-end" style={{ paddingBlockStart: 0 }}>
               <ActionIcon
                 icon={Settings}
                 onClick={handleSettings}

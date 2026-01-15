@@ -1,8 +1,9 @@
 import { ActionIcon, Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { MessageSquareDashed, Star } from 'lucide-react';
-import { Suspense, memo, useCallback } from 'react';
+import { Suspense, memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import urlJoin from 'url-join';
 
 import { isDesktop } from '@/const/version';
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -28,6 +29,12 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
   const { t } = useTranslation('topic');
   const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
+
+  // Construct href for cmd+click support
+  const href = useMemo(() => {
+    if (!activeAgentId || !id) return undefined;
+    return urlJoin('/chat', `?agent=${activeAgentId}&topic=${id}`);
+  }, [activeAgentId, id]);
 
   const [editing, isLoading] = useChatStore((s) => [
     id ? s.topicRenamingId === id : false,
@@ -97,6 +104,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
         active={active && !threadId && !isInAgentSubRoute}
         contextMenuItems={dropdownMenu}
         disabled={editing}
+        href={href}
         icon={
           <ActionIcon
             color={fav ? cssVar.colorWarning : undefined}

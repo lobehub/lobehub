@@ -43,4 +43,4 @@ DROP TABLE "old_table";
 CREATE INDEX "users_email_idx" ON "users" ("email");
 ```
 
-**Important**: After modifying migration SQL (e.g., adding `IF NOT EXISTS` clauses), run `bun run db:generate-client` to update the hash in `packages/database/src/core/migrations.json`.
+**Important**: After modifying migration SQL (e.g., adding `IF NOT EXISTS` clauses), run `bun run db:generate:client` to update the hash in `packages/database/src/core/migrations.json`.

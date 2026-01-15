@@ -4,7 +4,7 @@ import type { ParsedQuery } from 'query-string';
 import type { ChatGroupItem } from '@/database/schemas/chatGroup';
 
 export interface QueryRouter {
-  push: (url: string, options?: { query?: ParsedQuery }) => void;
+  push: (url: string, options?: { query?: ParsedQuery; replace?: boolean }) => void;
 }
 
 export interface ChatGroupState {

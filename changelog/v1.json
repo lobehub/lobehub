@@ -1,6 +1,118 @@
 [
   {
     "children": {
+      "fixes": ["Click lobe ai topic trigger create new agent."],
+      "improvements": ["Improve agent loading state."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.291"
+  },
+  {
+    "children": {
+      "fixes": ["Fix internal editor onTextChange issue and add test case."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.290"
+  },
+  {
+    "children": {
+      "fixes": ["Fix page content mismatch when switch quickly."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.289"
+  },
+  {
+    "children": {
+      "features": ["Improve group prompt context engine and fix group supervisor response issue."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.288"
+  },
+  {
+    "children": {},
+    "date": "2026-01-14",
+    "version": "2.0.0-next.287"
+  },
+  {
+    "children": {
+      "fixes": ["Prevent auto navigation to profile when clicking topic."]
+    },
+    "date": "2026-01-14",
+    "version": "2.0.0-next.286"
+  },
+  {
+    "children": {
+      "features": [
+        "Update the agent profiles tools check & agentbuilder tools & publish to market button."
+      ]
+    },
+    "date": "2026-01-14",
+    "version": "2.0.0-next.285"
+  },
+  {
+    "children": {
+      "improvements": ["Remove the old lobehub plugins."],
+      "fixes": ["Slove the settings/profile change but not refresh the profiles."]
+    },
+    "date": "2026-01-14",
+    "version": "2.0.0-next.284"
+  },
+  {
+    "children": {
+      "improvements": ["Fix UI issues with tooltip wrapping and dropdown type."]
+    },
+    "date": "2026-01-14",
+    "version": "2.0.0-next.283"
+  },
+  {
+    "children": {
+      "improvements": ["Update readFile content."]
+    },
+    "date": "2026-01-14",
+    "version": "2.0.0-next.282"
+  },
+  {
+    "children": {
+      "fixes": ["Fix group ux and memory retriever."]
+    },
+    "date": "2026-01-14",
+    "version": "2.0.0-next.281"
+  },
+  {
+    "children": {
+      "improvements": ["Add MiniMax-M2.1 and GLM-4.7 for Qiniu provider."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.280"
+  },
+  {
+    "children": {
+      "fixes": ["Fix new topic flick issue, fix thread portal not open correctly."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.279"
+  },
+  {
+    "children": {},
+    "date": "2026-01-13",
+    "version": "2.0.0-next.278"
+  },
+  {
+    "children": {
+      "features": [
+        "Update the community user layout action button, update the cron job visiual way."
+      ]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.277"
+  },
+  {
+    "children": {},
+    "date": "2026-01-13",
+    "version": "2.0.0-next.276"
+  },
+  {
+    "children": {
       "features": ["Improve PageEditor header UX with DropdownMenu and i18n support."]
     },
     "date": "2026-01-13",

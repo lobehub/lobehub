@@ -190,12 +190,13 @@ export const createGroupOrchestrationExecutors = (
 
       // If instruction is provided, inject it as a virtual User Message
       // This virtual message is not persisted to database, only used for model context
+      // Mark with <speaker> tag so the agent knows this instruction is from the Supervisor
       const now = Date.now();
       const messagesWithInstruction: UIChatMessage[] = agentInstruction
         ? [
             ...messages,
             {
-              content: agentInstruction,
+              content: `<speaker name="Supervisor" />\n${agentInstruction}`,
               createdAt: now,
               id: `virtual_speak_instruction_${now}`,
               role: 'user',
@@ -266,12 +267,13 @@ export const createGroupOrchestrationExecutors = (
 
       // If instruction is provided, inject it as a virtual User Message
       // This virtual message is not persisted to database, only used for model context
+      // Mark with <speaker> tag so the agent knows this instruction is from the Supervisor
       const now = Date.now();
       const messagesWithInstruction: UIChatMessage[] = agentInstruction
         ? [
             ...messages,
             {
-              content: agentInstruction,
+              content: `<speaker name="Supervisor" />\n${agentInstruction}`,
               createdAt: now,
               id: `virtual_broadcast_instruction_${now}`,
               role: 'user',

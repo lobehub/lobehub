@@ -16,6 +16,9 @@ export default {
   'agentGroupManagement.executeTask.thread': 'Thread ID',
   'agentGroupManagement.executeTask.timeout': 'Execution Timed Out',
   'agentGroupManagement.executeTask.tokens': 'Token Usage',
+  'agentGroupManagement.executeTasks.intervention.instructionPlaceholder':
+    'Detailed instruction for the agent to perform this task...',
+  'agentGroupManagement.executeTasks.intervention.titlePlaceholder': 'Task title...',
   'codeInterpreter-legacy.error': 'Execution Error',
   'codeInterpreter-legacy.executing': 'Executing...',
   'codeInterpreter-legacy.files': 'Files:',

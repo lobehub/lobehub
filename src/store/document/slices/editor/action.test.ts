@@ -180,7 +180,7 @@ describe('DocumentStore - Editor Actions', () => {
       expect(mockEditor.setDocument).toHaveBeenCalledWith('json', JSON.stringify(editorData));
     });
 
-    it('should set empty placeholder when no content', () => {
+    it('should not call setDocument when content is empty to avoid editor error', () => {
       const { result } = renderHook(() => useDocumentStore());
       const mockEditor = createMockEditor() as any;
 
@@ -196,7 +196,9 @@ describe('DocumentStore - Editor Actions', () => {
         result.current.onEditorInit(mockEditor);
       });
 
-      expect(mockEditor.setDocument).toHaveBeenCalledWith('markdown', ' ');
+      // setDocument should NOT be called for empty content
+      // This prevents "setEditorState: the editor state is empty" error
+      expect(mockEditor.setDocument).not.toHaveBeenCalled();
     });
   });
 

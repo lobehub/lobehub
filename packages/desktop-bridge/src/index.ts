@@ -7,3 +7,6 @@ export {
   locales,
   RouteVariants,
 } from './routeVariants';
+
+// Desktop window constants
+export const TITLE_BAR_HEIGHT = 38;

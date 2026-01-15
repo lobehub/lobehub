@@ -1,3 +1,4 @@
+import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
 import {
   BrowserWindow,
@@ -12,7 +13,6 @@ import { join } from 'node:path';
 import { preloadDir, resourcesDir } from '@/const/dir';
 import { isMac } from '@/const/env';
 import { ELECTRON_BE_PROTOCOL_SCHEME } from '@/const/protocol';
-import { TITLE_BAR_HEIGHT } from '@/const/theme';
 import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import { backendProxyProtocolManager } from '@/core/infrastructure/BackendProxyProtocolManager';
 import { setResponseHeader } from '@/utils/http-headers';

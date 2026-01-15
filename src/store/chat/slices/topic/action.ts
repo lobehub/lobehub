@@ -532,10 +532,11 @@ export const chatTopic: StateCreator<
     const { activeAgentId, activeGroupId } = get();
 
     // Clear the _new key data in the following cases:
-    // 1. When id is explicitly null (switching to empty topic state)
+    // 1. When id is null or undefined (switching to empty topic state)
     // 2. When clearNewKey option is explicitly true
     // This prevents stale data from previous conversations showing up
-    const shouldClearNewKey = id === null || opts.clearNewKey;
+    // Note: Use == null to match both null and undefined
+    const shouldClearNewKey = !id || opts.clearNewKey;
 
     if (shouldClearNewKey && activeAgentId) {
       // Determine scope: use explicit scope from options, or infer from activeGroupId

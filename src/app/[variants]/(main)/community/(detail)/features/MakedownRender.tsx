@@ -3,7 +3,7 @@
 import { Center, Empty, Markdown } from '@lobehub/ui';
 import { FileText } from 'lucide-react';
 import Link from 'next/link';
-import { memo } from 'react';
+import { type ReactNode, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { H1, H2, H3, H4, H5 } from './Toc/Heading';
@@ -26,7 +26,7 @@ const MarkdownRender = memo<{ children?: string }>(({ children }) => {
     <Markdown
       allowHtml
       components={{
-        a: ({ href, ...rest }) => {
+        a: ({ href, ...rest }: { children?: ReactNode; href?: string }) => {
           if (href && href.startsWith('http'))
             return <Link {...rest} href={href} target={'_blank'} />;
           return rest?.children;
@@ -36,7 +36,7 @@ const MarkdownRender = memo<{ children?: string }>(({ children }) => {
         h3: H3,
         h4: H4,
         h5: H5,
-        img: ({ src, ...rest }) => {
+        img: ({ src, ...rest }: { alt?: string; src?: string | Blob }) => {
           // FIXME ignore experimental blob image prop passing
           if (typeof src !== 'string') return null;
           if (src.includes('glama.ai')) return null;

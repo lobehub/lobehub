@@ -6,9 +6,9 @@ import { type MouseEventHandler, memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
+import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import { useNewScreen } from '@/features/Conversation/Messages/components/useNewScreen';
-import GroupAvatar from '@/features/GroupAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
@@ -90,7 +90,13 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
         </>
       }
       avatar={{ ...avatar, title: groupMeta.title }}
-      customAvatarRender={() => <GroupAvatar avatars={memberAvatars} />}
+      customAvatarRender={() => (
+        <AgentGroupAvatar
+          avatar={groupMeta.avatar}
+          backgroundColor={groupMeta.backgroundColor}
+          memberAvatars={memberAvatars}
+        />
+      )}
       newScreen={newScreen}
       onMouseEnter={onMouseEnter}
       placement={'left'}

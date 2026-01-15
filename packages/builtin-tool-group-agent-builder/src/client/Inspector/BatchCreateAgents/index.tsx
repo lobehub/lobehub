@@ -18,8 +18,8 @@ const styles = createStaticStyles(({ css, cssVar: cv }) => ({
     align-items: center;
   `,
   count: css`
-    color: ${cv.colorTextSecondary};
     font-size: 12px;
+    color: ${cv.colorTextSecondary};
   `,
   root: css`
     overflow: hidden;
@@ -83,8 +83,8 @@ export const BatchCreateAgentsInspector = memo<
           <div className={styles.avatarGroup}>
             {displayInfo.displayAgents.map((agent, index) => (
               <Avatar
-                key={index}
                 avatar={agent.avatar}
+                key={index}
                 shape={'square'}
                 size={20}
                 title={agent.title}

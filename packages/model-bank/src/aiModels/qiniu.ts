@@ -21,10 +21,36 @@ const qiniuChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 65_536,
     description:
-      "DeepSeek R1 is DeepSeek’s latest open model with very strong reasoning, matching OpenAI’s o1 on math, programming, and reasoning tasks.",
+      'DeepSeek R1 is DeepSeek’s latest open model with very strong reasoning, matching OpenAI’s o1 on math, programming, and reasoning tasks.',
     displayName: 'DeepSeek R1',
     enabled: true,
     id: 'deepseek-r1',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 204_800,
+    description:
+      'MiniMax-M2.1 is a lightweight, cutting-edge large language model optimized for coding, proxy workflows, and modern application development, providing cleaner, more concise output and faster perceptual response times.',
+    displayName: 'MiniMax M2.1',
+    enabled: true,
+    id: 'minimax/minimax-m2.1',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-24',
+    settings: {
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
@@ -63,7 +89,7 @@ const qiniuChatModels: AIChatModelCard[] = [
     displayName: 'LongCat Flash Chat',
     enabled: true,
     id: 'meituan/longcat-flash-chat',
-    maxOutput: 65536,
+    maxOutput: 65_536,
     pricing: {
       currency: 'CNY',
       units: [
@@ -86,7 +112,34 @@ const qiniuChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      "Zhipu’s latest flagship GLM-4.6 surpasses the previous generation in advanced coding, long-text processing, reasoning, and agent capabilities.",
+      "GLM-4.7 is Zhipu's latest flagship model, offering improved general capabilities, simpler and more natural replies, and a more immersive writing experience.",
+    displayName: 'GLM-4.7',
+    enabled: true,
+    id: 'z-ai/glm-4.7',
+    maxOutput: 128_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 3.168, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 12.528, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-23',
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
+      'The flagship model of Zhipu, GLM-4.6, surpasses its predecessor in all aspects of advanced coding, long text processing, reasoning, and intelligent agent capabilities.',
     displayName: 'GLM-4.6',
     enabled: true,
     id: 'z-ai/glm-4.6',

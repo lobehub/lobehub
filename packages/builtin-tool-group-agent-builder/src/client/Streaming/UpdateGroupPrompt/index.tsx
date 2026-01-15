@@ -21,7 +21,7 @@ export const UpdateGroupPromptStreaming = memo<BuiltinStreamingProps<UpdateGroup
     if (!prompt) return null;
 
     return (
-      <Block padding={4} variant={'outlined'} width="100%">
+      <Block paddingBlock={8} paddingInline={12} variant={'outlined'} width="100%">
         <Markdown animated variant={'chat'}>
           {prompt}
         </Markdown>

@@ -1,6 +1,8 @@
 import type { BaseDataModel } from '../meta';
 
 // Type definitions
+export type ShareVisibility = 'private' | 'link';
+
 export type TimeGroupId =
   | 'today'
   | 'yesterday'
@@ -125,4 +127,48 @@ export interface QueryTopicParams {
    */
   isInbox?: boolean;
   pageSize?: number;
+}
+
+/**
+ * Shared message data for public sharing
+ */
+export interface SharedMessage {
+  content: string;
+  createdAt: Date;
+  id: string;
+  role: string;
+}
+
+/**
+ * Shared topic data returned by public API
+ */
+export interface SharedTopicData {
+  agentId: string | null;
+  agentMeta?: {
+    avatar?: string | null;
+    backgroundColor?: string | null;
+    marketIdentifier?: string | null;
+    slug?: string | null;
+    title?: string | null;
+  };
+  groupId: string | null;
+  groupMeta?: {
+    avatar?: string | null;
+    backgroundColor?: string | null;
+    members?: { avatar: string | null; backgroundColor: string | null }[];
+    title?: string | null;
+  };
+  shareId: string;
+  title: string | null;
+  topicId: string;
+  visibility: ShareVisibility;
+}
+
+/**
+ * Topic share info returned to the owner
+ */
+export interface TopicShareInfo {
+  id: string;
+  topicId: string;
+  visibility: ShareVisibility;
 }

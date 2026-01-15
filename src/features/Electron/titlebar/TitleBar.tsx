@@ -1,3 +1,4 @@
+import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
@@ -13,7 +14,6 @@ import { useUpdateModal } from '../updater/UpdateModal';
 import { UpdateNotification } from '../updater/UpdateNotification';
 import NavigationBar from './NavigationBar';
 import WinControl from './WinControl';
-import { TITLE_BAR_HEIGHT } from './constants';
 
 const isMac = isMacOS();
 

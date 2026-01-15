@@ -9,7 +9,8 @@ import { useAgentStore } from '@/store/agent';
 const AddButton = memo(() => {
   const navigate = useNavigate();
   const createAgent = useAgentStore((s) => s.createAgent);
-  const { mutate, isValidating } = useActionSWR('agent.createAgent', async () => {
+  // Use a unique SWR key to avoid conflicts with useCreateMenuItems which uses 'agent.createAgent'
+  const { mutate, isValidating } = useActionSWR('agent.createAgentFromWelcome', async () => {
     const result = await createAgent({});
     navigate(`/agent/${result.agentId}/profile`);
     return result;

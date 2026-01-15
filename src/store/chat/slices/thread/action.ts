@@ -2,7 +2,12 @@
 // Disable the auto sort key eslint rule to make the code more logic and readable
 import { LOADING_FLAT } from '@lobechat/const';
 import { chainSummaryTitle } from '@lobechat/prompts';
-import { type CreateMessageParams, type IThreadType, type ThreadItem, type UIChatMessage } from '@lobechat/types';
+import {
+  type CreateMessageParams,
+  type IThreadType,
+  type ThreadItem,
+  type UIChatMessage,
+} from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import type { SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
@@ -19,6 +24,7 @@ import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { displayMessageSelectors } from '../message/selectors';
+import { PortalViewType } from '../portal/initialState';
 import { type ThreadDispatch, threadReducer } from './reducer';
 import { genParentMessages } from './selectors';
 
@@ -88,7 +94,8 @@ export const chatThreadMessage: StateCreator<
       false,
       'openThreadCreator',
     );
-    get().togglePortal(true);
+    // Push Thread view to portal stack instead of togglePortal
+    get().pushPortalView({ type: PortalViewType.Thread, startMessageId: messageId });
   },
   openThreadInPortal: (threadId, sourceMessageId) => {
     set(
@@ -96,7 +103,12 @@ export const chatThreadMessage: StateCreator<
       false,
       'openThreadInPortal',
     );
-    get().togglePortal(true);
+    // Push Thread view to portal stack with threadId
+    get().pushPortalView({
+      type: PortalViewType.Thread,
+      threadId,
+      startMessageId: sourceMessageId ?? undefined,
+    });
   },
 
   closeThreadPortal: () => {
@@ -105,7 +117,7 @@ export const chatThreadMessage: StateCreator<
       false,
       'closeThreadPortal',
     );
-    get().togglePortal(false);
+    get().clearPortalStack();
   },
   createThread: async ({ message, sourceMessageId, topicId, type }) => {
     set({ isCreatingThread: true }, false, n('creatingThread/start'));
