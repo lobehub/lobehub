@@ -114,7 +114,7 @@
   "defaultAgent.model.desc": "创建新助理时使用的默认模型",
   "defaultAgent.model.title": "模型",
   "defaultAgent.title": "默认助理设置",
-  "group.aiConfig": "模型配置",
+  "group.aiConfig": "智能体",
   "group.common": "通用",
   "group.profile": "账号",
   "group.subscription": "订阅",

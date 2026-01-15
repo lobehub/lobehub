@@ -116,7 +116,7 @@ export default {
   'defaultAgent.model.desc': 'Default model used when creating a new Agent',
   'defaultAgent.model.title': 'Model',
   'defaultAgent.title': 'Default Agent Settings',
-  'group.aiConfig': 'Model',
+  'group.aiConfig': 'Agent',
   'group.common': 'General',
   'group.profile': 'Account',
   'group.subscription': 'Subscription',
