@@ -42,8 +42,8 @@ const PluginDetailModal = memo<PluginDetailModalProps>(
           onClose();
         }}
         open={open}
-        title={t('detailModal.title')}
-        width={650}
+        title={t('dev.title.skillDetails')}
+        width={800}
       >
         <Meta id={id} />
         <Segmented

@@ -1,6 +1,6 @@
 'use client';
 
-import { Drawer, Flexbox } from '@lobehub/ui';
+import { Flexbox, Modal } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -86,19 +86,16 @@ const InstalledSkillItem = memo<InstalledSkillItemProps>(
           <Actions identifier={identifier} isMCP={isMCP} type={type} />
         </Flexbox>
         {isCommunityMCP && (
-          <Drawer
-            containerMaxWidth={'auto'}
+          <Modal
             destroyOnHidden
             footer={null}
-            height={'100vh'}
-            onClose={() => setDetailOpen(false)}
+            onCancel={() => setDetailOpen(false)}
             open={detailOpen}
-            placement={'bottom'}
-            styles={{ body: { padding: 24 } }}
-            title={t('store.actions.detail')}
+            title={t('dev.title.skillDetails')}
+            width={800}
           >
-            <McpDetail identifier={identifier} />
-          </Drawer>
+            <McpDetail identifier={identifier} noSettings />
+          </Modal>
         )}
         {isCustomPlugin && (
           <PluginDetailModal
