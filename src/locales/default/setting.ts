@@ -694,6 +694,9 @@ export default {
   'tools.lobehubSkill.connect': 'Connect',
   'tools.lobehubSkill.connected': 'Connected',
   'tools.lobehubSkill.disconnect': 'Disconnect',
+  'tools.lobehubSkill.disconnectConfirm.desc':
+    "You can still continue previous chats that reference {{name}} content. However, the assistant won't be able to access new content or perform new tasks.",
+  'tools.lobehubSkill.disconnectConfirm.title': 'Disconnect {{name}}?',
   'tools.lobehubSkill.disconnected': 'Disconnected',
   'tools.lobehubSkill.error': 'Error',
   'tools.notInstalled': 'Not Installed',

@@ -2,7 +2,7 @@
 
 import { type KlavisServerType } from '@lobechat/const';
 import { ActionIcon, Dropdown, Flexbox, Icon, Image } from '@lobehub/ui';
-import { Button } from 'antd';
+import { App, Button } from 'antd';
 import { createStyles, cssVar } from 'antd-style';
 import { Loader2, MoreVerticalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
@@ -64,6 +64,7 @@ interface KlavisSkillItemProps {
 const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
   const { t } = useTranslation('setting');
   const { styles } = useStyles();
+  const { modal } = App.useApp();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWaitingAuth, setIsWaitingAuth] = useState(false);
 
@@ -196,9 +197,19 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
     }
   };
 
-  const handleDisconnect = async () => {
+  const handleDisconnect = () => {
     if (!server) return;
-    await removeKlavisServer(server.identifier);
+    modal.confirm({
+      cancelText: t('cancel', { ns: 'common' }),
+      centered: true,
+      content: t('tools.lobehubSkill.disconnectConfirm.desc', { name: serverType.label }),
+      okButtonProps: { danger: true },
+      okText: t('tools.lobehubSkill.disconnect'),
+      onOk: async () => {
+        await removeKlavisServer(server.identifier);
+      },
+      title: t('tools.lobehubSkill.disconnectConfirm.title', { name: serverType.label }),
+    });
   };
 
   const renderIcon = () => {
