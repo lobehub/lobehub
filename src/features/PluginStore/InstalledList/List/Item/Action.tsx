@@ -35,21 +35,20 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
 
   const isCustomPlugin = type === 'customPlugin';
   const { t } = useTranslation('plugin');
-  const [open, setOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const plugin = useToolStore(pluginSelectors.getToolManifestById(identifier));
   const [togglePlugin, isPluginEnabledInAgent] = useAgentStore((s) => [
     s.togglePlugin,
     agentSelectors.currentAgentPlugins(s).includes(identifier),
   ]);
   const { modal } = App.useApp();
-  const [tab, setTab] = useState('info');
   const hasSettings = pluginHelpers.isSettingSchemaNonEmpty(plugin?.settings);
 
   const [showModal, setModal] = useState(false);
   const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
 
   // 自定义插件（包括自定义 MCP）使用 EditCustomPlugin
-  // 社区 MCP 使用 McpSettings
+  // 社区 MCP 使用 McpSettingsModal
   // 传统插件使用 PluginDetailModal
   const isCommunityMCP = !isCustomPlugin && isMCP;
   const showConfigureButton = isCustomPlugin || isMCP || hasSettings;
@@ -62,8 +61,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
         } else if (isCommunityMCP) {
           setMcpSettingsOpen(true);
         } else {
-          setOpen(true);
-          setTab('settings');
+          setSettingsOpen(true);
         }
       }}
       type="default"
@@ -138,12 +136,11 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
       <PluginDetailModal
         id={identifier}
         onClose={() => {
-          setOpen(false);
+          setSettingsOpen(false);
         }}
-        onTabChange={setTab}
-        open={open}
+        open={settingsOpen}
         schema={plugin?.settings}
-        tab={tab}
+        tab="settings"
       />
       <McpSettingsModal
         identifier={identifier}

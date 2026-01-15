@@ -7,8 +7,11 @@ import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import PluginTag from '@/components/Plugins/PluginTag';
+import PluginDetailModal from '@/features/PluginDetailModal';
 import Actions from '@/features/PluginStore/InstalledList/List/Item/Action';
 import McpDetail from '@/features/PluginStore/McpList/Detail';
+import { useToolStore } from '@/store/tool';
+import { pluginSelectors } from '@/store/tool/selectors';
 import { type LobeToolType } from '@/types/tool/tool';
 
 const useStyles = createStyles(({ css, token }) => ({
@@ -54,7 +57,11 @@ const InstalledSkillItem = memo<InstalledSkillItemProps>(
     const { styles } = useStyles();
     const { t } = useTranslation('plugin');
     const isMCP = runtimeType === 'mcp';
+    const isCustomPlugin = type === 'customPlugin';
+    const isCommunityMCP = isMCP && !isCustomPlugin;
     const [detailOpen, setDetailOpen] = useState(false);
+
+    const plugin = useToolStore(pluginSelectors.getToolManifestById(identifier));
 
     return (
       <>
@@ -78,7 +85,7 @@ const InstalledSkillItem = memo<InstalledSkillItemProps>(
           </Flexbox>
           <Actions identifier={identifier} isMCP={isMCP} type={type} />
         </Flexbox>
-        {isMCP && (
+        {isCommunityMCP && (
           <Drawer
             containerMaxWidth={'auto'}
             destroyOnHidden
@@ -92,6 +99,15 @@ const InstalledSkillItem = memo<InstalledSkillItemProps>(
           >
             <McpDetail identifier={identifier} />
           </Drawer>
+        )}
+        {isCustomPlugin && (
+          <PluginDetailModal
+            id={identifier}
+            onClose={() => setDetailOpen(false)}
+            open={detailOpen}
+            schema={plugin?.settings}
+            tab="info"
+          />
         )}
       </>
     );
