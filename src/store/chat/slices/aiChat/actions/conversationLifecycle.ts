@@ -204,8 +204,9 @@ export const conversationLifecycle: StateCreator<
     );
     get().internal_toggleMessageLoading(true, tempId);
 
-    // Associate temp message with operation
+    // Associate temp messages with operation
     get().associateMessageWithOperation(tempId, operationId);
+    get().associateMessageWithOperation(tempAssistantId, operationId);
 
     // Store editor state in operation metadata for cancel restoration
     const jsonState = mainInputEditor?.getJSONState();

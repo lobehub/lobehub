@@ -8,7 +8,6 @@ import { CollapsedMessage } from '../../AssistantGroup/components/CollapsedMessa
 import DisplayContent from '../../components/DisplayContent';
 import FileChunks from '../../components/FileChunks';
 import ImageFileListViewer from '../../components/ImageFileListViewer';
-import IntentUnderstanding from '../../components/IntentUnderstanding';
 import Reasoning from '../../components/Reasoning';
 import SearchGrounding from '../../components/SearchGrounding';
 import { useMarkdown } from '../useMarkdown';
@@ -22,9 +21,6 @@ const MessageContent = memo<UIChatMessage>(
     const isReasoning = useConversationStore(messageStateSelectors.isMessageInReasoning(id));
 
     const isToolCallGenerating = generating && (content === LOADING_FLAT || !content) && !!tools;
-
-    // TODO: Need to implement isIntentUnderstanding selector in ConversationStore if needed
-    const isIntentUnderstanding = false;
 
     const showSearch = !!search && !!search.citations?.length;
     const showImageItems = !!imageList && imageList.length > 0;
@@ -46,18 +42,15 @@ const MessageContent = memo<UIChatMessage>(
         )}
         {showFileChunks && <FileChunks data={chunksList} />}
         {showReasoning && <Reasoning {...props.reasoning} id={id} />}
-        {isIntentUnderstanding ? (
-          <IntentUnderstanding />
-        ) : (
-          <DisplayContent
-            content={content}
-            hasImages={showImageItems}
-            isMultimodal={metadata?.isMultimodal}
-            isToolCallGenerating={isToolCallGenerating}
-            markdownProps={markdownProps}
-            tempDisplayContent={metadata?.tempDisplayContent}
-          />
-        )}
+        <DisplayContent
+          content={content}
+          hasImages={showImageItems}
+          id={id}
+          isMultimodal={metadata?.isMultimodal}
+          isToolCallGenerating={isToolCallGenerating}
+          markdownProps={markdownProps}
+          tempDisplayContent={metadata?.tempDisplayContent}
+        />
         {showImageItems && <ImageFileListViewer items={imageList} />}
       </Flexbox>
     );

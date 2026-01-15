@@ -229,6 +229,8 @@ export default {
   'noMembersYet': "This group doesn't have any members yet. Click the + button to invite agents.",
   'noSelectedAgents': 'No members selected yet',
   'openInNewWindow': 'Open in New Window',
+  'operation.execAgentRuntime': 'Preparing response',
+  'operation.sendMessage': 'Sending message',
   'owner': 'Group owner',
   'pageCopilot.title': 'Page Agent',
   'pageCopilot.welcome':

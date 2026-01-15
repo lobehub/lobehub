@@ -203,6 +203,8 @@
   "noMembersYet": "这个群组还没有成员。点击「+」邀请助理加入",
   "noSelectedAgents": "还未选择成员",
   "openInNewWindow": "在新窗口打开",
+  "operation.execAgentRuntime": "准备响应中",
+  "operation.sendMessage": "消息发送中",
   "owner": "群主",
   "pageCopilot.title": "文稿助理",
   "pageCopilot.welcome": "**让文字更清晰、更到位**\n\n起草、改写、润色都可以。你把意图说清楚，其余交给我打磨",
