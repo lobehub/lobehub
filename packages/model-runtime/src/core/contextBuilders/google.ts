@@ -9,7 +9,12 @@ import { imageUrlToBase64 } from '@lobechat/utils';
 
 import { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { safeParseJSON } from '../../utils/safeParseJSON';
-import { parseDataUri } from '../../utils/uriParser';
+import {
+  isPublicExternalUrl,
+  MAX_INLINE_PDF_SIZE,
+  parseDataUri,
+  validateExternalUrl,
+} from '../../utils/uriParser';
 
 /**
  * Magic thoughtSignature
@@ -17,11 +22,36 @@ import { parseDataUri } from '../../utils/uriParser';
  */
 export const GEMINI_MAGIC_THOUGHT_SIGNATURE = 'context_engineering_is_the_way_to_go';
 
+const getGeminiMajorVersion = (model?: string) => {
+  if (!model) return null;
+
+  // Examples:
+  // - gemini-3-flash-preview
+  // - gemini-2.5-flash
+  const match = model.match(/gemini-(\d+)(?:\.(\d+))?/i);
+  if (!match?.[1]) return null;
+
+  const major = Number.parseInt(match[1], 10);
+  return Number.isFinite(major) ? major : null;
+};
+
+/**
+ * External HTTP / Signed URLs support varies by model generation.
+ * In practice, Gemini 3+ supports `fileData.fileUri` for external URLs reliably,
+ * while earlier models often require `inlineData`.
+ */
+const supportsExternalUrlFileData = (model?: string) => {
+  const major = getGeminiMajorVersion(model);
+  if (major === null) return true;
+  return major >= 3;
+};
+
 /**
  * Convert OpenAI content part to Google Part format
  */
 export const buildGooglePart = async (
   content: UserMessageContentPart,
+  options?: { model?: string },
 ): Promise<Part | undefined> => {
   switch (content.type) {
     default: {
@@ -31,6 +61,46 @@ export const buildGooglePart = async (
     case 'text': {
       return {
         text: content.text,
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      };
+    }
+
+    case 'file_url': {
+      const url = content.file_url?.url;
+      if (!url) return undefined;
+
+      if (!isPublicExternalUrl(url)) return undefined;
+
+      const validation = await validateExternalUrl(url);
+      if (!validation.isValid) {
+        if (validation.isTooLarge) {
+          throw new RangeError(validation.reason || 'External URL file too large');
+        }
+        return undefined;
+      }
+
+      if (validation.contentType !== 'application/pdf') return undefined;
+
+      if (!supportsExternalUrlFileData(options?.model)) {
+        if (validation.contentLength > MAX_INLINE_PDF_SIZE) {
+          throw new RangeError(
+            `File too large for inline PDF: ${validation.contentLength} bytes (max ${MAX_INLINE_PDF_SIZE} bytes)`,
+          );
+        }
+
+        const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(url);
+
+        return {
+          inlineData: { data: urlBase64, mimeType: urlMimeType || 'application/pdf' },
+          thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+        };
+      }
+
+      return {
+        fileData: {
+          fileUri: url,
+          mimeType: validation.contentType,
+        },
         thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
       };
     }
@@ -50,10 +120,32 @@ export const buildGooglePart = async (
       }
 
       if (type === 'url') {
-        const { base64, mimeType } = await imageUrlToBase64(content.image_url.url);
+        const url = content.image_url.url;
+
+        // Try to use External URL feature for public URLs to avoid re-uploading
+        // This allows Google to fetch the file directly, reducing transfer costs
+        if (supportsExternalUrlFileData(options?.model) && isPublicExternalUrl(url)) {
+          const validation = await validateExternalUrl(url);
+          if (validation.isValid) {
+            return {
+              fileData: {
+                fileUri: url,
+                mimeType: validation.contentType,
+              },
+              thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+            };
+          }
+          if (validation.isTooLarge) {
+            throw new RangeError(validation.reason || 'External URL file too large');
+          }
+          // If validation fails, fall back to base64 conversion
+        }
+
+        // Fallback: convert URL to base64 (for private/local URLs or failed validation)
+        const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(url);
 
         return {
-          inlineData: { data: base64, mimeType },
+          inlineData: { data: urlBase64, mimeType: urlMimeType },
           thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
         };
       }
@@ -76,12 +168,34 @@ export const buildGooglePart = async (
       }
 
       if (type === 'url') {
+        const url = content.video_url.url;
+
+        // Try to use External URL feature for public URLs
+        // Note: External URL currently doesn't support video types per Google docs,
+        // but we check anyway in case Google adds support in the future
+        if (supportsExternalUrlFileData(options?.model) && isPublicExternalUrl(url)) {
+          const validation = await validateExternalUrl(url);
+          if (validation.isValid) {
+            return {
+              fileData: {
+                fileUri: url,
+                mimeType: validation.contentType,
+              },
+              thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+            };
+          }
+          if (validation.isTooLarge) {
+            throw new RangeError(validation.reason || 'External URL file too large');
+          }
+        }
+
+        // Fallback: convert URL to base64
         // Use imageUrlToBase64 for SSRF protection (works for any binary data including videos)
         // Note: This might need size/duration limits for practical use
-        const { base64, mimeType } = await imageUrlToBase64(content.video_url.url);
+        const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(url);
 
         return {
-          inlineData: { data: base64, mimeType },
+          inlineData: { data: urlBase64, mimeType: urlMimeType },
           thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
         };
       }
@@ -97,6 +211,7 @@ export const buildGooglePart = async (
 export const buildGoogleMessage = async (
   message: OpenAIChatMessage,
   toolCallNameMap?: Map<string, string>,
+  options?: { model?: string },
 ): Promise<Content> => {
   const content = message.content as string | UserMessageContentPart[];
 
@@ -136,7 +251,7 @@ export const buildGoogleMessage = async (
     if (typeof content === 'string')
       return [{ text: content, thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE }];
 
-    const parts = await Promise.all(content.map(async (c) => await buildGooglePart(c)));
+    const parts = await Promise.all(content.map(async (c) => await buildGooglePart(c, options)));
     return parts.filter(Boolean) as Part[];
   };
 
@@ -149,7 +264,10 @@ export const buildGoogleMessage = async (
 /**
  * Convert messages from the OpenAI format to Google GenAI SDK format
  */
-export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promise<Content[]> => {
+export const buildGoogleMessages = async (
+  messages: OpenAIChatMessage[],
+  options?: { model?: string },
+): Promise<Content[]> => {
   const toolCallNameMap = new Map<string, string>();
 
   // Build tool call id to name mapping
@@ -165,7 +283,7 @@ export const buildGoogleMessages = async (messages: OpenAIChatMessage[]): Promis
 
   const pools = messages
     .filter((message) => message.role !== 'function')
-    .map(async (msg) => await buildGoogleMessage(msg, toolCallNameMap));
+    .map(async (msg) => await buildGoogleMessage(msg, toolCallNameMap, options));
 
   const contents = await Promise.all(pools);
 
