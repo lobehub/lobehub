@@ -1,6 +1,6 @@
 import { ActionIcon, Button, Dropdown, Flexbox, Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { InfoIcon, MoreVerticalIcon, Trash2 } from 'lucide-react';
+import { MoreVerticalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -88,15 +88,6 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
             <Dropdown
               menu={{
                 items: [
-                  {
-                    icon: <Icon icon={InfoIcon} />,
-                    key: 'detail',
-                    label: t('store.actions.detail'),
-                    onClick: () => {
-                      setOpen(true);
-                      setTab('info');
-                    },
-                  },
                   {
                     danger: true,
                     icon: <Icon icon={Trash2} />,
