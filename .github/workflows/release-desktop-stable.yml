@@ -3,10 +3,10 @@ name: Release Desktop Stable
 # ============================================
 # Stable 频道发版工作流
 # ============================================
-# 触发条件: 发布不含 pre-release 标识的 release (如 v2.0.0)
+# 触发条件: 发布不含 pre-release 后缀的 release (如 v2.0.0)
 #
 # 与 Beta 的区别:
-#   1. 仅响应 stable 版本 tag (不含 beta/alpha/rc/nightly)
+#   1. 仅响应 stable 版本 tag (不含任何 '-' 后缀)
 #   2. 使用 STABLE 专用的 Umami 配置
 #   3. 额外上传到 S3 更新服务器
 #   4. 构建时注入 UPDATE_SERVER_URL 让客户端从 S3 检查更新
@@ -84,8 +84,8 @@ jobs:
           if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
             # 手动触发: 使用输入的版本号
             version="${{ inputs.version }}"
+            version="${version#v}"
             echo "is_manual=true" >> $GITHUB_OUTPUT
-            echo "is_stable=true" >> $GITHUB_OUTPUT
             echo "version=${version}" >> $GITHUB_OUTPUT
             echo "release_notes=" >> $GITHUB_OUTPUT
             echo "🔧 Manual trigger: version=${version}"
@@ -101,15 +101,15 @@ jobs:
               printf '%s\n' "$release_body"
               echo "EOF"
             } >> $GITHUB_OUTPUT
+          fi
 
-            # 检查是否为 stable 版本 (不含 beta/alpha/rc/nightly)
-            if [[ "$version" == *"beta"* ]] || [[ "$version" == *"alpha"* ]] || [[ "$version" == *"rc"* ]] || [[ "$version" == *"nightly"* ]]; then
-              echo "is_stable=false" >> $GITHUB_OUTPUT
-              echo "⏭️ Skipping: $version is not a stable release"
-            else
-              echo "is_stable=true" >> $GITHUB_OUTPUT
-              echo "✅ Stable release detected: $version"
-            fi
+          # 检查是否为 stable 版本 (不含任何 '-' 后缀)
+          if [[ "$version" == *"-"* ]]; then
+            echo "is_stable=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Skipping: $version is not a stable release"
+          else
+            echo "is_stable=true" >> $GITHUB_OUTPUT
+            echo "✅ Stable release detected: $version"
           fi
 
   # ============================================
