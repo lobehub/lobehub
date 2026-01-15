@@ -6,6 +6,7 @@ import {
   LOBEHUB_SKILL_PROVIDERS,
   type LobehubSkillProviderType,
 } from '@lobechat/const';
+import { Divider } from 'antd';
 import { createStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
@@ -71,61 +72,58 @@ const SkillList = memo(() => {
     return allKlavisServers.find((server) => server.identifier === identifier);
   };
 
-  // Merge and sort all skills: installed first, then connected integrations
-  const sortedAllSkills = useMemo(() => {
-    type SkillItem =
-      | { plugin: (typeof installedPluginList)[0]; type: 'installed' }
+  // Separate skills into three categories:
+  // 1. Integrations (connected LobHub and Klavis)
+  // 2. Community MCP Tools (type === 'plugin')
+  // 3. Custom MCP Tools (type === 'customPlugin')
+  const { integrations, communityMCPs, customMCPs } = useMemo(() => {
+    type IntegrationItem =
       | { provider: LobehubSkillProviderType; type: 'lobehub' }
       | { serverType: KlavisServerType; type: 'klavis' };
 
-    const items: SkillItem[] = [];
-
-    // Add installed plugins first
-    for (const plugin of installedPluginList) {
-      items.push({ plugin, type: 'installed' });
-    }
+    const integrationItems: IntegrationItem[] = [];
 
     // Add lobehub skills
     if (isLobehubSkillEnabled) {
       for (const provider of LOBEHUB_SKILL_PROVIDERS) {
-        items.push({ provider, type: 'lobehub' });
+        integrationItems.push({ provider, type: 'lobehub' });
       }
     }
 
     // Add klavis skills
     if (isKlavisEnabled) {
       for (const serverType of KLAVIS_SERVER_TYPES) {
-        items.push({ serverType, type: 'klavis' });
+        integrationItems.push({ serverType, type: 'klavis' });
       }
     }
 
-    // Sort: installed first, then connected integrations, then disconnected
-    return items.sort((a, b) => {
-      // Installed plugins always come first
-      if (a.type === 'installed' && b.type !== 'installed') return -1;
-      if (a.type !== 'installed' && b.type === 'installed') return 1;
+    // Sort integrations: connected ones first
+    const sortedIntegrations = integrationItems.sort((a, b) => {
+      const isConnectedA =
+        a.type === 'lobehub'
+          ? getLobehubSkillServerByProvider(a.provider.id)?.status === LobehubSkillStatus.CONNECTED
+          : getKlavisServerByIdentifier(a.serverType.identifier)?.status ===
+            KlavisServerStatus.CONNECTED;
+      const isConnectedB =
+        b.type === 'lobehub'
+          ? getLobehubSkillServerByProvider(b.provider.id)?.status === LobehubSkillStatus.CONNECTED
+          : getKlavisServerByIdentifier(b.serverType.identifier)?.status ===
+            KlavisServerStatus.CONNECTED;
 
-      // Among integrations, connected ones come first
-      if (a.type !== 'installed' && b.type !== 'installed') {
-        const isConnectedA =
-          a.type === 'lobehub'
-            ? getLobehubSkillServerByProvider(a.provider.id)?.status ===
-              LobehubSkillStatus.CONNECTED
-            : getKlavisServerByIdentifier(a.serverType.identifier)?.status ===
-              KlavisServerStatus.CONNECTED;
-        const isConnectedB =
-          b.type === 'lobehub'
-            ? getLobehubSkillServerByProvider(b.provider.id)?.status ===
-              LobehubSkillStatus.CONNECTED
-            : getKlavisServerByIdentifier(b.serverType.identifier)?.status ===
-              KlavisServerStatus.CONNECTED;
-
-        if (isConnectedA && !isConnectedB) return -1;
-        if (!isConnectedA && isConnectedB) return 1;
-      }
-
+      if (isConnectedA && !isConnectedB) return -1;
+      if (!isConnectedA && isConnectedB) return 1;
       return 0;
     });
+
+    // Separate installed plugins into community and custom
+    const communityPlugins = installedPluginList.filter((plugin) => plugin.type === 'plugin');
+    const customPlugins = installedPluginList.filter((plugin) => plugin.type === 'customPlugin');
+
+    return {
+      communityMCPs: communityPlugins,
+      customMCPs: customPlugins,
+      integrations: sortedIntegrations,
+    };
   }, [
     installedPluginList,
     isLobehubSkillEnabled,
@@ -134,7 +132,7 @@ const SkillList = memo(() => {
     allKlavisServers,
   ]);
 
-  const hasAnySkills = sortedAllSkills.length > 0;
+  const hasAnySkills = integrations.length > 0 || communityMCPs.length > 0 || customMCPs.length > 0;
 
   if (!hasAnySkills) {
     return (
@@ -145,40 +143,63 @@ const SkillList = memo(() => {
     );
   }
 
-  return (
-    <div className={styles.container}>
-      {sortedAllSkills.map((item) => {
-        if (item.type === 'installed') {
-          return (
-            <InstalledSkillItem
-              author={item.plugin.author}
-              avatar={item.plugin.avatar}
-              description={item.plugin.description}
-              identifier={item.plugin.identifier}
-              key={item.plugin.identifier}
-              runtimeType={item.plugin.runtimeType}
-              title={item.plugin.title || item.plugin.identifier}
-              type={item.plugin.type as LobeToolType}
-            />
-          );
-        }
-        if (item.type === 'lobehub') {
-          return (
-            <LobehubSkillItem
-              key={item.provider.id}
-              provider={item.provider}
-              server={getLobehubSkillServerByProvider(item.provider.id)}
-            />
-          );
-        }
+  const renderIntegrations = () =>
+    integrations.map((item) => {
+      if (item.type === 'lobehub') {
         return (
-          <KlavisSkillItem
-            key={item.serverType.identifier}
-            server={getKlavisServerByIdentifier(item.serverType.identifier)}
-            serverType={item.serverType}
+          <LobehubSkillItem
+            key={item.provider.id}
+            provider={item.provider}
+            server={getLobehubSkillServerByProvider(item.provider.id)}
           />
         );
-      })}
+      }
+      return (
+        <KlavisSkillItem
+          key={item.serverType.identifier}
+          server={getKlavisServerByIdentifier(item.serverType.identifier)}
+          serverType={item.serverType}
+        />
+      );
+    });
+
+  const renderCommunityMCPs = () =>
+    communityMCPs.map((plugin) => (
+      <InstalledSkillItem
+        author={plugin.author}
+        avatar={plugin.avatar}
+        description={plugin.description}
+        identifier={plugin.identifier}
+        key={plugin.identifier}
+        runtimeType={plugin.runtimeType}
+        title={plugin.title || plugin.identifier}
+        type={plugin.type as LobeToolType}
+      />
+    ));
+
+  const renderCustomMCPs = () =>
+    customMCPs.map((plugin) => (
+      <InstalledSkillItem
+        author={plugin.author}
+        avatar={plugin.avatar}
+        description={plugin.description}
+        identifier={plugin.identifier}
+        key={plugin.identifier}
+        runtimeType={plugin.runtimeType}
+        title={plugin.title || plugin.identifier}
+        type={plugin.type as LobeToolType}
+      />
+    ));
+
+  return (
+    <div className={styles.container}>
+      {integrations.length > 0 && renderIntegrations()}
+      {integrations.length > 0 && communityMCPs.length > 0 && <Divider style={{ margin: 0 }} />}
+      {communityMCPs.length > 0 && renderCommunityMCPs()}
+      {(integrations.length > 0 || communityMCPs.length > 0) && customMCPs.length > 0 && (
+        <Divider style={{ margin: 0 }} />
+      )}
+      {customMCPs.length > 0 && renderCustomMCPs()}
     </div>
   );
 });
