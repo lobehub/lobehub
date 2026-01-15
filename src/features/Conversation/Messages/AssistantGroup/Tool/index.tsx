@@ -156,7 +156,6 @@ const Tool = memo<GroupToolProps>(
               apiName={apiName}
               arguments={requestArgs}
               disableEditing={disableEditing}
-              hasCustomRender={hasCustomRender}
               identifier={identifier}
               intervention={intervention}
               isArgumentsStreaming={isArgumentsStreaming}
