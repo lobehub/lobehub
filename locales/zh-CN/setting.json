@@ -492,7 +492,7 @@
   "skillStore.button": "技能商店",
   "skillStore.empty": "未找到技能",
   "skillStore.networkError": "网络错误，请重试",
-  "skillStore.search": "搜索技能名称介绍或关键词…",
+  "skillStore.search": "搜索技能名称或关键词，按回车键搜索…",
   "skillStore.tabs.community": "社区",
   "skillStore.tabs.lobehub": "LobeHub",
   "skillStore.title": "技能商店",

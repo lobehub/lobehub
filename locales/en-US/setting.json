@@ -492,7 +492,7 @@
   "skillStore.button": "Skill Store",
   "skillStore.empty": "No skills found",
   "skillStore.networkError": "Network error, please try again",
-  "skillStore.search": "Search Skills by name or keyword…",
+  "skillStore.search": "Search skills by name or keyword, press Enter to search…",
   "skillStore.tabs.community": "Community",
   "skillStore.tabs.lobehub": "LobeHub",
   "skillStore.title": "Skill Store",

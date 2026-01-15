@@ -561,7 +561,7 @@ export default {
   'skillStore.empty': 'Browse the Skill store. Install one to get started, add more later.',
   'skillStore.emptySearch': 'No matching Skills',
   'skillStore.networkError': 'Network error, please try again',
-  'skillStore.search': 'Search Skills by name or keyword…',
+  'skillStore.search': 'Search skills by name or keyword, press Enter to search…',
   'skillStore.tabs.community': 'Community',
   'skillStore.tabs.lobehub': 'LobeHub',
   'skillStore.title': 'Skill Store',

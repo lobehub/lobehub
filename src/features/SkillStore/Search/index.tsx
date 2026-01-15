@@ -25,16 +25,6 @@ export const Search = memo<SearchProps>(({ activeTab, onLobeHubSearch }) => {
         <SearchBar
           allowClear
           defaultValue={keywords}
-          onChange={(e) => {
-            // Trigger search when input is cleared
-            if (!e.target.value) {
-              if (activeTab === SkillStoreTab.Community) {
-                useToolStore.setState({ mcpSearchKeywords: '', searchLoading: true });
-              } else {
-                onLobeHubSearch('');
-              }
-            }
-          }}
           onSearch={(keywords: string) => {
             if (activeTab === SkillStoreTab.Community) {
               useToolStore.setState({ mcpSearchKeywords: keywords, searchLoading: true });
