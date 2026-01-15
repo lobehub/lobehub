@@ -1,4 +1,5 @@
-import { useUnmount } from 'ahooks';
+import { usePrevious, useUnmount } from 'ahooks';
+import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { createStoreUpdater } from 'zustand-utils';
 
@@ -9,9 +10,19 @@ const AgentIdSync = () => {
   const useStoreUpdater = createStoreUpdater(useAgentStore);
   const useChatStoreUpdater = createStoreUpdater(useChatStore);
   const params = useParams<{ aid?: string }>();
+  const prevAgentId = usePrevious(params.aid);
 
   useStoreUpdater('activeAgentId', params.aid);
   useChatStoreUpdater('activeAgentId', params.aid ?? '');
+
+  // Reset activeTopicId when switching to a different agent
+  // This prevents messages from being saved to the wrong topic bucket
+  useEffect(() => {
+    // Only reset topic when switching between agents (not on initial mount)
+    if (prevAgentId !== undefined && prevAgentId !== params.aid) {
+      useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
+    }
+  }, [params.aid, prevAgentId]);
 
   // Clear activeAgentId when unmounting (leaving chat page)
   useUnmount(() => {
