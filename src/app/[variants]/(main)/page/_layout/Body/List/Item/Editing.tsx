@@ -4,9 +4,9 @@ import { useTranslation } from 'react-i18next';
 
 import EmojiPicker from '@/components/EmojiPicker';
 import { useIsDark } from '@/hooks/useIsDark';
-import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
+import { usePageStore } from '@/store/page';
 
 interface EditingProps {
   currentEmoji?: string;
@@ -20,7 +20,7 @@ const Editing = memo<EditingProps>(({ documentId, title, currentEmoji, toggleEdi
   const isDarkMode = useIsDark();
   const { t } = useTranslation('file');
 
-  const editing = useFileStore((s) => s.renamingPageId === documentId);
+  const editing = usePageStore((s) => s.renamingPageId === documentId);
 
   const [newTitle, setNewTitle] = useState(title);
   const [newEmoji, setNewEmoji] = useState(currentEmoji);
@@ -35,7 +35,7 @@ const Editing = memo<EditingProps>(({ documentId, title, currentEmoji, toggleEdi
         if (newTitle && title !== newTitle) updates.title = newTitle;
         if (newEmoji !== undefined && currentEmoji !== newEmoji) updates.emoji = newEmoji;
 
-        await useFileStore.getState().renamePage(documentId, updates.title || title, updates.emoji);
+        await usePageStore.getState().renamePage(documentId, updates.title || title, updates.emoji);
       } catch (error) {
         console.error('Failed to update page:', error);
       }

@@ -64,6 +64,7 @@ export default {
   'assistants.sorts.knowledgeCount': 'Libraries',
   'assistants.sorts.myown': 'View My Agents',
   'assistants.sorts.pluginCount': 'Skills',
+  'assistants.sorts.recommended': 'Recommended',
   'assistants.sorts.title': 'Agent Name',
   'assistants.sorts.tokenUsage': 'Token Usage',
   'assistants.status.archived.reasons.official':
@@ -94,6 +95,7 @@ export default {
   'category.assistant.career': 'Career',
   'category.assistant.copywriting': 'Copywriting',
   'category.assistant.design': 'Design',
+  'category.assistant.discover': 'Discover',
   'category.assistant.education': 'Education',
   'category.assistant.emotions': 'Emotions',
   'category.assistant.entertainment': 'Entertainment',

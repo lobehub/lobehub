@@ -2,6 +2,7 @@ import {
   BadgeDollarSignIcon,
   BriefcaseIcon,
   Coffee,
+  CompassIcon,
   DramaIcon,
   GamepadIcon,
   GraduationCapIcon,
@@ -25,6 +26,11 @@ export const useCategory = () => {
 
   return useMemo(
     () => [
+      {
+        icon: CompassIcon,
+        key: AssistantCategory.Discover,
+        label: t('category.assistant.discover'),
+      },
       {
         icon: LayoutPanelTop,
         key: AssistantCategory.All,

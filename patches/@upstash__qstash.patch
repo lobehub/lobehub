@@ -1,5 +1,5 @@
 diff --git a/chunk-RQPZUJXG.mjs b/chunk-RQPZUJXG.mjs
-index d1a9b4a460efc59304ec30e6bc63a127f1aac6d6..6653a61b539aaf91253300436a8072c6c5f666ee 100644
+index d1a9b4a460efc59304ec30e6bc63a127f1aac6d6..4303089796e63297f79926fc9f9bd976029b1a8e 100644
 --- a/chunk-RQPZUJXG.mjs
 +++ b/chunk-RQPZUJXG.mjs
 @@ -326,6 +326,20 @@ var HttpClient = class {
@@ -23,3 +23,15 @@ index d1a9b4a460efc59304ec30e6bc63a127f1aac6d6..6653a61b539aaf91253300436a8072c6
        throw new QstashError(
          body.length > 0 ? body : `Error: status=${response.status}`,
          response.status
+@@ -1841,8 +1855,10 @@ var AutoExecutor = class _AutoExecutor {
+           if (error instanceof QStashWorkflowAbort) {
+             throw error;
+           }
++
++          const errorMessage = error instanceof Error ? error.message : typeof error === "object" ? JSON.stringify(error) : String(error);
+           throw new QStashWorkflowError(
+-            `Error submitting steps to QStash in partial parallel step execution: ${error}`
++            `Error submitting steps to QStash in partial parallel step execution: ${errorMessage}`
+           );
+         }
+         break;

@@ -1,0 +1,46 @@
+name: Desktop Upload Artifacts
+description: Rename macOS yml for multi-arch and upload build artifacts
+
+inputs:
+  artifact-name:
+    description: Name for the uploaded artifact
+    required: true
+  retention-days:
+    description: Number of days to retain artifacts
+    required: false
+    default: '5'
+
+runs:
+  using: composite
+  steps:
+    - name: Rename macOS latest-mac.yml for multi-architecture support
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        cd apps/desktop/release
+        if [ -f "latest-mac.yml" ]; then
+          SYSTEM_ARCH=$(uname -m)
+          if [[ "$SYSTEM_ARCH" == "arm64" ]]; then
+            ARCH_SUFFIX="arm64"
+          else
+            ARCH_SUFFIX="x64"
+          fi
+          mv latest-mac.yml "latest-mac-${ARCH_SUFFIX}.yml"
+          echo "✅ Renamed latest-mac.yml to latest-mac-${ARCH_SUFFIX}.yml"
+        fi
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v6
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: |
+          apps/desktop/release/latest*
+          apps/desktop/release/*.dmg*
+          apps/desktop/release/*.zip*
+          apps/desktop/release/*.exe*
+          apps/desktop/release/*.AppImage
+          apps/desktop/release/*.deb*
+          apps/desktop/release/*.snap*
+          apps/desktop/release/*.rpm*
+          apps/desktop/release/*.tar.gz*
+        retention-days: ${{ inputs.retention-days }}

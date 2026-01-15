@@ -3,57 +3,45 @@ interface ModelPricing {
   image?: string;
   input_cache_read?: string;
   input_cache_write?: string;
+  internal_reasoning?: string;
   prompt: string;
   request?: string;
   web_search?: string;
-  internal_reasoning?: string;
 }
 
 interface TopProvider {
   context_length: number;
-  max_completion_tokens: number | null;
   is_moderated: boolean;
+  max_completion_tokens: number | null;
 }
 
 interface Architecture {
-  modality: string;
   input_modalities: string[];
+  instruct_type: string | null;
+  modality: string;
   output_modalities: string[];
   tokenizer: string;
-  instruct_type: string | null;
 }
 
 export interface OpenRouterModelCard {
-  id: string;
-  canonical_slug: string;
-  hugging_face_id?: string;
-  name: string;
-  created: number;
-  description?: string;
-  context_length: number;
   architecture: Architecture;
-  pricing: ModelPricing;
-  top_provider: TopProvider;
-  per_request_limits?: any | null;
-  supported_parameters: string[];
+  canonical_slug: string;
+  context_length: number;
+  created: number;
   default_parameters?: any | null;
+  description?: string;
+  hugging_face_id?: string;
+  id: string;
+  name: string;
+  per_request_limits?: any | null;
+  pricing: ModelPricing;
+  supported_parameters: string[];
+  top_provider: TopProvider;
 }
 
-interface OpenRouterOpenAIReasoning {
-  effort: 'high' | 'medium' | 'low';
+export interface OpenRouterReasoning {
+  effort?: 'high' | 'medium' | 'low' | 'minimal';
+  enabled?: boolean;
   exclude?: boolean;
+  max_tokens?: number;
 }
-
-interface OpenRouterAnthropicReasoning {
-  exclude?: boolean;
-  max_tokens: number;
-}
-
-interface OpenRouterCommonReasoning {
-  exclude?: boolean;
-}
-
-export type OpenRouterReasoning =
-  | OpenRouterOpenAIReasoning
-  | OpenRouterAnthropicReasoning
-  | OpenRouterCommonReasoning;

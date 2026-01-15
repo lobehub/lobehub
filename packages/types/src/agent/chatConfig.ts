@@ -11,7 +11,7 @@ export interface WorkingModel {
 
 export interface LobeAgentChatConfig {
   /**
-   * Local System 配置（桌面端专用）
+   * Local System configuration (desktop only)
    */
   localSystem?: LocalSystemConfig;
   enableAutoCreateTopic?: boolean;

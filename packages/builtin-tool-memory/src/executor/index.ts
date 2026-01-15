@@ -6,6 +6,7 @@ import type {
   RemoveIdentityActionSchema,
   UpdateIdentityActionSchema,
 } from '@lobechat/memory-user-memory/schemas';
+import { formatMemorySearchResults } from '@lobechat/prompts';
 import { BaseExecutor, type BuiltinToolResult, SearchMemoryParams } from '@lobechat/types';
 import type { z } from 'zod';
 
@@ -13,35 +14,6 @@ import { userMemoryService } from '@/services/userMemory';
 
 import { MemoryIdentifier } from '../manifest';
 import { MemoryApiName } from '../types';
-
-/**
- * Format search results into human-readable summary
- */
-const formatSearchResultsSummary = (result: {
-  contexts: unknown[];
-  experiences: unknown[];
-  preferences: unknown[];
-}): string => {
-  const total = result.contexts.length + result.experiences.length + result.preferences.length;
-
-  if (total === 0) {
-    return '🔍 No memories found matching the query.';
-  }
-
-  const parts: string[] = [`🔍 Found ${total} memories:`];
-
-  if (result.contexts.length > 0) {
-    parts.push(`- ${result.contexts.length} context memories`);
-  }
-  if (result.experiences.length > 0) {
-    parts.push(`- ${result.experiences.length} experience memories`);
-  }
-  if (result.preferences.length > 0) {
-    parts.push(`- ${result.preferences.length} preference memories`);
-  }
-
-  return parts.join('\n');
-};
 
 /**
  * Memory Tool Executor
@@ -62,7 +34,7 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
       const result = await userMemoryService.searchMemory(params);
 
       return {
-        content: formatSearchResultsSummary(result),
+        content: formatMemorySearchResults({ query: params.query, results: result }),
         state: result,
         success: true,
       };

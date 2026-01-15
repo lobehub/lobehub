@@ -2,12 +2,12 @@
 
 import { memo } from 'react';
 
-import ConversationArea from '@/app/[variants]/(main)/chat/features/Conversation/ConversationArea';
-import PortalPanel from '@/app/[variants]/(main)/chat/features/Portal/features/PortalPanel';
+import ConversationArea from '@/app/[variants]/(main)/agent/features/Conversation/ConversationArea';
+import PageTitle from '@/app/[variants]/(main)/agent/features/PageTitle';
+import PortalPanel from '@/app/[variants]/(main)/agent/features/Portal/features/PortalPanel';
+import TelemetryNotification from '@/app/[variants]/(main)/agent/features/TelemetryNotification';
 import MainInterfaceTracker from '@/components/Analytics/MainInterfaceTracker';
 
-import PageTitle from '../../(main)/chat/features/PageTitle';
-import TelemetryNotification from '../../(main)/chat/features/TelemetryNotification';
 import Topic from './features/Topic';
 
 const MobileChatPage = memo(() => {

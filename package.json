@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/lobehub",
-  "version": "2.0.0-next.255",
+  "version": "2.0.0-next.293",
   "description": "LobeHub - an open-source,comprehensive AI Agent framework that supports speech synthesis, multimodal, and extensible Function Call plugin system. Supports one-click free deployment of your private ChatGPT/LLM web application.",
   "keywords": [
     "framework",
@@ -202,11 +202,11 @@
     "@lobehub/chat-plugin-sdk": "^1.32.4",
     "@lobehub/chat-plugins-gateway": "^1.9.0",
     "@lobehub/desktop-ipc-typings": "workspace:*",
-    "@lobehub/editor": "^3.8.0",
+    "@lobehub/editor": "^3.11.0",
     "@lobehub/icons": "^4.0.2",
     "@lobehub/market-sdk": "0.28.1",
     "@lobehub/tts": "^4.0.2",
-    "@lobehub/ui": "^4.11.6",
+    "@lobehub/ui": "^4.19.0",
     "@modelcontextprotocol/sdk": "^1.25.1",
     "@neondatabase/serverless": "^1.0.2",
     "@next/third-parties": "^16.1.1",
@@ -359,7 +359,7 @@
     "zustand-utils": "^2.1.1"
   },
   "devDependencies": {
-    "@ast-grep/napi": "^0.40.3",
+    "@ast-grep/napi": "^0.40.5",
     "@commitlint/cli": "^19.8.1",
     "@edge-runtime/vm": "^5.0.0",
     "@huggingface/tasks": "^0.19.74",
@@ -418,7 +418,7 @@
     "eslint-plugin-mdx": "^3.6.2",
     "fake-indexeddb": "^6.2.5",
     "fs-extra": "^11.3.3",
-    "glob": "^11.1.0",
+    "glob": "^13.0.0",
     "happy-dom": "^20.0.11",
     "husky": "^9.1.7",
     "import-in-the-middle": "^2.0.1",

@@ -1,8 +1,10 @@
 import type { NewChatGroup } from '@lobechat/types';
+import urlJoin from 'url-join';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { chatGroupService } from '@/services/chatGroup';
 import { type ChatGroupStore } from '@/store/agentGroup/store';
+import { useChatStore } from '@/store/chat';
 import { getSessionStoreState } from '@/store/session';
 
 export interface ChatGroupLifecycleAction {
@@ -11,6 +13,17 @@ export interface ChatGroupLifecycleAction {
     agentIds?: string[],
     silent?: boolean,
   ) => Promise<string>;
+  /**
+   * @deprecated Use switchTopic(undefined) instead
+   * Switch to a new topic in the group
+   * Clears activeTopicId and navigates to group root
+   */
+  switchToNewTopic: () => void;
+  /**
+   * Switch to a topic in the group with proper route handling
+   * @param topicId - Topic ID to switch to, or undefined/null for new topic
+   */
+  switchTopic: (topicId?: string | null) => void;
 }
 
 export const chatGroupLifecycleSlice: StateCreator<
@@ -47,5 +60,23 @@ export const chatGroupLifecycleSlice: StateCreator<
     }
 
     return group.id;
+  },
+
+  switchToNewTopic: () => {
+    get().switchTopic(undefined);
+  },
+
+  switchTopic: (topicId) => {
+    const { activeGroupId, router } = get();
+    if (!activeGroupId || !router) return;
+
+    // Update chat store's activeTopicId
+    useChatStore.getState().switchTopic(topicId ?? undefined);
+
+    // Navigate with replace to avoid stale query params
+    router.push(urlJoin('/group', activeGroupId), {
+      query: { topic: topicId ?? null },
+      replace: true,
+    });
   },
 });

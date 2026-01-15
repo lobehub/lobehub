@@ -3,15 +3,19 @@
 import { memo } from 'react';
 
 import AutoSaveHintBase from '@/components/Editor/AutoSaveHint';
+import { useGroupProfileStore } from '@/store/groupProfile';
+import { selectors } from '@/store/groupProfile/selectors';
 
-/**
- * AutoSaveHint - Save status indicator for group settings
- * TODO: Add saveStatus and lastUpdatedTime to agentGroupStore when needed
- */
 const AutoSaveHint = memo(() => {
-  // Group profile currently doesn't track save status
-  // Return idle state for now
-  return <AutoSaveHintBase lastUpdatedTime={null} saveStatus={'idle'} />;
+  const activeTabId = useGroupProfileStore((s) => s.activeTabId);
+  const saveState = useGroupProfileStore(selectors.getSaveState(activeTabId));
+
+  return (
+    <AutoSaveHintBase
+      lastUpdatedTime={saveState.lastUpdatedTime}
+      saveStatus={saveState.saveStatus}
+    />
+  );
 });
 
 export default AutoSaveHint;

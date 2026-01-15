@@ -29,37 +29,38 @@ const ListViewSkeleton = ({
           key={index}
           paddingInline={8}
           style={{
+            background: index % 2 === 0 ? cssVar.colorFillQuaternary : 'transparent',
             borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
             opacity: getOpacity(index),
           }}
         >
-        <Center height={40} style={{ paddingInline: 4 }}>
-          <Checkbox disabled />
-        </Center>
-        <Flexbox
-          align={'center'}
-          horizontal
-          paddingInline={8}
-          style={{
-            flexShrink: 0,
-            maxWidth: columnWidths.name,
-            minWidth: columnWidths.name,
-            width: columnWidths.name,
-          }}
-        >
-          <Skeleton.Avatar active shape={'square'} size={24} style={{ marginInline: 8 }} />
-          <Skeleton.Button active style={{ height: 16, width: '60%' }} />
+          <Center height={40} style={{ paddingInline: 4 }}>
+            <Checkbox disabled />
+          </Center>
+          <Flexbox
+            align={'center'}
+            horizontal
+            style={{
+              flexShrink: 0,
+              maxWidth: columnWidths.name,
+              minWidth: columnWidths.name,
+              paddingInline: 8,
+              width: columnWidths.name,
+            }}
+          >
+            <Skeleton.Avatar active shape={'square'} size={24} style={{ marginInline: 8 }} />
+            <Skeleton.Button active style={{ height: 16, width: '60%' }} />
+          </Flexbox>
+          <Flexbox style={{ flexShrink: 0, paddingInline: '0 24px' }} width={columnWidths.date}>
+            <Skeleton.Button active style={{ height: 16, width: '80%' }} />
+          </Flexbox>
+          <Flexbox style={{ flexShrink: 0, paddingInline: '0 24px' }} width={columnWidths.size}>
+            <Skeleton.Button active style={{ height: 16, width: '60%' }} />
+          </Flexbox>
         </Flexbox>
-        <Flexbox paddingInline={24} style={{ flexShrink: 0 }} width={columnWidths.date}>
-          <Skeleton.Button active style={{ height: 16, width: '80%' }} />
-        </Flexbox>
-        <Flexbox paddingInline={24} style={{ flexShrink: 0 }} width={columnWidths.size}>
-          <Skeleton.Button active style={{ height: 16, width: '60%' }} />
-        </Flexbox>
-      </Flexbox>
-    ))}
-  </Flexbox>
-);
+      ))}
+    </Flexbox>
+  );
 };
 
 export default ListViewSkeleton;

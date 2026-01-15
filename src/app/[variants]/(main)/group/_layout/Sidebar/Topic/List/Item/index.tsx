@@ -1,17 +1,18 @@
 import { ActionIcon, Flexbox, Icon, Skeleton, Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { MessageSquareDashed, Star } from 'lucide-react';
-import { Suspense, memo, useCallback } from 'react';
+import { Suspense, memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import urlJoin from 'url-join';
 
 import { isDesktop } from '@/const/version';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useAgentStore } from '@/store/agent';
+import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 
 import ThreadList from '../../TopicListContent/ThreadList';
-import { useTopicNavigation } from '../../hooks/useTopicNavigation';
 import Actions from './Actions';
 import Editing from './Editing';
 import { useTopicItemDropdownMenu } from './useDropdownMenu';
@@ -27,7 +28,15 @@ interface TopicItemProps {
 const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) => {
   const { t } = useTranslation('topic');
   const openTopicInNewWindow = useGlobalStore((s) => s.openTopicInNewWindow);
+  const toggleMobileTopic = useGlobalStore((s) => s.toggleMobileTopic);
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const [activeGroupId, switchTopic] = useAgentGroupStore((s) => [s.activeGroupId, s.switchTopic]);
+
+  // Construct href for cmd+click support
+  const href = useMemo(() => {
+    if (!activeGroupId || !id) return undefined;
+    return urlJoin('/group', activeGroupId, `?topic=${id}`);
+  }, [activeGroupId, id]);
 
   const [editing, isLoading] = useChatStore((s) => [
     id ? s.topicRenamingId === id : false,
@@ -35,8 +44,6 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
   ]);
 
   const [favoriteTopic] = useChatStore((s) => [s.favoriteTopic]);
-
-  const { navigateToTopic, isInAgentSubRoute } = useTopicNavigation();
 
   const toggleEditing = useCallback(
     (visible?: boolean) => {
@@ -47,8 +54,9 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
 
   const handleClick = useCallback(() => {
     if (editing) return;
-    navigateToTopic(id);
-  }, [editing, id, navigateToTopic]);
+    switchTopic(id);
+    toggleMobileTopic(false);
+  }, [editing, id, switchTopic, toggleMobileTopic]);
 
   const handleDoubleClick = useCallback(() => {
     if (!id || !activeAgentId) return;
@@ -66,7 +74,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
   if (!id) {
     return (
       <NavItem
-        active={active && !isInAgentSubRoute}
+        active={active}
         icon={
           <Icon color={cssVar.colorTextDescription} icon={MessageSquareDashed} size={'small'} />
         }
@@ -94,9 +102,10 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
     <Flexbox style={{ position: 'relative' }}>
       <NavItem
         actions={<Actions dropdownMenu={dropdownMenu} />}
-        active={active && !threadId && !isInAgentSubRoute}
+        active={active && !threadId}
         contextMenuItems={dropdownMenu}
         disabled={editing}
+        href={!editing ? href : undefined}
         icon={
           <ActionIcon
             color={fav ? cssVar.colorWarning : undefined}

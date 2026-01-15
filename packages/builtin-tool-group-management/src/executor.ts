@@ -3,10 +3,11 @@
  * Lobe Group Management Executor
  *
  * Handles all group management tool calls for multi-agent orchestration.
+ * Note: Member management (searchAgent, inviteAgent, createAgent, removeAgent)
+ * is handled by group-agent-builder. This executor focuses on orchestration.
  */
 import {
   BroadcastParams,
-  CreateAgentParams,
   CreateWorkflowParams,
   DelegateParams,
   ExecuteTaskParams,
@@ -14,9 +15,6 @@ import {
   GroupManagementApiName,
   GroupManagementIdentifier,
   InterruptParams,
-  InviteAgentParams,
-  RemoveAgentParams,
-  SearchAgentParams,
   SpeakParams,
   SummarizeParams,
   VoteParams,
@@ -24,166 +22,13 @@ import {
 import { formatAgentProfile } from '@lobechat/prompts';
 import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
 
-import { agentService } from '@/services/agent';
 import { agentGroupSelectors, useAgentGroupStore } from '@/store/agentGroup';
 
 class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName> {
   readonly identifier = GroupManagementIdentifier;
   protected readonly apiEnum = GroupManagementApiName;
 
-  // ==================== Member Management ====================
-
-  searchAgent = async (
-    params: SearchAgentParams,
-    _ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    const { query, limit = 10, source = 'user' } = params;
-
-    // Currently only support searching user's own agents
-    // Community search can be added in the future
-    if (source === 'community') {
-      return {
-        content:
-          'Community agent search is not yet supported. Please use source="user" to search your own agents.',
-        state: { agents: [], source, total: 0 },
-        success: true,
-      };
-    }
-
-    try {
-      const results = await agentService.queryAgents({ keyword: query, limit });
-
-      const agents = results.map((agent) => ({
-        avatar: agent.avatar,
-        description: agent.description,
-        id: agent.id,
-        title: agent.title,
-      }));
-
-      const total = agents.length;
-
-      if (total === 0) {
-        return {
-          content: query
-            ? `No agents found matching "${query}".`
-            : 'No agents found. You can create a new agent or search with different keywords.',
-          state: { agents: [], query, total: 0 },
-          success: true,
-        };
-      }
-
-      // Format agents list for LLM consumption
-      const agentList = agents
-        .map(
-          (a, i) =>
-            `${i + 1}. ${a.title || 'Untitled'} (ID: ${a.id})${a.description ? ` - ${a.description}` : ''}`,
-        )
-        .join('\n');
-
-      return {
-        content: `Found ${total} agent${total > 1 ? 's' : ''} matching "${query}":\n${agentList}`,
-        state: { agents, query, total },
-        success: true,
-      };
-    } catch (error) {
-      return {
-        content: `Failed to search agents: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        success: false,
-      };
-    }
-  };
-
-  inviteAgent = async (
-    params: InviteAgentParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    const { groupId } = ctx;
-
-    if (!groupId) {
-      return { content: 'No group context available', success: false };
-    }
-
-    try {
-      await useAgentGroupStore.getState().addAgentsToGroup(groupId, [params.agentId]);
-
-      return {
-        content: `Agent "${params.agentId}" has been invited to the group.`,
-        state: { agentId: params.agentId, type: 'inviteAgent' },
-        success: true,
-      };
-    } catch (error) {
-      return {
-        content: `Failed to invite agent "${params.agentId}": ${error instanceof Error ? error.message : 'Unknown error'}`,
-        success: false,
-      };
-    }
-  };
-
-  createAgent = async (
-    params: CreateAgentParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    const { groupId } = ctx;
-
-    if (!groupId) {
-      return { content: 'No group context available', success: false };
-    }
-
-    try {
-      // Create a virtual agent (agents created by supervisor are virtual)
-      const result = await agentService.createAgent({
-        config: {
-          avatar: params.avatar,
-          description: params.description,
-          systemRole: params.systemRole,
-          title: params.title,
-          virtual: true,
-        },
-        groupId,
-      });
-
-      if (!result.agentId) {
-        return { content: 'Failed to create agent: No agent ID returned', success: false };
-      }
-
-      return {
-        content: `Agent "${params.title}" has been created and added to the group.`,
-        state: { agentId: result.agentId, title: params.title, type: 'createAgent' },
-        success: true,
-      };
-    } catch (error) {
-      return {
-        content: `Failed to create agent: ${error instanceof Error ? error.message : 'Unknown error'}`,
-        success: false,
-      };
-    }
-  };
-
-  removeAgent = async (
-    params: RemoveAgentParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    const { groupId } = ctx;
-
-    if (!groupId) {
-      return { content: 'No group context available', success: false };
-    }
-
-    try {
-      await useAgentGroupStore.getState().removeAgentFromGroup(groupId, params.agentId);
-
-      return {
-        content: `Agent "${params.agentId}" has been removed from the group.`,
-        state: { agentId: params.agentId, type: 'removeAgent' },
-        success: true,
-      };
-    } catch (error) {
-      return {
-        content: `Failed to remove agent "${params.agentId}": ${error instanceof Error ? error.message : 'Unknown error'}`,
-        success: false,
-      };
-    }
-  };
+  // ==================== Agent Info ====================
 
   getAgentInfo = async (
     params: GetAgentInfoParams,
@@ -306,7 +151,7 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
 
   // ==================== Task Execution ====================
 
-  executeTask = async (
+  executeAgentTask = async (
     params: ExecuteTaskParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
@@ -333,7 +178,7 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
         skipCallSupervisor: params.skipCallSupervisor,
         task: params.task,
         timeout: params.timeout,
-        type: 'executeTask',
+        type: 'executeAgentTask',
       },
       stop: true,
       success: true,

@@ -1,4 +1,4 @@
-import { ActionIcon, Block, Center, Text } from '@lobehub/ui';
+import { Block, Center, Icon, Text } from '@lobehub/ui';
 import { PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 
@@ -22,7 +22,7 @@ const EmptyNavItem = memo<EmptyStatusProps>(({ title, onClick, className }) => {
       variant={'borderless'}
     >
       <Center flex={'none'} height={28} width={28}>
-        <ActionIcon icon={PlusIcon} size={'small'} />
+        <Icon icon={PlusIcon} size={'small'} />
       </Center>
       <Text align={'center'} type={'secondary'}>
         {title}

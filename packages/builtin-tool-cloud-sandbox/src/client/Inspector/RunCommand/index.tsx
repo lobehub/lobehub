@@ -6,19 +6,11 @@ import { Check, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { highlightTextStyles, shinyTextStyles } from '@/styles';
+import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import { type RunCommandState } from '../../../types';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
+const styles = createStaticStyles(({ css }) => ({
   statusIcon: css`
     margin-block-end: -2px;
     margin-inline-start: 4px;
@@ -41,13 +33,13 @@ export const RunCommandInspector = memo<BuiltinInspectorProps<RunCommandParams, 
     if (isArgumentsStreaming) {
       if (!description)
         return (
-          <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+          <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
             <span>{t('builtins.lobe-cloud-sandbox.apiName.runCommand')}</span>
           </div>
         );
 
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-cloud-sandbox.apiName.runCommand')}: </span>
           <span className={highlightTextStyles.primary}>{description}</span>
         </div>
@@ -55,7 +47,7 @@ export const RunCommandInspector = memo<BuiltinInspectorProps<RunCommandParams, 
     }
 
     return (
-      <div className={cx(styles.root, isLoading && shinyTextStyles.shinyText)}>
+      <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
         <span style={{ marginInlineStart: 2 }}>
           <span>{t('builtins.lobe-cloud-sandbox.apiName.runCommand')}: </span>
           {description && <span className={highlightTextStyles.primary}>{description}</span>}

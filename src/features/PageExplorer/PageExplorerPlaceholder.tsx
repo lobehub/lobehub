@@ -12,6 +12,7 @@ import GuideVideo from '@/components/GuideVideo';
 import NavHeader from '@/features/NavHeader';
 import useNotionImport from '@/features/ResourceManager/components/Header/hooks/useNotionImport';
 import { useFileStore } from '@/store/file';
+import { usePageStore } from '@/store/page';
 import { DocumentSourceType } from '@/types/document';
 import { standardizeIdentifier } from '@/utils/identifier';
 
@@ -76,21 +77,24 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
   ({ hasPages = false, knowledgeBaseId }) => {
     const { t } = useTranslation(['file', 'common']);
     const [isUploading, setIsUploading] = useState(false);
+
+    // Page-specific operations from pageStore
     const [
       createNewPage,
-      createDocument,
-      createOptimisticDocument,
-      replaceTempDocumentWithReal,
+      createOptimisticPage,
+      replaceTempPageWithReal,
       setSelectedPageId,
       fetchDocuments,
-    ] = useFileStore((s) => [
+    ] = usePageStore((s) => [
       s.createNewPage,
-      s.createDocument,
-      s.createOptimisticDocument,
-      s.replaceTempDocumentWithReal,
+      s.createOptimisticPage,
+      s.replaceTempPageWithReal,
       s.setSelectedPageId,
       s.fetchDocuments,
     ]);
+
+    // File operations from FileStore (for uploads and notion import)
+    const [createDocument] = useFileStore((s) => [s.createDocument]);
 
     const notionImport = useNotionImport({
       createDocument,
@@ -99,7 +103,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
       refetchResources: async () => {
         const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
         await revalidateResources();
-        await fetchDocuments({ pageOnly: true });
+        await fetchDocuments();
       },
       t,
     });
@@ -109,6 +113,10 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
       event: React.ChangeEvent<HTMLInputElement>,
     ) => {
       await notionImport.handleNotionImport(event);
+      // Fetch documents to update the UI immediately
+      // The hook calls refreshFileList which invalidates SWR cache,
+      // but we need to explicitly fetch to update the zustand store
+      await fetchDocuments();
     };
 
     const handleCreateDocument = async (content: string, title: string) => {
@@ -119,7 +127,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
       }
 
       // For markdown uploads with content, use optimistic pattern similar to createNewPage
-      const tempPageId = createOptimisticDocument(title);
+      const tempPageId = createOptimisticPage(title);
       // Set selected page to temp ID immediately (with URL update disabled for temp IDs)
       setSelectedPageId(tempPageId, false);
 
@@ -151,13 +159,13 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
         };
 
         // Replace optimistic with real
-        replaceTempDocumentWithReal(tempPageId, realPage);
+        replaceTempPageWithReal(tempPageId, realPage);
         // Update selected page ID and URL to the real page
         setSelectedPageId(newDoc.id);
       } catch (error) {
         console.error('Failed to create page:', error);
         // Remove temp document on error
-        useFileStore.getState().removeTempDocument(tempPageId);
+        usePageStore.getState().removeTempPage(tempPageId);
         setSelectedPageId(null);
         throw error;
       }
@@ -179,7 +187,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
           const fileName = file.name.replace(/\.(pdf|docx)$/i, '');
 
           // Create optimistic document but don't select it yet
-          const tempPageId = createOptimisticDocument(fileName);
+          const tempPageId = createOptimisticPage(fileName);
 
           try {
             // Upload file to server
@@ -219,7 +227,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
             };
 
             // Replace optimistic with real document in the store
-            replaceTempDocumentWithReal(tempPageId, realPage);
+            replaceTempPageWithReal(tempPageId, realPage);
 
             // Update selected page ID in store (with full ID including prefix)
             setSelectedPageId(parsedDocument.id, false);
@@ -231,7 +239,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
           } catch (error) {
             console.error('Failed to upload and parse file:', error);
             // Remove temp document on error
-            useFileStore.getState().removeTempDocument(tempPageId);
+            usePageStore.getState().removeTempPage(tempPageId);
             throw error;
           }
         }

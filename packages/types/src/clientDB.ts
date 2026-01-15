@@ -1,4 +1,4 @@
-// 定义加载状态类型
+// Define loading state types
 export enum DatabaseLoadingState {
   Error = 'error',
   Finished = 'finished',
@@ -19,7 +19,7 @@ export const ClientDatabaseInitStages = [
   DatabaseLoadingState.Finished,
 ];
 
-// 定义进度回调接口
+// Define progress callback interface
 export interface ClientDBLoadingProgress {
   costTime?: number;
   phase: 'wasm' | 'dependencies';

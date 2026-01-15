@@ -22,7 +22,7 @@ const SessionHydration = memo(() => {
   });
 
   useStoreUpdater('activeId', session);
-  useChatStoreUpdater('activeId', session);
+  useChatStoreUpdater('activeAgentId', session);
 
   useEffect(() => {
     const unsubscribe = useSessionStore.subscribe(

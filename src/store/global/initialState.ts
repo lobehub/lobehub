@@ -76,6 +76,10 @@ export enum ProfileTabs {
 
 export interface SystemStatus {
   /**
+   * Agent Builder panel width
+   */
+  agentBuilderPanelWidth?: number;
+  /**
    * number of agents (defaultList) to display
    */
   agentPageSize?: number;
@@ -89,6 +93,10 @@ export interface SystemStatus {
   expandTopicGroupKeys?: string[];
   fileManagerViewMode?: 'list' | 'masonry';
   filePanelWidth: number;
+  /**
+   * Group Agent Builder panel width
+   */
+  groupAgentBuilderPanelWidth?: number;
   hideGemini2_5FlashImagePreviewChineseWarning?: boolean;
   hidePWAInstaller?: boolean;
   hideThreadLimitAlert?: boolean;
@@ -122,6 +130,7 @@ export interface SystemStatus {
    */
   modelSwitchPanelWidth?: number;
   noWideScreen?: boolean;
+  pageAgentPanelWidth?: number;
   /**
    * number of pages (documents) to display per page
    */
@@ -179,6 +188,7 @@ export interface GlobalState {
 }
 
 export const INITIAL_STATUS = {
+  agentBuilderPanelWidth: 360,
   agentPageSize: 10,
   chatInputHeight: 64,
   disabledModelProvidersSortType: 'default',
@@ -187,6 +197,7 @@ export const INITIAL_STATUS = {
   expandSessionGroupKeys: [SessionDefaultGroup.Pinned, SessionDefaultGroup.Default],
   fileManagerViewMode: 'list' as const,
   filePanelWidth: 320,
+  groupAgentBuilderPanelWidth: 360,
   hideGemini2_5FlashImagePreviewChineseWarning: false,
   hidePWAInstaller: false,
   hideThreadLimitAlert: false,
@@ -198,6 +209,7 @@ export const INITIAL_STATUS = {
   modelSwitchPanelGroupMode: 'byProvider',
   modelSwitchPanelWidth: 430,
   noWideScreen: true,
+  pageAgentPanelWidth: 360,
   pagePageSize: 20,
   portalWidth: 400,
   resourceManagerColumnWidths: {

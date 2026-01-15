@@ -25,7 +25,6 @@
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^0.1.70",
     "@xmldom/xmldom": "^0.9.8",
     "concat-stream": "^2.0.0",
     "debug": "^4.4.3",
@@ -37,6 +36,7 @@
     "yauzl": "^3.2.0"
   },
   "devDependencies": {
+    "@napi-rs/canvas": "^0.1.70",
     "@types/concat-stream": "^2.0.3",
     "@types/yauzl": "^2.10.3",
     "typescript": "^5.9.3"

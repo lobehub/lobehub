@@ -1,5 +1,5 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
-import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
+import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import type { OfficialToolItem } from '@lobechat/context-engine';
 import {
   type FetchSSEOptions,
@@ -41,6 +41,7 @@ import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
   klavisStoreSelectors,
+  lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { getUserStoreState, useUserStore } from '@/store/user';
@@ -217,6 +218,28 @@ class ChatService {
             installed: !!server,
             name: klavisType.label,
             type: 'klavis',
+          });
+        }
+      }
+
+      // Get LobehubSkill providers (if enabled)
+      const isLobehubSkillEnabled =
+        typeof window !== 'undefined' &&
+        window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill;
+
+      if (isLobehubSkillEnabled) {
+        const allLobehubSkillServers = lobehubSkillStoreSelectors.getServers(toolState);
+
+        for (const provider of LOBEHUB_SKILL_PROVIDERS) {
+          const server = allLobehubSkillServers.find((s) => s.identifier === provider.id);
+
+          officialTools.push({
+            description: `LobeHub Skill Provider: ${provider.label}`,
+            enabled: enabledPlugins.includes(provider.id),
+            identifier: provider.id,
+            installed: !!server,
+            name: provider.label,
+            type: 'lobehub-skill',
           });
         }
       }

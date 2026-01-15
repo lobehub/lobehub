@@ -17,7 +17,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
-import { clearTreeFolderCache } from '@/features/ResourceManager/components/Tree';
+import { clearTreeFolderCache } from '@/features/ResourceManager/components/LibraryHierarchy';
 import { useFileStore } from '@/store/file';
 
 import { useResourceManagerStore } from './store';

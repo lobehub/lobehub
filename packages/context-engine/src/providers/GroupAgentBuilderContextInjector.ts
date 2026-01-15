@@ -47,8 +47,8 @@ export interface GroupOfficialToolItem {
   installed?: boolean;
   /** Tool display name */
   name: string;
-  /** Tool type: 'builtin' for built-in tools, 'klavis' for LobeHub Mcp servers */
-  type: 'builtin' | 'klavis';
+  /** Tool type: 'builtin' for built-in tools, 'klavis' for LobeHub Mcp servers, 'lobehub-skill' for LobeHub Skill providers */
+  type: 'builtin' | 'klavis' | 'lobehub-skill';
 }
 
 /**
@@ -195,6 +195,7 @@ const defaultFormatGroupContext = (context: GroupAgentBuilderContext): string =>
   if (context.officialTools && context.officialTools.length > 0) {
     const builtinTools = context.officialTools.filter((t) => t.type === 'builtin');
     const klavisTools = context.officialTools.filter((t) => t.type === 'klavis');
+    const lobehubSkillTools = context.officialTools.filter((t) => t.type === 'lobehub-skill');
 
     const toolsSections: string[] = [];
 
@@ -224,6 +225,21 @@ const defaultFormatGroupContext = (context: GroupAgentBuilderContext): string =>
         })
         .join('\n');
       toolsSections.push(`  <klavis_tools>\n${klavisItems}\n  </klavis_tools>`);
+    }
+
+    if (lobehubSkillTools.length > 0) {
+      const lobehubSkillItems = lobehubSkillTools
+        .map((t) => {
+          const attrs = [
+            `id="${t.identifier}"`,
+            `installed="${t.installed ? 'true' : 'false'}"`,
+            `enabled="${t.enabled ? 'true' : 'false'}"`,
+          ].join(' ');
+          const desc = t.description ? ` - ${escapeXml(t.description)}` : '';
+          return `    <tool ${attrs}>${escapeXml(t.name)}${desc}</tool>`;
+        })
+        .join('\n');
+      toolsSections.push(`  <lobehub_skill_tools>\n${lobehubSkillItems}\n  </lobehub_skill_tools>`);
     }
 
     if (toolsSections.length > 0) {

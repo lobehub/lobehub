@@ -1,8 +1,8 @@
 'use client';
 
-import { ActionIcon, Button, Flexbox, Text } from '@lobehub/ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
 import { cx } from 'antd-style';
-import { ArrowLeft, ExternalLink } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -22,13 +22,17 @@ const Header = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
 
-  const [topicId, documentId, closeDocument] = useChatStore((s) => [
+  const [topicId, documentId] = useChatStore((s) => [
     s.activeTopicId,
     chatPortalSelectors.portalDocumentId(s),
-    s.closeDocument,
   ]);
 
-  const document = useNotebookStore(notebookSelectors.getDocumentById(topicId, documentId));
+  const [useFetchDocuments, title, fileType] = useNotebookStore((s) => [
+    s.useFetchDocuments,
+    notebookSelectors.getDocumentById(topicId, documentId)(s)?.title,
+    notebookSelectors.getDocumentById(topicId, documentId)(s)?.fileType,
+  ]);
+  useFetchDocuments(topicId);
 
   const handleOpenInPageEditor = async () => {
     if (!documentId) return;
@@ -49,19 +53,18 @@ const Header = () => {
     }
   };
 
-  if (!document) return null;
+  if (!title) return null;
 
   return (
     <Flexbox align={'center'} flex={1} gap={12} horizontal justify={'space-between'} width={'100%'}>
-      <Flexbox align={'center'} gap={4} horizontal>
-        <ActionIcon icon={ArrowLeft} onClick={closeDocument} size={'small'} />
+      <Flexbox flex={1}>
         <Text className={cx(oneLineEllipsis)} type={'secondary'}>
-          {document.title}
+          {title}
         </Text>
       </Flexbox>
       <Flexbox align={'center'} gap={8} horizontal>
         <AutoSaveHint />
-        {document.fileType !== 'agent/plan' && (
+        {fileType !== 'agent/plan' && (
           <Button
             icon={<ExternalLink size={14} />}
             loading={loading}

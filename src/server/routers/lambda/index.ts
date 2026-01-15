@@ -37,6 +37,7 @@ import { ragEvalRouter } from './ragEval';
 import { searchRouter } from './search';
 import { sessionRouter } from './session';
 import { sessionGroupRouter } from './sessionGroup';
+import { shareRouter } from './share';
 import { threadRouter } from './thread';
 import { topicRouter } from './topic';
 import { uploadRouter } from './upload';
@@ -77,6 +78,7 @@ export const lambdaRouter = router({
   search: searchRouter,
   session: sessionRouter,
   sessionGroup: sessionGroupRouter,
+  share: shareRouter,
   thread: threadRouter,
   topic: topicRouter,
   upload: uploadRouter,

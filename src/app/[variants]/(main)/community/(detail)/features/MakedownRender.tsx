@@ -25,7 +25,7 @@ const MarkdownRender = memo<{ children?: string }>(({ children }) => {
     <Markdown
       allowHtml
       components={{
-        a: ({ href, ...rest }: { children: ReactNode; href: string }) => {
+        a: ({ href, ...rest }: { children?: ReactNode; href?: string }) => {
           if (href && href.startsWith('http'))
             return <a {...rest} href={href} rel="noreferrer" target="_blank" />;
           return rest?.children;
@@ -35,12 +35,14 @@ const MarkdownRender = memo<{ children?: string }>(({ children }) => {
         h3: H3,
         h4: H4,
         h5: H5,
-        img: ({ src, ...rest }: { src: string }) => {
-          if (src.includes('glama.ai')) return;
+        img: ({ src, ...rest }: { alt?: string; src?: string | Blob }) => {
+          // FIXME ignore experimental blob image prop passing
+          if (typeof src !== 'string') return null;
+          if (src.includes('glama.ai')) return null;
 
           // eslint-disable-next-line @next/next/no-img-element
-          if (src && src.startsWith('http')) return <img src={src} {...rest} />;
-          return;
+          if (src.startsWith('http')) return <img src={src} {...rest} />;
+          return null;
         },
       }}
       enableImageGallery={false}

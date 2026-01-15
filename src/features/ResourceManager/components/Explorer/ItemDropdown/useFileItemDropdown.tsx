@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
 import RepoIcon from '@/components/LibIcon';
-import { clearTreeFolderCache } from '@/features/ResourceManager/components/Tree';
+import { clearTreeFolderCache } from '@/features/ResourceManager/components/LibraryHierarchy';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';

@@ -4,7 +4,7 @@ import { Copy, CopyPlus, Pencil, Trash2 } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useFileStore } from '@/store/file';
+import { usePageStore } from '@/store/page';
 
 interface ActionProps {
   documentContent?: string;
@@ -19,8 +19,8 @@ export const useDropdownMenu = ({
 }: ActionProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['common', 'file']);
   const { message, modal } = App.useApp();
-  const removeDocument = useFileStore((s) => s.removeDocument);
-  const duplicateDocument = useFileStore((s) => s.duplicateDocument);
+  const removePage = usePageStore((s) => s.removePage);
+  const duplicatePage = usePageStore((s) => s.duplicatePage);
 
   const handleDelete = () => {
     modal.confirm({
@@ -30,7 +30,7 @@ export const useDropdownMenu = ({
       okText: t('delete'),
       onOk: async () => {
         try {
-          await removeDocument(pageId);
+          await removePage(pageId);
           message.success(t('pageEditor.deleteSuccess', { ns: 'file' }));
         } catch (error) {
           console.error('Failed to delete page:', error);
@@ -53,7 +53,7 @@ export const useDropdownMenu = ({
 
   const handleDuplicate = async () => {
     try {
-      await duplicateDocument(pageId);
+      await duplicatePage(pageId);
     } catch (error) {
       console.error('Failed to duplicate page:', error);
     }

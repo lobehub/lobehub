@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import { MainBroadcastEventKey, MainBroadcastParams } from './events';
 
@@ -21,11 +21,17 @@ export const useWatchBroadcast = <T extends MainBroadcastEventKey>(
   event: T,
   handler: (data: MainBroadcastParams<T>) => void,
 ) => {
+  const handlerRef = useRef<typeof handler>(handler);
+
+  useLayoutEffect(() => {
+    handlerRef.current = handler;
+  }, [handler]);
+
   useEffect(() => {
     if (!window.electron) return;
 
-    const listener = (e: any, data: MainBroadcastParams<T>) => {
-      handler(data);
+    const listener = (_e: any, data: MainBroadcastParams<T>) => {
+      handlerRef.current(data);
     };
 
     window.electron.ipcRenderer.on(event, listener);
@@ -33,5 +39,5 @@ export const useWatchBroadcast = <T extends MainBroadcastEventKey>(
     return () => {
       window.electron.ipcRenderer.removeListener(event, listener);
     };
-  }, []);
+  }, [event]);
 };
