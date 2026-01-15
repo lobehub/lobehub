@@ -23,10 +23,17 @@ const useStyles = createStyles(({ css, token }) => ({
     color: ${token.colorSuccess};
   `,
   container: css`
-    padding: 12px 0;
+    padding-block: 12px;
+padding-inline: 0;
   `,
   disconnected: css`
     font-size: 14px;
+    color: ${token.colorTextTertiary};
+  `,
+  disconnectedIcon: css`
+    opacity: 0.5;
+  `,
+  disconnectedTitle: css`
     color: ${token.colorTextTertiary};
   `,
   error: css`
@@ -41,9 +48,9 @@ const useStyles = createStyles(({ css, token }) => ({
 
     width: 48px;
     height: 48px;
+    border-radius: 12px;
 
     background: ${token.colorFillTertiary};
-    border-radius: 12px;
   `,
   title: css`
     font-size: 15px;
@@ -261,6 +268,8 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
     );
   };
 
+  const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
+
   return (
     <Flexbox
       align="center"
@@ -270,9 +279,13 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
       justify="space-between"
     >
       <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
-        <div className={styles.icon}>{renderIcon()}</div>
+        <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
+          {renderIcon()}
+        </div>
         <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-          <span className={styles.title}>{provider.label}</span>
+          <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
+            {provider.label}
+          </span>
           {renderStatus()}
         </Flexbox>
       </Flexbox>
