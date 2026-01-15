@@ -41,6 +41,7 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
     } catch (error) {
       const err = error as Error;
       return {
+        content: `searchUserMemory with error detail: ${err.message}`,
         error: {
           body: error,
           message: err.message,
@@ -80,6 +81,7 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
     } catch (error) {
       const err = error as Error;
       return {
+        content: `addContextMemory with error detail: ${err.message}`,
         error: {
           body: error,
           message: err.message,
@@ -110,13 +112,15 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
       }
 
       return {
-        content: `🧠 Experience memory saved: "${params.title}"`,
+        content: `Experience memory "${params.title}" saved with memoryId: "${result.memoryId}" and experienceId: "${result.experienceId}"`,
         state: { experienceId: result.experienceId, memoryId: result.memoryId },
         success: true,
       };
     } catch (error) {
       const err = error as Error;
+
       return {
+        content: `addExperienceMemory with error detail: ${err.message}`,
         error: {
           body: error,
           message: err.message,
@@ -154,6 +158,7 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
     } catch (error) {
       const err = error as Error;
       return {
+        content: `addIdentityMemory with error detail: ${err.message}`,
         error: {
           body: error,
           message: err.message,
@@ -191,6 +196,7 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
     } catch (error) {
       const err = error as Error;
       return {
+        content: `addPreferenceMemory with error detail: ${err.message}`,
         error: {
           body: error,
           message: err.message,
@@ -230,6 +236,7 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
     } catch (error) {
       const err = error as Error;
       return {
+        content: `updateIdentityMemory with error detail: ${err.message}`,
         error: {
           body: error,
           message: err.message,
@@ -264,6 +271,7 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
     } catch (error) {
       const err = error as Error;
       return {
+        content: `removeIdentityMemory with error detail: ${err.message}`,
         error: {
           body: error,
           message: err.message,
