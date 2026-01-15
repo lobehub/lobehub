@@ -1,5 +1,5 @@
 import { filesPrompts } from '@lobechat/prompts';
-import { MessageContentPart } from '@lobechat/types';
+import { ChatFileItem, MessageContentPart } from '@lobechat/types';
 import { imageUrlToBase64 } from '@lobechat/utils/imageToBase64';
 import { parseDataUri } from '@lobechat/utils/uriParser';
 import { isDesktopLocalStaticServerUrl } from '@lobechat/utils/url';
@@ -48,10 +48,10 @@ export interface MessageContentConfig {
 }
 
 export interface UserMessageContentPart {
-  googleThoughtSignature?: string;
   file_url?: {
     url: string;
   };
+  googleThoughtSignature?: string;
   image_url?: {
     detail?: string;
     url: string;
@@ -163,16 +163,16 @@ export class MessageContentProcessor extends BaseProcessor {
     let textContent = message.content || '';
 
     const isGoogleProvider = this.config.provider === 'google';
-    const fileList = message.fileList || [];
+    const fileList: ChatFileItem[] = message.fileList || [];
     const googlePdfFiles = isGoogleProvider
       ? fileList.filter((file) => {
-        const fileType = file.fileType?.toLowerCase();
-        return (
-          fileType === 'application/pdf' &&
-          file.size <= MAX_GOOGLE_EXTERNAL_PDF_SIZE &&
-          isHttpUrl(file.url)
-        );
-      })
+          const fileType = file.fileType?.toLowerCase();
+          return (
+            fileType === 'application/pdf' &&
+            file.size <= MAX_GOOGLE_EXTERNAL_PDF_SIZE &&
+            isHttpUrl(file.url)
+          );
+        })
       : [];
 
     const fileListForPrompt = isGoogleProvider
