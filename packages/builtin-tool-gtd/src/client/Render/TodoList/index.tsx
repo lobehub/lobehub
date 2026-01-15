@@ -2,10 +2,10 @@
 
 import { type BuiltinRenderProps } from '@lobechat/types';
 import { Block, Checkbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 
-import type { TodoItem, TodoList as TodoListType } from '../../../types';
+import type { TodoItem, TodoList as TodoListType, TodoStatus } from '../../../types';
 
 export interface TodoListRenderState {
   todos?: TodoListType;
@@ -23,30 +23,41 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       border-block-end: none;
     }
   `,
-  textChecked: css`
+  textCompleted: css`
     color: ${cssVar.colorTextQuaternary};
     text-decoration: line-through;
+  `,
+  textProcessing: css`
+    color: ${cssVar.colorWarningText};
   `,
 }));
 
 interface ReadOnlyTodoItemProps {
-  completed: boolean;
+  status: TodoStatus;
   text: string;
 }
 
 /**
  * Read-only todo item row, matching the style of TodoItemRow in SortableTodoList
  */
-const ReadOnlyTodoItem = memo<ReadOnlyTodoItemProps>(({ text, completed }) => {
+const ReadOnlyTodoItem = memo<ReadOnlyTodoItemProps>(({ text, status }) => {
+  const isCompleted = status === 'completed';
+  const isProcessing = status === 'processing';
+  const checkboxColor = isProcessing ? cssVar.colorWarning : cssVar.colorSuccess;
+
   return (
     <Checkbox
-      backgroundColor={cssVar.colorSuccess}
-      checked={completed}
-      classNames={{ text: completed ? styles.textChecked : undefined, wrapper: styles.itemRow }}
+      backgroundColor={checkboxColor}
+      checked={isCompleted}
+      classNames={{
+        text: cx(isCompleted && styles.textCompleted, isProcessing && styles.textProcessing),
+        wrapper: styles.itemRow,
+      }}
+      indeterminate={isProcessing}
       shape={'circle'}
       style={{ borderWidth: 1.5, cursor: 'default' }}
       textProps={{
-        type: completed ? 'secondary' : undefined,
+        type: isCompleted ? 'secondary' : undefined,
       }}
     >
       {text}
@@ -73,7 +84,7 @@ const TodoListUI = memo<TodoListUIProps>(({ items }) => {
     // Outer container with background - matches AddTodoIntervention
     <Block variant={'outlined'} width="100%">
       {items.map((item, index) => (
-        <ReadOnlyTodoItem completed={item.completed} key={index} text={item.text} />
+        <ReadOnlyTodoItem key={index} status={item.status} text={item.text} />
       ))}
     </Block>
   );

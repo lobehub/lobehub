@@ -22,7 +22,7 @@ describe('GTDExecutor', () => {
       expect(result.content).toContain('Call mom');
       expect(result.state?.todos.items).toHaveLength(2);
       expect(result.state?.todos.items[0].text).toBe('Buy milk');
-      expect(result.state?.todos.items[0].completed).toBe(false);
+      expect(result.state?.todos.items[0].status).toBe('todo');
       expect(result.state?.todos.items[1].text).toBe('Call mom');
     });
 
@@ -32,8 +32,8 @@ describe('GTDExecutor', () => {
       const result = await gtdExecutor.createTodos(
         {
           items: [
-            { text: 'Buy milk', completed: false },
-            { text: 'Call mom', completed: true },
+            { text: 'Buy milk', status: 'todo' },
+            { text: 'Call mom', status: 'completed' },
           ],
         },
         ctx,
@@ -43,15 +43,15 @@ describe('GTDExecutor', () => {
       expect(result.content).toContain('Added 2 items');
       expect(result.state?.todos.items).toHaveLength(2);
       expect(result.state?.todos.items[0].text).toBe('Buy milk');
-      expect(result.state?.todos.items[0].completed).toBe(false);
+      expect(result.state?.todos.items[0].status).toBe('todo');
       expect(result.state?.todos.items[1].text).toBe('Call mom');
-      expect(result.state?.todos.items[1].completed).toBe(true);
+      expect(result.state?.todos.items[1].status).toBe('completed');
     });
 
     it('should append items to existing todo list', async () => {
       const ctx = createMockContext({
         todos: {
-          items: [{ text: 'Existing task', completed: false }],
+          items: [{ text: 'Existing task', status: 'todo' }],
           updatedAt: '2024-01-01T00:00:00.000Z',
         },
       });
@@ -89,7 +89,7 @@ describe('GTDExecutor', () => {
       const result = await gtdExecutor.createTodos(
         {
           adds: ['AI task'],
-          items: [{ text: 'User edited task', completed: true }],
+          items: [{ text: 'User edited task', status: 'completed' }],
         },
         ctx,
       );
@@ -97,7 +97,7 @@ describe('GTDExecutor', () => {
       expect(result.success).toBe(true);
       expect(result.state?.todos.items).toHaveLength(1);
       expect(result.state?.todos.items[0].text).toBe('User edited task');
-      expect(result.state?.todos.items[0].completed).toBe(true);
+      expect(result.state?.todos.items[0].status).toBe('completed');
     });
   });
 
@@ -105,7 +105,7 @@ describe('GTDExecutor', () => {
     it('should add new items via operations', async () => {
       const ctx = createMockContext({
         todos: {
-          items: [{ text: 'Existing task', completed: false }],
+          items: [{ text: 'Existing task', status: 'todo' }],
           updatedAt: '2024-01-01T00:00:00.000Z',
         },
       });
@@ -125,7 +125,7 @@ describe('GTDExecutor', () => {
     it('should update item text via operations', async () => {
       const ctx = createMockContext({
         todos: {
-          items: [{ text: 'Old task', completed: false }],
+          items: [{ text: 'Old task', status: 'todo' }],
           updatedAt: '2024-01-01T00:00:00.000Z',
         },
       });
@@ -144,7 +144,7 @@ describe('GTDExecutor', () => {
     it('should complete items via operations', async () => {
       const ctx = createMockContext({
         todos: {
-          items: [{ text: 'Task', completed: false }],
+          items: [{ text: 'Task', status: 'todo' }],
           updatedAt: '2024-01-01T00:00:00.000Z',
         },
       });
@@ -157,15 +157,15 @@ describe('GTDExecutor', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(result.state?.todos.items[0].completed).toBe(true);
+      expect(result.state?.todos.items[0].status).toBe('completed');
     });
 
     it('should remove items via operations', async () => {
       const ctx = createMockContext({
         todos: {
           items: [
-            { text: 'Task 1', completed: false },
-            { text: 'Task 2', completed: false },
+            { text: 'Task 1', status: 'todo' },
+            { text: 'Task 2', status: 'todo' },
           ],
           updatedAt: '2024-01-01T00:00:00.000Z',
         },
@@ -198,11 +198,11 @@ describe('GTDExecutor', () => {
         createdItems: ['Task A', 'Task B', 'Task C', 'Task D', 'Task E'],
         todos: {
           items: [
-            { completed: false, text: 'Task A' },
-            { completed: false, text: 'Task B' },
-            { completed: false, text: 'Task C' },
-            { completed: false, text: 'Task D' },
-            { completed: false, text: 'Task E' },
+            { status: 'todo', text: 'Task A' },
+            { status: 'todo', text: 'Task B' },
+            { status: 'todo', text: 'Task C' },
+            { status: 'todo', text: 'Task D' },
+            { status: 'todo', text: 'Task E' },
           ],
           updatedAt: '2025-01-01T00:00:00.000Z',
         },
@@ -223,12 +223,12 @@ describe('GTDExecutor', () => {
       expect(result.state?.todos.items).toHaveLength(5);
       // Index 5 is out of range (0-4), so should be skipped
       // Index 2 should be completed
-      expect(result.state?.todos.items[2].completed).toBe(true);
+      expect(result.state?.todos.items[2].status).toBe('completed');
       // Other items should remain uncompleted
-      expect(result.state?.todos.items[0].completed).toBe(false);
-      expect(result.state?.todos.items[1].completed).toBe(false);
-      expect(result.state?.todos.items[3].completed).toBe(false);
-      expect(result.state?.todos.items[4].completed).toBe(false);
+      expect(result.state?.todos.items[0].status).toBe('todo');
+      expect(result.state?.todos.items[1].status).toBe('todo');
+      expect(result.state?.todos.items[3].status).toBe('todo');
+      expect(result.state?.todos.items[4].status).toBe('todo');
     });
   });
 
@@ -237,9 +237,9 @@ describe('GTDExecutor', () => {
       const ctx = createMockContext({
         todos: {
           items: [
-            { text: 'Task 1', completed: false },
-            { text: 'Task 2', completed: false },
-            { text: 'Task 3', completed: false },
+            { text: 'Task 1', status: 'todo' },
+            { text: 'Task 2', status: 'todo' },
+            { text: 'Task 3', status: 'todo' },
           ],
           updatedAt: '2024-01-01T00:00:00.000Z',
         },
@@ -249,9 +249,9 @@ describe('GTDExecutor', () => {
 
       expect(result.success).toBe(true);
       expect(result.content).toContain('Completed 2 items');
-      expect(result.state?.todos.items[0].completed).toBe(true);
-      expect(result.state?.todos.items[1].completed).toBe(false);
-      expect(result.state?.todos.items[2].completed).toBe(true);
+      expect(result.state?.todos.items[0].status).toBe('completed');
+      expect(result.state?.todos.items[1].status).toBe('todo');
+      expect(result.state?.todos.items[2].status).toBe('completed');
     });
 
     it('should return error when no indices provided', async () => {
@@ -277,7 +277,7 @@ describe('GTDExecutor', () => {
     it('should return error when all indices are invalid', async () => {
       const ctx = createMockContext({
         todos: {
-          items: [{ text: 'Task 1', completed: false }],
+          items: [{ text: 'Task 1', status: 'todo' }],
           updatedAt: '2024-01-01T00:00:00.000Z',
         },
       });
@@ -292,8 +292,8 @@ describe('GTDExecutor', () => {
       const ctx = createMockContext({
         todos: {
           items: [
-            { text: 'Task 1', completed: false },
-            { text: 'Task 2', completed: false },
+            { text: 'Task 1', status: 'todo' },
+            { text: 'Task 2', status: 'todo' },
           ],
           updatedAt: '2024-01-01T00:00:00.000Z',
         },
@@ -304,14 +304,14 @@ describe('GTDExecutor', () => {
       expect(result.success).toBe(true);
       expect(result.content).toContain('Completed 1 item');
       expect(result.content).toContain('Ignored invalid indices');
-      expect(result.state?.todos.items[0].completed).toBe(true);
-      expect(result.state?.todos.items[1].completed).toBe(false);
+      expect(result.state?.todos.items[0].status).toBe('completed');
+      expect(result.state?.todos.items[1].status).toBe('todo');
     });
 
     it('should handle single item completion with correct grammar', async () => {
       const ctx = createMockContext({
         todos: {
-          items: [{ text: 'Task 1', completed: false }],
+          items: [{ text: 'Task 1', status: 'todo' }],
           updatedAt: '2024-01-01T00:00:00.000Z',
         },
       });
@@ -329,9 +329,9 @@ describe('GTDExecutor', () => {
       const ctx = createMockContext({
         todos: {
           items: [
-            { text: 'Task 1', completed: false },
-            { text: 'Task 2', completed: false },
-            { text: 'Task 3', completed: false },
+            { text: 'Task 1', status: 'todo' },
+            { text: 'Task 2', status: 'todo' },
+            { text: 'Task 3', status: 'todo' },
           ],
           updatedAt: '2024-01-01T00:00:00.000Z',
         },
@@ -371,8 +371,8 @@ describe('GTDExecutor', () => {
       const ctx = createMockContext({
         todos: {
           items: [
-            { text: 'Task 1', completed: false },
-            { text: 'Task 2', completed: true },
+            { text: 'Task 1', status: 'todo' },
+            { text: 'Task 2', status: 'completed' },
           ],
           updatedAt: '2024-01-01T00:00:00.000Z',
         },
@@ -389,9 +389,9 @@ describe('GTDExecutor', () => {
       const ctx = createMockContext({
         todos: {
           items: [
-            { text: 'Task 1', completed: false },
-            { text: 'Task 2', completed: true },
-            { text: 'Task 3', completed: true },
+            { text: 'Task 1', status: 'todo' },
+            { text: 'Task 2', status: 'completed' },
+            { text: 'Task 3', status: 'completed' },
           ],
           updatedAt: '2024-01-01T00:00:00.000Z',
         },
@@ -421,7 +421,7 @@ describe('GTDExecutor', () => {
     it('should handle no completed items to clear', async () => {
       const ctx = createMockContext({
         todos: {
-          items: [{ text: 'Task 1', completed: false }],
+          items: [{ text: 'Task 1', status: 'todo' }],
           updatedAt: '2024-01-01T00:00:00.000Z',
         },
       });
@@ -442,13 +442,13 @@ describe('GTDExecutor', () => {
         operationId: 'test-operation-id',
         pluginState: {
           todos: {
-            items: [{ text: 'Old task from pluginState', completed: false }],
+            items: [{ text: 'Old task from pluginState', status: 'todo' }],
             updatedAt: '2024-01-01T00:00:00.000Z',
           },
         },
         stepContext: {
           todos: {
-            items: [{ text: 'New task from stepContext', completed: true }],
+            items: [{ text: 'New task from stepContext', status: 'completed' }],
             updatedAt: '2024-06-01T00:00:00.000Z',
           },
         },
@@ -461,7 +461,7 @@ describe('GTDExecutor', () => {
       expect(result.state?.todos.items).toHaveLength(2);
       // First item should be from stepContext, not pluginState
       expect(result.state?.todos.items[0].text).toBe('New task from stepContext');
-      expect(result.state?.todos.items[0].completed).toBe(true);
+      expect(result.state?.todos.items[0].status).toBe('completed');
       expect(result.state?.todos.items[1].text).toBe('Another task');
     });
 
@@ -471,7 +471,7 @@ describe('GTDExecutor', () => {
         operationId: 'test-operation-id',
         pluginState: {
           todos: {
-            items: [{ text: 'Task from pluginState', completed: false }],
+            items: [{ text: 'Task from pluginState', status: 'todo' }],
             updatedAt: '2024-01-01T00:00:00.000Z',
           },
         },
@@ -509,8 +509,8 @@ describe('GTDExecutor', () => {
         stepContext: {
           todos: {
             items: [
-              { text: 'Task 1', completed: false },
-              { text: 'Task 2', completed: false },
+              { text: 'Task 1', status: 'todo' },
+              { text: 'Task 2', status: 'todo' },
             ],
             updatedAt: '2024-06-01T00:00:00.000Z',
           },
@@ -520,8 +520,8 @@ describe('GTDExecutor', () => {
       const result = await gtdExecutor.completeTodos({ indices: [0] }, ctx);
 
       expect(result.success).toBe(true);
-      expect(result.state?.todos.items[0].completed).toBe(true);
-      expect(result.state?.todos.items[1].completed).toBe(false);
+      expect(result.state?.todos.items[0].status).toBe('completed');
+      expect(result.state?.todos.items[1].status).toBe('todo');
     });
 
     it('should work with stepContext.todos for removeTodos', async () => {
@@ -531,8 +531,8 @@ describe('GTDExecutor', () => {
         stepContext: {
           todos: {
             items: [
-              { text: 'Task 1', completed: false },
-              { text: 'Task 2', completed: false },
+              { text: 'Task 1', status: 'todo' },
+              { text: 'Task 2', status: 'todo' },
             ],
             updatedAt: '2024-06-01T00:00:00.000Z',
           },
@@ -553,8 +553,8 @@ describe('GTDExecutor', () => {
         stepContext: {
           todos: {
             items: [
-              { text: 'Task 1', completed: true },
-              { text: 'Task 2', completed: false },
+              { text: 'Task 1', status: 'completed' },
+              { text: 'Task 2', status: 'todo' },
             ],
             updatedAt: '2024-06-01T00:00:00.000Z',
           },

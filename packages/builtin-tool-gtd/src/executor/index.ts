@@ -82,7 +82,7 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
     const itemsToAdd: TodoItem[] = params.items
       ? params.items
       : params.adds
-        ? params.adds.map((text) => ({ completed: false, text }))
+        ? params.adds.map((text) => ({ status: 'todo' as const, text }))
         : [];
 
     if (itemsToAdd.length === 0) {
@@ -144,7 +144,7 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
       switch (op.type) {
         case 'add': {
           if (op.text) {
-            updatedTodos.push({ completed: false, text: op.text });
+            updatedTodos.push({ status: 'todo', text: op.text });
             results.push(`Added: "${op.text}"`);
           }
           break;
@@ -156,8 +156,9 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
             if (op.newText !== undefined) {
               updatedItem.text = op.newText;
             }
+            // Handle legacy completed field - convert to status
             if (op.completed !== undefined) {
-              updatedItem.completed = op.completed;
+              updatedItem.status = op.completed ? 'completed' : 'todo';
             }
             updatedTodos[op.index] = updatedItem;
             results.push(`Updated item ${op.index + 1}`);
@@ -174,7 +175,7 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
         case 'complete': {
           if (op.index !== undefined && op.index >= 0 && op.index < updatedTodos.length) {
             // Create a new object to avoid mutating frozen/immutable objects from store
-            updatedTodos[op.index] = { ...updatedTodos[op.index], completed: true };
+            updatedTodos[op.index] = { ...updatedTodos[op.index], status: 'completed' };
             results.push(`Completed: "${updatedTodos[op.index].text}"`);
           }
           break;
@@ -250,7 +251,7 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
     // Mark items as completed
     const updatedTodos = existingTodos.map((todo, index) => {
       if (validIndices.includes(index)) {
-        return { ...todo, completed: true };
+        return { ...todo, status: 'completed' as const };
       }
       return todo;
     });
@@ -388,7 +389,7 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
       actionSummary = `🧹 Cleared all ${clearedCount} item${clearedCount > 1 ? 's' : ''} from todo list.`;
     } else {
       // mode === 'completed'
-      updatedTodos = existingTodos.filter((todo) => !todo.completed);
+      updatedTodos = existingTodos.filter((todo) => todo.status !== 'completed');
       clearedCount = existingTodos.length - updatedTodos.length;
 
       if (clearedCount === 0) {

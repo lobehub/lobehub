@@ -85,9 +85,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorSuccess};
     transition: width 0.3s ${cssVar.motionEaseInOut};
   `,
-  textChecked: css`
+  textCompleted: css`
     color: ${cssVar.colorTextQuaternary};
     text-decoration: line-through;
+  `,
+  textProcessing: css`
+    color: ${cssVar.colorWarningText};
   `,
 }));
 
@@ -112,11 +115,13 @@ const TodoProgress = memo<TodoProgressProps>(({ className }) => {
   // Calculate progress
   const items = todos?.items || [];
   const total = items.length;
-  const completed = items.filter((item) => item.completed).length;
+  const completed = items.filter((item) => item.status === 'completed').length;
   const progressPercent = total > 0 ? (completed / total) * 100 : 0;
 
-  // Find current pending task (first incomplete item)
-  const currentPendingTask = items.find((item) => !item.completed);
+  // Find current pending task (first non-completed item, prioritize processing)
+  const currentPendingTask =
+    items.find((item) => item.status === 'processing') ||
+    items.find((item) => item.status === 'todo');
 
   // Don't render if no todos
   if (total === 0) return null;
@@ -156,24 +161,34 @@ const TodoProgress = memo<TodoProgressProps>(({ className }) => {
 
         {/* Expandable Todo List */}
         <div className={cx(styles.listContainer, expanded ? styles.expanded : styles.collapsed)}>
-          {items.map((item, index) => (
-            <Checkbox
-              backgroundColor={cssVar.colorSuccess}
-              checked={item.completed}
-              classNames={{
-                text: item.completed ? styles.textChecked : undefined,
-                wrapper: styles.itemRow,
-              }}
-              key={index}
-              shape="circle"
-              style={{ borderWidth: 1.5, cursor: 'default', pointerEvents: 'none' }}
-              textProps={{
-                type: item.completed ? 'secondary' : undefined,
-              }}
-            >
-              {item.text}
-            </Checkbox>
-          ))}
+          {items.map((item, index) => {
+            const isCompleted = item.status === 'completed';
+            const isProcessing = item.status === 'processing';
+            const checkboxColor = isProcessing ? cssVar.colorWarning : cssVar.colorSuccess;
+
+            return (
+              <Checkbox
+                backgroundColor={checkboxColor}
+                checked={isCompleted}
+                classNames={{
+                  text: cx(
+                    isCompleted && styles.textCompleted,
+                    isProcessing && styles.textProcessing,
+                  ),
+                  wrapper: styles.itemRow,
+                }}
+                indeterminate={isProcessing}
+                key={index}
+                shape="circle"
+                style={{ borderWidth: 1.5, cursor: 'default', pointerEvents: 'none' }}
+                textProps={{
+                  type: isCompleted ? 'secondary' : undefined,
+                }}
+              >
+                {item.text}
+              </Checkbox>
+            );
+          })}
         </div>
       </div>
     </WideScreenContainer>

@@ -8,7 +8,7 @@ import { ADD_ITEM_ID } from './types';
 
 // Helper to create TodoItem array from text strings
 const toTodoItems = (...texts: string[]): TodoItem[] =>
-  texts.map((text) => ({ completed: false, text }));
+  texts.map((text) => ({ status: 'todo', text }));
 
 describe('TodoListStore', () => {
   beforeEach(() => {
@@ -39,7 +39,7 @@ describe('TodoListStore', () => {
 
       expect(state.items).toHaveLength(2);
       expect(state.items[0].text).toBe('Task 1');
-      expect(state.items[0].completed).toBe(false);
+      expect(state.items[0].status).toBe('todo');
       expect(state.items[1].text).toBe('Task 2');
     });
 
@@ -63,7 +63,7 @@ describe('TodoListStore', () => {
       const state = store.getState();
       expect(state.items).toHaveLength(1);
       expect(state.items[0].text).toBe('New Task');
-      expect(state.items[0].completed).toBe(false);
+      expect(state.items[0].status).toBe('todo');
       expect(state.newItemText).toBe('');
     });
 
@@ -152,23 +152,29 @@ describe('TodoListStore', () => {
   });
 
   describe('toggleItem', () => {
-    it('should toggle item completed state', () => {
+    it('should cycle through status: todo → processing → completed → todo', () => {
       const store = createTodoListStore(toTodoItems('Task 1'));
       const itemId = store.getState().items[0].id;
 
-      expect(store.getState().items[0].completed).toBe(false);
+      expect(store.getState().items[0].status).toBe('todo');
 
       act(() => {
         store.getState().toggleItem(itemId);
       });
 
-      expect(store.getState().items[0].completed).toBe(true);
+      expect(store.getState().items[0].status).toBe('processing');
 
       act(() => {
         store.getState().toggleItem(itemId);
       });
 
-      expect(store.getState().items[0].completed).toBe(false);
+      expect(store.getState().items[0].status).toBe('completed');
+
+      act(() => {
+        store.getState().toggleItem(itemId);
+      });
+
+      expect(store.getState().items[0].status).toBe('todo');
     });
 
     it('should mark store as dirty after toggling item', () => {
@@ -362,7 +368,7 @@ describe('TodoListStore', () => {
 
       expect(onSave).toHaveBeenCalledTimes(1);
       // onSave receives TodoItem[] (without id), not TodoListItem[]
-      expect(onSave).toHaveBeenCalledWith([{ completed: false, text: 'Updated' }]);
+      expect(onSave).toHaveBeenCalledWith([{ status: 'todo', text: 'Updated' }]);
     });
 
     it('should set saveStatus to saving during save', async () => {

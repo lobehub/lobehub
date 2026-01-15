@@ -45,12 +45,22 @@ export type GTDApiNameType = (typeof GTDApiName)[keyof typeof GTDApiName];
 
 // ==================== Todo Item ====================
 
+/** Status of a todo item */
+export type TodoStatus = 'todo' | 'processing' | 'completed';
+
 export interface TodoItem {
-  /** Whether the item is completed */
-  completed: boolean;
+  /** Status of the todo item */
+  status: TodoStatus;
   /** The todo item text */
   text: string;
 }
+
+/** Get the next status in the cycle: todo → processing → completed → todo */
+export const getNextTodoStatus = (current: TodoStatus): TodoStatus => {
+  const cycle: TodoStatus[] = ['todo', 'processing', 'completed'];
+  const index = cycle.indexOf(current);
+  return cycle[(index + 1) % cycle.length];
+};
 
 export interface TodoList {
   items: TodoItem[];
