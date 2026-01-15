@@ -1,11 +1,11 @@
-import { ActionIcon, Button, Drawer, Dropdown, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, Dropdown, Flexbox, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { InfoIcon, MoreVerticalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginDetailModal from '@/features/PluginDetailModal';
-import McpDetail from '@/features/PluginStore/McpList/Detail';
+import McpSettingsModal from '@/features/PluginStore/McpList/Detail/McpSettingsModal';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -154,19 +154,11 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
         schema={plugin?.settings}
         tab={tab}
       />
-      <Drawer
-        containerMaxWidth={'auto'}
-        destroyOnHidden
-        footer={null}
-        height={'100vh'}
+      <McpSettingsModal
+        identifier={identifier}
         onClose={() => setMcpSettingsOpen(false)}
         open={mcpSettingsOpen}
-        placement={'bottom'}
-        styles={{ body: { padding: 24 } }}
-        title={t('dev.title.editCommunity')}
-      >
-        <McpDetail identifier={identifier} />
-      </Drawer>
+      />
     </>
   );
 });

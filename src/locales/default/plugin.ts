@@ -324,6 +324,7 @@ export default {
   'dev.title.create': 'Add custom Skill',
   'dev.title.edit': 'Edit custom Skill',
   'dev.title.editCommunity': 'Edit Community Skill',
+  'dev.title.skillSettings': 'Skill Settings',
   'dev.type.lobe': '{{appName}} Skill',
   'dev.type.openai': 'OpenAI Skill',
   'dev.update': 'Update',

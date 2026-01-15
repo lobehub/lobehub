@@ -1,18 +1,20 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Drawer, Flexbox } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
-import { memo } from 'react';
+import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import PluginTag from '@/components/Plugins/PluginTag';
 import Actions from '@/features/PluginStore/InstalledList/List/Item/Action';
+import McpDetail from '@/features/PluginStore/McpList/Detail';
 import { type LobeToolType } from '@/types/tool/tool';
 
 const useStyles = createStyles(({ css, token }) => ({
   container: css`
     padding-block: 12px;
-padding-inline: 0;
+    padding-inline: 0;
   `,
   icon: css`
     display: flex;
@@ -27,9 +29,14 @@ padding-inline: 0;
     background: ${token.colorFillTertiary};
   `,
   title: css`
+    cursor: pointer;
     font-size: 15px;
     font-weight: 500;
     color: ${token.colorText};
+
+    &:hover {
+      color: ${token.colorPrimary};
+    }
   `,
 }));
 
@@ -45,27 +52,48 @@ interface InstalledSkillItemProps {
 const InstalledSkillItem = memo<InstalledSkillItemProps>(
   ({ identifier, title, avatar, type, runtimeType, author }) => {
     const { styles } = useStyles();
+    const { t } = useTranslation('plugin');
     const isMCP = runtimeType === 'mcp';
+    const [detailOpen, setDetailOpen] = useState(false);
 
     return (
-      <Flexbox
-        align="center"
-        className={styles.container}
-        gap={16}
-        horizontal
-        justify="space-between"
-      >
-        <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
-          <div className={styles.icon}>
-            <PluginAvatar avatar={avatar} size={32} />
-          </div>
-          <Flexbox align="center" gap={8} horizontal style={{ overflow: 'hidden' }}>
-            <span className={styles.title}>{title}</span>
-            <PluginTag author={author} isMCP={isMCP} type={type} />
+      <>
+        <Flexbox
+          align="center"
+          className={styles.container}
+          gap={16}
+          horizontal
+          justify="space-between"
+        >
+          <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
+            <div className={styles.icon}>
+              <PluginAvatar avatar={avatar} size={32} />
+            </div>
+            <Flexbox align="center" gap={8} horizontal style={{ overflow: 'hidden' }}>
+              <span className={styles.title} onClick={() => setDetailOpen(true)}>
+                {title}
+              </span>
+              <PluginTag author={author} isMCP={isMCP} type={type} />
+            </Flexbox>
           </Flexbox>
+          <Actions identifier={identifier} isMCP={isMCP} type={type} />
         </Flexbox>
-        <Actions identifier={identifier} isMCP={isMCP} type={type} />
-      </Flexbox>
+        {isMCP && (
+          <Drawer
+            containerMaxWidth={'auto'}
+            destroyOnHidden
+            footer={null}
+            height={'100vh'}
+            onClose={() => setDetailOpen(false)}
+            open={detailOpen}
+            placement={'bottom'}
+            styles={{ body: { padding: 24 } }}
+            title={t('store.actions.detail')}
+          >
+            <McpDetail identifier={identifier} />
+          </Drawer>
+        )}
+      </>
     );
   },
 );

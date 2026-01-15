@@ -19,10 +19,11 @@ import { McpNavKey } from '@/types/discover';
 import Settings from './Settings';
 
 interface DetailProps {
+  defaultTab?: McpNavKey;
   identifier?: string;
 }
-const Detail = memo<DetailProps>(({ identifier: defaultIdentifier }) => {
-  const [activeTab, setActiveTab] = useState(McpNavKey.Overview);
+const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab }) => {
+  const [activeTab, setActiveTab] = useState(defaultTab ?? McpNavKey.Overview);
   const { t } = useTranslation('plugin');
 
   const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
