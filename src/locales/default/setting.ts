@@ -639,7 +639,7 @@ export default {
   'systemAgent.translation.modelDesc': 'Specify the model used for translation',
   'systemAgent.translation.title': 'Message Translation Agent',
   'tab.about': 'About',
-  'tab.addCustomSkill': 'Add Custom Skill',
+  'tab.addCustomSkill': 'Add custom skill',
   'tab.agent': 'Agent Service',
   'tab.all': 'All',
   'tab.apikey': 'API Key Management',
