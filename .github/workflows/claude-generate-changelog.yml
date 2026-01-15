@@ -1,0 +1,77 @@
+name: Generate Weekly Changelog
+description: Automatically collect recent PRs and generate user-friendly changelog entries
+
+on:
+  schedule:
+    # Run weekly on Monday at 02:00 UTC (10:00 Beijing Time)
+    - cron: '0 2 * * 1'
+  workflow_dispatch:
+    inputs:
+      days_back:
+        description: 'Number of days to look back for PRs (default: 7)'
+        required: false
+        type: string
+        default: '7'
+      dry_run:
+        description: 'Run in dry-run mode (no PR creation, just preview)'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: generate-changelog
+  cancel-in-progress: false
+
+jobs:
+  generate-changelog:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 1
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "claude-bot[bot]"
+          git config --global user.email "claude-bot[bot]@users.noreply.github.com"
+
+      - name: Copy changelog prompt
+        run: |
+          mkdir -p /tmp/claude-prompts
+          cp .claude/prompts/generate-changelog.md /tmp/claude-prompts/
+
+      - name: Run Claude Code for Changelog Generation
+        uses: anthropics/claude-code-action@main
+        with:
+          github_token: ${{ secrets.GH_TOKEN }}
+          allowed_non_write_users: '*'
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: '--allowed-tools Bash(gh pr:*),Bash(gh api:repos/*/pulls/*),Read,Edit,Glob,Grep'
+          prompt: |
+            Follow the changelog generation guide located at:
+            ```bash
+            cat /tmp/claude-prompts/generate-changelog.md
+            ```
+
+            ## Task Assignment
+
+            Collect all merged pull requests from the last ${{ inputs.days_back || '7' }} days and generate user-friendly changelog entries.
+
+            ${{ inputs.dry_run && '**DRY RUN MODE**: This is a test run. Do NOT create any PRs or commit changes. Only analyze PRs and show what would be generated.' || '' }}
+
+            ## Environment Information
+            - Repository: ${{ github.repository }}
+            - Branch: ${{ github.ref_name }}
+            - Days to look back: ${{ inputs.days_back || '7' }} days
+            - Dry Run: ${{ inputs.dry_run }}
+            - Run ID: ${{ github.run_id }}
+            - Current Date: $(date +%Y-%m-%d)
+
+            **Start the changelog generation process now.**
