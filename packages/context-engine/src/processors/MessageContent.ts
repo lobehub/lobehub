@@ -2,7 +2,7 @@ import { filesPrompts } from '@lobechat/prompts';
 import { ChatFileItem, MessageContentPart } from '@lobechat/types';
 import { imageUrlToBase64 } from '@lobechat/utils/imageToBase64';
 import { parseDataUri } from '@lobechat/utils/uriParser';
-import { isDesktopLocalStaticServerUrl } from '@lobechat/utils/url';
+import { isDesktopLocalStaticServerUrl, isLocalOrPrivateUrl } from '@lobechat/utils/url';
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';
@@ -170,7 +170,8 @@ export class MessageContentProcessor extends BaseProcessor {
           return (
             fileType === 'application/pdf' &&
             file.size <= MAX_GOOGLE_EXTERNAL_PDF_SIZE &&
-            isHttpUrl(file.url)
+            isHttpUrl(file.url) &&
+            !isLocalOrPrivateUrl(file.url)
           );
         })
       : [];
