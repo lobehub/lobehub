@@ -78,7 +78,7 @@ jobs:
         run: bun run lint
 
   build:
-    needs: [check-beta, test]
+    needs: [check-beta]
     if: needs.check-beta.outputs.is_beta == 'true'
     name: Build Desktop App
     runs-on: ${{ matrix.os }}
@@ -147,9 +147,19 @@ jobs:
         with:
           artifact-name: release-${{ matrix.os }}
 
+  # 汇总门禁: test/build 完成后决定是否继续
+  gate:
+    needs: [check-beta, test, build]
+    if: ${{ needs.check-beta.outputs.is_beta == 'true' && needs.test.result == 'success' && needs.build.result == 'success' }}
+    name: Gate for publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate passed
+        run: echo "Gate passed"
+
   # 合并 macOS 多架构 latest-mac.yml 文件
   merge-mac-files:
-    needs: [build, check-beta]
+    needs: [gate]
     name: Merge macOS Release Files
     runs-on: ubuntu-latest
     permissions:
