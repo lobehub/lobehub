@@ -37,6 +37,7 @@ ModalContent.displayName = 'AddFilesToKnowledgeBaseModalContent';
 export const useAddFilesToKnowledgeBaseModal = () => {
   const open = useCallback((params?: AddFilesToKnowledgeBaseModalProps) => {
     createModal({
+      afterClose: params?.onClose,
       children: (
         <Suspense fallback={<div style={{ minHeight: 200 }} />}>
           <ModalContent fileIds={params?.fileIds || []} knowledgeBaseId={params?.knowledgeBaseId} />
