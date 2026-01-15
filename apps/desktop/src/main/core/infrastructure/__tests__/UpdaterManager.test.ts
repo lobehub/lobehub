@@ -63,7 +63,7 @@ vi.mock('@/utils/logger', () => ({
 // Mock updater configs
 vi.mock('@/modules/updater/configs', () => ({
   UPDATE_CHANNEL: 'stable',
-  UPDATE_SERVER_URL: undefined,
+  UPDATE_SERVER_URL: 'https://mock.update.server',
   githubConfig: {
     owner: 'lobehub',
     repo: 'lobe-chat',
@@ -468,9 +468,11 @@ describe('UpdaterManager', () => {
         vi.mocked(autoUpdater.checkForUpdates).mockResolvedValue({} as any);
         await updaterManager.checkForUpdates({ manual: true });
 
+        vi.mocked(autoUpdater.checkForUpdates).mockRejectedValueOnce(new Error('Fallback failed'));
+
         const error = new Error('Update error');
         const handler = registeredEvents.get('error');
-        handler?.(error);
+        await handler?.(error);
 
         expect(mockBroadcast).toHaveBeenCalledWith('updateError', 'Update error');
       });
