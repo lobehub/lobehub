@@ -88,8 +88,8 @@ const transformOpenAIStream = (
     return { data: errorData, id: 'first_chunk_error', type: 'error' };
   }
 
-  // MiniMax 会在 base_resp 中返回业务错误（如余额不足），但不走 FIRST_CHUNK_ERROR_KEY
-  // 典型返回：{ id: '...', choices: null, base_resp: { status_code: 1008, status_msg: 'insufficient balance' }, usage: {...} }
+  // MiniMax returns business errors (e.g., insufficient balance) in base_resp, but not through FIRST_CHUNK_ERROR_KEY
+  // Typical response: { id: '...', choices: null, base_resp: { status_code: 1008, status_msg: 'insufficient balance' }, usage: {...} }
   if ((chunk as any).base_resp && typeof (chunk as any).base_resp.status_code === 'number') {
     const baseResp = (chunk as any).base_resp as {
       message?: string;
@@ -98,29 +98,29 @@ const transformOpenAIStream = (
     };
 
     if (baseResp.status_code !== 0) {
-      // 根据 MiniMax 错误码映射到对应的错误类型
+      // Map MiniMax error codes to corresponding error types
       let errorType: ILobeAgentRuntimeErrorType = AgentRuntimeErrorType.ProviderBizError;
 
       switch (baseResp.status_code) {
-        // 1004 - 未授权 / Token 不匹配 / 2049 - 无效的 API Key
+        // 1004 - Unauthorized / Token mismatch / 2049 - Invalid API Key
         case 1004:
         case 2049: {
           errorType = AgentRuntimeErrorType.InvalidProviderAPIKey;
           break;
         }
-        // 1008 - 余额不足
+        // 1008 - Insufficient balance
         case 1008: {
           errorType = AgentRuntimeErrorType.InsufficientQuota;
           break;
         }
-        // 1002 - 请求频率超限 / 1041 - 连接数限制 / 2045 - 请求频率增长超限
+        // 1002 - Request rate limit exceeded / 1041 - Connection limit / 2045 - Request rate growth limit exceeded
         case 1002:
         case 1041:
         case 2045: {
           errorType = AgentRuntimeErrorType.QuotaLimitReached;
           break;
         }
-        // 1039 - Token 限制
+        // 1039 - Token limit
         case 1039: {
           errorType = AgentRuntimeErrorType.ExceededContextWindow;
           break;
