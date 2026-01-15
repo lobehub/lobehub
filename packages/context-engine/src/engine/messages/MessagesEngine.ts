@@ -7,6 +7,7 @@ import { ContextEngine } from '../../pipeline';
 import {
   AgentCouncilFlattenProcessor,
   GroupMessageFlattenProcessor,
+  GroupOrchestrationFilterProcessor,
   GroupRoleTransformProcessor,
   HistoryTruncateProcessor,
   InputTemplateProcessor,
@@ -273,6 +274,21 @@ export class MessagesEngine {
 
       // 15. Supervisor role restore (convert role=supervisor back to role=assistant for model)
       new SupervisorRoleRestoreProcessor(),
+
+      // 15.5. Group orchestration filter (remove supervisor's orchestration messages like broadcast/speak)
+      // This must be BEFORE GroupRoleTransformProcessor so we filter based on original agentId/tools
+      ...(isAgentGroupEnabled && agentGroup.agentMap && agentGroup.currentAgentId
+        ? [
+            new GroupOrchestrationFilterProcessor({
+              agentMap: Object.fromEntries(
+                Object.entries(agentGroup.agentMap).map(([id, info]) => [id, { role: info.role }]),
+              ),
+              currentAgentId: agentGroup.currentAgentId,
+              // Only enabled when current agent is NOT supervisor (supervisor needs to see orchestration history)
+              enabled: agentGroup.currentAgentRole !== 'supervisor',
+            }),
+          ]
+        : []),
 
       // 16. Group role transform (convert other agents' messages to user role with speaker tags)
       // This must be BEFORE ToolCallProcessor so other agents' tool messages are converted first

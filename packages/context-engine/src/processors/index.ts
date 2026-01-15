@@ -1,6 +1,11 @@
 // Transformer processors
 export { AgentCouncilFlattenProcessor } from './AgentCouncilFlatten';
 export { GroupMessageFlattenProcessor } from './GroupMessageFlatten';
+export {
+  type GroupOrchestrationFilterConfig,
+  GroupOrchestrationFilterProcessor,
+  type OrchestrationAgentInfo,
+} from './GroupOrchestrationFilter';
 export { GroupRoleTransformProcessor } from './GroupRoleTransform';
 export { HistoryTruncateProcessor } from './HistoryTruncate';
 export { InputTemplateProcessor } from './InputTemplate';
