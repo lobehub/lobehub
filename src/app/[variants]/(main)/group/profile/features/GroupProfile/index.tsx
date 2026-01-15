@@ -14,6 +14,7 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
 import AutoSaveHint from '../Header/AutoSaveHint';
+import GroupPublishButton from '../Header/GroupPublishButton';
 import GroupHeader from './GroupHeader';
 
 const GroupProfile = memo(() => {
@@ -75,6 +76,7 @@ const GroupProfile = memo(() => {
           >
             {t('startConversation')}
           </Button>
+          <GroupPublishButton />
         </Flexbox>
       </Flexbox>
       <Divider />

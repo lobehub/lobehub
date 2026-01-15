@@ -17,6 +17,7 @@ import {
 } from '@/types/discover';
 
 import { agentRouter } from './agent';
+import { agentGroupRouter } from './agentGroup';
 import { oidcRouter } from './oidc';
 import { socialRouter } from './social';
 import { userRouter } from './user';
@@ -43,6 +44,9 @@ const marketProcedure = publicProcedure
 export const marketRouter = router({
   // ============================== Agent Management (authenticated) ==============================
   agent: agentRouter,
+
+  // ============================== Agent Group Management (authenticated) ==============================
+  agentGroup: agentGroupRouter,
 
   // ============================== Assistant Market ==============================
   getAssistantCategories: marketProcedure
@@ -167,7 +171,7 @@ export const marketRouter = router({
     }),
 
   // ============================== MCP Market ==============================
-getMcpCategories: marketProcedure
+  getMcpCategories: marketProcedure
     .input(
       z
         .object({
@@ -351,7 +355,7 @@ getMcpCategories: marketProcedure
     }),
 
   // ============================== Plugin Market ==============================
-getPluginCategories: marketProcedure
+  getPluginCategories: marketProcedure
     .input(
       z
         .object({
@@ -439,7 +443,7 @@ getPluginCategories: marketProcedure
     }),
 
   // ============================== Providers ==============================
-getProviderDetail: marketProcedure
+  getProviderDetail: marketProcedure
     .input(
       z.object({
         identifier: z.string(),
@@ -503,7 +507,7 @@ getProviderDetail: marketProcedure
     }),
 
   // ============================== User Profile ==============================
-getUserInfo: marketProcedure
+  getUserInfo: marketProcedure
     .input(
       z.object({
         locale: z.string().optional(),
@@ -674,7 +678,6 @@ getUserInfo: marketProcedure
         return { success: false };
       }
     }),
-
 
   reportMcpEvent: marketProcedure
     .input(
