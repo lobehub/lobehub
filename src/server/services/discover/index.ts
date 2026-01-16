@@ -33,7 +33,7 @@ import {
   type ModelQueryParams,
   ModelSorts,
   type PluginListResponse,
-  type PluginQueryParams as PluginQueryParams,
+  type PluginQueryParams,
   PluginSorts,
   type ProviderListResponse,
   type ProviderQueryParams,
@@ -718,6 +718,7 @@ export class DiscoverService {
       q,
       sort = AssistantSorts.CreatedAt,
       ownerId,
+      includeAgentGroup,
     } = rest;
 
     try {
@@ -740,9 +741,10 @@ export class DiscoverService {
         }
       }
 
-      // @ts-ignore
       const data = await this.market.agents.getAgentList({
         category,
+        // includeAgentGroup may not be in SDK type definition yet, using 'as any'
+        includeAgentGroup,
         locale: normalizedLocale,
         order,
         ownerId,
@@ -752,7 +754,7 @@ export class DiscoverService {
         sort: apiSort,
         status: 'published',
         visibility: 'public',
-      });
+      } as any);
 
       const transformedItems: DiscoverAssistantItem[] = (data.items || []).map((item: any) => {
         const normalizedAuthor = this.normalizeAuthorField(item.author);
@@ -773,6 +775,7 @@ export class DiscoverService {
           tags: item.tags || [],
           title: item.name || item.identifier,
           tokenUsage: item.tokenUsage || 0,
+          type: item.type,
           userName: normalizedAuthor.userName,
         };
       });
@@ -921,7 +924,6 @@ export class DiscoverService {
   createPluginEvent = async (params: PluginEventRequest) => {
     await this.market.plugins.createEvent(params);
   };
-
 
   /**
    * report plugin call result to marketplace
@@ -1735,7 +1737,9 @@ export class DiscoverService {
 
     try {
       // Call Market SDK to get user info
-      const response = (await this.market.user.getUserInfo(username, { locale })) as UserInfoResponse & {
+      const response = (await this.market.user.getUserInfo(username, {
+        locale,
+      })) as UserInfoResponse & {
         agentGroups?: any[];
       };
 
