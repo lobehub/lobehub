@@ -55,8 +55,8 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
     -webkit-app-region: no-drag;
   }
 
-  .${CLASSNAMES.ContextTrigger}[data-popup-open],
-    .${CLASSNAMES.DropdownMenuTrigger}[data-popup-open] {
+  .${CLASSNAMES.ContextTrigger}[data-popup-open]:not([data-no-highlight]),
+  .${CLASSNAMES.DropdownMenuTrigger}[data-popup-open]:not([data-no-highlight]) {
     background: ${token.colorFillTertiary};
   }
 `;

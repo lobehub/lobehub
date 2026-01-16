@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Dropdown } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu } from '@lobehub/ui';
 import { BotIcon, MoreHorizontal } from 'lucide-react';
 import { Suspense, memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,21 +18,19 @@ const CommunityAgents = memo(() => {
   return (
     <GroupBlock
       action={
-        <Dropdown
-          menu={{
-            items: [
-              {
-                key: 'all-assistants',
-                label: t('home.more'),
-                onClick: () => {
-                  navigate('/community/assistant');
-                },
+        <DropdownMenu
+          items={[
+            {
+              key: 'all-assistants',
+              label: t('home.more'),
+              onClick: () => {
+                navigate('/community/assistant');
               },
-            ],
-          }}
+            },
+          ]}
         >
           <ActionIcon icon={MoreHorizontal} size="small" />
-        </Dropdown>
+        </DropdownMenu>
       }
       icon={BotIcon}
       title={t('home.communityAgents')}

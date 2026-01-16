@@ -61,7 +61,7 @@ interface DragState {
 const DragStateContext = createContext<{
   currentDrag: DragState | null;
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  setCurrentDrag: (state: DragState | null) => void;
+  setCurrentDrag: (_state: DragState | null) => void;
 }>({
   currentDrag: null,
   setCurrentDrag: () => {},

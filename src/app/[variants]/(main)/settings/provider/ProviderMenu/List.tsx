@@ -1,6 +1,13 @@
 'use client';
 
-import { Accordion, AccordionItem, ActionIcon, Dropdown, Flexbox, Text } from '@lobehub/ui';
+import {
+  Accordion,
+  AccordionItem,
+  ActionIcon,
+  ContextMenuTrigger,
+  Flexbox,
+  Text,
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ArrowDownUpIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
@@ -113,16 +120,7 @@ const ProviderList = (props: {
               />
             </div>
           }
-          headerWrapper={(header) => (
-            <Dropdown
-              menu={{
-                items: [],
-              }}
-              trigger={['contextMenu']}
-            >
-              {header}
-            </Dropdown>
-          )}
+          headerWrapper={(header) => <ContextMenuTrigger items={[]}>{header}</ContextMenuTrigger>}
           itemKey="enabled"
           paddingBlock={4}
           paddingInline={'8px 4px'}
@@ -142,16 +140,7 @@ const ProviderList = (props: {
         {/* Custom Providers */}
         {disabledCustomProviderList.length > 0 && (
           <AccordionItem
-            headerWrapper={(header) => (
-              <Dropdown
-                menu={{
-                  items: [],
-                }}
-                trigger={['contextMenu']}
-              >
-                {header}
-              </Dropdown>
-            )}
+            headerWrapper={(header) => <ContextMenuTrigger items={[]}>{header}</ContextMenuTrigger>}
             itemKey="custom"
             paddingBlock={4}
             paddingInline={'8px 4px'}
@@ -177,14 +166,9 @@ const ProviderList = (props: {
             ) : undefined
           }
           headerWrapper={(header) => (
-            <Dropdown
-              menu={{
-                items: disabledModelProviderList.length > 1 ? dropdownMenu : [],
-              }}
-              trigger={['contextMenu']}
-            >
+            <ContextMenuTrigger items={disabledModelProviderList.length > 1 ? dropdownMenu : []}>
               {header}
-            </Dropdown>
+            </ContextMenuTrigger>
           )}
           itemKey="disabled"
           paddingBlock={4}

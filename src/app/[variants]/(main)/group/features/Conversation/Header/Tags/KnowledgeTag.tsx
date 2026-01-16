@@ -1,7 +1,6 @@
 'use client';
 
-import { Dropdown, Icon, type MenuProps, Tag } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import { DropdownMenu, Flexbox, Icon, type MenuProps, Tag } from '@lobehub/ui';
 import { LibraryBig } from 'lucide-react';
 import { memo } from 'react';
 
@@ -25,7 +24,7 @@ const PluginTag = memo<PluginTagProps>(({ data }) => {
   const count = data.length;
 
   return (
-    <Dropdown menu={{ items }}>
+    <DropdownMenu items={items}>
       <div>
         <Tag>
           {<Icon icon={LibraryBig} />}
@@ -35,7 +34,7 @@ const PluginTag = memo<PluginTagProps>(({ data }) => {
           {count > 1 && <div>({data.length - 1}+)</div>}
         </Tag>
       </div>
-    </Dropdown>
+    </DropdownMenu>
   );
 });
 

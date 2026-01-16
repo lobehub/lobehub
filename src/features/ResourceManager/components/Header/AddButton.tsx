@@ -2,7 +2,7 @@
 
 import { FILE_URL } from '@lobechat/business-const';
 import { Notion } from '@lobehub/icons';
-import { Button, Dropdown, Icon, type MenuProps } from '@lobehub/ui';
+import { Button, DropdownMenu, Icon, type MenuProps } from '@lobehub/ui';
 import { Upload } from 'antd';
 import { FilePenLine, FileUp, FolderIcon, FolderUp, Link, Plus } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
@@ -211,18 +211,11 @@ const AddButton = () => {
 
   return (
     <>
-      <Dropdown menu={{ items }} placement="bottomRight" trigger={['hover']}>
-        <Button
-          icon={Plus}
-          onClick={(e) => {
-            // Prevent default button behavior that might interfere with dropdown
-            e.stopPropagation();
-          }}
-          type="primary"
-        >
+      <DropdownMenu items={items} placement="bottomRight" trigger="both">
+        <Button data-no-highlight icon={Plus} type="primary">
           {t('addLibrary')}
         </Button>
-      </Dropdown>
+      </DropdownMenu>
       <GuideModal
         cancelText={t('header.actions.notionGuide.cancel')}
         cover={<GuideVideo height={269} src={FILE_URL.importFromNotionGuide} width={358} />}

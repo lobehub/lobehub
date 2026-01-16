@@ -1,5 +1,5 @@
-import { Dropdown, Icon } from '@lobehub/ui';
-import { Grid3x3Icon, ListIcon } from 'lucide-react';
+import { DropdownMenu, Icon } from '@lobehub/ui';
+import { Check, Grid3x3Icon, ListIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -23,33 +23,27 @@ const ViewSwitcher = memo(() => {
   const menuItems: MenuProps['items'] = useMemo(
     () => [
       {
+        extra: viewMode === 'list' ? <Icon icon={Check} /> : undefined,
         icon: <Icon icon={ListIcon} />,
         key: 'list',
         label: t('FileManager.view.list'),
         onClick: () => setViewMode('list'),
       },
       {
+        extra: viewMode === 'masonry' ? <Icon icon={Check} /> : undefined,
         icon: <Icon icon={Grid3x3Icon} />,
         key: 'masonry',
         label: t('FileManager.view.masonry'),
         onClick: () => setViewMode('masonry'),
       },
     ],
-    [setViewMode, t],
+    [setViewMode, t, viewMode],
   );
 
   return (
-    <Dropdown
-      arrow={false}
-      menu={{
-        items: menuItems,
-        selectable: true,
-        selectedKeys: [viewMode],
-      }}
-      placement="bottomRight"
-    >
+    <DropdownMenu items={menuItems} placement="bottomRight">
       <ActionIconWithChevron icon={currentViewIcon} title={currentViewLabel} />
-    </Dropdown>
+    </DropdownMenu>
   );
 });
 

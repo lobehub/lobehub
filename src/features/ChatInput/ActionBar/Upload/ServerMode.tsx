@@ -231,6 +231,7 @@ const FileUpload = memo(() => {
       loading={updating}
       showTooltip={false}
       title={t('upload.action.tooltip')}
+      trigger={'both'}
     />
   );
 
