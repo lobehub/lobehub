@@ -1,10 +1,10 @@
 'use client';
 
-import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import { Avatar, Flexbox, Icon } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { Blocks } from 'lucide-react';
-import { memo, useMemo, useState } from 'react';
+import { type ReactNode, createElement, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkillStore from '@/features/SkillStore';
@@ -49,7 +49,15 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
 }));
 
-const MAX_VISIBLE_ICONS = 7;
+const BANNER_SKILL_IDS = [
+  { id: 'gmail', type: 'klavis' },
+  { id: 'notion', type: 'klavis' },
+  { id: 'google-drive', type: 'klavis' },
+  { id: 'google-calendar', type: 'klavis' },
+  { id: 'slack', type: 'klavis' },
+  { id: 'twitter', type: 'lobehub' },
+  { id: 'github', type: 'klavis' },
+] as const;
 
 const SkillInstallBanner = memo(() => {
   const { styles } = useStyles();
@@ -67,29 +75,30 @@ const SkillInstallBanner = memo(() => {
   useFetchLobehubSkillConnections(isLobehubSkillEnabled);
   useFetchUserKlavisServers(isKlavisEnabled);
 
-  // Build avatar items for Avatar.Group
   const avatarItems = useMemo(() => {
-    const items: Array<{ avatar: string; key: string; title: string }> = [];
+    const items: Array<{ avatar: ReactNode; key: string; title: string }> = [];
 
-    if (isLobehubSkillEnabled) {
-      for (const provider of LOBEHUB_SKILL_PROVIDERS.filter((p) => p.defaultVisible !== false)) {
-        // Only include providers with URL icons (skip React component icons)
-        if (typeof provider.icon === 'string') {
+    for (const skill of BANNER_SKILL_IDS) {
+      if (skill.type === 'lobehub') {
+        const provider = getLobehubSkillProviderById(skill.id);
+        if (provider) {
           items.push({
-            avatar: provider.icon,
+            avatar:
+              typeof provider.icon === 'string'
+                ? provider.icon
+                : createElement(provider.icon, { size: 14 }),
             key: provider.id,
             title: provider.label,
           });
         }
-      }
-    }
-
-    if (isKlavisEnabled) {
-      for (const server of KLAVIS_SERVER_TYPES) {
-        // Only include servers with URL icons (skip React component icons)
-        if (typeof server.icon === 'string') {
+      } else {
+        const server = getKlavisServerByServerIdentifier(skill.id);
+        if (server) {
           items.push({
-            avatar: server.icon,
+            avatar:
+              typeof server.icon === 'string'
+                ? server.icon
+                : createElement(server.icon, { size: 14 }),
             key: server.identifier,
             title: server.label,
           });
@@ -97,8 +106,8 @@ const SkillInstallBanner = memo(() => {
       }
     }
 
-    return items.slice(0, MAX_VISIBLE_ICONS);
-  }, [isLobehubSkillEnabled, isKlavisEnabled]);
+    return items;
+  }, []);
 
   // Don't show banner if no skills are enabled
   if (!isLobehubSkillEnabled && !isKlavisEnabled) return null;
@@ -110,7 +119,7 @@ const SkillInstallBanner = memo(() => {
           <Icon className={styles.icon} icon={Blocks} size={18} />
           <span className={styles.text}>{t('skillInstallBanner.title')}</span>
         </Flexbox>
-        {avatarItems.length > 0 && <Avatar.Group items={avatarItems} shape={'circle'} size={24} />}
+        {avatarItems.length > 0 && <Avatar.Group items={avatarItems} shape="circle" size={24} />}
       </div>
       <SkillStore onClose={() => setOpen(false)} open={open} />
     </>
