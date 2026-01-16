@@ -20,7 +20,6 @@ import {
   ChatStreamPayload,
   EmbeddingsOptions,
   EmbeddingsPayload,
-  TextToImagePayload,
   TextToSpeechPayload,
 } from '../../types';
 import { postProcessModelList } from '../../utils/postProcessModelList';
@@ -310,11 +309,6 @@ export const createRouterRuntime = ({
     async createImage(payload: CreateImagePayload) {
       const runtime = await this.getRuntimeByModel(payload.model);
       return runtime.createImage!(payload);
-    }
-
-    async textToImage(payload: TextToImagePayload) {
-      const runtime = await this.getRuntimeByModel(payload.model);
-      return runtime.textToImage!(payload);
     }
 
     async models() {

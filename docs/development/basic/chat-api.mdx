@@ -223,7 +223,6 @@ AgentRuntime is a core abstraction layer in Lobe Chat that encapsulates a unifie
      chat(payload: ChatStreamPayload, options?: ChatCompetitionOptions): Promise<Response>;
      embeddings?(payload: EmbeddingsPayload, options?: EmbeddingsOptions): Promise<Embeddings[]>;
      models?(): Promise<any>;
-     textToImage?: (payload: TextToImagePayload) => Promise<string[]>;
      textToSpeech?: (
        payload: TextToSpeechPayload,
        options?: TextToSpeechOptions,

@@ -223,7 +223,6 @@ AgentRuntime 是 Lobe Chat 中的一个核心抽象层，它封装了与不同 A
      chat(payload: ChatStreamPayload, options?: ChatCompetitionOptions): Promise<Response>;
      embeddings?(payload: EmbeddingsPayload, options?: EmbeddingsOptions): Promise<Embeddings[]>;
      models?(): Promise<any>;
-     textToImage?: (payload: TextToImagePayload) => Promise<string[]>;
      textToSpeech?: (
        payload: TextToSpeechPayload,
        options?: TextToSpeechOptions,

@@ -23,7 +23,6 @@ describe('createRouterRuntime', () => {
     it('should create UniformRuntime class with valid routers', () => {
       class MockRuntime implements LobeRuntimeAI {
         chat = vi.fn();
-        textToImage = vi.fn();
         models = vi.fn();
         embeddings = vi.fn();
         textToSpeech = vi.fn();
@@ -53,7 +52,6 @@ describe('createRouterRuntime', () => {
           mockConstructor(options);
         }
         chat = vi.fn();
-        textToImage = vi.fn();
         models = vi.fn();
         embeddings = vi.fn();
         textToSpeech = vi.fn();
@@ -90,7 +88,6 @@ describe('createRouterRuntime', () => {
     it('should return correct runtime for matching model', async () => {
       const mockRuntime = {
         chat: vi.fn(),
-        textToImage: vi.fn(),
         models: vi.fn(),
         embeddings: vi.fn(),
         textToSpeech: vi.fn(),
@@ -117,7 +114,6 @@ describe('createRouterRuntime', () => {
     it('should support dynamic routers with asynchronous model fetching', async () => {
       const mockRuntime = {
         chat: vi.fn(),
-        textToImage: vi.fn(),
         models: vi.fn(),
         embeddings: vi.fn(),
         textToSpeech: vi.fn(),
@@ -153,7 +149,6 @@ describe('createRouterRuntime', () => {
     it('should return fallback runtime when model not found', async () => {
       const mockRuntime = {
         chat: vi.fn(),
-        textToImage: vi.fn(),
         models: vi.fn(),
         embeddings: vi.fn(),
         textToSpeech: vi.fn(),
@@ -349,35 +344,6 @@ describe('createRouterRuntime', () => {
     });
   });
 
-  describe('textToImage method', () => {
-    it('should call textToImage on the correct runtime based on model', async () => {
-      const mockTextToImage = vi.fn().mockResolvedValue('image-response');
-
-      class MockRuntime implements LobeRuntimeAI {
-        textToImage = mockTextToImage;
-      }
-
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: MockRuntime as any,
-            models: ['dall-e-3'],
-          },
-        ],
-      });
-
-      const runtime = new Runtime();
-      const payload = { model: 'dall-e-3', prompt: 'test prompt' };
-
-      const result = await runtime.textToImage(payload);
-      expect(result).toBe('image-response');
-      expect(mockTextToImage).toHaveBeenCalledWith(payload);
-    });
-  });
-
   describe('models method', () => {
     it('should call models method on first runtime', async () => {
       const mockModels = vi.fn().mockResolvedValue(['model-1', 'model-2']);
@@ -469,7 +435,6 @@ describe('createRouterRuntime', () => {
     it('should support function-based routers configuration', async () => {
       class MockRuntime implements LobeRuntimeAI {
         chat = vi.fn();
-        textToImage = vi.fn();
         models = vi.fn();
         embeddings = vi.fn();
         textToSpeech = vi.fn();

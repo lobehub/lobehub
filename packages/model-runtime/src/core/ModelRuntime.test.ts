@@ -226,43 +226,6 @@ describe('ModelRuntime', () => {
     });
   });
 
-  describe('ModelRuntime textToImage method', () => {
-    it('should run correctly', async () => {
-      const payload = {
-        model: 'stable-diffusion',
-        prompt: 'A beautiful landscape',
-      };
-
-      const mockResponse = ['https://example.com/image1.jpg', 'https://example.com/image2.jpg'];
-
-      vi.spyOn(LobeOpenAI.prototype, 'textToImage').mockResolvedValue(mockResponse);
-
-      const result = await mockModelRuntime.textToImage(payload);
-
-      expect(LobeOpenAI.prototype.textToImage).toHaveBeenCalledWith(payload);
-      expect(result).toBe(mockResponse);
-    });
-
-    it('should handle undefined textToImage method gracefully', async () => {
-      const payload = {
-        model: 'stable-diffusion',
-        prompt: 'A beautiful landscape',
-      };
-
-      // Mock runtime without textToImage method
-      const runtimeWithoutTextToImage = {
-        textToImage: undefined,
-      };
-
-      // @ts-ignore - testing edge case
-      mockModelRuntime['_runtime'] = runtimeWithoutTextToImage;
-
-      const result = await mockModelRuntime.textToImage(payload);
-
-      expect(result).toBeUndefined();
-    });
-  });
-
   describe('ModelRuntime createImage method', () => {
     it('should run correctly', async () => {
       const payload: CreateImagePayload = {
