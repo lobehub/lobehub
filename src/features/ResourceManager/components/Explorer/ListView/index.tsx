@@ -34,7 +34,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   dropZoneActive: css`
     background: ${cssVar.colorPrimaryBg};
-    outline: 2px dashed ${cssVar.colorPrimary};
+    outline: 1px dashed ${cssVar.colorPrimaryBorder};
     outline-offset: -4px;
   `,
   header: css`
