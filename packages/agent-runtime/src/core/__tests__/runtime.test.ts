@@ -1634,7 +1634,7 @@ describe('AgentRuntime', () => {
           stepContext: expect.objectContaining({
             todos: expect.objectContaining({
               items: expect.arrayContaining([
-                expect.objectContaining({ text: 'Buy milk', completed: false }),
+                expect.objectContaining({ text: 'Buy milk', status: 'todo' }),
               ]),
             }),
           }),
