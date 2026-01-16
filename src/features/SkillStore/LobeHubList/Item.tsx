@@ -77,6 +77,13 @@ const Item = memo<ItemProps>(
     const [isWaitingAuth, setIsWaitingAuth] = useState(false);
     const [detailOpen, setDetailOpen] = useState(false);
 
+    // Get localized description
+    const i18nPrefix = type === 'klavis' ? 'tools.klavis.servers' : 'tools.lobehubSkill.providers';
+    // @ts-ignore
+    const localizedDescription = t(`${i18nPrefix}.${identifier}.description`, {
+      defaultValue: description,
+    });
+
     const oauthWindowRef = useRef<Window | null>(null);
     const windowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -344,7 +351,9 @@ const Item = memo<ItemProps>(
           <div className={styles.icon}>{renderIcon()}</div>
           <Flexbox flex={1} gap={2} style={{ minWidth: 0, overflow: 'hidden' }}>
             <span className={styles.title}>{label}</span>
-            {description && <span className={styles.description}>{description}</span>}
+            {localizedDescription && (
+              <span className={styles.description}>{localizedDescription}</span>
+            )}
           </Flexbox>
           <div onClick={(e) => e.stopPropagation()}>{renderAction()}</div>
         </Block>

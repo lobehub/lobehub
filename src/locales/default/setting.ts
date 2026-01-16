@@ -696,17 +696,175 @@ export default {
   'tools.klavis.serverCreatedFailed': 'Failed to create server',
   'tools.klavis.serverRemoved': 'Server removed',
   'tools.klavis.servers': 'servers',
+
+  'tools.klavis.servers.airtable.description':
+    'Airtable is a cloud-based database and spreadsheet platform that combines the flexibility of a spreadsheet with the power of a database, enabling teams to organize, track, and collaborate on projects with customizable views and powerful automation features',
+
+  'tools.klavis.servers.airtable.introduction':
+    'Integrate with Airtable to manage your databases and workflows. Query records, create entries, update data, and automate operations with customizable views and powerful tracking features.',
+
+  'tools.klavis.servers.cal-com.description':
+    'Cal.com is an open-source scheduling platform that helps you schedule meetings without the back-and-forth emails. Manage event types, bookings, availability, and integrate with calendars for seamless appointment scheduling',
+
+  'tools.klavis.servers.cal-com.introduction':
+    'Connect to Cal.com to manage your scheduling and appointments. View availability, book meetings, manage event types, and automate your calendar through natural conversation.',
+
+  'tools.klavis.servers.clickup.description':
+    'ClickUp is a comprehensive project management and productivity platform that helps teams organize tasks, manage projects, and collaborate effectively with customizable workflows and powerful tracking features',
+
+  'tools.klavis.servers.clickup.introduction':
+    'Connect to ClickUp to manage tasks, track projects, and organize your work. Create tasks, update statuses, manage custom workflows, and collaborate with your team through natural language commands.',
+
+  'tools.klavis.servers.confluence.description':
+    'Confluence is a team workspace where knowledge and collaboration meet',
+
+  'tools.klavis.servers.confluence.introduction':
+    'Connect to Confluence to access and manage team documentation. Search pages, create content, organize spaces, and build your knowledge base through conversational AI assistance.',
+
+  'tools.klavis.servers.dropbox.description':
+    'Complete file management solution for Dropbox cloud storage. Upload, download, organize files and folders, manage sharing and collaboration, handle file versions, create file requests, and perform batch operations on your Dropbox files and folders',
+
+  'tools.klavis.servers.dropbox.introduction':
+    'Integrate with Dropbox to access and manage your files. Upload, download, share files, manage folders, handle file versions, and organize your cloud storage through conversational AI.',
+
+  'tools.klavis.servers.figma.description':
+    'Figma is a collaborative interface design tool for web and mobile applications.',
+
+  'tools.klavis.servers.figma.introduction':
+    'Connect to Figma to access design files and collaborate on projects. View designs, export assets, browse components, and manage your design workflow through natural conversation.',
+
+  'tools.klavis.servers.github.description': 'Enhanced GitHub MCP Server',
+
+  'tools.klavis.servers.github.introduction':
+    'Connect to GitHub to manage repositories, issues, pull requests, and code. Search code, review changes, create branches, and collaborate on software development projects through conversational AI.',
+
+  // Klavis Servers i18n
+  'tools.klavis.servers.gmail.description': 'Gmail is a free email service provided by Google',
+
+  'tools.klavis.servers.gmail.introduction':
+    'Bring the power of Gmail directly into your AI assistant. Read, compose, and send emails, search your inbox, manage labels, and organize your communications—all through natural conversation.',
+
+  'tools.klavis.servers.google-calendar.description':
+    'Google Calendar is a time-management and scheduling calendar service',
+
+  'tools.klavis.servers.google-calendar.introduction':
+    'Integrate Google Calendar to view, create, and manage your events seamlessly. Schedule meetings, set reminders, check availability, and coordinate your time—all through natural language commands.',
+
+  'tools.klavis.servers.google-docs.description':
+    'Google Docs is a word processor included as part of the free, web-based Google Docs Editors suite',
+
+  'tools.klavis.servers.google-docs.introduction':
+    'Integrate with Google Docs to create, edit, and manage documents. Write content, format text, collaborate in real-time, and access your documents through natural conversation.',
+
+  'tools.klavis.servers.google-drive.description': 'Google Drive is a cloud storage service',
+
+  'tools.klavis.servers.google-drive.introduction':
+    'Connect to Google Drive to access, organize, and manage your files. Search documents, upload files, share content, and navigate your cloud storage efficiently through AI assistance.',
+
+  'tools.klavis.servers.google-sheets.description':
+    'Google Sheets is a web-based spreadsheet application that allows users to create, edit, and collaborate on spreadsheets online',
+
+  'tools.klavis.servers.google-sheets.introduction':
+    'Connect to Google Sheets to read, write, and analyze spreadsheet data. Perform calculations, generate reports, create charts, and manage tabular data collaboratively with AI assistance.',
+
+  'tools.klavis.servers.hubspot.description':
+    'HubSpot is a developer and marketer of software products for inbound marketing, sales, and customer service',
+
+  'tools.klavis.servers.hubspot.introduction':
+    'Integrate with HubSpot to manage contacts, deals, and marketing campaigns. Access CRM data, track pipelines, automate workflows, and streamline your sales and marketing operations.',
+
+  'tools.klavis.servers.jira.description':
+    'Jira is a project management and issue tracking tool developed by Atlassian',
+
+  'tools.klavis.servers.jira.introduction':
+    'Integrate with Jira to manage issues, track progress, and organize sprints. Create tickets, update statuses, query project data, and streamline your development workflow through natural conversation.',
+
+  'tools.klavis.servers.notion.description':
+    'Notion is a collaborative productivity and note-taking application',
+
+  'tools.klavis.servers.notion.introduction':
+    'Connect to Notion to access and manage your workspace. Create pages, search content, update databases, and organize your knowledge base—all through natural conversation with your AI assistant.',
+
+  'tools.klavis.servers.onedrive.description':
+    'OneDrive is a file hosting service and synchronization service operated by Microsoft',
+
+  'tools.klavis.servers.onedrive.introduction':
+    'Connect to OneDrive to access and manage your Microsoft cloud files. Upload, download, share files, organize folders, and collaborate on documents through AI-powered assistance.',
+
+  'tools.klavis.servers.outlook-mail.description':
+    'Outlook Mail is a web-based suite of webmail, contacts, tasks, and calendaring services from Microsoft.',
+
+  'tools.klavis.servers.outlook-mail.introduction':
+    'Integrate with Outlook Mail to read, send, and manage your Microsoft emails. Search messages, compose emails, manage folders, and organize your inbox through natural conversation.',
+
+  'tools.klavis.servers.salesforce.description':
+    "Salesforce is the world's leading customer relationship management (CRM) platform that helps businesses connect with customers, partners, and potential customers",
+
+  'tools.klavis.servers.salesforce.introduction':
+    'Connect to Salesforce to manage customer relationships and sales data. Query records, update opportunities, track leads, and automate your CRM workflows through natural language commands.',
+
+  'tools.klavis.servers.slack.description':
+    'Slack is a messaging app for business that connects people to the information they need',
+
+  'tools.klavis.servers.slack.introduction':
+    'Integrate with Slack to send messages, search conversations, and manage channels. Connect with your team, automate communication workflows, and access workspace information through natural language.',
+
+  'tools.klavis.servers.supabase.description': 'Supabase official MCP Server',
+
+  'tools.klavis.servers.supabase.introduction':
+    'Integrate with Supabase to manage your database and backend services. Query data, manage authentication, handle storage, and interact with your application backend through natural conversation.',
+
+  'tools.klavis.servers.whatsapp.description':
+    'WhatsApp Business API integration that enables sending text messages, media, and managing conversations with customers. Perfect for customer support, marketing campaigns, and automated messaging workflows through the official WhatsApp Business platform.',
+
+  'tools.klavis.servers.whatsapp.introduction':
+    'Integrate with WhatsApp Business to send messages, manage conversations, and engage with customers. Automate messaging workflows and handle communications through conversational AI.',
+
+  'tools.klavis.servers.youtube.description':
+    'YouTube is a video-sharing platform where users can upload, share, and discover content. Access video information, transcripts, and metadata programmatically.',
+
+  'tools.klavis.servers.youtube.introduction':
+    'Connect to YouTube to search videos, access transcripts, and retrieve video information. Analyze content, extract metadata, and discover videos through natural conversation.',
+
+  'tools.klavis.servers.zendesk.description': 'Zendesk is a customer service software company',
+
+  'tools.klavis.servers.zendesk.introduction':
+    'Integrate with Zendesk to manage support tickets and customer interactions. Create, update, and track support requests, access customer data, and streamline your support operations.',
+
   'tools.klavis.tools': 'tools',
+
   'tools.klavis.verifyAuth': 'I have completed authentication',
+
   'tools.lobehubSkill.authorize': 'Authorize',
+
   'tools.lobehubSkill.connect': 'Connect',
+
   'tools.lobehubSkill.connected': 'Connected',
+
   'tools.lobehubSkill.disconnect': 'Disconnect',
+
   'tools.lobehubSkill.disconnectConfirm.desc':
     "You can still continue previous chats that reference {{name}} content. However, the assistant won't be able to access new content or perform new tasks.",
+
   'tools.lobehubSkill.disconnectConfirm.title': 'Disconnect {{name}}?',
+
   'tools.lobehubSkill.disconnected': 'Disconnected',
+
   'tools.lobehubSkill.error': 'Error',
+  // LobeHub Skill Providers i18n
+  'tools.lobehubSkill.providers.linear.description':
+    'Linear is a modern issue tracking and project management tool designed for high-performance teams to build better software faster',
+  'tools.lobehubSkill.providers.linear.introduction':
+    'Bring the power of Linear directly into your AI assistant. Create and update issues, manage sprints, track project progress, and streamline your development workflow—all through natural conversation.',
+  'tools.lobehubSkill.providers.microsoft.description':
+    'Outlook Calendar is an integrated scheduling tool within Microsoft Outlook that enables users to create appointments, organize meetings with others, and manage their time and events effectively.',
+  'tools.lobehubSkill.providers.microsoft.introduction':
+    'Integrate with Outlook Calendar to view, create, and manage your events seamlessly. Schedule meetings, check availability, set reminders, and coordinate your time—all through natural language commands.',
+  'tools.lobehubSkill.providers.twitter.description':
+    'X (Twitter) is a social media platform for sharing real-time updates, news, and engaging with your audience through posts, replies, and direct messages.',
+  'tools.lobehubSkill.providers.twitter.introduction':
+    'Connect to X (Twitter) to post tweets, manage your timeline, and engage with your audience. Create content, schedule posts, monitor mentions, and build your social media presence through conversational AI.',
+
   'tools.notInstalled': 'Not Installed',
   'tools.notInstalledWarning':
     'This skill is not currently installed, which may affect agent functionality.',

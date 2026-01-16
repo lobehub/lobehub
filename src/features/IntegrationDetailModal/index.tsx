@@ -145,6 +145,22 @@ const IntegrationDetailModal = memo<IntegrationDetailModalProps>(
 
     const { author, authorUrl, description, icon, introduction, label } = config;
 
+    // Get identifier for i18n keys
+    const i18nIdentifier =
+      type === 'klavis'
+        ? (config as KlavisServerType).identifier
+        : (config as LobehubSkillProviderType).id;
+    const i18nPrefix = type === 'klavis' ? 'tools.klavis.servers' : 'tools.lobehubSkill.providers';
+
+    const localizedDescription = t(`${i18nPrefix}.${i18nIdentifier}.description`, {
+      defaultValue: description,
+      ns: 'setting',
+    });
+    const localizedIntroduction = t(`${i18nPrefix}.${i18nIdentifier}.introduction`, {
+      defaultValue: introduction,
+      ns: 'setting',
+    });
+
     const renderIcon = () => {
       if (typeof icon === 'string') {
         return <Image alt={label} height={36} src={icon} width={36} />;
@@ -200,7 +216,7 @@ const IntegrationDetailModal = memo<IntegrationDetailModalProps>(
               <Flexbox gap={4}>
                 <span className={styles.title}>{label}</span>
                 <Text style={{ fontSize: 14 }} type="secondary">
-                  {description}
+                  {localizedDescription}
                 </Text>
               </Flexbox>
             </Flexbox>
@@ -208,7 +224,7 @@ const IntegrationDetailModal = memo<IntegrationDetailModalProps>(
           </Flexbox>
 
           {/* Introduction */}
-          <Typography className={styles.introduction}>{introduction}</Typography>
+          <Typography className={styles.introduction}>{localizedIntroduction}</Typography>
 
           {/* Developed by */}
           <Flexbox gap={8}>
