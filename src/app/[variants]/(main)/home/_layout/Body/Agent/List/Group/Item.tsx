@@ -1,5 +1,5 @@
 import type { SidebarGroup } from '@lobechat/types';
-import { AccordionItem, Dropdown, Flexbox, Icon, Text } from '@lobehub/ui';
+import { AccordionItem, ContextMenuTrigger, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { HashIcon, Loader2 } from 'lucide-react';
 import React, { memo, useCallback, useMemo } from 'react';
@@ -61,14 +61,7 @@ const GroupItem = memo<SidebarGroup>(({ items, id, name }) => {
       action={<Actions dropdownMenu={dropdownMenu} isLoading={isLoading} />}
       disabled={editing || isUpdating}
       headerWrapper={(header) => (
-        <Dropdown
-          menu={{
-            items: dropdownMenu,
-          }}
-          trigger={['contextMenu']}
-        >
-          {header}
-        </Dropdown>
+        <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>
       )}
       itemKey={id}
       key={id}

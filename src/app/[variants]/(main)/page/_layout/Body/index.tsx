@@ -1,6 +1,6 @@
 'use client';
 
-import { Accordion, AccordionItem, Dropdown, Flexbox, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
 import React, { Suspense, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -44,14 +44,7 @@ const Body = memo(() => {
         <AccordionItem
           action={<Actions />}
           headerWrapper={(header) => (
-            <Dropdown
-              menu={{
-                items: dropdownMenu,
-              }}
-              trigger={['contextMenu']}
-            >
-              {header}
-            </Dropdown>
+            <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>
           )}
           itemKey={GroupKey.AllPages}
           paddingBlock={4}

@@ -151,7 +151,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
     null,
   );
   const [pendingProfileSuccessCallback, setPendingProfileSuccessCallback] = useState<
-    ((profile: MarketUserProfile) => void) | null
+    ((_profile: MarketUserProfile) => void) | null
   >(null);
 
   // 订阅 user store 的初始化状态，当 isUserStateInit 为 true 时，settings 数据已加载完成

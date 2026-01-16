@@ -1,11 +1,17 @@
-import { Button, Dropdown, type DropdownMenuItemType, Icon } from '@lobehub/ui';
+import {
+  Button,
+  type DropdownItem,
+  DropdownMenu,
+  type DropdownMenuCheckboxItem,
+  Icon,
+} from '@lobehub/ui';
 import { ArrowDownWideNarrow, ChevronDown } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
-import { usePathname , useQuery } from '@/libs/router/navigation';
+import { usePathname, useQuery } from '@/libs/router/navigation';
 import {
   AssistantSorts,
   DiscoverTab,
@@ -22,7 +28,11 @@ const SortButton = memo(() => {
   const router = useQueryRoute();
   const { isAuthenticated, getCurrentUserInfo } = useMarketAuth();
   const activeTab = useMemo(() => pathname.split('community/')[1] as DiscoverTab, [pathname]);
-  const items = useMemo(() => {
+  type SortItem = Extract<DropdownItem, { type?: 'item' }> & {
+    key: string;
+  };
+
+  const items = useMemo<SortItem[]>(() => {
     switch (activeTab) {
       case DiscoverTab.Assistants: {
         const baseItems = [
@@ -153,8 +163,8 @@ const SortButton = memo(() => {
             label: t('mcp.sorts.updatedAt'),
           },
           {
+            key: McpSorts.CreatedAt,
             label: t('mcp.sorts.createdAt'),
-            value: McpSorts.CreatedAt,
           },
         ];
       }
@@ -164,12 +174,12 @@ const SortButton = memo(() => {
     }
   }, [t, activeTab, isAuthenticated]);
 
-  const activeItem: any = useMemo(() => {
+  const activeItem = useMemo<SortItem | undefined>(() => {
     if (sort) {
-      const findItem = items?.find((item: any) => item.key === sort);
+      const findItem = items.find((item) => String(item.key) === sort);
       if (findItem) return findItem;
     }
-    return items?.[0];
+    return items[0];
   }, [items, sort]);
 
   const handleSort = (config: string) => {
@@ -187,23 +197,34 @@ const SortButton = memo(() => {
     router.push(pathname, { query });
   };
 
-  if (items?.length === 0) return null;
+  const menuItems = useMemo<DropdownMenuCheckboxItem[]>(
+    () =>
+      items.map(
+        (item): DropdownMenuCheckboxItem => ({
+          checked: item.key === activeItem?.key,
+          closeOnClick: true,
+          key: item.key,
+          label: item.label,
+          onCheckedChange: (checked: boolean) => {
+            if (checked) {
+              handleSort(String(item.key));
+            }
+          },
+          type: 'checkbox',
+        }),
+      ),
+    [activeItem?.key, handleSort, items],
+  );
+
+  if (menuItems.length === 0) return null;
 
   return (
-    <Dropdown
-      menu={{
-        // @ts-expect-error 等待 antd 修复
-        activeKey: activeItem.key,
-        items: items as DropdownMenuItemType[],
-        onClick: ({ key }) => handleSort(key),
-      }}
-      trigger={['click', 'hover']}
-    >
+    <DropdownMenu items={menuItems} trigger="both">
       <Button data-testid="sort-dropdown" icon={<Icon icon={ArrowDownWideNarrow} />} type={'text'}>
-        {activeItem.label}
+        {activeItem?.label ?? menuItems[0]?.label}
         <Icon icon={ChevronDown} />
       </Button>
-    </Dropdown>
+    </DropdownMenu>
   );
 });
 

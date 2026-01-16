@@ -104,7 +104,7 @@ const CommonSTT = memo<{
                 />
               )
             : undefined,
-          trigger: ['click'],
+          trigger: 'click',
         }}
         icon={isLoading ? MicOff : Mic}
         onClick={handleTriggerStartStop}

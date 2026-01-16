@@ -1,6 +1,5 @@
-import { ActionIcon, Dropdown } from '@lobehub/ui';
-import { MenuItemType } from 'antd/es/menu/interface';
-import { LucideBolt } from 'lucide-react';
+import { ActionIcon, type DropdownItem, DropdownMenu } from '@lobehub/ui';
+import { Check, LucideBolt } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -34,6 +33,8 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
             type: 'group',
           },
           ...data.providers.map((p) => {
+            const key = menuKey(p.id, data.model.id);
+
             return {
               extra: (
                 <ActionIcon
@@ -53,7 +54,8 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
                   title={t('ModelSwitchPanel.goToSettings')}
                 />
               ),
-              key: menuKey(p.id, data.model.id),
+              icon: activeKey === key ? Check : undefined,
+              key,
               label: (
                 <ProviderItemRender
                   logo={p.logo}
@@ -70,23 +72,19 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
               },
             };
           }),
-        ] as MenuItemType[],
-      [data.model.id, data.providers, navigate, onModelChange, onClose, t],
+        ] as DropdownItem[],
+      [activeKey, data.model.id, data.providers, navigate, onModelChange, onClose, t],
     );
 
     return (
-      <Dropdown
-        align={{ offset: [12, -48] }}
-        arrow={false}
-        classNames={{
-          item: styles.menuItem,
-        }}
-        menu={{
-          items,
-          selectedKeys: [activeKey],
-        }}
-        // @ts-ignore
+      <DropdownMenu
+        items={items}
         placement="rightTop"
+        popupProps={{ className: styles.dropdownMenu }}
+        positionerProps={{
+          alignOffset: -48,
+          sideOffset: 12,
+        }}
       >
         <ModelItemRender
           {...data.model}
@@ -95,7 +93,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
           newBadgeLabel={newLabel}
           showInfoTag={true}
         />
-      </Dropdown>
+      </DropdownMenu>
     );
   },
 );

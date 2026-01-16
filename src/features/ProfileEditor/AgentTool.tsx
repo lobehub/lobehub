@@ -617,7 +617,7 @@ const AgentTool = memo<AgentToolProps>(
                   </div>
                 </div>
               )}
-              trigger={['click']}
+              trigger={'click'}
             >
               {button}
             </ActionDropdown>

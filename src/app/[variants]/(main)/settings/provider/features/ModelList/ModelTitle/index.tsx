@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Dropdown, Flexbox, Skeleton, Text } from '@lobehub/ui';
+import { ActionIcon, Button, DropdownMenu, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { App, Space } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleX, EllipsisVertical, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
@@ -137,28 +137,26 @@ const ModelTitle = memo<ModelFetcherProps>(
                     <CreateNewModelModal open={showModal} setOpen={setShowModal} />
                   </>
                 )}
-                <Dropdown
-                  menu={{
-                    items: [
-                      {
-                        key: 'reset',
-                        label: t('providerModels.list.resetAll.title'),
-                        onClick: async () => {
-                          modal.confirm({
-                            content: t('providerModels.list.resetAll.conform'),
-                            onOk: async () => {
-                              await clearModelsByProvider(provider);
-                              message.success(t('providerModels.list.resetAll.success'));
-                            },
-                            title: t('providerModels.list.resetAll.title'),
-                          });
-                        },
+                <DropdownMenu
+                  items={[
+                    {
+                      key: 'reset',
+                      label: t('providerModels.list.resetAll.title'),
+                      onClick: async () => {
+                        modal.confirm({
+                          content: t('providerModels.list.resetAll.conform'),
+                          onOk: async () => {
+                            await clearModelsByProvider(provider);
+                            message.success(t('providerModels.list.resetAll.success'));
+                          },
+                          title: t('providerModels.list.resetAll.title'),
+                        });
                       },
-                    ],
-                  }}
+                    },
+                  ]}
                 >
                   <Button icon={EllipsisVertical} size={'small'} />
-                </Dropdown>
+                </DropdownMenu>
               </Space.Compact>
             </Flexbox>
           )}

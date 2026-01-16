@@ -1,6 +1,13 @@
 [
   {
     "children": {
+      "fixes": ["Fix switch skill in home."]
+    },
+    "date": "2026-01-16",
+    "version": "2.0.0-next.298"
+  },
+  {
+    "children": {
       "features": ["Add agent group publish into market & use market group agents in lobehub."]
     },
     "date": "2026-01-16",

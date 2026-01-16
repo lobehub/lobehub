@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Dropdown } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu } from '@lobehub/ui';
 import { Clock, MoreHorizontal } from 'lucide-react';
 import { Suspense, memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,22 +37,20 @@ const RecentResource = memo(() => {
       action={
         <>
           {isRevalidating && <NeuralNetworkLoading size={14} />}
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  key: 'all-files',
-                  label: t('menu.allFiles'),
-                  onClick: () => {
-                    setCategory(FilesTabs.All);
-                    navigate('/resource');
-                  },
+          <DropdownMenu
+            items={[
+              {
+                key: 'all-files',
+                label: t('menu.allFiles'),
+                onClick: () => {
+                  setCategory(FilesTabs.All);
+                  navigate('/resource');
                 },
-              ],
-            }}
+              },
+            ]}
           >
             <ActionIcon icon={MoreHorizontal} size="small" />
-          </Dropdown>
+          </DropdownMenu>
         </>
       }
       icon={Clock}

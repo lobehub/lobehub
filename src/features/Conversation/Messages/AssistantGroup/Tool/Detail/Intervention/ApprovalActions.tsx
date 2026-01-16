@@ -1,4 +1,4 @@
-import { Button, Dropdown, Flexbox, Popover } from '@lobehub/ui';
+import { Button, DropdownMenu, Flexbox, Popover } from '@lobehub/ui';
 import { Input, Space } from 'antd';
 import { ChevronDown } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -140,17 +140,15 @@ const ApprovalActions = memo<ApprovalActionsProps>(
             >
               {t('tool.intervention.approveAndRemember')}
             </Button>
-            <Dropdown
-              menu={{
-                items: [
-                  {
-                    disabled: approveLoading || isMessageCreating,
-                    key: 'once',
-                    label: t('tool.intervention.approveOnce'),
-                    onClick: () => handleApprove(false),
-                  },
-                ],
-              }}
+            <DropdownMenu
+              items={[
+                {
+                  disabled: approveLoading || isMessageCreating,
+                  key: 'once',
+                  label: t('tool.intervention.approveOnce'),
+                  onClick: () => handleApprove(false),
+                },
+              ]}
             >
               <Button
                 disabled={approveLoading || isMessageCreating}
@@ -158,7 +156,7 @@ const ApprovalActions = memo<ApprovalActionsProps>(
                 size="small"
                 type="primary"
               />
-            </Dropdown>
+            </DropdownMenu>
           </Space.Compact>
         ) : (
           <Button

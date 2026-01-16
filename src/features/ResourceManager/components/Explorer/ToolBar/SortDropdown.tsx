@@ -1,9 +1,8 @@
-import { Dropdown } from '@lobehub/ui';
+import { DropdownMenu, type DropdownMenuCheckboxItem } from '@lobehub/ui';
 import { ArrowDownAZ } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type MenuProps } from '@/components/Menu';
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 
 import ActionIconWithChevron from './ActionIconWithChevron';
@@ -22,30 +21,34 @@ const SortDropdown = memo(() => {
     [t],
   );
 
-  const menuItems: MenuProps['items'] = useMemo(
+  const selectedKey = sorter || 'createdAt';
+
+  const menuItems = useMemo<DropdownMenuCheckboxItem[]>(
     () =>
-      sortOptions.map((option) => ({
-        key: option.key,
-        label: option.label,
-        onClick: () => setSorter(option.key as 'name' | 'createdAt' | 'size'),
-      })),
-    [setSorter, sortOptions],
+      sortOptions.map(
+        (option): DropdownMenuCheckboxItem => ({
+          checked: option.key === selectedKey,
+          closeOnClick: true,
+          key: option.key,
+          label: option.label,
+          onCheckedChange: (checked: boolean) => {
+            if (checked) {
+              setSorter(option.key as 'name' | 'createdAt' | 'size');
+            }
+          },
+          type: 'checkbox',
+        }),
+      ),
+    [selectedKey, setSorter, sortOptions],
   );
 
   const currentSortLabel =
     sortOptions.find((option) => option.key === sorter)?.label || t('FileManager.sort.dateAdded');
 
   return (
-    <Dropdown
-      arrow={false}
-      menu={{
-        items: menuItems,
-        selectable: true,
-        selectedKeys: [sorter || 'createdAt'],
-      }}
-    >
+    <DropdownMenu items={menuItems}>
       <ActionIconWithChevron icon={ArrowDownAZ} title={currentSortLabel} />
-    </Dropdown>
+    </DropdownMenu>
   );
 });
 

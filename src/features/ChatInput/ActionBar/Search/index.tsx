@@ -51,7 +51,7 @@ const Search = memo(() => {
             padding: 4,
           },
         },
-        trigger: isMobile ? ['click'] : ['hover'],
+        trigger: isMobile ? 'click' : 'hover',
       }}
       showTooltip={false}
       title={t('search.title')}

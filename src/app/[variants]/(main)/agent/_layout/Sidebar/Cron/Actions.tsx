@@ -1,4 +1,4 @@
-import { ActionIcon, Dropdown } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu } from '@lobehub/ui';
 import { MoreHorizontal } from 'lucide-react';
 import { memo } from 'react';
 
@@ -10,21 +10,12 @@ interface ActionsProps {
 }
 
 const Actions = memo<ActionsProps>(({ cronJobId, topics }) => {
-  const dropdownMenu = useCronJobDropdownMenu(cronJobId, topics);
+  const menuItems = useCronJobDropdownMenu(cronJobId, topics);
 
   return (
-    <Dropdown
-      arrow={false}
-      menu={{
-        items: dropdownMenu,
-        onClick: ({ domEvent }) => {
-          domEvent.stopPropagation();
-        },
-      }}
-      trigger={['click']}
-    >
+    <DropdownMenu items={menuItems}>
       <ActionIcon icon={MoreHorizontal} size={'small'} />
-    </Dropdown>
+    </DropdownMenu>
   );
 });
 

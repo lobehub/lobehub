@@ -1,4 +1,10 @@
-import { ActionIcon, Dropdown, type DropdownProps, Icon, type MenuProps } from '@lobehub/ui';
+import {
+  ActionIcon,
+  DropdownMenu,
+  type DropdownMenuProps,
+  Icon,
+  type MenuProps,
+} from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { MoreVertical, PencilLine, Plus, Settings2, Trash, UsersRound } from 'lucide-react';
@@ -15,7 +21,7 @@ const styles = createStaticStyles(({ css }) => ({
     z-index: 2000;
   `,
 }));
-interface ActionsProps extends Pick<DropdownProps, 'onOpenChange'> {
+interface ActionsProps extends Pick<DropdownMenuProps, 'onOpenChange'> {
   id?: string;
   isCustomGroup?: boolean;
   isPinned?: boolean;
@@ -170,17 +176,7 @@ const Actions = memo<ActionsProps>(
 
     return (
       <>
-        <Dropdown
-          arrow={false}
-          menu={{
-            items: menuItems,
-            onClick: ({ domEvent }) => {
-              domEvent.stopPropagation();
-            },
-          }}
-          onOpenChange={onOpenChange}
-          trigger={['click']}
-        >
+        <DropdownMenu items={menuItems} onOpenChange={onOpenChange}>
           <ActionIcon
             active={isMobile ? true : false}
             icon={MoreVertical}
@@ -191,7 +187,7 @@ const Actions = memo<ActionsProps>(
             size={{ blockSize: 22, size: 16 }}
             style={{ background: isMobile ? 'transparent' : '', marginRight: -8 }}
           />
-        </Dropdown>
+        </DropdownMenu>
 
         <MemberSelectionModal
           mode="create"

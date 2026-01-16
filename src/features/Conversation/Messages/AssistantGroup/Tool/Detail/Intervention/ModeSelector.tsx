@@ -1,7 +1,6 @@
-import { Button, Dropdown, Icon, type MenuProps } from '@lobehub/ui';
-import { Center } from '@lobehub/ui';
+import { Button, Center, DropdownMenu, Icon, type MenuProps } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { ChevronDown, Hand, ListChecks, Zap } from 'lucide-react';
+import { Check, ChevronDown, Hand, ListChecks, Zap } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -61,6 +60,7 @@ const ModeSelector = memo(() => {
   const menuItems = useMemo<MenuProps['items']>(
     () => [
       {
+        extra: approvalMode === 'auto-run' ? <Icon icon={Check} /> : undefined,
         icon: (
           <Center className={styles.icon} height={32} width={32}>
             <Icon icon={Zap} />
@@ -76,6 +76,7 @@ const ModeSelector = memo(() => {
         onClick: () => handleModeChange('auto-run'),
       },
       {
+        extra: approvalMode === 'allow-list' ? <Icon icon={Check} /> : undefined,
         icon: (
           <Center className={styles.icon} height={32} width={32}>
             <Icon icon={ListChecks} />
@@ -91,6 +92,7 @@ const ModeSelector = memo(() => {
         onClick: () => handleModeChange('allow-list'),
       },
       {
+        extra: approvalMode === 'manual' ? <Icon icon={Check} /> : undefined,
         icon: (
           <Center className={styles.icon} height={32} width={32}>
             <Icon icon={Hand} />
@@ -106,15 +108,11 @@ const ModeSelector = memo(() => {
         onClick: () => handleModeChange('manual'),
       },
     ],
-    [modeLabels, handleModeChange, styles, t],
+    [approvalMode, modeLabels, handleModeChange, styles, t],
   );
 
   return (
-    <Dropdown
-      // @ts-expect-error activeKey 没在 Dropdown key 里很奇怪
-      menu={{ activeKey: approvalMode, items: menuItems }}
-      placement="bottomLeft"
-    >
+    <DropdownMenu items={menuItems} placement="bottomLeft">
       <Button
         className={styles.modeButton}
         color={'default'}
@@ -125,7 +123,7 @@ const ModeSelector = memo(() => {
       >
         {modeLabels[approvalMode]}
       </Button>
-    </Dropdown>
+    </DropdownMenu>
   );
 });
 

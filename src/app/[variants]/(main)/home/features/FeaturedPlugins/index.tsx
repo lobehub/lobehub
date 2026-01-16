@@ -1,7 +1,7 @@
 'use client';
 
 import { MCP } from '@lobehub/icons';
-import { ActionIcon, Dropdown, Grid } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Grid } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { MoreHorizontal } from 'lucide-react';
 import { Suspense, memo } from 'react';
@@ -20,21 +20,19 @@ const FeaturedPlugins = memo(() => {
   return (
     <GroupBlock
       action={
-        <Dropdown
-          menu={{
-            items: [
-              {
-                key: 'all-plugins',
-                label: t('home.more'),
-                onClick: () => {
-                  navigate('/community/mcp');
-                },
+        <DropdownMenu
+          items={[
+            {
+              key: 'all-plugins',
+              label: t('home.more'),
+              onClick: () => {
+                navigate('/community/mcp');
               },
-            ],
-          }}
+            },
+          ]}
         >
           <ActionIcon icon={MoreHorizontal} size="small" />
-        </Dropdown>
+        </DropdownMenu>
       }
       icon={<MCP color={cssVar.colorTextDescription} size={18} />}
       title={t('home.featuredPlugins')}

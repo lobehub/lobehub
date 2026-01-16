@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Dropdown } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu } from '@lobehub/ui';
 import { FileTextIcon, MoreHorizontal } from 'lucide-react';
 import { Suspense, memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,22 +37,20 @@ const RecentPage = memo(() => {
       action={
         <>
           {isRevalidating && <NeuralNetworkLoading size={14} />}
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  key: 'all-documents',
-                  label: t('menu.allPages'),
-                  onClick: () => {
-                    setCategory(FilesTabs.Pages);
-                    navigate('/resource');
-                  },
+          <DropdownMenu
+            items={[
+              {
+                key: 'all-documents',
+                label: t('menu.allPages'),
+                onClick: () => {
+                  setCategory(FilesTabs.Pages);
+                  navigate('/resource');
                 },
-              ],
-            }}
+              },
+            ]}
           >
             <ActionIcon icon={MoreHorizontal} size="small" />
-          </Dropdown>
+          </DropdownMenu>
         </>
       }
       icon={FileTextIcon}

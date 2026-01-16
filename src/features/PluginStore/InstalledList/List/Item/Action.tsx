@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Dropdown, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { InfoIcon, MoreVerticalIcon, PackageSearch, Settings, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -72,46 +72,43 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
                 title={t('store.actions.settings')}
               />
             )}
-            <Dropdown
-              menu={{
-                items: [
-                  {
-                    icon: <Icon icon={InfoIcon} />,
-                    key: 'detail',
-                    label: t('store.actions.detail'),
-                    onClick: () => {
-                      setOpen(true);
-                      setTab('info');
-                    },
+            <DropdownMenu
+              items={[
+                {
+                  icon: <Icon icon={InfoIcon} />,
+                  key: 'detail',
+                  label: t('store.actions.detail'),
+                  onClick: () => {
+                    setOpen(true);
+                    setTab('info');
                   },
-                  {
-                    danger: true,
-                    icon: <Icon icon={Trash2} />,
-                    key: 'uninstall',
-                    label: t('store.actions.uninstall'),
-                    onClick: () => {
-                      modal.confirm({
-                        centered: true,
-                        okButtonProps: { danger: true },
-                        onOk: async () => {
-                          // If plugin is enabled in current agent, disable it first
-                          if (isPluginEnabledInAgent) {
-                            await togglePlugin(identifier, false);
-                          }
-                          await unInstallPlugin(identifier);
-                        },
-                        title: t('store.actions.confirmUninstall'),
-                        type: 'error',
-                      });
-                    },
+                },
+                {
+                  danger: true,
+                  icon: <Icon icon={Trash2} />,
+                  key: 'uninstall',
+                  label: t('store.actions.uninstall'),
+                  onClick: () => {
+                    modal.confirm({
+                      centered: true,
+                      okButtonProps: { danger: true },
+                      onOk: async () => {
+                        // If plugin is enabled in current agent, disable it first
+                        if (isPluginEnabledInAgent) {
+                          await togglePlugin(identifier, false);
+                        }
+                        await unInstallPlugin(identifier);
+                      },
+                      title: t('store.actions.confirmUninstall'),
+                      type: 'error',
+                    });
                   },
-                ],
-              }}
+                },
+              ]}
               placement="bottomRight"
-              trigger={['click']}
             >
               <ActionIcon icon={MoreVerticalIcon} loading={installing} />
-            </Dropdown>
+            </DropdownMenu>
           </>
         ) : (
           <Button
