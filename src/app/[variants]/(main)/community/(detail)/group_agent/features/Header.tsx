@@ -1,104 +1,246 @@
-import { ActionIcon, Avatar, Flexbox, Tag } from '@lobehub/ui';
-import { Typography } from 'antd';
-import { Heart, Star, Users } from 'lucide-react';
-import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
+'use client';
 
-import { formatTime } from '@/utils/client/time';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  Flexbox,
+  Icon,
+  Text,
+  Tooltip,
+  TooltipGroup,
+} from '@lobehub/ui';
+import { App } from 'antd';
+import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
+import {
+  BookmarkCheckIcon,
+  BookmarkIcon,
+  DotIcon,
+  HeartIcon,
+  UsersIcon,
+} from 'lucide-react';
+import qs from 'query-string';
+import { memo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router-dom';
+import useSWR from 'swr';
+import urlJoin from 'url-join';
+
+import PublishedTime from '@/components/PublishedTime';
+import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { socialService } from '@/services/social';
 
 import { useDetailData } from './DetailProvider';
 
-const { Title, Text, Paragraph } = Typography;
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  time: css`
+    font-size: 12px;
+    color: ${cssVar.colorTextDescription};
+  `,
+}));
 
-const Header = memo(() => {
+const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { t } = useTranslation('discover');
+  const { message } = App.useApp();
   const data = useDetailData();
+  const { mobile = isMobile } = useResponsive();
+  const { isAuthenticated, signIn, session } = useMarketAuth();
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const [likeLoading, setLikeLoading] = useState(false);
 
   const { group, currentVersion, author, memberAgents } = data;
 
   const avatar = currentVersion?.avatar || group.name?.[0] || '👥';
   const title = currentVersion?.name || group.name;
-  const description = currentVersion?.description;
   const category = currentVersion?.category;
-  const tags = currentVersion?.tags || [];
+  const identifier = group.identifier;
+  const userName = author?.userName;
 
   const memberCount = memberAgents?.length || 0;
-  const likeCount = group.likeCount || 0;
-  const favoriteCount = group.favoriteCount || 0;
+
+  // Set access token for social service
+  if (session?.accessToken) {
+    socialService.setAccessToken(session.accessToken);
+  }
+
+  // TODO: Use 'group_agent' type when social service supports it
+  // Fetch favorite status
+  const { data: favoriteStatus, mutate: mutateFavorite } = useSWR(
+    identifier && isAuthenticated ? ['favorite-status', 'agent', identifier] : null,
+    () => socialService.checkFavoriteStatus('agent', identifier!),
+    { revalidateOnFocus: false },
+  );
+
+  const isFavorited = favoriteStatus?.isFavorited ?? false;
+
+  // Fetch like status
+  const { data: likeStatus, mutate: mutateLike } = useSWR(
+    identifier && isAuthenticated ? ['like-status', 'agent', identifier] : null,
+    () => socialService.checkLikeStatus('agent', identifier!),
+    { revalidateOnFocus: false },
+  );
+  const isLiked = likeStatus?.isLiked ?? false;
+
+  const handleFavoriteClick = async () => {
+    if (!isAuthenticated) {
+      await signIn();
+      return;
+    }
+
+    if (!identifier) return;
+
+    setFavoriteLoading(true);
+    try {
+      if (isFavorited) {
+        await socialService.removeFavorite('agent', identifier);
+        message.success(t('assistant.unfavoriteSuccess'));
+      } else {
+        await socialService.addFavorite('agent', identifier);
+        message.success(t('assistant.favoriteSuccess'));
+      }
+      await mutateFavorite();
+    } catch (error) {
+      message.error(t('assistant.favoriteFailed'));
+    } finally {
+      setFavoriteLoading(false);
+    }
+  };
+
+  const handleLikeClick = async () => {
+    if (!isAuthenticated) {
+      await signIn();
+      return;
+    }
+
+    if (!identifier) return;
+
+    setLikeLoading(true);
+    try {
+      if (isLiked) {
+        await socialService.unlike('agent', identifier);
+        message.success(t('assistant.unlikeSuccess'));
+      } else {
+        await socialService.like('agent', identifier);
+        message.success(t('assistant.likeSuccess'));
+      }
+      await mutateLike();
+    } catch (error) {
+      message.error(t('assistant.likeFailed'));
+    } finally {
+      setLikeLoading(false);
+    }
+  };
+
+  const cateButton = category ? (
+    <Link
+      to={qs.stringifyUrl({
+        query: { category },
+        url: '/community/group_agent',
+      })}
+    >
+      <Button size={'middle'} variant={'outlined'}>
+        {category}
+      </Button>
+    </Link>
+  ) : null;
 
   return (
-    <Flexbox gap={24} style={{ padding: '24px 0' }}>
-      {/* Avatar and Title Section */}
-      <Flexbox align="center" gap={16} horizontal>
-        <Avatar
-          avatar={avatar}
-          background={currentVersion?.backgroundColor}
-          size={80}
-          style={{ flex: 'none' }}
-        />
-        <Flexbox flex={1} gap={8}>
-          <Title level={2} style={{ margin: 0 }}>
-            {title}
-          </Title>
-          {author && (
-            <Flexbox align="center" gap={8} horizontal>
-              <Avatar avatar={author.avatar} size={24} />
-              <Text type="secondary">
-                {t('by')} {author.name || author.userName}
+    <Flexbox gap={12}>
+      <Flexbox align={'flex-start'} gap={16} horizontal width={'100%'}>
+        <Avatar avatar={avatar} shape={'square'} size={mobile ? 48 : 64} />
+        <Flexbox
+          flex={1}
+          gap={4}
+          style={{
+            overflow: 'hidden',
+          }}
+        >
+          <Flexbox
+            align={'center'}
+            gap={8}
+            horizontal
+            justify={'space-between'}
+            style={{
+              overflow: 'hidden',
+              position: 'relative',
+            }}
+          >
+            <Flexbox
+              align={'center'}
+              flex={1}
+              gap={12}
+              horizontal
+              style={{
+                overflow: 'hidden',
+                position: 'relative',
+              }}
+            >
+              <Text
+                as={'h1'}
+                ellipsis
+                style={{ fontSize: mobile ? 18 : 24, margin: 0 }}
+                title={identifier}
+              >
+                {title}
               </Text>
             </Flexbox>
+            <Tooltip title={isLiked ? t('assistant.unlike') : t('assistant.like')}>
+              <ActionIcon
+                icon={HeartIcon}
+                loading={likeLoading}
+                onClick={handleLikeClick}
+                style={isLiked ? { color: '#ff4d4f' } : undefined}
+              />
+            </Tooltip>
+            <Tooltip title={isFavorited ? t('assistant.unfavorite') : t('assistant.favorite')}>
+              <ActionIcon
+                icon={isFavorited ? BookmarkCheckIcon : BookmarkIcon}
+                loading={favoriteLoading}
+                onClick={handleFavoriteClick}
+                variant={isFavorited ? 'outlined' : undefined}
+              />
+            </Tooltip>
+          </Flexbox>
+          <Flexbox align={'center'} gap={4} horizontal>
+            {author && userName ? (
+              <Link style={{ color: 'inherit' }} to={urlJoin('/community/user', userName)}>
+                {author.name || author.userName}
+              </Link>
+            ) : (
+              author?.name || author?.userName
+            )}
+            <Icon icon={DotIcon} />
+            <PublishedTime
+              className={styles.time}
+              date={group.createdAt as string}
+              template={'MMM DD, YYYY'}
+            />
+          </Flexbox>
+        </Flexbox>
+      </Flexbox>
+      <TooltipGroup>
+        <Flexbox
+          align={'center'}
+          gap={mobile ? 12 : 24}
+          horizontal
+          style={{
+            color: cssVar.colorTextSecondary,
+          }}
+        >
+          {!mobile && cateButton}
+          {Boolean(memberCount) && (
+            <Tooltip
+              styles={{ root: { pointerEvents: 'none' } }}
+              title={t('groupAgents.memberCount', { defaultValue: 'Members' })}
+            >
+              <Flexbox align={'center'} gap={6} horizontal>
+                <Icon icon={UsersIcon} />
+                {memberCount}
+              </Flexbox>
+            </Tooltip>
           )}
-          <Text type="secondary">
-            {t('publishedAt')} {formatTime(group.createdAt)}
-          </Text>
         </Flexbox>
-      </Flexbox>
-
-      {/* Description */}
-      {description && (
-        <Paragraph style={{ margin: 0 }} type="secondary">
-          {description}
-        </Paragraph>
-      )}
-
-      {/* Metadata Section */}
-      <Flexbox align="center" gap={16} horizontal wrap="wrap">
-        {/* Category */}
-        {category && (
-          <Tag bordered={false} color="blue">
-            {category}
-          </Tag>
-        )}
-
-        {/* Member Count */}
-        <Flexbox align="center" gap={4} horizontal>
-          <Users size={16} />
-          <Text type="secondary">
-            {memberCount} {memberCount === 1 ? 'Member' : 'Members'}
-          </Text>
-        </Flexbox>
-
-        {/* Like Count */}
-        <Flexbox align="center" gap={4} horizontal>
-          <Heart size={16} />
-          <Text type="secondary">{likeCount}</Text>
-        </Flexbox>
-
-        {/* Favorite Count */}
-        <Flexbox align="center" gap={4} horizontal>
-          <Star size={16} />
-          <Text type="secondary">{favoriteCount}</Text>
-        </Flexbox>
-      </Flexbox>
-
-      {/* Tags */}
-      {tags.length > 0 && (
-        <Flexbox gap={8} horizontal wrap="wrap">
-          {tags.map((tag) => (
-            <Tag key={tag}>{tag}</Tag>
-          ))}
-        </Flexbox>
-      )}
+      </TooltipGroup>
     </Flexbox>
   );
 });

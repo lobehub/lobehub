@@ -1,4 +1,5 @@
 import { DiscoverAssistantItem } from './assistants';
+import { DiscoverGroupAgentItem } from './groupAgents';
 
 export * from './assistants';
 export * from './groupAgents';
@@ -60,9 +61,10 @@ export interface DiscoverUserInfo {
 }
 
 /**
- * User profile with their published agents
+ * User profile with their published agents and groups
  */
 export interface DiscoverUserProfile {
+  agentGroups?: DiscoverGroupAgentItem[];
   agents: DiscoverAssistantItem[];
   user: DiscoverUserInfo;
 }

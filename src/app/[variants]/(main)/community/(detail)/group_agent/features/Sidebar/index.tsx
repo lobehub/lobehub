@@ -1,23 +1,40 @@
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, ScrollShadow } from '@lobehub/ui';
 import { memo } from 'react';
+
+import { useQuery } from '@/hooks/useQuery';
 
 import { GroupAgentNavKey } from '../Details/Nav';
 import ActionButton from './ActionButton';
+import Summary from './Summary';
 
-interface SidebarProps {
-  activeTab: GroupAgentNavKey;
-}
+const Sidebar = memo<{ mobile?: boolean }>(({ mobile }) => {
+  const { activeTab = GroupAgentNavKey.Overview } = useQuery() as { activeTab: GroupAgentNavKey };
 
-const Sidebar = memo<SidebarProps>(({ activeTab }) => {
+  if (mobile) {
+    return (
+      <Flexbox gap={32}>
+        <ActionButton mobile />
+      </Flexbox>
+    );
+  }
+
   return (
-    <Flexbox gap={16}>
-      {/* Action Button - always visible */}
+    <ScrollShadow
+      flex={'none'}
+      gap={32}
+      hideScrollBar
+      size={4}
+      style={{
+        maxHeight: 'calc(100vh - 76px)',
+        paddingBottom: 24,
+        position: 'sticky',
+        top: 16,
+      }}
+      width={360}
+    >
       <ActionButton />
-
-      {/* TODO: Add more sidebar content */}
-      {/* - Summary (for non-Overview tabs) */}
-      {/* - Related Groups */}
-    </Flexbox>
+      {activeTab !== GroupAgentNavKey.Overview && <Summary />}
+    </ScrollShadow>
   );
 });
 

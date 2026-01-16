@@ -2,9 +2,9 @@ import { Flexbox, Tag } from '@lobehub/ui';
 import { Table, Typography } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'next/navigation';
+import { useParams } from 'react-router-dom';
 
-import { formatTime } from '@/utils/client/time';
+import PublishedTime from '@/components/PublishedTime';
 import { useDetailData } from '../../DetailProvider';
 
 const { Title } = Typography;
@@ -55,7 +55,7 @@ const Versions = memo(() => {
     {
       dataIndex: 'updatedAt',
       key: 'updatedAt',
-      render: (date: string) => formatTime(date),
+      render: (date: string) => <PublishedTime date={date} template={'MMM DD, YYYY'} />,
       title: t('versions.publishedAt', { defaultValue: 'Published At' }),
     },
   ];

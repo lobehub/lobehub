@@ -1,46 +1,52 @@
 import { Flexbox } from '@lobehub/ui';
-import { memo } from 'react';
+import { useResponsive } from 'antd-style';
 import { useQueryState } from 'nuqs';
-
-import { useResponsive } from '@/hooks/useResponsive';
+import { memo } from 'react';
 
 import Nav, { GroupAgentNavKey } from './Nav';
-import Overview from './Overview';
 import Members from './Members';
+import Overview from './Overview';
 import Versions from './Versions';
 import Sidebar from '../Sidebar';
 
-const Details = memo(() => {
-  const { mobile } = useResponsive();
-  const [activeTab = GroupAgentNavKey.Overview] = useQueryState('activeTab');
+const Details = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
+  const { mobile = isMobile } = useResponsive();
+  const [activeTab = GroupAgentNavKey.Overview, setActiveTab] = useQueryState('activeTab');
 
   return (
-    <Flexbox gap={24} horizontal={!mobile} style={{ position: 'relative' }}>
-      {/* Main Content */}
-      <Flexbox flex={1} gap={16} style={{ minWidth: 0 }}>
-        <Nav />
+    <Flexbox gap={24}>
+      {/* Navigation */}
+      <Nav
+        activeTab={activeTab as GroupAgentNavKey}
+        mobile={mobile}
+        setActiveTab={(tab) => setActiveTab(tab)}
+      />
 
-        {/* Tab Content */}
-        {activeTab === GroupAgentNavKey.Overview && <Overview />}
-        {activeTab === GroupAgentNavKey.Members && <Members />}
-        {activeTab === GroupAgentNavKey.Versions && <Versions />}
-      </Flexbox>
-
-      {/* Sidebar - desktop only for most content */}
-      {!mobile && (
+      <Flexbox
+        gap={48}
+        horizontal={!mobile}
+        style={mobile ? { flexDirection: 'column-reverse' } : undefined}
+      >
+        {/* Main Content */}
         <Flexbox
+          flex={1}
           gap={16}
           style={{
-            maxHeight: 'calc(100vh - 76px)',
-            overflow: 'auto',
-            position: 'sticky',
-            top: 76,
-            width: 320,
+            overflow: 'hidden',
           }}
+          width={'100%'}
         >
-          <Sidebar activeTab={activeTab as GroupAgentNavKey} />
+          {/* Tab Content */}
+          {activeTab === GroupAgentNavKey.Overview && <Overview />}
+          {activeTab === GroupAgentNavKey.Members && <Members />}
+          {activeTab === GroupAgentNavKey.Versions && <Versions />}
         </Flexbox>
-      )}
+
+        {/* Sidebar */}
+        <Flexbox gap={16} width={mobile ? '100%' : 360}>
+          <Sidebar mobile={mobile} />
+        </Flexbox>
+      </Flexbox>
     </Flexbox>
   );
 });

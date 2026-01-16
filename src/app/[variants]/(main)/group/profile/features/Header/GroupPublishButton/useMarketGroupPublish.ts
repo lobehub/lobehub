@@ -132,6 +132,19 @@ export const useMarketGroupPublish = ({ action, onSuccess }: UseMarketGroupPubli
         ...(currentGroup.backgroundColor ? { backgroundColor: currentGroup.backgroundColor } : {}),
         category: 'productivity', // TODO: Allow user to select category
         changelog,
+        // Include group-level config (systemPrompt, openingMessage, etc.)
+        config: {
+          ...(currentGroupConfig.systemPrompt && { systemPrompt: currentGroupConfig.systemPrompt }),
+          ...(currentGroupConfig.openingMessage && {
+            openingMessage: currentGroupConfig.openingMessage,
+          }),
+          ...(currentGroupConfig.openingQuestions &&
+            currentGroupConfig.openingQuestions.length > 0 && {
+              openingQuestions: currentGroupConfig.openingQuestions,
+            }),
+          ...(currentGroupConfig.allowDM !== undefined && { allowDM: currentGroupConfig.allowDM }),
+          ...(currentGroupConfig.revealDM !== undefined && { revealDM: currentGroupConfig.revealDM }),
+        },
         // Market requires at least 1 character for description
         description: currentGroupMeta.description || 'No description provided',
         // marketIdentifier is stored in editorData

@@ -466,7 +466,7 @@ class DiscoverService {
     identifier: string;
     locale?: string;
     version?: string;
-  }): Promise<DiscoverGroupAgentDetail | undefined> => {
+  }): Promise<any> => {
     const locale = globalHelpers.getCurrentLanguage();
     return lambdaClient.market.getGroupAgentDetail.query({
       identifier: params.identifier,
@@ -481,7 +481,7 @@ class DiscoverService {
 
   getGroupAgentList = async (
     params: GroupAgentQueryParams = {},
-  ): Promise<GroupAgentListResponse> => {
+  ): Promise<any> => {
     const locale = globalHelpers.getCurrentLanguage();
     return lambdaClient.market.getGroupAgentList.query(
       {

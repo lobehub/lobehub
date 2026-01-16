@@ -124,6 +124,15 @@ const publishOrCreateGroupSchema = z.object({
   backgroundColor: z.string().nullish(),
   category: z.string().optional(),
   changelog: z.string().optional(),
+  config: z
+    .object({
+      allowDM: z.boolean().optional(),
+      openingMessage: z.string().optional(),
+      openingQuestions: z.array(z.string()).optional(),
+      revealDM: z.boolean().optional(),
+      systemPrompt: z.string().optional(),
+    })
+    .optional(),
   description: z.string(),
   identifier: z.string().optional(),
   memberAgents: z.array(memberAgentSchema),

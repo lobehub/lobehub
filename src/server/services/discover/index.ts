@@ -1735,14 +1735,16 @@ export class DiscoverService {
 
     try {
       // Call Market SDK to get user info
-      const response: UserInfoResponse = await this.market.user.getUserInfo(username, { locale });
+      const response = (await this.market.user.getUserInfo(username, { locale })) as UserInfoResponse & {
+        agentGroups?: any[];
+      };
 
       if (!response?.user) {
         log('getUserInfo: user not found for username=%s', username);
         return undefined;
       }
 
-      const { user, agents } = response;
+      const { user, agents, agentGroups } = response;
 
       // Transform agents to DiscoverAssistantItem format
       const transformedAgents: DiscoverAssistantItem[] = (agents || []).map((agent: any) => ({
@@ -1763,7 +1765,27 @@ export class DiscoverService {
         tokenUsage: agent.tokenUsage || 0,
       }));
 
+      // Transform agentGroups to DiscoverGroupAgentItem format
+      const transformedAgentGroups = (agentGroups || []).map((group: any) => ({
+        author: user.displayName || user.userName || user.namespace || '',
+        avatar: group.avatar || '👥',
+        category: group.category as any,
+        createdAt: group.createdAt,
+        description: group.description || '',
+        homepage: `https://lobehub.com/discover/group_agent/${group.identifier}`,
+        identifier: group.identifier,
+        installCount: group.installCount || 0,
+        isFeatured: group.isFeatured || false,
+        isOfficial: group.isOfficial || false,
+        memberCount: 0, // Will be populated from memberAgents in detail view
+        schemaVersion: 1,
+        tags: group.tags || [],
+        title: group.name || group.identifier,
+        updatedAt: group.updatedAt,
+      }));
+
       const result: DiscoverUserProfile = {
+        agentGroups: transformedAgentGroups,
         agents: transformedAgents,
         user: {
           avatarUrl: user.avatarUrl || null,
@@ -1781,7 +1803,11 @@ export class DiscoverService {
         },
       };
 
-      log('getUserInfo: returning user profile with %d agents', result.agents.length);
+      log(
+        'getUserInfo: returning user profile with %d agents and %d groups',
+        result.agents.length,
+        result.agentGroups?.length || 0,
+      );
       return result;
     } catch (error) {
       log('getUserInfo: error fetching user info: %O', error);
@@ -1793,8 +1819,9 @@ export class DiscoverService {
 
   getGroupAgentCategories = async (params?: CategoryListQuery) => {
     try {
-      const response = await this.market.agentGroups.getAgentGroupCategories?.(params);
-      return response;
+      // TODO: SDK method not yet available, using fallback
+      const response = await (this.market.agentGroups as any).getAgentGroupCategories?.(params);
+      return response || { items: [] };
     } catch (error) {
       log('getGroupAgentCategories: error: %O', error);
       return { items: [] };
@@ -1820,7 +1847,8 @@ export class DiscoverService {
 
   getGroupAgentIdentifiers = async () => {
     try {
-      const response = await this.market.agentGroups.getAgentGroupIdentifiers?.();
+      // TODO: SDK method not yet available, using fallback
+      const response = await (this.market.agentGroups as any).getAgentGroupIdentifiers?.();
       return response || { identifiers: [] };
     } catch (error) {
       log('getGroupAgentIdentifiers: error: %O', error);
@@ -1857,7 +1885,8 @@ export class DiscoverService {
     source?: string;
   }) => {
     try {
-      await this.market.agentGroups.createAgentGroupEvent?.(params);
+      // TODO: SDK method not yet available
+      await (this.market.agentGroups as any).createAgentGroupEvent?.(params);
     } catch (error) {
       log('createGroupAgentEvent: error: %O', error);
     }
@@ -1865,7 +1894,8 @@ export class DiscoverService {
 
   increaseGroupAgentInstallCount = async (identifier: string) => {
     try {
-      await this.market.agentGroups.increaseInstallCount?.(identifier);
+      // TODO: SDK method not yet available
+      await (this.market.agentGroups as any).increaseInstallCount?.(identifier);
     } catch (error) {
       log('increaseGroupAgentInstallCount: error: %O', error);
     }

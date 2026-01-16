@@ -1,27 +1,28 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { useParams } from 'next/navigation';
 import { memo } from 'react';
-import { Virtuoso } from 'react-virtuoso';
+import { useParams } from 'react-router-dom';
 
-import { TocProvider } from '@/components/TocAnchor';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
 
+import NotFound from '../components/NotFound';
+import { TocProvider } from '../features/Toc/useToc';
 import Details from './features/Details';
-import DetailProvider from './features/DetailProvider';
+import { DetailProvider } from './features/DetailProvider';
 import Header from './features/Header';
-import Loading from './loading';
-import NotFound from './not-found';
 import StatusPage from './features/StatusPage';
+import Loading from './loading';
 
-const GroupAgentDetailPage = memo(() => {
+interface GroupAgentDetailPageProps {
+  mobile?: boolean;
+}
+
+const GroupAgentDetailPage = memo<GroupAgentDetailPageProps>(({ mobile }) => {
   const params = useParams<{ slug: string }>();
-  const { version } = useQuery();
-
-  // Decode the slug (identifier)
-  const identifier = decodeURIComponent(params.slug);
+  const identifier = decodeURIComponent(params.slug ?? '');
+  const { version } = useQuery() as { version?: string };
 
   // Fetch group agent detail
   const useGroupAgentDetail = useDiscoverStore((s) => s.useGroupAgentDetail);
@@ -39,13 +40,13 @@ const GroupAgentDetailPage = memo(() => {
 
   return (
     <TocProvider>
-      <DetailProvider config={data}>
+      <DetailProvider config={data as any}>
         <Flexbox gap={16} width={'100%'}>
           {/* Header Section */}
-          <Header />
+          <Header mobile={mobile} />
 
           {/* Details Section */}
-          <Details />
+          <Details mobile={mobile} />
         </Flexbox>
       </DetailProvider>
     </TocProvider>

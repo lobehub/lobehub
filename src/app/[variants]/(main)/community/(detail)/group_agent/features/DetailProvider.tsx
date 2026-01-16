@@ -75,8 +75,6 @@ interface DetailProviderProps extends PropsWithChildren {
   config: GroupAgentDetailData;
 }
 
-const DetailProvider: FC<DetailProviderProps> = ({ config, children }) => {
+export const DetailProvider: FC<DetailProviderProps> = ({ config, children }) => {
   return <DetailContext.Provider value={config}>{children}</DetailContext.Provider>;
 };
-
-export default DetailProvider;
