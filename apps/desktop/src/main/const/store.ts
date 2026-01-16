@@ -1,7 +1,7 @@
 /**
  * 应用设置存储相关常量
  */
-import { NetworkProxySettings } from '@lobechat/electron-client-ipc';
+import { DEFAULT_AUTO_CHECK_UPDATE, NetworkProxySettings } from '@lobechat/electron-client-ipc';
 
 import { appStorageDir } from '@/const/dir';
 import { DEFAULT_SHORTCUTS_CONFIG } from '@/shortcuts';
@@ -25,7 +25,7 @@ export const defaultProxySettings: NetworkProxySettings = {
  * 存储默认值
  */
 export const STORE_DEFAULTS: ElectronMainStore = {
-  autoCheckUpdate: true,
+  autoCheckUpdate: DEFAULT_AUTO_CHECK_UPDATE,
   dataSyncConfig: { storageMode: 'cloud' },
   encryptedTokens: {},
   locale: 'auto',

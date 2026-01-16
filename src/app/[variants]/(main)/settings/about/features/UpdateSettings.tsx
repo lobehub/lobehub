@@ -1,5 +1,6 @@
 'use client';
 
+import { DEFAULT_AUTO_CHECK_UPDATE } from '@lobechat/electron-client-ipc';
 import { Form, type FormGroupItemType } from '@lobehub/ui';
 import { Switch } from 'antd';
 import { memo, useCallback } from 'react';
@@ -28,7 +29,13 @@ const UpdateSettings = memo(() => {
   const updateSettingsGroup: FormGroupItemType = {
     children: [
       {
-        children: <Switch checked={autoCheckUpdate} loading={isLoading} onChange={handleChange} />,
+        children: (
+          <Switch
+            checked={autoCheckUpdate ?? DEFAULT_AUTO_CHECK_UPDATE}
+            loading={isLoading}
+            onChange={handleChange}
+          />
+        ),
         desc: t('settingUpdate.autoCheckUpdate.desc'),
         label: t('settingUpdate.autoCheckUpdate.title'),
         layout: 'horizontal',
