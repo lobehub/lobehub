@@ -2,6 +2,7 @@
  * @see https://github.com/lobehub/lobe-chat/discussions/6563
  */
 import type { ChatModelCard } from '@lobechat/types';
+import debug from 'debug';
 import OpenAI, { ClientOptions } from 'openai';
 import { Stream } from 'openai/streaming';
 
@@ -26,6 +27,8 @@ import { postProcessModelList } from '../../utils/postProcessModelList';
 import { LobeRuntimeAI } from '../BaseAI';
 import { CreateImageOptions, CustomClientOptions } from '../openaiCompatibleFactory';
 import { baseRuntimeMap } from './baseRuntimeMap';
+
+const log = debug('lobe-model-runtime:router-runtime');
 
 interface ProviderIniOptions extends Record<string, any> {
   accessKeyId?: string;
@@ -125,6 +128,14 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
   routers: Routers;
 }
 
+const formatErrorMessage = (error: unknown): string => {
+  if (error instanceof Error) {
+    return error.name ? `${error.name}: ${error.message}` : error.message;
+  }
+
+  return String(error);
+};
+
 export const createRouterRuntime = ({
   id,
   routers,
@@ -218,16 +229,61 @@ export const createRouterRuntime = ({
     ): Promise<T> {
       const matchedRouter = await this.resolveMatchedRouter(model);
       const routerOptions = this.normalizeRouterOptions(matchedRouter);
+      const totalOptions = routerOptions.length;
+
+      log(
+        'resolve router for model=%s apiType=%s options=%d',
+        model,
+        matchedRouter.apiType,
+        totalOptions,
+      );
 
       let lastError: unknown;
 
-      for (const optionItem of routerOptions) {
-        const { runtime } = this.createRuntimeFromOption(matchedRouter, optionItem);
+      for (const [index, optionItem] of routerOptions.entries()) {
+        const attempt = index + 1;
+        const { id: resolvedApiType, runtime } = this.createRuntimeFromOption(
+          matchedRouter,
+          optionItem,
+        );
 
         try {
-          return await requestHandler(runtime);
+          const result = await requestHandler(runtime);
+
+          if (totalOptions > 1 && attempt > 1) {
+            log(
+              'fallback success for model=%s attempt=%d/%d apiType=%s',
+              model,
+              attempt,
+              totalOptions,
+              resolvedApiType,
+            );
+          }
+
+          return result;
         } catch (error) {
           lastError = error;
+
+          const message = formatErrorMessage(error);
+          if (attempt < totalOptions) {
+            log(
+              'attempt failed, fallback to next: model=%s attempt=%d/%d apiType=%s error=%s',
+              model,
+              attempt,
+              totalOptions,
+              resolvedApiType,
+              message,
+            );
+          } else {
+            log(
+              'attempt failed, no more fallbacks: model=%s attempt=%d/%d apiType=%s error=%s',
+              model,
+              attempt,
+              totalOptions,
+              resolvedApiType,
+              message,
+            );
+          }
         }
       }
 
