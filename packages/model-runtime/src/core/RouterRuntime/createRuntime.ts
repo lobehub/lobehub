@@ -1,12 +1,14 @@
 /**
  * @see https://github.com/lobehub/lobe-chat/discussions/6563
  */
+import type { GoogleGenAIOptions } from '@google/genai';
 import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
 import OpenAI, { ClientOptions } from 'openai';
 import { Stream } from 'openai/streaming';
 
 import { LobeOpenAI } from '../../providers/openai';
+import { LobeVertexAI } from '../../providers/vertexai';
 import {
   CreateImagePayload,
   CreateImageResponse,
@@ -24,6 +26,7 @@ import {
   TextToSpeechPayload,
 } from '../../types';
 import { postProcessModelList } from '../../utils/postProcessModelList';
+import { safeParseJSON } from '../../utils/safeParseJSON';
 import { LobeRuntimeAI } from '../BaseAI';
 import { CreateImageOptions, CustomClientOptions } from '../openaiCompatibleFactory';
 import { baseRuntimeMap } from './baseRuntimeMap';
@@ -49,6 +52,8 @@ interface ProviderIniOptions extends Record<string, any> {
  */
 interface RouterOptionItem extends ProviderIniOptions {
   apiType?: keyof typeof baseRuntimeMap;
+  id?: string;
+  remark?: string;
 }
 
 type RouterOptions = RouterOptionItem | RouterOptionItem[];
@@ -207,18 +212,55 @@ export const createRouterRuntime = ({
     private createRuntimeFromOption(
       router: RouterInstance,
       optionItem: RouterOptionItem,
-    ): { id: keyof typeof baseRuntimeMap; runtime: LobeRuntimeAI } {
-      const { apiType: optionApiType, ...optionOverrides } = optionItem;
+    ): {
+      channelId?: string;
+      id: keyof typeof baseRuntimeMap;
+      remark?: string;
+      runtime: LobeRuntimeAI;
+    } {
+      const { apiType: optionApiType, id: channelId, remark, ...optionOverrides } = optionItem;
       const resolvedApiType = optionApiType ?? router.apiType;
+      const finalOptions = { ...this._params, ...this._options, ...optionOverrides };
+
+      /**
+       * Vertex AI uses GoogleGenAI credentials flow rather than API keys.
+       * Accept JSON credentials in apiKey for compatibility with server config.
+       */
+      if (resolvedApiType === 'vertexai') {
+        const { apiKey, googleAuthOptions, project, location, ...restOptions } = finalOptions;
+        const credentials = safeParseJSON<Record<string, any>>(apiKey);
+        const vertexOptions: GoogleGenAIOptions = {
+          ...(restOptions as GoogleGenAIOptions),
+          vertexai: true,
+        };
+
+        if (googleAuthOptions) {
+          vertexOptions.googleAuthOptions = googleAuthOptions;
+        } else if (credentials) {
+          vertexOptions.googleAuthOptions = { credentials };
+        }
+
+        if (project) vertexOptions.project = project;
+        if (location) vertexOptions.location = location as GoogleGenAIOptions['location'];
+
+        return {
+          channelId,
+          id: resolvedApiType,
+          remark,
+          runtime: LobeVertexAI.initFromVertexAI(vertexOptions),
+        };
+      }
+
       const providerAI =
         resolvedApiType === router.apiType
           ? (router.runtime ?? baseRuntimeMap[resolvedApiType] ?? LobeOpenAI)
           : (baseRuntimeMap[resolvedApiType] ?? LobeOpenAI);
-      const finalOptions = { ...this._params, ...this._options, ...optionOverrides };
       const runtime: LobeRuntimeAI = new providerAI({ ...finalOptions, id: this._id });
 
       return {
+        channelId,
         id: resolvedApiType,
+        remark,
         runtime,
       };
     }
@@ -242,21 +284,25 @@ export const createRouterRuntime = ({
 
       for (const [index, optionItem] of routerOptions.entries()) {
         const attempt = index + 1;
-        const { id: resolvedApiType, runtime } = this.createRuntimeFromOption(
-          matchedRouter,
-          optionItem,
-        );
+        const {
+          channelId,
+          id: resolvedApiType,
+          remark,
+          runtime,
+        } = this.createRuntimeFromOption(matchedRouter, optionItem);
 
         try {
           const result = await requestHandler(runtime);
 
           if (totalOptions > 1 && attempt > 1) {
             log(
-              'fallback success for model=%s attempt=%d/%d apiType=%s',
+              'fallback success for model=%s attempt=%d/%d apiType=%s channelId=%s remark=%s',
               model,
               attempt,
               totalOptions,
               resolvedApiType,
+              channelId ?? '',
+              remark ?? '',
             );
           }
 
@@ -267,20 +313,24 @@ export const createRouterRuntime = ({
           const message = formatErrorMessage(error);
           if (attempt < totalOptions) {
             log(
-              'attempt failed, fallback to next: model=%s attempt=%d/%d apiType=%s error=%s',
+              'attempt failed, fallback to next: model=%s attempt=%d/%d apiType=%s channelId=%s remark=%s error=%s',
               model,
               attempt,
               totalOptions,
               resolvedApiType,
+              channelId ?? '',
+              remark ?? '',
               message,
             );
           } else {
             log(
-              'attempt failed, no more fallbacks: model=%s attempt=%d/%d apiType=%s error=%s',
+              'attempt failed, no more fallbacks: model=%s attempt=%d/%d apiType=%s channelId=%s remark=%s error=%s',
               model,
               attempt,
               totalOptions,
               resolvedApiType,
+              channelId ?? '',
+              remark ?? '',
               message,
             );
           }
