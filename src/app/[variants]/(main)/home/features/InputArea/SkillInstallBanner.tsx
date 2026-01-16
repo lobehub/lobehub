@@ -15,21 +15,29 @@ const useStyles = createStyles(({ css, token }) => ({
   banner: css`
     cursor: pointer;
 
+    position: absolute;
+    z-index: 0;
+    inset-block-end: 0;
+    inset-inline: 0 0;
+
     display: flex;
     gap: 12px;
     align-items: center;
     justify-content: space-between;
 
-    padding-block: 10px;
+    margin-block-end: 6px;
+    padding-block: 42px 10px;
     padding-inline: 16px;
-    border-radius: 8px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: 20px;
 
     background: ${token.colorFillQuaternary};
+    box-shadow: 0 12px 32px rgb(0 0 0 / 4%);
 
     transition: background 0.2s ease-in-out;
 
     &:hover {
-      background: ${token.colorFillTertiary};
+      background: ${token.colorFillQuaternary};
     }
   `,
   icon: css`
@@ -97,17 +105,13 @@ const SkillInstallBanner = memo(() => {
 
   return (
     <>
-      <Flexbox width={'100%'}>
-        <div className={styles.banner} onClick={() => setOpen(true)}>
-          <Flexbox align="center" gap={8} horizontal>
-            <Icon className={styles.icon} icon={Blocks} size={18} />
-            <span className={styles.text}>{t('skillInstallBanner.title')}</span>
-          </Flexbox>
-          {avatarItems.length > 0 && (
-            <Avatar.Group items={avatarItems} shape={'circle'} size={24} />
-          )}
-        </div>
-      </Flexbox>
+      <div className={styles.banner} onClick={() => setOpen(true)}>
+        <Flexbox align="center" gap={8} horizontal>
+          <Icon className={styles.icon} icon={Blocks} size={18} />
+          <span className={styles.text}>{t('skillInstallBanner.title')}</span>
+        </Flexbox>
+        {avatarItems.length > 0 && <Avatar.Group items={avatarItems} shape={'circle'} size={24} />}
+      </div>
       <SkillStore onClose={() => setOpen(false)} open={open} />
     </>
   );

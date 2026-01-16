@@ -37,40 +37,44 @@ const InputArea = () => {
         boxShadow: '0 12px 32px rgba(0,0,0,.04)',
       },
     }),
-    [inputActiveMode],
+    [],
   );
 
   return (
     <Flexbox gap={16} style={{ marginBottom: 16 }}>
-      <DragUploadZone onUploadFiles={handleUploadFiles}>
-        <ChatInputProvider
-          agentId={inboxAgentId}
-          allowExpand={false}
-          chatInputEditorRef={(instance) => {
-            if (!instance) return;
-            useChatStore.setState({ mainInputEditor: instance });
-          }}
-          leftActions={leftActions}
-          onMarkdownContentChange={(content) => {
-            useChatStore.setState({ inputMessage: content });
-          }}
-          onSend={send}
-          sendButtonProps={{
-            disabled: loading,
-            generating: loading,
-            onStop: () => {},
-            shape: 'round',
-          }}
+      <Flexbox style={{ paddingBottom: 32, position: 'relative' }}>
+        <SkillInstallBanner />
+        <DragUploadZone
+          onUploadFiles={handleUploadFiles}
+          style={{ position: 'relative', zIndex: 1 }}
         >
-          <DesktopChatInput
-            dropdownPlacement="bottomLeft"
-            extenHeaderContent={inputActiveMode ? <ModeHeader /> : undefined}
-            inputContainerProps={inputContainerProps}
-          />
-        </ChatInputProvider>
-      </DragUploadZone>
-
-      <SkillInstallBanner />
+          <ChatInputProvider
+            agentId={inboxAgentId}
+            allowExpand={false}
+            chatInputEditorRef={(instance) => {
+              if (!instance) return;
+              useChatStore.setState({ mainInputEditor: instance });
+            }}
+            leftActions={leftActions}
+            onMarkdownContentChange={(content) => {
+              useChatStore.setState({ inputMessage: content });
+            }}
+            onSend={send}
+            sendButtonProps={{
+              disabled: loading,
+              generating: loading,
+              onStop: () => {},
+              shape: 'round',
+            }}
+          >
+            <DesktopChatInput
+              dropdownPlacement="bottomLeft"
+              extenHeaderContent={inputActiveMode ? <ModeHeader /> : undefined}
+              inputContainerProps={inputContainerProps}
+            />
+          </ChatInputProvider>
+        </DragUploadZone>
+      </Flexbox>
 
       <StarterList />
     </Flexbox>
