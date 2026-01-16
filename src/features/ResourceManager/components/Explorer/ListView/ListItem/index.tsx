@@ -510,6 +510,7 @@ const FileListItem = memo<FileListItemProps>(
                 e.stopPropagation();
               }}
               onPointerDown={(e) => e.stopPropagation()}
+              paddingInline={8}
             >
               {!isFolder &&
                 !isPage &&
