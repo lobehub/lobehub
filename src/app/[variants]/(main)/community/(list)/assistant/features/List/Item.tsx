@@ -1,4 +1,4 @@
-import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Avatar, Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ClockIcon } from 'lucide-react';
 import qs from 'query-string';
@@ -9,8 +9,8 @@ import urlJoin from 'url-join';
 
 import PublishedTime from '@/components/PublishedTime';
 import { useQuery } from '@/hooks/useQuery';
-import { type AssistantMarketSource, type DiscoverAssistantItem } from '@/types/discover';
 import { discoverService } from '@/services/discover';
+import { type AssistantMarketSource, type DiscoverAssistantItem } from '@/types/discover';
 
 import TokenTag from './TokenTag';
 
@@ -68,13 +68,16 @@ const AssistantItem = memo<DiscoverAssistantItem>(
     installCount,
     backgroundColor,
     userName,
+    type,
   }) => {
     const navigate = useNavigate();
     const { source } = useQuery() as { source?: AssistantMarketSource };
+    const isGroupAgent = type === 'agent-group';
+    const basePath = isGroupAgent ? '/community/group_agent' : '/community/assistant';
     const link = qs.stringifyUrl(
       {
         query: { source },
-        url: urlJoin('/community/assistant', identifier),
+        url: urlJoin(basePath, identifier),
       },
       { skipNull: true },
     );
@@ -93,11 +96,13 @@ const AssistantItem = memo<DiscoverAssistantItem>(
     );
 
     const handleClick = useCallback(() => {
-      discoverService.reportAgentEvent({
-        event: 'click',
-        identifier,
-        source: location.pathname,
-      }).catch(() => {});
+      discoverService
+        .reportAgentEvent({
+          event: 'click',
+          identifier,
+          source: location.pathname,
+        })
+        .catch(() => {});
 
       navigate(link);
     }, [identifier, link, navigate]);
@@ -115,6 +120,19 @@ const AssistantItem = memo<DiscoverAssistantItem>(
         variant={'outlined'}
         width={'100%'}
       >
+        {isGroupAgent && (
+          <Tag
+            color="info"
+            style={{
+              position: 'absolute',
+              right: 12,
+              top: 12,
+              zIndex: 1,
+            }}
+          >
+            {t('groupAgents.tag', { defaultValue: '群组' })}
+          </Tag>
+        )}
         <Flexbox
           align={'flex-start'}
           gap={16}

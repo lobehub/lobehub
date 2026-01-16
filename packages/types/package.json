@@ -8,7 +8,7 @@
     "@lobechat/python-interpreter": "workspace:*",
     "@lobechat/web-crawler": "workspace:*",
     "@lobehub/chat-plugin-sdk": "^1.32.4",
-    "@lobehub/market-sdk": "0.28.1",
+    "@lobehub/market-sdk": "0.29.0",
     "@lobehub/market-types": "^1.12.3",
     "model-bank": "workspace:*",
     "type-fest": "^4.41.0",

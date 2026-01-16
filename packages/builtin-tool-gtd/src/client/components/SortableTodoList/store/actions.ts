@@ -1,6 +1,6 @@
 import { debounce } from 'es-toolkit/compat';
 
-import type { TodoItem } from '../../../../types';
+import { getNextTodoStatus, type TodoItem } from '../../../../types';
 import { AUTO_SAVE_DELAY, AUTO_SAVE_MAX_WAIT, initialState } from './initialState';
 import type { StoreInternals, TodoListItem, TodoListStore } from './types';
 import { ADD_ITEM_ID } from './types';
@@ -37,7 +37,7 @@ export const createActions = (
 
     try {
       // Convert TodoListItem[] to TodoItem[] (remove id)
-      const todoItems: TodoItem[] = items.map(({ completed, text }) => ({ completed, text }));
+      const todoItems: TodoItem[] = items.map(({ status, text }) => ({ status, text }));
       console.log('[performSave] calling onSave with', todoItems.length, 'items');
       await internals.onSave(todoItems);
       console.log('[performSave] onSave completed');
@@ -69,7 +69,7 @@ export const createActions = (
       if (!newItemText.trim()) return;
 
       set({
-        items: [...items, { completed: false, id: generateId(), text: newItemText.trim() }],
+        items: [...items, { id: generateId(), status: 'todo', text: newItemText.trim() }],
         newItemText: '',
       });
       markDirtyAndSave();
@@ -97,7 +97,7 @@ export const createActions = (
       set({ saveStatus: 'saving' });
 
       try {
-        const todoItems: TodoItem[] = items.map(({ completed, text }) => ({ completed, text }));
+        const todoItems: TodoItem[] = items.map(({ status, text }) => ({ status, text }));
         console.log('[saveNow] force saving', todoItems.length, 'items');
         await internals.onSave(todoItems);
         console.log('[saveNow] save completed');
@@ -160,7 +160,7 @@ export const createActions = (
       const { items } = get();
       set({
         items: items.map((item) =>
-          item.id === id ? { ...item, completed: !item.completed } : item,
+          item.id === id ? { ...item, status: getNextTodoStatus(item.status) } : item,
         ),
       });
       markDirtyAndSave();

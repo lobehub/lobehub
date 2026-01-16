@@ -1607,8 +1607,8 @@ describe('AgentRuntime', () => {
       const stepContext = {
         todos: {
           items: [
-            { text: 'Buy milk', completed: false },
-            { text: 'Call mom', completed: true },
+            { text: 'Buy milk', status: 'todo' as const },
+            { text: 'Call mom', status: 'completed' as const },
           ],
           updatedAt: '2024-06-01T00:00:00.000Z',
         },
@@ -1634,7 +1634,7 @@ describe('AgentRuntime', () => {
           stepContext: expect.objectContaining({
             todos: expect.objectContaining({
               items: expect.arrayContaining([
-                expect.objectContaining({ text: 'Buy milk', completed: false }),
+                expect.objectContaining({ text: 'Buy milk', status: 'todo' }),
               ]),
             }),
           }),
@@ -1666,7 +1666,7 @@ describe('AgentRuntime', () => {
 
       const stepContext = {
         todos: {
-          items: [{ text: 'Task 1', completed: false }],
+          items: [{ text: 'Task 1', status: 'todo' as const }],
           updatedAt: '2024-06-01T00:00:00.000Z',
         },
       };
@@ -1746,7 +1746,7 @@ describe('AgentRuntime', () => {
 
       const stepContext = {
         todos: {
-          items: [{ text: 'Batch task', completed: false }],
+          items: [{ text: 'Batch task', status: 'todo' as const }],
           updatedAt: '2024-06-01T00:00:00.000Z',
         },
       };

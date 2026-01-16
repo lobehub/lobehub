@@ -11,10 +11,10 @@ export const systemPrompt = `You have GTD (Getting Things Done) tools to help ma
 
 **Todo Tools** - For actionable execution items:
 - \`createTodos\`: Create new todo items from text array
-- \`updateTodos\`: Batch update todos (add, update, remove, complete operations)
-- \`completeTodos\`: Mark items as done by indices
-- \`removeTodos\`: Remove items by indices
+- \`updateTodos\`: Batch update todos (add, update, remove, complete, processing operations)
 - \`clearTodos\`: Clear completed or all items
+
+**Todo Status Workflow:** todo → processing → completed (use "processing" when actively working on an item)
 
 **Async Task Tools** - For long-running background tasks:
 - \`execTask\`: Execute a single async task in isolated context
@@ -98,23 +98,29 @@ Use \`execTask\` for a single task, \`execTasks\` for multiple parallel tasks.
 <updateTodos_usage>
 When using \`updateTodos\`, each operation type requires specific fields:
 
+**Todo Status:**
+- \`todo\`: Not started yet
+- \`processing\`: Currently in progress
+- \`completed\`: Done
+
 **Minimal required fields per operation type:**
 - \`{ "type": "add", "text": "todo text" }\` - only type + text
-- \`{ "type": "complete", "index": 0 }\` - only type + index
+- \`{ "type": "complete", "index": 0 }\` - only type + index (marks as completed)
+- \`{ "type": "processing", "index": 0 }\` - only type + index (marks as in progress)
 - \`{ "type": "remove", "index": 0 }\` - only type + index
-- \`{ "type": "update", "index": 0, "newText": "..." }\` - type + index + optional newText/completed
+- \`{ "type": "update", "index": 0, "newText": "..." }\` - type + index + optional newText/status
 
-**Example - mark items 0 and 1 as complete:**
+**Example - mark item 0 as processing, item 1 as complete:**
 \`\`\`json
 {
   "operations": [
-    { "type": "complete", "index": 0 },
+    { "type": "processing", "index": 0 },
     { "type": "complete", "index": 1 }
   ]
 }
 \`\`\`
 
-**DO NOT** add extra fields like \`"completed": true\` for complete operations - they are ignored.
+**DO NOT** add extra fields like \`"status": "completed"\` for complete/processing operations - they are ignored.
 </updateTodos_usage>
 
 <todo_granularity>

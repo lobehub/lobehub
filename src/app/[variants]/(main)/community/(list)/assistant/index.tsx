@@ -16,6 +16,7 @@ const AssistantPage = memo(() => {
   const useAssistantList = useDiscoverStore((s) => s.useAssistantList);
   const { data, isLoading } = useAssistantList({
     category,
+    includeAgentGroup: true,
     order,
     page,
     pageSize: 21,

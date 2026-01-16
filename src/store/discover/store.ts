@@ -4,6 +4,7 @@ import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
 import { type AssistantAction, createAssistantSlice } from './slices/assistant/action';
+import { type GroupAgentAction, createGroupAgentSlice } from './slices/groupAgent/action';
 import { type MCPAction, createMCPSlice } from './slices/mcp';
 import { type ModelAction, createModelSlice } from './slices/model/action';
 import { type PluginAction, createPluginSlice } from './slices/plugin/action';
@@ -15,6 +16,7 @@ import { type UserAction, createUserSlice } from './slices/user';
 
 export type DiscoverStore = MCPAction &
   AssistantAction &
+  GroupAgentAction &
   ProviderAction &
   ModelAction &
   PluginAction &
@@ -26,6 +28,7 @@ const createStore: StateCreator<DiscoverStore, [['zustand/devtools', never]]> = 
 ) => ({
   ...createMCPSlice(...parameters),
   ...createAssistantSlice(...parameters),
+  ...createGroupAgentSlice(...parameters),
   ...createProviderSlice(...parameters),
   ...createModelSlice(...parameters),
   ...createPluginSlice(...parameters),

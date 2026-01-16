@@ -187,9 +187,13 @@ export default {
   'llm.waitingForMoreLinkAriaLabel': 'Open the Provider request form',
   'marketPublish.forkConfirm.by': 'by {{author}}',
   'marketPublish.forkConfirm.confirm': 'Confirm Publish',
+  'marketPublish.forkConfirm.confirmGroup': 'Confirm Publish',
   'marketPublish.forkConfirm.description':
     'You are about to publish a derivative version based on an existing agent from the community. Your new agent will be created as a separate entry in the marketplace.',
+  'marketPublish.forkConfirm.descriptionGroup':
+    'You are about to publish a derivative version based on an existing group from the community. Your new group will be created as a separate entry in the marketplace.',
   'marketPublish.forkConfirm.title': 'Publish Derivative Agent',
+  'marketPublish.forkConfirm.titleGroup': 'Publish Derivative Group',
   'marketPublish.modal.changelog.extra':
     'Describe the key changes and improvements in this version',
   'marketPublish.modal.changelog.label': 'Changelog',
@@ -209,11 +213,14 @@ export default {
   'marketPublish.modal.identifier.required': 'Please enter the agent identifier',
   'marketPublish.modal.loading.fetchingRemote': 'Loading remote data...',
   'marketPublish.modal.loading.submit': 'Submitting Agent...',
+  'marketPublish.modal.loading.submitGroup': 'Submitting Group...',
   'marketPublish.modal.loading.upload': 'Publishing new version...',
+  'marketPublish.modal.loading.uploadGroup': 'Publishing new group version...',
   'marketPublish.modal.messages.createVersionFailed': 'Failed to create version: {{message}}',
   'marketPublish.modal.messages.fetchRemoteFailed': 'Failed to fetch remote agent data',
   'marketPublish.modal.messages.missingIdentifier':
     'This Agent doesn’t have a Community identifier yet.',
+  'marketPublish.modal.messages.noGroup': 'No group selected',
   'marketPublish.modal.messages.notAuthenticated': 'Sign in to your Community account first.',
   'marketPublish.modal.messages.publishFailed': 'Publish failed: {{message}}',
   'marketPublish.modal.submitButton': 'Publish',
@@ -221,12 +228,16 @@ export default {
   'marketPublish.modal.title.upload': 'Publish New Version',
   'marketPublish.resultModal.message':
     'Your Agent has been submitted for review. Once approved, it will go live automatically.',
+  'marketPublish.resultModal.messageGroup':
+    'Your Group has been submitted for review. Once approved, it will go live automatically.',
   'marketPublish.resultModal.title': 'Submission Successful',
   'marketPublish.resultModal.view': 'View in Community',
   'marketPublish.submit.button': 'Share to Community',
   'marketPublish.submit.tooltip': 'Share this Agent to the Community',
+  'marketPublish.submitGroup.tooltip': 'Share this Group to the Community',
   'marketPublish.upload.button': 'Publish New Version',
   'marketPublish.upload.tooltip': 'Publish a new version to Agent Community',
+  'marketPublish.uploadGroup.tooltip': 'Publish a new version to Group Community',
   'memory.enabled.desc':
     'Allow LobeHub to extract preferences and info from conversations and use them later. You can view, edit, or clear memory anytime.',
   'memory.enabled.title': 'Enable Memory',
@@ -551,6 +562,7 @@ export default {
   'submitAgentModal.placeholder': 'Enter a unique identifier for the agent, e.g. web-development',
   'submitAgentModal.success': 'Agent submitted successfully',
   'submitAgentModal.tooltips': 'Share to Agent Community',
+  'submitGroupModal.tooltips': 'Share to Group Community',
   'sync.device.deviceName.hint': 'Add a name for easy identification',
   'sync.device.deviceName.placeholder': 'Enter device name',
   'sync.device.deviceName.title': 'Device Name',

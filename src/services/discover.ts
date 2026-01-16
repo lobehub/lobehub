@@ -1,4 +1,8 @@
-import { type CategoryItem, type CategoryListQuery, type PluginManifest } from '@lobehub/market-sdk';
+import {
+  type CategoryItem,
+  type CategoryListQuery,
+  type PluginManifest,
+} from '@lobehub/market-sdk';
 import {
   AgentEventRequest,
   type CallReportRequest,
@@ -20,6 +24,7 @@ import {
   type DiscoverPluginDetail,
   type DiscoverProviderDetail,
   type DiscoverUserProfile,
+  type GroupAgentQueryParams,
   type IdentifiersResponse,
   type McpListResponse,
   type McpQueryParams,
@@ -448,6 +453,58 @@ class DiscoverService {
     }
     return null;
   }
+
+  // ============================== Group Agent Market ==============================
+
+  getGroupAgentCategories = async (params: CategoryListQuery = {}): Promise<CategoryItem[]> => {
+    const locale = globalHelpers.getCurrentLanguage();
+    return lambdaClient.market.getGroupAgentCategories.query({
+      ...params,
+      locale,
+    });
+  };
+
+  getGroupAgentDetail = async (params: {
+    identifier: string;
+    locale?: string;
+    version?: string;
+  }): Promise<any> => {
+    const locale = globalHelpers.getCurrentLanguage();
+    return lambdaClient.market.getGroupAgentDetail.query({
+      identifier: params.identifier,
+      locale,
+      version: params.version,
+    });
+  };
+
+  getGroupAgentIdentifiers = async (): Promise<IdentifiersResponse> => {
+    return lambdaClient.market.getGroupAgentIdentifiers.query();
+  };
+
+  getGroupAgentList = async (params: GroupAgentQueryParams = {}): Promise<any> => {
+    const locale = globalHelpers.getCurrentLanguage();
+    return lambdaClient.market.getGroupAgentList.query(
+      {
+        ...params,
+        locale,
+        page: params.page ? Number(params.page) : 1,
+        pageSize: params.pageSize ? Number(params.pageSize) : 20,
+      },
+      { context: { showNotification: false } },
+    );
+  };
+
+  reportGroupAgentEvent = async (params: {
+    event: 'add' | 'chat' | 'click';
+    identifier: string;
+    source?: string;
+  }): Promise<void> => {
+    await lambdaClient.market.reportGroupAgentEvent.mutate(params);
+  };
+
+  reportGroupAgentInstall = async (identifier: string): Promise<void> => {
+    await lambdaClient.market.reportGroupAgentInstall.mutate({ identifier });
+  };
 }
 
 export const discoverService = new DiscoverService();

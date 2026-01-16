@@ -12,17 +12,15 @@ const Header = memo(() => {
   const { id } = useParams<{ id: string }>();
   const { t } = useTranslation('common');
   return (
-    <>
-      <SideBarHeaderLayout
-        breadcrumb={[
-          {
-            href: '/resource',
-            title: t('tab.resource'),
-          },
-        ]}
-      />
-      <LibraryHead id={id || ''} />
-    </>
+    <SideBarHeaderLayout
+      breadcrumb={[
+        {
+          href: '/resource',
+          title: t('tab.resource'),
+        },
+      ]}
+      left={<LibraryHead id={id || ''} />}
+    />
   );
 });
 

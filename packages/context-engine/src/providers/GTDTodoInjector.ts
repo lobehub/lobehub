@@ -5,12 +5,15 @@ import type { PipelineContext, ProcessorOptions } from '../types';
 
 const log = debug('context-engine:provider:GTDTodoInjector');
 
+/** Status of a todo item */
+export type GTDTodoStatus = 'todo' | 'processing' | 'completed';
+
 /**
  * GTD Todo item structure
  */
 export interface GTDTodoItem {
-  /** Whether the item is completed */
-  completed: boolean;
+  /** Status of the todo item */
+  status: GTDTodoStatus;
   /** The todo item text */
   text: string;
 }
@@ -43,13 +46,15 @@ function formatGTDTodos(todos: GTDTodoList): string | null {
   const lines: string[] = ['<gtd_todos>'];
 
   items.forEach((item, index) => {
-    const status = item.completed ? 'done' : 'pending';
-    lines.push(`<todo index="${index}" status="${status}">${item.text}</todo>`);
+    lines.push(`<todo index="${index}" status="${item.status}">${item.text}</todo>`);
   });
 
-  const completedCount = items.filter((item) => item.completed).length;
+  const completedCount = items.filter((item) => item.status === 'completed').length;
+  const processingCount = items.filter((item) => item.status === 'processing').length;
   const totalCount = items.length;
-  lines.push(`<progress completed="${completedCount}" total="${totalCount}" />`);
+  lines.push(
+    `<progress completed="${completedCount}" processing="${processingCount}" total="${totalCount}" />`,
+  );
 
   lines.push('</gtd_todos>');
 
@@ -117,7 +122,10 @@ export class GTDTodoInjector extends BaseLastUserContentProvider {
     clonedContext.metadata.gtdTodoInjected = true;
     clonedContext.metadata.gtdTodoCount = this.config.todos.items.length;
     clonedContext.metadata.gtdTodoCompletedCount = this.config.todos.items.filter(
-      (item) => item.completed,
+      (item) => item.status === 'completed',
+    ).length;
+    clonedContext.metadata.gtdTodoProcessingCount = this.config.todos.items.filter(
+      (item) => item.status === 'processing',
     ).length;
 
     log('GTD Todo context appended to last user message');

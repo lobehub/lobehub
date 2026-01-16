@@ -17,7 +17,7 @@ const AddTodoIntervention = memo<BuiltinInterventionProps<CreateTodosParams>>(
     // - Initial AI input: { adds: string[] } (from AI)
     // - After user edit: { items: TodoItem[] } (saved format)
     const defaultItems: TodoItem[] =
-      args?.items || args?.adds?.map((text) => ({ completed: false, text })) || [];
+      args?.items || args?.adds?.map((text) => ({ status: 'todo', text })) || [];
 
     const handleSave = useCallback(
       async (items: TodoItem[]) => {

@@ -1,11 +1,12 @@
 'use client';
 
 import { type BuiltinRenderProps } from '@lobechat/types';
-import { Block, Checkbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Block, Checkbox, Icon } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { CircleArrowRight } from 'lucide-react';
 import { memo } from 'react';
 
-import type { TodoItem, TodoList as TodoListType } from '../../../types';
+import type { TodoItem, TodoList as TodoListType, TodoStatus } from '../../../types';
 
 export interface TodoListRenderState {
   todos?: TodoListType;
@@ -23,30 +24,58 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       border-block-end: none;
     }
   `,
-  textChecked: css`
+  processingRow: css`
+    display: flex;
+    gap: 7px;
+    align-items: center;
+  `,
+  textCompleted: css`
     color: ${cssVar.colorTextQuaternary};
     text-decoration: line-through;
+  `,
+  textProcessing: css`
+    color: ${cssVar.colorText};
+  `,
+  textTodo: css`
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
 interface ReadOnlyTodoItemProps {
-  completed: boolean;
+  status: TodoStatus;
   text: string;
 }
 
 /**
  * Read-only todo item row, matching the style of TodoItemRow in SortableTodoList
  */
-const ReadOnlyTodoItem = memo<ReadOnlyTodoItemProps>(({ text, completed }) => {
+const ReadOnlyTodoItem = memo<ReadOnlyTodoItemProps>(({ text, status }) => {
+  const isCompleted = status === 'completed';
+  const isProcessing = status === 'processing';
+
+  // Processing state uses CircleArrowRight icon
+  if (isProcessing) {
+    return (
+      <div className={cx(styles.itemRow, styles.processingRow)}>
+        <Icon icon={CircleArrowRight} size={17} style={{ color: cssVar.colorTextSecondary }} />
+        <span className={styles.textProcessing}>{text}</span>
+      </div>
+    );
+  }
+
+  // Todo and completed states use Checkbox
   return (
     <Checkbox
       backgroundColor={cssVar.colorSuccess}
-      checked={completed}
-      classNames={{ text: completed ? styles.textChecked : undefined, wrapper: styles.itemRow }}
+      checked={isCompleted}
+      classNames={{
+        text: cx(styles.textTodo, isCompleted && styles.textCompleted),
+        wrapper: styles.itemRow,
+      }}
       shape={'circle'}
       style={{ borderWidth: 1.5, cursor: 'default' }}
       textProps={{
-        type: completed ? 'secondary' : undefined,
+        type: isCompleted ? 'secondary' : undefined,
       }}
     >
       {text}
@@ -73,7 +102,7 @@ const TodoListUI = memo<TodoListUIProps>(({ items }) => {
     // Outer container with background - matches AddTodoIntervention
     <Block variant={'outlined'} width="100%">
       {items.map((item, index) => (
-        <ReadOnlyTodoItem completed={item.completed} key={index} text={item.text} />
+        <ReadOnlyTodoItem key={index} status={item.status} text={item.text} />
       ))}
     </Block>
   );

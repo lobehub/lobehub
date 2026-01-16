@@ -7,8 +7,8 @@ describe('computeStepContext', () => {
     it('should include todos when provided', () => {
       const todos = {
         items: [
-          { text: 'Buy milk', completed: false },
-          { text: 'Call mom', completed: true },
+          { text: 'Buy milk', status: 'todo' as const },
+          { text: 'Call mom', status: 'completed' as const },
         ],
         updatedAt: '2024-06-01T00:00:00.000Z',
       };
@@ -18,9 +18,9 @@ describe('computeStepContext', () => {
       expect(result.todos).toBeDefined();
       expect(result.todos?.items).toHaveLength(2);
       expect(result.todos?.items[0].text).toBe('Buy milk');
-      expect(result.todos?.items[0].completed).toBe(false);
+      expect(result.todos?.items[0].status).toBe('todo');
       expect(result.todos?.items[1].text).toBe('Call mom');
-      expect(result.todos?.items[1].completed).toBe(true);
+      expect(result.todos?.items[1].status).toBe('completed');
     });
 
     it('should not include todos key when undefined', () => {
@@ -42,7 +42,7 @@ describe('computeStepContext', () => {
       // This should compile and work - object param allows future extensions
       const result = computeStepContext({
         todos: {
-          items: [{ text: 'Task', completed: false }],
+          items: [{ text: 'Task', status: 'todo' as const }],
           updatedAt: '2024-01-01T00:00:00.000Z',
         },
       });
