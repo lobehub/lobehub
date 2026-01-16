@@ -22,6 +22,7 @@ export const defaultProxySettings: NetworkProxySettings = {
 
 export interface ElectronState extends NavigationHistoryState {
   appState: ElectronAppState;
+  autoCheckUpdate: boolean;
   dataSyncConfig: DataSyncConfig;
   desktopHotkeys: Record<string, string>;
   isAppStateInit?: boolean;
@@ -36,6 +37,7 @@ export interface ElectronState extends NavigationHistoryState {
 export const initialState: ElectronState = {
   ...navigationHistoryInitialState,
   appState: {},
+  autoCheckUpdate: true,
   dataSyncConfig: { storageMode: 'cloud' },
   desktopHotkeys: {},
   isAppStateInit: false,

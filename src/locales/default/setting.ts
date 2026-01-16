@@ -539,6 +539,10 @@ export default {
     'Select a voice for the current agent, different TTS services support different voices',
   'settingTTS.voice.preview': 'Voice Preview',
   'settingTTS.voice.title': 'Text-to-Speech Voice',
+  'settingUpdate.autoCheckUpdate.desc':
+    'When enabled, the app will automatically check for updates periodically',
+  'settingUpdate.autoCheckUpdate.title': 'Auto Check for Updates',
+  'settingUpdate.title': 'Update Settings',
   'startConversation': 'Start Conversation',
   'storage.actions.export.button': 'Export',
   'storage.actions.export.exportType.agent': 'Export Agent Settings',

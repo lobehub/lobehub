@@ -92,6 +92,13 @@ vi.mock('@/const/env', () => ({
   isDev: false,
 }));
 
+// Mock store defaults
+vi.mock('@/const/store', () => ({
+  STORE_DEFAULTS: {
+    autoCheckUpdate: true,
+  },
+}));
+
 describe('UpdaterManager', () => {
   let updaterManager: UpdaterManager;
   let mockApp: AppCore;
@@ -128,6 +135,9 @@ describe('UpdaterManager', () => {
         }),
       },
       isQuiting: false,
+      storeManager: {
+        get: vi.fn().mockReturnValue(true),
+      },
     } as unknown as AppCore;
 
     updaterManager = new UpdaterManager(mockApp);
