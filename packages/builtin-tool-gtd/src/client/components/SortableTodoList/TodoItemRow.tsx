@@ -1,9 +1,9 @@
 'use client';
 
-import { ActionIcon, Checkbox, Flexbox, SortableList } from '@lobehub/ui';
+import { ActionIcon, Checkbox, Flexbox, Icon, SortableList } from '@lobehub/ui';
 import { Input, InputRef } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Trash2 } from 'lucide-react';
+import { CircleArrowRight, Trash2 } from 'lucide-react';
 import { ChangeEvent, KeyboardEvent, memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -125,20 +125,25 @@ const TodoItemRow = memo<TodoItemRowProps>(({ id, placeholder }) => {
     toggleItem(id);
   }, [id, toggleItem]);
 
-  // Determine checkbox color based on status
-  const checkboxColor = isProcessing ? cssVar.colorWarning : cssVar.colorSuccess;
-
   return (
     <Flexbox align="center" className={styles.itemRow} gap={4} horizontal width="100%">
       <SortableList.DragHandle className={cx(styles.dragHandle, 'drag-handle')} size="small" />
-      <Checkbox
-        backgroundColor={checkboxColor}
-        checked={isCompleted}
-        indeterminate={isProcessing}
-        onChange={handleToggle}
-        shape={'circle'}
-        style={{ borderWidth: 1.5 }}
-      />
+      {isProcessing ? (
+        <Icon
+          icon={CircleArrowRight}
+          onClick={handleToggle}
+          size={16}
+          style={{ color: cssVar.colorInfo, cursor: 'pointer', flexShrink: 0 }}
+        />
+      ) : (
+        <Checkbox
+          backgroundColor={cssVar.colorSuccess}
+          checked={isCompleted}
+          onChange={handleToggle}
+          shape={'circle'}
+          style={{ borderWidth: 1.5 }}
+        />
+      )}
       <Input
         className={cx(isCompleted && styles.textCompleted, isProcessing && styles.textProcessing)}
         onChange={handleChange}

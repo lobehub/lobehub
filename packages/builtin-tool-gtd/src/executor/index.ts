@@ -7,14 +7,12 @@ import { useNotebookStore } from '@/store/notebook';
 import { GTDIdentifier } from '../manifest';
 import {
   type ClearTodosParams,
-  type CompleteTodosParams,
   type CreatePlanParams,
   type CreateTodosParams,
   type ExecTaskParams,
   type ExecTasksParams,
   GTDApiName,
   type Plan,
-  type RemoveTodosParams,
   type TodoItem,
   type TodoState,
   type UpdatePlanParams,
@@ -49,12 +47,10 @@ const syncTodosToPlan = async (topicId: string, todos: TodoState): Promise<void>
 // API enum for MVP (Todo + Plan)
 const GTDApiNameEnum = {
   clearTodos: GTDApiName.clearTodos,
-  completeTodos: GTDApiName.completeTodos,
   createPlan: GTDApiName.createPlan,
   createTodos: GTDApiName.createTodos,
   execTask: GTDApiName.execTask,
   execTasks: GTDApiName.execTasks,
-  removeTodos: GTDApiName.removeTodos,
   updatePlan: GTDApiName.updatePlan,
   updateTodos: GTDApiName.updateTodos,
 } as const;
@@ -156,9 +152,9 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
             if (op.newText !== undefined) {
               updatedItem.text = op.newText;
             }
-            // Handle legacy completed field - convert to status
-            if (op.completed !== undefined) {
-              updatedItem.status = op.completed ? 'completed' : 'todo';
+            // Handle status field
+            if (op.status !== undefined) {
+              updatedItem.status = op.status;
             }
             updatedTodos[op.index] = updatedItem;
             results.push(`Updated item ${op.index + 1}`);
@@ -177,6 +173,14 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
             // Create a new object to avoid mutating frozen/immutable objects from store
             updatedTodos[op.index] = { ...updatedTodos[op.index], status: 'completed' };
             results.push(`Completed: "${updatedTodos[op.index].text}"`);
+          }
+          break;
+        }
+        case 'processing': {
+          if (op.index !== undefined && op.index >= 0 && op.index < updatedTodos.length) {
+            // Create a new object to avoid mutating frozen/immutable objects from store
+            updatedTodos[op.index] = { ...updatedTodos[op.index], status: 'processing' };
+            results.push(`In progress: "${updatedTodos[op.index].text}"`);
           }
           break;
         }
@@ -201,154 +205,6 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
     return {
       content: actionSummary + '\n\n' + formatTodoStateSummary(updatedTodos, now),
       state: {
-        todos: todoState,
-      },
-      success: true,
-    };
-  };
-
-  /**
-   * Mark todo items as done by their indices
-   */
-  completeTodos = async (
-    params: CompleteTodosParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    const { indices } = params;
-
-    if (!indices || indices.length === 0) {
-      return {
-        content: 'No indices provided to complete.',
-        success: false,
-      };
-    }
-
-    const existingTodos = getTodosFromContext(ctx);
-
-    if (existingTodos.length === 0) {
-      const now = new Date().toISOString();
-      return {
-        content: 'No todos to complete. The list is empty.\n\n' + formatTodoStateSummary([], now),
-        state: {
-          completedIndices: [],
-          todos: { items: [], updatedAt: now },
-        },
-        success: true,
-      };
-    }
-
-    // Validate indices
-    const validIndices = indices.filter((i: number) => i >= 0 && i < existingTodos.length);
-    const invalidIndices = indices.filter((i: number) => i < 0 || i >= existingTodos.length);
-
-    if (validIndices.length === 0) {
-      return {
-        content: `Invalid indices: ${indices.join(', ')}. Valid range is 0-${existingTodos.length - 1}.`,
-        success: false,
-      };
-    }
-
-    // Mark items as completed
-    const updatedTodos = existingTodos.map((todo, index) => {
-      if (validIndices.includes(index)) {
-        return { ...todo, status: 'completed' as const };
-      }
-      return todo;
-    });
-
-    const completedItems = validIndices.map((i: number) => existingTodos[i].text);
-    const now = new Date().toISOString();
-
-    // Format response: action summary + todo state
-    let actionSummary = `✔️ Completed ${validIndices.length} item${validIndices.length > 1 ? 's' : ''}:\n`;
-    actionSummary += completedItems.map((text: string) => `- ${text}`).join('\n');
-
-    if (invalidIndices.length > 0) {
-      actionSummary += `\n\nNote: Ignored invalid indices: ${invalidIndices.join(', ')}`;
-    }
-
-    const todoState = { items: updatedTodos, updatedAt: now };
-
-    // Sync todos to Plan document if topic exists
-    if (ctx.topicId) {
-      await syncTodosToPlan(ctx.topicId, todoState);
-    }
-
-    return {
-      content: actionSummary + '\n\n' + formatTodoStateSummary(updatedTodos, now),
-      state: {
-        completedIndices: validIndices,
-        todos: todoState,
-      },
-      success: true,
-    };
-  };
-
-  /**
-   * Remove todo items by indices
-   */
-  removeTodos = async (
-    params: RemoveTodosParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    const { indices } = params;
-
-    if (!indices || indices.length === 0) {
-      return {
-        content: 'No indices provided to remove.',
-        success: false,
-      };
-    }
-
-    const existingTodos = getTodosFromContext(ctx);
-
-    if (existingTodos.length === 0) {
-      const now = new Date().toISOString();
-      return {
-        content: 'No todos to remove. The list is empty.\n\n' + formatTodoStateSummary([], now),
-        state: {
-          removedIndices: [],
-          todos: { items: [], updatedAt: now },
-        },
-        success: true,
-      };
-    }
-
-    // Validate indices
-    const validIndices = indices.filter((i: number) => i >= 0 && i < existingTodos.length);
-    const invalidIndices = indices.filter((i: number) => i < 0 || i >= existingTodos.length);
-
-    if (validIndices.length === 0) {
-      return {
-        content: `Invalid indices: ${indices.join(', ')}. Valid range is 0-${existingTodos.length - 1}.`,
-        success: false,
-      };
-    }
-
-    // Remove items
-    const removedItems = validIndices.map((i: number) => existingTodos[i].text);
-    const updatedTodos = existingTodos.filter((_, index) => !validIndices.includes(index));
-    const now = new Date().toISOString();
-
-    // Format response: action summary + todo state
-    let actionSummary = `🗑️ Removed ${validIndices.length} item${validIndices.length > 1 ? 's' : ''}:\n`;
-    actionSummary += removedItems.map((text: string) => `- ${text}`).join('\n');
-
-    if (invalidIndices.length > 0) {
-      actionSummary += `\n\nNote: Ignored invalid indices: ${invalidIndices.join(', ')}`;
-    }
-
-    const todoState = { items: updatedTodos, updatedAt: now };
-
-    // Sync todos to Plan document if topic exists
-    if (ctx.topicId) {
-      await syncTodosToPlan(ctx.topicId, todoState);
-    }
-
-    return {
-      content: actionSummary + '\n\n' + formatTodoStateSummary(updatedTodos, now),
-      state: {
-        removedIndices: validIndices,
         todos: todoState,
       },
       success: true,

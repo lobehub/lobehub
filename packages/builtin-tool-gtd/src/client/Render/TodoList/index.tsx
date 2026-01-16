@@ -1,8 +1,9 @@
 'use client';
 
 import { type BuiltinRenderProps } from '@lobechat/types';
-import { Block, Checkbox } from '@lobehub/ui';
+import { Block, Checkbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { CircleArrowRight } from 'lucide-react';
 import { memo } from 'react';
 
 import type { TodoItem, TodoList as TodoListType, TodoStatus } from '../../../types';
@@ -23,12 +24,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       border-block-end: none;
     }
   `,
+  processingRow: css`
+    display: flex;
+    gap: 7px;
+    align-items: center;
+  `,
   textCompleted: css`
     color: ${cssVar.colorTextQuaternary};
     text-decoration: line-through;
   `,
   textProcessing: css`
-    color: ${cssVar.colorWarningText};
+    color: ${cssVar.colorText};
+  `,
+  textTodo: css`
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
@@ -43,17 +52,26 @@ interface ReadOnlyTodoItemProps {
 const ReadOnlyTodoItem = memo<ReadOnlyTodoItemProps>(({ text, status }) => {
   const isCompleted = status === 'completed';
   const isProcessing = status === 'processing';
-  const checkboxColor = isProcessing ? cssVar.colorWarning : cssVar.colorSuccess;
 
+  // Processing state uses CircleArrowRight icon
+  if (isProcessing) {
+    return (
+      <div className={cx(styles.itemRow, styles.processingRow)}>
+        <Icon icon={CircleArrowRight} size={17} style={{ color: cssVar.colorTextSecondary }} />
+        <span className={styles.textProcessing}>{text}</span>
+      </div>
+    );
+  }
+
+  // Todo and completed states use Checkbox
   return (
     <Checkbox
-      backgroundColor={checkboxColor}
+      backgroundColor={cssVar.colorSuccess}
       checked={isCompleted}
       classNames={{
-        text: cx(isCompleted && styles.textCompleted, isProcessing && styles.textProcessing),
+        text: cx(styles.textTodo, isCompleted && styles.textCompleted),
         wrapper: styles.itemRow,
       }}
-      indeterminate={isProcessing}
       shape={'circle'}
       style={{ borderWidth: 1.5, cursor: 'default' }}
       textProps={{

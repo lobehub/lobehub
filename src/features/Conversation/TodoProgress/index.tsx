@@ -3,7 +3,7 @@
 import { type StepContextTodos } from '@lobechat/types';
 import { Checkbox, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { ChevronDown, ChevronUp, ListTodo } from 'lucide-react';
+import { ChevronDown, ChevronUp, CircleArrowRight, ListTodo } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -72,6 +72,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       max-height 0.25s ${cssVar.motionEaseInOut},
       opacity 0.2s ${cssVar.motionEaseInOut},
       padding 0.2s ${cssVar.motionEaseInOut};
+  `,
+  processingRow: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
   `,
   progress: css`
     flex: 1;
@@ -164,20 +169,26 @@ const TodoProgress = memo<TodoProgressProps>(({ className }) => {
           {items.map((item, index) => {
             const isCompleted = item.status === 'completed';
             const isProcessing = item.status === 'processing';
-            const checkboxColor = isProcessing ? cssVar.colorWarning : cssVar.colorSuccess;
 
+            // Processing state uses CircleArrowRight icon
+            if (isProcessing) {
+              return (
+                <div className={cx(styles.itemRow, styles.processingRow)} key={index}>
+                  <Icon icon={CircleArrowRight} size={16} style={{ color: cssVar.colorInfo }} />
+                  <span className={styles.textProcessing}>{item.text}</span>
+                </div>
+              );
+            }
+
+            // Todo and completed states use Checkbox
             return (
               <Checkbox
-                backgroundColor={checkboxColor}
+                backgroundColor={cssVar.colorSuccess}
                 checked={isCompleted}
                 classNames={{
-                  text: cx(
-                    isCompleted && styles.textCompleted,
-                    isProcessing && styles.textProcessing,
-                  ),
+                  text: cx(isCompleted && styles.textCompleted),
                   wrapper: styles.itemRow,
                 }}
-                indeterminate={isProcessing}
                 key={index}
                 shape="circle"
                 style={{ borderWidth: 1.5, cursor: 'default', pointerEvents: 'none' }}
