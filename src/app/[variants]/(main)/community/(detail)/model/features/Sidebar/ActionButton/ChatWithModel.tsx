@@ -1,7 +1,7 @@
 'use client';
 
 import { ProviderIcon } from '@lobehub/icons';
-import { Button, Icon } from '@lobehub/ui';
+import { Button, DropdownMenu, Icon } from '@lobehub/ui';
 import { Dropdown } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { ChevronDownIcon } from 'lucide-react';
@@ -69,12 +69,7 @@ const ChatWithModel = memo(() => {
     );
 
   return (
-    <Dropdown
-      menu={{
-        items,
-      }}
-      trigger={['click']}
-    >
+    <DropdownMenu data-no-highlight items={items}>
       <Button
         className={styles.button}
         size={'large'}
@@ -83,7 +78,7 @@ const ChatWithModel = memo(() => {
       >
         {t('models.guide')}
       </Button>
-    </Dropdown>
+    </DropdownMenu>
   );
 });
 
