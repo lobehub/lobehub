@@ -91,7 +91,7 @@ export const useMinimapData = () => {
         }
       } else {
         // No active index, go to first/last
-        targetPosition = direction === 'prev' ? indicators.length - 1 : 0;
+        targetPosition = direction === 'prev' ? 0 : indicators.length - 1;
       }
 
       const targetIndicator = indicators[targetPosition];

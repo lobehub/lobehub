@@ -10,6 +10,11 @@ export interface VirtuaListAction {
   registerVirtuaScrollMethods: (methods: VirtuaScrollMethods | null) => void;
 
   /**
+   * Set active index directly (derived from scroll position)
+   */
+  setActiveIndex: (index: number | null) => void;
+
+  /**
    * Remove visible item and recalculate active index
    */
   removeVisibleItem: (index: number) => void;
@@ -75,6 +80,10 @@ export const virtuaListSlice: StateCreator<State & VirtuaListAction, [], [], Vir
 ) => ({
   registerVirtuaScrollMethods: (methods) => {
     set({ virtuaScrollMethods: methods });
+  },
+
+  setActiveIndex: (index) => {
+    set({ activeIndex: index });
   },
 
   removeVisibleItem: (index) => {
