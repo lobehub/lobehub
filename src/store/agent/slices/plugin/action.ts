@@ -26,6 +26,7 @@ export const createPluginSlice: StateCreator<
   togglePlugin: async (id, open) => {
     const originConfig = agentSelectors.currentAgentConfig(get());
 
+    console.log('originConfig:', originConfig);
     const config = produce(originConfig, (draft) => {
       draft.plugins = produce(draft.plugins || [], (plugins) => {
         const index = plugins.indexOf(id);
