@@ -239,9 +239,11 @@ export const createResourceSlice: StateCreator<
         'deleteResource/optimistic',
       );
 
-      // 2. Enqueue sync (background)
+      // 2. Enqueue sync and await completion.
+      // Important: if callers revalidate the list immediately, doing so before the server-side
+      // deletion finishes can re-introduce the item from a still-stale query response.
       const syncEngine = getSyncEngine();
-      syncEngine.enqueue({
+      await syncEngine.enqueue({
         id: `sync-${id}-${Date.now()}`,
         payload: {},
         resourceId: id,
