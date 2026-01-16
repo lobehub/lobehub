@@ -375,7 +375,12 @@ const ListView = memo(function ListView() {
               width: columnWidths.name,
             }}
           >
-            {t('FileManager.title.title')}
+            {selectFileIds.length > 0
+              ? t('FileManager.total.selectedCount', {
+                  count: selectFileIds.length,
+                  ns: 'components',
+                })
+              : t('FileManager.title.title')}
             <ColumnResizeHandle
               column="name"
               currentWidth={columnWidths.name}
