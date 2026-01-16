@@ -5,6 +5,8 @@ import { type SegmentedOptions } from 'antd/es/segmented';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AddPluginButton from '@/features/PluginStore/AddPluginButton';
+
 import CommunityList from './CommunityList';
 import LobeHubList from './LobeHubList';
 import Search from './Search';
@@ -29,14 +31,17 @@ export const Content = memo(() => {
   return (
     <Flexbox gap={8} style={{ maxHeight: '75vh' }} width={'100%'}>
       <Flexbox gap={8} paddingInline={16}>
-        <Segmented
-          block
-          onChange={(v) => setActiveTab(v as SkillStoreTab)}
-          options={options}
-          style={{ flex: 1 }}
-          value={activeTab}
-          variant={'filled'}
-        />
+        <Flexbox align="center" gap={8} horizontal>
+          <Segmented
+            block
+            onChange={(v) => setActiveTab(v as SkillStoreTab)}
+            options={options}
+            style={{ flex: 1 }}
+            value={activeTab}
+            variant={'filled'}
+          />
+          <AddPluginButton />
+        </Flexbox>
         <Search activeTab={activeTab} onLobeHubSearch={setLobehubKeywords} />
       </Flexbox>
       <Flexbox flex={1} style={{ display: isLobeHub ? 'flex' : 'none', overflow: 'auto' }}>
