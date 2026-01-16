@@ -229,9 +229,7 @@ const IntegrationDetailModal = memo<IntegrationDetailModalProps>(
           {/* Developed by */}
           <Flexbox gap={8}>
             <Flexbox align="center" gap={4} horizontal>
-              <span className={styles.sectionTitle}>
-                {t('integrationDetail.developedBy', { defaultValue: 'Developed by' })}
-              </span>
+              <span className={styles.sectionTitle}>{t('integrationDetail.developedBy')}</span>
               <span
                 className={styles.authorLink}
                 onClick={handleAuthorClick}
@@ -242,10 +240,7 @@ const IntegrationDetailModal = memo<IntegrationDetailModalProps>(
               </span>
             </Flexbox>
             <Text className={styles.trustWarning} type="secondary">
-              {t('integrationDetail.trustWarning', {
-                defaultValue:
-                  "Only use connectors from developers you trust. LobeHub does not control which tools developers make available and cannot verify that they will work as intended or that they won't change.",
-              })}
+              {t('integrationDetail.trustWarning')}
             </Text>
           </Flexbox>
 
@@ -255,9 +250,7 @@ const IntegrationDetailModal = memo<IntegrationDetailModalProps>(
               <Divider style={{ margin: 0 }} />
               <Flexbox gap={12}>
                 <Flexbox align="center" gap={8} horizontal>
-                  <span className={styles.sectionTitle}>
-                    {t('integrationDetail.tools', { defaultValue: 'Tools' })}
-                  </span>
+                  <span className={styles.sectionTitle}>{t('integrationDetail.tools')}</span>
                   <Tag>{tools.length}</Tag>
                 </Flexbox>
                 <div className={styles.toolsContainer}>
@@ -274,14 +267,10 @@ const IntegrationDetailModal = memo<IntegrationDetailModalProps>(
           {/* Details */}
           <Divider style={{ margin: 0 }} />
           <Flexbox gap={12}>
-            <span className={styles.sectionTitle}>
-              {t('integrationDetail.details', { defaultValue: 'Details' })}
-            </span>
+            <span className={styles.sectionTitle}>{t('integrationDetail.details')}</span>
             <Flexbox gap={16} horizontal>
               <div className={styles.detailItem}>
-                <span className={styles.detailLabel}>
-                  {t('integrationDetail.author', { defaultValue: 'Author' })}
-                </span>
+                <span className={styles.detailLabel}>{t('integrationDetail.author')}</span>
                 <span
                   className={styles.authorLink}
                   onClick={handleAuthorClick}
