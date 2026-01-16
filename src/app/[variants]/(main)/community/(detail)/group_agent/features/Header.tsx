@@ -12,13 +12,7 @@ import {
 } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
-import {
-  BookmarkCheckIcon,
-  BookmarkIcon,
-  DotIcon,
-  HeartIcon,
-  UsersIcon,
-} from 'lucide-react';
+import { BookmarkCheckIcon, BookmarkIcon, DotIcon, HeartIcon, UsersIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -103,7 +97,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
         message.success(t('assistant.favoriteSuccess'));
       }
       await mutateFavorite();
-    } catch (error) {
+    } catch {
       message.error(t('assistant.favoriteFailed'));
     } finally {
       setFavoriteLoading(false);
@@ -128,7 +122,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
         message.success(t('assistant.likeSuccess'));
       }
       await mutateLike();
-    } catch (error) {
+    } catch {
       message.error(t('assistant.likeFailed'));
     } finally {
       setLikeLoading(false);
@@ -208,12 +202,9 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
           <Flexbox align={'center'} gap={4} horizontal>
             {(() => {
               // API returns author as object {avatar, name, userName}, but type definition says string
-              const authorObj = typeof author === 'object' && author !== null
-                ? (author as any)
-                : null;
-              const authorName = authorObj
-                ? (authorObj.name || authorObj.userName)
-                : author;
+              const authorObj =
+                typeof author === 'object' && author !== null ? (author as any) : null;
+              const authorName = authorObj ? authorObj.name || authorObj.userName : author;
 
               return authorName && userName ? (
                 <Link style={{ color: 'inherit' }} to={urlJoin('/community/user', userName)}>
