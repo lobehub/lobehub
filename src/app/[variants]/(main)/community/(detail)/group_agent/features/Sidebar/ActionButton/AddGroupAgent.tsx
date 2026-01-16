@@ -7,7 +7,7 @@ import { ChevronDownIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useDetailData } from '../../DetailProvider';
+import { useDetailContext } from '../../DetailProvider';
 
 const styles = createStaticStyles(({ css }) => ({
   buttonGroup: css`
@@ -25,12 +25,10 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const AddGroupAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
-  const data = useDetailData();
+  const data = useDetailContext();
   const [isLoading, setIsLoading] = useState(false);
   const { message } = App.useApp();
   const { t } = useTranslation('discover');
-
-  const { group } = data;
 
   const handleAddAndConverse = async () => {
     setIsLoading(true);

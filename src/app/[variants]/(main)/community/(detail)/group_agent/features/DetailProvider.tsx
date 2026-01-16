@@ -1,80 +1,19 @@
-import { type FC, type PropsWithChildren, createContext, useContext } from 'react';
+'use client';
 
-interface GroupAgentDetailData {
-  author?: {
-    avatar?: string;
-    name?: string;
-    userName?: string;
-  };
-  currentVersion?: {
-    avatar?: string;
-    backgroundColor?: string;
-    category?: string;
-    config?: Record<string, any>;
-    description?: string;
-    name: string;
-    tags?: string[];
-    version?: string;
-    versionNumber?: number;
-  };
-  group: {
-    commentCount?: number;
-    createdAt: string;
-    favoriteCount?: number;
-    homepage?: string;
-    identifier: string;
-    installCount?: number;
-    isFeatured?: boolean;
-    isOfficial?: boolean;
-    likeCount?: number;
-    name: string;
-    ownerId?: number;
-    status?: string;
-    updatedAt: string;
-    visibility?: string;
-  };
-  locale?: string;
-  memberAgents: Array<{
-    agent: {
-      displayOrder?: number;
-      enabled?: boolean;
-      identifier: string;
-      name: string;
-      role: 'supervisor' | 'participant';
-    };
-    currentVersion: {
-      avatar?: string;
-      config?: Record<string, any>;
-      description?: string;
-      name: string;
-      tokenUsage?: number;
-      url: string;
-      version?: string;
-    };
-  }>;
-  versions?: Array<{
-    isLatest?: boolean;
-    status?: string;
-    updatedAt: string;
-    version: string;
-    versionNumber: number;
-  }>;
-}
+import { type ReactNode, createContext, memo, use } from 'react';
 
-const DetailContext = createContext<GroupAgentDetailData | null>(null);
+import { type DiscoverGroupAgentDetail } from '@/types/discover';
 
-export const useDetailData = () => {
-  const context = useContext(DetailContext);
-  if (!context) {
-    throw new Error('useDetailData must be used within DetailProvider');
-  }
-  return context;
-};
+export type DetailContextConfig = Partial<DiscoverGroupAgentDetail>;
 
-interface DetailProviderProps extends PropsWithChildren {
-  config: GroupAgentDetailData;
-}
+export const DetailContext = createContext<DetailContextConfig>({});
 
-export const DetailProvider: FC<DetailProviderProps> = ({ config, children }) => {
-  return <DetailContext.Provider value={config}>{children}</DetailContext.Provider>;
+export const DetailProvider = memo<{ children: ReactNode; config?: DetailContextConfig }>(
+  ({ children, config = {} }) => {
+    return <DetailContext value={config}>{children}</DetailContext>;
+  },
+);
+
+export const useDetailContext = () => {
+  return use(DetailContext);
 };

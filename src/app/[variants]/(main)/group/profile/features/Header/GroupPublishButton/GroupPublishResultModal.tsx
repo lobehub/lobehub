@@ -20,8 +20,7 @@ const GroupPublishResultModal = memo<GroupPublishResultModalProps>(
 
     const handleGoToMarket = () => {
       if (identifier) {
-        // TODO: Update route when group market page is implemented
-        navigate(`/community/group/${identifier}`);
+        navigate(`/community/group_agent/${identifier}`);
       }
       onCancel();
     };

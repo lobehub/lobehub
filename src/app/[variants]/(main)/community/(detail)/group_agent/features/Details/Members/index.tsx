@@ -4,7 +4,7 @@ import { Crown, User } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useDetailData } from '../../DetailProvider';
+import { useDetailContext } from '../../DetailProvider';
 
 const { Title, Text, Paragraph } = Typography;
 
@@ -97,31 +97,38 @@ MemberCard.displayName = 'MemberCard';
 
 const Members = memo(() => {
   const { t } = useTranslation('discover');
-  const data = useDetailData();
-
-  const { memberAgents } = data;
+  const { memberAgents = [] } = useDetailContext();
 
   // Sort: supervisors first, then by displayOrder
-  const sortedMembers = [...memberAgents].sort((a, b) => {
-    if (a.agent.role === 'supervisor' && b.agent.role !== 'supervisor') return -1;
-    if (a.agent.role !== 'supervisor' && b.agent.role === 'supervisor') return 1;
-    return (a.agent.displayOrder || 0) - (b.agent.displayOrder || 0);
+  const sortedMembers = [...(memberAgents || [])].sort((a: any, b: any) => {
+    const aRole = a.role || a.agent?.role;
+    const bRole = b.role || b.agent?.role;
+    if (aRole === 'supervisor' && bRole !== 'supervisor') return -1;
+    if (aRole !== 'supervisor' && bRole === 'supervisor') return 1;
+    const aOrder = a.displayOrder || a.agent?.displayOrder || 0;
+    const bOrder = b.displayOrder || b.agent?.displayOrder || 0;
+    return aOrder - bOrder;
   });
 
   return (
     <Flexbox gap={16}>
       <Title level={4}>
-        {t('members.title', { defaultValue: 'Member Agents' })} ({memberAgents.length})
+        {t('members.title', { defaultValue: 'Member Agents' })} ({memberAgents?.length || 0})
       </Title>
 
       <Flexbox gap={12}>
-        {sortedMembers.map((member, index) => (
-          <MemberCard
-            agent={member.agent}
-            currentVersion={member.currentVersion}
-            key={member.agent.identifier || index}
-          />
-        ))}
+        {sortedMembers.map((member: any, index) => {
+          // Support both flat structure and nested structure
+          const agent = member.agent || member;
+          const currentVersion = member.currentVersion || member;
+          return (
+            <MemberCard
+              agent={agent}
+              currentVersion={currentVersion}
+              key={agent.identifier || index}
+            />
+          );
+        })}
       </Flexbox>
     </Flexbox>
   );

@@ -1,80 +1,119 @@
-import { Flexbox, Tag } from '@lobehub/ui';
-import { Table, Typography } from 'antd';
-import { memo } from 'react';
+import { Block, Flexbox, Icon, Tag } from '@lobehub/ui';
+import { cssVar } from 'antd-style';
+import { CheckIcon, MinusIcon } from 'lucide-react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useParams } from 'react-router-dom';
 
+import InlineTable from '@/components/InlineTable';
 import PublishedTime from '@/components/PublishedTime';
-import { useDetailData } from '../../DetailProvider';
 
-const { Title } = Typography;
+import Title from '../../../../../features/Title';
+import { useDetailContext } from '../../DetailProvider';
 
 const Versions = memo(() => {
   const { t } = useTranslation('discover');
-  const params = useParams();
-  const data = useDetailData();
+  const { versions = [], currentVersion } = useDetailContext();
 
-  const { versions = [], group } = data;
-
-  const columns = [
-    {
-      dataIndex: 'version',
-      key: 'version',
-      render: (version: string, record: any) => (
-        <Flexbox gap={8} horizontal>
-          <a
-            href={`/community/group_agent/${params.slug}?version=${record.versionNumber}`}
-            onClick={(e) => {
-              e.preventDefault();
-              window.location.href = `/community/group_agent/${params.slug}?version=${record.versionNumber}`;
-            }}
-          >
-            {version}
-          </a>
-          {record.isLatest && (
-            <Tag color="green">{t('versions.latest', { defaultValue: 'Latest' })}</Tag>
-          )}
-        </Flexbox>
-      ),
-      title: t('versions.version', { defaultValue: 'Version' }),
-    },
-    {
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => {
-        const colorMap: Record<string, string> = {
-          archived: 'default',
-          deprecated: 'red',
-          published: 'green',
-          unpublished: 'orange',
-        };
-        return <Tag color={colorMap[status] || 'default'}>{status}</Tag>;
+  const statusTagMap = useMemo(
+    () => ({
+      archived: {
+        color: 'default' as const,
+        label: t('groupAgents.details.version.status.archived', { defaultValue: 'Archived' }),
       },
-      title: t('versions.status', { defaultValue: 'Status' }),
-    },
-    {
-      dataIndex: 'updatedAt',
-      key: 'updatedAt',
-      render: (date: string) => <PublishedTime date={date} template={'MMM DD, YYYY'} />,
-      title: t('versions.publishedAt', { defaultValue: 'Published At' }),
-    },
-  ];
+      deprecated: {
+        color: 'warning' as const,
+        label: t('groupAgents.details.version.status.deprecated', { defaultValue: 'Deprecated' }),
+      },
+      published: {
+        color: 'success' as const,
+        label: t('groupAgents.details.version.status.published', { defaultValue: 'Published' }),
+      },
+      unpublished: {
+        color: 'default' as const,
+        label: t('groupAgents.details.version.status.unpublished', { defaultValue: 'Unpublished' }),
+      },
+    }),
+    [t],
+  );
+
+  if (!versions.length) {
+    return (
+      <Flexbox gap={16}>
+        <Title>
+          {t('groupAgents.details.version.title', { defaultValue: 'Version History' })}
+        </Title>
+        <Block padding={24} variant={'outlined'}>
+          {t('groupAgents.details.version.empty', { defaultValue: 'No version history available' })}
+        </Block>
+      </Flexbox>
+    );
+  }
 
   return (
     <Flexbox gap={16}>
-      <Title level={4}>
-        {t('versions.title', { defaultValue: 'Version History' })} ({versions.length})
+      <Title>
+        {t('groupAgents.details.version.title', { defaultValue: 'Version History' })}
       </Title>
+      <Block variant={'outlined'}>
+        <InlineTable
+          columns={[
+            {
+              dataIndex: 'version',
+              render: (_: any, record: any) => {
+                const statusKey =
+                  record.status &&
+                  Object.prototype.hasOwnProperty.call(statusTagMap, record.status)
+                    ? (record.status as keyof typeof statusTagMap)
+                    : undefined;
+                const statusMeta = statusKey ? statusTagMap[statusKey] : undefined;
 
-      <Table
-        columns={columns}
-        dataSource={versions}
-        pagination={false}
-        rowKey="versionNumber"
-        size="small"
-      />
+                return (
+                  <Flexbox align={'center'} gap={8} horizontal>
+                    <code style={{ fontSize: 14 }}>{record.version}</code>
+                    {(record.isLatest || record.version === currentVersion) && (
+                      <Tag color={'info'}>
+                        {t('groupAgents.details.version.table.isLatest', { defaultValue: 'Latest' })}
+                      </Tag>
+                    )}
+                    {statusMeta && <Tag color={statusMeta.color}>{statusMeta.label}</Tag>}
+                  </Flexbox>
+                );
+              },
+              title: t('groupAgents.details.version.table.version', { defaultValue: 'Version' }),
+            },
+            {
+              align: 'center',
+              dataIndex: 'isValidated',
+              render: (_: any, record: any) => (
+                <Icon
+                  color={record.isValidated ? cssVar.colorSuccess : cssVar.colorTextDescription}
+                  icon={record.isValidated ? CheckIcon : MinusIcon}
+                />
+              ),
+              title: t('groupAgents.details.version.table.isValidated', {
+                defaultValue: 'Validated',
+              }),
+            },
+            {
+              align: 'end',
+              dataIndex: 'createdAt',
+              render: (_: any, record: any) => (
+                <PublishedTime date={record.createdAt} showPrefix={false} />
+              ),
+              title: t('groupAgents.details.version.table.publishAt', {
+                defaultValue: 'Published At',
+              }),
+            },
+          ]}
+          dataSource={versions}
+          rowKey={'version'}
+          size={'middle'}
+        />
+      </Block>
     </Flexbox>
   );
 });
+
+Versions.displayName = 'GroupAgentVersions';
 
 export default Versions;

@@ -132,16 +132,20 @@ export const useMarketGroupPublish = ({ action, onSuccess }: UseMarketGroupPubli
         ...(currentGroup.backgroundColor ? { backgroundColor: currentGroup.backgroundColor } : {}),
         category: 'productivity', // TODO: Allow user to select category
         changelog,
-        // Include group-level config (systemPrompt, openingMessage, etc.)
+        // Include group-level config (systemPrompt from content, openingMessage, etc.)
         config: {
-          ...(currentGroupConfig.systemPrompt && { systemPrompt: currentGroupConfig.systemPrompt }),
-          ...(currentGroupConfig.openingMessage && {
+          // Group systemPrompt is stored in currentGroup.content
+          ...(currentGroup.content !== undefined &&
+            currentGroup.content !== null && {
+              systemPrompt: currentGroup.content,
+            }),
+          ...(currentGroupConfig.openingMessage !== undefined && {
             openingMessage: currentGroupConfig.openingMessage,
           }),
-          ...(currentGroupConfig.openingQuestions &&
+          ...(currentGroupConfig.openingQuestions !== undefined &&
             currentGroupConfig.openingQuestions.length > 0 && {
-              openingQuestions: currentGroupConfig.openingQuestions,
-            }),
+            openingQuestions: currentGroupConfig.openingQuestions,
+          }),
           ...(currentGroupConfig.allowDM !== undefined && { allowDM: currentGroupConfig.allowDM }),
           ...(currentGroupConfig.revealDM !== undefined && { revealDM: currentGroupConfig.revealDM }),
         },

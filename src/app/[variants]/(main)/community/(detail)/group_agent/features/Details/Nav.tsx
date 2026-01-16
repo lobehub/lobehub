@@ -3,11 +3,11 @@
 import { SOCIAL_URL } from '@lobechat/business-const';
 import { Flexbox, Icon, Tabs, Tag } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { BookOpenIcon, HistoryIcon, UsersIcon } from 'lucide-react';
+import { BookOpenIcon, HistoryIcon, LayersIcon, ListIcon, SquareUserIcon, UsersIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useDetailData } from '../DetailProvider';
+import { useDetailContext } from '../DetailProvider';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {
@@ -25,8 +25,8 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 });
 
 export enum GroupAgentNavKey {
-  Members = 'members',
   Overview = 'overview',
+  SystemRole = 'systemRole',
   Versions = 'versions',
 }
 
@@ -38,9 +38,6 @@ interface NavProps {
 
 const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = GroupAgentNavKey.Overview }) => {
   const { t } = useTranslation('discover');
-  const data = useDetailData();
-
-  const memberCount = data.memberAgents?.length || 0;
 
   const nav = (
     <Tabs
@@ -53,24 +50,9 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = GroupAgentNavKey
           label: t('groupAgents.details.overview.title', { defaultValue: 'Overview' }),
         },
         {
-          icon: <Icon icon={UsersIcon} size={16} />,
-          key: GroupAgentNavKey.Members,
-          label:
-            memberCount > 0 ? (
-              <Flexbox
-                align={'center'}
-                gap={6}
-                horizontal
-                style={{
-                  display: 'inline-flex',
-                }}
-              >
-                {t('groupAgents.details.members.title', { defaultValue: 'Members' })}
-                <Tag>{memberCount}</Tag>
-              </Flexbox>
-            ) : (
-              t('groupAgents.details.members.title', { defaultValue: 'Members' })
-            ),
+          icon: <Icon icon={SquareUserIcon} size={16} />,
+          key: GroupAgentNavKey.SystemRole,
+          label: t('groupAgents.details.systemRole.title', { defaultValue: 'System Role' }),
         },
         {
           icon: <Icon icon={HistoryIcon} size={16} />,

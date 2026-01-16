@@ -3,14 +3,13 @@ import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useDetailData } from '../../DetailProvider';
+import { useDetailContext } from '../../DetailProvider';
 
 const Summary = memo(() => {
-  const data = useDetailData();
+  const { description, summary } = useDetailContext();
   const { t } = useTranslation('discover');
 
-  const { currentVersion, group } = data;
-  const description = currentVersion?.description || 'No description provided';
+  const displayDescription = summary || description || 'No description provided';
 
   return (
     <Collapse
@@ -25,7 +24,7 @@ const Summary = memo(() => {
                 margin: 0,
               }}
             >
-              {description}
+              {displayDescription}
             </p>
           ),
           key: 'summary',

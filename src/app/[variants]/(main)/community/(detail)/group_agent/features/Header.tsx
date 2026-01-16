@@ -30,7 +30,7 @@ import PublishedTime from '@/components/PublishedTime';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { socialService } from '@/services/social';
 
-import { useDetailData } from './DetailProvider';
+import { useDetailContext } from './DetailProvider';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   time: css`
@@ -42,20 +42,24 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { t } = useTranslation('discover');
   const { message } = App.useApp();
-  const data = useDetailData();
+  const data = useDetailContext();
   const { mobile = isMobile } = useResponsive();
   const { isAuthenticated, signIn, session } = useMarketAuth();
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
 
-  const { group, currentVersion, author, memberAgents } = data;
+  const {
+    memberAgents = [],
+    author,
+    avatar,
+    title,
+    category,
+    identifier,
+    createdAt,
+    userName,
+  } = data;
 
-  const avatar = currentVersion?.avatar || group.name?.[0] || '👥';
-  const title = currentVersion?.name || group.name;
-  const category = currentVersion?.category;
-  const identifier = group.identifier;
-  const userName = author?.userName;
-
+  const displayAvatar = avatar || title?.[0] || '👥';
   const memberCount = memberAgents?.length || 0;
 
   // Set access token for social service
@@ -147,7 +151,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   return (
     <Flexbox gap={12}>
       <Flexbox align={'flex-start'} gap={16} horizontal width={'100%'}>
-        <Avatar avatar={avatar} shape={'square'} size={mobile ? 48 : 64} />
+        <Avatar avatar={displayAvatar} shape={'square'} size={mobile ? 48 : 64} />
         <Flexbox
           flex={1}
           gap={4}
@@ -202,17 +206,27 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
             </Tooltip>
           </Flexbox>
           <Flexbox align={'center'} gap={4} horizontal>
-            {author && userName ? (
-              <Link style={{ color: 'inherit' }} to={urlJoin('/community/user', userName)}>
-                {author.name || author.userName}
-              </Link>
-            ) : (
-              author?.name || author?.userName
-            )}
+            {(() => {
+              // API returns author as object {avatar, name, userName}, but type definition says string
+              const authorObj = typeof author === 'object' && author !== null
+                ? (author as any)
+                : null;
+              const authorName = authorObj
+                ? (authorObj.name || authorObj.userName)
+                : author;
+
+              return authorName && userName ? (
+                <Link style={{ color: 'inherit' }} to={urlJoin('/community/user', userName)}>
+                  {authorName}
+                </Link>
+              ) : (
+                authorName
+              );
+            })()}
             <Icon icon={DotIcon} />
             <PublishedTime
               className={styles.time}
-              date={group.createdAt as string}
+              date={createdAt as string}
               template={'MMM DD, YYYY'}
             />
           </Flexbox>
