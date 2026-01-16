@@ -16,9 +16,7 @@
  *   --port <port>  Server port (default: 3006)
  *   --help         Show help message
  */
-
-import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
-import { existsSync, unlinkSync, writeFileSync } from 'node:fs';
+import { spawn, spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
 // ============================================================================
@@ -33,21 +31,27 @@ const CONFIG = {
   defaultPort: 3006,
   dockerImage: 'paradedb/paradedb:latest',
   projectRoot: resolve(__dirname, '../..'),
-  serverTimeout: 120_000, // 2 minutes
+  
 
-  // Secrets (for e2e testing only)
-  secrets: {
-    betterAuthSecret: 'e2e-test-secret-key-for-better-auth-32chars!',
-    keyVaultsSecret: 'LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=',
-  },
-
-  // S3 Mock (required even if not testing file uploads)
-  s3Mock: {
+// S3 Mock (required even if not testing file uploads)
+s3Mock: {
     accessKeyId: 'e2e-mock-access-key',
     bucket: 'e2e-mock-bucket',
     endpoint: 'https://e2e-mock-s3.localhost',
     secretAccessKey: 'e2e-mock-secret-key',
+  }, 
+
+  
+  
+// 2 minutes
+// Secrets (for e2e testing only)
+secrets: {
+    betterAuthSecret: 'e2e-test-secret-key-for-better-auth-32chars!',
+    keyVaultsSecret: 'LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=',
   },
+
+  
+  serverTimeout: 120_000,
 };
 
 // ============================================================================
@@ -55,11 +59,11 @@ const CONFIG = {
 // ============================================================================
 
 const colors = {
-  cyan: (s: string) => `\x1b[36m${s}\x1b[0m`,
-  dim: (s: string) => `\x1b[2m${s}\x1b[0m`,
-  green: (s: string) => `\x1b[32m${s}\x1b[0m`,
-  red: (s: string) => `\x1b[31m${s}\x1b[0m`,
-  yellow: (s: string) => `\x1b[33m${s}\x1b[0m`,
+  cyan: (s: string) => `\u001B[36m${s}\u001B[0m`,
+  dim: (s: string) => `\u001B[2m${s}\u001B[0m`,
+  green: (s: string) => `\u001B[32m${s}\u001B[0m`,
+  red: (s: string) => `\u001B[31m${s}\u001B[0m`,
+  yellow: (s: string) => `\u001B[33m${s}\u001B[0m`,
 };
 
 function log(emoji: string, message: string) {
@@ -73,12 +77,12 @@ function logStep(step: number, total: number, message: string) {
 function exec(
   command: string,
   args: string[] = [],
-  options: { cwd?: string; silent?: boolean } = {}
+  options: { cwd?: string; silent?: boolean } = {},
 ) {
   const { cwd = CONFIG.projectRoot, silent = false } = options;
   const result = spawnSync(command, args, {
     cwd,
-    encoding: 'utf-8',
+    encoding: 'utf8',
     shell: true,
     stdio: silent ? 'pipe' : 'inherit',
   });
@@ -88,7 +92,7 @@ function exec(
 function execAsync(
   command: string,
   args: string[] = [],
-  env: Record<string, string> = {}
+  env: Record<string, string> = {},
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
@@ -111,14 +115,16 @@ function execAsync(
 }
 
 async function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 async function waitForCondition(
   check: () => Promise<boolean>,
   timeout: number,
   interval: number = 1000,
-  onWait?: () => void
+  onWait?: () => void,
 ): Promise<boolean> {
   const startTime = Date.now();
   while (Date.now() - startTime < timeout) {
@@ -204,7 +210,7 @@ async function startPostgres(): Promise<void> {
     },
     30_000,
     2000,
-    () => process.stdout.write('.')
+    () => process.stdout.write('.'),
   );
 
   console.log();
@@ -327,7 +333,7 @@ async function startServer(port: number): Promise<void> {
     () => isServerRunning(port),
     CONFIG.serverTimeout,
     2000,
-    () => process.stdout.write('.')
+    () => process.stdout.write('.'),
   );
 
   console.log();
@@ -412,27 +418,34 @@ function parseArgs(): Options {
   for (let i = 0; i < args.length; i++) {
     switch (args[i]) {
       case '--help':
-      case '-h':
+      case '-h': {
         options.help = true;
         break;
-      case '--clean':
+      }
+      case '--clean': {
         options.clean = true;
         break;
-      case '--skip-db':
+      }
+      case '--skip-db': {
         options.skipDb = true;
         break;
-      case '--skip-migrate':
+      }
+      case '--skip-migrate': {
         options.skipMigrate = true;
         break;
-      case '--build':
+      }
+      case '--build': {
         options.build = true;
         break;
-      case '--start':
+      }
+      case '--start': {
         options.start = true;
         break;
-      case '--port':
+      }
+      case '--port': {
         options.port = parseInt(args[++i], 10) || CONFIG.defaultPort;
         break;
+      }
     }
   }
 
@@ -526,4 +539,4 @@ ${colors.green('✅ E2E environment setup completed!')}
   }
 }
 
-main();
+await main();

@@ -6,12 +6,12 @@ import { Suspense, memo } from 'react';
 import { getBuiltinStreaming } from '@/tools/streamings';
 
 import AbortResponse from './AbortResponse';
-import CustomRender from './CustomRender';
 import ErrorResponse from './ErrorResponse';
 import Intervention from './Intervention';
 import ModeSelector from './Intervention/ModeSelector';
 import LoadingPlaceholder from './LoadingPlaceholder';
 import RejectedResponse from './RejectedResponse';
+import ToolRender from './Render';
 
 interface RenderProps {
   apiName: string;
@@ -26,8 +26,7 @@ interface RenderProps {
    */
   messageId: string;
   result?: ChatToolResult;
-  setShowPluginRender: (show: boolean) => void;
-  showPluginRender: boolean;
+  showCustomToolRender?: boolean;
   toolCallId: string;
   toolMessageId?: string;
   type?: string;
@@ -45,8 +44,6 @@ const Render = memo<RenderProps>(
     messageId,
     arguments: requestArgs,
     disableEditing,
-    showPluginRender,
-    setShowPluginRender,
     identifier,
     apiName,
     result,
@@ -55,6 +52,7 @@ const Render = memo<RenderProps>(
     toolMessageId,
     isArgumentsStreaming,
     isToolCalling,
+    showCustomToolRender,
   }) => {
     if (toolMessageId && intervention?.status === 'pending' && !disableEditing) {
       return (
@@ -124,7 +122,9 @@ const Render = memo<RenderProps>(
         apiName={apiName}
         identifier={identifier}
         loading
+        messageId={messageId}
         requestArgs={requestArgs}
+        toolCallId={toolCallId}
       />
     );
 
@@ -133,23 +133,17 @@ const Render = memo<RenderProps>(
     return (
       <Suspense fallback={placeholder}>
         <Flexbox gap={8}>
-          <CustomRender
+          <ToolRender
             content={result.content || ''}
             messageId={toolMessageId}
-            plugin={
-              type
-                ? ({
-                    apiName,
-                    arguments: requestArgs || '',
-                    identifier,
-                    type,
-                  } as any)
-                : undefined
-            }
+            plugin={{
+              apiName,
+              arguments: requestArgs || '',
+              identifier,
+              type: type as any,
+            }}
             pluginState={result.state}
-            requestArgs={requestArgs}
-            setShowPluginRender={setShowPluginRender}
-            showPluginRender={showPluginRender}
+            showCustomToolRender={showCustomToolRender}
             toolCallId={toolCallId}
           />
           {!disableEditing && (

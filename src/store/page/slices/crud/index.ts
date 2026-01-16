@@ -1,2 +1,2 @@
 export { createCrudSlice, type CrudAction } from './action';
-export { type CrudState,initialCrudState } from './initialState';
+export { type CrudState, initialCrudState } from './initialState';

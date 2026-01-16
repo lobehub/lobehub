@@ -556,10 +556,7 @@ export class KnowledgeRepo {
       // When in a knowledge base, return standalone documents (folders and notes without fileId)
       // that have the knowledgeBaseId column set. Documents with fileId are already
       // returned by the file query via their linked file records.
-      kbWhereConditions.push(
-        sql`d.file_id IS NULL`,
-        sql`d.knowledge_base_id = ${knowledgeBaseId}`,
-      );
+      kbWhereConditions.push(sql`d.file_id IS NULL`, sql`d.knowledge_base_id = ${knowledgeBaseId}`);
 
       return sql`
         SELECT

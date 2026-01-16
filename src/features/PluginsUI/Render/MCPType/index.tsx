@@ -1,7 +1,7 @@
 import { Flexbox, Image, Markdown } from '@lobehub/ui';
 import { memo } from 'react';
 
-import Arguments from '@/features/Conversation/Messages/AssistantGroup/Tool/Render/Arguments';
+import Arguments from '@/features/Conversation/Messages/AssistantGroup/Tool/Detail/Arguments';
 import { type ToolCallResult } from '@/libs/mcp';
 
 export interface MCPTypeProps {

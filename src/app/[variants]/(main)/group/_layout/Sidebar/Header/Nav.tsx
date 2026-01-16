@@ -3,7 +3,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { BotPromptIcon } from '@lobehub/ui/icons';
 import { MessageSquarePlusIcon, SearchIcon } from 'lucide-react';
-import { usePathname } from 'next/navigation';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
@@ -11,6 +10,7 @@ import urlJoin from 'url-join';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { usePathname } from '@/libs/router/navigation';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';

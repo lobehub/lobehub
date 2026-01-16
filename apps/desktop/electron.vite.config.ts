@@ -21,7 +21,6 @@ export default defineConfig({
       },
       sourcemap: isDev ? 'inline' : false,
     },
-
     define: {
       'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
       'process.env.UPDATE_CHANNEL': JSON.stringify(process.env.UPDATE_CHANNEL),

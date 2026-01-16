@@ -1,6 +1,23 @@
 [
   {
     "children": {
+      "improvements": ["Migrate Next.js navigation APIs to React Router for SPA."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.295"
+  },
+  {
+    "children": {},
+    "date": "2026-01-15",
+    "version": "2.0.0-next.294"
+  },
+  {
+    "children": {},
+    "date": "2026-01-15",
+    "version": "2.0.0-next.293"
+  },
+  {
+    "children": {
       "improvements": ["Use fallbackData to prevent useActionSWR auto-fetch."]
     },
     "date": "2026-01-15",

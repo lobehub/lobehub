@@ -1,12 +1,11 @@
-import { Dropdown, type DropdownMenuItemType, Icon , Button } from '@lobehub/ui';
+import { Button, Dropdown, type DropdownMenuItemType, Icon } from '@lobehub/ui';
 import { ArrowDownWideNarrow, ChevronDown } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { usePathname } from '@/app/[variants]/(main)/hooks/usePathname';
-import { useQuery } from '@/app/[variants]/(main)/hooks/useQuery';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { usePathname , useQuery } from '@/libs/router/navigation';
 import {
   AssistantSorts,
   DiscoverTab,

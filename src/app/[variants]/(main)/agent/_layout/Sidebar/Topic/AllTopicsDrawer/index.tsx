@@ -1,12 +1,12 @@
 'use client';
 
 import { Flexbox, SearchBar } from '@lobehub/ui';
-import dynamic from 'next/dynamic';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SideBarDrawer from '@/features/NavPanel/SideBarDrawer';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
+import dynamic from '@/libs/next/dynamic';
 
 const Content = dynamic(() => import('./Content'), {
   loading: () => (

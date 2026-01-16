@@ -7,7 +7,7 @@ import superjson from 'superjson';
 import FileService from '@/services/fileSrv';
 import { createLogger } from '@/utils/logger';
 
-import { MCPClient } from '../libs/mcp/client';
+import { MCPClient, MCPConnectionError } from '../libs/mcp/client';
 import type { MCPClientParams, ToolCallContent, ToolCallResult } from '../libs/mcp/types';
 import { ControllerModule, IpcMethod } from './index';
 
@@ -228,8 +228,9 @@ export default class McpCtr extends ControllerModule {
       type: 'stdio',
     };
 
-    const client = await this.createClient(params);
+    let client: MCPClient | undefined;
     try {
+      client = await this.createClient(params);
       const manifest = await client.listManifests();
       const identifier = input.name;
 
@@ -257,8 +258,25 @@ export default class McpCtr extends ControllerModule {
         mcpParams: params,
         type: 'mcp' as any,
       });
+    } catch (error) {
+      // If it's an MCPConnectionError with stderr logs, enhance the error message
+      if (error instanceof MCPConnectionError && error.stderrLogs.length > 0) {
+        const stderrOutput = error.stderrLogs.join('\n');
+        const enhancedError = new Error(
+          `${error.message}\n\n--- STDIO Process Output ---\n${stderrOutput}`,
+        );
+        enhancedError.name = error.name;
+        logger.error('getStdioMcpServerManifest failed with STDIO logs:', {
+          message: error.message,
+          stderrLogs: error.stderrLogs,
+        });
+        throw enhancedError;
+      }
+      throw error;
     } finally {
-      await client.disconnect();
+      if (client) {
+        await client.disconnect();
+      }
     }
   }
 
@@ -313,8 +331,9 @@ export default class McpCtr extends ControllerModule {
       type: 'stdio',
     };
 
-    const client = await this.createClient(params);
+    let client: MCPClient | undefined;
     try {
+      client = await this.createClient(params);
       const args = safeParseToRecord(input.args);
 
       const raw = (await client.callTool(input.toolName, args)) as ToolCallResult;
@@ -328,10 +347,25 @@ export default class McpCtr extends ControllerModule {
         success: true,
       });
     } catch (error) {
+      // If it's an MCPConnectionError with stderr logs, enhance the error message
+      if (error instanceof MCPConnectionError && error.stderrLogs.length > 0) {
+        const stderrOutput = error.stderrLogs.join('\n');
+        const enhancedError = new Error(
+          `${error.message}\n\n--- STDIO Process Output ---\n${stderrOutput}`,
+        );
+        enhancedError.name = error.name;
+        logger.error('callTool failed with STDIO logs:', {
+          message: error.message,
+          stderrLogs: error.stderrLogs,
+        });
+        throw enhancedError;
+      }
       logger.error('callTool failed:', error);
       throw error;
     } finally {
-      await client.disconnect();
+      if (client) {
+        await client.disconnect();
+      }
     }
   }
 
@@ -361,8 +395,9 @@ export default class McpCtr extends ControllerModule {
   }
 
   private async checkSystemDependency(dependency: any) {
+    const checkCommand = dependency.checkCommand || `${dependency.name} --version`;
+
     try {
-      const checkCommand = dependency.checkCommand || `${dependency.name} --version`;
       const { stdout, stderr } = await execPromise(checkCommand);
 
       if (stderr && !stdout) {
@@ -444,22 +479,19 @@ export default class McpCtr extends ControllerModule {
       const packageName = details?.packageName;
       if (!packageName) return { installed: false };
 
+      // Only check global npm list - do NOT use npx as it may download packages
       try {
         const { stdout } = await execPromise(`npm list -g ${packageName} --depth=0`);
-        if (!stdout.includes('(empty)') && stdout.includes(packageName)) return { installed: true };
+        if (!stdout.includes('(empty)') && stdout.includes(packageName)) {
+          return { installed: true };
+        }
       } catch {
-        // ignore
+        // ignore - package not found in global list
       }
 
-      try {
-        await execPromise(`npx -y ${packageName} --version`);
-        return { installed: true };
-      } catch (error) {
-        return {
-          error: error instanceof Error ? error.message : 'Unknown error',
-          installed: false,
-        };
-      }
+      // For npm packages, we don't require pre-installation
+      // npx will handle downloading and running on-demand during actual MCP connection
+      return { installed: false };
     }
 
     if (installationMethod === 'python') {
@@ -553,7 +585,7 @@ export default class McpCtr extends ControllerModule {
       const bestResult = recommendedResult || firstInstallableResult || results[0];
 
       const checkResult: CheckMcpInstallResult = {
-        ...(bestResult || {}),
+        ...bestResult,
         allOptions: results as any,
         platform: process.platform,
         success: true,

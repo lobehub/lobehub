@@ -1,7 +1,7 @@
 import { BarList } from '@lobehub/charts';
 import { ActionIcon, Avatar, Modal } from '@lobehub/ui';
 import { MaximizeIcon } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/libs/router/Link';
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

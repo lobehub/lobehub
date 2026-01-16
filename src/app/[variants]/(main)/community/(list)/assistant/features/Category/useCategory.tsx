@@ -2,6 +2,7 @@ import {
   BadgeDollarSignIcon,
   BriefcaseIcon,
   Coffee,
+  CompassIcon,
   DramaIcon,
   GamepadIcon,
   GraduationCapIcon,
@@ -14,7 +15,6 @@ import {
   PencilIcon,
   PrinterIcon,
   TerminalSquareIcon,
-  CompassIcon,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

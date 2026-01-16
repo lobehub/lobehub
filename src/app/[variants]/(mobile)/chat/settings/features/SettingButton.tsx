@@ -2,12 +2,12 @@
 
 import { ActionIcon } from '@lobehub/ui';
 import { AlignJustify } from 'lucide-react';
-import dynamic from 'next/dynamic';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE, MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
+import dynamic from '@/libs/next/dynamic';
 import { useSessionStore } from '@/store/session';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';

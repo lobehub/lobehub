@@ -174,6 +174,7 @@ export default {
   'builtins.lobe-user-memory.apiName.removeIdentityMemory': 'Delete identity memory',
   'builtins.lobe-user-memory.apiName.searchUserMemory': 'Search memory',
   'builtins.lobe-user-memory.apiName.updateIdentityMemory': 'Update identity memory',
+  'builtins.lobe-user-memory.inspector.noResults': 'No results',
   'builtins.lobe-user-memory.title': 'Memory',
   'builtins.lobe-web-browsing.apiName.crawlMultiPages': 'Read multiple pages',
   'builtins.lobe-web-browsing.apiName.crawlSinglePage': 'Read page content',

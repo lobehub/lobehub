@@ -4,7 +4,7 @@ name: Release Desktop Beta
 # Beta/Nightly 频道发版工作流
 # ============================================
 # 触发条件: 发布包含 pre-release 标识的 release
-# 如: v2.0.0-beta.1, v2.0.0-alpha.1, v2.0.0-rc.1, v2.0.0-nightly.xxx
+# 如: v2.0.0-beta.1, v2.0.0-alpha.1, v2.0.0-rc.1, v2.0.0-nightly.xxx, v2.0.0-next.292
 #
 # 注意: Stable 版本 (如 v2.0.0) 由 release-desktop-stable.yml 处理
 # ============================================
@@ -24,10 +24,10 @@ env:
 
 jobs:
   # ============================================
-  # 检查是否为 Beta/Nightly 版本 (排除 Stable)
+  # 检查是否为 Beta/Nightly/Next 版本 (排除 Stable)
   # ============================================
   check-beta:
-    name: Check if Beta/Nightly Release
+    name: Check if Beta/Nightly/Next Release
     runs-on: ubuntu-latest
     outputs:
       is_beta: ${{ steps.check.outputs.is_beta }}
@@ -40,10 +40,10 @@ jobs:
           version="${version#v}"
           echo "version=${version}" >> $GITHUB_OUTPUT
 
-          # Beta/Nightly 版本包含 beta/alpha/rc/nightly
-          if [[ "$version" == *"beta"* ]] || [[ "$version" == *"alpha"* ]] || [[ "$version" == *"rc"* ]] || [[ "$version" == *"nightly"* ]]; then
+          # Beta/Nightly/Next 版本包含 beta/alpha/rc/nightly/next
+          if [[ "$version" == *"beta"* ]] || [[ "$version" == *"alpha"* ]] || [[ "$version" == *"rc"* ]] || [[ "$version" == *"nightly"* ]] || [[ "$version" == *"next"* ]]; then
             echo "is_beta=true" >> $GITHUB_OUTPUT
-            echo "✅ Beta/Nightly release detected: $version"
+            echo "✅ Beta/Nightly/Next release detected: $version"
           else
             echo "is_beta=false" >> $GITHUB_OUTPUT
             echo "⏭️ Skipping: $version is a stable release (handled by release-desktop-stable.yml)"

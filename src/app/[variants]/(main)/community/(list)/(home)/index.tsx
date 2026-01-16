@@ -4,7 +4,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDiscoverStore } from '@/store/discover';
-import { McpSorts, AssistantSorts } from '@/types/discover';
+import { AssistantSorts, McpSorts } from '@/types/discover';
 
 import Title from '../../components/Title';
 import AssistantList from '../assistant/features/List';

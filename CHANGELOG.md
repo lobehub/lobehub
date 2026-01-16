@@ -2,6 +2,83 @@
 
 # Changelog
 
+## [Version 2.0.0-next.295](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.294...v2.0.0-next.295)
+
+<sup>Released on **2026-01-15**</sup>
+
+#### ♻ Code Refactoring
+
+- **misc**: Migrate Next.js navigation APIs to React Router for SPA.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **misc**: Migrate Next.js navigation APIs to React Router for SPA, closes [#11394](https://github.com/lobehub/lobe-chat/issues/11394) ([2253d46](https://github.com/lobehub/lobe-chat/commit/2253d46))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.294](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.293...v2.0.0-next.294)
+
+<sup>Released on **2026-01-15**</sup>
+
+#### 🐛 Bug Fixes
+
+- **chat**: Reset activeTopicId when switching agent/group.
+- **mcp**: Fix installation check hanging issue in desktop app.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **chat**: Reset activeTopicId when switching agent/group, closes [#11523](https://github.com/lobehub/lobe-chat/issues/11523) ([fde54b0](https://github.com/lobehub/lobe-chat/commit/fde54b0))
+- **mcp**: Fix installation check hanging issue in desktop app, closes [#11524](https://github.com/lobehub/lobe-chat/issues/11524) ([b9341c3](https://github.com/lobehub/lobe-chat/commit/b9341c3))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.293](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.292...v2.0.0-next.293)
+
+<sup>Released on **2026-01-15**</sup>
+
+#### ✨ Features
+
+- **desktop**: Add desktop release service and API endpoint.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **desktop**: Add desktop release service and API endpoint, closes [#11520](https://github.com/lobehub/lobe-chat/issues/11520) ([e3dc5be](https://github.com/lobehub/lobe-chat/commit/e3dc5be))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.292](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.291...v2.0.0-next.292)
 
 <sup>Released on **2026-01-15**</sup>

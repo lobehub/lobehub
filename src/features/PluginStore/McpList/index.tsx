@@ -1,6 +1,6 @@
 import { DraggablePanel, Flexbox } from '@lobehub/ui';
 import { cssVar, useTheme } from 'antd-style';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { memo, useRef } from 'react';
 
 import { useServerConfigStore } from '@/store/serverConfig';

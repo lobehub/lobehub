@@ -13,6 +13,7 @@ import {
   LocalSystemIdentifier,
   LocalSystemInterventions,
 } from '@lobechat/builtin-tool-local-system/client';
+import { MemoryInterventions, MemoryManifest } from '@lobechat/builtin-tool-memory/client';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { NotebookInterventions } from '@lobechat/builtin-tool-notebook/client';
 import { type BuiltinIntervention } from '@lobechat/types';
@@ -28,6 +29,7 @@ export const BuiltinToolInterventions: Record<string, Record<string, any>> = {
   [GroupManagementManifest.identifier]: GroupManagementInterventions,
   [GTDManifest.identifier]: GTDInterventions,
   [LocalSystemIdentifier]: LocalSystemInterventions,
+  [MemoryManifest.identifier]: MemoryInterventions,
   [NotebookManifest.identifier]: NotebookInterventions,
 };
 

@@ -4,10 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { App } from '@/core/App';
 import type { IpcContext } from '@/utils/ipc';
 import { IpcHandler } from '@/utils/ipc/base';
-import {
-  __resetMacPermissionsModuleCache,
-  __setMacPermissionsModule,
-} from '@/utils/permissions';
+import { __resetMacPermissionsModuleCache, __setMacPermissionsModule } from '@/utils/permissions';
 
 import SystemController from '../SystemCtr';
 

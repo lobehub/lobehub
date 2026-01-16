@@ -306,9 +306,7 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
     ...(enableMaxTokens
       ? [
           {
-            children: (
-              <SliderWithInput max={32_000} min={0} step={100} unlimitedInput />
-            ),
+            children: <SliderWithInput max={32_000} min={0} step={100} unlimitedInput />,
             label: (
               <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
                 {t('settingModel.maxTokens.title')}

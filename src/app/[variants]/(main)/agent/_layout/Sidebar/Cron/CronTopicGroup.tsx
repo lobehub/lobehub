@@ -6,8 +6,8 @@ import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 
-import { useRouter } from '@/app/[variants]/(main)/hooks/useRouter';
 import type { AgentCronJob } from '@/database/schemas/agentCronJob';
+import { useRouter } from '@/libs/router/navigation';
 
 import Actions from './Actions';
 import CronTopicItem from './CronTopicItem';

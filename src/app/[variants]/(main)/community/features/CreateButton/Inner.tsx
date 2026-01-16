@@ -1,7 +1,7 @@
 import { Button, Icon, Tag, Typography } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { Github, Settings, Share2 } from 'lucide-react';
-import Image from 'next/image';
+import Image from '@/libs/next/Image';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

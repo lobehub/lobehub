@@ -18,7 +18,7 @@ export enum AssistantCategory {
   Marketing = 'marketing',
   Office = 'office',
   Programming = 'programming',
-  Translation = 'translation'
+  Translation = 'translation',
 }
 
 export enum AssistantSorts {
@@ -29,7 +29,7 @@ export enum AssistantSorts {
   PluginCount = 'pluginCount',
   Recommended = 'recommended',
   Title = 'title',
-  TokenUsage = 'tokenUsage'
+  TokenUsage = 'tokenUsage',
 }
 
 export enum AssistantNavKey {

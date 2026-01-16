@@ -15,15 +15,9 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "paths": {
-      "@/*": [
-        "./src/main/*"
-      ],
-      "~common/*": [
-        "./src/common/*"
-      ],
-      "*": [
-        "./*"
-      ]
+      "@/*": ["./src/main/*"],
+      "~common/*": ["./src/common/*"],
+      "*": ["./*"]
     }
   },
   "include": [

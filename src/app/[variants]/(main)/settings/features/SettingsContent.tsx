@@ -1,7 +1,7 @@
 'use client';
 
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { Fragment } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
