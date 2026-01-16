@@ -11,7 +11,8 @@ import Versions from './Versions';
 
 const Details = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { mobile = isMobile } = useResponsive();
-  const [activeTab = GroupAgentNavKey.Overview, setActiveTab] = useQueryState('activeTab');
+  const [activeTabParam, setActiveTab] = useQueryState('activeTab');
+  const activeTab = activeTabParam || GroupAgentNavKey.Overview;
 
   return (
     <Flexbox gap={24}>
