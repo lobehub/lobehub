@@ -9,6 +9,7 @@ import { useChatStore } from '@/store/chat';
 import { useHomeStore } from '@/store/home';
 
 import ModeHeader from './ModeHeader';
+import SkillInstallBanner from './SkillInstallBanner';
 import StarterList from './StarterList';
 import { useSend } from './useSend';
 
@@ -68,6 +69,8 @@ const InputArea = () => {
           />
         </ChatInputProvider>
       </DragUploadZone>
+
+      <SkillInstallBanner />
 
       <StarterList />
     </Flexbox>

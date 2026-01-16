@@ -3,8 +3,9 @@
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { createStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 
+import IntegrationDetailModal from '@/features/IntegrationDetailModal';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import { klavisStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
@@ -33,8 +34,14 @@ interface LobeHubListProps {
   keywords: string;
 }
 
+interface DetailState {
+  identifier: string;
+  type: 'klavis' | 'lobehub';
+}
+
 export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
   const { styles } = useStyles();
+  const [detailState, setDetailState] = useState<DetailState | null>(null);
 
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
@@ -92,39 +99,55 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
   if (filteredItems.length === 0) return <Empty search={hasSearchKeywords} />;
 
   return (
-    <div className={styles.grid}>
-      {filteredItems.map((item) => {
-        if (item.type === 'lobehub') {
-          const server = getLobehubSkillServerByProvider(item.provider.id);
-          const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
+    <>
+      <div className={styles.grid}>
+        {filteredItems.map((item) => {
+          if (item.type === 'lobehub') {
+            const server = getLobehubSkillServerByProvider(item.provider.id);
+            const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
+            return (
+              <Item
+                description={item.provider.description}
+                icon={item.provider.icon}
+                identifier={item.provider.id}
+                isConnected={isConnected}
+                key={item.provider.id}
+                label={item.provider.label}
+                onOpenDetail={() =>
+                  setDetailState({ identifier: item.provider.id, type: 'lobehub' })
+                }
+                type="lobehub"
+              />
+            );
+          }
+          const server = getKlavisServerByIdentifier(item.serverType.identifier);
+          const isConnected = server?.status === KlavisServerStatus.CONNECTED;
           return (
             <Item
-              description={item.provider.description}
-              icon={item.provider.icon}
-              identifier={item.provider.id}
+              description={item.serverType.description}
+              icon={item.serverType.icon}
+              identifier={item.serverType.identifier}
               isConnected={isConnected}
-              key={item.provider.id}
-              label={item.provider.label}
-              type="lobehub"
+              key={item.serverType.identifier}
+              label={item.serverType.label}
+              onOpenDetail={() =>
+                setDetailState({ identifier: item.serverType.identifier, type: 'klavis' })
+              }
+              serverName={item.serverType.serverName}
+              type="klavis"
             />
           );
-        }
-        const server = getKlavisServerByIdentifier(item.serverType.identifier);
-        const isConnected = server?.status === KlavisServerStatus.CONNECTED;
-        return (
-          <Item
-            description={item.serverType.description}
-            icon={item.serverType.icon}
-            identifier={item.serverType.identifier}
-            isConnected={isConnected}
-            key={item.serverType.identifier}
-            label={item.serverType.label}
-            serverName={item.serverType.serverName}
-            type="klavis"
-          />
-        );
-      })}
-    </div>
+        })}
+      </div>
+      {detailState && (
+        <IntegrationDetailModal
+          identifier={detailState.identifier}
+          onClose={() => setDetailState(null)}
+          open
+          type={detailState.type}
+        />
+      )}
+    </>
   );
 });
 

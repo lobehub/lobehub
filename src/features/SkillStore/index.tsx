@@ -17,6 +17,7 @@ export const SkillStore = memo<SkillStoreProps>(({ onClose, open }) => {
   return (
     <Modal
       allowFullscreen
+      destroyOnClose={false}
       footer={null}
       onCancel={onClose}
       open={open}

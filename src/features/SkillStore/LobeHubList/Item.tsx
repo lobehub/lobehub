@@ -9,7 +9,6 @@ import { Loader2, MoreVerticalIcon, Plus, Unplug } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import IntegrationDetailModal from '@/features/IntegrationDetailModal';
 import { useToolStore } from '@/store/tool';
 import { klavisStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
@@ -64,18 +63,18 @@ interface ItemProps {
   identifier: string;
   isConnected: boolean;
   label: string;
+  onOpenDetail?: () => void;
   serverName?: Klavis.McpServerName;
   type: 'klavis' | 'lobehub';
 }
 
 const Item = memo<ItemProps>(
-  ({ description, icon, identifier, isConnected, label, serverName, type }) => {
+  ({ description, icon, identifier, isConnected, label, onOpenDetail, serverName, type }) => {
     const { t } = useTranslation('setting');
     const { styles } = useStyles();
     const { modal } = App.useApp();
     const [isConnecting, setIsConnecting] = useState(false);
     const [isWaitingAuth, setIsWaitingAuth] = useState(false);
-    const [detailOpen, setDetailOpen] = useState(false);
 
     // Get localized description
     const i18nPrefix = type === 'klavis' ? 'tools.klavis.servers' : 'tools.lobehubSkill.providers';
@@ -336,36 +335,26 @@ const Item = memo<ItemProps>(
     };
 
     return (
-      <>
-        <Block
-          align={'center'}
-          className={styles.container}
-          gap={12}
-          horizontal
-          onClick={() => setDetailOpen(true)}
-          paddingBlock={12}
-          paddingInline={12}
-          style={{ cursor: 'pointer' }}
-          variant={'filled'}
-        >
-          <div className={styles.icon}>{renderIcon()}</div>
-          <Flexbox flex={1} gap={2} style={{ minWidth: 0, overflow: 'hidden' }}>
-            <span className={styles.title}>{label}</span>
-            {localizedDescription && (
-              <span className={styles.description}>{localizedDescription}</span>
-            )}
-          </Flexbox>
-          <div onClick={(e) => e.stopPropagation()}>{renderAction()}</div>
-        </Block>
-        <IntegrationDetailModal
-          identifier={identifier}
-          isConnecting={isConnecting || isWaitingAuth}
-          onClose={() => setDetailOpen(false)}
-          onConnect={isConnected ? undefined : handleConnect}
-          open={detailOpen}
-          type={type}
-        />
-      </>
+      <Block
+        align={'center'}
+        className={styles.container}
+        gap={12}
+        horizontal
+        onClick={onOpenDetail}
+        paddingBlock={12}
+        paddingInline={12}
+        style={{ cursor: 'pointer' }}
+        variant={'filled'}
+      >
+        <div className={styles.icon}>{renderIcon()}</div>
+        <Flexbox flex={1} gap={2} style={{ minWidth: 0, overflow: 'hidden' }}>
+          <span className={styles.title}>{label}</span>
+          {localizedDescription && (
+            <span className={styles.description}>{localizedDescription}</span>
+          )}
+        </Flexbox>
+        <div onClick={(e) => e.stopPropagation()}>{renderAction()}</div>
+      </Block>
     );
   },
 );

@@ -500,6 +500,7 @@ export default {
   'settings.saveSettings': 'Save',
   'settings.title': 'Skill community settings',
   'showInPortal': 'View details in Workspace',
+  'skillInstallBanner.title': 'Add skills to Lobe AI',
   'store.actions.cancel': 'Cancel',
   'store.actions.configure': 'Configure',
   'store.actions.confirmUninstall': 'Uninstalling will clear Skill config. Continue?',

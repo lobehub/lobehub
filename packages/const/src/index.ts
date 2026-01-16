@@ -8,6 +8,7 @@ export * from './lobehubSkill';
 export * from './message';
 export * from './meta';
 export * from './plugin';
+export * from './recommendedSkill';
 export * from './session';
 export * from './settings';
 export * from './theme';
