@@ -40,7 +40,7 @@ const AssistantDetailPage = memo<AssistantDetailPageProps>(({ mobile }) => {
   return (
     <TocProvider>
       <DetailProvider config={data}>
-        <Flexbox gap={16}>
+        <Flexbox data-testid="assistant-detail-content" gap={16}>
           <Header mobile={mobile} />
           <Details mobile={mobile} />
         </Flexbox>

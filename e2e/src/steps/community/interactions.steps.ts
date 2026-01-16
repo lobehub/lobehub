@@ -446,8 +446,8 @@ Then('I should be navigated to the assistant detail page', async function (this:
 Then('I should see the assistant detail content', async function (this: CustomWorld) {
   await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
-  // Look for detail page elements (e.g., title, description, etc.)
-  const detailContent = this.page.locator('[data-testid="detail-content"], main, article').first();
+  // Look for assistant detail page content
+  const detailContent = this.page.locator('[data-testid="assistant-detail-content"]');
   await expect(detailContent).toBeVisible({ timeout: 30_000 });
 });
 
@@ -561,8 +561,8 @@ Then('I should be navigated to the MCP detail page', async function (this: Custo
 Then('I should see the MCP detail content', async function (this: CustomWorld) {
   await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
-  // Look for detail page elements
-  const detailContent = this.page.locator('[data-testid="detail-content"], main, article').first();
+  // Look for MCP detail page content
+  const detailContent = this.page.locator('[data-testid="mcp-detail-content"]');
   await expect(detailContent).toBeVisible({ timeout: 30_000 });
 });
 
