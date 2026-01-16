@@ -10,11 +10,6 @@ export interface VirtuaListAction {
   registerVirtuaScrollMethods: (methods: VirtuaScrollMethods | null) => void;
 
   /**
-   * Set active index directly (derived from scroll position)
-   */
-  setActiveIndex: (index: number | null) => void;
-
-  /**
    * Remove visible item and recalculate active index
    */
   removeVisibleItem: (index: number) => void;
@@ -36,6 +31,11 @@ export interface VirtuaListAction {
     index: number,
     options?: { align?: 'start' | 'center' | 'end'; smooth?: boolean },
   ) => void;
+
+  /**
+   * Set active index directly (derived from scroll position)
+   */
+  setActiveIndex: (index: number | null) => void;
 
   /**
    * Update scroll state (atBottom, isScrolling)
@@ -82,10 +82,6 @@ export const virtuaListSlice: StateCreator<State & VirtuaListAction, [], [], Vir
     set({ virtuaScrollMethods: methods });
   },
 
-  setActiveIndex: (index) => {
-    set({ activeIndex: index });
-  },
-
   removeVisibleItem: (index) => {
     const { visibleItems } = get();
     if (!visibleItems.has(index)) return;
@@ -114,6 +110,10 @@ export const virtuaListSlice: StateCreator<State & VirtuaListAction, [], [], Vir
   scrollToIndex: (index, options) => {
     const { virtuaScrollMethods } = get();
     virtuaScrollMethods?.scrollToIndex(index, options);
+  },
+
+  setActiveIndex: (index) => {
+    set({ activeIndex: index });
   },
 
   setScrollState: (state) => {
