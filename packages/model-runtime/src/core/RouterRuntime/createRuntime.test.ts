@@ -17,7 +17,9 @@ describe('createRouterRuntime', () => {
       const runtime = new Runtime();
 
       // 现在错误在使用时才抛出，因为是延迟创建
-      await expect(runtime.getRuntimeByModel('test-model')).rejects.toThrow('empty providers');
+      await expect(
+        runtime.chat({ model: 'test-model', messages: [], temperature: 0.7 }),
+      ).rejects.toThrow('empty providers');
     });
 
     it('should create UniformRuntime class with valid routers', () => {
@@ -72,7 +74,7 @@ describe('createRouterRuntime', () => {
       const runtime = new Runtime({ apiKey: 'constructor-key' });
 
       // 触发 runtime 创建
-      await runtime.getRuntimeByModel('test-model');
+      await runtime.chat({ model: 'test-model', messages: [], temperature: 0.7 });
 
       expect(mockConstructor).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -81,166 +83,6 @@ describe('createRouterRuntime', () => {
           id: 'test-runtime',
         }),
       );
-    });
-  });
-
-  describe('model matching', () => {
-    it('should return correct runtime for matching model', async () => {
-      const mockRuntime = {
-        chat: vi.fn(),
-        models: vi.fn(),
-        embeddings: vi.fn(),
-        textToSpeech: vi.fn(),
-      } as unknown as LobeRuntimeAI;
-
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: mockRuntime.constructor as any,
-            models: ['model-1', 'model-2'],
-          },
-        ],
-      });
-
-      const runtime = new Runtime();
-      const selectedRuntime = await runtime.getRuntimeByModel('model-1');
-
-      expect(selectedRuntime).toBeDefined();
-    });
-
-    it('should support dynamic routers with asynchronous model fetching', async () => {
-      const mockRuntime = {
-        chat: vi.fn(),
-        models: vi.fn(),
-        embeddings: vi.fn(),
-        textToSpeech: vi.fn(),
-      } as unknown as LobeRuntimeAI;
-
-      const mockModelsFunction = vi.fn().mockResolvedValue(['async-model-1', 'async-model-2']);
-
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: async () => {
-          // 异步获取模型列表
-          const models = await mockModelsFunction();
-          return [
-            {
-              apiType: 'openai',
-              options: {},
-              runtime: mockRuntime.constructor as any,
-              models, // 静态数组
-            },
-          ];
-        },
-      });
-
-      const runtime = new Runtime();
-
-      // 触发 routers 函数调用
-      const selectedRuntime = await runtime.getRuntimeByModel('async-model-1');
-
-      expect(selectedRuntime).toBeDefined();
-      expect(mockModelsFunction).toHaveBeenCalled();
-    });
-
-    it('should return fallback runtime when model not found', async () => {
-      const mockRuntime = {
-        chat: vi.fn(),
-        models: vi.fn(),
-        embeddings: vi.fn(),
-        textToSpeech: vi.fn(),
-      } as unknown as LobeRuntimeAI;
-
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: mockRuntime.constructor as any,
-            models: ['known-model'],
-          },
-        ],
-      });
-
-      const runtime = new Runtime();
-      const selectedRuntime = await runtime.getRuntimeByModel('unknown-model');
-
-      expect(selectedRuntime).toBeDefined();
-    });
-  });
-
-  describe('getRuntimeByModel', () => {
-    it('should return runtime that supports the model', async () => {
-      class MockRuntime1 implements LobeRuntimeAI {
-        chat = vi.fn();
-      }
-
-      class MockRuntime2 implements LobeRuntimeAI {
-        chat = vi.fn();
-      }
-
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: MockRuntime1 as any,
-            models: ['gpt-4'],
-          },
-          {
-            apiType: 'anthropic',
-            options: {},
-            runtime: MockRuntime2 as any,
-            models: ['claude-3'],
-          },
-        ],
-      });
-
-      const runtime = new Runtime();
-
-      const result1 = await runtime.getRuntimeByModel('gpt-4');
-      expect(result1).toBeInstanceOf(MockRuntime1);
-
-      const result2 = await runtime.getRuntimeByModel('claude-3');
-      expect(result2).toBeInstanceOf(MockRuntime2);
-    });
-
-    it('should return last runtime when no model matches', async () => {
-      class MockRuntime1 implements LobeRuntimeAI {
-        chat = vi.fn();
-      }
-
-      class MockRuntime2 implements LobeRuntimeAI {
-        chat = vi.fn();
-      }
-
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: MockRuntime1 as any,
-            models: ['gpt-4'],
-          },
-          {
-            apiType: 'anthropic',
-            options: {},
-            runtime: MockRuntime2 as any,
-            models: ['claude-3'],
-          },
-        ],
-      });
-
-      const runtime = new Runtime();
-      const result = await runtime.getRuntimeByModel('unknown-model');
-
-      expect(result).toBeInstanceOf(MockRuntime2);
     });
   });
 
@@ -474,7 +316,7 @@ describe('createRouterRuntime', () => {
       expect(runtime).toBeDefined();
 
       // 测试动态 routers 是否能正确工作
-      const result = await runtime.getRuntimeByModel('gpt-4');
+      const result = await runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 });
       expect(result).toBeDefined();
 
       // 验证动态函数被调用时传入了正确的参数
@@ -497,7 +339,9 @@ describe('createRouterRuntime', () => {
       const runtime = new Runtime();
 
       // 现在错误在使用时才抛出，因为是延迟创建
-      await expect(runtime.getRuntimeByModel('test-model')).rejects.toThrow('empty providers');
+      await expect(
+        runtime.chat({ model: 'test-model', messages: [], temperature: 0.7 }),
+      ).rejects.toThrow('empty providers');
     });
   });
 });

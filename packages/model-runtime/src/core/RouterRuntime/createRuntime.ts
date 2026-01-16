@@ -27,12 +27,6 @@ import { LobeRuntimeAI } from '../BaseAI';
 import { CreateImageOptions, CustomClientOptions } from '../openaiCompatibleFactory';
 import { baseRuntimeMap } from './baseRuntimeMap';
 
-export interface RuntimeItem {
-  id: string;
-  models?: string[];
-  runtime: LobeRuntimeAI;
-}
-
 interface ProviderIniOptions extends Record<string, any> {
   accessKeyId?: string;
   accessKeySecret?: string;
@@ -173,65 +167,81 @@ export const createRouterRuntime = ({
       return resolvedRouters;
     }
 
-    /**
-     * Create runtime for inference requests (chat, generateObject, etc.)
-     * Finds the router that matches the model, or uses the last router as fallback
-     */
-    private async createRuntimeForInference(model: string): Promise<RuntimeItem> {
+    private async resolveMatchedRouter(model: string): Promise<RouterInstance> {
       const resolvedRouters = await this.resolveRouters(model);
-
-      const matchedRouter =
+      return (
         resolvedRouters.find((router) => {
           if (router.models && router.models.length > 0) {
             return router.models.includes(model);
           }
           return false;
-        }) ?? resolvedRouters.at(-1)!;
+        }) ?? resolvedRouters.at(-1)!
+      );
+    }
 
-      const primaryOptions = Array.isArray(matchedRouter.options)
-        ? matchedRouter.options[0]
-        : matchedRouter.options;
+    private normalizeRouterOptions(router: RouterInstance): RouterOptionItem[] {
+      const routerOptions = Array.isArray(router.options) ? router.options : [router.options];
 
-      if (!primaryOptions) {
+      if (routerOptions.length === 0 || routerOptions.some((optionItem) => !optionItem)) {
         throw new Error('empty provider options');
       }
 
-      const { apiType: optionApiType, ...optionOverrides } = primaryOptions;
-      const resolvedApiType = optionApiType ?? matchedRouter.apiType;
+      return routerOptions;
+    }
+
+    /**
+     * Build a runtime instance for a specific option item.
+     * Option items can override apiType to switch providers for fallback.
+     */
+    private createRuntimeFromOption(
+      router: RouterInstance,
+      optionItem: RouterOptionItem,
+    ): { id: keyof typeof baseRuntimeMap; runtime: LobeRuntimeAI } {
+      const { apiType: optionApiType, ...optionOverrides } = optionItem;
+      const resolvedApiType = optionApiType ?? router.apiType;
       const providerAI =
-        resolvedApiType === matchedRouter.apiType
-          ? (matchedRouter.runtime ?? baseRuntimeMap[resolvedApiType] ?? LobeOpenAI)
+        resolvedApiType === router.apiType
+          ? (router.runtime ?? baseRuntimeMap[resolvedApiType] ?? LobeOpenAI)
           : (baseRuntimeMap[resolvedApiType] ?? LobeOpenAI);
       const finalOptions = { ...this._params, ...this._options, ...optionOverrides };
       const runtime: LobeRuntimeAI = new providerAI({ ...finalOptions, id: this._id });
 
       return {
         id: resolvedApiType,
-        models: matchedRouter.models,
         runtime,
       };
     }
 
-    /**
-     * Create all runtimes for listing models
-     */
-    private async createRuntimes(): Promise<RuntimeItem[]> {
-      const resolvedRouters = await this.resolveRouters();
-      return resolvedRouters.map((router) => {
-        const primaryOptions = Array.isArray(router.options) ? router.options[0] : router.options;
+    private async runWithFallback<T>(
+      model: string,
+      requestHandler: (runtime: LobeRuntimeAI) => Promise<T>,
+    ): Promise<T> {
+      const matchedRouter = await this.resolveMatchedRouter(model);
+      const routerOptions = this.normalizeRouterOptions(matchedRouter);
 
-        if (!primaryOptions) {
-          throw new Error('empty provider options');
+      let lastError: unknown;
+
+      for (const optionItem of routerOptions) {
+        const { runtime } = this.createRuntimeFromOption(matchedRouter, optionItem);
+
+        try {
+          return await requestHandler(runtime);
+        } catch (error) {
+          lastError = error;
         }
+      }
 
-        const { apiType: optionApiType, ...optionOverrides } = primaryOptions;
-        const resolvedApiType = optionApiType ?? router.apiType;
-        const providerAI =
-          resolvedApiType === router.apiType
-            ? (router.runtime ?? baseRuntimeMap[resolvedApiType] ?? LobeOpenAI)
-            : (baseRuntimeMap[resolvedApiType] ?? LobeOpenAI);
-        const finalOptions = { ...this._params, ...this._options, ...optionOverrides };
-        const runtime: LobeRuntimeAI = new providerAI({ ...finalOptions, id: this._id });
+      throw lastError ?? new Error('empty provider options');
+    }
+
+    async models() {
+      const resolvedRouters = await this.resolveRouters();
+      const runtimes = resolvedRouters.map((router) => {
+        const routerOptions = this.normalizeRouterOptions(router);
+        const { id: resolvedApiType, runtime } = this.createRuntimeFromOption(
+          router,
+          routerOptions[0],
+        );
 
         return {
           id: resolvedApiType,
@@ -239,81 +249,8 @@ export const createRouterRuntime = ({
           runtime,
         };
       });
-    }
 
-    // Check if it can match a specific model, otherwise default to using the last runtime
-    async getRuntimeByModel(model: string) {
-      const runtimeItem = await this.createRuntimeForInference(model);
-      return runtimeItem.runtime;
-    }
-
-    /**
-     * Try router options in order for chat requests.
-     * When options is an array, fall back to the next item on failure.
-     */
-    async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
-      const resolvedRouters = await this.resolveRouters(payload.model);
-      const matchedRouter =
-        resolvedRouters.find((router) => {
-          if (router.models && router.models.length > 0) {
-            return router.models.includes(payload.model);
-          }
-          return false;
-        }) ?? resolvedRouters.at(-1)!;
-
-      const routerOptions = Array.isArray(matchedRouter.options)
-        ? matchedRouter.options
-        : [matchedRouter.options];
-
-      if (routerOptions.length === 0) {
-        throw new Error('empty provider options');
-      }
-
-      let lastError: unknown;
-
-      for (const optionItem of routerOptions) {
-        const { apiType: optionApiType, ...optionOverrides } = optionItem;
-        const resolvedApiType = optionApiType ?? matchedRouter.apiType;
-        const providerAI =
-          resolvedApiType === matchedRouter.apiType
-            ? (matchedRouter.runtime ?? baseRuntimeMap[resolvedApiType] ?? LobeOpenAI)
-            : (baseRuntimeMap[resolvedApiType] ?? LobeOpenAI);
-        const finalOptions = { ...this._params, ...this._options, ...optionOverrides };
-        const runtime: LobeRuntimeAI = new providerAI({ ...finalOptions, id: this._id });
-
-        try {
-          return await runtime.chat!(payload, options);
-        } catch (e) {
-          lastError = e;
-        }
-      }
-
-      const errorToThrow = lastError ?? new Error('empty provider options');
-
-      if (params.chatCompletion?.handleError) {
-        const error = params.chatCompletion.handleError(errorToThrow, this._options);
-
-        if (error) {
-          throw error;
-        }
-      }
-
-      throw errorToThrow;
-    }
-
-    async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
-      const runtime = await this.getRuntimeByModel(payload.model);
-      return runtime.generateObject!(payload, options);
-    }
-
-    async createImage(payload: CreateImagePayload) {
-      const runtime = await this.getRuntimeByModel(payload.model);
-      return runtime.createImage!(payload);
-    }
-
-    async models() {
       if (modelsOption && typeof modelsOption === 'function') {
-        const runtimes = await this.createRuntimes();
         // If it's a functional configuration, use the last runtime's client to call the function
         const lastRuntime = runtimes.at(-1)?.runtime;
         if (lastRuntime && 'client' in lastRuntime) {
@@ -322,18 +259,51 @@ export const createRouterRuntime = ({
         }
       }
 
-      const runtimes = await this.createRuntimes();
       return runtimes.at(-1)?.runtime.models?.();
     }
 
+    /**
+     * Try router options in order for chat requests.
+     * When options is an array, fall back to the next item on failure.
+     */
+    async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
+      try {
+        return await this.runWithFallback(payload.model, (runtime) =>
+          runtime.chat!(payload, options),
+        );
+      } catch (e) {
+        if (params.chatCompletion?.handleError) {
+          const error = params.chatCompletion.handleError(e, this._options);
+
+          if (error) {
+            throw error;
+          }
+        }
+
+        throw e;
+      }
+    }
+
+    async createImage(payload: CreateImagePayload) {
+      return this.runWithFallback(payload.model, (runtime) => runtime.createImage!(payload));
+    }
+
+    async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
+      return this.runWithFallback(payload.model, (runtime) =>
+        runtime.generateObject!(payload, options),
+      );
+    }
+
     async embeddings(payload: EmbeddingsPayload, options?: EmbeddingsOptions) {
-      const runtime = await this.getRuntimeByModel(payload.model);
-      return runtime.embeddings!(payload, options);
+      return this.runWithFallback(payload.model, (runtime) =>
+        runtime.embeddings!(payload, options),
+      );
     }
 
     async textToSpeech(payload: TextToSpeechPayload, options?: EmbeddingsOptions) {
-      const runtime = await this.getRuntimeByModel(payload.model);
-      return runtime.textToSpeech!(payload, options);
+      return this.runWithFallback(payload.model, (runtime) =>
+        runtime.textToSpeech!(payload, options),
+      );
     }
   };
 };
