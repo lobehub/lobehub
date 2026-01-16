@@ -10,8 +10,8 @@ export interface RecommendedSkillItem {
 
 export const RECOMMENDED_SKILLS: RecommendedSkillItem[] = [
   { id: 'gmail', type: RecommendedSkillType.Klavis },
-  { id: 'github', type: RecommendedSkillType.Klavis },
+  { id: 'notion', type: RecommendedSkillType.Klavis },
   { id: 'google-drive', type: RecommendedSkillType.Klavis },
   { id: 'google-calendar', type: RecommendedSkillType.Klavis },
-  { id: 'twitter', type: RecommendedSkillType.Lobehub },
+  { id: 'slack', type: RecommendedSkillType.Klavis },
 ];

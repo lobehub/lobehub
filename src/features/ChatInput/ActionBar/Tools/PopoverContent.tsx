@@ -1,8 +1,9 @@
 import { Flexbox, Icon, type ItemType, Segmented, usePopoverContext } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ChevronRight, Store } from 'lucide-react';
+import { ChevronRight, Settings, Store } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 
 import ToolsList, { toolsListStyles } from './ToolsList';
 
@@ -33,6 +34,7 @@ interface PopoverContentProps {
 const PopoverContent = memo<PopoverContentProps>(
   ({ activeTab, currentItems, enableKlavis, onTabChange, onOpenStore }) => {
     const { t } = useTranslation('setting');
+    const navigate = useNavigate();
 
     const { close: closePopover } = usePopoverContext();
 
@@ -79,6 +81,21 @@ const PopoverContent = memo<PopoverContentProps>(
               <Icon icon={Store} size={20} />
             </div>
             <div className={toolsListStyles.itemContent}>{t('tools.plugins.store')}</div>
+            <Icon className={styles.trailingIcon} icon={ChevronRight} size={16} />
+          </div>
+          <div
+            className={toolsListStyles.item}
+            onClick={() => {
+              closePopover();
+              navigate('/settings/skill');
+            }}
+            role="button"
+            tabIndex={0}
+          >
+            <div className={toolsListStyles.itemIcon}>
+              <Icon icon={Settings} size={20} />
+            </div>
+            <div className={toolsListStyles.itemContent}>{t('tools.plugins.management')}</div>
             <Icon className={styles.trailingIcon} icon={ChevronRight} size={16} />
           </div>
         </div>
