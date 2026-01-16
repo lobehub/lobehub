@@ -99,6 +99,7 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
           const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
           return (
             <Item
+              description={item.provider.description}
               icon={item.provider.icon}
               identifier={item.provider.id}
               isConnected={isConnected}
@@ -112,6 +113,7 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
         const isConnected = server?.status === KlavisServerStatus.CONNECTED;
         return (
           <Item
+            description={item.serverType.description}
             icon={item.serverType.icon}
             identifier={item.serverType.identifier}
             isConnected={isConnected}

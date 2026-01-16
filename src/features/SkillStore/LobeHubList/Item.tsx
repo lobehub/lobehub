@@ -1,14 +1,15 @@
 'use client';
 
 import { getLobehubSkillProviderById } from '@lobechat/const';
-import { ActionIcon, Block, Flexbox, Icon, Image } from '@lobehub/ui';
+import { ActionIcon, Block, Dropdown, Flexbox, Icon, Image } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStyles, cssVar } from 'antd-style';
 import type { Klavis } from 'klavis';
-import { Loader2, Plus, Unplug } from 'lucide-react';
+import { Loader2, MoreVerticalIcon, Plus, Unplug } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import IntegrationDetailModal from '@/features/IntegrationDetailModal';
 import { useToolStore } from '@/store/tool';
 import { klavisStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
@@ -58,6 +59,7 @@ const useStyles = createStyles(({ css, token }) => ({
 }));
 
 interface ItemProps {
+  description?: string;
   icon: string | React.ComponentType;
   identifier: string;
   isConnected: boolean;
@@ -66,269 +68,298 @@ interface ItemProps {
   type: 'klavis' | 'lobehub';
 }
 
-const Item = memo<ItemProps>(({ icon, identifier, isConnected, label, serverName, type }) => {
-  const { t } = useTranslation('setting');
-  const { styles } = useStyles();
-  const { modal } = App.useApp();
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [isWaitingAuth, setIsWaitingAuth] = useState(false);
+const Item = memo<ItemProps>(
+  ({ description, icon, identifier, isConnected, label, serverName, type }) => {
+    const { t } = useTranslation('setting');
+    const { styles } = useStyles();
+    const { modal } = App.useApp();
+    const [isConnecting, setIsConnecting] = useState(false);
+    const [isWaitingAuth, setIsWaitingAuth] = useState(false);
+    const [detailOpen, setDetailOpen] = useState(false);
 
-  const oauthWindowRef = useRef<Window | null>(null);
-  const windowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const oauthWindowRef = useRef<Window | null>(null);
+    const windowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // LobeHub skill hooks
-  const checkLobehubStatus = useToolStore((s) => s.checkLobehubSkillStatus);
-  const revokeLobehubConnect = useToolStore((s) => s.revokeLobehubSkill);
-  const getAuthorizeUrl = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
-  const lobehubServer = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(identifier));
+    // LobeHub skill hooks
+    const checkLobehubStatus = useToolStore((s) => s.checkLobehubSkillStatus);
+    const revokeLobehubConnect = useToolStore((s) => s.revokeLobehubSkill);
+    const getAuthorizeUrl = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
+    const lobehubServer = useToolStore(
+      lobehubSkillStoreSelectors.getServerByIdentifier(identifier),
+    );
 
-  // Klavis hooks
-  const userId = useUserStore(userProfileSelectors.userId);
-  const createKlavisServer = useToolStore((s) => s.createKlavisServer);
-  const refreshKlavisServerTools = useToolStore((s) => s.refreshKlavisServerTools);
-  const removeKlavisServer = useToolStore((s) => s.removeKlavisServer);
-  const klavisServer = useToolStore(klavisStoreSelectors.getServerByIdentifier(identifier));
+    // Klavis hooks
+    const userId = useUserStore(userProfileSelectors.userId);
+    const createKlavisServer = useToolStore((s) => s.createKlavisServer);
+    const refreshKlavisServerTools = useToolStore((s) => s.refreshKlavisServerTools);
+    const removeKlavisServer = useToolStore((s) => s.removeKlavisServer);
+    const klavisServer = useToolStore(klavisStoreSelectors.getServerByIdentifier(identifier));
 
-  const cleanup = useCallback(() => {
-    if (windowCheckIntervalRef.current) {
-      clearInterval(windowCheckIntervalRef.current);
-      windowCheckIntervalRef.current = null;
-    }
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
-    }
-    if (pollTimeoutRef.current) {
-      clearTimeout(pollTimeoutRef.current);
-      pollTimeoutRef.current = null;
-    }
-    oauthWindowRef.current = null;
-    setIsWaitingAuth(false);
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      cleanup();
-    };
-  }, [cleanup]);
-
-  useEffect(() => {
-    const connected =
-      type === 'lobehub'
-        ? lobehubServer?.status === LobehubSkillStatus.CONNECTED
-        : klavisServer?.status === KlavisServerStatus.CONNECTED;
-
-    if (connected && isWaitingAuth) {
-      cleanup();
-    }
-  }, [type, lobehubServer?.status, klavisServer?.status, isWaitingAuth, cleanup]);
-
-  // Listen for OAuth success message from popup window (for LobeHub skills)
-  useEffect(() => {
-    if (type !== 'lobehub') return;
-
-    const handleMessage = async (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
-
-      if (
-        event.data?.type === 'LOBEHUB_SKILL_AUTH_SUCCESS' &&
-        event.data?.provider === identifier
-      ) {
-        cleanup();
-        await checkLobehubStatus(identifier);
+    const cleanup = useCallback(() => {
+      if (windowCheckIntervalRef.current) {
+        clearInterval(windowCheckIntervalRef.current);
+        windowCheckIntervalRef.current = null;
       }
-    };
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+      if (pollTimeoutRef.current) {
+        clearTimeout(pollTimeoutRef.current);
+        pollTimeoutRef.current = null;
+      }
+      oauthWindowRef.current = null;
+      setIsWaitingAuth(false);
+    }, []);
 
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
-  }, [type, identifier, cleanup, checkLobehubStatus]);
+    useEffect(() => {
+      return () => {
+        cleanup();
+      };
+    }, [cleanup]);
 
-  const startFallbackPolling = useCallback(
-    (serverIdOrName: string) => {
-      if (pollIntervalRef.current) return;
+    useEffect(() => {
+      const connected =
+        type === 'lobehub'
+          ? lobehubServer?.status === LobehubSkillStatus.CONNECTED
+          : klavisServer?.status === KlavisServerStatus.CONNECTED;
 
-      pollIntervalRef.current = setInterval(async () => {
-        try {
-          if (type === 'lobehub') {
-            await checkLobehubStatus(serverIdOrName);
-          } else {
-            await refreshKlavisServerTools(serverIdOrName);
-          }
-        } catch (error) {
-          console.error('[SkillStore] Failed to check status:', error);
+      if (connected && isWaitingAuth) {
+        cleanup();
+      }
+    }, [type, lobehubServer?.status, klavisServer?.status, isWaitingAuth, cleanup]);
+
+    // Listen for OAuth success message from popup window (for LobeHub skills)
+    useEffect(() => {
+      if (type !== 'lobehub') return;
+
+      const handleMessage = async (event: MessageEvent) => {
+        if (event.origin !== window.location.origin) return;
+
+        if (
+          event.data?.type === 'LOBEHUB_SKILL_AUTH_SUCCESS' &&
+          event.data?.provider === identifier
+        ) {
+          cleanup();
+          await checkLobehubStatus(identifier);
         }
-      }, POLL_INTERVAL_MS);
+      };
 
-      pollTimeoutRef.current = setTimeout(() => {
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
-        }
-        setIsWaitingAuth(false);
-      }, POLL_TIMEOUT_MS);
-    },
-    [type, checkLobehubStatus, refreshKlavisServerTools],
-  );
+      window.addEventListener('message', handleMessage);
+      return () => window.removeEventListener('message', handleMessage);
+    }, [type, identifier, cleanup, checkLobehubStatus]);
 
-  const startWindowMonitor = useCallback(
-    (oauthWindow: Window, serverIdOrName: string) => {
-      windowCheckIntervalRef.current = setInterval(async () => {
-        try {
-          if (oauthWindow.closed) {
-            if (windowCheckIntervalRef.current) {
-              clearInterval(windowCheckIntervalRef.current);
-              windowCheckIntervalRef.current = null;
-            }
-            oauthWindowRef.current = null;
-            // Check status and then reset waiting state
+    const startFallbackPolling = useCallback(
+      (serverIdOrName: string) => {
+        if (pollIntervalRef.current) return;
+
+        pollIntervalRef.current = setInterval(async () => {
+          try {
             if (type === 'lobehub') {
               await checkLobehubStatus(serverIdOrName);
             } else {
               await refreshKlavisServerTools(serverIdOrName);
             }
-            setIsWaitingAuth(false);
+          } catch (error) {
+            console.error('[SkillStore] Failed to check status:', error);
           }
-        } catch {
-          if (windowCheckIntervalRef.current) {
-            clearInterval(windowCheckIntervalRef.current);
-            windowCheckIntervalRef.current = null;
+        }, POLL_INTERVAL_MS);
+
+        pollTimeoutRef.current = setTimeout(() => {
+          if (pollIntervalRef.current) {
+            clearInterval(pollIntervalRef.current);
+            pollIntervalRef.current = null;
           }
+          setIsWaitingAuth(false);
+        }, POLL_TIMEOUT_MS);
+      },
+      [type, checkLobehubStatus, refreshKlavisServerTools],
+    );
+
+    const startWindowMonitor = useCallback(
+      (oauthWindow: Window, serverIdOrName: string) => {
+        windowCheckIntervalRef.current = setInterval(async () => {
+          try {
+            if (oauthWindow.closed) {
+              if (windowCheckIntervalRef.current) {
+                clearInterval(windowCheckIntervalRef.current);
+                windowCheckIntervalRef.current = null;
+              }
+              oauthWindowRef.current = null;
+              // Check status and then reset waiting state
+              if (type === 'lobehub') {
+                await checkLobehubStatus(serverIdOrName);
+              } else {
+                await refreshKlavisServerTools(serverIdOrName);
+              }
+              setIsWaitingAuth(false);
+            }
+          } catch {
+            if (windowCheckIntervalRef.current) {
+              clearInterval(windowCheckIntervalRef.current);
+              windowCheckIntervalRef.current = null;
+            }
+            startFallbackPolling(serverIdOrName);
+          }
+        }, 500);
+      },
+      [type, checkLobehubStatus, refreshKlavisServerTools, startFallbackPolling],
+    );
+
+    const openOAuthWindow = useCallback(
+      (oauthUrl: string, serverIdOrName: string) => {
+        cleanup();
+        setIsWaitingAuth(true);
+
+        const oauthWindow = window.open(oauthUrl, '_blank', 'width=600,height=700');
+        if (oauthWindow) {
+          oauthWindowRef.current = oauthWindow;
+          startWindowMonitor(oauthWindow, serverIdOrName);
+        } else {
           startFallbackPolling(serverIdOrName);
         }
-      }, 500);
-    },
-    [type, checkLobehubStatus, refreshKlavisServerTools, startFallbackPolling],
-  );
-
-  const openOAuthWindow = useCallback(
-    (oauthUrl: string, serverIdOrName: string) => {
-      cleanup();
-      setIsWaitingAuth(true);
-
-      const oauthWindow = window.open(oauthUrl, '_blank', 'width=600,height=700');
-      if (oauthWindow) {
-        oauthWindowRef.current = oauthWindow;
-        startWindowMonitor(oauthWindow, serverIdOrName);
-      } else {
-        startFallbackPolling(serverIdOrName);
-      }
-    },
-    [cleanup, startWindowMonitor, startFallbackPolling],
-  );
-
-  // Handle connect for LobeHub
-  const handleLobehubConnect = async () => {
-    if (lobehubServer?.isConnected) return;
-
-    setIsConnecting(true);
-    try {
-      const provider = getLobehubSkillProviderById(identifier);
-      if (!provider) return;
-
-      const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(identifier)}`;
-      const { authorizeUrl } = await getAuthorizeUrl(identifier, { redirectUri });
-      openOAuthWindow(authorizeUrl, identifier);
-    } catch (error) {
-      console.error('[SkillStore] Failed to get authorize URL:', error);
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  // Handle connect for Klavis
-  const handleKlavisConnect = async () => {
-    if (!userId || !serverName) return;
-    if (klavisServer) return;
-
-    setIsConnecting(true);
-    try {
-      const newServer = await createKlavisServer({
-        identifier,
-        serverName,
-        userId,
-      });
-
-      if (newServer) {
-        if (newServer.isAuthenticated) {
-          await refreshKlavisServerTools(newServer.identifier);
-        } else if (newServer.oauthUrl) {
-          openOAuthWindow(newServer.oauthUrl, newServer.identifier);
-        }
-      }
-    } catch (error) {
-      console.error('[SkillStore] Failed to connect server:', error);
-    } finally {
-      setIsConnecting(false);
-    }
-  };
-
-  const handleConnect = type === 'lobehub' ? handleLobehubConnect : handleKlavisConnect;
-
-  const handleDisconnect = () => {
-    modal.confirm({
-      cancelText: t('cancel', { ns: 'common' }),
-      centered: true,
-      content: t('tools.lobehubSkill.disconnectConfirm.desc', { name: label }),
-      okButtonProps: { danger: true },
-      okText: t('tools.lobehubSkill.disconnect'),
-      onOk: async () => {
-        if (type === 'lobehub' && lobehubServer) {
-          await revokeLobehubConnect(lobehubServer.identifier);
-        } else if (type === 'klavis' && klavisServer) {
-          await removeKlavisServer(klavisServer.identifier);
-        }
       },
-      title: t('tools.lobehubSkill.disconnectConfirm.title', { name: label }),
-    });
-  };
+      [cleanup, startWindowMonitor, startFallbackPolling],
+    );
 
-  const renderIcon = () => {
-    if (typeof icon === 'string') {
-      return <Image alt={label} height={20} src={icon} width={20} />;
-    }
-    return <Icon fill={cssVar.colorText} icon={icon as any} size={20} />;
-  };
+    // Handle connect for LobeHub
+    const handleLobehubConnect = async () => {
+      if (lobehubServer?.isConnected) return;
 
-  const renderAction = () => {
-    if (isConnecting || isWaitingAuth) {
-      return <ActionIcon icon={Loader2} loading />;
-    }
+      setIsConnecting(true);
+      try {
+        const provider = getLobehubSkillProviderById(identifier);
+        if (!provider) return;
 
-    if (isConnected) {
+        const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(identifier)}`;
+        const { authorizeUrl } = await getAuthorizeUrl(identifier, { redirectUri });
+        openOAuthWindow(authorizeUrl, identifier);
+      } catch (error) {
+        console.error('[SkillStore] Failed to get authorize URL:', error);
+      } finally {
+        setIsConnecting(false);
+      }
+    };
+
+    // Handle connect for Klavis
+    const handleKlavisConnect = async () => {
+      if (!userId || !serverName) return;
+      if (klavisServer) return;
+
+      setIsConnecting(true);
+      try {
+        const newServer = await createKlavisServer({
+          identifier,
+          serverName,
+          userId,
+        });
+
+        if (newServer) {
+          if (newServer.isAuthenticated) {
+            await refreshKlavisServerTools(newServer.identifier);
+          } else if (newServer.oauthUrl) {
+            openOAuthWindow(newServer.oauthUrl, newServer.identifier);
+          }
+        }
+      } catch (error) {
+        console.error('[SkillStore] Failed to connect server:', error);
+      } finally {
+        setIsConnecting(false);
+      }
+    };
+
+    const handleConnect = type === 'lobehub' ? handleLobehubConnect : handleKlavisConnect;
+
+    const handleDisconnect = () => {
+      modal.confirm({
+        cancelText: t('cancel', { ns: 'common' }),
+        centered: true,
+        content: t('tools.lobehubSkill.disconnectConfirm.desc', { name: label }),
+        okButtonProps: { danger: true },
+        okText: t('tools.lobehubSkill.disconnect'),
+        onOk: async () => {
+          if (type === 'lobehub' && lobehubServer) {
+            await revokeLobehubConnect(lobehubServer.identifier);
+          } else if (type === 'klavis' && klavisServer) {
+            await removeKlavisServer(klavisServer.identifier);
+          }
+        },
+        title: t('tools.lobehubSkill.disconnectConfirm.title', { name: label }),
+      });
+    };
+
+    const renderIcon = () => {
+      if (typeof icon === 'string') {
+        return <Image alt={label} height={20} src={icon} width={20} />;
+      }
+      return <Icon fill={cssVar.colorText} icon={icon as any} size={20} />;
+    };
+
+    const renderAction = () => {
+      if (isConnecting || isWaitingAuth) {
+        return <ActionIcon icon={Loader2} loading />;
+      }
+
+      if (isConnected) {
+        return (
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  icon: <Icon icon={Unplug} />,
+                  key: 'disconnect',
+                  label: t('tools.lobehubSkill.disconnect'),
+                  onClick: handleDisconnect,
+                },
+              ],
+            }}
+            placement="bottomRight"
+            trigger={['click']}
+          >
+            <ActionIcon icon={MoreVerticalIcon} />
+          </Dropdown>
+        );
+      }
+
       return (
-        <ActionIcon
-          icon={Unplug}
-          onClick={handleDisconnect}
-          title={t('tools.lobehubSkill.disconnect')}
-        />
+        <ActionIcon icon={Plus} onClick={handleConnect} title={t('tools.lobehubSkill.connect')} />
       );
-    }
+    };
 
     return (
-      <ActionIcon icon={Plus} onClick={handleConnect} title={t('tools.lobehubSkill.connect')} />
+      <>
+        <Block
+          align={'center'}
+          className={styles.container}
+          gap={12}
+          horizontal
+          onClick={() => setDetailOpen(true)}
+          paddingBlock={12}
+          paddingInline={12}
+          style={{ cursor: 'pointer' }}
+          variant={'filled'}
+        >
+          <div className={styles.icon}>{renderIcon()}</div>
+          <Flexbox flex={1} gap={2} style={{ minWidth: 0, overflow: 'hidden' }}>
+            <span className={styles.title}>{label}</span>
+            {description && <span className={styles.description}>{description}</span>}
+          </Flexbox>
+          <div onClick={(e) => e.stopPropagation()}>{renderAction()}</div>
+        </Block>
+        <IntegrationDetailModal
+          identifier={identifier}
+          isConnecting={isConnecting || isWaitingAuth}
+          onClose={() => setDetailOpen(false)}
+          onConnect={isConnected ? undefined : handleConnect}
+          open={detailOpen}
+          type={type}
+        />
+      </>
     );
-  };
-
-  return (
-    <Block
-      align={'center'}
-      className={styles.container}
-      gap={12}
-      horizontal
-      paddingBlock={12}
-      paddingInline={12}
-      variant={'filled'}
-    >
-      <div className={styles.icon}>{renderIcon()}</div>
-      <Flexbox flex={1} gap={2} style={{ minWidth: 0, overflow: 'hidden' }}>
-        <span className={styles.title}>{label}</span>
-      </Flexbox>
-      {renderAction()}
-    </Block>
-  );
-});
+  },
+);
 
 Item.displayName = 'LobeHubListItem';
 

@@ -8,6 +8,7 @@ import { Loader2, MoreVerticalIcon, SquareArrowOutUpRight, Unplug } from 'lucide
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import IntegrationDetailModal from '@/features/IntegrationDetailModal';
 import { useToolStore } from '@/store/tool';
 import { type KlavisServer, KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { useUserStore } from '@/store/user';
@@ -50,9 +51,14 @@ const useStyles = createStyles(({ css, token }) => ({
     color: ${token.colorWarning};
   `,
   title: css`
+    cursor: pointer;
     font-size: 15px;
     font-weight: 500;
     color: ${token.colorText};
+
+    &:hover {
+      color: ${token.colorPrimary};
+    }
   `,
 }));
 
@@ -67,6 +73,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
   const { modal } = App.useApp();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWaitingAuth, setIsWaitingAuth] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const oauthWindowRef = useRef<Window | null>(null);
   const windowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -310,25 +317,37 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
   const isConnected = server?.status === KlavisServerStatus.CONNECTED;
 
   return (
-    <Flexbox
-      align="center"
-      className={styles.container}
-      gap={16}
-      horizontal
-      justify="space-between"
-    >
-      <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
-        <div className={styles.icon}>{renderIcon()}</div>
-        <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-          <span className={styles.title}>{serverType.label}</span>
-          {!isConnected && renderStatus()}
+    <>
+      <Flexbox
+        align="center"
+        className={styles.container}
+        gap={16}
+        horizontal
+        justify="space-between"
+      >
+        <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
+          <div className={styles.icon}>{renderIcon()}</div>
+          <Flexbox gap={4} style={{ overflow: 'hidden' }}>
+            <span className={styles.title} onClick={() => setDetailOpen(true)}>
+              {serverType.label}
+            </span>
+            {!isConnected && renderStatus()}
+          </Flexbox>
+        </Flexbox>
+        <Flexbox align="center" gap={12} horizontal>
+          {isConnected && renderStatus()}
+          {renderAction()}
         </Flexbox>
       </Flexbox>
-      <Flexbox align="center" gap={12} horizontal>
-        {isConnected && renderStatus()}
-        {renderAction()}
-      </Flexbox>
-    </Flexbox>
+      <IntegrationDetailModal
+        identifier={serverType.identifier}
+        isConnecting={isConnecting || isWaitingAuth}
+        onClose={() => setDetailOpen(false)}
+        onConnect={handleConnect}
+        open={detailOpen}
+        type="klavis"
+      />
+    </>
   );
 });
 

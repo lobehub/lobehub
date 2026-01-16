@@ -8,6 +8,7 @@ import { Loader2, MoreVerticalIcon, SquareArrowOutUpRight, Unplug } from 'lucide
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import IntegrationDetailModal from '@/features/IntegrationDetailModal';
 import { useToolStore } from '@/store/tool';
 import {
   type LobehubSkillServer,
@@ -53,9 +54,14 @@ const useStyles = createStyles(({ css, token }) => ({
     background: ${token.colorFillTertiary};
   `,
   title: css`
+    cursor: pointer;
     font-size: 15px;
     font-weight: 500;
     color: ${token.colorText};
+
+    &:hover {
+      color: ${token.colorPrimary};
+    }
   `,
 }));
 
@@ -70,6 +76,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
   const { modal } = App.useApp();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWaitingAuth, setIsWaitingAuth] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const oauthWindowRef = useRef<Window | null>(null);
   const windowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -296,29 +303,42 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
   const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
 
   return (
-    <Flexbox
-      align="center"
-      className={styles.container}
-      gap={16}
-      horizontal
-      justify="space-between"
-    >
-      <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
-        <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
-          {renderIcon()}
-        </div>
-        <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-          <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
-            {provider.label}
-          </span>
-          {!isConnected && renderStatus()}
+    <>
+      <Flexbox
+        align="center"
+        className={styles.container}
+        gap={16}
+        horizontal
+        justify="space-between"
+      >
+        <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
+          <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
+            {renderIcon()}
+          </div>
+          <Flexbox gap={4} style={{ overflow: 'hidden' }}>
+            <span
+              className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}
+              onClick={() => setDetailOpen(true)}
+            >
+              {provider.label}
+            </span>
+            {!isConnected && renderStatus()}
+          </Flexbox>
+        </Flexbox>
+        <Flexbox align="center" gap={12} horizontal>
+          {isConnected && renderStatus()}
+          {renderAction()}
         </Flexbox>
       </Flexbox>
-      <Flexbox align="center" gap={12} horizontal>
-        {isConnected && renderStatus()}
-        {renderAction()}
-      </Flexbox>
-    </Flexbox>
+      <IntegrationDetailModal
+        identifier={provider.id}
+        isConnecting={isConnecting || isWaitingAuth}
+        onClose={() => setDetailOpen(false)}
+        onConnect={handleConnect}
+        open={detailOpen}
+        type="lobehub"
+      />
+    </>
   );
 });
 
