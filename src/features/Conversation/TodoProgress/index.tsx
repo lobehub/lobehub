@@ -95,7 +95,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     text-decoration: line-through;
   `,
   textProcessing: css`
-    color: ${cssVar.colorWarningText};
+    color: ${cssVar.colorText};
+  `,
+  textTodo: css`
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
@@ -174,7 +177,11 @@ const TodoProgress = memo<TodoProgressProps>(({ className }) => {
             if (isProcessing) {
               return (
                 <div className={cx(styles.itemRow, styles.processingRow)} key={index}>
-                  <Icon icon={CircleArrowRight} size={16} style={{ color: cssVar.colorInfo }} />
+                  <Icon
+                    icon={CircleArrowRight}
+                    size={17}
+                    style={{ color: cssVar.colorTextSecondary }}
+                  />
                   <span className={styles.textProcessing}>{item.text}</span>
                 </div>
               );
@@ -186,7 +193,7 @@ const TodoProgress = memo<TodoProgressProps>(({ className }) => {
                 backgroundColor={cssVar.colorSuccess}
                 checked={isCompleted}
                 classNames={{
-                  text: cx(isCompleted && styles.textCompleted),
+                  text: cx(styles.textTodo, isCompleted && styles.textCompleted),
                   wrapper: styles.itemRow,
                 }}
                 key={index}
