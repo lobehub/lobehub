@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useConversationStore } from '@/features/Conversation';
@@ -12,23 +12,37 @@ import { useConversationStore } from '@/features/Conversation';
  * Uses ConversationStore for input and send operations.
  */
 const MessageFromUrl = () => {
-  const [updateInputMessage, sendMessage] = useConversationStore((s) => [
-    s.updateInputMessage,
-    s.sendMessage,
-  ]);
+  const [sendMessage, agentId] = useConversationStore((s) => [s.sendMessage, s.context.agentId]);
   const [searchParams, setSearchParams] = useSearchParams();
 
+  // Track if we've processed the initial message to prevent duplicate sends
+  const hasProcessedRef = useRef(false);
+
   useEffect(() => {
+    // Only process once
+    if (hasProcessedRef.current) return;
+
     const message = searchParams.get('message');
     if (!message) return;
 
-    const params = new URLSearchParams(searchParams.toString());
-    params.delete('message');
-    setSearchParams(params, { replace: true });
+    // Wait for agentId to be available before sending
+    if (!agentId) return;
 
-    updateInputMessage(message);
+    hasProcessedRef.current = true;
+
+    // Use functional update to safely remove message param without affecting other params
+    setSearchParams(
+      (prev) => {
+        const newParams = new URLSearchParams(prev);
+        newParams.delete('message');
+        return newParams;
+      },
+      { replace: true },
+    );
+
+    // Send the message
     sendMessage({ message });
-  }, [searchParams, setSearchParams, updateInputMessage, sendMessage]);
+  }, [searchParams, setSearchParams, sendMessage, agentId]);
 
   return null;
 };

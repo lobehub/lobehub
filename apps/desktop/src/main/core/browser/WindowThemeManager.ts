@@ -1,3 +1,4 @@
+import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { BrowserWindow, nativeTheme } from 'electron';
 import { join } from 'node:path';
 
@@ -9,7 +10,6 @@ import {
   SYMBOL_COLOR_DARK,
   SYMBOL_COLOR_LIGHT,
   THEME_CHANGE_DELAY,
-  TITLE_BAR_HEIGHT,
 } from '@/const/theme';
 import { createLogger } from '@/utils/logger';
 
@@ -91,7 +91,8 @@ export class WindowThemeManager {
       icon: isDev ? join(buildDir, 'icon-dev.ico') : undefined,
       titleBarOverlay: {
         color: isDarkMode ? BACKGROUND_DARK : BACKGROUND_LIGHT,
-        height: TITLE_BAR_HEIGHT,
+        // Reduce 2px to prevent blocking the container border edge
+        height: TITLE_BAR_HEIGHT - 2,
         symbolColor: isDarkMode ? SYMBOL_COLOR_DARK : SYMBOL_COLOR_LIGHT,
       },
       titleBarStyle: 'hidden',

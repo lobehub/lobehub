@@ -1,4 +1,4 @@
-import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
+import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { marketToolsResultsPrompt, modelsResultsPrompt } from '@lobechat/prompts';
 import { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
@@ -10,9 +10,11 @@ import { getToolStoreState } from '@/store/tool';
 import {
   builtinToolSelectors,
   klavisStoreSelectors,
+  lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore/types';
+import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -732,7 +734,82 @@ export class AgentBuilderExecutionRuntime {
           }
         }
 
-        // Not a Klavis tool, check if it's a builtin tool
+        // Check if it's a LobehubSkill provider
+        const isLobehubSkillEnabled =
+          typeof window !== 'undefined' &&
+          window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill;
+
+        if (isLobehubSkillEnabled) {
+          // Check if this is a LobehubSkill provider
+          const lobehubSkillServer = lobehubSkillStoreSelectors
+            .getServers(toolState)
+            .find((s) => s.identifier === identifier);
+
+          // Find LobehubSkill provider info from LOBEHUB_SKILL_PROVIDERS
+          const lobehubSkillProviderInfo = LOBEHUB_SKILL_PROVIDERS.find((p) => p.id === identifier);
+
+          if (lobehubSkillProviderInfo) {
+            // This is a LobehubSkill provider
+            if (lobehubSkillServer) {
+              // Server exists
+              if (lobehubSkillServer.status === LobehubSkillStatus.CONNECTED) {
+                // Already connected, just enable the plugin
+                const agentState = getAgentStoreState();
+                const currentPlugins =
+                  agentSelectors.getAgentConfigById(agentId)(agentState).plugins || [];
+
+                if (!currentPlugins.includes(identifier)) {
+                  await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
+                    plugins: [...currentPlugins, identifier],
+                  });
+                }
+
+                return {
+                  content: `Successfully enabled LobehubSkill provider: ${lobehubSkillProviderInfo.label}`,
+                  state: {
+                    installed: true,
+                    isLobehubSkill: true,
+                    pluginId: identifier,
+                    pluginName: lobehubSkillProviderInfo.label,
+                    serverStatus: 'connected',
+                    success: true,
+                  } as InstallPluginState,
+                  success: true,
+                };
+              } else {
+                // Server exists but not connected - need to reconnect
+                return {
+                  content: `LobehubSkill provider "${lobehubSkillProviderInfo.label}" is not connected. Please reconnect it from the tools settings.`,
+                  state: {
+                    installed: false,
+                    isLobehubSkill: true,
+                    pluginId: identifier,
+                    pluginName: lobehubSkillProviderInfo.label,
+                    serverStatus: lobehubSkillServer.status,
+                    success: false,
+                  } as InstallPluginState,
+                  success: false,
+                };
+              }
+            } else {
+              // Server doesn't exist - need to connect first
+              return {
+                content: `LobehubSkill provider "${lobehubSkillProviderInfo.label}" is not connected. Please connect it from the tools settings first.`,
+                state: {
+                  installed: false,
+                  isLobehubSkill: true,
+                  pluginId: identifier,
+                  pluginName: lobehubSkillProviderInfo.label,
+                  serverStatus: 'not_connected',
+                  success: false,
+                } as InstallPluginState,
+                success: false,
+              };
+            }
+          }
+        }
+
+        // Not a Klavis or LobehubSkill tool, check if it's a builtin tool
         const builtinTools = builtinToolSelectors.metaList(toolState);
         const builtinTool = builtinTools.find((t) => t.identifier === identifier);
 

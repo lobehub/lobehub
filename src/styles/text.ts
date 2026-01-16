@@ -13,6 +13,22 @@ export const lineEllipsis = (line: number) =>
 export const oneLineEllipsis = lineEllipsis(1);
 
 /**
+ * Inspector text style for builtin tool inspectors
+ * Combines oneLineEllipsis with secondary text color
+ */
+export const inspectorTextStyles = createStaticStyles(({ css, cssVar }) => ({
+  root: css`
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+
+    color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
+  `,
+}));
+
+/**
  * Highlight underline effect using gradient background
  * - primary: default blue highlight
  * - info: info blue highlight

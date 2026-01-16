@@ -240,3 +240,34 @@ export function createMCPError(
 
   return error;
 }
+
+/**
+ * STDIO Process Output separator used in enhanced error messages
+ */
+const STDIO_OUTPUT_SEPARATOR = '--- STDIO Process Output ---';
+
+/**
+ * Parse error message to extract STDIO process output logs
+ * The enhanced error format from desktop is:
+ * "Original message\n\n--- STDIO Process Output ---\nlogs..."
+ */
+export interface ParsedStdioError {
+  errorLog?: string;
+  originalMessage: string;
+}
+
+export function parseStdioErrorMessage(errorMessage: string): ParsedStdioError {
+  const separatorIndex = errorMessage.indexOf(STDIO_OUTPUT_SEPARATOR);
+
+  if (separatorIndex === -1) {
+    return { originalMessage: errorMessage };
+  }
+
+  const originalMessage = errorMessage.slice(0, separatorIndex).trim();
+  const errorLog = errorMessage.slice(separatorIndex + STDIO_OUTPUT_SEPARATOR.length).trim();
+
+  return {
+    errorLog: errorLog || undefined,
+    originalMessage: originalMessage || errorMessage,
+  };
+}

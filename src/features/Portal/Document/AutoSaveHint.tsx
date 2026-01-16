@@ -2,15 +2,16 @@
 
 import { memo } from 'react';
 
-import AutoSaveHintBase from '@/components/Editor/AutoSaveHint';
-
-import { useDocumentEditorStore } from './store';
+import { AutoSaveHint as SharedAutoSaveHint } from '@/features/EditorCanvas';
+import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
 
 const AutoSaveHint = memo(() => {
-  const saveStatus = useDocumentEditorStore((s) => s.saveStatus);
-  const lastUpdatedTime = useDocumentEditorStore((s) => s.lastUpdatedTime);
+  const documentId = useChatStore(chatPortalSelectors.portalDocumentId);
 
-  return <AutoSaveHintBase lastUpdatedTime={lastUpdatedTime} saveStatus={saveStatus} />;
+  if (!documentId) return null;
+
+  return <SharedAutoSaveHint documentId={documentId} />;
 });
 
 export default AutoSaveHint;

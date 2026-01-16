@@ -2,27 +2,37 @@
 
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { Suspense, memo, useCallback, useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { electronSystemService } from '@/services/electron/system';
-import { isDev } from '@/utils/env';
 
 import OnboardingContainer from './_layout';
 import DataModeStep from './features/DataModeStep';
 import LoginStep from './features/LoginStep';
 import PermissionsStep from './features/PermissionsStep';
 import WelcomeStep from './features/WelcomeStep';
-import { getDesktopOnboardingCompleted, setDesktopOnboardingCompleted } from './storage';
+import {
+  clearDesktopOnboardingStep,
+  getDesktopOnboardingStep,
+  setDesktopOnboardingCompleted,
+  setDesktopOnboardingStep,
+} from './storage';
 
 const DesktopOnboardingPage = memo(() => {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [isMac, setIsMac] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 从 URL query 参数获取初始步骤，默认为 1
+  // 从 localStorage 或 URL query 参数获取初始步骤
+  // 优先使用 localStorage 以支持重启后恢复
   const getInitialStep = useCallback(() => {
+    // First try localStorage (for app restart scenario)
+    const savedStep = getDesktopOnboardingStep();
+    if (savedStep !== null) {
+      return savedStep;
+    }
+    // Then try URL params
     const stepParam = searchParams.get('step');
     if (stepParam) {
       const step = parseInt(stepParam, 10);
@@ -33,11 +43,10 @@ const DesktopOnboardingPage = memo(() => {
 
   const [currentStep, setCurrentStep] = useState(getInitialStep);
 
-  // 检查是否已完成 onboarding
+  // 持久化当前步骤到 localStorage
   useEffect(() => {
-    if (isDev) return;
-    if (getDesktopOnboardingCompleted()) navigate('/', { replace: true });
-  }, [navigate]);
+    setDesktopOnboardingStep(currentStep);
+  }, [currentStep]);
 
   // 设置窗口大小和可调整性
   useEffect(() => {
@@ -117,6 +126,7 @@ const DesktopOnboardingPage = memo(() => {
         case 4: {
           // 如果是第4步（LoginStep），完成 onboarding
           setDesktopOnboardingCompleted();
+          clearDesktopOnboardingStep(); // Clear persisted step since onboarding is complete
           // Restore window resizable before hard reload (cleanup won't run due to hard navigation)
           electronSystemService
             .setWindowResizable({ resizable: true })

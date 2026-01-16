@@ -1,6 +1,6 @@
 'use client';
 
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { pwaInstallHandler } from 'pwa-install-handler';
 import { memo, useEffect, useState } from 'react';
 

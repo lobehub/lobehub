@@ -3,11 +3,13 @@ import {
   type RecentTopicGroup,
   type RecentTopicGroupMember,
 } from '@lobechat/types';
+import { cleanObject } from '@lobechat/utils';
 import { eq, inArray } from 'drizzle-orm';
 import { after } from 'next/server';
 import { z } from 'zod';
 
 import { TopicModel } from '@/database/models/topic';
+import { TopicShareModel } from '@/database/models/topicShare';
 import { AgentMigrationRepo } from '@/database/repositories/agentMigration';
 import { TopicImporterRepo } from '@/database/repositories/topicImporter';
 import { agents, chatGroups, chatGroupsAgents } from '@/database/schemas';
@@ -30,6 +32,7 @@ const topicProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
       agentMigrationRepo: new AgentMigrationRepo(ctx.serverDB, ctx.userId),
       topicImporterRepo: new TopicImporterRepo(ctx.serverDB, ctx.userId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId),
+      topicShareModel: new TopicShareModel(ctx.serverDB, ctx.userId),
     },
   });
 });
@@ -138,15 +141,51 @@ export const topicRouter = router({
       return data.id;
     }),
 
+  /**
+   * Disable sharing for a topic (deletes share record)
+   */
+  disableSharing: topicProcedure
+    .input(z.object({ topicId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.topicShareModel.deleteByTopicId(input.topicId);
+    }),
+
+  /**
+   * Enable sharing for a topic (creates share record)
+   */
+  enableSharing: topicProcedure
+    .input(
+      z.object({
+        topicId: z.string(),
+        visibility: z.enum(['private', 'link']).optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.topicShareModel.create(input.topicId, input.visibility);
+    }),
+
   getAllTopics: topicProcedure.query(async ({ ctx }) => {
     return ctx.topicModel.queryAll();
   }),
+
+  getCronTopicsGroupedByCronJob: topicProcedure
+    .input(z.object({ agentId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      return ctx.topicModel.getCronTopicsGroupedByCronJob(input.agentId);
+    }),
+
+  getShareInfo: topicProcedure
+    .input(z.object({ topicId: z.string() }))
+    .query(async ({ input, ctx }) => {
+      return ctx.topicShareModel.getByTopicId(input.topicId);
+    }),
 
   getTopics: topicProcedure
     .input(
       z.object({
         agentId: z.string().nullable().optional(),
         current: z.number().optional(),
+        excludeTriggers: z.array(z.string()).optional(),
         groupId: z.string().nullable().optional(),
         isInbox: z.boolean().optional(),
         pageSize: z.number().optional(),
@@ -154,11 +193,11 @@ export const topicRouter = router({
       }),
     )
     .query(async ({ input, ctx }) => {
-      const { sessionId, isInbox, groupId, ...rest } = input;
+      const { sessionId, isInbox, groupId, excludeTriggers, ...rest } = input;
 
       // If groupId is provided, query by groupId directly
       if (groupId) {
-        const result = await ctx.topicModel.query({ groupId, ...rest });
+        const result = await ctx.topicModel.query({ excludeTriggers, groupId, ...rest });
         return { items: result.items, total: result.total };
       }
 
@@ -168,7 +207,12 @@ export const topicRouter = router({
         effectiveAgentId = await resolveAgentIdFromSession(sessionId, ctx.serverDB, ctx.userId);
       }
 
-      const result = await ctx.topicModel.query({ ...rest, agentId: effectiveAgentId, isInbox });
+      const result = await ctx.topicModel.query({
+        ...rest,
+        agentId: effectiveAgentId,
+        excludeTriggers,
+        isInbox,
+      });
 
       // Runtime migration: backfill agentId for ALL legacy topics and messages under this agent
       const runMigration = async () => {
@@ -367,8 +411,14 @@ export const topicRouter = router({
         const agentId = topicAgentIdMap.get(topic.id);
         const agentInfo = agentId ? agentInfoMap.get(agentId) : null;
 
+        // Clean agent info - if avatar/title are all null, return null
+        const cleanedAgent = agentInfo ? cleanObject(agentInfo) : null;
+        // Only return agent if it has meaningful display info (avatar or title)
+        const validAgent =
+          cleanedAgent && (cleanedAgent.avatar || cleanedAgent.title) ? cleanedAgent : null;
+
         return {
-          agent: agentInfo ?? null,
+          agent: validAgent,
           group: null,
           id: topic.id,
           title: topic.title,
@@ -405,6 +455,20 @@ export const topicRouter = router({
       );
 
       return ctx.topicModel.queryByKeyword(input.keywords, resolved.sessionId);
+    }),
+
+  /**
+   * Update share visibility
+   */
+  updateShareVisibility: topicProcedure
+    .input(
+      z.object({
+        topicId: z.string(),
+        visibility: z.enum(['private', 'link']),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.topicShareModel.updateVisibility(input.topicId, input.visibility);
     }),
 
   updateTopic: topicProcedure

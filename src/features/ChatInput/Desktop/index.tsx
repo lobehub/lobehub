@@ -95,9 +95,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
             <ChatInputActionBar
               left={<ActionBar dropdownPlacement={dropdownPlacement} />}
               right={<SendArea />}
-              style={{
-                paddingRight: 8,
-              }}
+              style={{ paddingRight: 8 }}
             />
           }
           fullscreen={expand}

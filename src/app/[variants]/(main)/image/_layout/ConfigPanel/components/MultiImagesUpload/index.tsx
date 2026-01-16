@@ -4,7 +4,7 @@
 import { Center } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Image as ImageIcon, X } from 'lucide-react';
-import Image from 'next/image';
+import Image from '@/libs/next/Image';
 import React, { type FC, memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

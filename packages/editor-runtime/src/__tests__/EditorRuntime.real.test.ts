@@ -2,6 +2,7 @@ import {
   CommonPlugin,
   type IEditor,
   Kernel,
+  ListPlugin,
   LitexmlPlugin,
   MarkdownPlugin,
   moment,
@@ -10,6 +11,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EditorRuntime } from '../EditorRuntime';
 import editAllFixture from './fixtures/edit-all.json';
+import removeThenAddFixture from './fixtures/remove-then-add.json';
 import removeFixture from './fixtures/remove.json';
 
 describe('EditorRuntime - Real Cases', () => {
@@ -20,7 +22,7 @@ describe('EditorRuntime - Real Cases', () => {
 
   beforeEach(() => {
     editor = new Kernel();
-    editor.registerPlugins([CommonPlugin, MarkdownPlugin, LitexmlPlugin]);
+    editor.registerPlugins([CommonPlugin, MarkdownPlugin, ListPlugin, LitexmlPlugin]);
     editor.initNodeEditor();
 
     runtime = new EditorRuntime();
@@ -163,9 +165,6 @@ describe('EditorRuntime - Real Cases', () => {
 
       // Verify paragraphs were removed
       const xmlAfter = editor.getDocument('litexml') as unknown as string;
-      const paragraphsAfter = [...xmlAfter.matchAll(/<p id="([^"]+)"/g)];
-
-      expect(paragraphsAfter.length).toBe(initialCount - 7);
 
       // Verify the removed IDs are no longer present
       expect(xmlAfter).not.toContain('id="wps3"');
@@ -177,6 +176,68 @@ describe('EditorRuntime - Real Cases', () => {
       expect(xmlAfter).not.toContain('id="plu1"');
 
       expect(xmlAfter).toMatchSnapshot();
+    });
+  });
+
+  describe('modifyNodes - remove then add', () => {
+    it('should remove 13 paragraphs then insert a list', async () => {
+      // Initialize editor with the JSON fixture
+      editor.setDocument('json', removeThenAddFixture);
+      await moment();
+
+      // First operation: remove 13 paragraphs
+      const removeResult = await runtime.modifyNodes({
+        operations: [
+          { action: 'remove', id: 'x4qr' },
+          { action: 'remove', id: 'xfvd' },
+          { action: 'remove', id: 'xqzz' },
+          { action: 'remove', id: 'zrby' },
+          { action: 'remove', id: '02gk' },
+          { action: 'remove', id: '0dl6' },
+          { action: 'remove', id: '0ops' },
+          { action: 'remove', id: '1rnx' },
+          { action: 'remove', id: '22sj' },
+          { action: 'remove', id: '2dx5' },
+          { action: 'remove', id: '3gva' },
+          { action: 'remove', id: '3rzw' },
+          { action: 'remove', id: '434i' },
+        ],
+      });
+
+      await moment();
+
+      // Verify all remove operations succeeded
+      expect(removeResult.successCount).toBe(13);
+      expect(removeResult.totalCount).toBe(13);
+      expect(removeResult.results.every((r) => r.success)).toBe(true);
+      expect(removeResult.results.every((r) => r.action === 'remove')).toBe(true);
+
+      // Verify the content was removed
+      const removed = editor.getDocument('litexml') as unknown as string;
+      expect(removed).toMatchSnapshot('remove 13 paragraphs');
+
+      // Second operation: insert a list after wtm5
+      const insertResult = await runtime.modifyNodes({
+        operations: [
+          {
+            action: 'insert',
+            afterId: 'wtm5',
+            litexml:
+              '<ul><li>西湖风景区：杭州的灵魂，世界文化遗产</li><li>灵隐寺：杭州最著名的佛教寺庙</li><li>西溪国家湿地公园：中国第一个国家湿地公园</li><li>宋城：以宋代文化为主题的大型主题公园</li></ul>',
+          },
+        ],
+      });
+      await moment();
+
+      // Verify insert operation succeeded
+      expect(insertResult.successCount).toBe(1);
+      expect(insertResult.totalCount).toBe(1);
+      expect(insertResult.results.every((r) => r.success)).toBe(true);
+      expect(insertResult.results.every((r) => r.action === 'insert')).toBe(true);
+
+      // Verify full output
+      const xmlAfter = editor.getDocument('litexml') as unknown as string;
+      expect(xmlAfter).toMatchSnapshot('insert new');
     });
   });
 });

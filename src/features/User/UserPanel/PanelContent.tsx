@@ -1,6 +1,6 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Flexbox } from '@lobehub/ui';
-import { useRouter } from 'next/navigation';
+import { useRouter } from '@/libs/next/navigation';
 import { memo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 

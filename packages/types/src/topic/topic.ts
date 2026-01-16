@@ -1,6 +1,8 @@
 import type { BaseDataModel } from '../meta';
 
 // Type definitions
+export type ShareVisibility = 'private' | 'link';
+
 export type TimeGroupId =
   | 'today'
   | 'yesterday'
@@ -34,13 +36,17 @@ export interface TopicUserMemoryExtractRunState {
 }
 
 export interface ChatTopicMetadata {
+  /**
+   * Cron job ID that triggered this topic creation (if created by scheduled task)
+   */
+  cronJobId?: string;
   model?: string;
   provider?: string;
   userMemoryExtractRunState?: TopicUserMemoryExtractRunState;
   userMemoryExtractStatus?: 'pending' | 'completed' | 'failed';
   /**
-   * Local System 工作目录（桌面端专用）
-   * 优先级高于 Agent 级别的设置
+   * Local System working directory (desktop only)
+   * Priority is higher than Agent-level settings
    */
   workingDirectory?: string;
 }
@@ -57,6 +63,7 @@ export interface ChatTopic extends Omit<BaseDataModel, 'meta'> {
   metadata?: ChatTopicMetadata;
   sessionId?: string;
   title: string;
+  trigger?: string | null;
 }
 
 export type ChatTopicMap = Record<string, ChatTopic>;
@@ -107,6 +114,10 @@ export interface QueryTopicParams {
   agentId?: string | null;
   current?: number;
   /**
+   * Exclude topics by trigger types (e.g. ['cron'])
+   */
+  excludeTriggers?: string[];
+  /**
    * Group ID to filter topics by
    */
   groupId?: string | null;
@@ -116,4 +127,48 @@ export interface QueryTopicParams {
    */
   isInbox?: boolean;
   pageSize?: number;
+}
+
+/**
+ * Shared message data for public sharing
+ */
+export interface SharedMessage {
+  content: string;
+  createdAt: Date;
+  id: string;
+  role: string;
+}
+
+/**
+ * Shared topic data returned by public API
+ */
+export interface SharedTopicData {
+  agentId: string | null;
+  agentMeta?: {
+    avatar?: string | null;
+    backgroundColor?: string | null;
+    marketIdentifier?: string | null;
+    slug?: string | null;
+    title?: string | null;
+  };
+  groupId: string | null;
+  groupMeta?: {
+    avatar?: string | null;
+    backgroundColor?: string | null;
+    members?: { avatar: string | null; backgroundColor: string | null }[];
+    title?: string | null;
+  };
+  shareId: string;
+  title: string | null;
+  topicId: string;
+  visibility: ShareVisibility;
+}
+
+/**
+ * Topic share info returned to the owner
+ */
+export interface TopicShareInfo {
+  id: string;
+  topicId: string;
+  visibility: ShareVisibility;
 }

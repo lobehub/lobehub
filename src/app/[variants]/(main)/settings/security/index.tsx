@@ -1,7 +1,7 @@
 'use client';
 
 import { Skeleton } from '@lobehub/ui';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 

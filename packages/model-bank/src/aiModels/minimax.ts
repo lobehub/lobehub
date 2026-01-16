@@ -7,7 +7,8 @@ const minimaxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 204_800,
-    description: '强大多语言编程实力，全面升级编程体验',
+    description:
+      'Powerful multilingual programming capabilities, comprehensively upgraded programming experience',
     displayName: 'MiniMax M2.1',
     enabled: true,
     id: 'MiniMax-M2.1',
@@ -30,7 +31,8 @@ const minimaxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 204_800,
-    description: '强大多语言编程实力，全面升级编程体验。更快，更高效。',
+    description:
+      'Powerful multilingual programming capabilities, comprehensively upgraded programming experience. Faster and more efficient.',
     displayName: 'MiniMax M2.1 Lightning',
     id: 'MiniMax-M2.1-Lightning',
     maxOutput: 131_072,
@@ -52,7 +54,7 @@ const minimaxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 204_800,
-    description: '专为高效编码与Agent工作流而生',
+    description: 'Built specifically for efficient coding and Agent workflows',
     displayName: 'MiniMax M2',
     id: 'MiniMax-M2',
     maxOutput: 131_072,
@@ -74,7 +76,8 @@ const minimaxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 204_800,
-    description: 'Built for efficient coding and agent workflows, with higher concurrency for commercial use.',
+    description:
+      'Built for efficient coding and agent workflows, with higher concurrency for commercial use.',
     displayName: 'MiniMax M2 Stable',
     id: 'MiniMax-M2-Stable',
     maxOutput: 131_072,
@@ -136,7 +139,8 @@ const minimaxChatModels: AIChatModelCard[] = [
 
 const minimaxImageModels: AIImageModelCard[] = [
   {
-    description: 'A new image generation model with fine detail, supporting text-to-image and image-to-image.',
+    description:
+      'A new image generation model with fine detail, supporting text-to-image and image-to-image.',
     displayName: 'Image 01',
     enabled: true,
     id: 'image-01',

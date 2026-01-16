@@ -4,12 +4,12 @@ import type { RuntimeInitialContext, RuntimeStepContext } from '@lobechat/types'
 
 import type { OpenAIChatMessage, UIChatMessage } from '@/types/index';
 
-import type { AgentInfo } from '../../processors/GroupMessageSender';
+import type { AgentInfo } from '../../processors/GroupRoleTransform';
 import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
-import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
-import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
 import type { GTDPlan } from '../../providers/GTDPlanInjector';
 import type { GTDTodoList } from '../../providers/GTDTodoInjector';
+import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
+import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
 import type { LobeToolManifest } from '../tools/types';
 
 /**
@@ -249,7 +249,7 @@ export interface MessagesEngineResult {
 
 // Re-export types for convenience
 
-export { type AgentInfo } from '../../processors/GroupMessageSender';
+export { type AgentInfo } from '../../processors/GroupRoleTransform';
 export { type AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
 export { type GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
 export { type GTDPlan } from '../../providers/GTDPlanInjector';

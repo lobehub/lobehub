@@ -41,10 +41,10 @@ const OllamaModelDownloader = memo<OllamaModelDownloaderProps>(
       isValidating: isDownloading,
       error,
     } = useActionSWR(
-      [modelToPull],
-      async ([model]) => {
+      ['ollama.downloadModel', modelToPull],
+      async () => {
         await modelsService.downloadModel(
-          { model, provider: 'ollama' },
+          { model: modelToPull, provider: 'ollama' },
           { onProgress: handleProgress },
         );
 

@@ -85,6 +85,17 @@ class ChatGroupService {
     return lambdaClient.group.addAgentsToGroup.mutate({ agentIds, groupId });
   };
 
+  /**
+   * Batch create virtual agents and add them to an existing group.
+   * This is more efficient than calling createAgentOnly multiple times.
+   */
+  batchCreateAgentsInGroup = (groupId: string, agents: GroupMemberConfig[]) => {
+    return lambdaClient.group.batchCreateAgentsInGroup.mutate({
+      agents: agents as Partial<AgentItem>[],
+      groupId,
+    });
+  };
+
   removeAgentsFromGroup = (groupId: string, agentIds: string[]) => {
     return lambdaClient.group.removeAgentsFromGroup.mutate({ agentIds, groupId });
   };
@@ -106,6 +117,17 @@ class ChatGroupService {
 
   getGroupAgents = (groupId: string): Promise<ChatGroupAgentItem[]> => {
     return lambdaClient.group.getGroupAgents.query({ groupId });
+  };
+
+  /**
+   * Duplicate a chat group with all its members.
+   * Returns the new group ID and supervisor agent ID.
+   */
+  duplicateGroup = (
+    groupId: string,
+    newTitle?: string,
+  ): Promise<{ groupId: string; supervisorAgentId: string } | null> => {
+    return lambdaClient.group.duplicateGroup.mutate({ groupId, newTitle });
   };
 }
 

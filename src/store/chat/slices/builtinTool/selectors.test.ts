@@ -10,69 +10,6 @@ describe('chatToolSelectors', () => {
     useChatStore.setState(useChatStore.getInitialState());
   });
 
-  describe('isDallEImageGenerating', () => {
-    it('should return true when DALL-E image is generating for message', () => {
-      const { result } = renderHook(() => useChatStore());
-
-      act(() => {
-        useChatStore.setState({
-          dalleImageLoading: {
-            msg1: true,
-            msg2: false,
-          },
-        });
-      });
-
-      expect(chatToolSelectors.isDallEImageGenerating('msg1')(result.current)).toBe(true);
-      expect(chatToolSelectors.isDallEImageGenerating('msg2')(result.current)).toBe(false);
-    });
-
-    it('should return undefined when message not in loading state', () => {
-      const { result } = renderHook(() => useChatStore());
-
-      expect(chatToolSelectors.isDallEImageGenerating('msg1')(result.current)).toBeUndefined();
-    });
-  });
-
-  describe('isGeneratingDallEImage', () => {
-    it('should return true when any DALL-E image is generating', () => {
-      const { result } = renderHook(() => useChatStore());
-
-      act(() => {
-        useChatStore.setState({
-          dalleImageLoading: {
-            msg1: false,
-            msg2: true,
-            msg3: false,
-          },
-        });
-      });
-
-      expect(chatToolSelectors.isGeneratingDallEImage(result.current)).toBe(true);
-    });
-
-    it('should return false when no DALL-E images are generating', () => {
-      const { result } = renderHook(() => useChatStore());
-
-      act(() => {
-        useChatStore.setState({
-          dalleImageLoading: {
-            msg1: false,
-            msg2: false,
-          },
-        });
-      });
-
-      expect(chatToolSelectors.isGeneratingDallEImage(result.current)).toBe(false);
-    });
-
-    it('should return false when dalleImageLoading is empty', () => {
-      const { result } = renderHook(() => useChatStore());
-
-      expect(chatToolSelectors.isGeneratingDallEImage(result.current)).toBe(false);
-    });
-  });
-
   describe('isInterpreterExecuting', () => {
     it('should return true when interpreter is executing for message', () => {
       const { result } = renderHook(() => useChatStore());

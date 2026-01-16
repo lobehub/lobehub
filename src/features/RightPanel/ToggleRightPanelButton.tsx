@@ -15,6 +15,7 @@ import { HotkeyEnum } from '@/types/hotkey';
 export const TOGGLE_BUTTON_ID = 'toggle_right_panel_button';
 
 interface ToggleRightPanelButtonProps {
+  hideWhenExpanded?: boolean;
   icon?: ActionIconProps['icon'];
   showActive?: boolean;
   size?: ActionIconProps['size'];
@@ -22,7 +23,7 @@ interface ToggleRightPanelButtonProps {
 }
 
 const ToggleRightPanelButton = memo<ToggleRightPanelButtonProps>(
-  ({ title, showActive, icon, size }) => {
+  ({ title, showActive, icon, hideWhenExpanded, size }) => {
     const [expand, togglePanel] = useGlobalStore((s) => [
       systemStatusSelectors.showRightPanel(s),
       s.toggleRightPanel,
@@ -31,6 +32,7 @@ const ToggleRightPanelButton = memo<ToggleRightPanelButtonProps>(
 
     const { t } = useTranslation(['chat', 'hotkey']);
 
+    if (hideWhenExpanded && expand) return null;
     return (
       <ActionIcon
         active={showActive ? expand : undefined}

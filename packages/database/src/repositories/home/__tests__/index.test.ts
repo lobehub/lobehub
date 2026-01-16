@@ -36,6 +36,86 @@ describe('HomeRepository', () => {
       expect(result.groups).toEqual([]);
     });
 
+    it('should return non-virtual agents without agentsToSessions relationship', async () => {
+      // Create an agent without session relationship (e.g., duplicated agent)
+      const agentId = 'standalone-agent';
+
+      await clientDB.insert(Schema.agents).values({
+        id: agentId,
+        userId,
+        title: 'Standalone Agent',
+        description: 'Agent without session',
+        pinned: false,
+        virtual: false,
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      // Agent should appear in ungrouped list even without agentsToSessions
+      expect(result.ungrouped).toHaveLength(1);
+      expect(result.ungrouped[0].id).toBe(agentId);
+      expect(result.ungrouped[0].title).toBe('Standalone Agent');
+    });
+
+    it('should return pinned non-virtual agents without agentsToSessions relationship', async () => {
+      // Create a pinned agent without session relationship
+      const agentId = 'pinned-standalone';
+
+      await clientDB.insert(Schema.agents).values({
+        id: agentId,
+        userId,
+        title: 'Pinned Standalone Agent',
+        pinned: true,
+        virtual: false,
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      // Agent should appear in pinned list
+      expect(result.pinned).toHaveLength(1);
+      expect(result.pinned[0].id).toBe(agentId);
+      expect(result.pinned[0].pinned).toBe(true);
+    });
+
+    it('should return mixed agents with and without session relationships', async () => {
+      // Agent with session
+      await clientDB.transaction(async (tx) => {
+        await tx.insert(Schema.agents).values({
+          id: 'with-session',
+          userId,
+          title: 'Agent With Session',
+          pinned: false,
+          virtual: false,
+        });
+        await tx.insert(Schema.sessions).values({
+          id: 'session-1',
+          slug: 'session-1',
+          userId,
+        });
+        await tx.insert(Schema.agentsToSessions).values({
+          agentId: 'with-session',
+          sessionId: 'session-1',
+          userId,
+        });
+      });
+
+      // Agent without session (e.g., duplicated)
+      await clientDB.insert(Schema.agents).values({
+        id: 'without-session',
+        userId,
+        title: 'Agent Without Session',
+        pinned: false,
+        virtual: false,
+      });
+
+      const result = await homeRepo.getSidebarAgentList();
+
+      // Both agents should appear
+      expect(result.ungrouped).toHaveLength(2);
+      expect(result.ungrouped.map((a) => a.id)).toContain('with-session');
+      expect(result.ungrouped.map((a) => a.id)).toContain('without-session');
+    });
+
     it('should return agents with pinned status from agents table', async () => {
       // Create an agent with pinned=true
       const agentId = 'agent-1';
@@ -380,12 +460,40 @@ describe('HomeRepository', () => {
           sessionId: 'session-search-unpinned',
           userId,
         });
+
+        // Agent without session (e.g., duplicated agent)
+        await tx.insert(Schema.agents).values({
+          id: 'search-standalone',
+          userId,
+          title: 'Standalone Searchable Agent',
+          description: 'A standalone agent without session',
+          pinned: false,
+          virtual: false,
+        });
       });
     });
 
     it('should return empty array for empty keyword', async () => {
       const result = await homeRepo.searchAgents('');
       expect(result).toEqual([]);
+    });
+
+    it('should search agents without agentsToSessions relationship', async () => {
+      const result = await homeRepo.searchAgents('Standalone');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('search-standalone');
+      expect(result[0].title).toBe('Standalone Searchable Agent');
+    });
+
+    it('should search and return mixed agents with and without session relationships', async () => {
+      // Search for "Searchable" should return all 3 agents
+      const result = await homeRepo.searchAgents('Searchable');
+
+      expect(result).toHaveLength(3);
+      expect(result.map((a) => a.id)).toContain('search-pinned');
+      expect(result.map((a) => a.id)).toContain('search-unpinned');
+      expect(result.map((a) => a.id)).toContain('search-standalone');
     });
 
     it('should search agents by title and return correct pinned status', async () => {
@@ -407,15 +515,19 @@ describe('HomeRepository', () => {
     it('should return multiple matching agents with correct pinned status', async () => {
       const result = await homeRepo.searchAgents('Searchable');
 
-      expect(result).toHaveLength(2);
+      // 3 agents: search-pinned, search-unpinned, search-standalone
+      expect(result).toHaveLength(3);
 
       const pinnedAgent = result.find((a) => a.id === 'search-pinned');
       const unpinnedAgent = result.find((a) => a.id === 'search-unpinned');
+      const standaloneAgent = result.find((a) => a.id === 'search-standalone');
 
       expect(pinnedAgent).toBeDefined();
       expect(pinnedAgent!.pinned).toBe(true);
       expect(unpinnedAgent).toBeDefined();
       expect(unpinnedAgent!.pinned).toBe(false);
+      expect(standaloneAgent).toBeDefined();
+      expect(standaloneAgent!.pinned).toBe(false);
     });
 
     it('should not return virtual agents in search', async () => {

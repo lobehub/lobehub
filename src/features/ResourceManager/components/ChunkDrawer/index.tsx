@@ -1,7 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
 import { cssVar } from 'antd-style';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { memo } from 'react';
 
 import { fileManagerSelectors, useFileStore } from '@/store/file';

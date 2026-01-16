@@ -31,8 +31,8 @@ export interface OfficialToolItem {
   installed?: boolean;
   /** Tool display name */
   name: string;
-  /** Tool type: 'builtin' for built-in tools, 'klavis' for LobeHub Mcp servers */
-  type: 'builtin' | 'klavis';
+  /** Tool type: 'builtin' for built-in tools, 'klavis' for LobeHub Mcp servers, 'lobehub-skill' for LobeHub Skill providers */
+  type: 'builtin' | 'klavis' | 'lobehub-skill';
 }
 
 /**
@@ -58,7 +58,7 @@ export interface AgentBuilderContext {
     tags?: string[];
     title?: string;
   };
-  /** Available official tools (builtin tools and Klavis integrations) */
+  /** Available official tools (builtin tools, Klavis integrations, and LobehubSkill providers) */
   officialTools?: OfficialToolItem[];
 }
 
@@ -136,6 +136,7 @@ const defaultFormatAgentContext = (context: AgentBuilderContext): string => {
   if (context.officialTools && context.officialTools.length > 0) {
     const builtinTools = context.officialTools.filter((t) => t.type === 'builtin');
     const klavisTools = context.officialTools.filter((t) => t.type === 'klavis');
+    const lobehubSkillTools = context.officialTools.filter((t) => t.type === 'lobehub-skill');
 
     const toolsSections: string[] = [];
 
@@ -167,6 +168,21 @@ const defaultFormatAgentContext = (context: AgentBuilderContext): string => {
       toolsSections.push(`  <klavis_tools>\n${klavisItems}\n  </klavis_tools>`);
     }
 
+    if (lobehubSkillTools.length > 0) {
+      const lobehubSkillItems = lobehubSkillTools
+        .map((t) => {
+          const attrs = [
+            `id="${t.identifier}"`,
+            `installed="${t.installed ? 'true' : 'false'}"`,
+            `enabled="${t.enabled ? 'true' : 'false'}"`,
+          ].join(' ');
+          const desc = t.description ? ` - ${escapeXml(t.description)}` : '';
+          return `    <tool ${attrs}>${escapeXml(t.name)}${desc}</tool>`;
+        })
+        .join('\n');
+      toolsSections.push(`  <lobehub_skill_tools>\n${lobehubSkillItems}\n  </lobehub_skill_tools>`);
+    }
+
     if (toolsSections.length > 0) {
       parts.push(
         `<available_official_tools>\n${toolsSections.join('\n')}\n</available_official_tools>`,
@@ -179,7 +195,7 @@ const defaultFormatAgentContext = (context: AgentBuilderContext): string => {
   }
 
   return `<current_agent_context>
-<instruction>This is the current agent's configuration context. Use this information when the user asks about or wants to modify agent settings. Use togglePlugin to enable/disable tools, or installPlugin to install new tools.</instruction>
+<instruction>This is the current agent's configuration context. Use this information when the user asks about or wants to modify agent settings. Use togglePlugin to enable/disable tools, or installPlugin to install new tools (including builtin tools, Klavis servers, and LobehubSkill providers).</instruction>
 ${parts.join('\n')}
 </current_agent_context>`;
 };

@@ -14,5 +14,6 @@ export default defineConfig({
       reportsDirectory: './coverage/app',
     },
     environment: 'node',
+    setupFiles: ['./src/main/__mocks__/setup.ts'],
   },
 });

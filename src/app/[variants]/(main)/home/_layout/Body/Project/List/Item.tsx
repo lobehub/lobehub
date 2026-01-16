@@ -1,7 +1,7 @@
 import { BoxIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 
-import { useKnowledgeBaseStore } from '@/store/knowledgeBase';
+import { useKnowledgeBaseStore } from '@/store/library';
 
 import NavItem from '../../../../../../../../features/NavPanel/components/NavItem';
 import Actions from './Actions';

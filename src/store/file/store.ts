@@ -8,6 +8,8 @@ import { type FileAction, createFileSlice } from './slices/chat';
 import { type FileChunkAction, createFileChunkSlice } from './slices/chunk';
 import { type DocumentAction, createDocumentSlice } from './slices/document';
 import { type FileManageAction, createFileManageSlice } from './slices/fileManager';
+import { type ResourceAction, createResourceSlice } from './slices/resource/action';
+import { type ResourceState } from './slices/resource/initialState';
 import { type TTSFileAction, createTTSFileSlice } from './slices/tts';
 import { type FileUploadAction, createFileUploadSlice } from './slices/upload/action';
 
@@ -19,7 +21,9 @@ export type FileStore = FilesStoreState &
   TTSFileAction &
   FileManageAction &
   FileChunkAction &
-  FileUploadAction;
+  FileUploadAction &
+  ResourceAction &
+  ResourceState;
 
 const createStore: StateCreator<FileStore, [['zustand/devtools', never]]> = (...parameters) => ({
   ...initialState,
@@ -29,6 +33,7 @@ const createStore: StateCreator<FileStore, [['zustand/devtools', never]]> = (...
   ...createTTSFileSlice(...parameters),
   ...createFileChunkSlice(...parameters),
   ...createFileUploadSlice(...parameters),
+  ...createResourceSlice(...parameters),
 });
 
 //  ===============  Implement useStore ============ //

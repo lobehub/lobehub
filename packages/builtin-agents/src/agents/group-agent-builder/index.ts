@@ -13,7 +13,7 @@ export const GROUP_AGENT_BUILDER: BuiltinAgentDefinition = {
   // Persist config - stored in database
   persist: {
     model: 'claude-sonnet-4-5-20250929',
-    provider: 'anthropic',
+    provider: 'lobehub',
   },
 
   // Runtime config - static systemRole

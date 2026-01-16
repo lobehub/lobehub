@@ -1,3 +1,4 @@
+import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementIdentifier } from '@lobechat/builtin-tool-group-management';
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
 
@@ -20,6 +21,11 @@ const resolveSystemRole = (ctx: GroupSupervisorContext): string => {
  * - Strategically coordinating agent participation
  * - Ensuring natural conversation flow
  * - Matching user queries to appropriate agent expertise
+ *
+ * Tools:
+ * - GroupManagement: orchestration (speak, broadcast, executeAgentTask, etc.)
+ * - GroupAgentBuilder: member management (searchAgent, inviteAgent, createAgent, etc.)
+ * - GTD: task tracking
  */
 export const GROUP_SUPERVISOR: BuiltinAgentDefinition = {
   runtime: (ctx) => {
@@ -33,7 +39,12 @@ export const GROUP_SUPERVISOR: BuiltinAgentDefinition = {
       chatConfig: {
         enableHistoryCount: false,
       },
-      plugins: [GroupManagementIdentifier, GTDIdentifier, ...(ctx.plugins || [])],
+      plugins: [
+        GroupManagementIdentifier,
+        GroupAgentBuilderIdentifier,
+        GTDIdentifier,
+        ...(ctx.plugins || []),
+      ],
       systemRole: resolveSystemRole(groupSupervisorContext),
     };
   },

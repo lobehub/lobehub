@@ -3,6 +3,11 @@ import { Browser, BrowserContext, Page, Response, chromium } from '@playwright/t
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
+/**
+ * Default timeout for waiting operations (e.g., waitForURL, toBeVisible)
+ */
+export const WAIT_TIMEOUT = 13_000;
+
 export interface TestContext {
   [key: string]: any;
   consoleErrors: string[];
@@ -16,6 +21,13 @@ export class CustomWorld extends World {
   browserContext!: BrowserContext;
   page!: Page;
   testContext: TestContext;
+
+  /**
+   * Get the platform-specific modifier key (Meta for macOS, Control for Linux/Windows)
+   */
+  get modKey(): 'Meta' | 'Control' {
+    return process.platform === 'darwin' ? 'Meta' : 'Control';
+  }
 
   constructor(options: IWorldOptions) {
     super(options);

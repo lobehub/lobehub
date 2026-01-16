@@ -16,6 +16,7 @@ interface AgentBuilderProviderProps {
  * Uses 'group_agent_builder' scope with groupId to isolate messages per group
  */
 const AgentBuilderProvider = memo<AgentBuilderProviderProps>(({ agentId, children }) => {
+  // Use activeTopicId from chatStore (synced with URL query 'bt' via ProfileHydration)
   const activeTopicId = useChatStore((s) => s.activeTopicId);
 
   // Build conversation context for group agent builder

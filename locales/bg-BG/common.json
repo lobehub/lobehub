@@ -134,6 +134,8 @@
   "cmdk.search.communityAgent": "Агент от общността",
   "cmdk.search.file": "Файл",
   "cmdk.search.files": "Файлове",
+  "cmdk.search.folder": "Папка",
+  "cmdk.search.folders": "Папки",
   "cmdk.search.loading": "Търсене...",
   "cmdk.search.market": "Общност",
   "cmdk.search.mcp": "MCP сървър",

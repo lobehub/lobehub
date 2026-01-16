@@ -16,7 +16,7 @@ const common = {
   'actions.save': 'Save',
   'actions.search': 'Search',
   'actions.submit': 'Submit',
-  'app.description': 'For Collaborative Agents',
+  'app.description': 'Where Agents Collaborate',
   'app.name': 'LobeHub',
   'status.error': 'Error',
   'status.info': 'Information',

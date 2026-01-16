@@ -3,7 +3,7 @@
 import { type FormItemProps, FormModal, type FormModalProps, Segmented } from '@lobehub/ui';
 import { Skeleton } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

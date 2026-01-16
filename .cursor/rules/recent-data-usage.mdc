@@ -42,7 +42,7 @@ const Component = () => {
 
   return (
     <div>
-      {recentTopics.map(topic => (
+      {recentTopics.map((topic) => (
         <div key={topic.id}>{topic.title}</div>
       ))}
     </div>
@@ -81,6 +81,7 @@ const isInit = useSessionStore(recentSelectors.isRecentTopicsInit);
 ```
 
 **RecentTopic 类型：**
+
 ```typescript
 interface RecentTopic {
   agent: {

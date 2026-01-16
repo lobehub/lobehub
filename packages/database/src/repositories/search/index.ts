@@ -9,6 +9,7 @@ export type SearchResultType =
   | 'agent'
   | 'topic'
   | 'file'
+  | 'folder'
   | 'memory'
   | 'message'
   | 'mcp'
@@ -60,6 +61,12 @@ export interface FileSearchResult extends BaseSearchResult {
   url: string | null;
 }
 
+export interface FolderSearchResult extends BaseSearchResult {
+  knowledgeBaseId: string | null;
+  slug: string | null;
+  type: 'folder';
+}
+
 export interface MessageSearchResult extends BaseSearchResult {
   agentId: string | null;
   content: string;
@@ -106,6 +113,7 @@ export type SearchResult =
   | AgentSearchResult
   | TopicSearchResult
   | FileSearchResult
+  | FolderSearchResult
   | MessageSearchResult
   | MCPSearchResult
   | PluginSearchResult
@@ -167,6 +175,9 @@ export class SearchRepo {
     if ((!type || type === 'file') && limits.file > 0) {
       queries.push(this.buildFileQuery(searchTerm, exactQuery, prefixQuery, limits.file));
     }
+    if ((!type || type === 'folder') && limits.folder > 0) {
+      queries.push(this.buildFolderQuery(searchTerm, exactQuery, prefixQuery, limits.folder));
+    }
     if ((!type || type === 'page') && limits.page > 0) {
       queries.push(this.buildPageQuery(searchTerm, exactQuery, prefixQuery, limits.page));
     }
@@ -192,7 +203,7 @@ export class SearchRepo {
    * Calculate result limits based on context
    * - Agent context: expand topics (6) and messages (6), limit others (3 each)
    * - Page context: expand pages (6), limit others (3 each)
-   * - Resource context: expand files (6), limit others (3 each)
+   * - Resource context: expand files (6) and folders (6), limit others (3 each)
    * - General context: limit all types to 3 each
    */
   private calculateLimits(
@@ -203,6 +214,7 @@ export class SearchRepo {
   ): {
     agent: number;
     file: number;
+    folder: number;
     message: number;
     page: number;
     pageContent: number;
@@ -213,6 +225,7 @@ export class SearchRepo {
       return {
         agent: type === 'agent' ? baseLimit : 0,
         file: type === 'file' ? baseLimit : 0,
+        folder: type === 'folder' ? baseLimit : 0,
         message: type === 'message' ? baseLimit : 0,
         page: type === 'page' ? baseLimit : 0,
         pageContent: type === 'pageContent' ? baseLimit : 0,
@@ -225,6 +238,7 @@ export class SearchRepo {
       return {
         agent: 3,
         file: 3,
+        folder: 3,
         message: 3,
         page: 6,
         pageContent: 0, // Not available yet
@@ -232,11 +246,12 @@ export class SearchRepo {
       };
     }
 
-    // Resource context: expand files to 6, limit others to 3
+    // Resource context: expand files and folders to 6, limit others to 3
     if (contextType === 'resource') {
       return {
         agent: 3,
         file: 6,
+        folder: 6,
         message: 3,
         page: 3,
         pageContent: 0, // Not available yet
@@ -249,6 +264,7 @@ export class SearchRepo {
       return {
         agent: 3,
         file: 3,
+        folder: 3,
         message: 6,
         page: 3,
         pageContent: 0, // Not available yet
@@ -260,11 +276,26 @@ export class SearchRepo {
     return {
       agent: 3,
       file: 3,
+      folder: 3,
       message: 3,
       page: 3,
       pageContent: 0, // Not available yet
       topic: 3,
     };
+  }
+
+  /**
+   * Truncate content at database level with ellipsis indicator
+   * Uses SQL LEFT() function for efficient truncation
+   * Note: This helper is defined for documentation but not currently used.
+   * Truncation is implemented inline in query methods for better SQL readability.
+   */
+  private truncateContent(columnName: string, maxLength: number): string {
+    return `CASE
+      WHEN LENGTH(${columnName}) > ${maxLength}
+      THEN LEFT(${columnName}, ${maxLength}) || '...'
+      ELSE ${columnName}
+    END`;
   }
 
   /**
@@ -362,7 +393,10 @@ export class SearchRepo {
         t.id,
         'topic' as type,
         t.title,
-        t.content as description,
+        CASE
+          WHEN length(COALESCE(t.content, '')) > 200 THEN substring(COALESCE(t.content, ''), 1, 200) || '...'
+          ELSE t.content
+        END as description,
         NULL::varchar(100) as slug,
         NULL::text as avatar,
         NULL::text as background_color,
@@ -447,7 +481,7 @@ export class SearchRepo {
         m.id,
         'message' as type,
         CASE
-          WHEN length(m.content) > 100 THEN substring(m.content, 1, 100) || '...'
+          WHEN length(m.content) > 200 THEN substring(m.content, 1, 200) || '...'
           ELSE m.content
         END as title,
         COALESCE(a.title, 'General Chat') as description,
@@ -492,7 +526,10 @@ export class SearchRepo {
         f.id,
         'file' as type,
         f.name as title,
-        d.content as description,
+        CASE
+          WHEN length(COALESCE(d.content, '')) > 200 THEN substring(COALESCE(d.content, ''), 1, 200) || '...'
+          ELSE d.content
+        END as description,
         NULL::varchar(100) as slug,
         NULL::text as avatar,
         NULL::text as background_color,
@@ -520,13 +557,16 @@ export class SearchRepo {
         AND f.name ILIKE ${searchTerm}
     `;
 
-    // Query for standalone documents (not pages and not linked to files)
+    // Query for standalone documents (not pages, not folders, and not linked to files)
     const documentQuery = sql`
       SELECT
         d.id,
         'file' as type,
         COALESCE(d.title, d.filename, 'Untitled') as title,
-        d.content as description,
+        CASE
+          WHEN length(COALESCE(d.content, '')) > 200 THEN substring(COALESCE(d.content, ''), 1, 200) || '...'
+          ELSE d.content
+        END as description,
         NULL::varchar(100) as slug,
         NULL::text as avatar,
         NULL::text as background_color,
@@ -552,6 +592,7 @@ export class SearchRepo {
       WHERE d.user_id = ${this.userId}
         AND d.source_type != 'file'
         AND d.file_type != 'custom/document'
+        AND d.file_type != 'custom/folder'
         AND (
           COALESCE(d.title, '') ILIKE ${searchTerm}
           OR COALESCE(d.filename, '') ILIKE ${searchTerm}
@@ -566,6 +607,54 @@ export class SearchRepo {
         UNION ALL
         (${documentQuery})
       ) as combined
+      ORDER BY relevance ASC, updated_at DESC
+      LIMIT ${limit}
+    `;
+  }
+
+  /**
+   * Build folder search query
+   * Searches folders in the documents table (file_type='custom/folder')
+   */
+  private buildFolderQuery(
+    searchTerm: string,
+    exactQuery: string,
+    prefixQuery: string,
+    limit: number,
+  ): ReturnType<typeof sql> {
+    return sql`
+      SELECT
+        d.id,
+        'folder' as type,
+        COALESCE(d.title, d.filename, 'Untitled') as title,
+        d.description,
+        d.slug,
+        NULL::text as avatar,
+        NULL::text as background_color,
+        NULL::jsonb as tags,
+        d.created_at,
+        d.updated_at,
+        CASE
+          WHEN COALESCE(d.title, d.filename) ILIKE ${exactQuery} THEN 1
+          WHEN COALESCE(d.title, d.filename) ILIKE ${prefixQuery} THEN 2
+          ELSE 3
+        END as relevance,
+        NULL::boolean as favorite,
+        NULL::text as session_id,
+        NULL::text as agent_id,
+        COALESCE(d.title, d.filename, 'Untitled') as name,
+        d.file_type,
+        NULL::integer as size,
+        NULL::text as url,
+        d.knowledge_base_id
+      FROM ${documents} d
+      WHERE d.user_id = ${this.userId}
+        AND d.file_type = 'custom/folder'
+        AND (
+          COALESCE(d.title, '') ILIKE ${searchTerm}
+          OR COALESCE(d.filename, '') ILIKE ${searchTerm}
+          OR COALESCE(d.description, '') ILIKE ${searchTerm}
+        )
       ORDER BY relevance ASC, updated_at DESC
       LIMIT ${limit}
     `;
@@ -635,7 +724,10 @@ export class SearchRepo {
         d.id,
         'pageContent' as type,
         COALESCE(d.title, d.filename, 'Untitled') as title,
-        d.content as description,
+        CASE
+          WHEN length(COALESCE(d.content, '')) > 200 THEN substring(COALESCE(d.content, ''), 1, 200) || '...'
+          ELSE d.content
+        END as description,
         NULL::varchar(100) as slug,
         NULL::text as avatar,
         NULL::text as background_color,
@@ -735,6 +827,14 @@ export class SearchRepo {
             size: Number(row.size),
             type: 'file' as const,
             url: row.url,
+          };
+        }
+        case 'folder': {
+          return {
+            ...base,
+            knowledgeBaseId: row.knowledge_base_id,
+            slug: row.slug,
+            type: 'folder' as const,
           };
         }
         case 'message': {

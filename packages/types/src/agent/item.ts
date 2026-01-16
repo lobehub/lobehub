@@ -12,8 +12,8 @@ export interface LobeAgentConfig {
   chatConfig: LobeAgentChatConfig;
 
   /**
-   * 编辑器内容（JSON 格式）
-   * 用于保存富文本编辑器的完整状态，包括 mention 等特殊节点
+   * Editor content (JSON format)
+   * Used to save the complete state of the rich text editor, including special nodes like mention
    */
   editorData?: any;
   enableAgentMode?: boolean;
@@ -26,41 +26,41 @@ export interface LobeAgentConfig {
    */
   knowledgeBases?: KnowledgeBaseItem[];
   /**
-   * 角色所使用的语言模型
+   * Language model used by the agent
    * @default gpt-4o-mini
    */
   model: string;
 
   /**
-   * 开场白
+   * Opening message
    */
   openingMessage?: string;
   /**
-   * 开场问题
+   * Opening questions
    */
   openingQuestions?: string[];
 
   /**
-   * 语言模型参数
+   * Language model parameters
    */
   params: LLMParams;
   /**
-   * 启用的插件
+   * Enabled plugins
    */
   plugins?: string[];
 
   /**
-   *  模型供应商
+   *  Model provider
    */
   provider?: string;
 
   /**
-   * 系统角色
+   * System role
    */
   systemRole: string;
 
   /**
-   * 语音服务
+   * Text-to-speech service
    */
   tts: LobeAgentTTSConfig;
 

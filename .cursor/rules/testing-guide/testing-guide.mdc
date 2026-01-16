@@ -3,173 +3,199 @@ globs: *.test.ts,*.test.tsx
 alwaysApply: false
 ---
 
-# 测试指南 - LobeChat Testing Guide
+# LobeChat Testing Guide
 
-## 测试环境概览
+## Test Overview
 
-LobeChat 项目使用 Vitest 测试库，配置了两种不同的测试环境：
+LobeChat testing consists of **E2E tests** and **Unit tests**. This guide focuses on **Unit tests**.
 
-### 客户端数据库测试环境 (DOM Environment)
+Unit tests are organized into three main categories:
 
-- **配置文件**: [vitest.config.ts](mdc:vitest.config.ts)
-- **环境**: Happy DOM (浏览器环境模拟)
-- **数据库**: PGLite (浏览器环境的 PostgreSQL)
-- **用途**: 测试前端组件、客户端逻辑、React 组件等
-- **设置文件**: [tests/setup.ts](mdc:tests/setup.ts)
+```plaintext
++---------------------+---------------------------+-----------------------------+
+| Category            | Location                  | Config File                 |
++---------------------+---------------------------+-----------------------------+
+| Next.js Webapp      | src/**/*.test.ts(x)       | vitest.config.ts            |
+| Packages            | packages/*/**/*.test.ts   | packages/*/vitest.config.ts |
+| Desktop App         | apps/desktop/**/*.test.ts | apps/desktop/vitest.config.ts |
++---------------------+---------------------------+-----------------------------+
+```
 
-### 服务端数据库测试环境 (Node Environment)
+### Next.js Webapp Tests
 
-目前只有 `packages/database` 下的测试可以通过配置 `TEST_SERVER_DB=1` 环境变量来使用服务端数据库测试
+- **Config File**: `vitest.config.ts`
+- **Environment**: Happy DOM (browser environment simulation)
+- **Database**: PGLite (PostgreSQL for browser environments)
+- **Setup File**: `tests/setup.ts`
+- **Purpose**: Testing React components, hooks, stores, utilities, and client-side logic
 
-- **配置文件**: [packages/database/vitest.config.mts](mdc:packages/database/vitest.config.mts) 并且设置环境变量 `TEST_SERVER_DB=1`
-- **环境**: Node.js
-- **数据库**: 真实的 PostgreSQL 数据库
-- **并发限制**: 单线程运行 (`singleFork: true`)
-- **用途**: 测试数据库模型、服务端逻辑、API 端点等
-- **设置文件**: [packages/database/tests/setup-db.ts](mdc:packages/database/tests/setup-db.ts)
+### Packages Tests
 
-## 测试运行命令
+Most packages use standard Vitest configuration. However, the `database` package is special:
 
-** 性能警告**: 项目包含 3000+ 测试用例，完整运行需要约 10 分钟。务必使用文件过滤或测试名称过滤。
+#### Database Package (Special Case)
 
-### 正确的命令格式
+The database package supports **dual-environment testing**:
+
+| Environment      | Database        | Config                                | Use Case                          |
+|------------------|-----------------|---------------------------------------|-----------------------------------|
+| Client (Default) | PGLite          | `packages/database/vitest.config.mts` | Fast local development            |
+| Server           | Real PostgreSQL | Set `TEST_SERVER_DB=1`                | CI/CD, compatibility verification |
+
+Server environment details:
+
+- **Concurrency**: Single-threaded (`singleFork: true`)
+- **Setup File**: `packages/database/tests/setup-db.ts`
+- **Requirement**: `DATABASE_TEST_URL` environment variable must be set
+
+### Desktop App Tests
+
+- **Config File**: `apps/desktop/vitest.config.ts`
+- **Environment**: Node.js
+- **Purpose**: Testing Electron main process controllers, IPC handlers, and desktop-specific logic
+
+## Test Commands
+
+**Performance Warning**: The project contains 3000+ test cases. A full run takes approximately 10 minutes. Always use file filtering or test name filtering.
+
+### Recommended Command Format
 
 ```bash
-# 运行所有客户端/服务端测试
-bunx vitest run --silent='passed-only'                                          # 客户端测试
-cd packages/database && TEST_SERVER_DB=1 bunx vitest run --silent='passed-only' # 服务端测试
+# Run all client/server tests
+bunx vitest run --silent='passed-only'                                          # Client tests
+cd packages/database && TEST_SERVER_DB=1 bunx vitest run --silent='passed-only' # Server tests
 
-# 运行特定测试文件 (支持模糊匹配)
+# Run specific test file (supports fuzzy matching)
 bunx vitest run --silent='passed-only' user.test.ts
 
-# 运行特定测试用例名称 (使用 -t 参数)
+# Run specific test case by name (using -t flag)
 bunx vitest run --silent='passed-only' -t "test case name"
 
-# 组合使用文件和测试名称过滤
+# Combine file and test name filtering
 bunx vitest run --silent='passed-only' filename.test.ts -t "specific test"
 
-# 生成覆盖率报告 (使用 --coverage 参数)
+# Generate coverage report (using --coverage flag)
 bunx vitest run --silent='passed-only' --coverage
 ```
 
-### 避免的命令格式
+### Commands to Avoid
 
 ```bash
-#  这些命令会运行所有 3000+ 测试用例，耗时约 10 分钟！
+# ❌ These commands run all 3000+ test cases, taking ~10 minutes!
 npm test
 npm test some-file.test.ts
 
-#  不要使用裸 vitest (会进入 watch 模式)
+# ❌ Don't use bare vitest (enters watch mode)
 vitest test-file.test.ts
 ```
 
-## 测试修复原则
+## Test Fixing Principles
 
-### 核心原则
+### Core Principles
 
-1. **收集足够的上下文**  
-   在修复测试之前，务必做到：
-   - 完整理解测试的意图和实现
-   - 强烈建议阅读当前的 git diff 和 PR diff
+1. **Gather Sufficient Context**
+   Before fixing tests, ensure you:
+   - Fully understand the test's intent and implementation
+   - Strongly recommended: review the current git diff and PR diff
 
-2. **测试优先修复**  
-   如果是测试本身写错了，应优先修改测试，而不是实现代码。
+2. **Prioritize Test Fixes**
+   If the test itself is incorrect, fix the test first rather than the implementation code.
 
-3. **专注单一问题**  
-   只修复指定的测试，不要顺带添加额外测试。
+3. **Focus on a Single Issue**
+   Only fix the specified test; don't add extra tests along the way.
 
-4. **不自作主张**  
-   发现其他问题时，不要直接修改，需先提出并讨论。
+4. **Don't Act Unilaterally**
+   When discovering other issues, don't modify them directly—raise and discuss first.
 
-### 测试协作最佳实践
+### Testing Collaboration Best Practices
 
-基于实际开发经验总结的重要协作原则：
+Important collaboration principles based on real development experience:
 
-#### 1. 失败处理策略
+#### 1. Failure Handling Strategy
 
-**核心原则**: 避免盲目重试，快速识别问题并寻求帮助。
+**Core Principle**: Avoid blind retries; quickly identify problems and seek help.
 
-- **失败阈值**: 当连续尝试修复测试 1-2 次都失败后，应立即停止继续尝试
-- **问题总结**: 分析失败原因，整理已尝试的解决方案及其失败原因
-- **寻求帮助**: 带着清晰的问题摘要和尝试记录向团队寻求帮助
-- **避免陷阱**: 不要陷入"不断尝试相同或类似方法"的循环
+- **Failure Threshold**: After 1-2 consecutive failed fix attempts, stop immediately
+- **Problem Summary**: Analyze failure reasons and document attempted solutions with their failure causes
+- **Seek Help**: Approach the team with a clear problem summary and attempt history
+- **Avoid the Trap**: Don't fall into the loop of repeatedly trying the same or similar approaches
 
 ```typescript
-//  错误做法：连续失败后继续盲目尝试
-// 第3次、第4次仍在用相似的方法修复同一个问题
+// ❌ Wrong approach: Keep blindly trying after consecutive failures
+// 3rd, 4th attempts still using similar methods to fix the same problem
 
-//  正确做法：失败1-2次后总结问题
+// ✅ Correct approach: Summarize after 1-2 failures
 /*
-问题总结：
-1. 尝试过的方法：修改 mock 数据结构
-2. 失败原因：仍然提示类型不匹配
-3. 具体错误：Expected 'UserData' but received 'UserProfile'
-4. 需要帮助：不确定最新的 UserData 接口定义
+Problem Summary:
+1. Attempted method: Modified mock data structure
+2. Failure reason: Still getting type mismatch error
+3. Specific error: Expected 'UserData' but received 'UserProfile'
+4. Help needed: Unsure about the latest UserData interface definition
 */
 ```
 
-#### 2. 测试用例命名规范
+#### 2. Test Case Naming Conventions
 
-**核心原则**: 测试应该关注"行为"，而不是"实现细节"。
+**Core Principle**: Tests should focus on "behavior," not "implementation details."
 
-- **描述业务场景**: `describe` 和 `it` 的标题应该描述具体的业务场景和预期行为
-- **避免实现绑定**: 不要在测试名称中提及具体的代码行号、覆盖率目标或实现细节
-- **保持稳定性**: 测试名称应该在代码重构后仍然有意义
+- **Describe Business Scenarios**: `describe` and `it` titles should describe specific business scenarios and expected behaviors
+- **Avoid Implementation Binding**: Don't mention specific line numbers, coverage goals, or implementation details in test names
+- **Maintain Stability**: Test names should remain meaningful after code refactoring
 
 ```typescript
-//  错误的测试命名
+// ❌ Poor test naming
 describe('User component coverage', () => {
   it('covers line 45-50 in getUserData', () => {
-    // 为了覆盖第45-50行而写的测试
+    // Test written just to cover lines 45-50
   });
 
   it('tests the else branch', () => {
-    // 仅为了测试某个分支而存在
+    // Exists only to test a specific branch
   });
 });
 
-//  正确的测试命名
+// ✅ Good test naming
 describe('<UserAvatar />', () => {
   it('should render fallback icon when image url is not provided', () => {
-    // 测试具体的业务场景，自然会覆盖相关代码分支
+    // Tests a specific business scenario, naturally covering relevant code branches
   });
 
   it('should display user initials when avatar image fails to load', () => {
-    // 描述用户行为和预期结果
+    // Describes user behavior and expected outcome
   });
 });
 ```
 
-**覆盖率提升的正确思路**:
+**The Right Approach to Improving Coverage**:
 
-- 通过设计各种业务场景（正常流程、边缘情况、错误处理）来自然提升覆盖率
-- 不要为了达到覆盖率数字而写测试，更不要在测试中注释"为了覆盖 xxx 行"
+- Naturally improve coverage by designing various business scenarios (happy paths, edge cases, error handling)
+- Don't write tests just to hit coverage numbers, and never comment "to cover line xxx" in tests
 
-#### 3. 测试组织结构
+#### 3. Test Organization Structure
 
-**核心原则**: 维护清晰的测试层次结构，避免冗余的顶级测试块。
+**Core Principle**: Maintain a clear test hierarchy; avoid redundant top-level test blocks.
 
-- **复用现有结构**: 添加新测试时，优先在现有的 `describe` 块中寻找合适的位置
-- **逻辑分组**: 相关的测试用例应该组织在同一个 `describe` 块内
-- **避免碎片化**: 不要为了单个测试用例就创建新的顶级 `describe` 块
+- **Reuse Existing Structure**: When adding new tests, first look for an appropriate place in existing `describe` blocks
+- **Logical Grouping**: Related test cases should be organized within the same `describe` block
+- **Avoid Fragmentation**: Don't create a new top-level `describe` block for a single test case
 
 ```typescript
-//  错误的组织方式：创建过多顶级块
+// ❌ Poor organization: Too many top-level blocks
 describe('<UserProfile />', () => {
   it('should render user name', () => {});
 });
 
 describe('UserProfile new prop test', () => {
-  // 不必要的新块
+  // Unnecessary new block
   it('should handle email display', () => {});
 });
 
 describe('UserProfile edge cases', () => {
-  // 不必要的新块
+  // Unnecessary new block
   it('should handle missing avatar', () => {});
 });
 
-//  正确的组织方式：合并相关测试
+// ✅ Good organization: Merge related tests
 describe('<UserProfile />', () => {
   it('should render user name', () => {});
 
@@ -178,78 +204,78 @@ describe('<UserProfile />', () => {
   it('should handle missing avatar', () => {});
 
   describe('when user data is incomplete', () => {
-    // 只有在有多个相关子场景时才创建子组
+    // Only create sub-groups when there are multiple related sub-scenarios
     it('should show placeholder for missing name', () => {});
     it('should hide email section when email is undefined', () => {});
   });
 });
 ```
 
-**组织决策流程**:
+**Organization Decision Flow**:
 
-1. 是否存在逻辑相关的现有 `describe` 块？ → 如果有，添加到其中
-2. 是否有多个（3个以上）相关的测试用例？ → 如果有，可以考虑创建新的子 `describe`
-3. 是否是独立的、无关联的功能模块？ → 如果是，才考虑创建新的顶级 `describe`
+1. Is there a logically related existing `describe` block? → If yes, add to it
+2. Are there multiple (3+) related test cases? → If yes, consider creating a new sub-`describe`
+3. Is it an independent, unrelated feature module? → Only then consider creating a new top-level `describe`
 
-### 测试修复流程
+### Test Fixing Workflow
 
-1. **复现问题**: 定位并运行失败的测试，确认能在本地复现
-2. **分析原因**: 阅读测试代码、错误日志和相关文件的 Git 修改历史
-3. **建立假设**: 判断问题出在测试逻辑、实现代码还是环境配置
-4. **修复验证**: 根据假设进行修复，重新运行测试确认通过
-5. **扩大验证**: 运行当前文件内所有测试，确保没有引入新问题
-6. **撰写总结**: 说明错误原因和修复方法
+1. **Reproduce the Issue**: Locate and run the failing test; confirm it can be reproduced locally
+2. **Analyze the Cause**: Read test code, error logs, and Git history of related files
+3. **Form a Hypothesis**: Determine if the problem is in test logic, implementation code, or environment configuration
+4. **Fix and Verify**: Apply the fix based on your hypothesis; rerun the test to confirm it passes
+5. **Expand Verification**: Run all tests in the current file to ensure no new issues were introduced
+6. **Write a Summary**: Document the error cause and fix method
 
-### 修复完成后的总结
+### Post-Fix Summary
 
-测试修复完成后，应该提供简要说明，包括：
+After completing a test fix, provide a brief explanation including:
 
-1. **错误原因分析**: 说明测试失败的根本原因
-   - 测试逻辑错误
-   - 实现代码bug
-   - 环境配置问题
-   - 依赖变更导致的问题
+1. **Root Cause Analysis**: Explain the fundamental reason for the test failure
+   - Test logic error
+   - Implementation bug
+   - Environment configuration issue
+   - Dependency change
 
-2. **修复方法说明**: 简述采用的修复方式
-   - 修改了哪些文件
-   - 采用了什么解决方案
-   - 为什么选择这种修复方式
+2. **Fix Description**: Briefly describe the fix approach
+   - Which files were modified
+   - What solution was applied
+   - Why this fix approach was chosen
 
-**示例格式**:
+**Example Format**:
 
 ```markdown
-## 测试修复总结
+## Test Fix Summary
 
-**错误原因**: 测试中的 mock 数据格式与实际 API 返回格式不匹配，导致断言失败。
+**Root Cause**: The mock data format in the test didn't match the actual API response format, causing assertion failures.
 
-**修复方法**: 更新了测试文件中的 mock 数据结构，使其与最新的 API 响应格式保持一致。具体修改了 `user.test.ts` 中的 `mockUserData` 对象结构。
+**Fix**: Updated the mock data structure in the test file to match the latest API response format. Specifically modified the `mockUserData` object structure in `user.test.ts`.
 ```
 
-## 测试编写最佳实践
+## Test Writing Best Practices
 
-### Mock 数据策略：追求"低成本的真实性"
+### Mock Data Strategy: Aim for "Low-Cost Authenticity"
 
-**核心原则**: 测试数据应默认追求真实性，只有在引入"高昂的测试成本"时才进行简化。
+**Core Principle**: Test data should default to authenticity; only simplify when it introduces "high testing costs."
 
-#### 什么是"高昂的测试成本"？
+#### What Are "High Testing Costs"?
 
-"高成本"指的是测试中引入了外部依赖，使测试变慢、不稳定或复杂：
+"High cost" refers to introducing external dependencies in tests that make them slow, unstable, or complex:
 
-- **文件 I/O 操作**：读写硬盘文件
-- **网络请求**：HTTP 调用、数据库连接
-- **系统调用**：获取系统时间、环境变量等
+- **File I/O Operations**: Reading/writing disk files
+- **Network Requests**: HTTP calls, database connections
+- **System Calls**: Getting system time, environment variables, etc.
 
-#### 推荐做法：Mock 依赖，保留真实数据
+#### Recommended Approach: Mock Dependencies, Keep Real Data
 
 ```typescript
-//  好的做法：Mock I/O 操作，但使用真实的文件内容格式
+// ✅ Good approach: Mock I/O operations but use real file content formats
 describe('parseContentType', () => {
   beforeEach(() => {
-    // Mock 文件读取操作（避免真实 I/O）
+    // Mock file read operation (avoid real I/O)
     vi.spyOn(fs, 'readFileSync').mockImplementation((path) => {
-      // 但返回真实的文件内容格式
-      if (path.includes('.pdf')) return '%PDF-1.4\n%âãÏÓ'; // 真实 PDF 文件头
-      if (path.includes('.png')) return '\x89PNG\r\n\x1a\n'; // 真实 PNG 文件头
+      // But return real file content formats
+      if (path.includes('.pdf')) return '%PDF-1.4\n%âãÏÓ'; // Real PDF header
+      if (path.includes('.png')) return '\x89PNG\r\n\x1a\n'; // Real PNG header
       return '';
     });
   });
@@ -260,40 +286,38 @@ describe('parseContentType', () => {
   });
 });
 
-//  过度简化：使用不真实的数据
+// ❌ Over-simplified: Using unrealistic data
 describe('parseContentType', () => {
   it('should detect PDF content type correctly', () => {
-    // 这种简化数据没有测试价值
+    // This simplified data has no test value
     const result = parseContentType('fake-pdf-content');
     expect(result).toBe('application/pdf');
   });
 });
 ```
 
-#### 真实标识符的价值
+#### The Value of Real Identifiers
 
 ```typescript
-// ✅ 使用真实标识符
+// ✅ Use real identifiers
 const result = parseModelString('openai', '+gpt-4,+gpt-3.5-turbo');
 
-// ❌ 使用占位符（价值较低）
+// ❌ Use placeholders (lower value)
 const result = parseModelString('test-provider', '+model1,+model2');
 ```
 
-### 现代化Mock技巧：环境设置与Mock方法
+### Modern Mocking Techniques: Environment Setup and Mock Methods
 
-**环境设置 + Mock方法结合使用**
-
-客户端代码测试时，推荐使用环境注释配合现代化Mock方法：
+When testing client-side code, use environment annotations with modern mock methods:
 
 ```typescript
 /**
- * @vitest-environment happy-dom  // 提供浏览器API
+ * @vitest-environment happy-dom  // Provides browser APIs
  */
 import { beforeEach, vi } from 'vitest';
 
 beforeEach(() => {
-  // 现代方法1：使用vi.stubGlobal替代global.xxx = ...
+  // Modern method 1: Use vi.stubGlobal instead of global.xxx = ...
   const mockImage = vi.fn().mockImplementation(() => ({
     addEventListener: vi.fn(),
     naturalHeight: 600,
@@ -301,72 +325,72 @@ beforeEach(() => {
   }));
   vi.stubGlobal('Image', mockImage);
 
-  // 现代方法2：使用vi.spyOn保留原功能，只mock特定方法
+  // Modern method 2: Use vi.spyOn to preserve original functionality, only mock specific methods
   vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-url');
   vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
 });
 ```
 
-**环境选择优先级**
+#### Environment Selection Priority
 
-1. **@vitest-environment happy-dom** (推荐) - 轻量、快速，项目已安装
-2. **@vitest-environment jsdom** - 功能完整，但需要额外安装jsdom包
-3. **不设置环境** - Node.js环境，需要手动mock所有浏览器API
+1. **@vitest-environment happy-dom** (Recommended) - Lightweight, fast, already installed in the project
+2. **@vitest-environment jsdom** - Full-featured, but requires additional jsdom package installation
+3. **No environment set** - Node.js environment, requires manually mocking all browser APIs
 
-**Mock方法对比**
+#### Mock Method Comparison
 
 ```typescript
-// ❌ 旧方法：直接操作global对象（类型问题）
+// ❌ Old method: Directly manipulating global object (type issues)
 global.Image = mockImage;
 global.URL = { ...global.URL, createObjectURL: mockFn };
 
-// ✅ 现代方法：类型安全的vi API
-vi.stubGlobal('Image', mockImage); // 完全替换全局对象
-vi.spyOn(URL, 'createObjectURL'); // 部分mock，保留其他功能
+// ✅ Modern method: Type-safe vi API
+vi.stubGlobal('Image', mockImage); // Completely replace global object
+vi.spyOn(URL, 'createObjectURL'); // Partial mock, preserve other functionality
 ```
 
-### 测试覆盖率原则：代码分支优于用例数量
+### Test Coverage Principles: Code Branches Over Test Quantity
 
-**核心原则**: 优先覆盖所有代码分支，而非编写大量重复用例
+**Core Principle**: Prioritize covering all code branches rather than writing many repetitive test cases.
 
 ```typescript
-// ❌ 过度测试：29个测试用例都验证相同分支
+// ❌ Over-testing: 29 test cases all validating the same branch
 describe('getImageDimensions', () => {
   it('should reject .txt files');
   it('should reject .pdf files');
-  // ... 25个类似测试，都走相同的验证分支
+  // ... 25 similar tests, all hitting the same validation branch
 });
 
-// ✅ 精简测试：4个核心用例覆盖所有分支
+// ✅ Lean testing: 4 core cases covering all branches
 describe('getImageDimensions', () => {
-  it('should return dimensions for valid File object'); // 成功路径 - File
-  it('should return dimensions for valid data URI'); // 成功路径 - String
-  it('should return undefined for invalid inputs'); // 输入验证分支
-  it('should return undefined when image fails to load'); // 错误处理分支
+  it('should return dimensions for valid File object'); // Success path - File
+  it('should return dimensions for valid data URI'); // Success path - String
+  it('should return undefined for invalid inputs'); // Input validation branch
+  it('should return undefined when image fails to load'); // Error handling branch
 });
 ```
 
-**分支覆盖策略**
+#### Branch Coverage Strategy
 
-1. **成功路径** - 每种输入类型1个测试即可
-2. **边界条件** - 合并类似场景到单个测试
-3. **错误处理** - 测试代表性错误即可
-4. **业务逻辑** - 覆盖所有if/else分支
+1. **Success Paths** - One test per input type is sufficient
+2. **Boundary Conditions** - Consolidate similar scenarios into a single test
+3. **Error Handling** - Test representative errors only
+4. **Business Logic** - Cover all if/else branches
 
-**合理测试数量**
+#### Reasonable Test Counts
 
-- 简单工具函数：2-5个测试
-- 复杂业务逻辑：5-10个测试
-- 核心安全功能：适当增加，但避免重复路径
+- Simple utility functions: 2-5 tests
+- Complex business logic: 5-10 tests
+- Core security features: Add more as needed, but avoid duplicate paths
 
-### 错误处理测试：测试"行为"而非"文本"
+### Error Handling Tests: Test "Behavior" Not "Text"
 
-**核心原则**: 测试应该验证程序在错误发生时的行为是可预测的，而不是验证易变的错误信息文本。
+**Core Principle**: Tests should verify that program behavior is predictable when errors occur, not verify error message text that may change.
 
-#### 推荐的错误测试方式
+#### Recommended Error Testing Approach
 
 ```typescript
-// ✅ 测试错误类型和属性
+// ✅ Test error types and properties
 expect(() => validateUser({})).toThrow(ValidationError);
 expect(() => processPayment({})).toThrow(
   expect.objectContaining({
@@ -375,136 +399,136 @@ expect(() => processPayment({})).toThrow(
   }),
 );
 
-// ❌ 避免测试具体错误文本
-expect(() => processUser({})).toThrow('用户数据不能为空，请检查输入参数');
+// ❌ Avoid testing specific error text
+expect(() => processUser({})).toThrow('User data cannot be empty, please check input parameters');
 ```
 
-### 疑难解答：警惕模块污染
+### Troubleshooting: Beware of Module Pollution
 
-**识别信号**: 当你的测试出现以下"灵异"现象时，优先怀疑模块污染：
+**Warning Signs**: When your tests exhibit these "mysterious" behaviors, suspect module pollution first:
 
-- 单独运行某个测试通过，但和其他测试一起运行就失败
-- 测试的执行顺序影响结果
-- Mock 设置看起来正确，但实际使用的是旧的 Mock 版本
+- A test passes when run alone but fails when run with other tests
+- Test execution order affects results
+- Mock setup appears correct but actually uses an old mock version
 
-#### 典型场景：动态 Mock 同一模块
+#### Typical Scenario: Dynamic Mocking of the Same Module
 
 ```typescript
-// ❌ 问题：动态Mock同一模块
+// ❌ Problem: Dynamic mocking of the same module
 it('dev mode', async () => {
   vi.doMock('./config', () => ({ isDev: true }));
-  const { getSettings } = await import('./service'); // 可能使用缓存
+  const { getSettings } = await import('./service'); // May use cache
 });
 
-// ✅ 解决：清除模块缓存
+// ✅ Solution: Clear module cache
 beforeEach(() => {
-  vi.resetModules(); // 确保每个测试都是干净环境
+  vi.resetModules(); // Ensure each test has a clean environment
 });
 ```
 
-**记住**: `vi.resetModules()` 是解决测试"灵异"失败的终极武器。
+**Remember**: `vi.resetModules()` is the ultimate weapon for resolving "mysterious" test failures.
 
-## 测试文件组织
+## Test File Organization
 
-### 文件命名约定
+### File Naming Convention
 
-`*.test.ts`, `*.test.tsx` (任意位置)
+`*.test.ts`, `*.test.tsx` (any location)
 
-### 测试文件组织风格
+### Test File Organization Style
 
-项目采用 **测试文件与源文件同目录** 的组织风格：
+The project uses a **co-located test files** organization style:
 
-- 测试文件放在对应源文件的同一目录下
-- 命名格式：`原文件名.test.ts` 或 `原文件名.test.tsx`
+- Test files are placed in the same directory as the corresponding source files
+- Naming format: `originalFileName.test.ts` or `originalFileName.test.tsx`
 
-例如：
+Example:
 
 ```plaintext
 src/components/Button/
-├── index.tsx           # 源文件
-└── index.test.tsx      # 测试文件
+├── index.tsx           # Source file
+└── index.test.tsx      # Test file
 ```
 
-- 也有少数情况会统一放到 `__tests__` 文件夹， 例如 `packages/database/src/models/__tests__`
-- 测试使用的辅助文件放到 fixtures 文件夹
+- In some cases, tests are consolidated in a `__tests__` folder, e.g., `packages/database/src/models/__tests__`
+- Test helper files are placed in a fixtures folder
 
-## 测试调试技巧
+## Test Debugging Tips
 
-### 测试调试步骤
+### Test Debugging Steps
 
-1. **确定测试环境**: 根据文件路径选择正确的配置文件
-2. **隔离问题**: 使用 `-t` 参数只运行失败的测试用例
-3. **分析错误**: 仔细阅读错误信息、堆栈跟踪和最近的文件修改记录
-4. **添加调试**: 在测试中添加 `console.log` 了解执行流程
+1. **Determine Test Environment**: Select the correct config file based on file path
+2. **Isolate the Problem**: Use the `-t` flag to run only the failing test case
+3. **Analyze the Error**: Carefully read error messages, stack traces, and recent file modification history
+4. **Add Debugging**: Add `console.log` statements in tests to understand execution flow
 
-### TypeScript 类型处理
+### TypeScript Type Handling
 
-在测试中，为了提高编写效率和可读性，可以适当放宽 TypeScript 类型检测：
+In tests, you can relax TypeScript type checking to improve writing efficiency and readability:
 
-#### 推荐的类型放宽策略
+#### Recommended Type Relaxation Strategies
 
 ```typescript
-//  使用非空断言访问测试中确定存在的属性
+// Use non-null assertion to access properties you're certain exist in tests
 const result = await someFunction();
 expect(result!.data).toBeDefined();
 expect(result!.status).toBe('success');
 
-//  使用 any 类型简化复杂的 Mock 设置
+// Use any type to simplify complex mock setups
 const mockStream = new ReadableStream() as any;
 mockStream.toReadableStream = () => mockStream;
 
-//  访问私有成员
-await instance['getFromCache']('key'); // 推荐中括号
-await (instance as any).getFromCache('key'); // 避免as any
+// Access private members
+await instance['getFromCache']('key'); // Bracket notation recommended
+await (instance as any).getFromCache('key'); // Avoid as any
 ```
 
-#### 适用场景
+#### Applicable Scenarios
 
-- **Mock 对象**: 对于测试用的 Mock 数据，使用 `as any` 避免复杂的类型定义
-- **第三方库**: 处理复杂的第三方库类型时，适当使用 `any` 提高效率
-- **测试断言**: 在确定对象存在的测试场景中，使用 `!` 非空断言
-- **私有成员访问**: 优先使用中括号 `instance['privateMethod']()` 而不是 `(instance as any).privateMethod()`
-- **临时调试**: 快速编写测试时，先用 `any` 保证功能，后续可选择性地优化类型
+- **Mock Objects**: Use `as any` for test mock data to avoid complex type definitions
+- **Third-Party Libraries**: Use `any` appropriately when handling complex third-party library types
+- **Test Assertions**: Use `!` non-null assertion in test scenarios where you're certain the object exists
+- **Private Member Access**: Prefer bracket notation `instance['privateMethod']()` over `(instance as any).privateMethod()`
+- **Temporary Debugging**: When quickly writing tests, use `any` first to ensure functionality, then optionally optimize types later
 
-#### 注意事项
+#### Important Notes
 
-- **适度使用**: 不要过度依赖 `any`，核心业务逻辑的类型仍应保持严格
-- **私有成员访问优先级**: 中括号访问 > `as any` 转换，保持更好的类型安全性
-- **文档说明**: 对于使用 `any` 的复杂场景，添加注释说明原因
-- **测试覆盖**: 确保即使使用了 `any`，测试仍能有效验证功能正确性
+- **Use Moderately**: Don't over-rely on `any`; core business logic types should remain strict
+- **Private Member Access Priority**: Bracket notation > `as any` casting for better type safety
+- **Documentation**: Add comments explaining the reason for complex `any` usage scenarios
+- **Test Coverage**: Ensure tests still effectively verify correctness even when using `any`
 
-### 检查最近修改记录
+### Checking Recent Modifications
 
-**核心原则**：测试突然失败时，优先检查最近的代码修改。
+**Core Principle**: When tests suddenly fail, first check recent code changes.
 
-#### 快速检查方法
+#### Quick Check Methods
 
 ```bash
-git status                  # 查看当前修改状态
-git diff HEAD -- '*.test.*' # 检查测试文件改动
-git diff main...HEAD        # 对比主分支差异
-gh pr diff                  # 查看PR中的所有改动
+git status                  # View current modification status
+git diff HEAD -- '*.test.*' # Check test file changes
+git diff main...HEAD        # Compare with main branch
+gh pr diff                  # View all changes in the PR
 ```
 
-#### 常见原因与解决
+#### Common Causes and Solutions
 
-- **最新提交引入bug** → 检查并修复实现代码
-- **分支代码滞后** → `git rebase main` 同步主分支
+- **Latest commit introduced a bug** → Check and fix the implementation code
+- **Branch code is outdated** → `git rebase main` to sync with main branch
 
-## 特殊场景的测试
+## Special Testing Scenarios
 
-针对一些特殊场景的测试，需要阅读相关 rules：
+For special testing scenarios, refer to the related rules:
 
-- [Electron IPC 接口测试策略](mdc:./electron-ipc-test.mdc)
-- [数据库 Model 测试指南](mdc:./db-model-test.mdc)
+- `electron-ipc-test.mdc` - Electron IPC Interface Testing Strategy
+- `db-model-test.mdc` - Database Model Testing Guide
 
-## 核心要点
+## Key Takeaways
 
-- **命令格式**: 使用 `bunx vitest run --silent='passed-only'` 并指定文件过滤
-- **修复原则**: 失败1-2次后寻求帮助，测试命名关注行为而非实现细节
-- **调试流程**: 复现 → 分析 → 假设 → 修复 → 验证 → 总结
-- **文件组织**: 优先在现有 `describe` 块中添加测试，避免创建冗余顶级块
-- **数据策略**: 默认追求真实性，只有高成本（I/O、网络等）时才简化
-- **错误测试**: 测试错误类型和行为，避免依赖具体的错误信息文本
-- **模块污染**: 测试"灵异"失败时，优先怀疑模块污染，使用 `vi.resetModules()` 解决
-- **安全要求**: Model 测试必须包含权限检查，并在双环境下验证通过
+- **Command Format**: Use `bunx vitest run --silent='passed-only'` with file filtering
+- **Fix Principles**: Seek help after 1-2 failures; focus test naming on behavior, not implementation details
+- **Debug Workflow**: Reproduce → Analyze → Hypothesize → Fix → Verify → Summarize
+- **File Organization**: Prefer adding tests to existing `describe` blocks; avoid creating redundant top-level blocks
+- **Data Strategy**: Default to authenticity; only simplify for high-cost scenarios (I/O, network, etc.)
+- **Error Testing**: Test error types and behavior; avoid depending on specific error message text
+- **Module Pollution**: When tests fail "mysteriously," suspect module pollution first; use `vi.resetModules()` to resolve
+- **Security Requirements**: Model tests must include permission checks and pass in both environments

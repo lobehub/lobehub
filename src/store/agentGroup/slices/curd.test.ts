@@ -87,13 +87,13 @@ describe('ChatGroupCurdSlice', () => {
       const { result } = renderHook(() => useAgentGroupStore());
 
       await act(async () => {
-        await result.current.updateGroupConfig({ enableSupervisor: false });
+        await result.current.updateGroupConfig({ allowDM: false });
       });
 
       expect(chatGroupService.updateGroup).toHaveBeenCalledWith('group-1', {
         config: expect.objectContaining({
           ...DEFAULT_CHAT_GROUP_CHAT_CONFIG,
-          enableSupervisor: false,
+          allowDM: false,
         }),
       });
     });
@@ -109,7 +109,7 @@ describe('ChatGroupCurdSlice', () => {
       const { result } = renderHook(() => useAgentGroupStore());
 
       await act(async () => {
-        await result.current.updateGroupConfig({ enableSupervisor: false });
+        await result.current.updateGroupConfig({ allowDM: false });
       });
 
       expect(chatGroupService.updateGroup).not.toHaveBeenCalled();
@@ -121,7 +121,7 @@ describe('ChatGroupCurdSlice', () => {
       const { result } = renderHook(() => useAgentGroupStore());
 
       await act(async () => {
-        await result.current.updateGroupConfig({ scene: 'casual' });
+        await result.current.updateGroupConfig({ revealDM: true });
       });
 
       expect(mutate).toHaveBeenCalledWith(['fetchGroupDetail', 'group-1']);

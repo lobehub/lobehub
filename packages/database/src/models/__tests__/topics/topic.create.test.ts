@@ -1,10 +1,10 @@
 import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { getTestDB } from '../../../core/getTestDB';
 import { agents, messages, sessions, topics, users } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
 import { CreateTopicParams, TopicModel } from '../../topic';
-import { getTestDB } from '../../../core/getTestDB';
 
 const userId = 'topic-create-user';
 const userId2 = 'topic-create-user-2';
@@ -68,11 +68,17 @@ describe('TopicModel - Create', () => {
       expect(dbTopic).toHaveLength(1);
       expect(dbTopic[0]).toEqual(createdTopic);
 
-      const associatedMessages = await serverDB.select().from(messages).where(inArray(messages.id, topicData.messages!));
+      const associatedMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(inArray(messages.id, topicData.messages!));
       expect(associatedMessages).toHaveLength(2);
       expect(associatedMessages.every((msg) => msg.topicId === topicId)).toBe(true);
 
-      const unassociatedMessage = await serverDB.select().from(messages).where(eq(messages.id, 'message3'));
+      const unassociatedMessage = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'message3'));
       expect(unassociatedMessage[0].topicId).toBeNull();
     });
 
@@ -169,8 +175,18 @@ describe('TopicModel - Create', () => {
       const createdTopics = await topicModel.batchCreate(topicParams);
 
       expect(createdTopics).toHaveLength(2);
-      expect(createdTopics[0]).toMatchObject({ title: 'Topic 1', favorite: true, sessionId, userId });
-      expect(createdTopics[1]).toMatchObject({ title: 'Topic 2', favorite: false, sessionId, userId });
+      expect(createdTopics[0]).toMatchObject({
+        title: 'Topic 1',
+        favorite: true,
+        sessionId,
+        userId,
+      });
+      expect(createdTopics[1]).toMatchObject({
+        title: 'Topic 2',
+        favorite: false,
+        sessionId,
+        userId,
+      });
 
       const items = await serverDB.select().from(topics);
       expect(items).toHaveLength(2);
@@ -216,7 +232,15 @@ describe('TopicModel - Create', () => {
       expect(createdTopics[1].agentId).toBe('batch-agent-2');
       expect(createdTopics[1].sessionId).toBeNull();
 
-      const dbTopics = await serverDB.select().from(topics).where(inArray(topics.id, createdTopics.map((t) => t.id)));
+      const dbTopics = await serverDB
+        .select()
+        .from(topics)
+        .where(
+          inArray(
+            topics.id,
+            createdTopics.map((t) => t.id),
+          ),
+        );
       expect(dbTopics).toHaveLength(2);
       expect(dbTopics.find((t) => t.id === createdTopics[0].id)?.agentId).toBe('batch-agent-1');
       expect(dbTopics.find((t) => t.id === createdTopics[1].id)?.agentId).toBe('batch-agent-2');
@@ -236,7 +260,10 @@ describe('TopicModel - Create', () => {
         ]);
       });
 
-      const { topic: duplicatedTopic, messages: duplicatedMessages } = await topicModel.duplicate(topicId, newTitle);
+      const { topic: duplicatedTopic, messages: duplicatedMessages } = await topicModel.duplicate(
+        topicId,
+        newTitle,
+      );
 
       expect(duplicatedTopic.id).not.toBe(topicId);
       expect(duplicatedTopic.title).toBe(newTitle);
@@ -255,7 +282,9 @@ describe('TopicModel - Create', () => {
     it('should throw an error if the topic to duplicate does not exist', async () => {
       const topicId = 'nonexistent-topic';
 
-      await expect(topicModel.duplicate(topicId)).rejects.toThrow(`Topic with id ${topicId} not found`);
+      await expect(topicModel.duplicate(topicId)).rejects.toThrow(
+        `Topic with id ${topicId} not found`,
+      );
     });
   });
 });

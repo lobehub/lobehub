@@ -4,10 +4,12 @@ import {
   UpdateMessagePluginSchema,
   UpdateMessageRAGParamsSchema,
 } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { MessageModel } from '@/database/models/message';
-import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { TopicShareModel } from '@/database/models/topicShare';
+import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
 import { MessageService } from '@/server/services/message';
@@ -89,7 +91,8 @@ export const messageRouter = router({
     return ctx.messageModel.getHeatmaps();
   }),
 
-  getMessages: messageProcedure
+  getMessages: publicProcedure
+    .use(serverDatabase)
     .input(
       z.object({
         agentId: z.string().nullable().optional(),
@@ -99,11 +102,41 @@ export const messageRouter = router({
         sessionId: z.string().nullable().optional(),
         threadId: z.string().nullable().optional(),
         topicId: z.string().nullable().optional(),
+        topicShareId: z.string().optional(),
       }),
     )
     .query(async ({ input, ctx }) => {
-      return ctx.messageModel.query(input, {
-        postProcessUrl: (path) => ctx.fileService.getFullFileUrl(path),
+      const { topicShareId, ...queryParams } = input;
+
+      // Public access via topicShareId
+      if (topicShareId) {
+        const share = await TopicShareModel.findByShareIdWithAccessCheck(
+          ctx.serverDB,
+          topicShareId,
+          ctx.userId ?? undefined,
+        );
+
+        const messageModel = new MessageModel(ctx.serverDB, share.ownerId);
+        const fileService = new FileService(ctx.serverDB, share.ownerId);
+
+        return messageModel.query(
+          { ...queryParams, topicId: share.topicId },
+          {
+            postProcessUrl: (path) => fileService.getFullFileUrl(path),
+          },
+        );
+      }
+
+      // Authenticated access - require userId
+      if (!ctx.userId) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Authentication required' });
+      }
+
+      const messageModel = new MessageModel(ctx.serverDB, ctx.userId);
+      const fileService = new FileService(ctx.serverDB, ctx.userId);
+
+      return messageModel.query(queryParams, {
+        postProcessUrl: (path) => fileService.getFullFileUrl(path),
       });
     }),
 

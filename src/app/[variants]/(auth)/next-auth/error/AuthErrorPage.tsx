@@ -1,7 +1,7 @@
 'use client';
 
 import { signIn } from 'next-auth/react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams } from '@/libs/next/navigation';
 import { memo } from 'react';
 
 import ErrorCapture from '@/components/Error';

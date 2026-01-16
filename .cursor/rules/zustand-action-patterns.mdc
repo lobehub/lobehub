@@ -16,7 +16,7 @@ Main interfaces exposed for UI component consumption:
 
 - Naming: Verb form (`createTopic`, `sendMessage`, `updateTopicTitle`)
 - Responsibilities: Parameter validation, flow orchestration, calling internal actions
-- Example: [src/store/chat/slices/topic/action.ts](mdc:src/store/chat/slices/topic/action.ts)
+- Example: `src/store/chat/slices/topic/action.ts`
 
 ```typescript
 // Public Action example

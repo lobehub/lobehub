@@ -1,10 +1,19 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
 import type { ChatTopicMetadata, ThreadMetadata } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
-import { boolean, index, jsonb, pgTable, primaryKey, text, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
-import { idGenerator } from '../utils/idGenerator';
+import { createNanoId, idGenerator } from '../utils/idGenerator';
 import { createdAt, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
 import { chatGroups } from './chatGroup';
@@ -133,3 +142,36 @@ export const topicDocuments = pgTable(
 
 export type NewTopicDocument = typeof topicDocuments.$inferInsert;
 export type TopicDocumentItem = typeof topicDocuments.$inferSelect;
+
+/**
+ * Topic sharing table - Manages public sharing links for topics
+ */
+export const topicShares = pgTable(
+  'topic_shares',
+  {
+    id: text('id')
+      .$defaultFn(() => createNanoId(8)())
+      .primaryKey(),
+
+    topicId: text('topic_id')
+      .notNull()
+      .references(() => topics.id, { onDelete: 'cascade' }),
+
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    visibility: text('visibility').default('private').notNull(), // 'private' | 'link'
+
+    pageViewCount: integer('page_view_count').default(0).notNull(),
+
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex('topic_shares_topic_id_unique').on(t.topicId),
+    index('topic_shares_user_id_idx').on(t.userId),
+  ],
+);
+
+export type NewTopicShare = typeof topicShares.$inferInsert;
+export type TopicShareItem = typeof topicShares.$inferSelect;

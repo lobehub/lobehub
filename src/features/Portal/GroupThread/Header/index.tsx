@@ -12,10 +12,10 @@ import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 
 const Header = memo(() => {
-  const togglePortal = useChatStore((s) => s.togglePortal);
+  const clearPortalStack = useChatStore((s) => s.clearPortalStack);
   const close = () => {
     useAgentGroupStore.setState({ activeThreadAgentId: '' });
-    togglePortal(false);
+    clearPortalStack();
   };
   const activeThreadAgentId = useAgentGroupStore((s) => s.activeThreadAgentId);
 

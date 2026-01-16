@@ -1,7 +1,6 @@
 'use client';
 
 import { Button, Flexbox, FluentEmoji } from '@lobehub/ui';
-import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -32,9 +31,10 @@ const NotFound = memo(() => {
         <div>{t('notFound.desc')}</div>
         <div style={{ marginTop: '0.5em' }}>{t('notFound.check')}</div>
       </div>
-      <Link href="/">
-        <Button type={'primary'}>{t('notFound.backHome')}</Button>
-      </Link>
+
+      <Button onClick={() => (window.location.href = '/')} type={'primary'}>
+        {t('notFound.backHome')}
+      </Button>
     </Flexbox>
   );
 });

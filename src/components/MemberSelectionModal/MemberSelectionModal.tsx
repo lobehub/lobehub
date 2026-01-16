@@ -162,11 +162,7 @@ export interface MemberSelectionModalProps {
    */
   mode: MemberSelectionMode;
   onCancel: () => void;
-  onConfirm: (
-    selectedAgents: string[],
-    hostConfig?: { model?: string; provider?: string },
-    enableSupervisor?: boolean,
-  ) => void | Promise<void>;
+  onConfirm: (selectedAgents: string[]) => void | Promise<void>;
   open: boolean;
   /**
    * Pre-selected agent IDs (useful for editing existing groups)
@@ -338,12 +334,7 @@ const MemberSelectionModal = memo<MemberSelectionModalProps>(
     const handleConfirm = async () => {
       try {
         setIsAdding(true);
-        // Only pass host config if the host card is visible (being managed in this modal)
-        const shouldManageHost = !isHostCurrentlyEnabled;
-        const hostConfig =
-          shouldManageHost && !isHostRemoved ? normalizedHostModelConfig : undefined;
-        const enableSupervisor = shouldManageHost ? !isHostRemoved : undefined;
-        await onConfirm(selectedAgents, hostConfig, enableSupervisor);
+        await onConfirm(selectedAgents);
         handleReset();
       } catch (error) {
         console.error('Failed to confirm action:', error);

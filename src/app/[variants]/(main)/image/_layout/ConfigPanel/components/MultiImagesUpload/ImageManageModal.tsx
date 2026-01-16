@@ -3,7 +3,7 @@
 import { Button, Modal } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { Upload, X } from 'lucide-react';
-import Image from 'next/image';
+import Image from '@/libs/next/Image';
 import React, { type FC, memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

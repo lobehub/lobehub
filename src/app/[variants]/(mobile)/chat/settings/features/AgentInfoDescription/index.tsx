@@ -3,7 +3,7 @@
 import { ProDescriptions } from '@ant-design/pro-components';
 import { type AgentItemDetail } from '@lobehub/market-sdk';
 import { Flexbox, Tag } from '@lobehub/ui';
-import Image from 'next/image';
+import Image from '@/libs/next/Image';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

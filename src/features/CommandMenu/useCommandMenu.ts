@@ -169,21 +169,11 @@ export const useCommandMenu = () => {
   const handleCreateAgentTeam = async () => {
     closeCommandMenu();
     openGroupWizard({
-      onCreateCustom: async (selectedAgents, hostConfig, enableSupervisor) => {
-        await createGroupWithMembers(selectedAgents, undefined, hostConfig, enableSupervisor);
+      onCreateCustom: async (selectedAgents) => {
+        await createGroupWithMembers(selectedAgents);
       },
-      onCreateFromTemplate: async (
-        templateId,
-        hostConfig,
-        enableSupervisor,
-        selectedMemberTitles,
-      ) => {
-        await createGroupFromTemplate(
-          templateId,
-          hostConfig,
-          enableSupervisor,
-          selectedMemberTitles,
-        );
+      onCreateFromTemplate: async (templateId, selectedMemberTitles) => {
+        await createGroupFromTemplate(templateId, selectedMemberTitles);
       },
     });
   };

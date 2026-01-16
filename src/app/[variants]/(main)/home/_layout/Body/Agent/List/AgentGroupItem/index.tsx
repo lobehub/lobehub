@@ -13,8 +13,8 @@ import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 
 import Actions from '../Item/Actions';
-import { useDropdownMenu } from '../Item/useDropdownMenu';
 import Editing from './Editing';
+import { useGroupDropdownMenu } from './useDropdownMenu';
 
 interface GroupItemProps {
   className?: string;
@@ -30,8 +30,8 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
 
   // Get UI state from homeStore (editing, updating)
   const [editing, isUpdating] = useHomeStore((s) => [
-    s.agentRenamingId === id,
-    s.agentUpdatingId === id,
+    s.groupRenamingId === id,
+    s.groupUpdatingId === id,
   ]);
 
   // Get display title with fallback
@@ -63,7 +63,7 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
 
   const toggleEditing = useCallback(
     (visible?: boolean) => {
-      useHomeStore.getState().setAgentRenamingId(visible ? id : null);
+      useHomeStore.getState().setGroupRenamingId(visible ? id : null);
     },
     [id],
   );
@@ -85,13 +85,9 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
     return <GroupAvatar avatars={(avatar as any) || []} size={22} />;
   }, [isUpdating, avatar]);
 
-  const dropdownMenu = useDropdownMenu({
-    group: undefined,
+  const dropdownMenu = useGroupDropdownMenu({
     id,
-    openCreateGroupModal: () => {}, // Groups don't need this
-    parentType: 'group',
     pinned: pinned ?? false,
-    sessionType: 'group',
     toggleEditing,
   });
 

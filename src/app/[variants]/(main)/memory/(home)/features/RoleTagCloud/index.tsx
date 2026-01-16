@@ -1,7 +1,7 @@
 import { ActionIcon, Block } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { MaximizeIcon, MinimizeIcon } from 'lucide-react';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { memo, useEffect, useState } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';

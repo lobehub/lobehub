@@ -26,6 +26,8 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useElectronStore } from '@/store/electron';
+import { electronSyncSelectors } from '@/store/electron/selectors';
 import { SettingsTabs } from '@/store/global/initialState';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
@@ -63,13 +65,24 @@ export const useCategory = () => {
     userProfileSelectors.userAvatar(s),
     userProfileSelectors.nickName(s),
   ]);
+  const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
+
+  // Process avatar URL for desktop environment
+  const avatarUrl = useMemo(() => {
+    if (!avatar) return undefined;
+    if (isDesktop && avatar.startsWith('/') && remoteServerUrl) {
+      return remoteServerUrl + avatar;
+    }
+    return avatar;
+  }, [avatar, remoteServerUrl]);
+
   const categoryGroups: CategoryGroup[] = useMemo(() => {
     const groups: CategoryGroup[] = [];
 
     // 个人资料组 - Profile 相关设置
     const profileItems: CategoryItem[] = [
       {
-        icon: avatar ? <Avatar avatar={avatar} shape={'square'} size={26} /> : UserCircle,
+        icon: avatarUrl ? <Avatar avatar={avatarUrl} shape={'square'} size={26} /> : UserCircle,
         key: SettingsTabs.Profile,
         label: username ? username : tAuth('tab.profile'),
       },
@@ -227,7 +240,7 @@ export const useCategory = () => {
     showAiImage,
     showApiKeyManage,
     isLoginWithClerk,
-    avatar,
+    avatarUrl,
     username,
   ]);
 

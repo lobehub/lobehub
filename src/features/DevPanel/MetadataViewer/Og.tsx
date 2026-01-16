@@ -1,5 +1,5 @@
 import { Flexbox, Form, Input, TextArea } from '@lobehub/ui';
-import Image from 'next/image';
+import Image from '@/libs/next/Image';
 import { memo } from 'react';
 
 import { useHead } from './useHead';

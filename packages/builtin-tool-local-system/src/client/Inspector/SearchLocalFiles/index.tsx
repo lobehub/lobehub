@@ -3,24 +3,13 @@
 import { type LocalSearchFilesParams } from '@lobechat/electron-client-ipc';
 import { type BuiltinInspectorProps } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { highlightTextStyles, shinyTextStyles } from '@/styles';
+import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import { type LocalFileSearchState } from '../../..';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
 
 export const SearchLocalFilesInspector = memo<
   BuiltinInspectorProps<LocalSearchFilesParams, LocalFileSearchState>
@@ -33,13 +22,13 @@ export const SearchLocalFilesInspector = memo<
   if (isArgumentsStreaming) {
     if (!keywords)
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-local-system.apiName.searchLocalFiles')}</span>
         </div>
       );
 
     return (
-      <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
         <span>{t('builtins.lobe-local-system.apiName.searchLocalFiles')}: </span>
         <span className={highlightTextStyles.primary}>{keywords}</span>
       </div>
@@ -51,7 +40,7 @@ export const SearchLocalFilesInspector = memo<
   const hasResults = resultCount > 0;
 
   return (
-    <div className={cx(styles.root, isLoading && shinyTextStyles.shinyText)}>
+    <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
       <span style={{ marginInlineStart: 2 }}>
         <span>{t('builtins.lobe-local-system.apiName.searchLocalFiles')}: </span>
         {keywords && <span className={highlightTextStyles.primary}>{keywords}</span>}

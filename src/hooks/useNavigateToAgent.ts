@@ -5,15 +5,15 @@ import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useChatStore } from '@/store/chat';
 
 export const useNavigateToAgent = () => {
-  const togglePortal = useChatStore((s) => s.togglePortal);
+  const clearPortalStack = useChatStore((s) => s.clearPortalStack);
   const router = useQueryRoute();
 
   return useCallback(
     (agentId: string) => {
-      togglePortal(false);
+      clearPortalStack();
 
       router.push(SESSION_CHAT_URL(agentId, false));
     },
-    [togglePortal, router],
+    [clearPortalStack, router],
   );
 };

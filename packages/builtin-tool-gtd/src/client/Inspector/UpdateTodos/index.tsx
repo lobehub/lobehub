@@ -7,17 +7,11 @@ import { CheckCircle, DiffIcon, Minus, Plus } from 'lucide-react';
 import { type ReactNode, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { shinyTextStyles } from '@/styles';
+import { oneLineEllipsis, shinyTextStyles } from '@/styles';
 
 import type { UpdateTodosParams, UpdateTodosState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-  `,
   separator: css`
     margin-inline: 2px;
     color: ${cssVar.colorTextQuaternary};
@@ -66,7 +60,7 @@ export const UpdateTodosInspector = memo<
 
   if (isArgumentsStreaming && !hasOperations) {
     return (
-      <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+      <div className={cx(oneLineEllipsis, shinyTextStyles.shinyText)}>
         <span>{t('builtins.lobe-gtd.apiName.updateTodos')}</span>
       </div>
     );
@@ -107,7 +101,7 @@ export const UpdateTodosInspector = memo<
   }
 
   return (
-    <div className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+    <div className={cx(oneLineEllipsis, isArgumentsStreaming && shinyTextStyles.shinyText)}>
       <span className={styles.title}>{t('builtins.lobe-gtd.apiName.updateTodos')}</span>
       {statsParts.length > 0 && (
         <>

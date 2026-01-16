@@ -120,26 +120,16 @@ export const lobehubSkillStoreSelectors = {
    */
   metaList: (s: ToolStoreState) => {
     const servers = s.lobehubSkillServers || [];
-    const result = servers
+
+    return servers
       .filter((server) => server.status === LobehubSkillStatus.CONNECTED)
-      .map((server) => {
-        // Debug logging
-        console.log('[lobehubSkillStoreSelectors.metaList] server:', {
-          icon: server.icon,
-          identifier: server.identifier,
-          name: server.name,
-          status: server.status,
-        });
-        return {
-          identifier: server.identifier,
-          meta: {
-            avatar: server.icon || '🔗',
-            description: `LobeHub Skill: ${server.name}`,
-            title: server.name,
-          },
-        };
-      });
-    console.log('[lobehubSkillStoreSelectors.metaList] result:', result);
-    return result;
+      .map((server) => ({
+        identifier: server.identifier,
+        meta: {
+          avatar: server.icon || '🔗',
+          description: `LobeHub Skill: ${server.name}`,
+          title: server.name,
+        },
+      }));
   },
 };

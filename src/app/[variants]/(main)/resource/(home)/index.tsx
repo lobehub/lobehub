@@ -1,7 +1,7 @@
 'use client';
 
-import { memo, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { memo, useEffect, useLayoutEffect } from 'react';
+import { useLocation, useSearchParams } from 'react-router-dom';
 
 import ResourceManager from '@/features/ResourceManager';
 import { documentSelectors, useFileStore } from '@/store/file';
@@ -11,6 +11,7 @@ import { useResourceManagerStore } from '../features/store';
 
 const ResourceHomePage = memo(() => {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const [setMode, setCurrentViewItemId, setCategory, setLibraryId] = useResourceManagerStore(
     (s) => [s.setMode, s.setCurrentViewItemId, s.setCategory, s.setLibraryId],
   );
@@ -23,15 +24,27 @@ const ResourceHomePage = memo(() => {
   const { data: fileData } = useFetchKnowledgeItem(fileId || undefined);
   const documentData = useFileStore(documentSelectors.getDocumentById(fileId || undefined));
 
-  // Clear libraryId when on home route (only once on mount)
-  useEffect(() => {
-    setLibraryId(undefined);
-  }, [setLibraryId]);
+  // Clear libraryId when on home route using useLayoutEffect
+  // useLayoutEffect runs synchronously before browser paint, ensuring state is cleared
+  // before child components' useEffects run, while avoiding React's setState-in-render error
+  // IMPORTANT: Only depend on location.pathname, NOT currentLibraryId to avoid feedback loop
+  // When location changes to /resource, clear libraryId
+  // Don't clear when location is /library/* (even if this component is still mounted)
+  useLayoutEffect(() => {
+    const isOnHomeRoute = location.pathname === '/resource' || !location.pathname.includes('/library/');
+    if (isOnHomeRoute) {
+      setLibraryId(undefined);
+    }
+  }, [setLibraryId, location.pathname]);
 
-  // Sync category from URL
-  useEffect(() => {
-    setCategory(categoryParam);
-  }, [categoryParam, setCategory]);
+  // Sync category from URL using useLayoutEffect
+  // IMPORTANT: Only sync if we're actually on the home route (not transitioning to library)
+  useLayoutEffect(() => {
+    const isOnHomeRoute = location.pathname === '/resource' || !location.pathname.includes('/library/');
+    if (isOnHomeRoute) {
+      setCategory(categoryParam);
+    }
+  }, [categoryParam, setCategory, location.pathname]);
 
   // Sync file view mode from URL
   useEffect(() => {

@@ -1,10 +1,8 @@
 import type { UserMemoryData, UserMemoryIdentityItem } from '@lobechat/context-engine';
 import type { RetrieveMemoryResult } from '@lobechat/types';
 
-import { mutate } from '@/libs/swr';
-import { userMemoryService } from '@/services/userMemory';
 import { getChatStoreState } from '@/store/chat';
-import { getUserMemoryStoreState, useUserMemoryStore } from '@/store/userMemory';
+import { getUserMemoryStoreState } from '@/store/userMemory';
 import { agentMemorySelectors, identitySelectors } from '@/store/userMemory/selectors';
 
 const EMPTY_MEMORIES: RetrieveMemoryResult = {
@@ -39,17 +37,13 @@ export interface TopicMemoryResolverContext {
 }
 
 /**
- * Resolves topic-based memories (contexts, experiences, preferences)
+ * Resolves topic-based memories (contexts, experiences, preferences) from cache only.
  *
- * This function handles:
- * 1. Getting the topic ID from context or active topic
- * 2. Checking if memories are already cached for the topic
- * 3. Fetching memories from the service if not cached
- * 4. Caching the fetched memories by topic ID
+ * This function only reads from cache and does NOT trigger network requests.
+ * Memory data is pre-loaded by SWR in ChatList via useFetchTopicMemories hook.
+ * This ensures sendMessage is not blocked by memory retrieval network calls.
  */
-export const resolveTopicMemories = async (
-  ctx?: TopicMemoryResolverContext,
-): Promise<RetrieveMemoryResult> => {
+export const resolveTopicMemories = (ctx?: TopicMemoryResolverContext): RetrieveMemoryResult => {
   // Get topic ID from context or active topic
   const topicId = ctx?.topicId ?? getChatStoreState().activeTopicId;
 
@@ -60,34 +54,11 @@ export const resolveTopicMemories = async (
 
   const userMemoryStoreState = getUserMemoryStoreState();
 
-  // Check if already have cached memories for this topic
+  // Only read from cache, do not trigger network request
+  // Memory data is pre-loaded by SWR in ChatList
   const cachedMemories = agentMemorySelectors.topicMemories(topicId)(userMemoryStoreState);
 
-  if (cachedMemories) {
-    return cachedMemories;
-  }
-
-  // Fetch memories for this topic
-  try {
-    const result = await userMemoryService.retrieveMemoryForTopic(topicId);
-    const memories = result ?? EMPTY_MEMORIES;
-
-    // Cache the fetched memories by topic ID
-    useUserMemoryStore.setState((state) => ({
-      topicMemoriesMap: {
-        ...state.topicMemoriesMap,
-        [topicId]: memories,
-      },
-    }));
-
-    // Also trigger SWR mutate to keep in sync
-    await mutate(['useFetchMemoriesForTopic', topicId]);
-
-    return memories;
-  } catch (error) {
-    console.error('Failed to retrieve memories for topic:', error);
-    return EMPTY_MEMORIES;
-  }
+  return cachedMemories ?? EMPTY_MEMORIES;
 };
 
 /**

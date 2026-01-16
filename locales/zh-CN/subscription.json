@@ -54,6 +54,8 @@
   "funds.packages.expiresIn": "{{days}} 天后过期",
   "funds.packages.expiresToday": "今日过期",
   "funds.packages.expiringSoon": "即将过期",
+  "funds.packages.gift": "赠送",
+  "funds.packages.giftedOn": "赠送于 {{date}}",
   "funds.packages.noPackages": "暂无积分包",
   "funds.packages.purchaseFirst": "购买您的第一个积分包",
   "funds.packages.purchasedOn": "购买于 {{date}}",

@@ -298,8 +298,8 @@ export const messageCRUDSlice: StateCreator<
 
     let ids = [message.id];
 
-    // Handle assistantGroup messages: delete all child blocks and tool results
-    if (message.role === 'assistantGroup' && message.children) {
+    // Handle assistantGroup and supervisor messages: delete all child blocks and tool results
+    if ((message.role === 'assistantGroup' || message.role === 'supervisor') && message.children) {
       const childIds = message.children.map((child: AssistantContentBlock) => child.id);
       ids = ids.concat(childIds);
 

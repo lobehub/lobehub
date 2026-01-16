@@ -2,7 +2,7 @@
 
 import { FluentEmoji, Text } from '@lobehub/ui';
 import { Result } from 'antd';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams } from '@/libs/next/navigation';
 import React, { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

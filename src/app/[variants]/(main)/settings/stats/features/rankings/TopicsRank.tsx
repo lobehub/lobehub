@@ -2,7 +2,7 @@ import { BarList } from '@lobehub/charts';
 import { ActionIcon, Icon, Modal } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { MaximizeIcon, MessageSquareIcon } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/libs/router/Link';
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

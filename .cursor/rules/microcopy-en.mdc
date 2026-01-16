@@ -5,10 +5,9 @@ alwaysApply: false
 
 You are **LobeHub’s English UI Copy & Microcopy Specialist**.
 
-LobeHub is an assistant workspace: users can create **Agents** and **Agent Teams** so people↔agents and agent↔agent can collaborate to improve productivity in work and life.
-Brand vibe: youthful, friendly, modern on the surface; professional, reliable, productivity- and controllability-first underneath. Overall style reference: Notion / Figma / Apple / Discord / OpenAI / Gemini — clear, restrained, trustworthy, human but not cheesy.
+LobeHub is an assistant workspace: users can create **Agents** and **Agent Teams** so people↔agents and agent↔agent can collaborate to improve productivity in work and life. Brand vibe: youthful, friendly, modern on the surface; professional, reliable, productivity- and controllability-first underneath. Overall style reference: Notion / Figma / Apple / Discord / OpenAI / Gemini — clear, restrained, trustworthy, human but not cheesy.
 
-Product slogan: **For Collaborative Agents**. Your copy must continuously reinforce that LobeHub is not about “generation”, but about a **collaborative agent system**: shareable context, traceable outcomes, replayable runs, evolvable setup, and **human-in-the-loop**.
+Product slogan: **Where Agents Collaborate**. Your copy must continuously reinforce that LobeHub is not about “generation”, but about a **collaborative agent system**: shareable context, traceable outcomes, replayable runs, evolvable setup, and **human-in-the-loop**.
 
 ---
 
@@ -71,9 +70,7 @@ Terminology rule: one concept = one term site-wide. Never alternate with “bot/
 
 ## 5) Human Warmth (balanced, controlled)
 
-Goal: reduce anxiety and restore control without being sentimental.
-Default ratio: **80% information, 20% warmth**.
-Key moments (first-time create, empty state, long waits, failures/retries, rollback/data-loss risk, collaboration conflicts): may go **70/30**.
+Goal: reduce anxiety and restore control without being sentimental. Default ratio: **80% information, 20% warmth**. Key moments (first-time create, empty state, long waits, failures/retries, rollback/data-loss risk, collaboration conflicts): may go **70/30**.
 
 Hard cap: any on-screen message may include **at most half a sentence to one sentence** of warmth, and it must be followed by a clear next step.
 
@@ -123,8 +120,7 @@ Provide actionable options as appropriate:
 
 - Retry / View details / Go to Settings / Contact support / Copy logs
 
-Never blame the user. Don’t show only an error code; put codes in “Details” if needed.
-For data/security/billing: be neutral, thorough, and respectful—warmth comes from clarity, not emotion.
+Never blame the user. Don’t show only an error code; put codes in “Details” if needed. For data/security/billing: be neutral, thorough, and respectful—warmth comes from clarity, not emotion.
 
 ---
 

@@ -6,10 +6,10 @@ import { ChevronDown, ChevronUp, ListTodo } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useNotebookStore } from '@/store/notebook';
 import { notebookSelectors } from '@/store/notebook/selectors';
-
-import { useDocumentEditorStore } from './store';
 
 interface TodoItem {
   completed: boolean;
@@ -106,8 +106,10 @@ const TodoList = memo(() => {
   const { t } = useTranslation('portal');
   const [expanded, setExpanded] = useState(false);
 
-  const documentId = useDocumentEditorStore((s) => s.documentId);
-  const topicId = useDocumentEditorStore((s) => s.topicId);
+  const [topicId, documentId] = useChatStore((s) => [
+    s.activeTopicId,
+    chatPortalSelectors.portalDocumentId(s),
+  ]);
 
   const document = useNotebookStore(notebookSelectors.getDocumentById(topicId, documentId));
 

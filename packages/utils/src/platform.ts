@@ -26,17 +26,49 @@ export const browserInfo = {
 export const isMacOS = () => getPlatform() === 'Mac OS';
 
 /**
+ * Get macOS Darwin major version number
+ * @returns Darwin major version (e.g., 25, 26) or 0 if not available
+ */
+export const getDarwinMajorVersion = (): number => {
+  if (isOnServerSide || typeof window === 'undefined') return 0;
+
+  // In Electron environment, use window.lobeEnv.darwinMajorVersion if available
+  if (typeof (window as any)?.lobeEnv?.darwinMajorVersion === 'number') {
+    return (window as any).lobeEnv.darwinMajorVersion;
+  }
+
+  // In web environment, try to parse from userAgent
+  if (typeof navigator !== 'undefined') {
+    const match = navigator.userAgent.match(/Mac OS X (\d+)[._](\d+)/);
+    if (match) {
+      return parseInt(match[1], 10);
+    }
+  }
+
+  return 0;
+};
+
+/**
  *
  * We can't use it to detect the macOS real version, and we also don't know if it's macOS 26, only an estimated value.
- * @returns true if the current browser is macOS and the version is 10.15 or later
+ * @returns true if the current browser is macOS and the version is 10.15 or later (web) or darwinMajorVersion >= 25 (Electron)
  */
 export const isMacOSWithLargeWindowBorders = () => {
   if (isOnServerSide || typeof navigator === 'undefined') return false;
 
-  // keep consistent with the original logic: only for macOS on web (exclude Electron)
+  // Check if we're in Electron environment
   const isElectron =
     /Electron\//.test(navigator.userAgent) || Boolean((window as any)?.process?.type);
-  if (isElectron || !isMacOS()) return false;
+
+  // In Electron environment, check darwinMajorVersion from window.lobeEnv
+  if (isElectron) {
+    const darwinMajorVersion = getDarwinMajorVersion();
+    // macOS 25+ has large window borders
+    return darwinMajorVersion >= 25;
+  }
+
+  // keep consistent with the original logic: only for macOS on web (exclude Electron)
+  if (!isMacOS()) return false;
 
   const match = navigator.userAgent.match(/Mac OS X (\d+)[._](\d+)/);
   if (!match) return false;

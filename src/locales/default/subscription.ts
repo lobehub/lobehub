@@ -62,6 +62,8 @@ export default {
   'funds.packages.expiresIn': 'Expires in {{days}} days',
   'funds.packages.expiresToday': 'Expires today',
   'funds.packages.expiringSoon': 'Expiring soon',
+  'funds.packages.gift': 'Gift',
+  'funds.packages.giftedOn': 'Gifted on {{date}}',
   'funds.packages.noPackages': 'No credit packages',
   'funds.packages.purchaseFirst': 'Purchase your first credit package',
   'funds.packages.purchasedOn': 'Purchased on {{date}}',

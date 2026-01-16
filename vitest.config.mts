@@ -56,6 +56,7 @@ export default defineConfig({
       '@/const': resolve(__dirname, './packages/const/src'),
       '@': resolve(__dirname, './src'),
       '~test-utils': resolve(__dirname, './tests/utils.tsx'),
+      'lru_map': resolve(__dirname, './tests/mocks/lru_map'),
       /* eslint-enable */
     },
     coverage: {
@@ -94,7 +95,14 @@ export default defineConfig({
     globals: true,
     server: {
       deps: {
-        inline: ['vitest-canvas-mock', '@lobehub/ui', '@lobehub/fluent-emoji'],
+        inline: [
+          'vitest-canvas-mock',
+          '@lobehub/ui',
+          '@lobehub/fluent-emoji',
+          '@pierre/diffs',
+          '@pierre/diffs/react',
+          'lru_map',
+        ],
       },
     },
     setupFiles: join(__dirname, './tests/setup.ts'),

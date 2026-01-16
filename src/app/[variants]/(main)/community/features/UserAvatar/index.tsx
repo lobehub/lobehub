@@ -16,7 +16,14 @@ import { serverConfigSelectors } from '@/store/serverConfig/selectors';
  */
 const checkNeedsProfileSetup = (
   enableMarketTrustedClient: boolean,
-  userProfile: { avatarUrl: string | null; bannerUrl: string | null; socialLinks: { github?: string; twitter?: string; website?: string } | null } | null | undefined,
+  userProfile:
+    | {
+        avatarUrl: string | null;
+        bannerUrl: string | null;
+        socialLinks: { github?: string; twitter?: string; website?: string } | null;
+      }
+    | null
+    | undefined,
 ): boolean => {
   if (!enableMarketTrustedClient) return false;
   if (!userProfile) return true;
@@ -33,7 +40,9 @@ const UserAvatar = memo(() => {
   const [loading, setLoading] = useState(false);
   const { isAuthenticated, isLoading, getCurrentUserInfo, signIn } = useMarketAuth();
 
-  const enableMarketTrustedClient = useServerConfigStore(serverConfigSelectors.enableMarketTrustedClient);
+  const enableMarketTrustedClient = useServerConfigStore(
+    serverConfigSelectors.enableMarketTrustedClient,
+  );
 
   const userInfo = getCurrentUserInfo();
   const username = userInfo?.sub;
@@ -70,8 +79,9 @@ const UserAvatar = memo(() => {
     return <Skeleton.Avatar active shape={'square'} size={28} style={{ borderRadius: 6 }} />;
   }
 
-  // 未认证，或者是 trustedClient 模式但需要完善资料时，显示登录按钮
-  if (!isAuthenticated || needsProfileSetup) {
+  // 如果启用了 trustedClient，不显示"成为创作者"按钮，直接显示头像
+  // 否则，未认证或需要完善资料时，显示登录按钮
+  if (!enableMarketTrustedClient && (!isAuthenticated || needsProfileSetup)) {
     return (
       <Button
         icon={UserCircleIcon}
@@ -92,7 +102,7 @@ const UserAvatar = memo(() => {
 
   return (
     <Avatar
-      avatar={avatarUrl || userProfile?.userName}
+      avatar={avatarUrl || userProfile?.userName || username}
       onClick={handleAvatarClick}
       shape={'square'}
       size={28}

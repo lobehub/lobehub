@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound } from '@/libs/next/navigation';
 import { type PropsWithChildren } from 'react';
 
 import { enableBetterAuth } from '@/envs/auth';

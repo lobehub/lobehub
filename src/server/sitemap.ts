@@ -32,7 +32,7 @@ export enum SitemapType {
 
 export const LAST_MODIFIED = new Date().toISOString();
 
-// 每页条目数量
+// Number of items per page
 const ITEMS_PER_PAGE = 100;
 
 export class Sitemap {
@@ -40,19 +40,19 @@ export class Sitemap {
 
   private discoverService = new DiscoverService();
 
-  // 获取插件总页数
+  // Get total number of plugin pages
   async getPluginPageCount(): Promise<number> {
     const list = await this.discoverService.getPluginIdentifiers();
     return Math.ceil(list.length / ITEMS_PER_PAGE);
   }
 
-  // 获取助理总页数
+  // Get total number of assistant pages
   async getAssistantPageCount(): Promise<number> {
     const list = await this.discoverService.getAssistantIdentifiers();
     return Math.ceil(list.length / ITEMS_PER_PAGE);
   }
 
-  // 获取模型总页数
+  // Get total number of model pages
   async getModelPageCount(): Promise<number> {
     const list = await this.discoverService.getModelIdentifiers();
     return Math.ceil(list.length / ITEMS_PER_PAGE);
@@ -164,14 +164,14 @@ export class Sitemap {
       ),
     );
 
-    // 获取需要分页的类型的页数
+    // Get page counts for types that need pagination
     const [pluginPages, assistantPages, modelPages] = await Promise.all([
       this.getPluginPageCount(),
       this.getAssistantPageCount(),
       this.getModelPageCount(),
     ]);
 
-    // 生成分页sitemap链接
+    // Generate paginated sitemap links
     const paginatedSitemaps = [
       ...Array.from({ length: pluginPages }, (_, i) =>
         this._generateSitemapLink(
@@ -211,7 +211,7 @@ export class Sitemap {
       const pageAssistants = list.slice(startIndex, endIndex);
 
       const sitmap = pageAssistants
-        .filter((item) => item.identifier) // 过滤掉 identifier 为空的项目
+        .filter((item) => item.identifier) // Filter out items with empty identifiers
         .map((item) =>
           this._genSitemap(urlJoin('/community/assistant', item.identifier), {
             lastModified: item?.lastModified || LAST_MODIFIED,
@@ -220,7 +220,7 @@ export class Sitemap {
       return flatten(sitmap);
     }
 
-    // 如果没有指定页数，返回所有（向后兼容）
+    // If page number is not specified, return all (backward compatibility)
     const sitmap = list
       .filter((item) => item.identifier) // 过滤掉 identifier 为空的项目
       .map((item) =>
@@ -240,7 +240,7 @@ export class Sitemap {
       const pagePlugins = list.slice(startIndex, endIndex);
 
       const sitmap = pagePlugins
-        .filter((item) => item.identifier) // 过滤掉 identifier 为空的项目
+        .filter((item) => item.identifier) // Filter out items with empty identifiers
         .map((item) =>
           this._genSitemap(urlJoin('/community/plugin', item.identifier), {
             lastModified: item?.lastModified || LAST_MODIFIED,
@@ -249,7 +249,7 @@ export class Sitemap {
       return flatten(sitmap);
     }
 
-    // 如果没有指定页数，返回所有（向后兼容）
+    // If page number is not specified, return all (backward compatibility)
     const sitmap = list
       .filter((item) => item.identifier) // 过滤掉 identifier 为空的项目
       .map((item) =>
@@ -269,7 +269,7 @@ export class Sitemap {
       const pageModels = list.slice(startIndex, endIndex);
 
       const sitmap = pageModels
-        .filter((item) => item.identifier) // 过滤掉 identifier 为空的项目
+        .filter((item) => item.identifier) // Filter out items with empty identifiers
         .map((item) =>
           this._genSitemap(urlJoin('/community/model', item.identifier), {
             lastModified: item?.lastModified || LAST_MODIFIED,
@@ -278,7 +278,7 @@ export class Sitemap {
       return flatten(sitmap);
     }
 
-    // 如果没有指定页数，返回所有（向后兼容）
+    // If page number is not specified, return all (backward compatibility)
     const sitmap = list
       .filter((item) => item.identifier) // 过滤掉 identifier 为空的项目
       .map((item) =>

@@ -1,4 +1,4 @@
-import Image from 'next/image';
+import Image from '@/libs/next/Image';
 
 interface WebFaviconProps {
   alt?: string;

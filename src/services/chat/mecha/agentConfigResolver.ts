@@ -10,7 +10,7 @@ import { produce } from 'immer';
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { agentGroupByIdSelectors, agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 /**
  * Applies params adjustments based on chatConfig settings.
@@ -49,7 +49,7 @@ export interface AgentConfigResolverContext {
   agentId: string;
 
   // Builtin agent specific context
-/** Document content for page-agent */
+  /** Document content for page-agent */
   documentContent?: string;
 
   /** Current model being used (for template variables) */
@@ -109,7 +109,19 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   const basePlugins = agentConfig.plugins ?? [];
 
   // Check if this is a builtin agent
-  const slug = agentSelectors.getAgentSlugById(agentId)(agentStoreState);
+  // First check agent store, then check if this is a supervisor agent in agentGroup store
+  let slug = agentSelectors.getAgentSlugById(agentId)(agentStoreState);
+
+  // If not found in agent store, check if this is a supervisor agent in any group
+  // Supervisor agents have their slug stored in agentGroup store, not agent store
+  if (!slug) {
+    const groupStoreState = getChatGroupStoreState();
+    const group = agentGroupByIdSelectors.groupBySupervisorAgentId(agentId)(groupStoreState);
+    if (group) {
+      // This is a supervisor agent - use the builtin slug
+      slug = BUILTIN_AGENT_SLUGS.groupSupervisor;
+    }
+  }
 
   if (!slug) {
     // Regular agent - use provided plugins if available, fallback to agent's plugins

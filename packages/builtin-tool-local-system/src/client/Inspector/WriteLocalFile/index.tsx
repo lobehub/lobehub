@@ -3,25 +3,14 @@
 import { type WriteLocalFileParams } from '@lobechat/electron-client-ipc';
 import { type BuiltinInspectorProps } from '@lobechat/types';
 import { Icon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { cssVar, cx } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { shinyTextStyles } from '@/styles';
+import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import { FilePathDisplay } from '../../components/FilePathDisplay';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
 
 export const WriteLocalFileInspector = memo<BuiltinInspectorProps<WriteLocalFileParams>>(
   ({ args, partialArgs, isArgumentsStreaming }) => {
@@ -36,14 +25,16 @@ export const WriteLocalFileInspector = memo<BuiltinInspectorProps<WriteLocalFile
     // During argument streaming without path
     if (isArgumentsStreaming && !filePath) {
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-local-system.apiName.writeLocalFile')}</span>
         </div>
       );
     }
 
     return (
-      <div className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+      <div
+        className={cx(inspectorTextStyles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}
+      >
         <span>{t('builtins.lobe-local-system.apiName.writeLocalFile')}: </span>
         <FilePathDisplay filePath={filePath} />
         {lines > 0 && (

@@ -1,16 +1,19 @@
 import { parse } from 'partial-json';
+import { useMemo } from 'react';
 import { stringify } from 'yaml';
 
 export const useYamlArguments = (args?: string) => {
-  if (!args) return '';
+  return useMemo(() => {
+    if (!args) return '';
 
-  try {
-    const obj = parse(args);
+    try {
+      const obj = parse(args);
 
-    if (Object.keys(obj).length === 0) return '';
+      if (Object.keys(obj).length === 0) return '';
 
-    return stringify(obj);
-  } catch {
-    return args;
-  }
+      return stringify(obj);
+    } catch {
+      return args;
+    }
+  }, [args]);
 };

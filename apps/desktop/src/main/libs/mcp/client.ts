@@ -6,15 +6,31 @@ import {
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { Progress } from '@modelcontextprotocol/sdk/types.js';
+import type { Readable } from 'node:stream';
 
 import { getDesktopEnv } from '@/env';
 
 import type { MCPClientParams, McpPrompt, McpResource, McpTool, ToolCallResult } from './types';
 
+/**
+ * Custom error class for MCP connection errors that includes STDIO logs
+ */
+export class MCPConnectionError extends Error {
+  readonly stderrLogs: string[];
+
+  constructor(message: string, stderrLogs: string[] = []) {
+    super(message);
+    this.name = 'MCPConnectionError';
+    this.stderrLogs = stderrLogs;
+  }
+}
+
 export class MCPClient {
   private readonly mcp: Client;
 
   private transport: Transport;
+  private stderrLogs: string[] = [];
+  private isStdio: boolean = false;
 
   constructor(params: MCPClientParams) {
     this.mcp = new Client({ name: 'lobehub-desktop-mcp-client', version: '1.0.0' });
@@ -40,14 +56,21 @@ export class MCPClient {
       }
 
       case 'stdio': {
-        this.transport = new StdioClientTransport({
+        this.isStdio = true;
+        const stdioTransport = new StdioClientTransport({
           args: params.args,
           command: params.command,
           env: {
             ...getDefaultEnvironment(),
             ...params.env,
           },
+          stderr: 'pipe', // Capture stderr for better error messages
         });
+
+        // Listen to stderr stream to collect logs
+        this.setupStderrListener(stdioTransport);
+
+        this.transport = stdioTransport;
         break;
       }
 
@@ -60,16 +83,45 @@ export class MCPClient {
     }
   }
 
+  private setupStderrListener(transport: StdioClientTransport) {
+    const stderr = transport.stderr as Readable | null;
+    if (stderr) {
+      stderr.on('data', (chunk: Buffer) => {
+        const text = chunk.toString('utf8');
+        // Split by newlines and filter empty lines
+        const lines = text.split('\n').filter((line) => line.trim());
+        this.stderrLogs.push(...lines);
+      });
+    }
+  }
+
+  /**
+   * Get collected stderr logs from the STDIO process
+   */
+  getStderrLogs(): string[] {
+    return this.stderrLogs;
+  }
+
   private isMethodNotFoundError(error: unknown) {
     const err = error as any;
     if (!err) return false;
+    // eslint-disable-next-line unicorn/numeric-separators-style
     if (err.code === -32601) return true;
     if (typeof err.message === 'string' && err.message.includes('Method not found')) return true;
     return false;
   }
 
   async initialize(options: { onProgress?: (progress: Progress) => void } = {}) {
-    await this.mcp.connect(this.transport, { onprogress: options.onProgress });
+    try {
+      await this.mcp.connect(this.transport, { onprogress: options.onProgress });
+    } catch (error) {
+      // If this is a STDIO connection and we have stderr logs, enhance the error
+      if (this.isStdio && this.stderrLogs.length > 0) {
+        const originalMessage = error instanceof Error ? error.message : String(error);
+        throw new MCPConnectionError(originalMessage, this.stderrLogs);
+      }
+      throw error;
+    }
   }
 
   async disconnect() {

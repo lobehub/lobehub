@@ -11,34 +11,33 @@ import { Tools } from '../../AssistantGroup/Tools';
 import Reasoning from '../../components/Reasoning';
 import MessageContent from './MessageContent';
 
-const ContentBlock = memo<AssistantContentBlock>(({ id, tools, content, reasoning, error }) => {
-  const errorContent = useErrorContent(error);
-  const isReasoning = useConversationStore(messageStateSelectors.isMessageInReasoning(id));
-  const hasTools = tools && tools.length > 0;
-  const showReasoning =
-    (!!reasoning && reasoning.content?.trim() !== '') || (!reasoning && isReasoning);
+interface ContentBlockProps extends AssistantContentBlock {
+  disableEditing?: boolean;
+}
 
-  if (error && (content === LOADING_FLAT || !content))
+const ContentBlock = memo<ContentBlockProps>(
+  ({ id, tools, content, reasoning, error, disableEditing }) => {
+    const errorContent = useErrorContent(error);
+    const isReasoning = useConversationStore(messageStateSelectors.isMessageInReasoning(id));
+    const hasTools = tools && tools.length > 0;
+    const showReasoning =
+      (!!reasoning && reasoning.content?.trim() !== '') || (!reasoning && isReasoning);
+
+    if (error && (content === LOADING_FLAT || !content))
+      return <ErrorContent error={errorContent} id={id} />;
+
     return (
-      <ErrorContent
-        error={
-          errorContent && error && (content === LOADING_FLAT || !content) ? errorContent : undefined
-        }
-        id={id}
-      />
+      <Flexbox gap={8} id={id}>
+        {showReasoning && <Reasoning {...reasoning} id={id} />}
+
+        {/* Content - markdown text */}
+        <MessageContent content={content} hasTools={hasTools} id={id} />
+
+        {/* Tools */}
+        {hasTools && <Tools disableEditing={disableEditing} messageId={id} tools={tools} />}
+      </Flexbox>
     );
-
-  return (
-    <Flexbox gap={8} id={id}>
-      {showReasoning && <Reasoning {...reasoning} id={id} />}
-
-      {/* Content - markdown text */}
-      <MessageContent content={content} hasTools={hasTools} id={id} />
-
-      {/* Tools */}
-      {hasTools && <Tools messageId={id} tools={tools} />}
-    </Flexbox>
-  );
-});
+  },
+);
 
 export default ContentBlock;

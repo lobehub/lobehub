@@ -17,6 +17,8 @@ import {
 } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import FileIcon from '@/components/FileIcon';
+import { clearTreeFolderCache } from '@/features/ResourceManager/components/LibraryHierarchy';
+import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { type FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
@@ -25,6 +27,7 @@ import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import ChunksBadge from './ChunkTag';
+import TruncatedFileName from './TruncatedFileName';
 
 // Initialize dayjs plugin once at module level
 dayjs.extend(relativeTime);
@@ -38,6 +41,7 @@ const styles = createStaticStyles(({ css }) => {
       cursor: pointer;
       min-width: 800px;
 
+      /* Hover effect for individual rows */
       &:hover {
         background: ${cssVar.colorFillTertiary};
       }
@@ -55,6 +59,25 @@ const styles = createStaticStyles(({ css }) => {
     dragging: css`
       will-change: transform;
       opacity: 0.5;
+    `,
+
+    evenRow: css`
+      background: ${cssVar.colorFillQuaternary};
+
+      /* Hover effect overrides zebra striping on the hovered row only */
+      &:hover {
+        background: ${cssVar.colorFillTertiary};
+      }
+
+      /* Hide zebra striping when any row is hovered */
+      .any-row-hovered & {
+        background: transparent;
+      }
+
+      /* But keep hover effect on the actual hovered row */
+      .any-row-hovered &:hover {
+        background: ${cssVar.colorFillTertiary};
+      }
     `,
 
     hover: css`
@@ -78,7 +101,6 @@ const styles = createStaticStyles(({ css }) => {
       margin-inline-start: 12px;
 
       color: ${cssVar.colorText};
-      text-overflow: ellipsis;
       white-space: nowrap;
     `,
     nameContainer: css`
@@ -103,6 +125,8 @@ interface FileListItemProps extends FileListItemType {
     size: number;
   };
   index: number;
+  isAnyRowHovered: boolean;
+  onHoverChange: (isHovered: boolean) => void;
   onSelectedChange: (id: string, selected: boolean, shiftKey: boolean, index: number) => void;
   pendingRenameItemId?: string | null;
   selected?: boolean;
@@ -131,6 +155,7 @@ const FileListItem = memo<FileListItemProps>(
     sourceType,
     slug,
     pendingRenameItemId,
+    onHoverChange,
   }) => {
     const { t } = useTranslation(['components', 'file']);
     const { message } = App.useApp();
@@ -142,7 +167,8 @@ const FileListItem = memo<FileListItemProps>(
       (s) => ({
         isCreatingFileParseTask: fileManagerSelectors.isCreatingFileParseTask(id)(s),
         parseFiles: s.parseFilesToChunks,
-        renameFolder: s.renameFolder,
+        refreshFileList: s.refreshFileList,
+        updateResource: s.updateResource,
       }),
       shallow,
     );
@@ -161,6 +187,7 @@ const FileListItem = memo<FileListItemProps>(
     const [isRenaming, setIsRenaming] = useState(false);
     const [renamingValue, setRenamingValue] = useState(name);
     const inputRef = useRef<any>(null);
+    const isConfirmingRef = useRef(false);
     const isDragActive = useDragActive();
     const { setCurrentDrag } = useDragState();
     const [isDragging, setIsDragging] = useState(false);
@@ -170,10 +197,10 @@ const FileListItem = memo<FileListItemProps>(
     const computedValues = useMemo(() => {
       const isPDF = fileType?.toLowerCase() === 'pdf' || name?.toLowerCase().endsWith('.pdf');
       return {
-        emoji: sourceType === 'document' || fileType === 'custom/document' ? metadata?.emoji : null,
+        emoji: sourceType === 'document' || fileType === PAGE_FILE_TYPE ? metadata?.emoji : null,
         isFolder: fileType === 'custom/folder',
         // PDF files should not be treated as pages, even if they have sourceType='document'
-        isPage: !isPDF && (sourceType === 'document' || fileType === 'custom/document'),
+        isPage: !isPDF && (sourceType === 'document' || fileType === PAGE_FILE_TYPE),
         isSupportedForChunking: !isChunkingUnsupported(fileType),
       };
     }, [fileType, sourceType, metadata?.emoji, name]);
@@ -260,27 +287,52 @@ const FileListItem = memo<FileListItemProps>(
     }, [name]);
 
     const handleRenameConfirm = useCallback(async () => {
+      // Prevent duplicate calls (e.g., from both Enter key and onBlur)
+      if (isConfirmingRef.current) return;
+      isConfirmingRef.current = true;
+
       if (!renamingValue.trim()) {
         message.error(t('FileManager.actions.renameError'));
+        isConfirmingRef.current = false;
         return;
       }
 
       if (renamingValue.trim() === name) {
         setIsRenaming(false);
+        isConfirmingRef.current = false;
         return;
       }
 
       try {
-        await fileStoreState.renameFolder(id, renamingValue.trim());
+        // Use optimistic updateResource for instant UI update
+        await fileStoreState.updateResource(id, { name: renamingValue.trim() });
+        if (resourceManagerState.libraryId) {
+          await clearTreeFolderCache(resourceManagerState.libraryId);
+        }
+        await fileStoreState.refreshFileList();
+
         message.success(t('FileManager.actions.renameSuccess'));
         setIsRenaming(false);
       } catch (error) {
         console.error('Rename error:', error);
         message.error(t('FileManager.actions.renameError'));
+      } finally {
+        isConfirmingRef.current = false;
       }
-    }, [renamingValue, name, fileStoreState.renameFolder, id, message, t]);
+    }, [
+      fileStoreState.refreshFileList,
+      fileStoreState.updateResource,
+      id,
+      message,
+      name,
+      renamingValue,
+      resourceManagerState.libraryId,
+      t,
+    ]);
 
     const handleRenameCancel = useCallback(() => {
+      // Don't cancel if we're in the middle of confirming
+      if (isConfirmingRef.current) return;
       setIsRenaming(false);
       setRenamingValue(name);
     }, [name]);
@@ -334,7 +386,7 @@ const FileListItem = memo<FileListItemProps>(
       fileType,
       filename: name,
       id,
-      knowledgeBaseId: resourceManagerState.libraryId,
+      libraryId: resourceManagerState.libraryId,
       onRenameStart: isFolder ? handleRenameStart : undefined,
       sourceType,
       url,
@@ -347,12 +399,14 @@ const FileListItem = memo<FileListItemProps>(
           className={cx(
             styles.container,
             'file-list-item-group',
+            index % 2 === 0 && styles.evenRow,
             selected && styles.selected,
             isDragging && styles.dragging,
             isOver && styles.dragOver,
           )}
           data-drop-target-id={id}
           data-is-folder={String(isFolder)}
+          data-row-index={index}
           draggable={!!resourceManagerState.libraryId}
           height={48}
           horizontal
@@ -361,6 +415,8 @@ const FileListItem = memo<FileListItemProps>(
           onDragOver={handleDragOver}
           onDragStart={handleDragStart}
           onDrop={handleDrop}
+          onMouseEnter={() => onHoverChange(true)}
+          onMouseLeave={() => onHoverChange(false)}
           paddingInline={8}
           style={{
             borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
@@ -440,7 +496,10 @@ const FileListItem = memo<FileListItemProps>(
                   value={renamingValue}
                 />
               ) : (
-                <span className={styles.name}>{name || t('file:pageList.untitled')}</span>
+                <TruncatedFileName
+                  className={styles.name}
+                  name={name || t('file:pageList.untitled')}
+                />
               )}
             </Flexbox>
             <Flexbox
@@ -453,6 +512,7 @@ const FileListItem = memo<FileListItemProps>(
               onPointerDown={(e) => e.stopPropagation()}
             >
               {!isFolder &&
+                !isPage &&
                 (fileStoreState.isCreatingFileParseTask ||
                 isNull(chunkingStatus) ||
                 !chunkingStatus ? (
@@ -533,7 +593,8 @@ const FileListItem = memo<FileListItemProps>(
       prevProps.url === nextProps.url &&
       prevProps.columnWidths.name === nextProps.columnWidths.name &&
       prevProps.columnWidths.date === nextProps.columnWidths.date &&
-      prevProps.columnWidths.size === nextProps.columnWidths.size
+      prevProps.columnWidths.size === nextProps.columnWidths.size &&
+      prevProps.isAnyRowHovered === nextProps.isAnyRowHovered
     );
   },
 );

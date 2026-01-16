@@ -118,7 +118,7 @@ export const agentGroupSlice: StateCreator<
 
       // 4. Switch to new topic if created
       if (result.isCreateNewTopic && result.topicId) {
-        await get().switchTopic(result.topicId, true);
+        await get().switchTopic(result.topicId, { clearNewKey: true, skipRefreshMessage: true });
       }
 
       // 5. Create execContext with updated topicId from server response

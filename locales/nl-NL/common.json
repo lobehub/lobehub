@@ -134,6 +134,8 @@
   "cmdk.search.communityAgent": "Community Agent",
   "cmdk.search.file": "Bestand",
   "cmdk.search.files": "Bestanden",
+  "cmdk.search.folder": "Map",
+  "cmdk.search.folders": "Mappen",
   "cmdk.search.loading": "Zoeken...",
   "cmdk.search.market": "Community",
   "cmdk.search.mcp": "MCP-server",

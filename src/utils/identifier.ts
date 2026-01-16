@@ -4,7 +4,7 @@
  * @returns The standardized identifier.
  */
 
-const standardizeIdentifier = (identifier: string, prefix?: 'docs' | 'agt') => {
+export const standardizeIdentifier = (identifier: string, prefix?: 'docs' | 'agt') => {
   if (identifier.includes('_')) {
     return identifier.split('_')[1];
   } else if (prefix) {
@@ -14,4 +14,10 @@ const standardizeIdentifier = (identifier: string, prefix?: 'docs' | 'agt') => {
   return identifier;
 };
 
-export { standardizeIdentifier };
+export const getIdFromIdentifier = (identifier: string, prefix?: 'docs' | 'agt') => {
+  if (identifier.includes('_')) {
+    return identifier;
+  }
+
+  return `${prefix}_${identifier}`;
+};

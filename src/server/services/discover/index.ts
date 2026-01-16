@@ -25,13 +25,15 @@ import {
   type DiscoverProviderItem,
   type DiscoverUserProfile,
   type IdentifiersResponse,
+  McpCategory,
   type McpListResponse,
   type McpQueryParams,
+  McpSorts,
   type ModelListResponse,
   type ModelQueryParams,
   ModelSorts,
   type PluginListResponse,
-  type PluginQueryParams,
+  type PluginQueryParams as PluginQueryParams,
   PluginSorts,
   type ProviderListResponse,
   type ProviderQueryParams,
@@ -48,7 +50,12 @@ import {
   MarketSDK,
   type UserInfoResponse,
 } from '@lobehub/market-sdk';
-import { type CallReportRequest, type InstallReportRequest } from '@lobehub/market-types';
+import {
+  AgentEventRequest,
+  type CallReportRequest,
+  type InstallReportRequest,
+  type PluginEventRequest,
+} from '@lobehub/market-types';
 import dayjs from 'dayjs';
 import debug from 'debug';
 import { cloneDeep, countBy, isString, merge, uniq, uniqBy } from 'es-toolkit/compat';
@@ -850,12 +857,16 @@ export class DiscoverService {
 
   getMcpList = async (params: McpQueryParams = {}): Promise<McpListResponse> => {
     log('getMcpList: params=%O', params);
-    const { locale } = params;
+    const { category, locale, sort } = params;
     const normalizedLocale = normalizeLocale(locale);
+    const isDiscoverCategory = category === McpCategory.Discover;
+
     const result = await this.market.plugins.getPluginList(
       {
         ...params,
+        category: isDiscoverCategory ? undefined : category,
         locale: normalizedLocale,
+        sort: isDiscoverCategory ? McpSorts.Recommended : sort,
       },
       {
         next: {
@@ -896,6 +907,21 @@ export class DiscoverService {
   reportPluginInstallation = async (params: InstallReportRequest) => {
     await this.market.plugins.reportInstallation(params);
   };
+
+  /**
+   * record Agent plugin event
+   */
+  createAgentEvent = async (params: AgentEventRequest) => {
+    await this.market.agents.createEvent(params);
+  };
+
+  /**
+   * record MCP plugin event
+   */
+  createPluginEvent = async (params: PluginEventRequest) => {
+    await this.market.plugins.createEvent(params);
+  };
+
 
   /**
    * report plugin call result to marketplace

@@ -15,9 +15,9 @@ import { useHomeStore } from '@/store/home';
 
 import { useAgentModal } from '../../ModalProvider';
 import Actions from '../Item/Actions';
-import { useDropdownMenu } from '../Item/useDropdownMenu';
 import Avatar from './Avatar';
 import Editing from './Editing';
+import { useAgentDropdownMenu } from './useDropdownMenu';
 
 interface AgentItemProps {
   className?: string;
@@ -96,13 +96,11 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
     return <Avatar avatar={typeof avatar === 'string' ? avatar : undefined} />;
   }, [isUpdating, avatar]);
 
-  const dropdownMenu = useDropdownMenu({
+  const dropdownMenu = useAgentDropdownMenu({
     group: undefined, // TODO: pass group from parent if needed
     id,
     openCreateGroupModal: handleOpenCreateGroupModal,
-    parentType: 'agent',
     pinned: pinned ?? false,
-    sessionType: 'agent',
     toggleEditing,
   });
 

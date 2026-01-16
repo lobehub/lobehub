@@ -1,7 +1,6 @@
 'use client';
 
 import { Alert, Button, Flexbox } from '@lobehub/ui';
-import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,16 +19,17 @@ const UpgradeAlert = memo(() => {
       title={
         <Flexbox gap={8}>
           <p>{t('upgradeVersion.newVersion', { version: `v${latestVersion}` })}</p>
-          <Link
+          <a
             aria-label={t('upgradeVersion.action')}
             href={MANUAL_UPGRADE_URL}
+            rel="noreferrer"
             style={{ marginBottom: 6 }}
-            target={'_blank'}
+            target="_blank"
           >
             <Button block size={'small'} type={'primary'}>
               {t('upgradeVersion.action')}
             </Button>
-          </Link>
+          </a>
         </Flexbox>
       }
       type={'info'}

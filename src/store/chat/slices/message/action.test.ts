@@ -75,7 +75,7 @@ afterEach(() => {
 
 describe('chatMessage actions', () => {
   describe('addAIMessage', () => {
-    it('should return early if activeId is undefined', async () => {
+    it('should return early if activeAgentId is undefined', async () => {
       useChatStore.setState({ activeAgentId: undefined });
       const { result } = renderHook(() => useChatStore());
       const updateMessageInputSpy = vi.spyOn(result.current, 'updateMessageInput');
@@ -117,7 +117,7 @@ describe('chatMessage actions', () => {
   });
 
   describe('addUserMessage', () => {
-    it('should return early if activeId is undefined', async () => {
+    it('should return early if activeAgentId is undefined', async () => {
       useChatStore.setState({ activeAgentId: undefined });
       const { result } = renderHook(() => useChatStore());
       const updateMessageInputSpy = vi.spyOn(result.current, 'updateMessageInput');
@@ -739,7 +739,7 @@ describe('chatMessage actions', () => {
       useChatStore.setState({ refreshMessages: realRefreshMessages });
 
       const { result } = renderHook(() => useChatStore());
-      const activeId = useChatStore.getState().activeAgentId;
+      const activeAgentId = useChatStore.getState().activeAgentId;
       const activeTopicId = useChatStore.getState().activeTopicId;
 
       // 在这里，我们不需要再次模拟 mutate，因为它已经在顶部被模拟了
@@ -750,13 +750,13 @@ describe('chatMessage actions', () => {
       // 确保 mutate 调用了正确的参数（session 和 group 两次）
       expect(mutate).toHaveBeenCalledWith([
         'SWR_USE_FETCH_MESSAGES',
-        activeId,
+        activeAgentId,
         activeTopicId,
         'session',
       ]);
       expect(mutate).toHaveBeenCalledWith([
         'SWR_USE_FETCH_MESSAGES',
-        activeId,
+        activeAgentId,
         activeTopicId,
         'group',
       ]);

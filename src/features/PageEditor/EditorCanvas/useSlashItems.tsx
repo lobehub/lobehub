@@ -28,7 +28,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { openFileSelector } from '@/features/PageEditor/EditorCanvas/actions';
+import { openFileSelector } from '@/features/EditorCanvas';
 import { useFileStore } from '@/store/file';
 
 export const useSlashItems = (editor: IEditor | undefined): SlashOptions['items'] => {

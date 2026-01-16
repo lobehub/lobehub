@@ -15,6 +15,8 @@
   "agentGroupManagement.executeTask.thread": "线程 ID",
   "agentGroupManagement.executeTask.timeout": "执行超时",
   "agentGroupManagement.executeTask.tokens": "令牌使用量",
+  "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "执行此任务的详细指令...",
+  "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "任务标题...",
   "codeInterpreter-legacy.error": "执行出错",
   "codeInterpreter-legacy.executing": "正在执行...",
   "codeInterpreter-legacy.files": "文件：",

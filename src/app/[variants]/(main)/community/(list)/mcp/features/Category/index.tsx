@@ -10,13 +10,13 @@ import { withSuspense } from '@/components/withSuspense';
 import { useCategory } from '@/hooks/useMCPCategory';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
-import { McpCategory } from '@/types/discover';
+import { McpCategory, McpSorts } from '@/types/discover';
 
 import CategoryMenu from '../../../../components/CategoryMenu';
 
 const Category = memo(() => {
   const useMcpCategories = useDiscoverStore((s) => s.useMcpCategories);
-  const { category = 'all', q } = useQuery() as { category?: McpCategory; q?: string };
+  const { category = McpCategory.Discover, q } = useQuery() as { category?: McpCategory; q?: string };
   const { data: items = [] } = useMcpCategories({ q });
   const navigate = useNavigate();
   const cates = useCategory();
@@ -24,7 +24,11 @@ const Category = memo(() => {
   const genUrl = (key: McpCategory) =>
     qs.stringifyUrl(
       {
-        query: { category: key === McpCategory.All ? null : key, q },
+        query: {
+          category: [McpCategory.All, McpCategory.Discover].includes(key) ? null : key,
+          q,
+          sort: key === McpCategory.Discover ? McpSorts.Recommended : null,
+        },
         url: '/community/mcp',
       },
       { skipNull: true },

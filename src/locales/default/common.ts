@@ -148,6 +148,8 @@ export default {
   'cmdk.search.communityAgent': 'Community Agent',
   'cmdk.search.file': 'File',
   'cmdk.search.files': 'Files',
+  'cmdk.search.folder': 'Folder',
+  'cmdk.search.folders': 'Folders',
   'cmdk.search.loading': 'Searching...',
   'cmdk.search.market': 'Community',
   'cmdk.search.mcp': 'MCP Server',

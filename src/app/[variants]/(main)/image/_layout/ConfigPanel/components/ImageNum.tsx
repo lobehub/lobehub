@@ -1,116 +1,15 @@
 'use client';
 
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import { ActionIcon, Flexbox, InputNumber } from '@lobehub/ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { ActionIcon, Flexbox, InputNumber, Segmented } from '@lobehub/ui';
 import { Check, Plus, X } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useImageStore } from '@/store/image';
 import { imageGenerationConfigSelectors } from '@/store/image/selectors';
 
 const DEFAULT_IMAGE_NUM_MAX = ENABLE_BUSINESS_FEATURES ? 8 : 50;
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  actionButton: css`
-    flex-shrink: 0;
-  `,
-
-  button: css`
-    cursor: pointer;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    min-width: 40px;
-    height: 32px;
-    padding-block: 0;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius}px;
-
-    font-size: 14px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-
-    background: ${cssVar.colorBgContainer};
-
-    transition: all 0.2s ease;
-
-    &:hover {
-      border-color: ${cssVar.colorPrimary};
-      background: ${cssVar.colorBgTextHover};
-    }
-
-    &:disabled {
-      cursor: not-allowed;
-      opacity: 0.5;
-
-      &:hover {
-        border-color: ${cssVar.colorBorder};
-        background: ${cssVar.colorBgContainer};
-      }
-    }
-  `,
-
-  cancelButton: css`
-    border-color: ${cssVar.colorBorder};
-    color: ${cssVar.colorTextTertiary};
-
-    &:hover {
-      border-color: ${cssVar.colorBorderSecondary};
-      color: ${cssVar.colorText};
-      background: ${cssVar.colorBgTextHover};
-    }
-  `,
-
-  confirmButton: css`
-    border-color: ${cssVar.colorSuccess};
-    color: ${cssVar.colorSuccess};
-
-    &:hover {
-      border-color: ${cssVar.colorSuccessHover};
-      color: ${cssVar.colorSuccessHover};
-      background: ${cssVar.colorSuccessBg};
-    }
-  `,
-
-  container: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  `,
-
-  editContainer: css`
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    width: 100%;
-  `,
-
-  input: css`
-    flex: 1;
-    min-width: 80px;
-
-    .ant-input {
-      font-weight: 500;
-      text-align: center;
-    }
-  `,
-
-  selectedButton: css`
-    border-color: ${cssVar.colorPrimary};
-    color: ${cssVar.colorPrimary};
-    background: ${cssVar.colorPrimaryBg};
-
-    &:hover {
-      border-color: ${cssVar.colorPrimary};
-      color: ${cssVar.colorPrimary};
-      background: ${cssVar.colorPrimaryBgHover};
-    }
-  `,
-}));
+const CUSTOM_VALUE = '__custom__';
 
 interface ImageNumSelectorProps {
   disabled?: boolean;
@@ -130,34 +29,52 @@ const ImageNum = memo<ImageNumSelectorProps>(
 
     const isCustomValue = !presetCounts.includes(imageNum);
 
-    // 处理预设按钮点击
-    const handlePresetClick = useCallback(
-      (count: number) => {
+    const options = useMemo(() => {
+      const items = presetCounts.map((count) => ({
+        label: String(count),
+        value: count,
+      }));
+
+      // Add custom option or show current custom value
+      if (isCustomValue) {
+        items.push({
+          label: String(imageNum),
+          value: imageNum,
+        });
+      } else {
+        items.push({
+          label: <Plus size={16} style={{ verticalAlign: 'middle' }} />,
+          value: CUSTOM_VALUE,
+        } as any);
+      }
+
+      return items;
+    }, [presetCounts, isCustomValue, imageNum]);
+
+    const handleChange = useCallback(
+      (value: number | string) => {
         if (disabled) return;
-        setImageNum(count);
+
+        if (value === CUSTOM_VALUE || (isCustomValue && value === imageNum)) {
+          // Enter edit mode
+          setCustomCount(imageNum);
+          customCountRef.current = imageNum;
+          setIsEditing(true);
+        } else {
+          setImageNum(value as number);
+        }
       },
-      [disabled, setImageNum],
+      [disabled, isCustomValue, imageNum, setImageNum],
     );
 
-    // 进入编辑模式
-    const handleEditStart = useCallback(() => {
-      if (disabled) return;
-      setCustomCount(imageNum);
-      customCountRef.current = imageNum;
-      setIsEditing(true);
-    }, [disabled, imageNum]);
-
-    // 确认自定义输入
     const handleCustomConfirm = useCallback(() => {
       let count = customCountRef.current;
 
-      // 如果解析失败或输入为空，使用当前值
       if (count === null) {
         setIsEditing(false);
         return;
       }
 
-      // 智能处理超出范围的值 (作为二次保险)
       if (count > max) {
         count = max;
       } else if (count < min) {
@@ -174,10 +91,7 @@ const ImageNum = memo<ImageNumSelectorProps>(
       setCustomCount(null);
     }, []);
 
-    // 处理输入变化
     const handleInputChange = useCallback((value: number | string | null) => {
-      console.log('handleInputChange', value);
-
       if (value === null) {
         setCustomCount(null);
         customCountRef.current = null;
@@ -192,10 +106,8 @@ const ImageNum = memo<ImageNumSelectorProps>(
       }
     }, []);
 
-    // 自动聚焦和选择输入框内容
     useEffect(() => {
       if (isEditing) {
-        // 延迟聚焦以确保 input 已渲染
         setTimeout(() => {
           if (inputRef.current) {
             inputRef.current.focus();
@@ -205,16 +117,12 @@ const ImageNum = memo<ImageNumSelectorProps>(
       }
     }, [isEditing]);
 
-    // 验证输入是否有效
-    const isValidInput = useCallback(() => {
-      return customCount !== null;
-    }, [customCount]);
+    const isValidInput = customCount !== null;
 
     if (isEditing) {
       return (
-        <div className={styles.editContainer}>
+        <Flexbox gap={8} horizontal style={{ width: '100%' }}>
           <InputNumber
-            className={styles.input}
             max={max}
             min={min}
             onChange={handleInputChange}
@@ -228,59 +136,32 @@ const ImageNum = memo<ImageNumSelectorProps>(
             placeholder={`${min}-${max}`}
             ref={inputRef}
             size="small"
+            style={{ flex: 1 }}
             value={customCount}
           />
           <ActionIcon
-            className={cx(styles.actionButton, styles.confirmButton)}
-            disabled={!isValidInput()}
+            color="success"
+            disabled={!isValidInput}
             icon={Check}
             onClick={handleCustomConfirm}
             size="small"
+            variant="filled"
           />
-          <ActionIcon
-            className={cx(styles.actionButton, styles.cancelButton)}
-            icon={X}
-            onClick={handleCustomCancel}
-            size="small"
-          />
-        </div>
+          <ActionIcon icon={X} onClick={handleCustomCancel} size="small" variant="filled" />
+        </Flexbox>
       );
     }
 
     return (
-      <Flexbox className={styles.container} horizontal>
-        {presetCounts.map((count) => (
-          <button
-            className={cx(styles.button, imageNum === count && styles.selectedButton)}
-            disabled={disabled}
-            key={count}
-            onClick={() => handlePresetClick(count)}
-            type="button"
-          >
-            {count}
-          </button>
-        ))}
-
-        {isCustomValue ? (
-          <button
-            className={cx(styles.button, styles.selectedButton)}
-            disabled={disabled}
-            onClick={handleEditStart}
-            type="button"
-          >
-            {imageNum}
-          </button>
-        ) : (
-          <button
-            className={styles.button}
-            disabled={disabled}
-            onClick={handleEditStart}
-            type="button"
-          >
-            <Plus size={16} />
-          </button>
-        )}
-      </Flexbox>
+      <Segmented
+        block
+        disabled={disabled}
+        onChange={handleChange}
+        options={options}
+        style={{ width: '100%' }}
+        value={isCustomValue ? imageNum : imageNum}
+        variant="filled"
+      />
     );
   },
 );

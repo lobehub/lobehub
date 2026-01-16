@@ -5,10 +5,6 @@ import { type ChatGroupAgentItem } from '@/database/schemas/chatGroup';
 export interface ChatMessageState {
   activeAgentId: string;
   /**
-   * @deprecated
-   */
-  activeId: string;
-  /**
    * Raw messages from database (flat structure)
    */
   dbMessagesMap: Record<string, UIChatMessage[]>;
@@ -37,7 +33,6 @@ export interface ChatMessageState {
 
 export const initialMessageState: ChatMessageState = {
   activeAgentId: '',
-  activeId: 'inbox',
   dbMessagesMap: {},
   groupAgentMaps: {},
   isCreatingMessage: false,

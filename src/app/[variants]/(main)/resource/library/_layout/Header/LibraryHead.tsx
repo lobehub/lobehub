@@ -9,7 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { useDragActive } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import RepoIcon from '@/components/LibIcon';
-import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/knowledgeBase';
+import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   clickableHeader: css`

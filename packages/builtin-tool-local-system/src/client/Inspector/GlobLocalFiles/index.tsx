@@ -7,19 +7,11 @@ import { Check, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { highlightTextStyles, shinyTextStyles } from '@/styles';
+import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import { type GlobFilesState } from '../../..';
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
+const styles = createStaticStyles(({ css }) => ({
   statusIcon: css`
     margin-block-end: -2px;
     margin-inline-start: 4px;
@@ -36,13 +28,13 @@ export const GlobLocalFilesInspector = memo<BuiltinInspectorProps<GlobFilesParam
     if (isArgumentsStreaming) {
       if (!pattern)
         return (
-          <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+          <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
             <span>{t('builtins.lobe-local-system.apiName.globLocalFiles')}</span>
           </div>
         );
 
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-local-system.apiName.globLocalFiles')}: </span>
           <span className={highlightTextStyles.primary}>{pattern}</span>
         </div>
@@ -53,7 +45,7 @@ export const GlobLocalFilesInspector = memo<BuiltinInspectorProps<GlobFilesParam
     const isSuccess = pluginState?.result?.success;
 
     return (
-      <div className={cx(styles.root, isLoading && shinyTextStyles.shinyText)}>
+      <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
         <span style={{ marginInlineStart: 2 }}>
           <span>{t('builtins.lobe-local-system.apiName.globLocalFiles')}: </span>
           {pattern && <span className={highlightTextStyles.primary}>{pattern}</span>}

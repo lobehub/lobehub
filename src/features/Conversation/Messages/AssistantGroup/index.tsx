@@ -2,7 +2,7 @@
 
 import type { AssistantContentBlock } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { type MouseEventHandler, Suspense, memo, useCallback, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';

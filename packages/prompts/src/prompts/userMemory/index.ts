@@ -1,3 +1,5 @@
+export * from './formatSearchResults';
+
 /**
  * User memory item interfaces
  */

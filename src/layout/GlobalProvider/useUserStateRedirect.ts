@@ -1,7 +1,6 @@
 'use client';
 
 import { OFFICIAL_URL } from '@lobechat/const';
-import { usePathname } from 'next/navigation';
 import { useCallback } from 'react';
 
 import { getDesktopOnboardingCompleted } from '@/app/[variants]/(desktop)/desktop-onboarding/storage';
@@ -11,18 +10,10 @@ import { useUserStore } from '@/store/user';
 import { onboardingSelectors } from '@/store/user/selectors';
 import type { UserInitializationState } from '@/types/user';
 
-const redirectIfNotOn = (currentPath: string | null | undefined, path: string) => {
-  if (!currentPath?.startsWith(path)) {
+const redirectIfNotOn = (currentPath: string, path: string) => {
+  if (!currentPath.startsWith(path)) {
     window.location.href = path;
   }
-};
-
-const useCurrentPathname = () => {
-  const pathname = usePathname();
-  return useCallback(() => {
-    if (typeof window === 'undefined') return pathname;
-    return window.location.pathname || pathname;
-  }, [pathname]);
 };
 
 export const useDesktopUserStateRedirect = () => {
@@ -69,25 +60,22 @@ export const useDesktopUserStateRedirect = () => {
   );
 };
 
-export const useWebUserStateRedirect = (getCurrentPathname: () => string | null | undefined) =>
-  useCallback(
-    (state: UserInitializationState) => {
-      if (state.isInWaitList === true) {
-        redirectIfNotOn(getCurrentPathname(), '/waitlist');
-        return;
-      }
+export const useWebUserStateRedirect = () =>
+  useCallback((state: UserInitializationState) => {
+    const pathname = window.location.pathname;
+    if (state.isInWaitList === true) {
+      redirectIfNotOn(pathname, '/waitlist');
+      return;
+    }
 
-      if (!onboardingSelectors.needsOnboarding(state)) return;
+    if (!onboardingSelectors.needsOnboarding(state)) return;
 
-      redirectIfNotOn(getCurrentPathname(), '/onboarding');
-    },
-    [getCurrentPathname],
-  );
+    redirectIfNotOn(pathname, '/onboarding');
+  }, []);
 
 export const useUserStateRedirect = () => {
-  const getCurrentPathname = useCurrentPathname();
   const desktopRedirect = useDesktopUserStateRedirect();
-  const webRedirect = useWebUserStateRedirect(getCurrentPathname);
+  const webRedirect = useWebUserStateRedirect();
 
   return useCallback(
     (state: UserInitializationState) => {

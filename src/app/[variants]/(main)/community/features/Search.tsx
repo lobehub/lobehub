@@ -6,10 +6,9 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
-import { usePathname } from '@/app/[variants]/(main)/hooks/usePathname';
-import { useQuery } from '@/app/[variants]/(main)/hooks/useQuery';
 import { withSuspense } from '@/components/withSuspense';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { usePathname, useQuery } from '@/libs/router/navigation';
 
 const prefixCls = 'ant';
 

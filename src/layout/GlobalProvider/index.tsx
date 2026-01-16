@@ -64,6 +64,7 @@ const GlobalLayout = async ({
               serverConfig={serverConfig}
             >
               <QueryProvider>
+                <StoreInitialization />
                 <GroupWizardProvider>
                   <DragUploadProvider>
                     <LazyMotion features={domMax}>
@@ -76,7 +77,6 @@ const GlobalLayout = async ({
                   </DragUploadProvider>
                 </GroupWizardProvider>
               </QueryProvider>
-              <StoreInitialization />
               <Suspense>
                 {ENABLE_BUSINESS_FEATURES ? <ReferralProvider /> : null}
                 <ImportSettings />

@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound } from '@/libs/next/navigation';
 
 import { authEnv } from '@/envs/auth';
 import { defaultClients } from '@/libs/oidc-provider/config';

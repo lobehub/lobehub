@@ -1,12 +1,11 @@
-import { Dropdown, type DropdownMenuItemType, Icon , Button } from '@lobehub/ui';
+import { Button, Dropdown, type DropdownMenuItemType, Icon } from '@lobehub/ui';
 import { ArrowDownWideNarrow, ChevronDown } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { usePathname } from '@/app/[variants]/(main)/hooks/usePathname';
-import { useQuery } from '@/app/[variants]/(main)/hooks/useQuery';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { usePathname , useQuery } from '@/libs/router/navigation';
 import {
   AssistantSorts,
   DiscoverTab,
@@ -27,6 +26,10 @@ const SortButton = memo(() => {
     switch (activeTab) {
       case DiscoverTab.Assistants: {
         const baseItems = [
+          {
+            key: AssistantSorts.Recommended,
+            label: t('assistants.sorts.recommended'),
+          },
           {
             key: AssistantSorts.CreatedAt,
             label: t('assistants.sorts.createdAt'),
@@ -125,6 +128,10 @@ const SortButton = memo(() => {
       }
       case DiscoverTab.Mcp: {
         return [
+          {
+            key: McpSorts.Recommended,
+            label: t('mcp.sorts.recommended'),
+          },
           {
             key: McpSorts.IsFeatured,
             label: t('mcp.sorts.isFeatured'),

@@ -1,59 +1,15 @@
-import { Flexbox } from '@lobehub/ui';
-import { Slider } from 'antd';
-import { memo, useCallback } from 'react';
+import { type CreatedLevelSliderProps, createLevelSliderComponent } from './createLevelSlider';
 
-import { useAgentStore } from '@/store/agent';
-import { chatConfigByIdSelectors } from '@/store/agent/selectors';
+const GPT52_PRO_REASONING_EFFORT_LEVELS = ['medium', 'high', 'xhigh'] as const;
+type GPT52ProReasoningEffort = (typeof GPT52_PRO_REASONING_EFFORT_LEVELS)[number];
 
-import { useAgentId } from '../../hooks/useAgentId';
-import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
+export type GPT52ProReasoningEffortSliderProps = CreatedLevelSliderProps<GPT52ProReasoningEffort>;
 
-const GPT52ProReasoningEffortSlider = memo(() => {
-  const agentId = useAgentId();
-  const { updateAgentChatConfig } = useUpdateAgentConfig();
-  const config = useAgentStore((s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s));
-
-  const gpt5_2ProReasoningEffort = config.gpt5_2ProReasoningEffort || 'medium';
-
-  const marks = {
-    0: 'medium',
-    1: 'high',
-    2: 'xhigh',
-  };
-
-  const effortValues = ['medium', 'high', 'xhigh'];
-  const indexValue = effortValues.indexOf(gpt5_2ProReasoningEffort);
-  const currentValue = indexValue === -1 ? 0 : indexValue;
-
-  const updateGPT52ProReasoningEffort = useCallback(
-    (value: number) => {
-      const effort = effortValues[value] as 'medium' | 'high' | 'xhigh';
-      updateAgentChatConfig({ gpt5_2ProReasoningEffort: effort });
-    },
-    [updateAgentChatConfig],
-  );
-
-  return (
-    <Flexbox
-      align={'center'}
-      gap={12}
-      horizontal
-      paddingInline={'0 20px'}
-      style={{ minWidth: 160, width: '100%' }}
-    >
-      <Flexbox flex={1}>
-        <Slider
-          marks={marks}
-          max={2}
-          min={0}
-          onChange={updateGPT52ProReasoningEffort}
-          step={1}
-          tooltip={{ open: false }}
-          value={currentValue}
-        />
-      </Flexbox>
-    </Flexbox>
-  );
+const GPT52ProReasoningEffortSlider = createLevelSliderComponent<GPT52ProReasoningEffort>({
+  configKey: 'gpt5_2ProReasoningEffort',
+  defaultValue: 'medium',
+  levels: GPT52_PRO_REASONING_EFFORT_LEVELS,
+  style: { minWidth: 160 },
 });
 
 export default GPT52ProReasoningEffortSlider;

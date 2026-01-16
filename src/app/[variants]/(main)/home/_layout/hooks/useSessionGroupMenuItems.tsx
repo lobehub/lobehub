@@ -18,11 +18,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-interface HostConfig {
-  model?: string;
-  provider?: string;
-}
-
 /**
  * Hook for generating menu items for session group containers
  * Used in List/Group/Actions.tsx
@@ -153,11 +148,7 @@ export const useSessionGroupMenuItems = () => {
       _groupId: string,
       onOpenMemberSelection: (callbacks: {
         onCancel: () => void;
-        onConfirm: (
-          selectedAgents: string[],
-          hostConfig?: HostConfig,
-          enableSupervisor?: boolean,
-        ) => Promise<void>;
+        onConfirm: (selectedAgents: string[]) => Promise<void>;
       }) => void,
     ): ItemType => {
       const iconElement = <Icon icon={FolderPenIcon} />;
@@ -170,21 +161,12 @@ export const useSessionGroupMenuItems = () => {
 
           onOpenMemberSelection({
             onCancel: () => {},
-            onConfirm: async (selectedAgents, hostConfig, enableSupervisor) => {
+            onConfirm: async (selectedAgents) => {
               setIsCreatingGroup(true);
               try {
                 await createGroup(
                   {
-                    config: {
-                      ...DEFAULT_CHAT_GROUP_CHAT_CONFIG,
-                      ...(hostConfig
-                        ? {
-                            orchestratorModel: hostConfig.model,
-                            orchestratorProvider: hostConfig.provider,
-                          }
-                        : {}),
-                      enableSupervisor: enableSupervisor ?? true,
-                    },
+                    config: DEFAULT_CHAT_GROUP_CHAT_CONFIG,
                     title: 'New Group Chat',
                   },
                   selectedAgents,
@@ -208,12 +190,7 @@ export const useSessionGroupMenuItems = () => {
    * Internal helper function used by create menu items
    */
   const createGroupFromTemplate = useCallback(
-    async (
-      templateId: string,
-      hostConfig?: HostConfig,
-      enableSupervisor?: boolean,
-      selectedMemberTitles?: string[],
-    ) => {
+    async (templateId: string, selectedMemberTitles?: string[]) => {
       setIsCreatingGroup(true);
       try {
         const template = groupTemplates.find((t) => t.id === templateId);
@@ -258,16 +235,7 @@ export const useSessionGroupMenuItems = () => {
 
         await createGroup(
           {
-            config: {
-              ...DEFAULT_CHAT_GROUP_CHAT_CONFIG,
-              ...(hostConfig
-                ? {
-                    orchestratorModel: hostConfig.model,
-                    orchestratorProvider: hostConfig.provider,
-                  }
-                : {}),
-              enableSupervisor: enableSupervisor ?? true,
-            },
+            config: DEFAULT_CHAT_GROUP_CHAT_CONFIG,
             title: template.title,
           },
           memberAgentIds,
@@ -290,28 +258,14 @@ export const useSessionGroupMenuItems = () => {
    * Internal helper function used by create menu items
    */
   const createGroupWithMembers = useCallback(
-    async (
-      selectedAgents: string[],
-      groupTitle?: string,
-      hostConfig?: HostConfig,
-      enableSupervisor?: boolean,
-    ) => {
+    async (selectedAgents: string[], groupTitle?: string) => {
       setIsCreatingGroup(true);
       try {
         const title = groupTitle || t('defaultGroupChat');
 
         await createGroup(
           {
-            config: {
-              ...DEFAULT_CHAT_GROUP_CHAT_CONFIG,
-              ...(hostConfig
-                ? {
-                    orchestratorModel: hostConfig.model,
-                    orchestratorProvider: hostConfig.provider,
-                  }
-                : {}),
-              enableSupervisor: enableSupervisor ?? true,
-            },
+            config: DEFAULT_CHAT_GROUP_CHAT_CONFIG,
             title,
           },
           selectedAgents,

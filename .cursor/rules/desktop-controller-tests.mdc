@@ -3,13 +3,14 @@ description: 桌面端测试
 globs:
 alwaysApply: false
 ---
+
 # 桌面端控制器单元测试指南
 
 ## 测试框架与目录结构
 
 LobeChat 桌面端使用 Vitest 作为测试框架。控制器的单元测试应放置在对应控制器文件同级的 `__tests__` 目录下，并以原控制器文件名加 `.test.ts` 作为文件名。
 
-```
+```plaintext
 apps/desktop/src/main/controllers/
 ├── __tests__/
 │   ├── index.test.ts

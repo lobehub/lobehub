@@ -1,5 +1,10 @@
 import { type CategoryItem, type CategoryListQuery, type PluginManifest } from '@lobehub/market-sdk';
-import { type CallReportRequest, type InstallReportRequest } from '@lobehub/market-types';
+import {
+  AgentEventRequest,
+  type CallReportRequest,
+  type InstallReportRequest,
+  type PluginEventRequest,
+} from '@lobehub/market-types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import { globalHelpers } from '@/store/global/helpers';
@@ -195,6 +200,22 @@ class DiscoverService {
     });
   };
 
+  reportMcpEvent = async (eventData: PluginEventRequest) => {
+    const allow = userGeneralSettingsSelectors.telemetry(useUserStore.getState());
+    if (!allow) return;
+
+    await this.injectMPToken();
+
+    const payload = cleanObject({
+      ...eventData,
+      source: eventData.source ?? 'community/mcp',
+    });
+
+    lambdaClient.market.reportMcpEvent.mutate(payload).catch((error) => {
+      console.warn('Failed to report MCP event:', error);
+    });
+  };
+
   /**
    * Report agent installation to increase install count
    */
@@ -208,6 +229,22 @@ class DiscoverService {
 
     lambdaClient.market.reportAgentInstall.mutate({ identifier }).catch((reportError) => {
       console.warn('Failed to report agent installation:', reportError);
+    });
+  };
+
+  reportAgentEvent = async (eventData: AgentEventRequest) => {
+    const allow = userGeneralSettingsSelectors.telemetry(useUserStore.getState());
+    if (!allow) return;
+
+    await this.injectMPToken();
+
+    const payload = cleanObject({
+      ...eventData,
+      source: eventData.source ?? 'community/agent',
+    });
+
+    lambdaClient.market.reportAgentEvent.mutate(payload).catch((error) => {
+      console.warn('Failed to report Agent event:', error);
     });
   };
 

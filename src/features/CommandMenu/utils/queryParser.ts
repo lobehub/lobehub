@@ -16,6 +16,7 @@ const VALID_TYPES = [
   'topic',
   'message',
   'file',
+  'folder',
   'page',
   'mcp',
   'plugin',

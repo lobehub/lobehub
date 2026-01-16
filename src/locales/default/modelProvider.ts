@@ -220,6 +220,44 @@ export default {
   'providerModels.item.modelConfig.displayName.placeholder':
     'Please enter the display name of the model, e.g., ChatGPT, GPT-4, etc.',
   'providerModels.item.modelConfig.displayName.title': 'Model Display Name',
+  'providerModels.item.modelConfig.extendParams.extra':
+    'Choose extended parameters supported by the model. Hover an option to preview controls. Incorrect configs may cause request failures.',
+  'providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint':
+    'For Claude models; can lower cost and speed up responses.',
+  'providerModels.item.modelConfig.extendParams.options.enableReasoning.hint':
+    'For Claude, DeepSeek and other reasoning models; unlock deeper thinking.',
+  'providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint':
+    'For GPT-5 series; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint':
+    'For GPT-5.1 series; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.gpt5_2ProReasoningEffort.hint':
+    'For GPT-5.2 Pro series; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.gpt5_2ReasoningEffort.hint':
+    'For GPT-5.2 series; controls reasoning intensity.',
+  'providerModels.item.modelConfig.extendParams.options.imageAspectRatio.hint':
+    'For Gemini image generation models; controls aspect ratio of generated images.',
+  'providerModels.item.modelConfig.extendParams.options.imageResolution.hint':
+    'For Gemini 3 image generation models; controls resolution of generated images.',
+  'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint':
+    'For Claude, Qwen3 and similar; controls token budget for reasoning.',
+  'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint':
+    'For OpenAI and other reasoning-capable models; controls reasoning effort.',
+  'providerModels.item.modelConfig.extendParams.options.textVerbosity.hint':
+    'For GPT-5+ series; controls output verbosity.',
+  'providerModels.item.modelConfig.extendParams.options.thinking.hint':
+    'For some Doubao models; allow model to decide whether to think deeply.',
+  'providerModels.item.modelConfig.extendParams.options.thinkingBudget.hint':
+    'For Gemini series; controls thinking budget.',
+  'providerModels.item.modelConfig.extendParams.options.thinkingLevel.hint':
+    'For Gemini 3 Flash Preview models; controls thinking depth.',
+  'providerModels.item.modelConfig.extendParams.options.thinkingLevel2.hint':
+    'For Gemini 3 Pro Preview models; controls thinking depth.',
+  'providerModels.item.modelConfig.extendParams.options.urlContext.hint':
+    'For Gemini series; supports providing URL context.',
+  'providerModels.item.modelConfig.extendParams.placeholder':
+    'Select extended parameters to enable',
+  'providerModels.item.modelConfig.extendParams.previewFallback': 'Preview unavailable',
+  'providerModels.item.modelConfig.extendParams.title': 'Extended Parameters',
   'providerModels.item.modelConfig.files.extra':
     'The current file upload implementation is just a hack solution, limited to self-experimentation. Please wait for complete file upload capabilities in future implementations.',
   'providerModels.item.modelConfig.files.title': 'File Upload Support',

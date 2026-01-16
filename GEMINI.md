@@ -34,7 +34,7 @@ see @.cursor/rules/typescript.mdc
 
 ### Testing
 
-- **Required Rule**: read `@.cursor/rules/testing-guide/testing-guide.mdc` before writing tests
+- **Required Rule**: read `.cursor/rules/testing-guide/testing-guide.mdc` before writing tests
 - **Command**:
   - web: `bunx vitest run --silent='passed-only' '[file-path-pattern]'`
   - packages(eg: database): `cd packages/database && bunx vitest run --silent='passed-only' '[file-path-pattern]'`

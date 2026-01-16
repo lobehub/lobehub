@@ -4,6 +4,7 @@ import {
   Bot,
   ChevronRight,
   FileText,
+  Folder,
   MessageCircle,
   MessageSquare,
   Plug,
@@ -75,6 +76,18 @@ const SearchResults = memo<SearchResultsProps>(
           }
           break;
         }
+        case 'folder': {
+          // Navigate to folder by slug
+          if (result.knowledgeBaseId && result.slug) {
+            navigate(`/resource/library/${result.knowledgeBaseId}/${result.slug}`);
+          } else if (result.slug) {
+            navigate(`/resource/library/${result.slug}`);
+          } else {
+            // Fallback to library root if no slug
+            navigate(`/resource/library`);
+          }
+          break;
+        }
         case 'page': {
           navigate(`/page/${result.id.split('_')[1]}`);
           break;
@@ -109,6 +122,9 @@ const SearchResults = memo<SearchResultsProps>(
         case 'file': {
           return <FileText size={16} />;
         }
+        case 'folder': {
+          return <Folder size={16} />;
+        }
         case 'page': {
           return <FileText size={16} />;
         }
@@ -137,6 +153,9 @@ const SearchResults = memo<SearchResultsProps>(
         }
         case 'file': {
           return t('cmdk.search.file');
+        }
+        case 'folder': {
+          return t('cmdk.search.folder');
         }
         case 'page': {
           return t('cmdk.search.page');
@@ -198,6 +217,7 @@ const SearchResults = memo<SearchResultsProps>(
     const agentResults = results.filter((r) => r.type === 'agent');
     const topicResults = results.filter((r) => r.type === 'topic');
     const fileResults = results.filter((r) => r.type === 'file');
+    const folderResults = results.filter((r) => r.type === 'folder');
     const pageResults = results.filter((r) => r.type === 'page');
     const mcpResults = results.filter((r) => r.type === 'mcp');
     const pluginResults = results.filter((r) => r.type === 'plugin');
@@ -312,6 +332,13 @@ const SearchResults = memo<SearchResultsProps>(
           <Command.Group>
             {fileResults.map((result) => renderResultItem(result))}
             {renderSearchMore('file', fileResults.length)}
+          </Command.Group>
+        )}
+
+        {folderResults.length > 0 && (
+          <Command.Group>
+            {folderResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('folder', folderResults.length)}
           </Command.Group>
         )}
 

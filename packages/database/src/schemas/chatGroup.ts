@@ -9,7 +9,6 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
-import { createInsertSchema } from 'drizzle-zod';
 
 import type { ChatGroupConfig } from '../types/chatGroup';
 import { idGenerator } from '../utils/idGenerator';
@@ -31,6 +30,10 @@ export const chatGroups = pgTable(
       .notNull(),
     title: text('title'),
     description: text('description'),
+    avatar: text('avatar'),
+    backgroundColor: text('background_color'),
+    content: text('content'),
+    editorData: jsonb('editor_data').$type<Record<string, any>>(),
 
     config: jsonb('config').$type<ChatGroupConfig>(),
 
@@ -51,8 +54,6 @@ export const chatGroups = pgTable(
     index('chat_groups_group_id_idx').on(t.groupId),
   ],
 );
-
-export const insertChatGroupSchema = createInsertSchema(chatGroups);
 
 export type NewChatGroup = typeof chatGroups.$inferInsert;
 export type ChatGroupItem = typeof chatGroups.$inferSelect;

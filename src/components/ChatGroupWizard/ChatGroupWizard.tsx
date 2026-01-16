@@ -191,15 +191,9 @@ export interface ChatGroupWizardProps {
    */
   isCreatingFromTemplate?: boolean;
   onCancel: () => void;
-  onCreateCustom: (
-    selectedAgents: string[],
-    hostConfig?: { model?: string; provider?: string },
-    enableSupervisor?: boolean,
-  ) => void | Promise<void>;
+  onCreateCustom: (selectedAgents: string[]) => void | Promise<void>;
   onCreateFromTemplate: (
     templateId: string,
-    hostConfig?: { model?: string; provider?: string },
-    enableSupervisor?: boolean,
     selectedMemberTitles?: string[],
   ) => void | Promise<void>;
   open: boolean;
@@ -495,8 +489,6 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
     const handleTemplateConfirm = useCallback(async () => {
       if (!selectedTemplate) return;
 
-      const hostConfig = isHostRemoved ? undefined : normalizedHostModelConfig;
-
       try {
         // collect selected member titles (not removed)
         const template = groupTemplates.find((t) => t.id === selectedTemplate);
@@ -505,33 +497,19 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
           .filter((m) => m !== null && m !== undefined && !removedForTemplate.has(m.title))
           .map((m) => m.title);
 
-        await onCreateFromTemplate(
-          selectedTemplate,
-          hostConfig,
-          !isHostRemoved,
-          selectedMemberTitles,
-        );
+        await onCreateFromTemplate(selectedTemplate, selectedMemberTitles);
         handleReset();
       } catch (error) {
         console.error('Failed to create group from template:', error);
       }
-    }, [
-      selectedTemplate,
-      onCreateFromTemplate,
-      normalizedHostModelConfig,
-      isHostRemoved,
-      groupTemplates,
-      removedMembers,
-    ]);
+    }, [selectedTemplate, onCreateFromTemplate, groupTemplates, removedMembers]);
 
     const handleCustomConfirm = useCallback(async () => {
       if (selectedAgents.length === 0) return;
 
-      const hostConfig = isHostRemoved ? undefined : normalizedHostModelConfig;
-
       try {
         setIsCreatingCustom(true);
-        await onCreateCustom(selectedAgents, hostConfig, !isHostRemoved);
+        await onCreateCustom(selectedAgents);
         handleReset();
         onCancel();
       } catch (error) {
@@ -539,7 +517,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
       } finally {
         setIsCreatingCustom(false);
       }
-    }, [selectedAgents, onCreateCustom, normalizedHostModelConfig, isHostRemoved, onCancel]);
+    }, [selectedAgents, onCreateCustom, onCancel]);
 
     const handleConfirm = useCallback(async () => {
       if (selectedTemplate) {

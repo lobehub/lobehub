@@ -182,4 +182,9 @@ export interface ConversationContext {
    * Topic ID
    */
   topicId?: string | null;
+  /**
+   * Topic share ID for public access (used by shared topic pages)
+   * When present, allows unauthenticated access to topic messages
+   */
+  topicShareId?: string;
 }

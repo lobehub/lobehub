@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { LobeChatDatabase } from '@/database/type';
 
+import { getTestDB } from '../../core/getTestDB';
 import {
   NewChatGroup,
   agents as agentsTable,
@@ -12,7 +13,6 @@ import {
   users,
 } from '../../schemas';
 import { ChatGroupModel } from '../chatGroup';
-import { getTestDB } from '../../core/getTestDB';
 
 const userId = 'test-user';
 const otherUserId = 'other-user';
@@ -226,9 +226,8 @@ describe('ChatGroupModel', () => {
         description: 'A test chat group',
         pinned: true,
         config: {
-          maxResponseInRow: 5,
-          responseOrder: 'sequential',
-          scene: 'casual',
+          allowDM: true,
+          revealDM: false,
         },
       };
 
@@ -240,9 +239,8 @@ describe('ChatGroupModel', () => {
       expect(result.description).toBe('A test chat group');
       expect(result.pinned).toBe(true);
       expect(result.config).toEqual({
-        maxResponseInRow: 5,
-        responseOrder: 'sequential',
-        scene: 'casual',
+        allowDM: true,
+        revealDM: false,
       });
       expect(result.id.startsWith('cg_')).toBe(true);
     });

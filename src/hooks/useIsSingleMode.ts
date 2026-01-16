@@ -1,11 +1,13 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
+
+import { useSearchParams } from '@/libs/router/navigation';
 
 /**
  * Hook to check if the current page is in single mode
  * Single mode is used for standalone windows in desktop app
+ * React Router version for SPA
  * @returns boolean indicating if the current page is in single mode
  */
 export const useIsSingleMode = (): boolean => {
@@ -16,7 +18,7 @@ export const useIsSingleMode = (): boolean => {
     setMounted(true);
   }, []);
 
-  const searchParams = useSearchParams();
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     if (mounted) {

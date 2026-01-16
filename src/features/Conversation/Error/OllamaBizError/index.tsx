@@ -1,6 +1,6 @@
 import { type ChatMessageError } from '@lobechat/types';
 import { type AlertProps, Skeleton } from '@lobehub/ui';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { memo } from 'react';
 
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';

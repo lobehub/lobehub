@@ -1,26 +1,31 @@
-import { type IEditor } from '@lobehub/editor';
+'use client';
 
-export interface EditorState {
+import { type IEditor } from '@lobehub/editor';
+import { type EditorState as LobehubEditorState } from '@lobehub/editor/react';
+
+/**
+ * Document source type - determines which service to use for persistence
+ */
+export type DocumentSourceType = 'notebook' | 'page';
+
+/**
+ * Editor content state for a single document
+ * Only contains editor-related state, NOT document metadata (title, emoji, etc.)
+ */
+export interface EditorContentState {
   /**
-   * Current document content (markdown)
+   * Whether auto-save is enabled for this document
+   * Defaults to true. Set to false if the consumer handles saving themselves.
    */
-  activeContent: string;
+  autoSave?: boolean;
   /**
-   * Current document ID being edited
+   * Document content (markdown)
    */
-  activeDocumentId: string | undefined;
+  content: string;
   /**
-   * Current topic ID for the active document
+   * Editor JSON data (BlockNote format)
    */
-  activeTopicId: string | undefined;
-  /**
-   * Editor instance from @lobehub/editor
-   */
-  editor: IEditor | undefined;
-  /**
-   * Editor state from useEditorState hook
-   */
-  editorState: any;
+  editorData: any;
   /**
    * Whether there are unsaved changes
    */
@@ -34,29 +39,61 @@ export interface EditorState {
    */
   lastUpdatedTime: Date | null;
   /**
-   * Edit mode: 'edit' or 'preview'
-   */
-  mode: 'edit' | 'preview';
-  /**
    * Current save status
    */
   saveStatus: 'idle' | 'saving' | 'saved';
   /**
-   * Current document title
+   * Document source type - determines which service to call for persistence
    */
-  title: string;
+  sourceType: DocumentSourceType;
+  /**
+   * Topic ID (for notebook documents, used for save routing)
+   */
+  topicId?: string;
 }
 
-export const initialEditorState: EditorState = {
-  activeContent: '',
-  activeDocumentId: undefined,
-  activeTopicId: undefined,
-  editor: undefined,
-  editorState: undefined,
+/**
+ * Global editor state
+ */
+export interface EditorState {
+  /**
+   * Currently active document ID
+   */
+  activeDocumentId: string | undefined;
+  /**
+   * Map of editor content states by document ID
+   */
+  documents: Record<string, EditorContentState>;
+  /**
+   * Shared editor instance
+   */
+  editor: IEditor | undefined;
+  /**
+   * Editor state from useEditorState hook
+   */
+  editorState: LobehubEditorState | undefined;
+}
+
+/**
+ * Create initial state for a new document's editor content
+ */
+export const createInitialEditorContentState = (
+  sourceType: DocumentSourceType,
+  overrides?: Partial<EditorContentState>,
+): EditorContentState => ({
+  content: '',
+  editorData: null,
   isDirty: false,
   lastSavedContent: '',
   lastUpdatedTime: null,
-  mode: 'edit',
   saveStatus: 'idle',
-  title: '',
+  sourceType,
+  ...overrides,
+});
+
+export const initialEditorState: EditorState = {
+  activeDocumentId: undefined,
+  documents: {},
+  editor: undefined,
+  editorState: undefined,
 };

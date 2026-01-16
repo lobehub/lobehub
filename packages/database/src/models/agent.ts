@@ -28,7 +28,9 @@ export class AgentModel {
   }
 
   getAgentConfigById = async (id: string) => {
-    const agent = await this.db.query.agents.findFirst({ where: eq(agents.id, id) });
+    const agent = await this.db.query.agents.findFirst({
+      where: and(eq(agents.id, id), eq(agents.userId, this.userId)),
+    });
 
     if (!agent) return null;
 
@@ -76,9 +78,9 @@ export class AgentModel {
    */
   getAgentConfig = async (idOrSlug: string) => {
     const agent = await this.db.query.agents.findFirst({
-      where: or(
-        eq(agents.id, idOrSlug),
-        and(eq(agents.slug, idOrSlug), eq(agents.userId, this.userId)),
+      where: and(
+        eq(agents.userId, this.userId),
+        or(eq(agents.id, idOrSlug), eq(agents.slug, idOrSlug)),
       ),
     });
 
@@ -118,17 +120,20 @@ export class AgentModel {
 
   getAgentAssignedKnowledge = async (id: string) => {
     // Run both queries in parallel for better performance
+    // Include userId check to ensure user can only access their own agent's knowledge
     const [knowledgeBaseResult, fileResult] = await Promise.all([
       this.db
         .select({ enabled: agentsKnowledgeBases.enabled, knowledgeBases })
         .from(agentsKnowledgeBases)
-        .where(eq(agentsKnowledgeBases.agentId, id))
+        .where(
+          and(eq(agentsKnowledgeBases.agentId, id), eq(agentsKnowledgeBases.userId, this.userId)),
+        )
         .orderBy(desc(agentsKnowledgeBases.createdAt))
         .leftJoin(knowledgeBases, eq(knowledgeBases.id, agentsKnowledgeBases.knowledgeBaseId)),
       this.db
         .select({ enabled: agentsFiles.enabled, files })
         .from(agentsFiles)
-        .where(eq(agentsFiles.agentId, id))
+        .where(and(eq(agentsFiles.agentId, id), eq(agentsFiles.userId, this.userId)))
         .orderBy(desc(agentsFiles.createdAt))
         .leftJoin(files, eq(files.id, agentsFiles.fileId)),
     ]);
@@ -150,7 +155,10 @@ export class AgentModel {
    */
   findBySessionId = async (sessionId: string) => {
     const item = await this.db.query.agentsToSessions.findFirst({
-      where: eq(agentsToSessions.sessionId, sessionId),
+      where: and(
+        eq(agentsToSessions.sessionId, sessionId),
+        eq(agentsToSessions.userId, this.userId),
+      ),
     });
 
     if (!item) return;
@@ -442,6 +450,52 @@ export class AgentModel {
       .returning();
 
     return result[0];
+  };
+
+  /**
+   * Duplicate an agent.
+   * Returns the new agent ID.
+   */
+  duplicate = async (agentId: string, newTitle?: string): Promise<{ agentId: string } | null> => {
+    // Get the source agent
+    const sourceAgent = await this.db.query.agents.findFirst({
+      where: and(eq(agents.id, agentId), eq(agents.userId, this.userId)),
+    });
+
+    if (!sourceAgent) return null;
+
+    // Create new agent with explicit include fields
+    const [newAgent] = await this.db
+      .insert(agents)
+      .values({
+        avatar: sourceAgent.avatar,
+        backgroundColor: sourceAgent.backgroundColor,
+        chatConfig: sourceAgent.chatConfig,
+        description: sourceAgent.description,
+        fewShots: sourceAgent.fewShots,
+        model: sourceAgent.model,
+        openingMessage: sourceAgent.openingMessage,
+        openingQuestions: sourceAgent.openingQuestions,
+        params: sourceAgent.params,
+        pinned: sourceAgent.pinned,
+        // Config
+        plugins: sourceAgent.plugins,
+        provider: sourceAgent.provider,
+
+        // Session group
+        sessionGroupId: sourceAgent.sessionGroupId,
+        systemRole: sourceAgent.systemRole,
+
+        tags: sourceAgent.tags,
+        // Metadata
+        title: newTitle || (sourceAgent.title ? `${sourceAgent.title} (Copy)` : 'Copy'),
+        tts: sourceAgent.tts,
+        // User
+        userId: this.userId,
+      })
+      .returning();
+
+    return { agentId: newAgent.id };
   };
 
   /**

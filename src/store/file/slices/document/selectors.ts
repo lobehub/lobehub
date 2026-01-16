@@ -1,4 +1,3 @@
-import { useGlobalStore } from '@/store/global';
 import { type LobeDocument } from '@/types/document';
 
 import { type FilesStoreState } from '../../initialState';
@@ -23,51 +22,33 @@ const getDocumentById = (documentId: string | undefined) => (s: FilesStoreState)
   return localDocument || serverDocument;
 };
 
-const getFilteredPages = (s: FilesStoreState): LobeDocument[] => {
-  // Merge local optimistic map with server documents
-  const localPages = Array.from(s.localDocumentMap.values());
-  const serverPages = s.documents.filter((doc) => !s.localDocumentMap.has(doc.id));
-  const pages = [...localPages, ...serverPages];
+/**
+ * Get all documents merged from local optimistic map and server data
+ */
+const getOptimisticDocuments = (s: FilesStoreState): LobeDocument[] => {
+  // Track which documents we've added
+  const addedIds = new Set<string>();
 
-  const { searchKeywords, showOnlyPagesNotInLibrary } = s;
-
-  let result = pages;
-
-  // Filter out documents with sourceType='file'
-  result = result.filter((page: LobeDocument) => page.sourceType !== 'file');
-
-  // Filter by library membership
-  if (showOnlyPagesNotInLibrary) {
-    result = result.filter((page: LobeDocument) => {
-      // Show only pages that are NOT in any library
-      // Pages in a library have metadata.knowledgeBaseId set
-      return !page.metadata?.knowledgeBaseId;
-    });
-  }
-
-  // Filter by search keywords
-  if (searchKeywords.trim()) {
-    const lowerKeywords = searchKeywords.toLowerCase();
-    result = result.filter((page: LobeDocument) => {
-      const content = page.content?.toLowerCase() || '';
-      const title = page.title?.toLowerCase() || '';
-      return content.includes(lowerKeywords) || title.includes(lowerKeywords);
-    });
-  }
-
-  // Sort by creation date (newest first)
-  return result.sort((a: LobeDocument, b: LobeDocument) => {
-    const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-    const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-    return dateB - dateA;
+  // Create result array - start with server documents
+  const result: LobeDocument[] = s.documents.map((doc) => {
+    addedIds.add(doc.id);
+    // Check if we have a local optimistic update for this document
+    const localUpdate = s.localDocumentMap.get(doc.id);
+    // If local update exists and is newer, use it; otherwise use server version
+    if (localUpdate && new Date(localUpdate.updatedAt) >= new Date(doc.updatedAt)) {
+      return localUpdate;
+    }
+    return doc;
   });
-};
 
-// Limited filtered pages for sidebar display
-const getFilteredPagesLimited = (s: FilesStoreState): LobeDocument[] => {
-  const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
-  const allPages = getFilteredPages(s);
-  return allPages.slice(0, pageSize);
+  // Add any optimistic documents that aren't in server list yet (e.g., newly created temp documents)
+  for (const [id, doc] of s.localDocumentMap.entries()) {
+    if (!addedIds.has(id)) {
+      result.unshift(doc); // Add new documents to the beginning
+    }
+  }
+
+  return result;
 };
 
 const hasMoreDocuments = (s: FilesStoreState): boolean => s.hasMoreDocuments;
@@ -76,25 +57,10 @@ const isLoadingMoreDocuments = (s: FilesStoreState): boolean => s.isLoadingMoreD
 
 const documentsTotal = (s: FilesStoreState): number => s.documentsTotal;
 
-// Check if filtered pages have more than displayed
-const hasMoreFilteredPages = (s: FilesStoreState): boolean => {
-  const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
-  const allPages = getFilteredPages(s);
-  return allPages.length > pageSize;
-};
-
-// Get total count of filtered pages
-const filteredPagesCount = (s: FilesStoreState): number => {
-  return getFilteredPages(s).length;
-};
-
 export const documentSelectors = {
   documentsTotal,
-  filteredPagesCount,
   getDocumentById,
-  getFilteredPages,
-  getFilteredPagesLimited,
+  getOptimisticDocuments,
   hasMoreDocuments,
-  hasMoreFilteredPages,
   isLoadingMoreDocuments,
 };

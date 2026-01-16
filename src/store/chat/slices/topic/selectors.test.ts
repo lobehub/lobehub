@@ -35,7 +35,7 @@ const topicDataMap = createTopicDataMap('test');
 
 describe('topicSelectors', () => {
   describe('currentTopics', () => {
-    it('should return undefined if there are no topics with activeId', () => {
+    it('should return undefined if there are no topics with activeAgentId', () => {
       const topics = topicSelectors.currentTopics(initialStore);
       expect(topics).toBeUndefined();
     });

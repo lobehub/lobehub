@@ -1,0 +1,18 @@
+# 本地更新测试配置
+# 将此文件复制到 apps/desktop/dev-app-update.yml 以使用本地服务器测试
+#
+# 使用方法:
+#   cp scripts/update-test/dev-app-update.local.yml dev-app-update.yml
+#
+# 恢复默认配置:
+#   git checkout dev-app-update.yml
+
+provider: generic
+# URL 格式: http://localhost:8787/{channel}
+# 可选渠道: stable, beta, nightly
+url: http://localhost:8787/stable
+updaterCacheDirName: lobehub-desktop-local-test
+
+# 设置 channel 为 stable 以匹配生产环境行为
+# stable channel 会找 stable-mac.yml
+channel: stable

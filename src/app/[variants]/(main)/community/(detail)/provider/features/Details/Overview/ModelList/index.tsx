@@ -72,10 +72,11 @@ const ModelList = memo(() => {
               key: 'maxOutput',
               render: (_, record) =>
                 record.maxOutput ? formatTokenNumber(record.maxOutput) : '--',
+              showSorterTooltip: false,
               sorter: (a, b) => (a.maxOutput || 0) - (b.maxOutput || 0),
               title: (
                 <Tooltip title={t('models.providerInfo.maxOutputTooltip')}>
-                  {t('models.providerInfo.maxOutput')}
+                  <span>{t('models.providerInfo.maxOutput')}</span>
                 </Tooltip>
               ),
               width: 120,
@@ -89,6 +90,7 @@ const ModelList = memo(() => {
                   ? '$' + formatPriceByCurrency(inputRate, record.pricing?.currency)
                   : '--';
               },
+              showSorterTooltip: false,
               sorter: (a, b) => {
                 const aRate = getTextInputUnitRate(a.pricing) || 0;
                 const bRate = getTextInputUnitRate(b.pricing) || 0;
@@ -96,7 +98,7 @@ const ModelList = memo(() => {
               },
               title: (
                 <Tooltip title={t('models.providerInfo.inputTooltip')}>
-                  {t('models.providerInfo.input')}
+                  <span>{t('models.providerInfo.input')}</span>
                 </Tooltip>
               ),
               width: 100,
@@ -110,6 +112,7 @@ const ModelList = memo(() => {
                   ? '$' + formatPriceByCurrency(outputRate, record.pricing?.currency)
                   : '--';
               },
+              showSorterTooltip: false,
               sorter: (a, b) => {
                 const aRate = getTextOutputUnitRate(a.pricing) || 0;
                 const bRate = getTextOutputUnitRate(b.pricing) || 0;
@@ -117,7 +120,7 @@ const ModelList = memo(() => {
               },
               title: (
                 <Tooltip title={t('models.providerInfo.outputTooltip')}>
-                  {t('models.providerInfo.output')}
+                  <span>{t('models.providerInfo.output')}</span>
                 </Tooltip>
               ),
               width: 100,

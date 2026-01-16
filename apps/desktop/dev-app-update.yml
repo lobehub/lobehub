@@ -1,6 +1,16 @@
+# 开发环境更新配置
+# 可选择 GitHub 或 Generic provider 进行测试
+
+# 方式1: GitHub Provider (默认)
 provider: github
 owner: lobehub
 repo: lobe-chat
 updaterCacheDirName: electron-app-updater
 allowPrerelease: true
 channel: nightly
+
+# 方式2: Generic Provider (测试自定义服务器)
+# 取消下面的注释，注释掉上面的 GitHub 配置
+# provider: generic
+# url: http://localhost:8080
+# updaterCacheDirName: electron-app-updater

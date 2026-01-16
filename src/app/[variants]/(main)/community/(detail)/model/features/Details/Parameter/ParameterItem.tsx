@@ -1,7 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
-import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -29,9 +28,9 @@ const ParameterItem = memo<ParameterItemProps>(
       <Flexbox align={'flex-start'} gap={16}>
         <p style={{ color: cssVar.colorTextSecondary, margin: 0 }}>
           {desc}{' '}
-          <Link href={docUrl} target={'_blank'}>
+          <a href={docUrl} rel="noreferrer" target="_blank">
             {t('models.parameterList.docs')}
-          </Link>
+          </a>
         </p>
         <Divider dashed style={{ margin: 0 }} />
         <Flexbox align={'center'} gap={16} horizontal style={{ paddingBottom: 8 }} wrap={'wrap'}>

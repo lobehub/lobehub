@@ -1,5 +1,5 @@
 import { SignUp } from '@clerk/nextjs';
-import { notFound } from 'next/navigation';
+import { notFound } from '@/libs/next/navigation';
 
 import { enableBetterAuth, enableClerk } from '@/envs/auth';
 import { metadataModule } from '@/server/metadata';

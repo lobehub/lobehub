@@ -1,4 +1,4 @@
-import { usePathname } from 'next/navigation';
+import { usePathname } from '@/libs/router/navigation';
 import { useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import urlJoin from 'url-join';

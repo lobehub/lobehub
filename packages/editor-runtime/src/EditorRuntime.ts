@@ -109,7 +109,7 @@ export class EditorRuntime {
     }
 
     // Set markdown content directly - the editor will convert it internally
-    editor.setDocument('markdown', markdown);
+    editor.setDocument('markdown', markdown, { keepId: true });
 
     // Get the resulting document to count nodes
     const jsonState = editor.getDocument('json') as any;

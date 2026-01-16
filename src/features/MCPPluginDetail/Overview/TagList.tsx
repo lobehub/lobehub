@@ -2,7 +2,7 @@
 
 import { Flexbox, Tag } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import Link from 'next/link';
+import { Link } from '@/libs/router';
 import qs from 'query-string';
 import { memo } from 'react';
 

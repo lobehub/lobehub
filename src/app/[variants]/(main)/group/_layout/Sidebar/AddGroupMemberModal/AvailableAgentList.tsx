@@ -21,7 +21,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     padding-block: ${cssVar.paddingSM}px 0;
     padding-inline: ${cssVar.paddingSM}px;
-    border-inline-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
 }));
 

@@ -7,17 +7,11 @@ import { Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { shinyTextStyles } from '@/styles';
+import { oneLineEllipsis, shinyTextStyles } from '@/styles';
 
 import type { CreateTodosParams, CreateTodosState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-  `,
   title: css`
     margin-inline-end: 8px;
     color: ${cssVar.colorText};
@@ -35,14 +29,14 @@ export const CreateTodosInspector = memo<
 
   if (isArgumentsStreaming && count === 0) {
     return (
-      <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+      <div className={cx(oneLineEllipsis, shinyTextStyles.shinyText)}>
         <span>{t('builtins.lobe-gtd.apiName.createTodos')}</span>
       </div>
     );
   }
 
   return (
-    <div className={cx(styles.root, isArgumentsStreaming && shinyTextStyles.shinyText)}>
+    <div className={cx(oneLineEllipsis, isArgumentsStreaming && shinyTextStyles.shinyText)}>
       <span className={styles.title}>{t('builtins.lobe-gtd.apiName.createTodos')}</span>
       {count > 0 && (
         <Text as={'span'} code color={cssVar.colorSuccess} fontSize={12}>

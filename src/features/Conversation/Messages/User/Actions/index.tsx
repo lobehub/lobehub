@@ -76,7 +76,11 @@ export const UserActionsBar = memo<UserActionsProps>(({ actionsConfig, id, data 
   // Use external config if provided, otherwise use defaults
   // Append extra actions from factories
   const barItems = useMemo(() => {
-    const base = actionsConfig?.bar ?? [defaultActions.regenerate, defaultActions.edit];
+    const base = actionsConfig?.bar ?? [
+      defaultActions.regenerate,
+      defaultActions.edit,
+      defaultActions.copy,
+    ];
     return [...base, ...extraBarItems];
   }, [actionsConfig?.bar, defaultActions.regenerate, defaultActions.edit, extraBarItems]);
 

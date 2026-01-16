@@ -10,7 +10,7 @@ import {
 } from '@/server/services/memory/userMemory/extract';
 
 export const POST = async (req: Request) => {
-  const { webhookHeaders } = parseMemoryExtractionConfig();
+  const { webhookHeaders, upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 
   if (webhookHeaders && Object.keys(webhookHeaders).length > 0) {
     for (const [key, value] of Object.entries(webhookHeaders)) {
@@ -43,6 +43,7 @@ export const POST = async (req: Request) => {
     if (params.mode === 'workflow') {
       const { workflowRunId } = await MemoryExtractionWorkflowService.triggerProcessUsers(
         buildWorkflowPayloadInput(params),
+        { extraHeaders: upstashWorkflowExtraHeaders },
       );
       return NextResponse.json(
         { message: 'Memory extraction scheduled via workflow.', workflowRunId },

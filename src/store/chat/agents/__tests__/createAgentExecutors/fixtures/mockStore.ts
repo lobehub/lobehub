@@ -15,7 +15,7 @@ export const createMockStore = (overrides: Partial<ChatStore> = {}): ChatStore =
 
   const store = {
     // Other store properties (add as needed)
-    activeId: 'test-session',
+    activeAgentId: 'test-session',
 
     activeTopicId: 'test-topic',
 

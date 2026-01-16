@@ -1,43 +1,54 @@
 'use client';
 
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
+import { EditorProvider } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { type FC, memo, useEffect } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
+import DiffAllToolbar from '@/features/EditorCanvas/DiffAllToolbar';
 import WideScreenContainer from '@/features/WideScreenContainer';
-import { useRegisterFilesHotkeys, useSaveDocumentHotkey } from '@/hooks/useHotkeys';
+import { useRegisterFilesHotkeys } from '@/hooks/useHotkeys';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
-import { useFileStore } from '@/store/file';
+import { useDocumentStore } from '@/store/document';
+import { editorSelectors } from '@/store/document/slices/editor';
+import { usePageStore } from '@/store/page';
 
-import Body from './Body';
 import Copilot from './Copilot';
-import DiffAllToolbar from './DiffAllToolbar';
+import EditorCanvas from './EditorCanvas';
 import Header from './Header';
 import PageAgentProvider from './PageAgentProvider';
 import { PageEditorProvider } from './PageEditorProvider';
 import PageTitle from './PageTitle';
+import TitleSection from './TitleSection';
 import { usePageEditorStore } from './store';
 
 interface PageEditorProps {
+  emoji?: string;
   knowledgeBaseId?: string;
   onBack?: () => void;
   onDelete?: () => void;
   onDocumentIdChange?: (newId: string) => void;
+  onEmojiChange?: (emoji: string | undefined) => void;
   onSave?: () => void;
+  onTitleChange?: (title: string) => void;
   pageId?: string;
+  title?: string;
 }
 
 const PageEditorCanvas = memo(() => {
   const editor = usePageEditorStore((s) => s.editor);
-  const flushSave = usePageEditorStore((s) => s.flushSave);
-  const isDirty = usePageEditorStore((s) => s.isDirty);
+  const documentId = usePageEditorStore((s) => s.documentId);
+
+  // Get isDirty from DocumentStore
+  const isDirty = useDocumentStore((s) =>
+    documentId ? editorSelectors.isDirty(documentId)(s) : false,
+  );
 
   // Register Files scope and save document hotkey
   useRegisterFilesHotkeys();
-  useSaveDocumentHotkey(flushSave);
 
   // Warn user before leaving page with unsaved changes
   useEffect(() => {
@@ -75,10 +86,13 @@ const PageEditorCanvas = memo(() => {
             width={'100%'}
           >
             <WideScreenContainer onClick={() => editor?.focus()} wrapperStyle={{ cursor: 'text' }}>
-              <Body />
+              <Flexbox flex={1} style={{ overflowY: 'auto', position: 'relative' }}>
+                <TitleSection />
+                <EditorCanvas />
+              </Flexbox>
             </WideScreenContainer>
           </Flexbox>
-          <DiffAllToolbar />
+          {documentId && <DiffAllToolbar documentId={documentId} editor={editor!} />}
         </Flexbox>
         <Copilot />
       </Flexbox>
@@ -95,31 +109,41 @@ export const PageEditor: FC<PageEditorProps> = ({
   pageId,
   knowledgeBaseId,
   onDocumentIdChange,
+  onEmojiChange,
   onSave,
+  onTitleChange,
   onBack,
+  title,
+  emoji,
 }) => {
   const useInitBuiltinAgent = useAgentStore((s) => s.useInitBuiltinAgent);
   const pageAgentId = useAgentStore(builtinAgentSelectors.pageAgentId);
 
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.pageAgent);
 
-  const [deletePage] = useFileStore((s) => [s.deletePage]);
+  const deletePage = usePageStore((s) => s.deletePage);
 
   if (!pageAgentId) return <Loading debugId="PageEditor > PageAgent Init" />;
 
   return (
     <PageAgentProvider pageAgentId={pageAgentId}>
-      <PageEditorProvider
-        key={pageId}
-        knowledgeBaseId={knowledgeBaseId}
-        onBack={onBack}
-        onDelete={() => deletePage(pageId || '')}
-        onDocumentIdChange={onDocumentIdChange}
-        onSave={onSave}
-        pageId={pageId}
-      >
-        <PageEditorCanvas />
-      </PageEditorProvider>
+      <EditorProvider>
+        <PageEditorProvider
+          emoji={emoji}
+          key={pageId}
+          knowledgeBaseId={knowledgeBaseId}
+          onBack={onBack}
+          onDelete={() => deletePage(pageId || '')}
+          onDocumentIdChange={onDocumentIdChange}
+          onEmojiChange={onEmojiChange}
+          onSave={onSave}
+          onTitleChange={onTitleChange}
+          pageId={pageId}
+          title={title}
+        >
+          <PageEditorCanvas />
+        </PageEditorProvider>
+      </EditorProvider>
     </PageAgentProvider>
   );
 };

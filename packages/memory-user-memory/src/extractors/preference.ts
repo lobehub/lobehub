@@ -1,10 +1,7 @@
 import { renderPlaceholderTemplate } from '@lobechat/context-engine';
 
-import {
-  PreferenceMemory,
-  PreferenceMemorySchema,
-} from '../schemas';
 import { preferencePrompt } from '../prompts';
+import { PreferenceMemory, PreferenceMemorySchema } from '../schemas';
 import { ExtractorTemplateProps } from '../types';
 import { buildGenerateObjectSchema } from '../utils/zod';
 import { BaseMemoryExtractor } from './base';
@@ -19,10 +16,7 @@ export class PreferenceExtractor extends BaseMemoryExtractor<PreferenceMemory> {
   }
 
   getSchema() {
-    return buildGenerateObjectSchema(
-      PreferenceMemorySchema,
-      { name: 'preference_extraction' },
-    );
+    return buildGenerateObjectSchema(PreferenceMemorySchema, { name: 'preference_extraction' });
   }
 
   getResultSchema() {

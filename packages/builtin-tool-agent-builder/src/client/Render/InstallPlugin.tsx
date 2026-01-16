@@ -9,8 +9,16 @@ import type { InstallPluginParams, InstallPluginState } from '../../types';
 
 const InstallPlugin = memo<BuiltinRenderProps<InstallPluginParams, InstallPluginState>>(
   ({ pluginState }) => {
-    const { pluginId, pluginName, installed, awaitingApproval, isKlavis, serverStatus, error } =
-      pluginState || {};
+    const {
+      pluginId,
+      pluginName,
+      installed,
+      awaitingApproval,
+      isKlavis,
+      isLobehubSkill,
+      serverStatus,
+      error,
+    } = pluginState || {};
 
     if (!pluginId) return null;
 
@@ -43,7 +51,7 @@ const InstallPlugin = memo<BuiltinRenderProps<InstallPluginParams, InstallPlugin
         <Flexbox align={'center'} gap={8} horizontal style={{ fontSize: 13 }}>
           <Clock size={14} style={{ color: 'var(--lobe-warning-6)' }} />
           <span style={{ fontWeight: 500 }}>
-            {isKlavis ? (
+            {isKlavis || isLobehubSkill ? (
               <>
                 Waiting for authorization:{' '}
                 <code
@@ -90,7 +98,7 @@ const InstallPlugin = memo<BuiltinRenderProps<InstallPluginParams, InstallPlugin
         <Flexbox align={'center'} gap={8} horizontal style={{ fontSize: 13 }}>
           <CheckCircle size={14} style={{ color: 'var(--lobe-success-6)' }} />
           <span style={{ fontWeight: 500 }}>
-            {isKlavis ? 'Connected and enabled' : 'Installed and enabled'}:{' '}
+            {isKlavis || isLobehubSkill ? 'Connected and enabled' : 'Installed and enabled'}:{' '}
             <code
               style={{
                 background: 'var(--lobe-fill-tertiary)',

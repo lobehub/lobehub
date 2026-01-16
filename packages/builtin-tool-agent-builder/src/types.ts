@@ -164,7 +164,7 @@ export interface InstallPluginParams {
    */
   identifier: string;
   /**
-   * Plugin source type: 'market' for MCP marketplace, 'official' for builtin/klavis tools
+   * Plugin source type: 'market' for MCP marketplace, 'official' for builtin/klavis/lobehubSkill tools
    */
   source: 'market' | 'official';
 }
@@ -188,6 +188,10 @@ export interface InstallPluginState {
    */
   isKlavis?: boolean;
   /**
+   * Whether the plugin is a LobehubSkill provider that needs OAuth connection
+   */
+  isLobehubSkill?: boolean;
+  /**
    * Klavis OAuth URL if authorization is needed
    */
   oauthUrl?: string;
@@ -204,9 +208,9 @@ export interface InstallPluginState {
    */
   serverName?: string;
   /**
-   * Klavis server status
+   * Server status (for Klavis tools and LobehubSkill providers)
    */
-  serverStatus?: 'connected' | 'pending_auth' | 'error';
+  serverStatus?: 'connected' | 'pending_auth' | 'error' | 'not_connected';
   /**
    * Whether the operation was successful
    */

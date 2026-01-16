@@ -115,7 +115,7 @@ export class ChatGroupModel {
   async update(id: string, value: Partial<ChatGroupItem>): Promise<ChatGroupItem> {
     const [result] = await this.db
       .update(chatGroups)
-      .set({ ...value, updatedAt: new Date() })
+      .set(value)
       .where(and(eq(chatGroups.id, id), eq(chatGroups.userId, this.userId)))
       .returning();
 

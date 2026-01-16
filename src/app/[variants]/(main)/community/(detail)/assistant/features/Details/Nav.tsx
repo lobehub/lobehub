@@ -4,7 +4,6 @@ import { SOCIAL_URL } from '@lobechat/business-const';
 import { Flexbox, Icon, Tabs, Tag } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { BookOpenIcon, HistoryIcon, LayersIcon, ListIcon, SquareUserIcon } from 'lucide-react';
-import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -104,21 +103,22 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = AssistantNavKey.
     <Flexbox align={'center'} className={styles.nav} horizontal justify={'space-between'}>
       {nav}
       <Flexbox gap={12} horizontal>
-        <Link className={styles.link} href={SOCIAL_URL.discord} target={'_blank'}>
+        <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
           {t('mcp.details.nav.needHelp')}
-        </Link>
+        </a>
         {identifier && marketplaceLink && (
-          <Link className={styles.link} href={marketplaceLink} target={'_blank'}>
+          <a className={styles.link} href={marketplaceLink} rel="noreferrer" target="_blank">
             {t('mcp.details.nav.viewSourceCode')}
-          </Link>
+          </a>
         )}
-        <Link
+        <a
           className={styles.link}
-          href={'https://github.com/lobehub/lobe-chat-agents/issues/new/choose'}
-          target={'_blank'}
+          href="https://github.com/lobehub/lobe-chat-agents/issues/new/choose"
+          rel="noreferrer"
+          target="_blank"
         >
           {t('mcp.details.nav.reportIssue')}
-        </Link>
+        </a>
       </Flexbox>
     </Flexbox>
   );

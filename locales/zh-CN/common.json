@@ -134,6 +134,8 @@
   "cmdk.search.communityAgent": "社区助理",
   "cmdk.search.file": "文件",
   "cmdk.search.files": "文件",
+  "cmdk.search.folder": "文件夹",
+  "cmdk.search.folders": "文件夹",
   "cmdk.search.loading": "搜索中…",
   "cmdk.search.market": "社区",
   "cmdk.search.mcp": "MCP 服务器",

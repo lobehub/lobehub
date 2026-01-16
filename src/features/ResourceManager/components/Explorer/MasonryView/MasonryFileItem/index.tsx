@@ -351,7 +351,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
       fileType,
       filename: name,
       id,
-      knowledgeBaseId,
+      libraryId: knowledgeBaseId,
       sourceType,
       url,
     });

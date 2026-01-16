@@ -21,7 +21,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
     chatInputEditorRef,
     onMarkdownContentChange,
     mentionItems,
-    allowExpand,
+    allowExpand = true,
   }) => {
     const editor = useEditor();
     const slashMenuRef = useRef<HTMLDivElement>(null);

@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { type ReactNode, Suspense, memo, useCallback } from 'react';
 
 import { useConversationStore } from '@/features/Conversation/store';

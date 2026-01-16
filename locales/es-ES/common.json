@@ -134,6 +134,8 @@
   "cmdk.search.communityAgent": "Agente de la comunidad",
   "cmdk.search.file": "Archivo",
   "cmdk.search.files": "Archivos",
+  "cmdk.search.folder": "Carpeta",
+  "cmdk.search.folders": "Carpetas",
   "cmdk.search.loading": "Buscando...",
   "cmdk.search.market": "Comunidad",
   "cmdk.search.mcp": "Servidor MCP",

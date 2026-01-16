@@ -5,7 +5,7 @@ import { ChevronsUpDownIcon } from 'lucide-react';
 import React, { type PropsWithChildren, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import GroupAvatar from '@/features/GroupAvatar';
+import SupervisorAvatar from '@/app/[variants]/(main)/group/features/GroupAvatar';
 import { SkeletonItem } from '@/features/NavPanel/components/SkeletonList';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
@@ -15,10 +15,9 @@ import SwitchPanel from './SwitchPanel';
 const Agent = memo<PropsWithChildren>(() => {
   const { t } = useTranslation(['chat', 'common']);
 
-  const [isGroupsInit, groupMeta, memberAvatars] = useAgentGroupStore((s) => [
+  const [isGroupsInit, groupMeta] = useAgentGroupStore((s) => [
     agentGroupSelectors.isGroupsInit(s),
     agentGroupSelectors.currentGroupMeta(s),
-    agentGroupSelectors.currentGroupMemberAvatars(s),
   ]);
 
   const displayTitle = groupMeta?.title || t('untitledGroup', { ns: 'chat' });
@@ -39,7 +38,7 @@ const Agent = memo<PropsWithChildren>(() => {
         }}
         variant={'borderless'}
       >
-        <GroupAvatar avatars={memberAvatars} size={28} />
+        <SupervisorAvatar size={28} />
         <Text ellipsis weight={500}>
           {displayTitle}
         </Text>

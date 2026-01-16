@@ -9,17 +9,8 @@ const ChatGroupWizard = lazy(() =>
 
 interface GroupWizardCallbacks {
   onCancel?: () => void;
-  onCreateCustom?: (
-    selectedAgents: string[],
-    hostConfig?: { model?: string; provider?: string },
-    enableSupervisor?: boolean,
-  ) => Promise<void>;
-  onCreateFromTemplate?: (
-    templateId: string,
-    hostConfig?: { model?: string; provider?: string },
-    enableSupervisor?: boolean,
-    selectedMemberTitles?: string[],
-  ) => Promise<void>;
+  onCreateCustom?: (selectedAgents: string[]) => Promise<void>;
+  onCreateFromTemplate?: (templateId: string, selectedMemberTitles?: string[]) => Promise<void>;
 }
 
 interface GroupWizardContextValue {
@@ -56,32 +47,18 @@ const GroupWizardProviderInner = memo<GroupWizardProviderProps>(({ children }) =
     setIsLoading(false);
   };
 
-  const handleCreateCustom = async (
-    selectedAgents: string[],
-    hostConfig?: { model?: string; provider?: string },
-    enableSupervisor?: boolean,
-  ) => {
+  const handleCreateCustom = async (selectedAgents: string[]) => {
     if (callbacks.onCreateCustom) {
-      await callbacks.onCreateCustom(selectedAgents, hostConfig, enableSupervisor);
+      await callbacks.onCreateCustom(selectedAgents);
       closeGroupWizard();
     }
   };
 
-  const handleCreateFromTemplate = async (
-    templateId: string,
-    hostConfig?: { model?: string; provider?: string },
-    enableSupervisor?: boolean,
-    selectedMemberTitles?: string[],
-  ) => {
+  const handleCreateFromTemplate = async (templateId: string, selectedMemberTitles?: string[]) => {
     if (callbacks.onCreateFromTemplate) {
       setIsLoading(true);
       try {
-        await callbacks.onCreateFromTemplate(
-          templateId,
-          hostConfig,
-          enableSupervisor,
-          selectedMemberTitles,
-        );
+        await callbacks.onCreateFromTemplate(templateId, selectedMemberTitles);
         closeGroupWizard();
       } finally {
         setIsLoading(false);

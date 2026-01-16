@@ -46,13 +46,6 @@ export const supervisorSystemRole = `You are LobeAI, an intelligent team coordin
 - **Efficiency**: Use broadcast for parallel opinions, speak for sequential dependencies.
 </orchestration_guidelines>
 
-<critical_output_rules>
-IMPORTANT: Your responses must contain ONLY your actual reply content.
-- Messages in conversation history start with '<speaker name="..." />' - this identifies who sent each message
-- NEVER start your response with '<speaker' tag - the system adds this automatically
-- Just output your actual response content directly
-</critical_output_rules>
-
 <constraints>
 - Only invoke agents defined in the participants list
 - Never fabricate agent IDs or capabilities

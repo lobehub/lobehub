@@ -1,8 +1,7 @@
-import { Button, Flexbox, Highlighter, Icon, Tag } from '@lobehub/ui';
+import { Flexbox, Highlighter, Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { ChevronDown, ChevronRight } from 'lucide-react';
 import * as motion from 'motion/react-m';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type MCPErrorInfoMetadata } from '@/types/plugins';
@@ -12,94 +11,73 @@ const ErrorDetails = memo<{
   errorMessage?: string;
 }>(({ errorInfo, errorMessage }) => {
   const { t } = useTranslation('plugin');
-  const [expanded, setExpanded] = useState(false);
 
   return (
     <Flexbox gap={8}>
-      <Button
-        color={'default'}
-        icon={<Icon icon={expanded ? ChevronDown : ChevronRight} />}
-        onClick={() => setExpanded(!expanded)}
-        size="small"
-        style={{
-          fontSize: '12px',
-          padding: '0 4px',
-        }}
-        variant="filled"
+      <motion.div
+        animate={{ height: 'auto', opacity: 1 }}
+        initial={{ height: 0, opacity: 0 }}
+        style={{ overflow: 'hidden' }}
       >
-        {expanded
-          ? t('mcpInstall.errorDetails.hideDetails')
-          : t('mcpInstall.errorDetails.showDetails')}
-      </Button>
-
-      {expanded && (
-        <motion.div
-          animate={{ height: 'auto', opacity: 1 }}
-          initial={{ height: 0, opacity: 0 }}
-          style={{ overflow: 'hidden' }}
+        <Flexbox
+          gap={8}
+          style={{
+            backgroundColor: cssVar.colorFillQuaternary,
+            borderRadius: 8,
+            fontFamily: 'monospace',
+            fontSize: '11px',
+            padding: '8px 12px',
+          }}
         >
-          <Flexbox
-            gap={8}
-            style={{
-              backgroundColor: cssVar.colorFillQuaternary,
-              borderRadius: 8,
-              fontFamily: 'monospace',
-              fontSize: '11px',
-              padding: '8px 12px',
-            }}
-          >
-            {errorInfo.params && (
-              <Flexbox gap={4}>
-                <div>
-                  <Tag color="blue" variant={'filled'}>
-                    {t('mcpInstall.errorDetails.connectionParams')}
-                  </Tag>
-                </div>
-                <div style={{ marginTop: 4, wordBreak: 'break-all' }}>
-                  {errorInfo.params.command && (
-                    <div>
-                      {t('mcpInstall.errorDetails.command')}: {errorInfo.params.command}
-                    </div>
-                  )}
-                  {errorInfo.params.args && (
-                    <div>
-                      {t('mcpInstall.errorDetails.args')}: {errorInfo.params.args.join(' ')}
-                    </div>
-                  )}
-                </div>
-              </Flexbox>
-            )}
-
-            {errorInfo.errorLog && (
-              <Flexbox gap={4}>
-                <div>
-                  <Tag color="red" variant={'filled'}>
-                    {t('mcpInstall.errorDetails.errorOutput')}
-                  </Tag>
-                </div>
-                <Highlighter
-                  language={'log'}
-                  style={{
-                    maxHeight: 200,
-                    overflow: 'auto',
-                  }}
-                >
-                  {errorInfo.errorLog}
-                </Highlighter>
-              </Flexbox>
-            )}
-
-            {errorInfo.originalError && errorInfo.originalError !== errorMessage && (
+          {errorInfo.params && (
+            <Flexbox gap={4}>
               <div>
-                <Tag color="orange">{t('mcpInstall.errorDetails.originalError')}</Tag>
-                <div style={{ marginTop: 4, wordBreak: 'break-all' }}>
-                  {errorInfo.originalError}
-                </div>
+                <Tag color="blue" variant={'filled'}>
+                  {t('mcpInstall.errorDetails.connectionParams')}
+                </Tag>
               </div>
-            )}
-          </Flexbox>
-        </motion.div>
-      )}
+              <div style={{ marginTop: 4, wordBreak: 'break-all' }}>
+                {errorInfo.params.command && (
+                  <div>
+                    {t('mcpInstall.errorDetails.command')}: {errorInfo.params.command}
+                  </div>
+                )}
+                {errorInfo.params.args && (
+                  <div>
+                    {t('mcpInstall.errorDetails.args')}: {errorInfo.params.args.join(' ')}
+                  </div>
+                )}
+              </div>
+            </Flexbox>
+          )}
+
+          {errorInfo.errorLog && (
+            <Flexbox gap={4}>
+              <div>
+                <Tag color="red" variant={'filled'}>
+                  {t('mcpInstall.errorDetails.errorOutput')}
+                </Tag>
+              </div>
+              <Highlighter
+                language={'log'}
+                style={{
+                  maxHeight: 200,
+                  overflow: 'auto',
+                }}
+              >
+                {errorInfo.errorLog}
+              </Highlighter>
+            </Flexbox>
+          )}
+
+          {errorInfo.originalError && errorInfo.originalError !== errorMessage && (
+            <div>
+              <Tag color="orange">{t('mcpInstall.errorDetails.originalError')}</Tag>
+              <div style={{ marginTop: 4, wordBreak: 'break-all' }}>{errorInfo.originalError}</div>
+            </div>
+          )}
+        </Flexbox>
+      </motion.div>
     </Flexbox>
   );
 });

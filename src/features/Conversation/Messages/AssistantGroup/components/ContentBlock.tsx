@@ -14,9 +14,10 @@ import MessageContent from './MessageContent';
 
 interface ContentBlockProps extends AssistantContentBlock {
   assistantId: string;
+  disableEditing?: boolean;
 }
 const ContentBlock = memo<ContentBlockProps>(
-  ({ id, tools, content, imageList, reasoning, error, assistantId }) => {
+  ({ id, tools, content, imageList, reasoning, error, assistantId, disableEditing }) => {
     const errorContent = useErrorContent(error);
     const showImageItems = !!imageList && imageList.length > 0;
     const [isReasoning, deleteMessage, continueGeneration] = useConversationStore((s) => [
@@ -70,7 +71,7 @@ const ContentBlock = memo<ContentBlockProps>(
         {showImageItems && <ImageFileListViewer items={imageList} />}
 
         {/* Tools */}
-        {hasTools && <Tools messageId={id} tools={tools} />}
+        {hasTools && <Tools disableEditing={disableEditing} messageId={id} tools={tools} />}
       </Flexbox>
     );
   },

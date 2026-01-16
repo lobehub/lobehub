@@ -4,7 +4,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
-import { documentSelectors, useFileStore } from '@/store/file';
+import { pageSelectors, usePageStore } from '@/store/page';
 
 import Actions from './Actions';
 import Editing from './Editing';
@@ -17,18 +17,13 @@ interface DocumentItemProps {
 
 const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
   const { t } = useTranslation('file');
-  const [editing, selectedPageId, document] = useFileStore(
-    useCallback(
-      (s) => {
-        const doc = documentSelectors.getDocumentById(pageId)(s);
-        return [s.renamingPageId === pageId, s.selectedPageId, doc] as const;
-      },
-      [pageId],
-    ),
-  );
+  const [editing, selectedPageId, document] = usePageStore((s) => {
+    const doc = pageSelectors.getDocumentById(pageId)(s);
+    return [s.renamingPageId === pageId, s.selectedPageId, doc] as const;
+  });
 
-  const selectPage = useFileStore((s) => s.selectPage);
-  const setRenamingPageId = useFileStore((s) => s.setRenamingPageId);
+  const selectPage = usePageStore((s) => s.selectPage);
+  const setRenamingPageId = usePageStore((s) => s.setRenamingPageId);
 
   const active = selectedPageId === pageId;
   const title = document?.title || t('pageList.untitled');

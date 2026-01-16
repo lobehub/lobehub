@@ -23,26 +23,13 @@ interface AgentModalContextValue {
 
 interface GroupWizardCallbacks {
   onCancel?: () => void;
-  onCreateCustom?: (
-    selectedAgents: string[],
-    hostConfig?: { model?: string; provider?: string },
-    enableSupervisor?: boolean,
-  ) => Promise<void>;
-  onCreateFromTemplate?: (
-    templateId: string,
-    hostConfig?: { model?: string; provider?: string },
-    enableSupervisor?: boolean,
-    selectedMemberTitles?: string[],
-  ) => Promise<void>;
+  onCreateCustom?: (selectedAgents: string[]) => Promise<void>;
+  onCreateFromTemplate?: (templateId: string, selectedMemberTitles?: string[]) => Promise<void>;
 }
 
 interface MemberSelectionCallbacks {
   onCancel?: () => void;
-  onConfirm?: (
-    selectedAgents: string[],
-    hostConfig?: { model?: string; provider?: string },
-    enableSupervisor?: boolean,
-  ) => Promise<void>;
+  onConfirm?: (selectedAgents: string[]) => Promise<void>;
 }
 
 const AgentModalContext = createContext<AgentModalContextValue | null>(null);
@@ -131,21 +118,11 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
           groupWizardCallbacks.onCancel?.();
           setGroupWizardOpen(false);
         }}
-        onCreateCustom={async (selectedAgents, hostConfig, enableSupervisor) => {
-          await groupWizardCallbacks.onCreateCustom?.(selectedAgents, hostConfig, enableSupervisor);
+        onCreateCustom={async (selectedAgents: string[]) => {
+          await groupWizardCallbacks.onCreateCustom?.(selectedAgents);
         }}
-        onCreateFromTemplate={async (
-          templateId,
-          hostConfig,
-          enableSupervisor,
-          selectedMemberTitles,
-        ) => {
-          await groupWizardCallbacks.onCreateFromTemplate?.(
-            templateId,
-            hostConfig,
-            enableSupervisor,
-            selectedMemberTitles,
-          );
+        onCreateFromTemplate={async (templateId: string, selectedMemberTitles?: string[]) => {
+          await groupWizardCallbacks.onCreateFromTemplate?.(templateId, selectedMemberTitles);
         }}
         open={groupWizardOpen}
       />
@@ -156,8 +133,8 @@ export const AgentModalProvider = memo<AgentModalProviderProps>(({ children }) =
           memberSelectionCallbacks.onCancel?.();
           setMemberSelectionOpen(false);
         }}
-        onConfirm={async (selectedAgents, hostConfig, enableSupervisor) => {
-          await memberSelectionCallbacks.onConfirm?.(selectedAgents, hostConfig, enableSupervisor);
+        onConfirm={async (selectedAgents: string[]) => {
+          await memberSelectionCallbacks.onConfirm?.(selectedAgents);
         }}
         open={memberSelectionOpen}
       />

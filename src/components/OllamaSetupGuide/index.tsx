@@ -2,7 +2,6 @@ import { ProviderCombine } from '@lobehub/icons';
 import { Flexbox, Highlighter, Snippet, Tabs } from '@lobehub/ui';
 import { Steps } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import Link from 'next/link';
 import { readableColor } from 'polished';
 import React, { memo, useMemo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -48,7 +47,7 @@ const SetupGuide = memo(() => {
                       <Trans
                         components={[
                           <span key="0" />,
-                          <Link href={'https://ollama.com/download'} key="1" />,
+                          <a href={'https://ollama.com/download'} key="1" rel="noreferrer" target="_blank" />,
                         ]}
                         i18nKey={'OllamaSetupGuide.install.description'}
                         ns={'components'}
@@ -94,7 +93,7 @@ const SetupGuide = memo(() => {
                       <Trans
                         components={[
                           <span key="0" />,
-                          <Link href={'https://ollama.com/download'} key="1" />,
+                          <a href={'https://ollama.com/download'} key="1" rel="noreferrer" target="_blank" />,
                         ]}
                         i18nKey={'OllamaSetupGuide.install.description'}
                         ns={'components'}
@@ -139,9 +138,11 @@ const SetupGuide = memo(() => {
                           <Trans
                             components={[
                               <span key="0" />,
-                              <Link
+                              <a
                                 href={'https://github.com/ollama/ollama/blob/main/docs/linux.md'}
                                 key="1"
+                                rel="noreferrer"
+                                target="_blank"
                               />,
                             ]}
                             i18nKey={'OllamaSetupGuide.install.linux.manual'}

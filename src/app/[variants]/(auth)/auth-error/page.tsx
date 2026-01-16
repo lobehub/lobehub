@@ -2,7 +2,7 @@
 
 import { SiDiscord } from '@icons-pack/react-simple-icons';
 import { Alert, Button, Flexbox, Icon } from '@lobehub/ui';
-import Link from 'next/link';
+import Link from '@/libs/next/Link';
 import { parseAsString, useQueryState } from 'nuqs';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -644,6 +644,7 @@ export class FlatListBuilder {
               id: toolMsg.id,
             };
             if (toolMsg.error) result.error = toolMsg.error;
+            if (toolMsg.pluginError) result.error = toolMsg.pluginError;
             if (toolMsg.pluginState) result.state = toolMsg.pluginState;
 
             const toolWithResult: ChatToolPayloadWithResult = {

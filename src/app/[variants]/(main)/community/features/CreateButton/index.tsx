@@ -1,7 +1,7 @@
 import { ActionIcon, Button, Modal , Skeleton } from '@lobehub/ui';
 import { useResponsive } from 'antd-style';
 import { Brush } from 'lucide-react';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

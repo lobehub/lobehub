@@ -2,6 +2,7 @@ import { BuiltinIntervention } from '@lobechat/types';
 
 import { GroupManagementApiName } from '../../types';
 import ExecuteTaskIntervention from './ExecuteTask';
+import ExecuteTasksIntervention from './ExecuteTasks';
 
 /**
  * Group Management Tool Intervention Components Registry
@@ -10,7 +11,9 @@ import ExecuteTaskIntervention from './ExecuteTask';
  * before the tool is executed.
  */
 export const GroupManagementInterventions: Record<string, BuiltinIntervention> = {
-  [GroupManagementApiName.executeTask]: ExecuteTaskIntervention as BuiltinIntervention,
+  [GroupManagementApiName.executeAgentTask]: ExecuteTaskIntervention as BuiltinIntervention,
+  [GroupManagementApiName.executeAgentTasks]: ExecuteTasksIntervention as BuiltinIntervention,
 };
 
 export { default as ExecuteTaskIntervention } from './ExecuteTask';
+export { default as ExecuteTasksIntervention } from './ExecuteTasks';

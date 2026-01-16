@@ -1,21 +1,18 @@
-import { useLocation, useSearchParams } from 'react-router-dom';
-
 import { ProfileTabs, SettingsTabs, type SidebarTabKey } from '@/store/global/initialState';
+import { usePathname, useSearchParams } from '@/libs/router/navigation';
 
 /**
  * Returns the active tab key (chat/discover/settings/...)
- * React Router version for (main) directory
+ * Uses React Router via @/libs/router
  */
 export const useActiveTabKey = () => {
-  const location = useLocation();
-  const pathname = location.pathname;
-
+  const pathname = usePathname();
   return pathname.split('/').find(Boolean) as SidebarTabKey;
 };
 
 /**
  * Returns the active setting page key (?active=common/sync/agent/...)
- * React Router version for (main) directory
+ * Uses React Router via @/libs/router
  */
 export const useActiveSettingsKey = () => {
   const [searchParams] = useSearchParams();
@@ -26,12 +23,10 @@ export const useActiveSettingsKey = () => {
 
 /**
  * Returns the active profile page key (profile/security/stats/...)
- * React Router version for (main) directory
+ * Uses React Router via @/libs/router
  */
 export const useActiveProfileKey = () => {
-  const location = useLocation();
-  const pathname = location.pathname;
-
+  const pathname = usePathname();
   const tabs = pathname.split('/').findLast(Boolean);
 
   if (tabs === 'profile') return ProfileTabs.Profile;

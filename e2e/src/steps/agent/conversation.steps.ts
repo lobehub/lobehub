@@ -7,7 +7,7 @@ import { Given, Then, When } from '@cucumber/cucumber';
 import { expect } from '@playwright/test';
 
 import { llmMockManager, presetResponses } from '../../mocks/llm';
-import { CustomWorld } from '../../support/world';
+import { CustomWorld, WAIT_TIMEOUT } from '../../support/world';
 
 // ============================================
 // Given Steps
@@ -29,19 +29,19 @@ Given('用户进入 Lobe AI 对话页面', async function (this: CustomWorld) {
   console.log('   📍 Step: 导航到首页...');
   // Navigate to home page first
   await this.page.goto('/');
-  await this.page.waitForLoadState('networkidle', { timeout: 10_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: WAIT_TIMEOUT });
 
   console.log('   📍 Step: 查找 Lobe AI...');
   // Find and click on "Lobe AI" agent in the sidebar/home
   const lobeAIAgent = this.page.locator('text=Lobe AI').first();
-  await expect(lobeAIAgent).toBeVisible({ timeout: 10_000 });
+  await expect(lobeAIAgent).toBeVisible({ timeout: WAIT_TIMEOUT });
 
   console.log('   📍 Step: 点击 Lobe AI...');
   await lobeAIAgent.click();
 
   console.log('   📍 Step: 等待聊天界面加载...');
   // Wait for the chat interface to be ready
-  await this.page.waitForLoadState('networkidle', { timeout: 10_000 });
+  await this.page.waitForLoadState('networkidle', { timeout: WAIT_TIMEOUT });
 
   console.log('   📍 Step: 查找输入框...');
   // The input is a rich text editor with contenteditable

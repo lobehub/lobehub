@@ -13,7 +13,6 @@ import {
   chatGroupsAgents,
 } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
-import { ChatGroupConfig } from '../../types/chatGroup';
 
 export interface SupervisorAgentConfig {
   model?: string;
@@ -106,14 +105,12 @@ export class AgentGroupRepository {
 
     // 4. If no supervisor exists, create a virtual supervisor agent
     if (!supervisorAgentId) {
-      const groupConfig = group.config as ChatGroupConfig | undefined;
-
       // Create supervisor agent (virtual agent)
       const [supervisorAgent] = await this.db
         .insert(agents)
         .values({
-          model: groupConfig?.orchestratorModel,
-          provider: groupConfig?.orchestratorProvider,
+          model: undefined,
+          provider: undefined,
           title: 'Supervisor',
           userId: this.userId,
           virtual: true,
@@ -163,14 +160,12 @@ export class AgentGroupRepository {
     agentMembers: string[] = [],
     supervisorConfig?: SupervisorAgentConfig,
   ): Promise<CreateGroupWithSupervisorResult> {
-    const groupConfig = groupParams.config as ChatGroupConfig | undefined;
-
     // 1. Create supervisor agent (virtual agent)
     const [supervisorAgent] = await this.db
       .insert(agents)
       .values({
-        model: supervisorConfig?.model ?? groupConfig?.orchestratorModel,
-        provider: supervisorConfig?.provider ?? groupConfig?.orchestratorProvider,
+        model: supervisorConfig?.model,
+        provider: supervisorConfig?.provider,
         title: supervisorConfig?.title ?? 'Supervisor',
         userId: this.userId,
         virtual: true,
@@ -303,5 +298,155 @@ export class AgentGroupRepository {
       deletedVirtualAgentIds: deleteVirtualAgents ? virtualAgentIds : [],
       removedFromGroup: agentIds.length,
     };
+  }
+
+  /**
+   * Duplicate a chat group with all its members.
+   * - Creates a new group with the same config
+   * - Creates a new supervisor agent
+   * - For virtual member agents: creates new copies
+   * - For non-virtual member agents: adds relationship only (references same agents)
+   *
+   * @param groupId - The chat group ID to duplicate
+   * @param newTitle - Optional new title for the duplicated group
+   * @returns The new group ID and supervisor agent ID, or null if source not found
+   */
+  async duplicate(
+    groupId: string,
+    newTitle?: string,
+  ): Promise<{ groupId: string; supervisorAgentId: string } | null> {
+    // 1. Get the source group
+    const sourceGroup = await this.db.query.chatGroups.findFirst({
+      where: and(eq(chatGroups.id, groupId), eq(chatGroups.userId, this.userId)),
+    });
+
+    if (!sourceGroup) return null;
+
+    // 2. Get all agents in the group with their details
+    const groupAgentsWithDetails = await this.db
+      .select({
+        agent: agents,
+        enabled: chatGroupsAgents.enabled,
+        order: chatGroupsAgents.order,
+        role: chatGroupsAgents.role,
+      })
+      .from(chatGroupsAgents)
+      .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
+      .where(eq(chatGroupsAgents.chatGroupId, groupId))
+      .orderBy(chatGroupsAgents.order);
+
+    // 3. Separate supervisor, virtual members, and non-virtual members
+    let sourceSupervisor: (typeof groupAgentsWithDetails)[number] | undefined;
+    const virtualMembers: (typeof groupAgentsWithDetails)[number][] = [];
+    const nonVirtualMembers: (typeof groupAgentsWithDetails)[number][] = [];
+
+    for (const row of groupAgentsWithDetails) {
+      if (row.role === 'supervisor') {
+        sourceSupervisor = row;
+      } else if (row.agent.virtual) {
+        virtualMembers.push(row);
+      } else {
+        nonVirtualMembers.push(row);
+      }
+    }
+
+    // Use transaction to ensure atomicity
+    return this.db.transaction(async (trx) => {
+      // 4. Create the new group
+      const [newGroup] = await trx
+        .insert(chatGroups)
+        .values({
+          config: sourceGroup.config,
+          pinned: sourceGroup.pinned,
+          title: newTitle || (sourceGroup.title ? `${sourceGroup.title} (Copy)` : 'Copy'),
+          userId: this.userId,
+        })
+        .returning();
+
+      // 5. Create new supervisor agent
+      const supervisorAgent = sourceSupervisor?.agent;
+      const [newSupervisor] = await trx
+        .insert(agents)
+        .values({
+          model: supervisorAgent?.model,
+          provider: supervisorAgent?.provider,
+          title: supervisorAgent?.title || 'Supervisor',
+          userId: this.userId,
+          virtual: true,
+        })
+        .returning();
+
+      // 6. Create copies of virtual member agents using include mode
+      const newVirtualAgentMap = new Map<string, string>(); // oldId -> newId
+      if (virtualMembers.length > 0) {
+        const virtualAgentConfigs = virtualMembers.map((member) => ({
+          // Metadata
+          avatar: member.agent.avatar,
+          backgroundColor: member.agent.backgroundColor,
+          // Config
+          chatConfig: member.agent.chatConfig,
+          description: member.agent.description,
+          fewShots: member.agent.fewShots,
+
+          model: member.agent.model,
+          openingMessage: member.agent.openingMessage,
+          openingQuestions: member.agent.openingQuestions,
+          params: member.agent.params,
+          plugins: member.agent.plugins,
+          provider: member.agent.provider,
+          systemRole: member.agent.systemRole,
+          tags: member.agent.tags,
+          title: member.agent.title,
+          tts: member.agent.tts,
+          // User & virtual flag
+          userId: this.userId,
+          virtual: true,
+        }));
+
+        const newVirtualAgents = await trx.insert(agents).values(virtualAgentConfigs).returning();
+
+        // Map old agent IDs to new agent IDs
+        for (const [i, virtualMember] of virtualMembers.entries()) {
+          newVirtualAgentMap.set(virtualMember.agent.id, newVirtualAgents[i].id);
+        }
+      }
+
+      // 7. Create group-agent relationships
+      const groupAgentValues: NewChatGroupAgent[] = [
+        // Supervisor
+        {
+          agentId: newSupervisor.id,
+          chatGroupId: newGroup.id,
+          order: -1,
+          role: 'supervisor',
+          userId: this.userId,
+        },
+        // Virtual members (using new copied agents)
+        ...virtualMembers.map((member) => ({
+          agentId: newVirtualAgentMap.get(member.agent.id)!,
+          chatGroupId: newGroup.id,
+          enabled: member.enabled,
+          order: member.order,
+          role: member.role || 'participant',
+          userId: this.userId,
+        })),
+        // Non-virtual members (referencing same agents - only add relationship)
+        ...nonVirtualMembers.map((member) => ({
+          agentId: member.agent.id,
+          chatGroupId: newGroup.id,
+          enabled: member.enabled,
+          order: member.order,
+          role: member.role || 'participant',
+          userId: this.userId,
+        })),
+      ];
+
+      await trx.insert(chatGroupsAgents).values(groupAgentValues);
+
+      return {
+        groupId: newGroup.id,
+        supervisorAgentId: newSupervisor.id,
+      };
+    });
   }
 }

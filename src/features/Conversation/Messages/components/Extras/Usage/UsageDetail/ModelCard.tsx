@@ -70,7 +70,7 @@ const ModelCard = memo<ModelCardProps>(({ pricing, id, provider, displayName }) 
                 {
                   label: (
                     <Tooltip title={t('messages.modelCard.creditTooltip')}>
-                      {t('messages.modelCard.credit')}
+                      <span>{t('messages.modelCard.credit')}</span>
                     </Tooltip>
                   ),
                   value: 'credit',

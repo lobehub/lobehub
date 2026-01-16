@@ -10,7 +10,6 @@ import { PluginStoreTabs } from '@/store/tool/slices/oldStore';
 import AddPluginButton from './AddPluginButton';
 import InstalledList from './InstalledList';
 import McpList from './McpList';
-import PluginList from './PluginList';
 import Search from './Search';
 
 export const Content = memo(() => {
@@ -21,9 +20,8 @@ export const Content = memo(() => {
 
   const options = [
     { label: t('store.tabs.mcp'), value: PluginStoreTabs.MCP },
-    { label: t('store.tabs.old'), value: PluginStoreTabs.Plugin },
     { label: t('store.tabs.installed'), value: PluginStoreTabs.Installed },
-  ].filter(Boolean) as SegmentedOptions;
+  ] as SegmentedOptions;
 
   return (
     <Flexbox
@@ -48,7 +46,6 @@ export const Content = memo(() => {
         <Search />
       </Flexbox>
       {listType === PluginStoreTabs.MCP && <McpList />}
-      {listType === PluginStoreTabs.Plugin && <PluginList />}
       {listType === PluginStoreTabs.Installed && <InstalledList keywords={keywords} />}
     </Flexbox>
   );

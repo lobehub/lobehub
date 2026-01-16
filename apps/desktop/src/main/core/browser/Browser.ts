@@ -1,3 +1,4 @@
+import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
 import {
   BrowserWindow,
@@ -119,6 +120,10 @@ export default class Browser {
     logger.info(`Creating new BrowserWindow instance: ${this.identifier}`);
     logger.debug(`[${this.identifier}] Resolved window state: ${JSON.stringify(resolvedState)}`);
 
+    // Calculate traffic light position to center vertically in title bar
+    // Traffic light buttons are approximately 12px tall
+    const trafficLightY = Math.round((TITLE_BAR_HEIGHT - 12) / 2);
+
     return new BrowserWindow({
       ...rest,
       autoHideMenuBar: true,
@@ -128,6 +133,7 @@ export default class Browser {
       height: resolvedState.height,
       show: false,
       title,
+      trafficLightPosition: isMac ? { x: 12, y: trafficLightY } : undefined,
       vibrancy: 'sidebar',
       visualEffectState: 'active',
       webPreferences: {
@@ -183,6 +189,21 @@ export default class Browser {
   private setupEventListeners(browserWindow: BrowserWindow): void {
     this.setupReadyToShowListener(browserWindow);
     this.setupCloseListener(browserWindow);
+    this.setupFocusListener(browserWindow);
+    this.setupWillPreventUnloadListener(browserWindow);
+  }
+
+  private setupWillPreventUnloadListener(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up 'will-prevent-unload' event listener.`);
+    browserWindow.webContents.on('will-prevent-unload', (event) => {
+      logger.debug(
+        `[${this.identifier}] 'will-prevent-unload' fired. isQuiting: ${this.app.isQuiting}`,
+      );
+      if (this.app.isQuiting) {
+        logger.info(`[${this.identifier}] App is quitting, ignoring beforeunload cancellation.`);
+        event.preventDefault();
+      }
+    });
   }
 
   private setupReadyToShowListener(browserWindow: BrowserWindow): void {
@@ -205,6 +226,14 @@ export default class Browser {
       onHide: () => this.hide(),
     });
     browserWindow.on('close', closeHandler);
+  }
+
+  private setupFocusListener(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up 'focus' event listener.`);
+    browserWindow.on('focus', () => {
+      logger.debug(`[${this.identifier}] Window 'focus' event fired.`);
+      this.broadcast('windowFocused');
+    });
   }
 
   // ==================== Window Actions ====================

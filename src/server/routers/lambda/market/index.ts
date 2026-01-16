@@ -167,7 +167,7 @@ export const marketRouter = router({
     }),
 
   // ============================== MCP Market ==============================
-  getMcpCategories: marketProcedure
+getMcpCategories: marketProcedure
     .input(
       z
         .object({
@@ -351,7 +351,7 @@ export const marketRouter = router({
     }),
 
   // ============================== Plugin Market ==============================
-  getPluginCategories: marketProcedure
+getPluginCategories: marketProcedure
     .input(
       z
         .object({
@@ -439,7 +439,7 @@ export const marketRouter = router({
     }),
 
   // ============================== Providers ==============================
-  getProviderDetail: marketProcedure
+getProviderDetail: marketProcedure
     .input(
       z.object({
         identifier: z.string(),
@@ -503,7 +503,7 @@ export const marketRouter = router({
     }),
 
   // ============================== User Profile ==============================
-  getUserInfo: marketProcedure
+getUserInfo: marketProcedure
     .input(
       z.object({
         locale: z.string().optional(),
@@ -598,6 +598,26 @@ export const marketRouter = router({
       }
     }),
 
+  reportAgentEvent: marketProcedure
+    .input(
+      z.object({
+        event: z.enum(['add', 'chat', 'click']),
+        identifier: z.string(),
+        source: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      log('createAgentEvent input: %O', input);
+
+      try {
+        await ctx.discoverService.createAgentEvent(input);
+        return { success: true };
+      } catch (error) {
+        console.error('Error reporting Agent event: %O', error);
+        return { success: false };
+      }
+    }),
+
   reportAgentInstall: marketProcedure
     .input(
       z.object({
@@ -651,6 +671,27 @@ export const marketRouter = router({
       } catch (error) {
         console.error('Error reporting call: %O', error);
         // Don't throw error, as reporting failure should not affect main flow
+        return { success: false };
+      }
+    }),
+
+
+  reportMcpEvent: marketProcedure
+    .input(
+      z.object({
+        event: z.enum(['click', 'install', 'activate', 'uninstall']),
+        identifier: z.string(),
+        source: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      log('createMcpEvent input: %O', input);
+
+      try {
+        await ctx.discoverService.createPluginEvent(input);
+        return { success: true };
+      } catch (error) {
+        console.error('Error reporting MCP event: %O', error);
         return { success: false };
       }
     }),

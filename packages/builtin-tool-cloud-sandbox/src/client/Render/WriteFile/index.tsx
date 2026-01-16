@@ -1,22 +1,10 @@
 'use client';
 
-import { CheckCircleFilled, CloseCircleFilled } from '@ant-design/icons';
 import { type BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Block, Highlighter } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { type WriteLocalFileState } from '../../../types';
-
-const styles = createStaticStyles(({ css }) => ({
-  container: css`
-    overflow: hidden;
-    padding-inline: 8px 0;
-  `,
-  statusIcon: css`
-    font-size: 12px;
-  `,
-}));
 
 interface WriteLocalFileParams {
   content: string;
@@ -24,31 +12,62 @@ interface WriteLocalFileParams {
   path: string;
 }
 
+/**
+ * Get file extension from path
+ */
+const getFileExtension = (path: string): string => {
+  const parts = path.split('.');
+  return parts.length > 1 ? parts.pop()?.toLowerCase() || 'text' : 'text';
+};
+
+/**
+ * Map file extension to Highlighter language
+ */
+const getLanguageFromExtension = (ext: string): string => {
+  const languageMap: Record<string, string> = {
+    css: 'css',
+    go: 'go',
+    html: 'html',
+    java: 'java',
+    js: 'javascript',
+    json: 'json',
+    jsx: 'jsx',
+    md: 'markdown',
+    py: 'python',
+    rs: 'rust',
+    scss: 'scss',
+    sh: 'bash',
+    sql: 'sql',
+    ts: 'typescript',
+    tsx: 'tsx',
+    xml: 'xml',
+    yaml: 'yaml',
+    yml: 'yaml',
+  };
+  return languageMap[ext] || 'text';
+};
+
 const WriteFile = memo<BuiltinRenderProps<WriteLocalFileParams, WriteLocalFileState>>(
-  ({ args, pluginState }) => {
-    const isSuccess = pluginState?.success;
+  ({ args }) => {
+    if (!args?.content) {
+      return null;
+    }
+
+    const ext = getFileExtension(args.path);
+    const language = getLanguageFromExtension(ext);
 
     return (
-      <Flexbox className={styles.container} gap={8}>
-        <Flexbox align={'center'} gap={8} horizontal>
-          {pluginState === undefined ? null : isSuccess ? (
-            <CheckCircleFilled
-              className={styles.statusIcon}
-              style={{ color: cssVar.colorSuccess }}
-            />
-          ) : (
-            <CloseCircleFilled className={styles.statusIcon} style={{ color: cssVar.colorError }} />
-          )}
-          <Text as={'span'} code fontSize={12}>
-            {isSuccess ? `✅ Written to ${args.path}` : `❌ Failed to write ${args.path}`}
-          </Text>
-          {pluginState?.bytesWritten !== undefined && (
-            <Text as={'span'} code fontSize={12} type={'secondary'}>
-              ({pluginState.bytesWritten} bytes)
-            </Text>
-          )}
-        </Flexbox>
-      </Flexbox>
+      <Block padding={8} variant={'outlined'}>
+        <Highlighter
+          language={language}
+          showLanguage
+          style={{ maxHeight: 400, overflow: 'auto' }}
+          variant={'borderless'}
+          wrap
+        >
+          {args.content}
+        </Highlighter>
+      </Block>
     );
   },
 );

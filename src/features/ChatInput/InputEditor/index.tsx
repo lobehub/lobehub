@@ -120,6 +120,7 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       className={className}
       content={''}
       editor={editor}
+      pasteAsPlainText
       {...richRenderProps}
       mentionOption={
         enableMention

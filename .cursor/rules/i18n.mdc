@@ -37,6 +37,7 @@ export default {
 - `sync.status.ready` - Feature + group + status
 
 **Parameters:** Use `{{variableName}}` syntax
+
 ```typescript
 'alert.cloud.desc': '我们提供 {{credit}} 额度积分',
 ```

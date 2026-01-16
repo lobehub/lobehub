@@ -2,6 +2,8 @@ import { Menu, MenuItemConstructorOptions, app, shell } from 'electron';
 import * as path from 'node:path';
 
 import { isDev } from '@/const/env';
+import NotificationCtr from '@/controllers/NotificationCtr';
+import SystemController from '@/controllers/SystemCtr';
 
 import type { IMenuPlatform, MenuOptions } from '../types';
 import { BaseMenuPlatform } from './BaseMenuPlatform';
@@ -57,7 +59,6 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
   private getAppMenuTemplate(options?: MenuOptions): MenuItemConstructorOptions[] {
     const appName = app.getName();
     const showDev = isDev || options?.showDevItems;
-
     // 创建命名空间翻译函数
     const t = this.app.i18n.ns('menu');
 
@@ -269,6 +270,48 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
             label: t('dev.refreshMenu'),
           },
           { type: 'separator' },
+          {
+            label: t('dev.permissions.title'),
+            submenu: [
+              {
+                click: () => {
+                  const notificationCtr = this.app.getController(NotificationCtr);
+                  void notificationCtr.requestNotificationPermission();
+                },
+                label: t('dev.permissions.notification.request'),
+              },
+              { type: 'separator' },
+              {
+                click: () => {
+                  const systemCtr = this.app.getController(SystemController);
+                  void systemCtr.requestAccessibilityAccess();
+                },
+                label: t('dev.permissions.accessibility.request'),
+              },
+              {
+                click: () => {
+                  const systemCtr = this.app.getController(SystemController);
+                  void systemCtr.requestMicrophoneAccess();
+                },
+                label: t('dev.permissions.microphone.request'),
+              },
+              {
+                click: () => {
+                  const systemCtr = this.app.getController(SystemController);
+                  void systemCtr.requestScreenAccess();
+                },
+                label: t('dev.permissions.screen.request'),
+              },
+              { type: 'separator' },
+              {
+                click: () => {
+                  const systemCtr = this.app.getController(SystemController);
+                  void systemCtr.promptFullDiskAccessIfNotGranted();
+                },
+                label: t('dev.permissions.fullDisk.request'),
+              },
+            ],
+          },
           {
             click: () => {
               const userDataPath = app.getPath('userData');

@@ -4,7 +4,6 @@ import { Github } from '@lobehub/icons';
 import { ActionIcon, Avatar, Collapse, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import { DotIcon } from 'lucide-react';
-import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -77,16 +76,17 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
             </Flexbox>
             {identifier && (
               <Flexbox align={'center'} gap={6} horizontal>
-                <Link
+                <a
                   href={urlJoin(
                     'https://github.com/lobehub/lobe-chat-agents/tree/main/locales',
                     identifier,
                   )}
                   onClick={(e) => e.stopPropagation()}
-                  target={'_blank'}
+                  rel="noreferrer"
+                  target="_blank"
                 >
                   <ActionIcon fill={cssVar.colorTextDescription} icon={Github} />
-                </Link>
+                </a>
               </Flexbox>
             )}
           </Flexbox>
@@ -94,9 +94,9 @@ const Header = memo<{ inModal?: boolean; mobile?: boolean }>(({ mobile: isMobile
             <Flexbox>
               <Flexbox align={'center'} gap={4} horizontal>
                 {author && (
-                  <Link href={urlJoin('https://github.com', author)} target={'_blank'}>
+                  <a href={urlJoin('https://github.com', author)} rel="noreferrer" target="_blank">
                     {author}
-                  </Link>
+                  </a>
                 )}
                 <Icon icon={DotIcon} />
                 <PublishedTime

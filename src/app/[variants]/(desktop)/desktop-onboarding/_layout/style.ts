@@ -1,14 +1,13 @@
 import { createStaticStyles } from 'antd-style';
 
+import { isMacOSWithLargeWindowBorders } from '@/utils/platform';
+
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   // Divider 样式
   divider: css`
     height: 24px;
   `,
 
-  drag: css`
-    -webkit-app-region: drag;
-  `,
   // 内层容器 - 深色模式
   innerContainerDark: css`
     position: relative;
@@ -16,7 +15,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow: hidden;
 
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
+    border-radius: ${!isMacOSWithLargeWindowBorders()
+      ? cssVar.borderRadius
+      : `${cssVar.borderRadius} 12px ${cssVar.borderRadius} 12px`};
 
     background: ${cssVar.colorBgContainer};
   `,
@@ -28,7 +29,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow: hidden;
 
     border: 1px solid ${cssVar.colorBorder};
-    border-radius: ${cssVar.borderRadius};
+    border-radius: ${!isMacOSWithLargeWindowBorders()
+      ? cssVar.borderRadius
+      : `${cssVar.borderRadius} 12px ${cssVar.borderRadius} 12px`};
 
     background: ${cssVar.colorBgContainer};
   `,

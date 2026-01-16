@@ -2,7 +2,6 @@
 
 import { Center } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import Link from 'next/link';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
@@ -24,10 +23,11 @@ const Footer = memo(() => {
         <Trans
           components={[
             <span key="0" />,
-            <Link
+            <a
               aria-label={t('llm.waitingForMoreLinkAriaLabel')}
               href={MORE_MODEL_PROVIDER_REQUEST_URL}
               key="1"
+              rel="noreferrer"
               target="_blank"
             />,
           ]}

@@ -1,7 +1,7 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { memo, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 

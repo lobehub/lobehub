@@ -1,6 +1,7 @@
 'use client';
 
 import { Button, Flexbox, Modal } from '@lobehub/ui';
+import { Divider } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +20,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     flex-direction: row;
 
     height: 500px;
+    padding: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: ${cssVar.borderRadius}px;
   `,
@@ -104,9 +106,11 @@ const AddGroupMemberModal = memo<AddGroupMemberModalProps>(
         title={t('memberSelection.addMember')}
         width={800}
       >
-        <Flexbox className={styles.container} horizontal>
+        <Flexbox className={styles.container} gap={8} horizontal>
           {/* Left Column - Available Agents */}
           <AvailableAgentList agents={availableAgents} isLoading={isLoadingAgents} />
+
+          <Divider orientation={'vertical'} style={{ height: '100%' }} />
 
           {/* Right Column - Selected Agents */}
           <SelectedAgentList agents={allAgents} />

@@ -1,19 +1,27 @@
 'use client';
 
 import isEqual from 'fast-deep-equal';
-import React, { memo } from 'react';
+import { memo } from 'react';
 
-import GroupAvatar from '@/features/GroupAvatar';
+import AgentGroupAvatar from '@/features/AgentGroupAvatar';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
-const SupervisorAvatar = memo<{ size?: number }>(({ size = 28 }) => {
-  const memberAvatars = useAgentGroupStore(
-    (s) => agentGroupSelectors.currentGroupMemberAvatars(s),
-    isEqual,
-  );
+/**
+ * Connected AgentGroupAvatar that reads from agentGroup store
+ */
+const CurrentAgentGroupAvatar = memo<{ size?: number }>(({ size = 28 }) => {
+  const groupMeta = useAgentGroupStore(agentGroupSelectors.currentGroupMeta, isEqual);
+  const memberAvatars = useAgentGroupStore(agentGroupSelectors.currentGroupMemberAvatars, isEqual);
 
-  return <GroupAvatar avatars={memberAvatars} size={size} />;
+  return (
+    <AgentGroupAvatar
+      avatar={groupMeta.avatar}
+      backgroundColor={groupMeta.backgroundColor}
+      memberAvatars={memberAvatars}
+      size={size}
+    />
+  );
 });
 
-export default SupervisorAvatar;
+export default CurrentAgentGroupAvatar;

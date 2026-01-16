@@ -1,22 +1,59 @@
 name: Release Desktop Beta
 
+# ============================================
+# Beta/Nightly 频道发版工作流
+# ============================================
+# 触发条件: 发布包含 pre-release 标识的 release
+# 如: v2.0.0-beta.1, v2.0.0-alpha.1, v2.0.0-rc.1, v2.0.0-nightly.xxx, v2.0.0-next.292
+#
+# 注意: Stable 版本 (如 v2.0.0) 由 release-desktop-stable.yml 处理
+# ============================================
+
 on:
   release:
-    types: [published] # 发布 release 时触发构建
+    types: [published]
 
-# 确保同一时间只运行一个相同的 workflow，取消正在进行的旧的运行
 concurrency:
   group: ${{ github.ref }}-${{ github.workflow }}
   cancel-in-progress: true
 
-# Add default permissions
 permissions: read-all
 
+env:
+  NODE_VERSION: '24.11.1'
+
 jobs:
+  # ============================================
+  # 检查是否为 Beta/Nightly/Next 版本 (排除 Stable)
+  # ============================================
+  check-beta:
+    name: Check if Beta/Nightly/Next Release
+    runs-on: ubuntu-latest
+    outputs:
+      is_beta: ${{ steps.check.outputs.is_beta }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Check release tag
+        id: check
+        run: |
+          version="${{ github.event.release.tag_name }}"
+          version="${version#v}"
+          echo "version=${version}" >> $GITHUB_OUTPUT
+
+          # Beta/Nightly/Next 版本包含 beta/alpha/rc/nightly/next
+          if [[ "$version" == *"beta"* ]] || [[ "$version" == *"alpha"* ]] || [[ "$version" == *"rc"* ]] || [[ "$version" == *"nightly"* ]] || [[ "$version" == *"next"* ]]; then
+            echo "is_beta=true" >> $GITHUB_OUTPUT
+            echo "✅ Beta/Nightly/Next release detected: $version"
+          else
+            echo "is_beta=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Skipping: $version is a stable release (handled by release-desktop-stable.yml)"
+          fi
+
   test:
     name: Code quality check
-    # 添加 PR label 触发条件，只有添加了 trigger:build-desktop 标签的 PR 才会触发构建
-    runs-on: ubuntu-latest # 只在 ubuntu 上运行一次检查
+    needs: [check-beta]
+    if: needs.check-beta.outputs.is_beta == 'true'
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout base
         uses: actions/checkout@v6
@@ -26,7 +63,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24.11.1
+          node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
 
       - name: Install bun
@@ -40,44 +77,9 @@ jobs:
       - name: Lint
         run: bun run lint
 
-  version:
-    name: Determine version
-    runs-on: ubuntu-latest
-    outputs:
-      # 输出版本信息，供后续 job 使用
-      version: ${{ steps.set_version.outputs.version }}
-      is_pr_build: ${{ steps.set_version.outputs.is_pr_build }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
-
-      # 主要逻辑：确定构建版本号
-      - name: Set version
-        id: set_version
-        run: |
-          # 从 apps/desktop/package.json 读取基础版本号
-          base_version=$(node -p "require('./apps/desktop/package.json').version")
-
-          # Release 事件直接使用 release tag 作为版本号，去掉可能的 v 前缀
-          version="${{ github.event.release.tag_name }}"
-          version="${version#v}"
-          echo "version=${version}" >> $GITHUB_OUTPUT
-          echo "📦 Release Version: ${version}"
-
-      # 输出版本信息总结，方便在 GitHub Actions 界面查看
-      - name: Version Summary
-        run: |
-          echo "🚦 Release Version: ${{ steps.set_version.outputs.version }}"
-
   build:
-    needs: [version, test]
+    needs: [check-beta]
+    if: needs.check-beta.outputs.is_beta == 'true'
     name: Build Desktop App
     runs-on: ${{ matrix.os }}
     strategy:
@@ -88,117 +90,76 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup build environment
+        uses: ./.github/actions/desktop-build-setup
         with:
-          run_install: false
+          node-version: ${{ env.NODE_VERSION }}
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24.11.1
-          package-manager-cache: false
-
-      # node-linker=hoisted 模式将可以确保 asar 压缩可用
-      - name: Install dependencies
-        run: pnpm install --node-linker=hoisted
-
-      - name: Install deps on Desktop
-        run: npm run install-isolated --prefix=./apps/desktop
-
-      # 设置 package.json 的版本号
       - name: Set package version
-        run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} beta
+        run: npm run workflow:set-desktop-version ${{ needs.check-beta.outputs.version }} beta
 
-      # macOS 构建处理
+      # macOS 构建
       - name: Build artifact on macOS
         if: runner.os == 'macOS'
         run: npm run desktop:build
         env:
+          UPDATE_CHANNEL: beta
           APP_URL: http://localhost:3015
-          DATABASE_URL: "postgresql://postgres@localhost:5432/postgres"
-          # 默认添加一个加密 SECRET
-          KEY_VAULTS_SECRET: "oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE="
-          # macOS 签名和公证配置
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
           CSC_LINK: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          # allow provisionally
           CSC_FOR_PULL_REQUEST: true
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-
           NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
           NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
 
-      #  Windows 平台构建处理
+      # Windows 构建
       - name: Build artifact on Windows
         if: runner.os == 'Windows'
         run: npm run desktop:build
         env:
+          UPDATE_CHANNEL: beta
           APP_URL: http://localhost:3015
-          DATABASE_URL: "postgresql://postgres@localhost:5432/postgres"
-          KEY_VAULTS_SECRET: "oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE="
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
           NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
           NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
-
-          # 将 TEMP 和 TMP 目录设置到 C 盘
           TEMP: C:\temp
           TMP: C:\temp
 
-      # Linux 平台构建处理
+      # Linux 构建
       - name: Build artifact on Linux
         if: runner.os == 'Linux'
         run: npm run desktop:build
         env:
+          UPDATE_CHANNEL: beta
           APP_URL: http://localhost:3015
-          DATABASE_URL: "postgresql://postgres@localhost:5432/postgres"
-          KEY_VAULTS_SECRET: "oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE="
+          DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
+          KEY_VAULTS_SECRET: 'oLXWIiR/AKF+rWaqy9lHkrYgzpATbW3CtJp3UfkVgpE='
           NEXT_PUBLIC_DESKTOP_PROJECT_ID: ${{ secrets.UMAMI_BETA_DESKTOP_PROJECT_ID }}
           NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ secrets.UMAMI_BETA_DESKTOP_BASE_URL }}
 
-      # 处理 macOS latest-mac.yml 重命名 (避免多架构覆盖)
-      - name: Rename macOS latest-mac.yml for multi-architecture support
-        if: runner.os == 'macOS'
-        run: |
-          cd apps/desktop/release
-          if [ -f "latest-mac.yml" ]; then
-            # 使用系统架构检测，与 electron-builder 输出保持一致
-            SYSTEM_ARCH=$(uname -m)
-            if [[ "$SYSTEM_ARCH" == "arm64" ]]; then
-              ARCH_SUFFIX="arm64"
-            else
-              ARCH_SUFFIX="x64"
-            fi
-
-            mv latest-mac.yml "latest-mac-${ARCH_SUFFIX}.yml"
-            echo "✅ Renamed latest-mac.yml to latest-mac-${ARCH_SUFFIX}.yml (detected: $SYSTEM_ARCH)"
-            ls -la latest-mac-*.yml
-          else
-            echo "⚠️ latest-mac.yml not found, skipping rename"
-            ls -la latest*.yml || echo "No latest*.yml files found"
-          fi
-
-      # 上传构建产物 (工作流处理重命名，不依赖 electron-builder 钩子)
-      - name: Upload artifact
-        uses: actions/upload-artifact@v6
+      - name: Upload artifacts
+        uses: ./.github/actions/desktop-upload-artifacts
         with:
-          name: release-${{ matrix.os }}
-          path: |
-            apps/desktop/release/latest*
-            apps/desktop/release/*.dmg*
-            apps/desktop/release/*.zip*
-            apps/desktop/release/*.exe*
-            apps/desktop/release/*.AppImage
-            apps/desktop/release/*.deb*
-            apps/desktop/release/*.snap*
-            apps/desktop/release/*.rpm*
-            apps/desktop/release/*.tar.gz*
-          retention-days: 5
+          artifact-name: release-${{ matrix.os }}
+
+  # 汇总门禁: test/build 完成后决定是否继续
+  gate:
+    needs: [check-beta, test, build]
+    if: ${{ needs.check-beta.outputs.is_beta == 'true' && needs.test.result == 'success' && needs.build.result == 'success' }}
+    name: Gate for publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Gate passed
+        run: echo "Gate passed"
 
   # 合并 macOS 多架构 latest-mac.yml 文件
   merge-mac-files:
-    needs: [build, version]
+    needs: [gate]
     name: Merge macOS Release Files
     runs-on: ubuntu-latest
     permissions:
@@ -210,7 +171,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: 24.11.1
+          node-version: ${{ env.NODE_VERSION }}
           package-manager-cache: false
 
       - name: Install bun

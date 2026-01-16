@@ -1,11 +1,11 @@
 import { z } from 'zod';
 
 /**
- * 会话上下文 Schema
- * 同时支持 agentId 和 sessionId，用于向后兼容
+ * Conversation context schema
+ * Supports both agentId and sessionId for backward compatibility
  *
- * 优先级：agentId > sessionId
- * 当同时提供时，agentId 会被用于解析对应的 sessionId
+ * Priority: agentId > sessionId
+ * When both are provided, agentId will be used to resolve the corresponding sessionId
  */
 export const conversationContextSchema = z.object({
   agentId: z.string().optional(),
@@ -16,8 +16,8 @@ export const conversationContextSchema = z.object({
 });
 
 /**
- * 简化版上下文
- * 用于 message 和 topic 的 CRUD 操作
+ * Simplified context
+ * Used for CRUD operations of messages and topics
  */
 export const basicContextSchema = z.object({
   agentId: z.string().optional(),

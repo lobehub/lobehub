@@ -3,7 +3,8 @@ description:
 globs:
 alwaysApply: false
 ---
-**桌面端窗口管理指南**
+
+# 桌面端窗口管理指南
 
 ## 窗口管理概述
 
@@ -16,7 +17,7 @@ LobeChat 桌面应用使用 Electron 的 `BrowserWindow` 管理应用窗口。�
 
 ## 相关文件结构
 
-```
+```plaintext
 apps/desktop/src/main/
 ├── appBrowsers.ts               # 窗口管理的核心文件
 ├── controllers/
@@ -63,6 +64,7 @@ export const createMainWindow = () => {
 实现窗口状态持久化保存和恢复：
 
 1. **保存窗口状态**
+
    ```typescript
    const saveWindowState = (window: BrowserWindow) => {
      if (!window.isMinimized() && !window.isMaximized()) {
@@ -80,6 +82,7 @@ export const createMainWindow = () => {
    ```
 
 2. **恢复窗口状态**
+
    ```typescript
    const restoreWindowState = (window: BrowserWindow) => {
      const savedState = settings.get('windowState');
@@ -96,6 +99,7 @@ export const createMainWindow = () => {
    ```
 
 3. **监听窗口事件**
+
    ```typescript
    window.on('close', () => saveWindowState(window));
    window.on('moved', () => saveWindowState(window));
@@ -107,6 +111,7 @@ export const createMainWindow = () => {
 对于需要多窗口支持的功能：
 
 1. **跟踪窗口**
+
    ```typescript
    export class WindowManager {
      private windows: Map<string, BrowserWindow> = new Map();
@@ -133,6 +138,7 @@ export const createMainWindow = () => {
    ```
 
 2. **窗口间通信**
+
    ```typescript
    // 从一个窗口向另一个窗口发送消息
    sendMessageToWindow(targetWindowId, channel, data) {
@@ -148,9 +154,11 @@ export const createMainWindow = () => {
 通过 IPC 实现窗口操作：
 
 1. **在主进程中注册 IPC 处理器**
+
    ```typescript
    // apps/desktop/src/main/controllers/BrowserWindowsCtr.ts
    import { BrowserWindow } from 'electron';
+
    import { ControllerModule, IpcMethod } from '@/controllers';
 
    export default class BrowserWindowsCtr extends ControllerModule {
@@ -178,10 +186,12 @@ export const createMainWindow = () => {
      }
    }
    ```
+
    - `@IpcMethod()` 根据控制器的 `groupName` 自动将方法映射为 `windows.minimizeWindow` 形式的通道名称。
    - 控制器需继承 `ControllerModule`，并在 `controllers/registry.ts` 中通过 `controllerIpcConstructors` 注册，便于类型生成。
 
 2. **在渲染进程中调用**
+
    ```typescript
    // src/services/electron/windowService.ts
    import { ensureElectronIpc } from '@/utils/electron/ipc';
@@ -194,6 +204,7 @@ export const createMainWindow = () => {
      close: () => ipc.windows.closeWindow(),
    };
    ```
+
    - `ensureElectronIpc()` 会基于 `DesktopIpcServices` 运行时生成 Proxy，并通过 `window.electronAPI.invoke` 与主进程通信；不再直接使用 `dispatch`。
 
 ### 5. 自定义窗口控制 (无边框窗口)
@@ -201,6 +212,7 @@ export const createMainWindow = () => {
 对于自定义窗口标题栏：
 
 1. **创建无边框窗口**
+
    ```typescript
    const window = new BrowserWindow({
      frame: false,
@@ -210,6 +222,7 @@ export const createMainWindow = () => {
    ```
 
 2. **在渲染进程中实现拖拽区域**
+
    ```css
    /* CSS */
    .titlebar {
@@ -229,6 +242,7 @@ export const createMainWindow = () => {
 
 2. **安全性**
    - 始终设置适当的 `webPreferences` 确保安全
+
    ```typescript
    webPreferences: {
      preload: path.join(__dirname, '../preload/index.js'),
@@ -255,6 +269,7 @@ export const createMainWindow = () => {
 ```typescript
 // apps/desktop/src/main/controllers/BrowserWindowsCtr.ts
 import type { OpenSettingsWindowOptions } from '@lobechat/electron-client-ipc';
+
 import { ControllerModule, IpcMethod } from '@/controllers';
 
 export default class BrowserWindowsCtr extends ControllerModule {

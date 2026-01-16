@@ -1,61 +1,18 @@
 'use client';
 
-import {
-  ReactCodePlugin,
-  ReactCodemirrorPlugin,
-  ReactHRPlugin,
-  ReactImagePlugin,
-  ReactLinkPlugin,
-  ReactListPlugin,
-  ReactMathPlugin,
-  ReactTablePlugin,
-} from '@lobehub/editor';
-import { Editor } from '@lobehub/editor/react';
+import { useEditor } from '@lobehub/editor/react';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
-import { useDocumentEditorStore } from './store';
+import { EditorCanvas as SharedEditorCanvas } from '@/features/EditorCanvas';
+import { useChatStore } from '@/store/chat';
+import { chatPortalSelectors } from '@/store/chat/selectors';
 
 const EditorCanvas = memo(() => {
-  const { t } = useTranslation('file');
+  const editor = useEditor();
 
-  const editor = useDocumentEditorStore((s) => s.editor);
-  const handleContentChange = useDocumentEditorStore((s) => s.handleContentChange);
+  const documentId = useChatStore(chatPortalSelectors.portalDocumentId);
 
-  if (!editor) return null;
-
-  return (
-    <div
-      onClick={(e) => {
-        e.stopPropagation();
-        e.preventDefault();
-      }}
-    >
-      <Editor
-        content={''}
-        editor={editor}
-        lineEmptyPlaceholder={t('pageEditor.editorPlaceholder')}
-        onTextChange={handleContentChange}
-        placeholder={t('pageEditor.editorPlaceholder')}
-        plugins={[
-          ReactListPlugin,
-          ReactCodePlugin,
-          ReactCodemirrorPlugin,
-          ReactHRPlugin,
-          ReactLinkPlugin,
-          ReactTablePlugin,
-          ReactMathPlugin,
-          Editor.withProps(ReactImagePlugin, {
-            defaultBlockImage: true,
-          }),
-        ]}
-        style={{
-          paddingBottom: 64,
-        }}
-        type={'text'}
-      />
-    </div>
-  );
+  return <SharedEditorCanvas documentId={documentId} editor={editor} sourceType="notebook" />;
 });
 
 export default EditorCanvas;

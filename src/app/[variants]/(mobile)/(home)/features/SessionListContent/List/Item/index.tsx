@@ -32,7 +32,7 @@ const SessionItem = memo<SessionItemProps>(({ id }) => {
 
   const [active] = useSessionStore((s) => [s.activeId === id]);
   const [loading] = useChatStore((s) => [
-    operationSelectors.isAgentRuntimeRunning(s) && id === s.activeId,
+    operationSelectors.isAgentRuntimeRunning(s) && id === s.activeAgentId,
   ]);
 
   const [pin, title, avatar, avatarBackground, updateAt, members, model, group, sessionType] =

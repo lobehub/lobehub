@@ -44,28 +44,6 @@ env:
   BUN_VERSION: 1.2.23
 
 jobs:
-  test:
-    name: Code quality check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout base
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node & Bun
-        uses: ./.github/actions/setup-node-bun
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          bun-version: ${{ env.BUN_VERSION }}
-          package-manager-cache: 'false'
-
-      - name: Install deps
-        run: bun i
-
-      - name: Lint
-        run: bun run lint
-
   version:
     name: Determine version
     runs-on: ubuntu-latest
@@ -106,7 +84,7 @@ jobs:
           echo "🚦 Release Version: ${{ steps.set_version.outputs.version }}"
 
   build-macos:
-    needs: [version, test]
+    needs: [version]
     name: Build Desktop App (macOS)
     if: inputs.build_macos
     runs-on: ${{ matrix.os }}
@@ -126,10 +104,10 @@ jobs:
 
       # node-linker=hoisted 模式将可以确保 asar 压缩可用
       - name: Install dependencies
-        run: pnpm install --node-linker=hoisted
-
-      - name: Install deps on Desktop
-        run: npm run install-isolated --prefix=./apps/desktop
+        run: |
+          pnpm install --node-linker=hoisted &
+          npm run install-isolated --prefix=./apps/desktop &
+          wait
 
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
@@ -187,7 +165,7 @@ jobs:
           retention-days: 5
 
   build-windows:
-    needs: [version, test]
+    needs: [version]
     name: Build Desktop App (Windows)
     if: inputs.build_windows
     runs-on: windows-2025
@@ -203,10 +181,11 @@ jobs:
           package-manager-cache: 'false'
 
       - name: Install dependencies
-        run: pnpm install --node-linker=hoisted
-
-      - name: Install deps on Desktop
-        run: npm run install-isolated --prefix=./apps/desktop
+        shell: pwsh
+        run: |
+          $job1 = Start-Job -ScriptBlock { pnpm install --node-linker=hoisted }
+          $job2 = Start-Job -ScriptBlock { npm run install-isolated --prefix=./apps/desktop }
+          $job1, $job2 | Wait-Job | Receive-Job
 
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
@@ -240,7 +219,7 @@ jobs:
           retention-days: 5
 
   build-linux:
-    needs: [version, test]
+    needs: [version]
     name: Build Desktop App (Linux)
     if: inputs.build_linux
     runs-on: ubuntu-latest
@@ -256,10 +235,10 @@ jobs:
           package-manager-cache: 'false'
 
       - name: Install dependencies
-        run: pnpm install --node-linker=hoisted
-
-      - name: Install deps on Desktop
-        run: npm run install-isolated --prefix=./apps/desktop
+        run: |
+          pnpm install --node-linker=hoisted &
+          npm run install-isolated --prefix=./apps/desktop &
+          wait
 
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}

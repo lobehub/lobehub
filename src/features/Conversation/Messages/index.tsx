@@ -158,7 +158,7 @@ const MessageItem = memo<MessageItemProps>(
         }
 
         case 'tool': {
-          return <ToolMessage id={id} index={index} />;
+          return <ToolMessage disableEditing={disableEditing} id={id} index={index} />;
         }
       }
 

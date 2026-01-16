@@ -260,6 +260,8 @@ const currentAgentLocalSystemConfig = (s: AgentStoreState): LocalSystemConfig | 
 const currentAgentWorkingDirectory = (s: AgentStoreState): string | undefined =>
   currentAgentLocalSystemConfig(s)?.workingDirectory;
 
+const isCurrentAgentExternal = (s: AgentStoreState): boolean => !currentAgentData(s)?.virtual;
+
 export const agentSelectors = {
   currentAgentAvatar,
   currentAgentBackgroundColor,
@@ -293,6 +295,7 @@ export const agentSelectors = {
   inboxAgentModel,
   isAgentConfigLoading,
   isAgentModeEnabled,
+  isCurrentAgentExternal,
   openingMessage,
   openingQuestions,
 };

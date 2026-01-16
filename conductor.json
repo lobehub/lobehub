@@ -1,0 +1,5 @@
+{
+  "scripts": {
+    "setup": "bash \"$CONDUCTOR_ROOT_PATH/.conductor/setup.sh\""
+  }
+}

@@ -5,7 +5,7 @@ import { memo } from 'react';
 
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
-import { type AssistantQueryParams, DiscoverTab } from '@/types/discover';
+import { type AssistantQueryParams, AssistantSorts, DiscoverTab } from '@/types/discover';
 
 import Pagination from '../features/Pagination';
 import List from './features/List';
@@ -20,7 +20,7 @@ const AssistantPage = memo(() => {
     page,
     pageSize: 21,
     q,
-    sort,
+    sort: sort ?? AssistantSorts.Recommended,
     source,
   });
 

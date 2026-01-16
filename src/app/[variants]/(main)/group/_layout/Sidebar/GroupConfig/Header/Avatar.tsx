@@ -3,15 +3,10 @@
 import { Block } from '@lobehub/ui';
 import { memo } from 'react';
 
-import GroupAvatar from '@/features/GroupAvatar';
+import SupervisorAvatar from '@/app/[variants]/(main)/group/features/GroupAvatar';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
-import { useAgentGroupStore } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
 const HeaderAvatar = memo<{ size?: number }>(() => {
-  const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup);
-  const agents = currentGroup?.agents || [];
-
   const openChatSettings = useOpenChatSettings();
 
   return (
@@ -30,13 +25,7 @@ const HeaderAvatar = memo<{ size?: number }>(() => {
       variant={'borderless'}
       width={32}
     >
-      <GroupAvatar
-        avatars={agents.map((agent) => ({
-          avatar: agent.avatar,
-          background: agent.backgroundColor || undefined,
-        }))}
-        size={28}
-      />
+      <SupervisorAvatar size={28} />
     </Block>
   );
 });

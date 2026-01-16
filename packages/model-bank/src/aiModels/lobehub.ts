@@ -1228,9 +1228,28 @@ const lobehubImageModels: AIImageModelCard[] = [
   },
   {
     description:
+      'Seedream 4.5, built by ByteDance Seed team, supports multi-image editing and composition. Features enhanced subject consistency, precise instruction following, spatial logic understanding, aesthetic expression, poster layout and logo design with high-precision text-image rendering.',
+    displayName: 'Seedream 4.5',
+    enabled: true,
+    id: 'fal-ai/bytedance/seedream/v4.5',
+    parameters: {
+      height: { default: 2048, max: 4096, min: 1920, step: 1 },
+      imageUrls: { default: [], maxCount: 10, maxFileSize: 10 * 1024 * 1024 },
+      prompt: { default: '' },
+      seed: { default: null },
+      width: { default: 2048, max: 4096, min: 1920, step: 1 },
+    },
+    pricing: {
+      units: [{ name: 'imageGeneration', rate: 0.04, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2025-12-04',
+    type: 'image',
+  },
+  {
+    description:
       'Seedream 4.0, built by ByteDance Seed, supports text and image inputs for highly controllable, high-quality image generation from prompts.',
     displayName: 'Seedream 4.0',
-    enabled: true,
+    enabled: false,
     id: 'fal-ai/bytedance/seedream/v4',
     parameters: {
       height: { default: 1024, max: 4096, min: 1024, step: 1 },

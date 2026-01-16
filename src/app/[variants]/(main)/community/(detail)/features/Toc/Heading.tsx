@@ -4,7 +4,6 @@ import { Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { kebabCase } from 'es-toolkit/compat';
 import { Heading2, Heading3, Heading4, Heading5 } from 'lucide-react';
-import Link from 'next/link';
 import {
   Children,
   type ComponentProps,
@@ -92,14 +91,14 @@ const createHeading = (Tag: `h${1 | 2 | 3 | 4 | 5 | 6}`) => {
         id={id}
       >
         {children}
-        <Link
+        <a
           aria-label="Permalink for this section"
           className={styles.anchor}
           href={`#${id}`}
           style={{ scrollMarginTop: 96 }}
         >
           <Icon icon={HeadingIcon[Tag]} />
-        </Link>
+        </a>
       </Tag>
     );
   };

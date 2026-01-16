@@ -83,11 +83,17 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
     // Report agent installation to marketplace if it has a market identifier
     if (identifier) {
       discoverService.reportAgentInstall(identifier);
+      discoverService.reportAgentEvent({
+        event: 'add',
+        identifier,
+        source: location.pathname,
+       })
     }
 
     if (shouldNavigate) {
       console.log(shouldNavigate);
     }
+
     return result;
   };
 

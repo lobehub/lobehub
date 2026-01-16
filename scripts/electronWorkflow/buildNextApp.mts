@@ -20,6 +20,31 @@ const foldersToSymlink = [
 
 const foldersToCopy = ['src', 'scripts'];
 
+// Assets to remove from desktop build output (not needed for Electron app)
+const assetsToRemove = [
+  // Icons & favicons
+  'apple-touch-icon.png',
+  'favicon.ico',
+  'favicon-32x32.ico',
+  'favicon-16x16.png',
+  'favicon-32x32.png',
+
+  // SEO & sitemap
+  'sitemap.xml',
+  'sitemap-index.xml',
+  'sitemap',
+  'robots.txt',
+
+  // Incompatible pages
+  'not-compatible.html',
+  'not-compatible',
+
+  // Large media assets
+  'videos',
+  'screenshots',
+  'og',
+];
+
 const filesToCopy = [
   'package.json',
   'tsconfig.json',
@@ -85,10 +110,13 @@ const build = async () => {
 
   console.log('🏗  Running next build in shadow workspace...');
   try {
-    execSync('next build --webpack', {
+    execSync('next build', {
       cwd: TEMP_DIR,
       env: {
         ...process.env,
+        // Pass PROJECT_ROOT to next.config.ts for outputFileTracingRoot
+        // This fixes Turbopack symlink resolution when building in shadow workspace
+        ELECTRON_BUILD_PROJECT_ROOT: PROJECT_ROOT,
         NODE_OPTIONS: process.env.NODE_OPTIONS || '--max-old-space-size=8192',
       },
       stdio: 'inherit',
@@ -106,6 +134,16 @@ const build = async () => {
     if (fs.existsSync(sourceOutDir)) {
       console.log('📦 Moving "out" directory...');
       await fs.move(sourceOutDir, targetOutDir);
+
+      // Remove unnecessary assets from desktop build
+      console.log('🗑️  Removing unnecessary assets...');
+      for (const asset of assetsToRemove) {
+        const assetPath = path.join(targetOutDir, asset);
+        if (fs.existsSync(assetPath)) {
+          await fs.remove(assetPath);
+          console.log(`   Removed: ${asset}`);
+        }
+      }
     } else {
       console.warn("⚠️ 'out' directory not found. Using '.next' instead (fallback)?");
       const sourceNextDir = path.join(TEMP_DIR, '.next');

@@ -226,7 +226,9 @@ export class AiInfraRepos {
               enabled: typeof user.enabled === 'boolean' ? user.enabled : item.enabled,
               id: item.id,
               providerId: provider.id,
-              settings: user.settings || item.settings,
+              settings: isEmpty(user.settings)
+                ? item.settings
+                : merge(item.settings || {}, user.settings || {}),
               sort: user.sort || undefined,
               type: user.type || item.type,
             };

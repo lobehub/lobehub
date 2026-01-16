@@ -9,7 +9,7 @@ type EventCallback = (events: StreamEvent[]) => void;
 
 /**
  * In-Memory Stream Event Manager
- * 内存实现，用于测试和本地开发环境
+ * In-memory implementation for testing and local development environments
  */
 export class InMemoryStreamEventManager implements IStreamEventManager {
   private streams: Map<string, StreamEvent[]> = new Map();
@@ -34,7 +34,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
       timestamp: Date.now(),
     };
 
-    // 获取或创建 stream
+    // Get or create stream
     let stream = this.streams.get(operationId);
     if (!stream) {
       stream = [];
@@ -43,14 +43,14 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
 
     stream.push(eventData);
 
-    // 限制流长度，防止内存溢出
+    // Limit stream length to prevent memory overflow
     if (stream.length > 1000) {
       stream.shift();
     }
 
     log('Published event %s for operation %s:%d', eventData.type, operationId, eventData.stepIndex);
 
-    // 通知订阅者
+    // Notify subscribers
     const callbacks = this.subscribers.get(operationId);
     if (callbacks) {
       for (const callback of callbacks) {
@@ -111,7 +111,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
       return [];
     }
 
-    // 返回最近的 count 条事件（倒序）
+    // Return most recent count events (in reverse order)
     return stream.slice(-count).reverse();
   }
 
@@ -126,12 +126,12 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
   }
 
   async disconnect(): Promise<void> {
-    // 内存实现无需断开连接
+    // In-memory implementation doesn't need to disconnect
     log('InMemoryStreamEventManager disconnected');
   }
 
   /**
-   * 订阅流式事件（用于测试）
+   * Subscribe to stream events (for testing)
    */
   subscribe(operationId: string, callback: EventCallback): () => void {
     let callbacks = this.subscribers.get(operationId);
@@ -141,7 +141,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
     }
     callbacks.push(callback);
 
-    // 返回取消订阅函数
+    // Return unsubscribe function
     return () => {
       const cbs = this.subscribers.get(operationId);
       if (cbs) {
@@ -154,7 +154,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
   }
 
   /**
-   * 清空所有数据（用于测试）
+   * Clear all data (for testing)
    */
   clear(): void {
     this.streams.clear();
@@ -164,14 +164,14 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
   }
 
   /**
-   * 获取所有事件（用于测试验证）
+   * Get all events (for test verification)
    */
   getAllEvents(operationId: string): StreamEvent[] {
     return this.streams.get(operationId) ?? [];
   }
 
   /**
-   * 等待特定类型的事件（用于测试）
+   * Wait for a specific event type (for testing)
    */
   waitForEvent(
     operationId: string,
@@ -196,7 +196,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
         }
       });
 
-      // 检查已有事件
+      // Check existing events
       const existingEvents = this.streams.get(operationId) ?? [];
       for (const event of existingEvents) {
         if (event.type === eventType) {
@@ -211,6 +211,6 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
 }
 
 /**
- * 单例实例，用于测试和本地开发环境
+ * Singleton instance for testing and local development environments
  */
 export const inMemoryStreamEventManager = new InMemoryStreamEventManager();

@@ -1,6 +1,5 @@
 ---
-description: Project directory structure overview
-alwaysApply: false
+alwaysApply: true
 ---
 
 # LobeChat Project Structure
@@ -27,6 +26,11 @@ lobe-chat/
 │   ├── agent-runtime/
 │   ├── builtin-agents/
 │   ├── builtin-tool-*/           # builtin tool packages
+│   ├── business/                 # cloud-only business logic packages
+│   │   ├── config/
+│   │   ├── const/
+│   │   └── model-runtime/
+│   ├── config/
 │   ├── const/
 │   ├── context-engine/
 │   ├── conversation-flow/
@@ -36,6 +40,8 @@ lobe-chat/
 │   │       ├── schemas/
 │   │       └── repositories/
 │   ├── desktop-bridge/
+│   ├── edge-config/
+│   ├── editor-runtime/
 │   ├── electron-client-ipc/
 │   ├── electron-server-ipc/
 │   ├── fetch-sse/
@@ -46,7 +52,7 @@ lobe-chat/
 │   │   └── src/
 │   │       ├── core/
 │   │       └── providers/
-│   ├── obervability-otel/
+│   ├── observability-otel/
 │   ├── prompts/
 │   ├── python-interpreter/
 │   ├── ssrf-safe-fetch/
@@ -72,6 +78,10 @@ lobe-chat/
 │   │   │   ├── onboarding/
 │   │   │   └── router/
 │   │   └── desktop/
+│   ├── business/                 # cloud-only business logic (client/server)
+│   │   ├── client/
+│   │   ├── locales/
+│   │   └── server/
 │   ├── components/
 │   ├── config/
 │   ├── const/
@@ -130,6 +140,9 @@ lobe-chat/
   - Repository (bff-queries): `packages/database/src/repositories`
 - Third-party Integrations: `src/libs` — analytics, oidc etc.
 - Builtin Tools: `src/tools`, `packages/builtin-tool-*`
+- Business (cloud-only): Code specific to LobeHub cloud service, only expose empty interfaces for opens-source version.
+  - `src/business/*`
+  - `packages/business/*`
 
 ## Data Flow Architecture
 

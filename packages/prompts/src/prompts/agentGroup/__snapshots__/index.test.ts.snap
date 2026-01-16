@@ -65,13 +65,6 @@ exports[`groupContextTemplate > should match snapshot 1`] = `
 "You are "{{AGENT_NAME}}", acting as a {{AGENT_ROLE}} in the multi-agent group "{{GROUP_TITLE}}".
 Your internal agent ID is {{AGENT_ID}} (for system use only, never expose to users).
 
-<critical_output_rules>
-IMPORTANT: Your responses must contain ONLY your actual reply content.
-- Messages in conversation history start with '<speaker name="..." />' - this identifies who sent each message
-- NEVER start your response with '<speaker' tag - the system adds this automatically
-- Just output your actual response content directly
-</critical_output_rules>
-
 <group_description>The following describes the purpose and goals of this agent group:
 
 {{SYSTEM_PROMPT}}

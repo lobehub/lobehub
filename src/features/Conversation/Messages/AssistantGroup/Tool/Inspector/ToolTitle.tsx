@@ -38,15 +38,6 @@ const ToolTitle = memo<ToolTitleProps>(({ identifier, apiName, isLoading, isAbor
   const isBuiltinPlugin = builtinToolIdentifiers.includes(identifier);
   const pluginTitle = pluginHelpers.getPluginTitle(pluginMeta) ?? t('unknownPlugin');
 
-  // Debug logging for LobeHub Skill title issue
-  console.log('[ToolTitle Debug]', {
-    apiName,
-    identifier,
-    isBuiltinPlugin,
-    pluginMeta,
-    pluginTitle,
-  });
-
   return (
     <div
       className={cx(

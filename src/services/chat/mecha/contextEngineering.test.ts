@@ -448,7 +448,7 @@ describe('contextEngineering', () => {
       ];
 
       // Mock topic memories and global identities separately
-      vi.spyOn(memoryManager, 'resolveTopicMemories').mockResolvedValue({
+      vi.spyOn(memoryManager, 'resolveTopicMemories').mockReturnValue({
         contexts: [
           {
             accessedAt: new Date('2024-01-01T00:00:00.000Z'),

@@ -7,6 +7,7 @@ import GroupSkeleton from '@/app/[variants]/(main)/home/features/components/Grou
 import { RECENT_BLOCK_SIZE } from '@/app/[variants]/(main)/home/features/const';
 import { useHomeStore } from '@/store/home';
 import { homeRecentSelectors } from '@/store/home/selectors';
+import { standardizeIdentifier } from '@/utils/identifier';
 
 import RecentPageItem from './Item';
 
@@ -22,7 +23,7 @@ const RecentPageList = memo(() => {
   }
 
   return documents.map((document) => {
-    const pageUrl = `/page/${document.id}`;
+    const pageUrl = `/page/${standardizeIdentifier(document.id)}`;
 
     return (
       <Link

@@ -2,8 +2,8 @@
 
 import { Button } from '@lobehub/ui';
 import { ChevronLeftIcon } from 'lucide-react';
-import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import Link from '@/libs/next/Link';
+import { useSearchParams } from '@/libs/next/navigation';
 import { useTranslation } from 'react-i18next';
 
 import AuthCard from '../../../../features/AuthCard';
