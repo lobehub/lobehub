@@ -48,6 +48,132 @@ export const marketRouter = router({
   // ============================== Agent Group Management (authenticated) ==============================
   agentGroup: agentGroupRouter,
 
+  // ============================== Group Agent Market (Discovery) ==============================
+  getGroupAgentCategories: marketProcedure
+    .input(
+      z
+        .object({
+          locale: z.string().optional(),
+          q: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input, ctx }) => {
+      log('getGroupAgentCategories input: %O', input);
+
+      try {
+        return await ctx.discoverService.getGroupAgentCategories(input);
+      } catch (error) {
+        log('Error fetching group agent categories: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch group agent categories',
+        });
+      }
+    }),
+
+  getGroupAgentDetail: marketProcedure
+    .input(
+      z.object({
+        identifier: z.string(),
+        locale: z.string().optional(),
+        version: z.string().optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      log('getGroupAgentDetail input: %O', input);
+
+      try {
+        return await ctx.discoverService.getGroupAgentDetail(input);
+      } catch (error) {
+        log('Error fetching group agent detail: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch group agent detail',
+        });
+      }
+    }),
+
+  getGroupAgentIdentifiers: marketProcedure.query(async ({ ctx }) => {
+    log('getGroupAgentIdentifiers called');
+
+    try {
+      return await ctx.discoverService.getGroupAgentIdentifiers();
+    } catch (error) {
+      log('Error fetching group agent identifiers: %O', error);
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch group agent identifiers',
+      });
+    }
+  }),
+
+  getGroupAgentList: marketProcedure
+    .input(
+      z
+        .object({
+          category: z.string().optional(),
+          locale: z.string().optional(),
+          order: z.enum(['asc', 'desc']).optional(),
+          ownerId: z.string().optional(),
+          page: z.number().optional(),
+          pageSize: z.number().optional(),
+          q: z.string().optional(),
+          sort: z.enum(['createdAt', 'updatedAt', 'name', 'recommended']).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input, ctx }) => {
+      log('getGroupAgentList input: %O', input);
+
+      try {
+        return await ctx.discoverService.getGroupAgentList(input);
+      } catch (error) {
+        log('Error fetching group agent list: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch group agent list',
+        });
+      }
+    }),
+
+  reportGroupAgentEvent: marketProcedure
+    .input(
+      z.object({
+        event: z.enum(['add', 'chat', 'click']),
+        identifier: z.string(),
+        source: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      log('reportGroupAgentEvent input: %O', input);
+
+      try {
+        await ctx.discoverService.createGroupAgentEvent(input);
+        return { success: true };
+      } catch (error) {
+        console.error('Error reporting Group Agent event: %O', error);
+        return { success: false };
+      }
+    }),
+
+  reportGroupAgentInstall: marketProcedure
+    .input(
+      z.object({
+        identifier: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      log('reportGroupAgentInstall input: %O', input);
+      try {
+        await ctx.discoverService.increaseGroupAgentInstallCount(input.identifier);
+        return { success: true };
+      } catch (error) {
+        log('Error reporting group agent installation: %O', error);
+        return { success: false };
+      }
+    }),
+
   // ============================== Assistant Market ==============================
   getAssistantCategories: marketProcedure
     .input(

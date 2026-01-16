@@ -170,6 +170,13 @@ export const desktopRoutes: RouteConfig[] = [
               },
               {
                 element: dynamicElement(
+                  () => import('../(main)/community/(detail)/group_agent'),
+                  'Desktop > Discover > Detail > Group Agent',
+                ),
+                path: 'group_agent/:slug',
+              },
+              {
+                element: dynamicElement(
                   () => import('../(main)/community/(detail)/model'),
                   'Desktop > Discover > Detail > Model',
                 ),

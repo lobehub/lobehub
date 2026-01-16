@@ -1788,4 +1788,86 @@ export class DiscoverService {
       return undefined;
     }
   };
+
+  // ============================== Group Agent Market Methods ==============================
+
+  getGroupAgentCategories = async (params?: CategoryListQuery) => {
+    try {
+      const response = await this.market.agentGroups.getAgentGroupCategories?.(params);
+      return response;
+    } catch (error) {
+      log('getGroupAgentCategories: error: %O', error);
+      return { items: [] };
+    }
+  };
+
+  getGroupAgentDetail = async (params: {
+    identifier: string;
+    locale?: string;
+    version?: string;
+  }) => {
+    try {
+      const response = await this.market.agentGroups.getAgentGroupDetail(params.identifier, {
+        locale: params.locale,
+        version: params.version ? Number(params.version) : undefined,
+      });
+      return response;
+    } catch (error) {
+      log('getGroupAgentDetail: error: %O', error);
+      throw error;
+    }
+  };
+
+  getGroupAgentIdentifiers = async () => {
+    try {
+      const response = await this.market.agentGroups.getAgentGroupIdentifiers?.();
+      return response || { identifiers: [] };
+    } catch (error) {
+      log('getGroupAgentIdentifiers: error: %O', error);
+      return { identifiers: [] };
+    }
+  };
+
+  getGroupAgentList = async (params?: {
+    category?: string;
+    locale?: string;
+    order?: 'asc' | 'desc';
+    ownerId?: string;
+    page?: number;
+    pageSize?: number;
+    q?: string;
+    sort?: 'createdAt' | 'updatedAt' | 'name' | 'recommended';
+  }) => {
+    try {
+      const response = await this.market.agentGroups.getAgentGroupList({
+        ...params,
+        status: 'published' as any,
+        visibility: 'public' as any,
+      });
+      return response;
+    } catch (error) {
+      log('getGroupAgentList: error: %O', error);
+      return { currentPage: 1, items: [], totalCount: 0, totalPages: 1 };
+    }
+  };
+
+  createGroupAgentEvent = async (params: {
+    event: 'add' | 'chat' | 'click';
+    identifier: string;
+    source?: string;
+  }) => {
+    try {
+      await this.market.agentGroups.createAgentGroupEvent?.(params);
+    } catch (error) {
+      log('createGroupAgentEvent: error: %O', error);
+    }
+  };
+
+  increaseGroupAgentInstallCount = async (identifier: string) => {
+    try {
+      await this.market.agentGroups.increaseInstallCount?.(identifier);
+    } catch (error) {
+      log('increaseGroupAgentInstallCount: error: %O', error);
+    }
+  };
 }

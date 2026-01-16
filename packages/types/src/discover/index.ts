@@ -1,6 +1,7 @@
 import { DiscoverAssistantItem } from './assistants';
 
 export * from './assistants';
+export * from './groupAgents';
 export * from './mcp';
 export * from './models';
 export * from './plugins';
@@ -8,6 +9,7 @@ export * from './providers';
 
 export enum DiscoverTab {
   Assistants = 'assistant',
+  GroupAgents = 'group_agent',
   Home = 'home',
   Mcp = 'mcp',
   Models = 'model',
