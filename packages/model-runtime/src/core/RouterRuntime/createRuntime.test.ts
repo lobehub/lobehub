@@ -276,7 +276,7 @@ describe('createRouterRuntime', () => {
   describe('dynamic routers configuration', () => {
     it('should support function-based routers configuration', async () => {
       class MockRuntime implements LobeRuntimeAI {
-        chat = vi.fn();
+        chat = vi.fn().mockResolvedValue('chat-response');
         models = vi.fn();
         embeddings = vi.fn();
         textToSpeech = vi.fn();
