@@ -130,7 +130,6 @@ export const PageEditor: FC<PageEditorProps> = ({
       <EditorProvider>
         <PageEditorProvider
           emoji={emoji}
-          key={pageId}
           knowledgeBaseId={knowledgeBaseId}
           onBack={onBack}
           onDelete={() => deletePage(pageId || '')}
@@ -141,7 +140,7 @@ export const PageEditor: FC<PageEditorProps> = ({
           pageId={pageId}
           title={title}
         >
-          <PageEditorCanvas />
+          <PageEditorCanvas key={pageId} />
         </PageEditorProvider>
       </EditorProvider>
     </PageAgentProvider>
