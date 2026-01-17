@@ -104,6 +104,13 @@ export class UpdaterManager {
 
     this.checking = true;
     this.isManualCheck = manual;
+
+    // Ensure allowPrerelease is correctly set before each check
+    // This guards against any internal state reset by electron-updater
+    if (!isStableChannel) {
+      autoUpdater.allowPrerelease = true;
+    }
+
     logger.info(`${manual ? 'Manually checking' : 'Auto checking'} for updates...`);
 
     // If manual check, notify renderer process about check start
@@ -340,13 +347,22 @@ export class UpdaterManager {
       logger.info(`Configuring GitHub provider for ${channel} channel ${reason}`);
       logger.info(`Channel set to: latest (will look for latest-mac.yml)`);
 
+      // For beta/nightly channels, we need prerelease versions
+      const needPrerelease = channel !== 'stable';
+
       autoUpdater.setFeedURL({
         owner: githubConfig.owner,
         provider: 'github',
         repo: githubConfig.repo,
       });
 
-      logger.info(`GitHub update URL configured: ${githubConfig.owner}/${githubConfig.repo}`);
+      // Ensure allowPrerelease is set correctly after setFeedURL
+      // setFeedURL may reset some internal states
+      autoUpdater.allowPrerelease = needPrerelease;
+
+      logger.info(
+        `GitHub update URL configured: ${githubConfig.owner}/${githubConfig.repo}, allowPrerelease=${needPrerelease}`,
+      );
     }
   }
 

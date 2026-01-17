@@ -241,8 +241,8 @@ const transformGoogleGenerativeAIStream = (
         {
           data: {
             citations: groundingChunks?.map((chunk) => ({
-              // google 返回的 uri 是经过 google 自己处理过的 url，因此无法展现真实的 favicon
-              // 需要使用 title 作为替换
+              // Google returns a uri processed by Google itself, so it cannot display the real favicon
+              // Need to use title as a replacement
               favicon: chunk.web?.title,
               title: chunk.web?.title,
               url: chunk.web?.uri,
@@ -293,7 +293,7 @@ const transformGoogleGenerativeAIStream = (
           ...usageChunks,
         ].filter(Boolean) as StreamProtocolChunk[];
       }
-      // 当有 finishReason 但没有 text 内容时,发送一个空的 text 块以停止加载动画
+      // When there is finishReason but no text content, send an empty text chunk to stop the loading animation
       return [
         { data: '', id: context?.id, type: 'text' },
         { data: candidate.finishReason, id: context?.id, type: 'stop' },
@@ -312,7 +312,7 @@ const transformGoogleGenerativeAIStream = (
 
 export interface GoogleAIStreamOptions {
   callbacks?: ChatStreamCallbacks;
-  enableStreaming?: boolean; // 选择 TPS 计算方式（非流式时传 false）
+  enableStreaming?: boolean; // Select TPS calculation method (pass false for non-streaming)
   inputStartAt?: number;
   payload?: ChatPayloadForTransformStream;
 }

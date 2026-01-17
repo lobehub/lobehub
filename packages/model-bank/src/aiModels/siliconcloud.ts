@@ -9,7 +9,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'GLM-4.7 是智谱新一代旗舰模型，总参数量 355B，激活参数量 32B，在通用对话、推理和智能体能力方面全面升级。GLM-4.7 增强了 Interleaved Thinking（交错思考），并引入了 Preserved Thinking（保留思考）和 Turn-level Thinking（轮级思考）。',
+      "GLM-4.7 is Zhipu's new generation flagship model with 355B total parameters and 32B active parameters, fully upgraded in general dialogue, reasoning, and agent capabilities. GLM-4.7 enhances Interleaved Thinking and introduces Preserved Thinking and Turn-level Thinking.",
     displayName: 'GLM-4.7 (Pro)',
     id: 'Pro/zai-org/glm-4.7',
     pricing: {

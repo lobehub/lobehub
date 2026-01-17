@@ -51,7 +51,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'MiniMax-M2.1 是 MiniMax 系列的最新版本，专为多语言编程和真实世界复杂任务优化。作为一款 AI 原生模型，MiniMax-M2.1 在模型性能、智能体框架支持以及多场景适配方面实现了显著提升，旨在帮助企业和个人更快地找到 AI 原生的工作与生活方式。',
+      'MiniMax-M2.1 is the latest version of the MiniMax series, optimized for multilingual programming and real-world complex tasks. As an AI-native model, MiniMax-M2.1 achieves significant improvements in model performance, agent framework support, and multi-scenario adaptation, aiming to help enterprises and individuals find AI-native work and lifestyle more quickly.',
     displayName: 'MiniMax M2.1',
     enabled: true,
     id: 'minimax-m2.1',
@@ -72,7 +72,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'MiniMax-M2 是一款专为编码与智能体工作流优化的专家混合（MoE）语言模型，具有约 230B 总参数与约 10B 活跃参数。它在保持强通用智能的同时，针对多文件编辑、代码-运行-修复闭环、测试校验修复等开发者场景进行深度增强，在终端、IDE 与 CI 等真实环境中表现稳定、高效。',
+      'MiniMax-M2 is a Mixture of Experts (MoE) language model optimized for coding and agent workflows, with approximately 230B total parameters and approximately 10B active parameters. While maintaining strong general intelligence, it is deeply enhanced for developer scenarios such as multi-file editing, code-run-fix loops, and test validation fixes, demonstrating stable and efficient performance in real environments like terminals, IDEs, and CI.',
     displayName: 'MiniMax M2',
     id: 'minimax-m2',
     maxOutput: 200_000,

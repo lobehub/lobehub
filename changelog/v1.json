@@ -1,5 +1,10 @@
 [
   {
+    "children": {},
+    "date": "2026-01-17",
+    "version": "2.0.0-next.301"
+  },
+  {
     "children": {
       "fixes": ["Fix supervisor group prompt."]
     },

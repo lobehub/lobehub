@@ -1,6 +1,6 @@
 import { type ModelProviderCard } from '@/types/llm';
 
-// ref: https://platform.moonshot.cn/docs/intro#模型列表
+// ref: https://platform.moonshot.cn/docs/intro#model-list
 const Moonshot: ModelProviderCard = {
   chatModels: [],
   checkModel: 'kimi-latest',

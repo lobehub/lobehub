@@ -402,25 +402,25 @@ export const createFirstErrorHandleTransformer = (
 export const createSSEDataExtractor = () =>
   new TransformStream({
     transform(chunk: Uint8Array, controller) {
-      // 将 Uint8Array 转换为字符串
+      // Convert Uint8Array to string
       const text = new TextDecoder().decode(chunk, { stream: true });
 
-      // 处理多行数据的情况
+      // Handle multi-line data case
       const lines = text.split('\n');
 
       for (const line of lines) {
-        // 只处理以 "data: " 开头的行
+        // Only process lines starting with "data: "
         if (line.startsWith('data: ')) {
-          // 提取 "data: " 后面的实际数据
+          // Extract the actual data after "data: "
           const jsonText = line.slice(6);
 
-          // 跳过心跳消息
+          // Skip heartbeat messages
           if (jsonText === '[DONE]') continue;
 
           try {
-            // 解析 JSON 数据
+            // Parse JSON data
             const data = JSON.parse(jsonText);
-            // 将解析后的数据传递给下一个处理器
+            // Pass parsed data to the next processor
             controller.enqueue(data);
           } catch {
             console.warn('Failed to parse SSE data:', jsonText);
@@ -441,7 +441,7 @@ export const createTokenSpeedCalculator = (
   {
     inputStartAt,
     streamStack,
-    enableStreaming = true, // 选择 TPS 计算方式（非流式时传 false）
+    enableStreaming = true, // Select TPS calculation method (pass false for non-streaming)
   }: { enableStreaming?: boolean; inputStartAt?: number; streamStack?: StreamContext } = {},
 ) => {
   let outputStartAt: number | undefined;
