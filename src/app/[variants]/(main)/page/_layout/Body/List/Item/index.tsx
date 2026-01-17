@@ -1,6 +1,6 @@
 import { Avatar, Icon } from '@lobehub/ui';
 import { FileTextIcon } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { type MouseEvent, memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -36,11 +36,16 @@ const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
     [pageId, setRenamingPageId],
   );
 
-  const handleClick = useCallback(() => {
-    if (!editing) {
-      selectPage(pageId);
-    }
-  }, [editing, selectPage, pageId]);
+  const handleClick = useCallback(
+    (e: MouseEvent) => {
+      // Skip navigation in current tab when opening in new tab
+      if (e.metaKey || e.ctrlKey) return;
+      if (!editing) {
+        selectPage(pageId);
+      }
+    },
+    [editing, selectPage, pageId],
+  );
 
   // Icon with emoji support
   const icon = useMemo(() => {
