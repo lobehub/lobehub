@@ -1,7 +1,8 @@
 import { Flexbox, TooltipGroup } from '@lobehub/ui';
-import React, { memo } from 'react';
+import React, { Suspense, memo } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
+import Loading from '@/components/Loading/BrandTextLoading';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -25,14 +26,20 @@ const ChatConversation = memo(() => {
   const { handleUploadFiles } = useUploadFiles({ model, provider });
 
   return (
-    <DragUploadZone onUploadFiles={handleUploadFiles} style={wrapperStyle}>
-      <Flexbox height={'100%'} style={{ overflow: 'hidden', position: 'relative' }} width={'100%'}>
-        {showHeader && <ChatHeader />}
-        <TooltipGroup>
-          <ConversationArea />
-        </TooltipGroup>
-      </Flexbox>
-    </DragUploadZone>
+    <Suspense fallback={<Loading debugId="Agent > ChatConversation" />}>
+      <DragUploadZone onUploadFiles={handleUploadFiles} style={wrapperStyle}>
+        <Flexbox
+          height={'100%'}
+          style={{ overflow: 'hidden', position: 'relative' }}
+          width={'100%'}
+        >
+          {showHeader && <ChatHeader />}
+          <TooltipGroup>
+            <ConversationArea />
+          </TooltipGroup>
+        </Flexbox>
+      </DragUploadZone>
+    </Suspense>
   );
 });
 

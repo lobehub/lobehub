@@ -14,6 +14,9 @@ export { AgentBuilderInterventions } from './Intervention';
 // Render components (read-only snapshots)
 export { AgentBuilderRenders } from './Render';
 
+// Streaming components (real-time tool execution feedback)
+export { AgentBuilderStreamings } from './Streaming';
+
 // Re-export types and manifest for convenience
 export { AgentBuilderManifest } from '../manifest';
 export * from '../types';
