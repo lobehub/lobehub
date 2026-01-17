@@ -8,7 +8,9 @@ import { CustomWorld } from '../../support/world';
 // ============================================
 
 Given('I wait for the page to fully load', async function (this: CustomWorld) {
-  await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
+   // Use domcontentloaded instead of networkidle to avoid hanging on persistent connections
+  await this.page.waitForLoadState('domcontentloaded', { timeout: 10_000 });
+  // Short wait for React hydration
   await this.page.waitForTimeout(1000);
 });
 
