@@ -7,7 +7,6 @@ import {
 
 export const params = {
     baseURL: 'https://api.n1n.ai/v1',
-    id: ModelProvider.N1N,
     provider: ModelProvider.N1N,
 } satisfies OpenAICompatibleFactoryOptions;
 

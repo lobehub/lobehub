@@ -32,6 +32,7 @@ const DallE = memo<BuiltinRenderProps<DallEImageItem[]>>(({ content, messageId }
       <PreviewGroup
         preview={{
           // 切换图片时设置
+          // @ts-ignore
           onChange: (current: number) => {
             currentRef.current = current;
           },
