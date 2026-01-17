@@ -59,4 +59,7 @@ export const n1nChatModels: AIChatModelCard[] = [
         id: 'deepseek-reasoner_repeat_n1n',
         type: 'chat',
     },
+    },
 ];
+
+export default n1nChatModels;
