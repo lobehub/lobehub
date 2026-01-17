@@ -3,7 +3,7 @@
 import { isDesktop } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Suspense, memo } from 'react';
+import { memo } from 'react';
 
 import NavHeader from '@/features/NavHeader';
 
@@ -25,9 +25,7 @@ const Header = memo(() => {
         <Flexbox align={'center'} horizontal style={{ backgroundColor: cssVar.colorBgContainer }}>
           {isDesktop && <WorkingDirectory />}
           <NotebookButton />
-          <Suspense>
-            <ShareButton />
-          </Suspense>
+          <ShareButton />
           <HeaderActions />
         </Flexbox>
       }
