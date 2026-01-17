@@ -140,7 +140,7 @@ export const PageEditor: FC<PageEditorProps> = ({
           pageId={pageId}
           title={title}
         >
-          <PageEditorCanvas key={pageId} />
+          <PageEditorCanvas />
         </PageEditorProvider>
       </EditorProvider>
     </PageAgentProvider>
