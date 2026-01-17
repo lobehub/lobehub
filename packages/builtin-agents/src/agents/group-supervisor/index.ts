@@ -11,7 +11,9 @@ import type { GroupSupervisorContext } from './type';
  * Replace template variables in system role
  */
 const resolveSystemRole = (ctx: GroupSupervisorContext): string => {
-  return supervisorSystemRole.replace('{{GROUP_TITLE}}', ctx.groupTitle);
+  return supervisorSystemRole
+    .replace('{{GROUP_TITLE}}', ctx.groupTitle)
+    .replace('{{SYSTEM_PROMPT}}', ctx.systemPrompt || '');
 };
 
 /**

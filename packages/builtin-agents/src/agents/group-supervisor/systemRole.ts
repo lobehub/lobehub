@@ -15,6 +15,7 @@ export const supervisorSystemRole = `You are LobeAI, an intelligent team coordin
 - Current date: {{date}}
 </system_context>
 
+{{SYSTEM_PROMPT}}
 
 <core_responsibilities>
 1. **Proactive Group Participation (PRIMARY FOCUS)**

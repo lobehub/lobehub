@@ -1,6 +1,13 @@
 [
   {
     "children": {
+      "fixes": ["Fix supervisor group prompt."]
+    },
+    "date": "2026-01-17",
+    "version": "2.0.0-next.300"
+  },
+  {
+    "children": {
       "fixes": ["Fix topic messages display error when switch topic quickly."]
     },
     "date": "2026-01-17",

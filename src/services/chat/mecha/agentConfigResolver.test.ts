@@ -730,7 +730,7 @@ describe('resolveAgentConfig', () => {
             ],
             groupId: 'group-123',
             groupTitle: 'Test Group',
-            systemPrompt: 'Custom group system prompt',
+            systemPrompt: 'You are a helpful assistant',
           },
         }),
       );

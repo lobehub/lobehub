@@ -1,19 +1,17 @@
 import { Icon, type MenuProps } from '@lobehub/ui';
 import { App } from 'antd';
-import { Copy, CopyPlus, Pencil, Trash2 } from 'lucide-react';
+import { CopyPlus, Pencil, Trash2 } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePageStore } from '@/store/page';
 
 interface ActionProps {
-  documentContent?: string;
   pageId: string;
   toggleEditing: (visible?: boolean) => void;
 }
 
 export const useDropdownMenu = ({
-  documentContent,
   pageId,
   toggleEditing,
 }: ActionProps): (() => MenuProps['items']) => {
@@ -41,16 +39,6 @@ export const useDropdownMenu = ({
     });
   };
 
-  const handleCopy = async () => {
-    if (documentContent) {
-      try {
-        await navigator.clipboard.writeText(documentContent);
-      } catch (error) {
-        console.error('Failed to copy page:', error);
-      }
-    }
-  };
-
   const handleDuplicate = async () => {
     try {
       await duplicatePage(pageId);
@@ -68,12 +56,12 @@ export const useDropdownMenu = ({
           label: t('rename'),
           onClick: () => toggleEditing(true),
         },
-        {
-          icon: <Icon icon={Copy} />,
-          key: 'copy',
-          label: t('pageList.copyContent', { ns: 'file' }),
-          onClick: handleCopy,
-        },
+        // {
+        //   icon: <Icon icon={Copy} />,
+        //   key: 'copy',
+        //   label: t('pageList.copyContent', { ns: 'file' }),
+        //   onClick: handleCopy,
+        // },
         {
           icon: <Icon icon={CopyPlus} />,
           key: 'duplicate',
@@ -89,6 +77,6 @@ export const useDropdownMenu = ({
           onClick: handleDelete,
         },
       ].filter(Boolean) as MenuProps['items'],
-    [t, toggleEditing, handleCopy, handleDuplicate, handleDelete],
+    [t, toggleEditing, handleDuplicate, handleDelete],
   );
 };

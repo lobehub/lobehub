@@ -130,7 +130,6 @@ export const PageEditor: FC<PageEditorProps> = ({
       <EditorProvider>
         <PageEditorProvider
           emoji={emoji}
-          key={pageId}
           knowledgeBaseId={knowledgeBaseId}
           onBack={onBack}
           onDelete={() => deletePage(pageId || '')}

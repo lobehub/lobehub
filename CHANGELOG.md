@@ -2,6 +2,31 @@
 
 # Changelog
 
+## [Version 2.0.0-next.300](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.299...v2.0.0-next.300)
+
+<sup>Released on **2026-01-17**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix supervisor group prompt.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fix supervisor group prompt, closes [#11543](https://github.com/lobehub/lobe-chat/issues/11543) ([3a6efbc](https://github.com/lobehub/lobe-chat/commit/3a6efbc))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.299](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.298...v2.0.0-next.299)
 
 <sup>Released on **2026-01-17**</sup>
