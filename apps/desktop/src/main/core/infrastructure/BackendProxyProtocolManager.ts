@@ -163,13 +163,14 @@ export class BackendProxyProtocolManager {
         responseHeaders.set('Access-Control-Allow-Headers', '*');
         responseHeaders.set('X-Src-Url', rewrittenUrl);
 
-        // Handle 401 Unauthorized: notify authorization required regardless of token presence
-        // This covers cases where:
-        // 1. No token exists
-        // 2. Token has expired
-        // 3. Token has been revoked server-side
+        // Handle 401 Unauthorized: only notify authorization required for real auth failures
+        // The server sets X-Auth-Required header for real authentication failures (e.g., token expired)
+        // Other 401 errors (e.g., invalid API keys) should not trigger re-authentication
         if (upstreamResponse.status === 401) {
-          this.notifyAuthorizationRequired();
+          const authRequired = upstreamResponse.headers.get('X-Auth-Required') === 'true';
+          if (authRequired) {
+            this.notifyAuthorizationRequired();
+          }
         }
 
         return new Response(upstreamResponse.body, {

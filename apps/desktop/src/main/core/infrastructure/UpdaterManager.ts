@@ -113,6 +113,18 @@ export class UpdaterManager {
 
     logger.info(`${manual ? 'Manually checking' : 'Auto checking'} for updates...`);
 
+    // Log detailed updater configuration for debugging
+    logger.info('[Updater Config] Channel:', autoUpdater.channel);
+    logger.info('[Updater Config] allowPrerelease:', autoUpdater.allowPrerelease);
+    logger.info('[Updater Config] allowDowngrade:', autoUpdater.allowDowngrade);
+    logger.info('[Updater Config] autoDownload:', autoUpdater.autoDownload);
+    logger.info('[Updater Config] forceDevUpdateConfig:', autoUpdater.forceDevUpdateConfig);
+    logger.info('[Updater Config] Build channel from config:', channel);
+    logger.info('[Updater Config] isStableChannel:', isStableChannel);
+    logger.info('[Updater Config] UPDATE_SERVER_URL:', UPDATE_SERVER_URL || '(not set)');
+    logger.info('[Updater Config] usingFallbackProvider:', this.usingFallbackProvider);
+    logger.info('[Updater Config] GitHub config:', JSON.stringify(githubConfig));
+
     // If manual check, notify renderer process about check start
     if (manual) {
       this.mainWindow.broadcast('manualUpdateCheckStart');
@@ -406,6 +418,8 @@ export class UpdaterManager {
 
     autoUpdater.on('checking-for-update', () => {
       logger.info('[Updater] Checking for update...');
+      logger.info('[Updater] Current channel:', autoUpdater.channel);
+      logger.info('[Updater] Current allowPrerelease:', autoUpdater.allowPrerelease);
     });
 
     autoUpdater.on('update-available', (info) => {
@@ -437,6 +451,14 @@ export class UpdaterManager {
 
     autoUpdater.on('error', async (err) => {
       logger.error('Error in auto-updater:', err);
+      // Log configuration state when error occurs for debugging
+      logger.error('[Updater Error Context] Channel:', autoUpdater.channel);
+      logger.error('[Updater Error Context] allowPrerelease:', autoUpdater.allowPrerelease);
+      logger.error('[Updater Error Context] Build channel from config:', channel);
+      logger.error('[Updater Error Context] isStableChannel:', isStableChannel);
+      logger.error('[Updater Error Context] UPDATE_SERVER_URL:', UPDATE_SERVER_URL || '(not set)');
+      logger.error('[Updater Error Context] usingFallbackProvider:', this.usingFallbackProvider);
+      logger.error('[Updater Error Context] GitHub config:', JSON.stringify(githubConfig));
 
       // Try fallback to GitHub if S3 failed
       if (!this.usingFallbackProvider && isStableChannel && UPDATE_SERVER_URL) {

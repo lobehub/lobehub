@@ -12,6 +12,7 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import { isDesktop } from '@/const/version';
 import { BANNER_HEIGHT } from '@/features/AlertBanner/CloudBanner';
 import DesktopNavigationBridge from '@/features/DesktopNavigationBridge';
+import AuthRequiredModal from '@/features/Electron/AuthRequiredModal';
 import TitleBar from '@/features/Electron/titlebar/TitleBar';
 import HotkeyHelperPanel from '@/features/HotkeyHelperPanel';
 import NavPanel from '@/features/NavPanel';
@@ -45,6 +46,7 @@ const Layout: FC = () => {
         {isDesktop && <TitleBar />}
         {isDesktop && <DesktopAutoOidcOnFirstOpen />}
         {isDesktop && <DesktopNavigationBridge />}
+        {isDesktop && <AuthRequiredModal />}
         {showCloudPromotion && <CloudBanner />}
       </Suspense>
       <DndContextWrapper>
