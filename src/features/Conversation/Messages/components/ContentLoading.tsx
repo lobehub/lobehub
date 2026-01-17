@@ -9,17 +9,17 @@ import type { OperationType } from '@/store/chat/slices/operation/types';
 
 const ELAPSED_TIME_THRESHOLD = 2100; // Show elapsed time after 2 seconds
 
+const NO_NEED_SHOW_DOT_OP_TYPES = new Set<OperationType>(['reasoning']);
+
 interface ContentLoadingProps {
   id: string;
 }
 
 const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
   const { t } = useTranslation('chat');
-  const operations = useChatStore(operationSelectors.getOperationsByMessage(id));
+  const runningOp = useChatStore(operationSelectors.getDeepestRunningOperationByMessage(id));
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
-  // Get the running operation
-  const runningOp = operations.find((op) => op.status === 'running');
   const operationType = runningOp?.type as OperationType | undefined;
   const startTime = runningOp?.metadata?.startTime;
 
@@ -47,6 +47,8 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
     : undefined;
 
   const showElapsedTime = elapsedSeconds >= ELAPSED_TIME_THRESHOLD / 1000;
+
+  if (operationType && NO_NEED_SHOW_DOT_OP_TYPES.has(operationType)) return null;
 
   return (
     <Flexbox align={'center'} horizontal>
