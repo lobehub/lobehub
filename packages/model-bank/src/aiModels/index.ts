@@ -35,6 +35,7 @@ import { default as modelscope } from './modelscope';
 import { default as moonshot } from './moonshot';
 import { default as nebius } from './nebius';
 import { default as newapi } from './newapi';
+import { default as n1n } from './n1n';
 import { default as novita } from './novita';
 import { default as nvidia } from './nvidia';
 import { default as ollama } from './ollama';
@@ -122,6 +123,7 @@ export const LOBE_DEFAULT_MODEL_LIST = buildDefaultModelList({
   moonshot,
   nebius,
   newapi,
+  n1n,
   novita,
   nvidia,
   ollama,
@@ -191,6 +193,7 @@ export { default as modelscope } from './modelscope';
 export { default as moonshot } from './moonshot';
 export { default as nebius } from './nebius';
 export { default as newapi } from './newapi';
+export { default as n1n } from './n1n';
 export { default as novita } from './novita';
 export { default as nvidia } from './nvidia';
 export { default as ollama } from './ollama';

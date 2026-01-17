@@ -41,6 +41,7 @@
     "./moonshot": "./src/aiModels/moonshot.ts",
     "./nebius": "./src/aiModels/nebius.ts",
     "./newapi": "./src/aiModels/newapi.ts",
+    "./n1n": "./src/aiModels/n1n.ts",
     "./novita": "./src/aiModels/novita.ts",
     "./nvidia": "./src/aiModels/nvidia.ts",
     "./ollama": "./src/aiModels/ollama.ts",
