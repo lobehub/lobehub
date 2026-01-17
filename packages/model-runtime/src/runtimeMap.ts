@@ -34,6 +34,7 @@ import { LobeModelScopeAI } from './providers/modelscope';
 import { LobeMoonshotAI } from './providers/moonshot';
 import { LobeNebiusAI } from './providers/nebius';
 import { LobeNewAPIAI } from './providers/newapi';
+import { LobeN1NAI } from './providers/n1n';
 import { LobeNovitaAI } from './providers/novita';
 import { LobeNvidiaAI } from './providers/nvidia';
 import { LobeOllamaAI } from './providers/ollama';
@@ -100,6 +101,7 @@ export const providerRuntimeMap = {
   modelscope: LobeModelScopeAI,
   moonshot: LobeMoonshotAI,
   nebius: LobeNebiusAI,
+  n1n: LobeN1NAI,
   newapi: LobeNewAPIAI,
   novita: LobeNovitaAI,
   nvidia: LobeNvidiaAI,
