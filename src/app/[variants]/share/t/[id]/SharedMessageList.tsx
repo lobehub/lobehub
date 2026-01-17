@@ -40,8 +40,8 @@ const SharedMessageList = memo<SharedMessageListProps>(({ agentId, groupId, shar
       context={context}
       hasInitMessages={!!messages}
       messages={messages}
-      onMessagesChange={(messages) => {
-        replaceMessages(messages, { context });
+      onMessagesChange={(messages, ctx) => {
+        replaceMessages(messages, { context: ctx });
       }}
     >
       <Flexbox flex={1}>

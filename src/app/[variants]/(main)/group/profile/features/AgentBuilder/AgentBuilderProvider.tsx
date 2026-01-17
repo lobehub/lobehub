@@ -47,8 +47,8 @@ const AgentBuilderProvider = memo<AgentBuilderProviderProps>(({ agentId, childre
       context={context}
       hasInitMessages={!!messages}
       messages={messages}
-      onMessagesChange={(msgs) => {
-        replaceMessages(msgs, { context });
+      onMessagesChange={(msgs, ctx) => {
+        replaceMessages(msgs, { context: ctx });
       }}
       operationState={operationState}
     >

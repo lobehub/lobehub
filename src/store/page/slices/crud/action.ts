@@ -47,10 +47,6 @@ export interface CrudAction {
    * Duplicate an existing page
    */
   duplicatePage: (pageId: string) => Promise<{ [key: string]: any; id: string }>;
-  /**
-   * Fetch full page detail by ID and update documents array
-   */
-  fetchPageDetail: (pageId: string) => Promise<void>;
   navigateToPage: (pageId: string | null) => void;
   /**
    * Remove a page (deletes from documents table)
@@ -238,50 +234,6 @@ export const createCrudSlice: StateCreator<
     get().internal_dispatchDocuments({ document: editorPage, type: 'addDocument' });
 
     return newPage;
-  },
-
-  fetchPageDetail: async (pageId) => {
-    try {
-      const document = await documentService.getDocumentById(pageId);
-
-      if (!document) {
-        console.warn(`[fetchPageDetail] Page not found: ${pageId}`);
-        return;
-      }
-
-      const fullPage: LobeDocument = {
-        content: document.content || null,
-        createdAt: document.createdAt ? new Date(document.createdAt) : new Date(),
-        editorData:
-          typeof document.editorData === 'string'
-            ? JSON.parse(document.editorData)
-            : document.editorData || null,
-        fileType: document.fileType,
-        filename: document.title || document.filename || 'Untitled',
-        id: document.id,
-        metadata: document.metadata || {},
-        source: 'document',
-        sourceType: DocumentSourceType.EDITOR,
-        title: document.title || '',
-        totalCharCount: document.content?.length || 0,
-        totalLineCount: 0,
-        updatedAt: document.updatedAt ? new Date(document.updatedAt) : new Date(),
-      };
-
-      // Update document via internal dispatch
-      const { documents } = get();
-      if (documents?.some((doc) => doc.id === pageId)) {
-        get().internal_dispatchDocuments({
-          document: fullPage,
-          id: pageId,
-          type: 'updateDocument',
-        });
-      } else {
-        get().internal_dispatchDocuments({ document: fullPage, type: 'addDocument' });
-      }
-    } catch (error) {
-      console.error('[fetchPageDetail] Failed to fetch page:', error);
-    }
   },
 
   navigateToPage: (pageId) => {

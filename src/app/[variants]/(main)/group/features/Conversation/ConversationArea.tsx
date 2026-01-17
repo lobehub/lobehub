@@ -58,8 +58,8 @@ const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
       hasInitMessages={!!messages}
       // hooks={groupHooks}
       messages={messages}
-      onMessagesChange={(messages) => {
-        replaceMessages(messages, { context });
+      onMessagesChange={(messages, ctx) => {
+        replaceMessages(messages, { context: ctx });
       }}
       operationState={operationState}
     >

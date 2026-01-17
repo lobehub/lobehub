@@ -33,8 +33,10 @@ export interface State extends DataState, InputState, MessageStateState, VirtuaL
 
   /**
    * Callback when messages are fetched or changed internally
+   * @param messages - The updated messages array
+   * @param context - The context that this data belongs to (prevents race conditions)
    */
-  onMessagesChange?: (messages: UIChatMessage[]) => void;
+  onMessagesChange?: (messages: UIChatMessage[], context: ConversationContext) => void;
 
   /**
    * External operation state (from ChatStore)

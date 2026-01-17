@@ -2,6 +2,39 @@
 
 # Changelog
 
+## [Version 2.0.0-next.299](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.298...v2.0.0-next.299)
+
+<sup>Released on **2026-01-17**</sup>
+
+#### ♻ Code Refactoring
+
+- **ui**: Migrate from Dropdown to DropdownMenu/ContextMenuTrigger components.
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix topic messages display error when switch topic quickly.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **ui**: Migrate from Dropdown to DropdownMenu/ContextMenuTrigger components, closes [#11539](https://github.com/lobehub/lobe-chat/issues/11539) ([9c9d4b1](https://github.com/lobehub/lobe-chat/commit/9c9d4b1))
+
+#### What's fixed
+
+- **misc**: Fix topic messages display error when switch topic quickly, closes [#11542](https://github.com/lobehub/lobe-chat/issues/11542) ([371d91e](https://github.com/lobehub/lobe-chat/commit/371d91e))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.298](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.297...v2.0.0-next.298)
 
 <sup>Released on **2026-01-16**</sup>
