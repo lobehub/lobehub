@@ -2,6 +2,7 @@
 
 import { memo, useEffect } from 'react';
 
+import { getDesktopOnboardingCompleted } from '@/app/[variants]/(desktop)/desktop-onboarding/storage';
 import { useElectronStore } from '@/store/electron';
 import {
   getDesktopAutoOidcFirstOpenHandled,
@@ -27,6 +28,9 @@ const DesktopAutoOidcOnFirstOpen = memo(() => {
 
   useEffect(() => {
     if (!isInitRemoteServerConfig) return;
+
+    // Don't auto-trigger during onboarding flow.
+    if (!getDesktopOnboardingCompleted()) return;
 
     // If already connected or not in cloud mode, don't auto-trigger.
     if (dataSyncConfig.active) return;

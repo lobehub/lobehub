@@ -1,4 +1,9 @@
-import { DataSyncConfig, MarketAuthorizationParams } from '@lobechat/electron-client-ipc';
+import {
+  AuthorizationPhase,
+  AuthorizationProgress,
+  DataSyncConfig,
+  MarketAuthorizationParams,
+} from '@lobechat/electron-client-ipc';
 import { BrowserWindow, shell } from 'electron';
 import crypto from 'node:crypto';
 import querystring from 'node:querystring';
@@ -9,8 +14,10 @@ import { createLogger } from '@/utils/logger';
 import RemoteServerConfigCtr from './RemoteServerConfigCtr';
 import { ControllerModule, IpcMethod } from './index';
 
-// Create logger
 const logger = createLogger('controllers:AuthCtr');
+
+const MAX_POLL_TIME = 2 * 60 * 1000; // 2 minutes (reduced from 5 minutes for better UX)
+const POLL_INTERVAL = 3000; // 3 seconds
 
 /**
  * Authentication Controller
@@ -107,6 +114,12 @@ export default class AuthCtr extends ControllerModule {
       await shell.openExternal(authUrl.toString());
       logger.debug('Opening authorization URL in default browser');
 
+      this.broadcastAuthorizationProgress({
+        elapsed: 0,
+        maxPollTime: MAX_POLL_TIME,
+        phase: 'browser_opened',
+      });
+
       // Start polling for credentials
       this.startPolling();
 
@@ -115,6 +128,24 @@ export default class AuthCtr extends ControllerModule {
       logger.error('Authorization request failed:', error);
       return { error: error.message, success: false };
     }
+  }
+
+  /**
+   * Cancel current authorization process
+   */
+  @IpcMethod()
+  async cancelAuthorization() {
+    if (this.authRequestState) {
+      logger.info('User cancelled authorization');
+      this.clearAuthorizationState();
+      this.broadcastAuthorizationProgress({
+        elapsed: 0,
+        maxPollTime: MAX_POLL_TIME,
+        phase: 'cancelled',
+      });
+      return { success: true };
+    }
+    return { error: 'No active authorization', success: false };
   }
 
   /**
@@ -152,14 +183,29 @@ export default class AuthCtr extends ControllerModule {
     }
 
     logger.info('Starting credential polling');
-    const pollInterval = 3000; // 3 seconds
-    const maxPollTime = 5 * 60 * 1000; // 5 minutes
+
     const startTime = Date.now();
 
+    // Broadcast initial state
+    this.broadcastAuthorizationProgress({
+      elapsed: 0,
+      maxPollTime: MAX_POLL_TIME,
+      phase: 'waiting_for_auth',
+    });
+
     this.pollingInterval = setInterval(async () => {
+      const elapsed = Date.now() - startTime;
+
+      // Broadcast progress on every tick
+      this.broadcastAuthorizationProgress({
+        elapsed,
+        maxPollTime: MAX_POLL_TIME,
+        phase: 'waiting_for_auth',
+      });
+
       try {
         // Check if polling has timed out
-        if (Date.now() - startTime > maxPollTime) {
+        if (elapsed > MAX_POLL_TIME) {
           logger.warn('Credential polling timed out');
           this.clearAuthorizationState();
           this.broadcastAuthorizationFailed('Authorization timed out');
@@ -172,6 +218,13 @@ export default class AuthCtr extends ControllerModule {
         if (result) {
           logger.info('Successfully received credentials from polling');
           this.stopPolling();
+
+          // Broadcast verifying state
+          this.broadcastAuthorizationProgress({
+            elapsed,
+            maxPollTime: MAX_POLL_TIME,
+            phase: 'verifying',
+          });
 
           // Validate state parameter
           if (result.state !== this.authRequestState) {
@@ -198,7 +251,7 @@ export default class AuthCtr extends ControllerModule {
         this.clearAuthorizationState();
         this.broadcastAuthorizationFailed('Polling error: ' + error.message);
       }
-    }, pollInterval);
+    }, POLL_INTERVAL);
   }
 
   /**
@@ -512,6 +565,21 @@ export default class AuthCtr extends ControllerModule {
   }
 
   /**
+   * Broadcast authorization progress event
+   */
+  private broadcastAuthorizationProgress(progress: AuthorizationProgress) {
+    // Avoid logging too frequently
+    // logger.debug('Broadcasting authorizationProgress event');
+    const allWindows = BrowserWindow.getAllWindows();
+
+    for (const win of allWindows) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('authorizationProgress', progress);
+      }
+    }
+  }
+
+  /**
    * Broadcast authorization failed event
    */
   private broadcastAuthorizationFailed(error: string) {
@@ -563,7 +631,7 @@ export default class AuthCtr extends ControllerModule {
     // Hash codeVerifier using SHA-256
     const encoder = new TextEncoder();
     const data = encoder.encode(codeVerifier);
-    const digest = await crypto.subtle.digest('SHA-256', data as unknown as NodeJS.BufferSource);
+    const digest = await crypto.subtle.digest('SHA-256', data.buffer);
 
     // Convert hash result to base64url encoding
     const challenge = Buffer.from(digest)

@@ -1,6 +1,6 @@
 'use client';
 
-import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
+import { AuthorizationProgress, useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Alert, Button, Center, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
@@ -9,6 +9,7 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
+import { remoteServerService } from '@/services/electron/remoteServer';
 import { useElectronStore } from '@/store/electron';
 import { setDesktopAutoOidcFirstOpenHandled } from '@/utils/electron/autoOidc';
 
@@ -44,6 +45,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
   const { t } = useTranslation('desktop-onboarding');
   const [endpoint, setEndpoint] = useState('');
   const [cloudLoginStatus, setCloudLoginStatus] = useState<LoginStatus>('idle');
+  const [authProgress, setAuthProgress] = useState<AuthorizationProgress | null>(null);
   const [selfhostLoginStatus, setSelfhostLoginStatus] = useState<LoginStatus>('idle');
   const [remoteError, setRemoteError] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -164,29 +166,53 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
   useWatchBroadcast('authorizationSuccessful', async () => {
     setRemoteError(null);
     clearRemoteServerSyncError();
+    setAuthProgress(null);
     await refreshServerConfig();
   });
 
   useWatchBroadcast('authorizationFailed', ({ error }) => {
     setRemoteError(error);
+    setAuthProgress(null);
     if (cloudLoginStatus === 'loading') setCloudLoginStatus('error');
     if (selfhostLoginStatus === 'loading') setSelfhostLoginStatus('error');
   });
+
+  useWatchBroadcast('authorizationProgress', (progress) => {
+    setAuthProgress(progress);
+    if (progress.phase === 'cancelled') {
+      setCloudLoginStatus('idle');
+      setAuthProgress(null);
+    }
+  });
+
+  const handleCancelAuth = async () => {
+    await remoteServerService.cancelAuthorization();
+    setCloudLoginStatus('idle');
+    setAuthProgress(null);
+  };
 
   // 渲染 Cloud 登录内容
   const renderCloudContent = () => {
     if (cloudLoginStatus === 'success') {
       return (
-        <Button
-          block
-          disabled={isSigningOut || isConnectingServer}
-          icon={Cloud}
-          onClick={handleSignOut}
-          size={'large'}
-          type={'default'}
-        >
-          {isSigningOut ? t('screen5.actions.signingOut') : t('screen5.actions.signOut')}
-        </Button>
+        <Flexbox gap={12} style={{ width: '100%' }}>
+          <Alert
+            description={t('authResult.success.desc')}
+            style={{ width: '100%' }}
+            title={t('authResult.success.title')}
+            type={'success'}
+          />
+          <Button
+            block
+            disabled={isSigningOut || isConnectingServer}
+            icon={Cloud}
+            onClick={handleSignOut}
+            size={'large'}
+            type={'default'}
+          >
+            {isSigningOut ? t('screen5.actions.signingOut') : t('screen5.actions.signOut')}
+          </Button>
+        </Flexbox>
       );
     }
 
@@ -212,19 +238,43 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
       );
     }
 
+    if (cloudLoginStatus === 'loading') {
+      return (
+        <Flexbox gap={8} style={{ width: '100%' }}>
+          <Button block disabled={true} icon={Cloud} loading={true} size={'large'} type={'primary'}>
+            {authProgress
+              ? t(`screen5.auth.phase.${authProgress.phase}`, {
+                  defaultValue: t('screen5.actions.signingIn'),
+                })
+              : t('screen5.actions.signingIn')}
+          </Button>
+          {authProgress && (
+            <Flexbox align={'center'} horizontal justify={'space-between'}>
+              <Text style={{ color: cssVar.colorTextDescription }} type={'secondary'}>
+                {t('screen5.auth.remaining', {
+                  time: Math.round((authProgress.maxPollTime - authProgress.elapsed) / 1000),
+                })}
+              </Text>
+              <Button onClick={handleCancelAuth} size={'small'} type={'text'}>
+                {t('screen5.actions.cancel')}
+              </Button>
+            </Flexbox>
+          )}
+        </Flexbox>
+      );
+    }
+
     return (
       <Button
         block
-        disabled={cloudLoginStatus === 'loading' || isConnectingServer}
+        disabled={isConnectingServer}
         icon={Cloud}
-        loading={cloudLoginStatus === 'loading'}
+        loading={false}
         onClick={handleCloudLogin}
         size={'large'}
         type={'primary'}
       >
-        {cloudLoginStatus === 'loading'
-          ? t('screen5.actions.signingIn')
-          : t('screen5.actions.signInCloud')}
+        {t('screen5.actions.signInCloud')}
       </Button>
     );
   };
@@ -233,16 +283,24 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
   const renderSelfhostContent = () => {
     if (selfhostLoginStatus === 'success') {
       return (
-        <Button
-          block
-          disabled={isSigningOut || isConnectingServer}
-          icon={Server}
-          onClick={handleSignOut}
-          size={'large'}
-          type={'default'}
-        >
-          {isSigningOut ? t('screen5.actions.signingOut') : t('screen5.actions.signOut')}
-        </Button>
+        <Flexbox gap={12} style={{ width: '100%' }}>
+          <Alert
+            description={t('authResult.success.desc')}
+            style={{ width: '100%' }}
+            title={t('authResult.success.title')}
+            type={'success'}
+          />
+          <Button
+            block
+            disabled={isSigningOut || isConnectingServer}
+            icon={Server}
+            onClick={handleSignOut}
+            size={'large'}
+            type={'default'}
+          >
+            {isSigningOut ? t('screen5.actions.signingOut') : t('screen5.actions.signOut')}
+          </Button>
+        </Flexbox>
       );
     }
 

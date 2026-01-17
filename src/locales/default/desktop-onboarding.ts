@@ -75,11 +75,16 @@ export default {
 
   'screen5.actions.connectToServer': 'Connect to Server',
   'screen5.actions.connecting': 'Connecting...',
+  'screen5.actions.cancel': 'Cancel',
   'screen5.actions.signInCloud': 'Sign in to LobeHub Cloud',
   'screen5.actions.signOut': 'Sign out',
   'screen5.actions.signingIn': 'Signing in...',
   'screen5.actions.signingOut': 'Signing out...',
   'screen5.actions.tryAgain': 'Try Again',
+  'screen5.auth.phase.browserOpened': 'Browser opened, please sign in...',
+  'screen5.auth.phase.waitingForAuth': 'Waiting for authorization...',
+  'screen5.auth.phase.verifying': 'Verifying credentials...',
+  'screen5.auth.remaining': 'Remaining: {{time}}s',
   'screen5.badge': 'Sign in',
   'screen5.description':
     'Sign in to sync Agents, Groups, settings, and Context across all devices.',
