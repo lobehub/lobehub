@@ -1,4 +1,4 @@
 {
   "buildCommand": "bun run build:vercel",
-  "installCommand": "npx bun@1.2.23 install"
+  "installCommand": "npx pnpm@10.26.2 install"
 }
