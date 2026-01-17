@@ -37,7 +37,9 @@ const TopicSelector = memo<TopicSelectorProps>(({ agentId }) => {
   const { t } = useTranslation('topic');
 
   // Fetch topics for the agent builder
-  useChatStore((s) => s.useFetchTopics)(true, { agentId });
+  const useFetchTopics = useChatStore((s) => s.useFetchTopics);
+
+  useFetchTopics(true, { agentId });
 
   const [activeTopicId, switchTopic, topics] = useChatStore((s) => [
     s.activeTopicId,
