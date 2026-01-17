@@ -9,11 +9,11 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
+import StoreSync from './StoreSync';
 import AgentBuilder from './features/AgentBuilder';
 import GroupProfileSettings from './features/GroupProfile';
 import Header from './features/Header';
 import MemberProfile from './features/MemberProfile';
-import ProfileHydration from './features/ProfileHydration';
 
 const ProfileArea = memo(() => {
   const editor = useGroupProfileStore((s) => s.editor);
@@ -51,7 +51,7 @@ const ProfileArea = memo(() => {
 const GroupProfile: FC = () => {
   return (
     <Suspense fallback={<Loading debugId="GroupProfile" />}>
-      <ProfileHydration />
+      <StoreSync />
       <Flexbox height={'100%'} horizontal width={'100%'}>
         <ProfileArea />
         <AgentBuilder />

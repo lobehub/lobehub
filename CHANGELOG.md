@@ -2,6 +2,39 @@
 
 # Changelog
 
+## [Version 2.0.0-next.302](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.301...v2.0.0-next.302)
+
+<sup>Released on **2026-01-17**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Try to fix group supervisor id not sync successful.
+
+#### 💄 Styles
+
+- **misc**: Fix left panel on group page.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Try to fix group supervisor id not sync successful, closes [#11570](https://github.com/lobehub/lobe-chat/issues/11570) ([ef51c17](https://github.com/lobehub/lobe-chat/commit/ef51c17))
+
+#### Styles
+
+- **misc**: Fix left panel on group page, closes [#11571](https://github.com/lobehub/lobe-chat/issues/11571) ([de81a42](https://github.com/lobehub/lobe-chat/commit/de81a42))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.301](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.300...v2.0.0-next.301)
 
 <sup>Released on **2026-01-17**</sup>

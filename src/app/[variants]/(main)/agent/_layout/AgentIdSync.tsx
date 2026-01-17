@@ -26,8 +26,12 @@ const AgentIdSync = () => {
 
   // Clear activeAgentId when unmounting (leaving chat page)
   useUnmount(() => {
-    useAgentStore.setState({ activeAgentId: undefined });
-    useChatStore.setState({ activeAgentId: undefined, activeTopicId: undefined });
+    useAgentStore.setState({ activeAgentId: undefined }, false, 'AgentIdSync/unmountAgentId');
+    useChatStore.setState(
+      { activeAgentId: undefined, activeTopicId: undefined },
+      false,
+      'AgentIdSync/unmountAgentId',
+    );
   });
 
   return null;

@@ -1,5 +1,13 @@
 [
   {
+    "children": {
+      "fixes": ["Try to fix group supervisor id not sync successful."],
+      "improvements": ["Fix left panel on group page."]
+    },
+    "date": "2026-01-17",
+    "version": "2.0.0-next.302"
+  },
+  {
     "children": {},
     "date": "2026-01-17",
     "version": "2.0.0-next.301"

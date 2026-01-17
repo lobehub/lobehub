@@ -1,4 +1,8 @@
 import {
+  AgentBuilderManifest,
+  AgentBuilderStreamings,
+} from '@lobechat/builtin-tool-agent-builder/client';
+import {
   CloudSandboxManifest,
   CloudSandboxStreamings,
 } from '@lobechat/builtin-tool-cloud-sandbox/client';
@@ -28,6 +32,7 @@ import { type BuiltinStreaming } from '@lobechat/types';
  * The component should fetch streaming content from store internally.
  */
 const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = {
+  [AgentBuilderManifest.identifier]: AgentBuilderStreamings as Record<string, BuiltinStreaming>,
   [CloudSandboxManifest.identifier]: CloudSandboxStreamings as Record<string, BuiltinStreaming>,
   [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderStreamings as Record<
     string,

@@ -10,7 +10,7 @@ import { parseAsString, useQueryState } from '@/hooks/useQueryParam';
 import { useChatStore } from '@/store/chat';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
-const ProfileHydration = memo(() => {
+const StoreSync = memo(() => {
   const editor = useEditor();
   const editorState = useEditorState(editor);
   const flushSave = useGroupProfileStore((s) => s.flushSave);
@@ -32,6 +32,11 @@ const ProfileHydration = memo(() => {
   useEffect(() => {
     const urlTopicId = builderTopicId ?? undefined;
     useChatStore.setState({ activeTopicId: urlTopicId });
+
+    return () => {
+      // Clear activeTopicId when unmounting (leaving group profile page)
+      useChatStore.setState({ activeTopicId: undefined }, false, 'GroupProfileUnmounted');
+    };
   }, [builderTopicId]);
 
   // Register hotkeys
@@ -40,15 +45,19 @@ const ProfileHydration = memo(() => {
 
   // Clear state when unmounting
   useUnmount(() => {
-    useGroupProfileStore.setState({
-      activeTabId: 'group',
-      editor: undefined,
-      editorState: undefined,
-      saveStateMap: {},
-    });
+    useGroupProfileStore.setState(
+      {
+        activeTabId: 'group',
+        editor: undefined,
+        editorState: undefined,
+        saveStateMap: {},
+      },
+      false,
+      'GroupProfileUnmounted',
+    );
   });
 
   return null;
 });
 
-export default ProfileHydration;
+export default StoreSync;
