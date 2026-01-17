@@ -30,7 +30,7 @@ export interface StoreUpdaterProps {
   /**
    * Callback when messages are fetched or changed internally
    */
-  onMessagesChange?: (messages: UIChatMessage[]) => void;
+  onMessagesChange?: (messages: UIChatMessage[], context: ConversationContext) => void;
   /**
    * External operation state (from ChatStore)
    */

@@ -48,8 +48,8 @@ const Conversation = memo(() => {
       context={context}
       hasInitMessages={!!messages}
       messages={messages}
-      onMessagesChange={(messages) => {
-        replaceMessages(messages, { context });
+      onMessagesChange={(messages, ctx) => {
+        replaceMessages(messages, { context: ctx });
       }}
       operationState={operationState}
     >
