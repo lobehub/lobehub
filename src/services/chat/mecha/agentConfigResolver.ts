@@ -193,7 +193,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
         availableAgents: groupMembers.map((agent) => ({ id: agent.id, title: agent.title })),
         groupId: group.id,
         groupTitle: group.title || 'Group Chat',
-        systemPrompt: group.config?.systemPrompt,
+        systemPrompt: agentConfig.systemRole,
       };
     }
   }
