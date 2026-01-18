@@ -352,12 +352,17 @@ export class UpdaterManager {
         url: UPDATE_SERVER_URL,
       });
     } else {
-      // Beta/nightly channels use GitHub, or fallback to GitHub if UPDATE_SERVER_URL not configured
-      // GitHub releases have latest-mac.yml, so we use default channel (latest)
-      autoUpdater.channel = 'latest';
+      // Beta/nightly channels use GitHub, or fallback to GitHub if UPDATE_SERVER_URL not configured.
+      // Leave channel unset so GitHub prerelease matching uses the version tag (e.g. next).
       const reason = this.usingFallbackProvider ? '(fallback from S3)' : '';
       logger.info(`Configuring GitHub provider for ${channel} channel ${reason}`);
-      logger.info(`Channel set to: latest (will look for latest-mac.yml)`);
+      if (!autoUpdater.channel) {
+        logger.info('Channel left unset (defaults to latest-mac.yml for GitHub)');
+      } else {
+        logger.info(
+          `Channel kept as: ${autoUpdater.channel} (will look for ${autoUpdater.channel}-mac.yml)`,
+        );
+      }
 
       // For beta/nightly channels, we need prerelease versions
       const needPrerelease = channel !== 'stable';
