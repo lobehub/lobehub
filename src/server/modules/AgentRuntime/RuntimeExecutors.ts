@@ -55,6 +55,8 @@ export const createRuntimeExecutors = (
     // Fallback to state's modelRuntimeConfig if not in payload
     const model = llmPayload.model || state.modelRuntimeConfig?.model;
     const provider = llmPayload.provider || state.modelRuntimeConfig?.provider;
+    // Fallback to state's tools if not in payload
+    const tools = llmPayload.tools || state.tools;
 
     if (!model || !provider) {
       throw new Error('Model and provider are required for call_llm instruction');
@@ -128,14 +130,14 @@ export const createRuntimeExecutors = (
       const chatPayload = {
         messages: llmPayload.messages,
         model,
-        tools: llmPayload.tools,
+        tools,
       };
 
       log(
         `${stagePrefix} calling model-runtime chat (model: %s, messages: %d, tools: %d)`,
         model,
         llmPayload.messages.length,
-        llmPayload.tools?.length ?? 0,
+        tools?.length ?? 0,
       );
 
       // Buffer: accumulate text and reasoning, send every 50ms

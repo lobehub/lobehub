@@ -10,6 +10,8 @@ import type {
 } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
+import type { LobeToolManifest } from '@lobechat/context-engine';
+import { MarketSDK } from '@lobehub/market-sdk';
 import debug from 'debug';
 
 import { LOADING_FLAT } from '@/const/message';
@@ -18,6 +20,8 @@ import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
+import { generateTrustedClientToken } from '@/libs/trusted-client';
 import {
   type ServerAgentToolsContext,
   createServerAgentToolsEngine,
@@ -185,7 +189,11 @@ export class AiAgentService {
       return info?.abilities?.functionCall ?? true;
     };
 
-    // 5. Create tools using Server AgentToolsEngine
+    // 5. Fetch LobeHub Skills manifests (temporary solution until LOBE-3517 is implemented)
+    const lobehubSkillManifests = await this.fetchLobehubSkillManifests();
+    log('execAgent: got %d lobehub skill manifests', lobehubSkillManifests.length);
+
+    // 6. Create tools using Server AgentToolsEngine
     const hasEnabledKnowledgeBases =
       agentConfig.knowledgeBases?.some((kb: { enabled?: boolean | null }) => kb.enabled === true) ??
       false;
@@ -196,6 +204,7 @@ export class AiAgentService {
     };
 
     const toolsEngine = createServerAgentToolsEngine(toolsContext, {
+      additionalManifests: lobehubSkillManifests,
       agentConfig: {
         chatConfig: agentConfig.chatConfig ?? undefined,
         plugins: agentConfig.plugins ?? undefined,
@@ -207,6 +216,8 @@ export class AiAgentService {
 
     // Generate tools and manifest map
     const pluginIds = agentConfig.plugins || [];
+    log('execAgent: agent configured plugins: %O', pluginIds);
+
     const toolsResult = toolsEngine.generateToolsDetailed({
       model,
       provider,
@@ -215,6 +226,12 @@ export class AiAgentService {
 
     const tools = toolsResult.tools;
 
+    // Log detailed tools generation result
+    if (toolsResult.filteredTools && toolsResult.filteredTools.length > 0) {
+      log('execAgent: filtered tools: %O', toolsResult.filteredTools);
+    }
+    log('execAgent: enabled tool ids: %O', toolsResult.enabledToolIds);
+
     // Get manifest map and convert from Map to Record
     const manifestMap = toolsEngine.getEnabledPluginManifests(pluginIds);
     const toolManifestMap: Record<string, any> = {};
@@ -222,7 +239,11 @@ export class AiAgentService {
       toolManifestMap[id] = manifest;
     });
 
-    log('execAgent: generated %d tools', tools?.length ?? 0);
+    log(
+      'execAgent: generated %d tools from %d configured plugins',
+      tools?.length ?? 0,
+      pluginIds.length,
+    );
 
     // 6. Get existing messages if provided
     let historyMessages: any[] = [];
@@ -328,7 +349,18 @@ export class AiAgentService {
       },
     };
 
-    // 12. Create operation using AgentRuntimeService
+    // 12. Log final operation parameters summary
+    log(
+      'execAgent: creating operation %s with params: model=%s, provider=%s, tools=%d, messages=%d, manifests=%d',
+      operationId,
+      model,
+      provider,
+      tools?.length ?? 0,
+      processedMessages.length,
+      Object.keys(toolManifestMap).length,
+    );
+
+    // 13. Create operation using AgentRuntimeService
     // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
     // If createOperation fails, we still have valid messages that need error info
     try {
@@ -692,6 +724,98 @@ export class AiAgentService {
         }
       },
     };
+  }
+
+  /**
+   * Fetch LobeHub Skills manifests from Market API
+   * This is a temporary solution until LOBE-3517 is implemented (store skills in DB)
+   */
+  private async fetchLobehubSkillManifests(): Promise<LobeToolManifest[]> {
+    try {
+      // 1. Get user info for trusted client token
+      const user = await UserModel.findById(this.db, this.userId);
+      if (!user?.email) {
+        log('fetchLobehubSkillManifests: user email not found, skipping');
+        return [];
+      }
+
+      // 2. Generate trusted client token
+      const trustedClientToken = generateTrustedClientToken({
+        email: user.email,
+        name: user.fullName || user.firstName || undefined,
+        userId: this.userId,
+      });
+
+      if (!trustedClientToken) {
+        log('fetchLobehubSkillManifests: trusted client not configured, skipping');
+        return [];
+      }
+
+      // 3. Create MarketSDK instance
+      const marketSDK = new MarketSDK({
+        baseURL: process.env.NEXT_PUBLIC_MARKET_BASE_URL,
+        trustedClientToken,
+      });
+
+      // 4. Get user's connected skills
+      const { connections } = await marketSDK.connect.listConnections();
+      if (!connections || connections.length === 0) {
+        log('fetchLobehubSkillManifests: no connected skills found');
+        return [];
+      }
+
+      log('fetchLobehubSkillManifests: found %d connected skills', connections.length);
+
+      // 5. Fetch tools for each connection and build manifests
+      const manifests: LobeToolManifest[] = [];
+
+      for (const connection of connections) {
+        try {
+          // Connection returns providerId (e.g., 'twitter', 'linear'), not numeric id
+          const providerId = (connection as any).providerId;
+          if (!providerId) {
+            log('fetchLobehubSkillManifests: connection missing providerId: %O', connection);
+            continue;
+          }
+          const providerName =
+            (connection as any).providerName || (connection as any).name || providerId;
+          const icon = (connection as any).icon;
+
+          const { tools } = await marketSDK.skills.listTools(providerId);
+          if (!tools || tools.length === 0) continue;
+
+          const manifest: LobeToolManifest = {
+            api: tools.map((tool: any) => ({
+              description: tool.description || '',
+              name: tool.name,
+              parameters: tool.inputSchema || { properties: {}, type: 'object' },
+            })),
+            identifier: providerId,
+            meta: {
+              avatar: icon || '🔗',
+              description: `LobeHub Skill: ${providerName}`,
+              tags: ['lobehub-skill', providerId],
+              title: providerName,
+            },
+            type: 'builtin',
+          };
+
+          manifests.push(manifest);
+          log(
+            'fetchLobehubSkillManifests: built manifest for %s with %d tools',
+            providerId,
+            tools.length,
+          );
+        } catch (error) {
+          log('fetchLobehubSkillManifests: failed to fetch tools for connection: %O', error);
+        }
+      }
+
+      return manifests;
+    } catch (error) {
+      log('fetchLobehubSkillManifests: error fetching skills: %O', error);
+      return [];
+    }
   }
 
   /**

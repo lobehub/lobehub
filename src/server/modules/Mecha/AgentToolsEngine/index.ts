@@ -12,8 +12,7 @@
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { ToolsEngine } from '@lobechat/context-engine';
-import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { type LobeToolManifest, ToolsEngine } from '@lobechat/context-engine';
 import debug from 'debug';
 
 import { builtinTools } from '@/tools';
@@ -50,11 +49,11 @@ export const createServerToolsEngine = (
 
   // Get plugin manifests from installed plugins (from database)
   const pluginManifests = context.installedPlugins
-    .map((plugin) => plugin.manifest as LobeChatPluginManifest)
+    .map((plugin) => plugin.manifest as LobeToolManifest)
     .filter(Boolean);
 
   // Get all builtin tool manifests
-  const builtinManifests = builtinTools.map((tool) => tool.manifest as LobeChatPluginManifest);
+  const builtinManifests = builtinTools.map((tool) => tool.manifest as LobeToolManifest);
 
   // Combine all manifests
   const allManifests = [...pluginManifests, ...builtinManifests, ...additionalManifests];
@@ -87,18 +86,27 @@ export const createServerAgentToolsEngine = (
   context: ServerAgentToolsContext,
   params: ServerCreateAgentToolsEngineParams,
 ): ToolsEngine => {
-  const { agentConfig, model, provider, hasEnabledKnowledgeBases = false } = params;
+  const {
+    additionalManifests,
+    agentConfig,
+    hasEnabledKnowledgeBases = false,
+    model,
+    provider,
+  } = params;
   const searchMode = agentConfig.chatConfig?.searchMode ?? 'off';
   const isSearchEnabled = searchMode !== 'off';
 
   log(
-    'Creating agent tools engine for model=%s, provider=%s, searchMode=%s',
+    'Creating agent tools engine for model=%s, provider=%s, searchMode=%s, additionalManifests=%d',
     model,
     provider,
     searchMode,
+    additionalManifests?.length ?? 0,
   );
 
   return createServerToolsEngine(context, {
+    // Pass additional manifests (e.g., LobeHub Skills)
+    additionalManifests,
     // Add default tools based on configuration
     defaultToolIds: [WebBrowsingManifest.identifier, KnowledgeBaseManifest.identifier],
     // Create search-aware enableChecker for this request
