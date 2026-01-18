@@ -23,6 +23,21 @@ import type {
   RunCommandResult,
   WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
+import {
+  formatCommandOutput,
+  formatCommandResult,
+  formatEditResult,
+  formatFileContent,
+  formatFileList,
+  formatFileSearchResults,
+  formatGlobResults,
+  formatGrepResults,
+  formatKillResult,
+  formatMoveResults,
+  formatMultipleFiles,
+  formatRenameResult,
+  formatWriteResult,
+} from '@lobechat/prompts';
 import { BaseExecutor, type BuiltinToolResult } from '@lobechat/types';
 
 import { localFileService } from '@/services/electron/localFileService';
@@ -76,8 +91,10 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
       const state: LocalFileListState = { listResults: result };
 
+      const content = formatFileList(result, params.path);
+
       return {
-        content: JSON.stringify(result),
+        content,
         state,
         success: true,
       };
@@ -96,8 +113,14 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
       const state: LocalReadFileState = { fileContent: result };
 
+      const content = formatFileContent({
+        content: result.content,
+        lineRange: params.loc,
+        path: params.path,
+      });
+
       return {
-        content: JSON.stringify(result),
+        content,
         state,
         success: true,
       };
@@ -116,8 +139,10 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
       const state: LocalReadFilesState = { filesContent: results };
 
+      const content = formatMultipleFiles(results);
+
       return {
-        content: JSON.stringify(results),
+        content,
         state,
         success: true,
       };
@@ -136,8 +161,10 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
       const state: LocalFileSearchState = { searchResults: result };
 
+      const content = formatFileSearchResults(result);
+
       return {
-        content: JSON.stringify(result),
+        content,
         state,
         success: true,
       };
@@ -154,20 +181,9 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     try {
       const results: LocalMoveFilesResultItem[] = await localFileService.moveLocalFiles(params);
 
-      const allSucceeded = results.every((r) => r.success);
-      const someFailed = results.some((r) => !r.success);
       const successCount = results.filter((r) => r.success).length;
-      const failedCount = results.length - successCount;
 
-      let message = '';
-
-      if (allSucceeded) {
-        message = `Successfully moved ${results.length} item(s).`;
-      } else if (someFailed) {
-        message = `Moved ${successCount} item(s) successfully. Failed to move ${failedCount} item(s).`;
-      } else {
-        message = `Failed to move all ${results.length} item(s).`;
-      }
+      const content = formatMoveResults(results);
 
       const state: LocalMoveFilesState = {
         results,
@@ -176,7 +192,7 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
       };
 
       return {
-        content: JSON.stringify({ message, results }),
+        content,
         state,
         success: true,
       };
@@ -202,7 +218,12 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
         };
 
         return {
-          content: JSON.stringify({ message: result.error, success: false }),
+          content: formatRenameResult({
+            error: result.error,
+            newName: params.newName,
+            oldPath: params.path,
+            success: false,
+          }),
           state,
           success: false,
         };
@@ -215,8 +236,9 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
       };
 
       return {
-        content: JSON.stringify({
-          message: `Successfully renamed file ${params.path} to ${params.newName}.`,
+        content: formatRenameResult({
+          newName: params.newName,
+          oldPath: params.path,
           success: true,
         }),
         state,
@@ -237,8 +259,9 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
       if (!result.success) {
         return {
-          content: JSON.stringify({
-            message: result.error || 'Failed to write file',
+          content: formatWriteResult({
+            error: result.error,
+            path: params.path,
             success: false,
           }),
           error: { message: result.error || 'Failed to write file', type: 'PluginServerError' },
@@ -247,8 +270,8 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
       }
 
       return {
-        content: JSON.stringify({
-          message: `Successfully wrote file ${params.path}`,
+        content: formatWriteResult({
+          path: params.path,
           success: true,
         }),
         success: true,
@@ -273,11 +296,12 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
         };
       }
 
-      const statsText =
-        result.linesAdded || result.linesDeleted
-          ? ` (+${result.linesAdded || 0} -${result.linesDeleted || 0})`
-          : '';
-      const message = `Successfully replaced ${result.replacements} occurrence(s) in ${params.file_path}${statsText}`;
+      const content = formatEditResult({
+        filePath: params.file_path,
+        linesAdded: result.linesAdded,
+        linesDeleted: result.linesDeleted,
+        replacements: result.replacements,
+      });
 
       const state: EditLocalFileState = {
         diffText: result.diffText,
@@ -287,7 +311,7 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
       };
 
       return {
-        content: message,
+        content,
         state,
         success: true,
       };
@@ -306,22 +330,19 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     try {
       const result: RunCommandResult = await localFileService.runCommand(params);
 
-      let message: string;
+      const content = formatCommandResult({
+        error: result.error,
+        exitCode: result.exit_code,
+        shellId: result.shell_id,
+        stderr: result.stderr,
+        stdout: result.stdout,
+        success: result.success,
+      });
 
-      if (result.success) {
-        if (result.shell_id) {
-          message = `Command started in background with shell_id: ${result.shell_id}`;
-        } else {
-          message = `Command completed successfully.`;
-        }
-      } else {
-        message = `Command failed: ${result.error}`;
-      }
-
-      const state: RunCommandState = { message, result };
+      const state: RunCommandState = { message: content.split('\n\n')[0], result };
 
       return {
-        content: JSON.stringify(result),
+        content,
         state,
         success: result.success,
       };
@@ -338,14 +359,17 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     try {
       const result: GetCommandOutputResult = await localFileService.getCommandOutput(params);
 
-      const message = result.success
-        ? `Output retrieved. Running: ${result.running}`
-        : `Failed: ${result.error}`;
+      const content = formatCommandOutput({
+        error: result.error,
+        output: result.output,
+        running: result.running,
+        success: result.success,
+      });
 
-      const state: GetCommandOutputState = { message, result };
+      const state: GetCommandOutputState = { message: content.split('\n\n')[0], result };
 
       return {
-        content: JSON.stringify(result),
+        content,
         state,
         success: result.success,
       };
@@ -362,14 +386,16 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     try {
       const result: KillCommandResult = await localFileService.killCommand(params);
 
-      const message = result.success
-        ? `Successfully killed shell: ${params.shell_id}`
-        : `Failed to kill shell: ${result.error}`;
+      const content = formatKillResult({
+        error: result.error,
+        shellId: params.shell_id,
+        success: result.success,
+      });
 
-      const state: KillCommandState = { message, result };
+      const state: KillCommandState = { message: content, result };
 
       return {
-        content: JSON.stringify(result),
+        content,
         state,
         success: result.success,
       };
@@ -388,14 +414,17 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     try {
       const result: GrepContentResult = await localFileService.grepContent(params);
 
-      const message = result.success
-        ? `Found ${result.total_matches} matches in ${result.matches.length} locations`
+      const content = result.success
+        ? formatGrepResults({
+            matches: result.matches,
+            totalMatches: result.total_matches,
+          })
         : 'Search failed';
 
-      const state: GrepContentState = { message, result };
+      const state: GrepContentState = { message: content.split('\n')[0], result };
 
       return {
-        content: JSON.stringify(result),
+        content,
         state,
         success: result.success,
       };
@@ -412,12 +441,17 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
     try {
       const result: GlobFilesResult = await localFileService.globFiles(params);
 
-      const message = result.success ? `Found ${result.total_files} files` : 'Glob search failed';
+      const content = result.success
+        ? formatGlobResults({
+            files: result.files,
+            totalFiles: result.total_files,
+          })
+        : 'Glob search failed';
 
-      const state: GlobFilesState = { message, result };
+      const state: GlobFilesState = { message: content.split('\n')[0], result };
 
       return {
-        content: JSON.stringify(result),
+        content,
         state,
         success: result.success,
       };
