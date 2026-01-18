@@ -3,17 +3,13 @@ import electronLog from 'electron-log';
 
 import { getDesktopEnv } from '@/env';
 
-const nodeEnv = process.env.NODE_ENV;
-const forceDebug = !!process.env.DEBUG;
 // 配置 electron-log
-electronLog.transports.file.level = forceDebug ? 'debug' : 'info'; // 生产环境记录 info 及以上级别
-electronLog.transports.console.level = forceDebug
-  ? 'debug'
-  : nodeEnv === 'development'
+electronLog.transports.file.level = 'info'; // 生产环境记录 info 及以上级别
+electronLog.transports.console.level =
+  getDesktopEnv().NODE_ENV === 'development'
     ? 'debug' // 开发环境显示更多日志
-    : 'warn'; // 生产环境只显示警告和错误
+    : 'info'; // 生产环境显示 info 及以上级别
 
-const isProd = nodeEnv === 'production';
 // 创建命名空间调试器
 export const createLogger = (namespace: string) => {
   const debugLogger = debug(namespace);
@@ -23,14 +19,14 @@ export const createLogger = (namespace: string) => {
       debugLogger(message, ...args);
     },
     error: (message, ...args) => {
-      if (isProd) {
+      if (getDesktopEnv().NODE_ENV === 'production') {
         electronLog.error(message, ...args);
       } else {
         console.error(message, ...args);
       }
     },
     info: (message, ...args) => {
-      if (isProd) {
+      if (getDesktopEnv().NODE_ENV === 'production') {
         electronLog.info(`[${namespace}]`, message, ...args);
       }
 
@@ -43,7 +39,7 @@ export const createLogger = (namespace: string) => {
       }
     },
     warn: (message, ...args) => {
-      if (isProd) {
+      if (getDesktopEnv().NODE_ENV === 'production') {
         electronLog.warn(message, ...args);
       }
       debugLogger(`WARN: ${message}`, ...args);

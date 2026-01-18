@@ -114,7 +114,14 @@ export class UpdaterManager {
     logger.info(`${manual ? 'Manually checking' : 'Auto checking'} for updates...`);
 
     // Log detailed updater configuration for debugging
+    const inferredChannel =
+      autoUpdater.channel ||
+      (autoUpdater.currentVersion?.prerelease?.[0]
+        ? String(autoUpdater.currentVersion.prerelease[0])
+        : null);
+
     logger.info('[Updater Config] Channel:', autoUpdater.channel);
+    logger.info('[Updater Config] inferredChannel:', inferredChannel);
     logger.info('[Updater Config] allowPrerelease:', autoUpdater.allowPrerelease);
     logger.info('[Updater Config] currentVersion:', autoUpdater.currentVersion?.version);
     logger.info('[Updater Config] allowDowngrade:', autoUpdater.allowDowngrade);
