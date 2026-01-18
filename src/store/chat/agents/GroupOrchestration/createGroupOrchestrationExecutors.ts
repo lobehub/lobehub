@@ -126,10 +126,11 @@ export const createGroupOrchestrationExecutors = (
 
       // Execute Supervisor agent with the supervisor's agentId in context
       // Mark isSupervisor=true so assistant messages get metadata.isSupervisor for UI rendering
+      // Note: Don't pass operationId - let it create a new child operation (same as call_agent)
+      // This ensures each call has its own immutable context with isSupervisor properly set
       await get().internal_execAgentRuntime({
         context: { ...messageContext, agentId: supervisorAgentId, isSupervisor: true },
         messages,
-        operationId: state.operationId,
         parentMessageId: lastMessage.id,
         parentMessageType: lastMessage.role as 'user' | 'assistant' | 'tool',
         parentOperationId: orchestrationOperationId,

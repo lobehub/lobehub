@@ -280,7 +280,7 @@ describe('GroupManagementExecutor', () => {
       const ctx = createMockContext();
 
       const result = await groupManagementExecutor.executeAgentTask(
-        { agentId: 'agent-1', task: 'Do something' },
+        { agentId: 'agent-1', task: 'Do something', title: 'Test Task' },
         ctx,
       );
 
@@ -291,6 +291,7 @@ describe('GroupManagementExecutor', () => {
         agentId: 'agent-1',
         task: 'Do something',
         timeout: undefined,
+        title: 'Test Task',
         type: 'executeAgentTask',
       });
     });
@@ -314,7 +315,7 @@ describe('GroupManagementExecutor', () => {
       );
 
       await groupManagementExecutor.executeAgentTask(
-        { agentId: 'agent-1', task: 'Do something', timeout: 30000 },
+        { agentId: 'agent-1', task: 'Do something', timeout: 30000, title: 'Test Task' },
         ctx,
       );
 
@@ -339,7 +340,7 @@ describe('GroupManagementExecutor', () => {
       const ctx = createMockContext();
 
       const result = await groupManagementExecutor.executeAgentTask(
-        { agentId: 'agent-1', task: 'Do something' },
+        { agentId: 'agent-1', task: 'Do something', title: 'Test Task' },
         ctx,
       );
 
@@ -351,7 +352,7 @@ describe('GroupManagementExecutor', () => {
       const ctx = createMockContext();
 
       const result = await groupManagementExecutor.executeAgentTask(
-        { agentId: 'agent-1', task: 'Do something', timeout: 60000 },
+        { agentId: 'agent-1', task: 'Do something', timeout: 60000, title: 'Test Task' },
         ctx,
       );
 
@@ -360,6 +361,7 @@ describe('GroupManagementExecutor', () => {
         agentId: 'agent-1',
         task: 'Do something',
         timeout: 60000,
+        title: 'Test Task',
         type: 'executeAgentTask',
       });
     });
