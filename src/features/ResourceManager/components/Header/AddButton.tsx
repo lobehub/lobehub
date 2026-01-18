@@ -5,7 +5,7 @@ import { Notion } from '@lobehub/icons';
 import { Button, DropdownMenu, Icon, type MenuProps } from '@lobehub/ui';
 import { Upload } from 'antd';
 import { FilePenLine, FileUp, FolderIcon, FolderUp, Link, Plus } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { type ChangeEvent, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
@@ -23,6 +23,7 @@ const AddButton = () => {
   const pushDockFileList = useFileStore((s) => s.pushDockFileList);
   const uploadFolderWithStructure = useFileStore((s) => s.uploadFolderWithStructure);
   const createResourceAndSync = useFileStore((s) => s.createResourceAndSync);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // TODO: Migrate Notion import to use createResource
   // Keep old functions temporarily for components not yet migrated
@@ -121,6 +122,13 @@ const AddButton = () => {
     t,
     uploadFolderWithStructure,
   });
+  const handleFolderUploadWithClose = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setMenuOpen(false);
+      return handleFolderUpload(event);
+    },
+    [handleFolderUpload],
+  );
 
   const items = useMemo<MenuProps['items']>(
     () => [
@@ -144,11 +152,13 @@ const AddButton = () => {
         type: 'divider',
       },
       {
+        closeOnClick: false,
         icon: <Icon icon={FileUp} />,
         key: 'upload-file',
         label: (
           <Upload
             beforeUpload={async (file) => {
+              setMenuOpen(false);
               await pushDockFileList([file], libraryId, currentFolderId ?? undefined);
 
               return false;
@@ -161,6 +171,7 @@ const AddButton = () => {
         ),
       },
       {
+        closeOnClick: false,
         icon: <Icon icon={FolderUp} />,
         key: 'upload-folder',
         label: <label htmlFor="folder-upload-input">{t('header.actions.uploadFolder')}</label>,
@@ -211,7 +222,13 @@ const AddButton = () => {
 
   return (
     <>
-      <DropdownMenu items={items} placement="bottomRight" trigger="both">
+      <DropdownMenu
+        items={items}
+        onOpenChange={setMenuOpen}
+        open={menuOpen}
+        placement="bottomRight"
+        trigger="both"
+      >
         <Button data-no-highlight icon={Plus} type="primary">
           {t('addLibrary')}
         </Button>
@@ -233,7 +250,7 @@ const AddButton = () => {
       <input
         id="folder-upload-input"
         multiple
-        onChange={handleFolderUpload}
+        onChange={handleFolderUploadWithClose}
         style={{ display: 'none' }}
         type="file"
         // @ts-expect-error - webkitdirectory is not in the React types

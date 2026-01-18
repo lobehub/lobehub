@@ -21,9 +21,16 @@ const hotArea = css`
   }
 `;
 
-export const useTopicActionsDropdownMenu = (): MenuProps['items'] => {
+interface UseTopicActionsDropdownMenuOptions {
+  onUploadClose?: () => void;
+}
+
+export const useTopicActionsDropdownMenu = (
+  options: UseTopicActionsDropdownMenuOptions = {},
+): MenuProps['items'] => {
   const { t } = useTranslation(['topic', 'common']);
   const { modal } = App.useApp();
+  const { onUploadClose } = options;
 
   const [removeUnstarredTopic, removeAllTopic, importTopic] = useChatStore((s) => [
     s.removeUnstarredTopic,
@@ -33,6 +40,7 @@ export const useTopicActionsDropdownMenu = (): MenuProps['items'] => {
 
   const handleImport = useCallback(
     async (file: File) => {
+      onUploadClose?.();
       try {
         const text = await file.text();
         // Validate JSON format
@@ -46,7 +54,7 @@ export const useTopicActionsDropdownMenu = (): MenuProps['items'] => {
       }
       return false; // Prevent default upload behavior
     },
-    [importTopic, modal, t],
+    [importTopic, modal, onUploadClose, t],
   );
 
   const [topicDisplayMode, updatePreference] = useUserStore((s) => [
@@ -101,6 +109,7 @@ export const useTopicActionsDropdownMenu = (): MenuProps['items'] => {
             <div className={cx(hotArea)}>{t('actions.import')}</div>
           </Upload>
         ),
+        ...(onUploadClose ? { closeOnClick: false } : null),
       },
       {
         type: 'divider' as const,
@@ -143,6 +152,7 @@ export const useTopicActionsDropdownMenu = (): MenuProps['items'] => {
     updatePreference,
     updateSystemStatus,
     handleImport,
+    onUploadClose,
     removeUnstarredTopic,
     removeAllTopic,
     t,

@@ -1,5 +1,5 @@
 import { validateVideoFileSize } from '@lobechat/utils/client';
-import { Icon, type ItemType, type MenuProps, Tooltip } from '@lobehub/ui';
+import { Icon, type ItemType, Tooltip } from '@lobehub/ui';
 import { Upload } from 'antd';
 import { css, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -21,6 +21,7 @@ import { preferenceSelectors } from '@/store/user/selectors';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import Action from '../components/Action';
+import type { ActionDropdownMenuItems } from '../components/ActionDropdown';
 import CheckboxItem from '../components/CheckboxWithLoading';
 
 const hotArea = css`
@@ -48,6 +49,7 @@ const FileUpload = memo(() => {
     s.updateGuideState,
   ]);
   const [modalOpen, setModalOpen] = useState(false);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [updating, setUpdating] = useState(false);
 
   const files = useAgentStore((s) => agentByIdSelectors.getAgentFilesById(agentId)(s), isEqual);
@@ -61,8 +63,9 @@ const FileUpload = memo(() => {
     s.toggleKnowledgeBase,
   ]);
 
-  const uploadItems: MenuProps['items'] = [
+  const uploadItems: ActionDropdownMenuItems = [
     {
+      closeOnClick: false,
       disabled: !canUploadImage,
       icon: ImageUp,
       key: 'upload-image',
@@ -70,6 +73,7 @@ const FileUpload = memo(() => {
         <Upload
           accept={'image/*'}
           beforeUpload={async (file) => {
+            setDropdownOpen(false);
             await upload([file]);
 
             return false;
@@ -86,6 +90,7 @@ const FileUpload = memo(() => {
       ),
     },
     {
+      closeOnClick: false,
       icon: FileUp,
       key: 'upload-file',
       label: (
@@ -105,6 +110,7 @@ const FileUpload = memo(() => {
               return false;
             }
 
+            setDropdownOpen(false);
             await upload([file]);
 
             return false;
@@ -117,6 +123,7 @@ const FileUpload = memo(() => {
       ),
     },
     {
+      closeOnClick: false,
       icon: FolderUp,
       key: 'upload-folder',
       label: (
@@ -136,6 +143,7 @@ const FileUpload = memo(() => {
               return false;
             }
 
+            setDropdownOpen(false);
             await upload([file]);
 
             return false;
@@ -214,7 +222,7 @@ const FileUpload = memo(() => {
     },
   );
 
-  const items: MenuProps['items'] = [
+  const items: ActionDropdownMenuItems = [
     ...uploadItems,
     ...(knowledgeItems.length > 0 ? knowledgeItems : []),
   ];
@@ -229,6 +237,8 @@ const FileUpload = memo(() => {
       }}
       icon={Paperclip}
       loading={updating}
+      onOpenChange={setDropdownOpen}
+      open={dropdownOpen}
       showTooltip={false}
       title={t('upload.action.tooltip')}
       trigger={'both'}
