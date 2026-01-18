@@ -87,6 +87,42 @@ const AddGroupAgent = memo<{ mobile?: boolean }>(() => {
       return;
     }
 
+    // Find supervisor from memberAgents
+    const supervisorMember = memberAgents.find((member: any) => {
+      const agent = member.agent || member;
+      const role = member.role || agent.role;
+      return role === 'supervisor';
+    });
+
+    // Prepare supervisor config
+    let supervisorConfig;
+    if (supervisorMember) {
+      // Type assertion needed because actual API data structure differs from type definition
+      const member = supervisorMember as any;
+      const agent = member.agent || member;
+      const currentVersion = member.currentVersion || member;
+      const rawConfig = {
+        avatar: currentVersion.avatar,
+        backgroundColor: currentVersion.backgroundColor,
+        description: currentVersion.description,
+        model: currentVersion.config?.model || currentVersion.model,
+        params: currentVersion.config?.params || currentVersion.params,
+        provider: currentVersion.config?.provider || currentVersion.provider,
+        systemRole:
+          currentVersion.config?.systemRole ||
+          currentVersion.config?.systemPrompt ||
+          currentVersion.systemRole ||
+          currentVersion.content,
+        tags: currentVersion.tags,
+        title: currentVersion.name || agent.name || 'Supervisor',
+      };
+      // Filter out null/undefined values
+      supervisorConfig = Object.fromEntries(
+        // eslint-disable-next-line eqeqeq, @typescript-eslint/no-unused-vars
+        Object.entries(rawConfig).filter(([_, v]) => v != null),
+      );
+    }
+
     // Prepare group config
     const groupConfig = {
       config: {
@@ -95,30 +131,46 @@ const AddGroupAgent = memo<{ mobile?: boolean }>(() => {
         openingQuestions: config.openingQuestions,
         revealDM: config.revealDM,
       },
-      content: config.systemRole,
+      // Group content is the supervisor's systemRole (for backward compatibility)
+      content: supervisorConfig?.systemRole || config.systemRole,
       ...meta,
     };
 
     // Prepare member agents from market data
-    const members = memberAgents.map((member: any) => {
-      const agent = member.agent || member;
-      const currentVersion = member.currentVersion || member;
-      return {
-        avatar: currentVersion.avatar,
-        backgroundColor: currentVersion.backgroundColor,
-        description: currentVersion.description,
-        model: currentVersion.model,
-        plugins: currentVersion.plugins,
-        provider: currentVersion.provider,
-        systemRole: currentVersion.systemRole || currentVersion.content,
-        tags: currentVersion.tags,
-        title: currentVersion.name || agent.name,
-      };
-    });
+    // Filter out supervisor role as it will be created separately using supervisorConfig
+    const members = memberAgents
+      .filter((member: any) => {
+        const agent = member.agent || member;
+        const role = member.role || agent.role;
+        return role !== 'supervisor';
+      })
+      .map((member: any) => {
+        const agent = member.agent || member;
+        const currentVersion = member.currentVersion || member;
+        return {
+          avatar: currentVersion.avatar,
+          backgroundColor: currentVersion.backgroundColor,
+          description: currentVersion.description,
+          model: currentVersion.config?.model || currentVersion.model,
+          plugins: currentVersion.plugins,
+          provider: currentVersion.config?.provider || currentVersion.provider,
+          systemRole:
+            currentVersion.config?.systemRole ||
+            currentVersion.config?.systemPrompt ||
+            currentVersion.systemRole ||
+            currentVersion.content,
+          tags: currentVersion.tags,
+          title: currentVersion.name || agent.name,
+        };
+      });
 
     try {
       // Create group with all members in one request
-      const result = await chatGroupService.createGroupWithMembers(groupConfig, members);
+      const result = await chatGroupService.createGroupWithMembers(
+        groupConfig,
+        members,
+        supervisorConfig,
+      );
 
       // Refresh group list
       await loadGroups();

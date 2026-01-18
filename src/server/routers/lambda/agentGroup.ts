@@ -129,6 +129,19 @@ export const agentGroupRouter = router({
             })
             .partial(),
         ),
+        supervisorConfig: z
+          .object({
+            avatar: z.string().nullish(),
+            backgroundColor: z.string().nullish(),
+            description: z.string().nullish(),
+            model: z.string().nullish(),
+            params: z.any().nullish(),
+            provider: z.string().nullish(),
+            systemRole: z.string().nullish(),
+            tags: z.array(z.string()).nullish(),
+            title: z.string().nullish(),
+          })
+          .optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -144,6 +157,14 @@ export const agentGroupRouter = router({
       const memberAgentIds = createdAgents.map((agent) => agent.id);
 
       // 2. Create group with supervisor and member agents
+      // Filter out null/undefined values from supervisorConfig
+      const supervisorConfig = input.supervisorConfig
+        ? Object.fromEntries(
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars, eqeqeq
+            Object.entries(input.supervisorConfig).filter(([_, v]) => v != null),
+          )
+        : undefined;
+
       const { group, supervisorAgentId } = await ctx.agentGroupRepo.createGroupWithSupervisor(
         {
           ...input.groupConfig,
@@ -152,6 +173,7 @@ export const agentGroupRouter = router({
           ),
         },
         memberAgentIds,
+        supervisorConfig as any,
       );
 
       return { agentIds: memberAgentIds, groupId: group.id, supervisorAgentId };
