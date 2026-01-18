@@ -627,7 +627,7 @@ describe('resolveAgentConfig', () => {
     });
   });
 
-  describe('supervisor agent (slug from agentGroup store)', () => {
+  describe('supervisor agent (detected via groupId)', () => {
     const mockGroupStoreState = { groupMap: {} };
     const mockGroupWithSupervisor = {
       agents: [
@@ -651,18 +651,11 @@ describe('resolveAgentConfig', () => {
       );
     });
 
-    it('should detect supervisor agent from agentGroup store when not found in agent store', () => {
-      // Mock: supervisor agent is found in agentGroup store
-      vi.spyOn(
-        agentGroupSelectors.agentGroupByIdSelectors,
-        'groupBySupervisorAgentId',
-      ).mockReturnValue(() => mockGroupWithSupervisor as any);
-
-      // Mock: getGroupBySupervisorAgentId for building groupSupervisorContext
-      vi.spyOn(
-        agentGroupSelectors.agentGroupSelectors,
-        'getGroupBySupervisorAgentId',
-      ).mockReturnValue(() => mockGroupWithSupervisor as any);
+    it('should detect supervisor agent using groupId for direct lookup', () => {
+      // Mock: groupById returns the group
+      vi.spyOn(agentGroupSelectors.agentGroupByIdSelectors, 'groupById').mockReturnValue(
+        () => mockGroupWithSupervisor as any,
+      );
 
       // Mock: getGroupMembers returns non-supervisor agents
       vi.spyOn(agentGroupSelectors.agentGroupSelectors, 'getGroupMembers').mockReturnValue(
@@ -680,7 +673,10 @@ describe('resolveAgentConfig', () => {
         systemRole: 'You are a group supervisor...',
       });
 
-      const result = resolveAgentConfig({ agentId: 'supervisor-agent-id' });
+      const result = resolveAgentConfig({
+        agentId: 'supervisor-agent-id',
+        groupId: 'group-123',
+      });
 
       expect(result.isBuiltinAgent).toBe(true);
       expect(result.slug).toBe('group-supervisor');
@@ -689,17 +685,10 @@ describe('resolveAgentConfig', () => {
     });
 
     it('should pass groupSupervisorContext to getAgentRuntimeConfig', () => {
-      // Mock: supervisor agent is found in agentGroup store
-      vi.spyOn(
-        agentGroupSelectors.agentGroupByIdSelectors,
-        'groupBySupervisorAgentId',
-      ).mockReturnValue(() => mockGroupWithSupervisor as any);
-
-      // Mock: getGroupBySupervisorAgentId for building groupSupervisorContext
-      vi.spyOn(
-        agentGroupSelectors.agentGroupSelectors,
-        'getGroupBySupervisorAgentId',
-      ).mockReturnValue(() => mockGroupWithSupervisor as any);
+      // Mock: groupById returns the group
+      vi.spyOn(agentGroupSelectors.agentGroupByIdSelectors, 'groupById').mockReturnValue(
+        () => mockGroupWithSupervisor as any,
+      );
 
       // Mock: getGroupMembers returns non-supervisor agents
       vi.spyOn(agentGroupSelectors.agentGroupSelectors, 'getGroupMembers').mockReturnValue(
@@ -718,7 +707,10 @@ describe('resolveAgentConfig', () => {
           systemRole: 'You are a group supervisor...',
         });
 
-      resolveAgentConfig({ agentId: 'supervisor-agent-id' });
+      resolveAgentConfig({
+        agentId: 'supervisor-agent-id',
+        groupId: 'group-123',
+      });
 
       expect(getAgentRuntimeConfigSpy).toHaveBeenCalledWith(
         'group-supervisor',
@@ -736,31 +728,53 @@ describe('resolveAgentConfig', () => {
       );
     });
 
-    it('should treat as regular agent when supervisor is not found in agentGroup store', () => {
-      // Mock: supervisor agent is NOT found in agentGroup store
-      vi.spyOn(
-        agentGroupSelectors.agentGroupByIdSelectors,
-        'groupBySupervisorAgentId',
-      ).mockReturnValue(() => undefined);
-
-      const result = resolveAgentConfig({ agentId: 'some-other-agent' });
+    it('should treat as regular agent when groupId is not provided', () => {
+      // Without groupId, cannot detect supervisor
+      const result = resolveAgentConfig({ agentId: 'supervisor-agent-id' });
 
       expect(result.isBuiltinAgent).toBe(false);
       expect(result.slug).toBeUndefined();
       expect(result.plugins).toEqual(['plugin-a', 'plugin-b']); // Falls back to agent config plugins
     });
 
-    it('should work correctly when regenerating supervisor message', () => {
-      // This simulates the regenerate flow where agentId is the supervisor agent ID
-      vi.spyOn(
-        agentGroupSelectors.agentGroupByIdSelectors,
-        'groupBySupervisorAgentId',
-      ).mockReturnValue(() => mockGroupWithSupervisor as any);
+    it('should treat as regular agent when agentId does not match group supervisorAgentId', () => {
+      // Mock: groupById returns the group
+      vi.spyOn(agentGroupSelectors.agentGroupByIdSelectors, 'groupById').mockReturnValue(
+        () => mockGroupWithSupervisor as any,
+      );
 
-      vi.spyOn(
-        agentGroupSelectors.agentGroupSelectors,
-        'getGroupBySupervisorAgentId',
-      ).mockReturnValue(() => mockGroupWithSupervisor as any);
+      // Pass a different agentId that is not the supervisor
+      const result = resolveAgentConfig({
+        agentId: 'some-other-agent',
+        groupId: 'group-123',
+      });
+
+      expect(result.isBuiltinAgent).toBe(false);
+      expect(result.slug).toBeUndefined();
+      expect(result.plugins).toEqual(['plugin-a', 'plugin-b']);
+    });
+
+    it('should treat as regular agent when group is not found', () => {
+      // Mock: groupById returns undefined
+      vi.spyOn(agentGroupSelectors.agentGroupByIdSelectors, 'groupById').mockReturnValue(
+        () => undefined,
+      );
+
+      const result = resolveAgentConfig({
+        agentId: 'supervisor-agent-id',
+        groupId: 'non-existent-group',
+      });
+
+      expect(result.isBuiltinAgent).toBe(false);
+      expect(result.slug).toBeUndefined();
+      expect(result.plugins).toEqual(['plugin-a', 'plugin-b']);
+    });
+
+    it('should work correctly when regenerating supervisor message with groupId', () => {
+      // This simulates the regenerate flow where both agentId and groupId are provided
+      vi.spyOn(agentGroupSelectors.agentGroupByIdSelectors, 'groupById').mockReturnValue(
+        () => mockGroupWithSupervisor as any,
+      );
 
       vi.spyOn(agentGroupSelectors.agentGroupSelectors, 'getGroupMembers').mockReturnValue(
         () => [{ id: 'member-agent-1', title: 'Agent 1' }] as any,
@@ -772,7 +786,10 @@ describe('resolveAgentConfig', () => {
         systemRole: 'Supervisor system role',
       });
 
-      const result = resolveAgentConfig({ agentId: 'supervisor-agent-id' });
+      const result = resolveAgentConfig({
+        agentId: 'supervisor-agent-id',
+        groupId: 'group-123',
+      });
 
       // Should correctly identify as builtin supervisor agent
       expect(result.isBuiltinAgent).toBe(true);

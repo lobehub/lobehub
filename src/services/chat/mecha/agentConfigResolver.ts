@@ -55,6 +55,12 @@ export interface AgentConfigResolverContext {
   /** Document content for page-agent */
   documentContent?: string;
 
+  /**
+   * Group ID for supervisor detection.
+   * When provided, used for direct lookup instead of iterating all groups.
+   */
+  groupId?: string;
+
   /** Current model being used (for template variables) */
   model?: string;
   /** Plugins enabled for the agent */
@@ -114,30 +120,19 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   const basePlugins = agentConfig.plugins ?? [];
 
   // Check if this is a builtin agent
-  // First check agent store, then check if this is a supervisor agent in agentGroup store
+  // First check agent store, then check if this is a supervisor agent via groupId
   let slug = agentSelectors.getAgentSlugById(agentId)(agentStoreState);
   log('slug from agentStore: %s (agentId: %s)', slug, agentId);
 
-  // If not found in agent store, check if this is a supervisor agent in any group
-  // Supervisor agents have their slug stored in agentGroup store, not agent store
-  if (!slug) {
+  // If not found in agent store, check if this is a supervisor agent using groupId
+  // This is more reliable than iterating all groups to find a match
+  if (!slug && ctx.groupId) {
     const groupStoreState = getChatGroupStoreState();
-    const groupMap = groupStoreState.groupMap;
-    const groupMapKeys = Object.keys(groupMap);
-    log(
-      'checking groupStore for supervisor - groupMap has %d groups: %o',
-      groupMapKeys.length,
-      groupMapKeys.map((key) => ({
-        groupId: key,
-        supervisorAgentId: groupMap[key]?.supervisorAgentId,
-        title: groupMap[key]?.title,
-      })),
-    );
+    const group = agentGroupByIdSelectors.groupById(ctx.groupId)(groupStoreState);
 
-    const group = agentGroupByIdSelectors.groupBySupervisorAgentId(agentId)(groupStoreState);
     log(
-      'groupBySupervisorAgentId result for agentId %s: %o',
-      agentId,
+      'checking supervisor via groupId %s: group=%o',
+      ctx.groupId,
       group
         ? {
             groupId: group.id,
@@ -147,10 +142,15 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
         : null,
     );
 
-    if (group) {
-      // This is a supervisor agent - use the builtin slug
+    // Check if this agent is the supervisor of the specified group
+    if (group?.supervisorAgentId === agentId) {
       slug = BUILTIN_AGENT_SLUGS.groupSupervisor;
-      log('agentId %s identified as group supervisor, assigned slug: %s', agentId, slug);
+      log(
+        'agentId %s identified as group supervisor for group %s, assigned slug: %s',
+        agentId,
+        ctx.groupId,
+        slug,
+      );
     }
   }
 
@@ -213,15 +213,17 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   }
 
   // Build groupSupervisorContext if this is a group-supervisor agent
+  // Use groupId for direct lookup instead of reverse lookup by supervisorAgentId
   let groupSupervisorContext;
-  if (slug === BUILTIN_AGENT_SLUGS.groupSupervisor) {
-    log('building groupSupervisorContext for agentId: %s', agentId);
+  if (slug === BUILTIN_AGENT_SLUGS.groupSupervisor && ctx.groupId) {
+    log('building groupSupervisorContext for agentId: %s, groupId: %s', agentId, ctx.groupId);
     const groupStoreState = getChatGroupStoreState();
-    // Find the group by supervisor agent ID
-    const group = agentGroupSelectors.getGroupBySupervisorAgentId(agentId)(groupStoreState);
+    // Direct lookup using groupId
+    const group = agentGroupByIdSelectors.groupById(ctx.groupId)(groupStoreState);
 
     log(
-      'getGroupBySupervisorAgentId result: %o',
+      'groupById result for %s: %o',
+      ctx.groupId,
       group
         ? {
             agentsCount: group.agents?.length,
@@ -253,7 +255,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
         hasSystemPrompt: !!groupSupervisorContext.systemPrompt,
       });
     } else {
-      log('WARNING: group not found for supervisor agentId: %s', agentId);
+      log('WARNING: group not found for groupId: %s', ctx.groupId);
     }
   }
 

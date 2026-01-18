@@ -160,14 +160,16 @@ export const streamingExecutor: StateCreator<
     // - agentId is used for session ID (message storage location)
     const effectiveAgentId = paramSubAgentId || agentId;
 
-    // Get scope from operation context if available
+    // Get scope and groupId from operation context if available
     const operation = operationId ? get().operations[operationId] : undefined;
     const scope = operation?.context.scope;
+    const groupId = operation?.context.groupId;
 
     // Resolve agent config with builtin agent runtime config merged
     // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
     const { agentConfig: agentConfigData, plugins: pluginIds } = resolveAgentConfig({
       agentId: effectiveAgentId || '',
+      groupId, // Pass groupId for supervisor detection
       scope, // Pass scope from operation context
     });
 
@@ -341,6 +343,7 @@ export const streamingExecutor: StateCreator<
     // - max_tokens/reasoning_effort based on chatConfig settings
     const resolved = resolveAgentConfig({
       agentId: effectiveAgentId,
+      groupId, // Pass groupId for supervisor detection
       scope, // scope is already available from line 329
     });
     const finalAgentConfig = agentConfig || resolved.agentConfig;
@@ -594,7 +597,8 @@ export const streamingExecutor: StateCreator<
     // - max_tokens/reasoning_effort based on chatConfig settings
     const { agentConfig: agentConfigData } = resolveAgentConfig({
       agentId: effectiveAgentId || '',
-      scope: context.scope, // Pass scope from context parameter (available at line 883)
+      groupId, // Pass groupId for supervisor detection
+      scope: context.scope, // Pass scope from context parameter
     });
 
     // Use agent config from agentId
