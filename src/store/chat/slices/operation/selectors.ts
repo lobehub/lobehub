@@ -234,6 +234,27 @@ const isAgentRuntimeRunningByContext =
   };
 
 // === Backward Compatibility ===
+
+/**
+ * Check if a specific agent has running AI runtime operations
+ * Used for agent list item loading states where we need per-agent granularity
+ */
+const isAgentRunning =
+  (agentId: string) =>
+  (s: ChatStoreState): boolean => {
+    for (const type of AI_RUNTIME_OPERATION_TYPES) {
+      const operationIds = s.operationsByType[type] || [];
+      const hasRunning = operationIds.some((id) => {
+        const op = s.operations[id];
+        return (
+          op && op.status === 'running' && !op.metadata.isAborting && op.context.agentId === agentId
+        );
+      });
+      if (hasRunning) return true;
+    }
+    return false;
+  };
+
 /**
  * Check if agent runtime is running (including both main window and thread)
  * Checks both client-side (execAgentRuntime) and server-side (execServerAgentRuntime) operations
@@ -477,6 +498,7 @@ export const operationSelectors = {
 
   isAborting,
 
+  isAgentRunning,
   isAgentRuntimeRunning,
   isAgentRuntimeRunningByContext,
   isAnyMessageLoading,
