@@ -2,6 +2,31 @@
 
 # Changelog
 
+## [Version 2.0.0-next.304](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.303...v2.0.0-next.304)
+
+<sup>Released on **2026-01-18**</sup>
+
+#### 💄 Styles
+
+- **misc**: Improve auto scroll and loading hint.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Styles
+
+- **misc**: Improve auto scroll and loading hint, closes [#11579](https://github.com/lobehub/lobe-chat/issues/11579) ([277b42d](https://github.com/lobehub/lobe-chat/commit/277b42d))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.303](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.302...v2.0.0-next.303)
 
 <sup>Released on **2026-01-18**</sup>

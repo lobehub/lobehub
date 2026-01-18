@@ -1,6 +1,13 @@
 [
   {
     "children": {
+      "improvements": ["Improve auto scroll and loading hint."]
+    },
+    "date": "2026-01-18",
+    "version": "2.0.0-next.304"
+  },
+  {
+    "children": {
       "improvements": ["Improve operation hint and fix scroll issue."]
     },
     "date": "2026-01-18",

@@ -1,12 +1,12 @@
 /**
- * 规范化语言代码
+ * Normalize language code
  */
 export const normalizeLocale = (locale: string) => {
   return locale.toLowerCase().replace('_', '-');
 };
 
 /**
- * 按需加载翻译资源
+ * Load translation resources on demand
  */
 export const loadResources = async (lng: string, ns: string) => {
   // All en-* locales fallback to 'en' and use default TypeScript files
@@ -16,7 +16,7 @@ export const loadResources = async (lng: string, ns: string) => {
 
       return content;
     } catch (error) {
-      console.error(`[I18n] 无法加载翻译文件: ${ns}`, error);
+      console.error(`[I18n] Unable to load translation file: ${ns}`, error);
       return {};
     }
   }
@@ -26,7 +26,7 @@ export const loadResources = async (lng: string, ns: string) => {
 
     return content;
   } catch (error) {
-    console.error(`无法加载翻译文件: ${lng} - ${ns}`, error);
+    console.error(`Unable to load translation file: ${lng} - ${ns}`, error);
     return {};
   }
 };

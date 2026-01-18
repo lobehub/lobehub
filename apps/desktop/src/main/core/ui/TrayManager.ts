@@ -8,11 +8,11 @@ import { createLogger } from '@/utils/logger';
 import type { App } from '../App';
 import { Tray, TrayOptions } from './Tray';
 
-// 创建日志记录器
+// Create logger
 const logger = createLogger('core:TrayManager');
 
 /**
- * 托盘标识符类型
+ * Tray identifier type
  */
 export type TrayIdentifiers = 'main';
 
@@ -20,41 +20,41 @@ export class TrayManager {
   app: App;
 
   /**
-   * 存储所有托盘实例
+   * Store all tray instances
    */
   trays: Map<TrayIdentifiers, Tray> = new Map();
 
   /**
-   * 构造方法
-   * @param app 应用实例
+   * Constructor
+   * @param app Application instance
    */
   constructor(app: App) {
-    logger.debug('初始化 TrayManager');
+    logger.debug('Initialize TrayManager');
     this.app = app;
   }
 
   /**
-   * 初始化所有托盘
+   * Initialize all trays
    */
   initializeTrays() {
-    logger.debug('初始化应用托盘');
+    logger.debug('Initialize application tray');
 
-    // 初始化主托盘
+    // Initialize main tray
     this.initializeMainTray();
   }
 
   /**
-   * 获取主托盘
+   * Get main tray
    */
   getMainTray() {
     return this.retrieveByIdentifier('main');
   }
 
   /**
-   * 初始化主托盘
+   * Initialize main tray
    */
   initializeMainTray() {
-    logger.debug('初始化主托盘');
+    logger.debug('Initialize main tray');
     return this.retrieveOrInitialize({
       iconPath: isMac
         ? nativeTheme.shouldUseDarkColorsForSystemIntegratedUI

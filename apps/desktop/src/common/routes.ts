@@ -1,36 +1,36 @@
 /**
- * 路由拦截类型，描述拦截路由和目标窗口的映射关系
+ * Route interception type, describing the mapping between intercepted routes and target windows
  */
 export interface RouteInterceptConfig {
   /**
-   * 是否始终在新窗口中打开，即使目标窗口已经存在
+   * Whether to always open in a new window, even if target window already exists
    */
   alwaysOpenNew?: boolean;
 
   /**
-   * 描述
+   * Description
    */
   description: string;
 
   /**
-   * 是否启用拦截
+   * Whether interception is enabled
    */
   enabled: boolean;
 
   /**
-   * 路由模式前缀，例如 '/settings'
+   * Route pattern prefix, e.g., '/settings'
    */
   pathPrefix: string;
 
   /**
-   * 目标窗口标识符
+   * Target window identifier
    */
   targetWindow: string;
 }
 
 /**
- * 拦截路由配置列表
- * 定义了所有需要特殊处理的路由
+ * Intercepted route configuration list
+ * Defines all routes that require special handling
  */
 export const interceptRoutes: RouteInterceptConfig[] = [
   {

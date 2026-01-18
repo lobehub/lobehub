@@ -47,7 +47,7 @@ export default class RemoteServerSyncCtr extends ControllerModule {
   }
 
   /**
-   * 处理流式请求的 IPC 调用
+   * Handle IPC calls for streaming requests
    */
   private handleStreamRequest = async (event: IpcMainEvent, args: ProxyTRPCStreamRequestParams) => {
     const { requestId } = args;
@@ -79,7 +79,7 @@ export default class RemoteServerSyncCtr extends ControllerModule {
         return;
       }
 
-      // 调用新的流式转发方法
+      // Call new streaming forwarding method
       await this.forwardStreamRequest(event.sender, {
         ...args,
         accessToken: token,
@@ -95,7 +95,7 @@ export default class RemoteServerSyncCtr extends ControllerModule {
   };
 
   /**
-   * 执行实际的流式请求转发
+   * Execute actual streaming request forwarding
    */
   private async forwardStreamRequest(
     sender: WebContents,
@@ -123,14 +123,14 @@ export default class RemoteServerSyncCtr extends ControllerModule {
     const clientReq = requester.request(requestOptions, (clientRes: IncomingMessage) => {
       logger.debug(`${logPrefix} Received response with status ${clientRes.statusCode}`);
 
-      // 添加调试信息
+      // Add debug information
       logger.debug(`${logPrefix} Response details:`, {
         headers: clientRes.headers,
         statusCode: clientRes.statusCode,
         statusMessage: clientRes.statusMessage,
       });
 
-      // 1. 立刻发送响应头和状态码
+      // 1. Immediately send response headers and status code
       const responseData = {
         headers: clientRes.headers || {},
         status: clientRes.statusCode || 500,
@@ -140,21 +140,21 @@ export default class RemoteServerSyncCtr extends ControllerModule {
       logger.debug(`${logPrefix} Sending response data:`, responseData);
       sender.send(`stream:response:${requestId}`, responseData);
 
-      // 2. 监听数据块并转发
+      // 2. Listen for data chunks and forward
       clientRes.on('data', (chunk: Buffer) => {
         if (sender.isDestroyed()) return;
         logger.debug(`${logPrefix} Received data chunk, size: ${chunk.length}. Forwarding...`);
         sender.send(`stream:data:${requestId}`, chunk);
       });
 
-      // 3. 监听结束信号并转发
+      // 3. Listen for end signal and forward
       clientRes.on('end', () => {
         logger.debug(`${logPrefix} Stream ended. Forwarding end signal...`);
         if (sender.isDestroyed()) return;
         sender.send(`stream:end:${requestId}`);
       });
 
-      // 4. 监听响应流错误并转发
+      // 4. Listen for response stream errors and forward
       clientRes.on('error', (error) => {
         logger.error(`${logPrefix} Error reading response stream:`, error);
         if (sender.isDestroyed()) return;

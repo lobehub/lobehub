@@ -220,7 +220,7 @@ export const filesRelations = relations(files, ({ many, one }) => ({
   }),
 }));
 
-// Document 相关关系定义
+// Document-related relation definitions
 export const documentsRelations = relations(documents, ({ one, many }) => ({
   file: one(files, {
     fields: [documents.fileId],
@@ -249,7 +249,7 @@ export const documentChunksRelations = relations(documentChunks, ({ one }) => ({
   }),
 }));
 
-// Generation 相关关系定义
+// Generation-related relation definitions
 export const generationTopicsRelations = relations(generationTopics, ({ one, many }) => ({
   user: one(users, {
     fields: [generationTopics.userId],
@@ -289,7 +289,7 @@ export const generationsRelations = relations(generations, ({ one }) => ({
   }),
 }));
 
-// Chat Groups 相关关系定义
+// Chat Groups-related relation definitions
 export const chatGroupsRelations = relations(chatGroups, ({ many, one }) => ({
   user: one(users, {
     fields: [chatGroups.userId],
@@ -313,7 +313,7 @@ export const chatGroupsAgentsRelations = relations(chatGroupsAgents, ({ one }) =
   }),
 }));
 
-// Message Groups 相关关系定义
+// Message Groups-related relation definitions
 export const messageGroupsRelations = relations(messageGroups, ({ many, one }) => ({
   user: one(users, {
     fields: [messageGroups.userId],

@@ -10,10 +10,6 @@ import AutoScroll from './AutoScroll';
 
 interface VirtualizedListProps {
   dataSource: string[];
-  /**
-   * Whether AI is generating (for auto-scroll)
-   */
-  isGenerating?: boolean;
   itemContent: (index: number, data: string) => ReactNode;
 }
 
@@ -22,7 +18,7 @@ interface VirtualizedListProps {
  *
  * Based on ConversationStore data flow, no dependency on global ChatStore.
  */
-const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent, isGenerating }) => {
+const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent }) => {
   const virtuaRef = useRef<VListHandle>(null);
   const prevDataLengthRef = useRef(dataSource.length);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -154,7 +150,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent, i
           position: 'relative',
         }}
       >
-        <AutoScroll isGenerating={isGenerating} />
+        <AutoScroll />
       </WideScreenContainer>
     </>
   );

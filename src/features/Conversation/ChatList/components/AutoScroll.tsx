@@ -2,19 +2,13 @@
 
 import { memo, useEffect } from 'react';
 
-import { useConversationStore, virtuaListSelectors } from '../../store';
+import { messageStateSelectors, useConversationStore, virtuaListSelectors } from '../../store';
 import BackBottom from './BackBottom';
 
-interface AutoScrollProps {
-  /**
-   * Whether AI is generating (for auto-scroll during generation)
-   */
-  isGenerating?: boolean;
-}
-
-const AutoScroll = memo<AutoScrollProps>(({ isGenerating }) => {
+const AutoScroll = memo(() => {
   const atBottom = useConversationStore(virtuaListSelectors.atBottom);
   const isScrolling = useConversationStore(virtuaListSelectors.isScrolling);
+  const isGenerating = useConversationStore(messageStateSelectors.isAIGenerating);
   const scrollToBottom = useConversationStore((s) => s.scrollToBottom);
 
   useEffect(() => {

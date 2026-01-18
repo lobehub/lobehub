@@ -3,14 +3,14 @@ import electronLog from 'electron-log';
 
 import { getDesktopEnv } from '@/env';
 
-// 配置 electron-log
-electronLog.transports.file.level = 'info'; // 生产环境记录 info 及以上级别
+// Configure electron-log
+electronLog.transports.file.level = 'info'; // Log info level and above in production
 electronLog.transports.console.level =
   getDesktopEnv().NODE_ENV === 'development'
-    ? 'debug' // 开发环境显示更多日志
-    : 'warn'; // 生产环境只显示警告和错误
+    ? 'debug' // Show more logs in development
+    : 'warn'; // Only show warnings and errors in production
 
-// 创建命名空间调试器
+// Create namespaced debugger
 export const createLogger = (namespace: string) => {
   const debugLogger = debug(namespace);
 

@@ -2,27 +2,27 @@ import { Menu } from 'electron';
 
 export interface MenuOptions {
   showDevItems?: boolean;
-  // 其他可能的配置项
+  // Other possible configuration items
 }
 
 export interface IMenuPlatform {
   /**
-   * 构建并设置应用菜单
+   * Build and set application menu
    */
   buildAndSetAppMenu(options?: MenuOptions): Menu;
 
   /**
-   * 构建上下文菜单
+   * Build context menu
    */
   buildContextMenu(type: string, data?: any): Menu;
 
   /**
-   * 构建托盘菜单
+   * Build tray menu
    */
   buildTrayMenu(): Menu;
 
   /**
-   * 刷新菜单
+   * Refresh menu
    */
   refresh(options?: MenuOptions): void;
 }

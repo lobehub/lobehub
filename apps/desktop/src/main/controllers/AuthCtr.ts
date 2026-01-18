@@ -143,7 +143,7 @@ export default class AuthCtr extends ControllerModule {
   }
 
   /**
-   * 启动轮询机制获取凭证
+   * Start polling mechanism to get credentials
    */
   private startPolling() {
     if (!this.authRequestState) {

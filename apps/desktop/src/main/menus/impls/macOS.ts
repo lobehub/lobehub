@@ -47,7 +47,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
   }
 
   refresh(options?: MenuOptions): void {
-    // 重建应用菜单
+    // 重建Application menu
     this.buildAndSetAppMenu(options);
     // 如果托盘菜单存在，也重建它（如果需要动态更新）
     // this.trayMenu = this.buildTrayMenu();

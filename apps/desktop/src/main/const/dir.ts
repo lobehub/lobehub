@@ -25,9 +25,9 @@ export const appStorageDir = join(userDataDir, 'lobehub-storage');
 
 // ------  Application storage directory ---- //
 
-// 本地存储文件（模拟 S3）
+// Local storage files (simulating S3)
 export const FILE_STORAGE_DIR = 'file-storage';
-// Plugin 安装目录
+// Plugin installation directory
 export const INSTALL_PLUGINS_DIR = 'plugins';
 
 // Desktop file service

@@ -160,7 +160,7 @@ export class StaticFileServerManager {
       logger.debug(`Request method: ${req.method}`);
       logger.debug(`Request headers: ${JSON.stringify(req.headers)}`);
 
-      // 提取文件路径：从 /desktop-file/path/to/file.png 中提取相对路径
+      // 提取File path：从 /desktop-file/path/to/file.png 中提取相对路径
       let filePath = decodeURIComponent(url.pathname.slice(1)); // 移除开头的 /
       logger.debug(`Initial file path after decode: ${filePath}`);
 
@@ -243,7 +243,7 @@ export class StaticFileServerManager {
   }
 
   /**
-   * 获取文件服务器域名
+   * Get file server domain
    */
   getFileServerDomain(): string {
     if (!this.isInitialized || !this.serverPort) {
