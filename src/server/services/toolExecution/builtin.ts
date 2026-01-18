@@ -4,6 +4,7 @@ import { type ChatToolPayload } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
+import { LobehubSkillService } from '@/server/services/lobehubSkill';
 import { SearchService } from '@/server/services/search';
 
 import { type IToolExecutor, type ToolExecutionContext, type ToolExecutionResult } from './types';
@@ -19,11 +20,36 @@ export class BuiltinToolsExecutor implements IToolExecutor {
     payload: ChatToolPayload,
     context: ToolExecutionContext,
   ): Promise<ToolExecutionResult> {
-    const { identifier, apiName, arguments: argsStr } = payload;
+    const { identifier, apiName, arguments: argsStr, source } = payload;
     const args = safeParseJSON(argsStr) || {};
 
-    log('Executing builtin tool: %s:%s with args: %O', identifier, apiName, args, context);
+    log(
+      'Executing builtin tool: %s:%s (source: %s) with args: %O',
+      identifier,
+      apiName,
+      source,
+      args,
+    );
 
+    // Route LobeHub Skills to dedicated service
+    if (source === 'lobehubSkill') {
+      if (!context.serverDB || !context.userId) {
+        return {
+          content: 'Server context not available for LobeHub Skills execution.',
+          error: { code: 'CONTEXT_NOT_AVAILABLE' },
+          success: false,
+        };
+      }
+
+      const skillService = new LobehubSkillService(context.serverDB, context.userId);
+      return skillService.execute({
+        args,
+        provider: identifier,
+        toolName: apiName,
+      });
+    }
+
+    // Default: original builtin runtime logic
     const ServerRuntime = BuiltinToolServerRuntimes[identifier];
 
     if (!ServerRuntime) {

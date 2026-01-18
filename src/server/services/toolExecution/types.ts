@@ -1,7 +1,10 @@
 import { type LobeToolManifest } from '@lobechat/context-engine';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { type ChatToolPayload } from '@lobechat/types';
 
 export interface ToolExecutionContext {
+  /** Server database for LobeHub Skills execution */
+  serverDB?: LobeChatDatabase;
   toolManifestMap: Record<string, LobeToolManifest>;
   userId?: string;
 }

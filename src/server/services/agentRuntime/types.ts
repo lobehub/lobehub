@@ -87,6 +87,7 @@ export interface OperationCreationParams {
    */
   stepCallbacks?: StepLifecycleCallbacks;
   toolManifestMap: Record<string, LobeToolManifest>;
+  toolSourceMap?: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'>;
   tools?: any[];
   userId?: string;
 }

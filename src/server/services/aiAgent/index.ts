@@ -1,4 +1,5 @@
 import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
+import type { LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
 import type {
   ExecAgentParams,
@@ -10,7 +11,6 @@ import type {
 } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
-import type { LobeToolManifest } from '@lobechat/context-engine';
 import { MarketSDK } from '@lobehub/market-sdk';
 import debug from 'debug';
 
@@ -239,10 +239,19 @@ export class AiAgentService {
       toolManifestMap[id] = manifest;
     });
 
+    // Build toolSourceMap for routing tool execution
+    const toolSourceMap: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'> =
+      {};
+    // Mark lobehub skills
+    for (const manifest of lobehubSkillManifests) {
+      toolSourceMap[manifest.identifier] = 'lobehubSkill';
+    }
+
     log(
-      'execAgent: generated %d tools from %d configured plugins',
+      'execAgent: generated %d tools from %d configured plugins, %d lobehub skills',
       tools?.length ?? 0,
       pluginIds.length,
+      lobehubSkillManifests.length,
     );
 
     // 6. Get existing messages if provided
@@ -379,6 +388,7 @@ export class AiAgentService {
         operationId,
         stepCallbacks,
         toolManifestMap,
+        toolSourceMap,
         tools,
         userId: this.userId,
       });

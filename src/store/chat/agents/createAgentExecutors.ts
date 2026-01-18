@@ -1087,11 +1087,8 @@ export const createAgentExecutors = (context: {
           }
 
           if (status.status === 'failed') {
-            // Extract error message from error object or string
-            const errorMessage =
-              typeof status.error === 'string'
-                ? status.error
-                : status.error?.message || JSON.stringify(status.error);
+            // Extract error message (error is always a string in TaskStatusResult)
+            const errorMessage = status.error || 'Unknown error';
             log('[%s] Task failed: %s', taskLogId, errorMessage);
             await context
               .get()

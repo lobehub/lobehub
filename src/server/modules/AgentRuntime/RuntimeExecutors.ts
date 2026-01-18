@@ -263,7 +263,12 @@ export const createRuntimeExecutors = (
             }
           },
           onToolsCalling: async ({ toolsCalling: raw }) => {
-            const payload = new ToolNameResolver().resolve(raw, state.toolManifestMap);
+            const resolved = new ToolNameResolver().resolve(raw, state.toolManifestMap);
+            // Add source field from toolSourceMap for routing tool execution
+            const payload = resolved.map((p) => ({
+              ...p,
+              source: state.toolSourceMap?.[p.identifier],
+            }));
             // log(`[${operationLogId}][toolsCalling]`, payload);
             toolsCalling = payload;
             tool_calls = raw;
@@ -468,6 +473,7 @@ export const createRuntimeExecutors = (
       // Execute tool using ToolExecutionService
       log(`[${operationLogId}] Executing tool ${toolName} ...`);
       const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
+        serverDB: ctx.serverDB,
         toolManifestMap: state.toolManifestMap,
         userId: ctx.userId,
       });

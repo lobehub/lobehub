@@ -231,6 +231,7 @@ export class AgentRuntimeService {
       initialMessages = [],
       appContext,
       toolManifestMap,
+      toolSourceMap,
       stepCallbacks,
     } = params;
 
@@ -258,6 +259,7 @@ export class AgentRuntimeService {
         status: 'idle',
         stepCount: 0,
         toolManifestMap,
+        toolSourceMap,
         tools,
       } as Partial<AgentState>;
 
