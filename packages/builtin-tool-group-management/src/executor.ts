@@ -11,7 +11,6 @@ import {
   CreateWorkflowParams,
   DelegateParams,
   ExecuteTaskParams,
-  GetAgentInfoParams,
   GroupManagementApiName,
   GroupManagementIdentifier,
   InterruptParams,
@@ -19,42 +18,11 @@ import {
   SummarizeParams,
   VoteParams,
 } from '@lobechat/builtin-tool-group-management';
-import { formatAgentProfile } from '@lobechat/prompts';
 import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
-
-import { agentGroupSelectors, useAgentGroupStore } from '@/store/agentGroup';
 
 class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName> {
   readonly identifier = GroupManagementIdentifier;
   protected readonly apiEnum = GroupManagementApiName;
-
-  // ==================== Agent Info ====================
-
-  getAgentInfo = async (
-    params: GetAgentInfoParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
-    const { groupId } = ctx;
-
-    if (!groupId) {
-      return {
-        content: JSON.stringify({ error: 'No group context available', success: false }),
-        success: false,
-      };
-    }
-
-    const agent = agentGroupSelectors.getAgentByIdFromGroup(
-      groupId,
-      params.agentId,
-    )(useAgentGroupStore.getState());
-
-    if (!agent) {
-      return { content: `Agent "${params.agentId}" not found in this group`, success: false };
-    }
-
-    // Return formatted agent profile for the supervisor
-    return { content: formatAgentProfile(agent), state: agent, success: true };
-  };
 
   // ==================== Communication Coordination ====================
 
@@ -225,12 +193,12 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
     _ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     // TODO: Implement conversation summarization
+    const focusInfo = params.focus ? ` with focus on "${params.focus}"` : '';
+    const preserveInfo = params.preserveRecent
+      ? ` (preserving ${params.preserveRecent} recent messages)`
+      : '';
     return {
-      content: JSON.stringify({
-        focus: params.focus,
-        message: 'Summarization not yet implemented',
-        preserveRecent: params.preserveRecent,
-      }),
+      content: `Summarization not yet implemented${focusInfo}${preserveInfo}`,
       success: true,
     };
   };
@@ -243,23 +211,16 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
   ): Promise<BuiltinToolResult> => {
     // TODO: Implement workflow creation
     return {
-      content: JSON.stringify({
-        message: 'Workflow creation not yet implemented',
-        name: params.name,
-        steps: params.steps,
-      }),
+      content: `Workflow creation not yet implemented for "${params.name}" with ${params.steps.length} steps`,
       success: true,
     };
   };
 
   vote = async (params: VoteParams, _ctx: BuiltinToolContext): Promise<BuiltinToolResult> => {
     // TODO: Implement voting mechanism
+    const optionLabels = params.options.map((o) => o.label).join(', ');
     return {
-      content: JSON.stringify({
-        message: 'Voting not yet implemented',
-        options: params.options,
-        question: params.question,
-      }),
+      content: `Voting not yet implemented for question: "${params.question}" with options: ${optionLabels}`,
       success: true,
     };
   };

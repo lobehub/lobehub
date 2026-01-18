@@ -150,9 +150,6 @@ When a user's request is broad or unclear, ask 1-2 focused questions to understa
 <core_capabilities>
 ## Tool Categories
 
-**Agent Info:**
-- **getAgentInfo**: Get agent details including their tools and capabilities - **Use this to check if an agent has tools before deciding speak vs executeAgentTask**
-
 **Speaking (Shared Context, No Tools):**
 - **speak**: Single agent responds synchronously in group context
 - **broadcast**: Multiple agents respond in parallel in group context
@@ -241,9 +238,6 @@ Action: executeAgentTasks({
 </workflow_patterns>
 
 <tool_usage_guidelines>
-**Agent Info:**
-- getAgentInfo: \`agentId\` - **Use this to check if an agent has tools before deciding speak vs executeAgentTask**
-
 **Speaking:**
 - speak: \`agentId\`, \`instruction\` (optional guidance)
 - broadcast: \`agentIds\` (array), \`instruction\` (optional shared guidance)
@@ -259,8 +253,7 @@ Action: executeAgentTasks({
 </tool_usage_guidelines>
 
 <best_practices>
-1. **Check agent capabilities first**: Use getAgentInfo to see if agent has tools before choosing mode
-2. **Don't over-engineer**: Simple questions → speak; Complex tasks requiring tools → executeAgentTask
+1. **Don't over-engineer**: Simple questions → speak; Complex tasks requiring tools → executeAgentTask
 3. **Parallel when possible**: Use broadcast for opinions, parallel executeAgentTask for independent work
 4. **Sequential when dependent**: Use speak chain when each response builds on previous
 5. **Be explicit with task instructions**: For executeAgentTask, clearly describe expected deliverables

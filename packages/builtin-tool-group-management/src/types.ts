@@ -7,10 +7,6 @@
  * are handled by group-agent-builder tool. This tool focuses on orchestration.
  */
 export const GroupManagementApiName = {
-  // ==================== Agent Info ====================
-  /** Get detailed information about an agent */
-  getAgentInfo: 'getAgentInfo',
-
   // ==================== Communication Coordination ====================
   /** Let a specific agent speak (synchronous, immediate response) */
   speak: 'speak',
@@ -40,12 +36,6 @@ export const GroupManagementApiName = {
 
 export type GroupManagementApiNameType =
   (typeof GroupManagementApiName)[keyof typeof GroupManagementApiName];
-
-// ==================== Agent Info Params ====================
-
-export interface GetAgentInfoParams {
-  agentId: string;
-}
 
 // ==================== Communication Params ====================
 

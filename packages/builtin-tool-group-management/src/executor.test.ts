@@ -271,18 +271,6 @@ describe('GroupManagementExecutor', () => {
     });
   });
 
-  describe('getAgentInfo', () => {
-    it('should return error when no groupId in context', async () => {
-      const ctx = createMockContext();
-
-      const result = await groupManagementExecutor.getAgentInfo({ agentId: 'agent-1' }, ctx);
-
-      // No groupId means we can't get agent info
-      expect(result.success).toBe(false);
-      expect(result.stop).toBeUndefined();
-    });
-  });
-
   describe('executeAgentTask', () => {
     beforeEach(() => {
       vi.clearAllMocks();

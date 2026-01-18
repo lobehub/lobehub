@@ -1,3 +1,4 @@
+import { formatAgentProfile } from '@lobechat/prompts';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import { agentService } from '@/services/agent';
@@ -11,6 +12,7 @@ import type {
   BatchCreateAgentsState,
   CreateAgentParams,
   CreateAgentState,
+  GetAgentInfoParams,
   InviteAgentParams,
   InviteAgentState,
   RemoveAgentParams,
@@ -30,6 +32,33 @@ import type {
  * Extends AgentBuilder functionality with group-specific operations
  */
 export class GroupAgentBuilderExecutionRuntime {
+  // ==================== Agent Info ====================
+
+  /**
+   * Get detailed information about a specific agent
+   */
+  async getAgentInfo(
+    groupId: string | undefined,
+    args: GetAgentInfoParams,
+  ): Promise<BuiltinServerRuntimeOutput> {
+    if (!groupId) {
+      return {
+        content: 'No group context available',
+        success: false,
+      };
+    }
+
+    const state = getChatGroupStoreState();
+    const agent = agentGroupSelectors.getAgentByIdFromGroup(groupId, args.agentId)(state);
+
+    if (!agent) {
+      return { content: `Agent "${args.agentId}" not found in this group`, success: false };
+    }
+
+    // Return formatted agent profile for the supervisor
+    return { content: formatAgentProfile(agent), state: agent, success: true };
+  }
+
   // ==================== Group Member Management ====================
 
   /**
