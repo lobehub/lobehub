@@ -116,6 +116,7 @@ export class UpdaterManager {
     // Log detailed updater configuration for debugging
     logger.info('[Updater Config] Channel:', autoUpdater.channel);
     logger.info('[Updater Config] allowPrerelease:', autoUpdater.allowPrerelease);
+    logger.info('[Updater Config] currentVersion:', autoUpdater.currentVersion?.version);
     logger.info('[Updater Config] allowDowngrade:', autoUpdater.allowDowngrade);
     logger.info('[Updater Config] autoDownload:', autoUpdater.autoDownload);
     logger.info('[Updater Config] forceDevUpdateConfig:', autoUpdater.forceDevUpdateConfig);

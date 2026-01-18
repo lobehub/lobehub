@@ -45,6 +45,21 @@ bun run build
 bun run build-local
 ```
 
+如果需要模拟 CI 的渠道构建（Nightly / Beta / Stable），可以使用根目录脚本：
+
+```bash
+# 回到仓库根目录
+cd ../../..
+
+# 指定渠道与版本号
+npm run desktop:build-channel -- nightly 2.1.0-nightly.1
+npm run desktop:build-channel -- beta 2.1.0-beta.1
+npm run desktop:build-channel -- stable 2.1.0
+
+# 保留 package.json 与 icon 变更
+npm run desktop:build-channel -- stable 2.1.0 --keep-changes
+```
+
 ### 3. 生成更新文件
 
 ```bash

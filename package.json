@@ -47,6 +47,7 @@
     "db:studio": "drizzle-kit studio",
     "db:visualize": "dbdocs build docs/development/database-schema.dbml --project lobe-chat",
     "desktop:build": "npm run desktop:build-next && npm run desktop:prepare-dist && npm run desktop:build-electron",
+    "desktop:build-channel": "tsx scripts/electronWorkflow/buildDesktopChannel.ts",
     "desktop:build-electron": "tsx scripts/electronWorkflow/buildElectron.ts",
     "desktop:build-local": "npm run desktop:build-next && npm run desktop:prepare-dist && npm run build-local --prefix=./apps/desktop",
     "desktop:build-next": "npm run build:electron",
