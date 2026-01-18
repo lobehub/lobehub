@@ -334,7 +334,7 @@ export class UpdaterManager {
   /**
    * Configure update provider based on channel
    * - Stable channel + UPDATE_SERVER_URL: Use generic HTTP provider (S3) as primary, channel=stable
-   * - Other channels (beta/nightly) or no S3: Use GitHub provider, channel=latest
+   * - Other channels (beta/nightly) or no S3: Use GitHub provider, channel unset (defaults to latest)
    *
    * Important: S3 has stable-mac.yml, GitHub has latest-mac.yml
    */
@@ -352,17 +352,15 @@ export class UpdaterManager {
         url: UPDATE_SERVER_URL,
       });
     } else {
-      // Beta/nightly channels use GitHub, or fallback to GitHub if UPDATE_SERVER_URL not configured.
-      // Leave channel unset so GitHub prerelease matching uses the version tag (e.g. next).
+      // GitHub provider:
+      // - stable: use default latest-mac.yml (GitHub uploads latest* only)
+      // - beta/nightly: leave channel unset so prerelease matching uses tag (e.g. next)
       const reason = this.usingFallbackProvider ? '(fallback from S3)' : '';
       logger.info(`Configuring GitHub provider for ${channel} channel ${reason}`);
-      if (!autoUpdater.channel) {
-        logger.info('Channel left unset (defaults to latest-mac.yml for GitHub)');
-      } else {
-        logger.info(
-          `Channel kept as: ${autoUpdater.channel} (will look for ${autoUpdater.channel}-mac.yml)`,
-        );
+      if (autoUpdater.channel !== null) {
+        autoUpdater.channel = null;
       }
+      logger.info('Channel left unset (defaults to latest-mac.yml for GitHub)');
 
       // For beta/nightly channels, we need prerelease versions
       const needPrerelease = channel !== 'stable';
