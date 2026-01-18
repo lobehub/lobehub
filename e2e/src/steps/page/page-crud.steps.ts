@@ -122,26 +122,87 @@ Given('用户在 Page 页面有一个文稿', async function (this: CustomWorld)
 
   // Create a unique title for this test page
   const uniqueTitle = `E2E Page ${Date.now()}`;
-  const defaultTitleRegex = /^(无标题|Untitled)$/;
 
   console.log(`   📍 Step: 重命名为唯一标题 "${uniqueTitle}"...`);
-  // Find the new page and rename it to ensure uniqueness
-  const pageItem = this.page.getByText(defaultTitleRegex).first();
+  // Find the new page in sidebar (use link selector to avoid matching editor title)
+  // Sidebar page items are rendered as <a href="/page/xxx"> links
+
+  // Debug: check how many links exist
+  const allPageLinks = this.page.locator('a[href^="/page/"]');
+  const linkCount = await allPageLinks.count();
+  console.log(`   📍 Debug: Found ${linkCount} page links in sidebar`);
+
+  // Find the Untitled page link
+  const pageItem = allPageLinks.filter({ hasText: /Untitled|无标题/ }).first();
+  const pageItemCount = await allPageLinks.filter({ hasText: /Untitled|无标题/ }).count();
+  console.log(`   📍 Debug: Found ${pageItemCount} Untitled page links`);
+
   await expect(pageItem).toBeVisible({ timeout: 5000 });
+  console.log('   📍 Debug: Page item is visible');
 
   // Right-click to open context menu and rename
   await pageItem.click({ button: 'right' });
+  console.log('   📍 Debug: Right-clicked on page item');
   await this.page.waitForTimeout(500);
 
-  const renameOption = this.page.getByRole('menuitem', { name: /^(rename|重命名)$/i });
+  // Debug: check menu items
+  const menuItemCount = await this.page.locator('[role="menuitem"]').count();
+  console.log(`   📍 Debug: Found ${menuItemCount} menu items after right-click`);
+
+  const renameOption = this.page.getByRole('menuitem', { name: /rename|重命名/i });
   await expect(renameOption).toBeVisible({ timeout: 5000 });
+  console.log('   📍 Debug: Rename option is visible');
   await renameOption.click();
-  await this.page.waitForTimeout(500);
+  console.log('   📍 Debug: Clicked rename option');
+  await this.page.waitForTimeout(800);
 
-  // Input the unique name (use modKey for cross-platform support)
-  await this.page.keyboard.press(`${this.modKey}+A`);
-  await this.page.keyboard.type(uniqueTitle, { delay: 20 });
-  await this.page.click('body', { position: { x: 10, y: 10 } });
+  // Wait for rename popover to appear and find the input
+  // Try multiple selectors for the input
+  const inputSelectors = [
+    '.ant-popover input',
+    '.ant-popover-content input',
+    '[class*="popover"] input',
+    'input[placeholder]',
+  ];
+
+  let popoverInput = null;
+  for (const selector of inputSelectors) {
+    const inputs = this.page.locator(selector);
+    const count = await inputs.count();
+    console.log(`   📍 Debug: Selector "${selector}" found ${count} inputs`);
+    if (count > 0) {
+      // Find the visible one
+      for (let i = 0; i < count; i++) {
+        const input = inputs.nth(i);
+        if (await input.isVisible()) {
+          const placeholder = await input.getAttribute('placeholder');
+          // Skip search input
+          if (placeholder && (placeholder.includes('Search') || placeholder.includes('搜索'))) {
+            continue;
+          }
+          popoverInput = input;
+          break;
+        }
+      }
+      if (popoverInput) break;
+    }
+  }
+
+  if (!popoverInput) {
+    throw new Error('Could not find popover input for renaming');
+  }
+
+  console.log('   📍 Debug: Popover input found');
+  await expect(popoverInput).toBeVisible({ timeout: 5000 });
+
+  // Clear and input the unique name
+  await popoverInput.click();
+  await popoverInput.clear();
+  await popoverInput.fill(uniqueTitle);
+  console.log(`   📍 Debug: Filled input with "${uniqueTitle}"`);
+
+  // Press Enter to confirm
+  await popoverInput.press('Enter');
   await this.page.waitForTimeout(1000);
 
   // Wait for the renamed page to be visible
@@ -174,8 +235,12 @@ Given('用户在 Page 页面有一个文稿 {string}', async function (this: Cus
   const defaultTitleRegex = /^(无标题|Untitled)$/;
 
   console.log(`   📍 Step: 通过右键菜单重命名文稿为 "${title}"...`);
-  // Find the new page in the sidebar and rename via context menu
-  const pageItem = this.page.getByText(defaultTitleRegex).first();
+  // Find the new page in sidebar (use link selector to avoid matching editor title)
+  // Sidebar page items are rendered as <a href="/page/xxx"> links
+  const pageItem = this.page
+    .locator('a[href^="/page/"]')
+    .filter({ hasText: defaultTitleRegex })
+    .first();
   await expect(pageItem).toBeVisible({ timeout: 5000 });
 
   // Right-click to open context menu
@@ -183,15 +248,52 @@ Given('用户在 Page 页面有一个文稿 {string}', async function (this: Cus
   await this.page.waitForTimeout(500);
 
   // Select rename option
-  const renameOption = this.page.getByRole('menuitem', { name: /^(rename|重命名)$/i });
+  const renameOption = this.page.getByRole('menuitem', { name: /rename|重命名/i });
   await expect(renameOption).toBeVisible({ timeout: 5000 });
   await renameOption.click();
-  await this.page.waitForTimeout(500);
+  await this.page.waitForTimeout(800);
 
-  // Input the new name (use modKey for cross-platform support)
-  await this.page.keyboard.press(`${this.modKey}+A`);
-  await this.page.keyboard.type(title, { delay: 20 });
-  await this.page.click('body', { position: { x: 10, y: 10 } });
+  // Wait for rename popover to appear and find the input
+  const inputSelectors = [
+    '.ant-popover input',
+    '.ant-popover-content input',
+    '[class*="popover"] input',
+    'input[placeholder]',
+  ];
+
+  let popoverInput = null;
+  for (const selector of inputSelectors) {
+    const inputs = this.page.locator(selector);
+    const count = await inputs.count();
+    if (count > 0) {
+      for (let i = 0; i < count; i++) {
+        const input = inputs.nth(i);
+        if (await input.isVisible()) {
+          const placeholder = await input.getAttribute('placeholder');
+          if (placeholder && (placeholder.includes('Search') || placeholder.includes('搜索'))) {
+            continue;
+          }
+          popoverInput = input;
+          break;
+        }
+      }
+      if (popoverInput) break;
+    }
+  }
+
+  if (!popoverInput) {
+    throw new Error('Could not find popover input for renaming');
+  }
+
+  await expect(popoverInput).toBeVisible({ timeout: 5000 });
+
+  // Clear and input the new name
+  await popoverInput.click();
+  await popoverInput.clear();
+  await popoverInput.fill(title);
+
+  // Press Enter to confirm
+  await popoverInput.press('Enter');
   await this.page.waitForTimeout(1000);
 
   console.log('   📍 Step: 查找文稿...');
