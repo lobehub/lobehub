@@ -70,6 +70,7 @@
   "builtins.lobe-group-management.apiName.summarize": "总结对话",
   "builtins.lobe-group-management.apiName.vote": "发起投票",
   "builtins.lobe-group-management.inspector.broadcast.title": "以下 Agent 发言：",
+  "builtins.lobe-group-management.inspector.executeAgentTask.title": "分配任务给：",
   "builtins.lobe-group-management.inspector.executeAgentTasks.title": "分配任务给：",
   "builtins.lobe-group-management.inspector.speak.title": "指定 Agent 发言：",
   "builtins.lobe-group-management.title": "群组协调",
