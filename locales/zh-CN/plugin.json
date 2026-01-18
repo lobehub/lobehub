@@ -40,6 +40,7 @@
   "builtins.lobe-cloud-sandbox.title": "云端沙盒",
   "builtins.lobe-group-agent-builder.apiName.batchCreateAgents": "批量创建 Agent",
   "builtins.lobe-group-agent-builder.apiName.createAgent": "创建助理",
+  "builtins.lobe-group-agent-builder.apiName.getAgentInfo": "获取成员信息",
   "builtins.lobe-group-agent-builder.apiName.getAvailableModels": "获取可用模型",
   "builtins.lobe-group-agent-builder.apiName.installPlugin": "安装技能",
   "builtins.lobe-group-agent-builder.apiName.inviteAgent": "邀请成员",

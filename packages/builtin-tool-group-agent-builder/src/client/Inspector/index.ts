@@ -10,6 +10,7 @@ import { type BuiltinInspector } from '@lobechat/types';
 import { GroupAgentBuilderApiName } from '../../types';
 import { BatchCreateAgentsInspector } from './BatchCreateAgents';
 import { CreateAgentInspector } from './CreateAgent';
+import { GetAgentInfoInspector } from './GetAgentInfo';
 import { InviteAgentInspector } from './InviteAgent';
 import { RemoveAgentInspector } from './RemoveAgent';
 import { SearchAgentInspector } from './SearchAgent';
@@ -27,6 +28,7 @@ export const GroupAgentBuilderInspectors: Record<string, BuiltinInspector> = {
   // Group-specific inspectors
   [GroupAgentBuilderApiName.batchCreateAgents]: BatchCreateAgentsInspector as BuiltinInspector,
   [GroupAgentBuilderApiName.createAgent]: CreateAgentInspector as BuiltinInspector,
+  [GroupAgentBuilderApiName.getAgentInfo]: GetAgentInfoInspector as BuiltinInspector,
   [GroupAgentBuilderApiName.inviteAgent]: InviteAgentInspector as BuiltinInspector,
   [GroupAgentBuilderApiName.removeAgent]: RemoveAgentInspector as BuiltinInspector,
   [GroupAgentBuilderApiName.searchAgent]: SearchAgentInspector as BuiltinInspector,
@@ -44,6 +46,7 @@ export const GroupAgentBuilderInspectors: Record<string, BuiltinInspector> = {
 // Re-export individual inspectors
 export { BatchCreateAgentsInspector } from './BatchCreateAgents';
 export { CreateAgentInspector } from './CreateAgent';
+export { GetAgentInfoInspector } from './GetAgentInfo';
 export { InviteAgentInspector } from './InviteAgent';
 export { RemoveAgentInspector } from './RemoveAgent';
 export { SearchAgentInspector } from './SearchAgent';
