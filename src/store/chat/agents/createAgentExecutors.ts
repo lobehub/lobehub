@@ -1087,12 +1087,17 @@ export const createAgentExecutors = (context: {
           }
 
           if (status.status === 'failed') {
-            log('[%s] Task failed: %s', taskLogId, status.error);
+            // Extract error message from error object or string
+            const errorMessage =
+              typeof status.error === 'string'
+                ? status.error
+                : status.error?.message || JSON.stringify(status.error);
+            log('[%s] Task failed: %s', taskLogId, errorMessage);
             await context
               .get()
               .optimisticUpdateMessageContent(
                 taskMessageId,
-                `Task failed: ${status.error}`,
+                `Task failed: ${errorMessage}`,
                 undefined,
                 { operationId: state.operationId },
               );

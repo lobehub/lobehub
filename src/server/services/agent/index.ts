@@ -17,6 +17,12 @@ import { type UpdateAgentResult } from './type';
 
 const log = debug('lobe-agent:service');
 
+/**
+ * Agent config with required id field.
+ * Used when returning agent config from database (id is always present).
+ */
+export type AgentConfigWithId = LobeAgentConfig & { id: string };
+
 interface AgentWelcomeData {
   openQuestions: string[];
   welcomeMessage: string;
@@ -76,6 +82,25 @@ export class AgentService {
     }
 
     return mergedConfig;
+  }
+
+  /**
+   * Get agent config by ID or slug with default config merged.
+   * Supports both agentId and slug lookup.
+   *
+   * The returned agent config is merged with:
+   * 1. DEFAULT_AGENT_CONFIG (hardcoded defaults)
+   * 2. Server's globalDefaultAgentConfig (from environment variable DEFAULT_AGENT_CONFIG)
+   * 3. User's defaultAgentConfig (from user settings)
+   * 4. The actual agent config from database
+   */
+  async getAgentConfig(idOrSlug: string): Promise<AgentConfigWithId | null> {
+    const [agent, defaultAgentConfig] = await Promise.all([
+      this.agentModel.getAgentConfig(idOrSlug),
+      this.userModel.getUserSettingsDefaultAgentConfig(),
+    ]);
+
+    return this.mergeDefaultConfig(agent, defaultAgentConfig) as AgentConfigWithId | null;
   }
 
   /**

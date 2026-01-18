@@ -23,10 +23,35 @@ import {
   createServerAgentToolsEngine,
   serverMessagesEngine,
 } from '@/server/modules/Mecha';
+import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import type { StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
 
 const log = debug('lobe-server:ai-agent-service');
+
+/**
+ * Format error for storage in thread metadata
+ * Handles Error objects which don't serialize properly with JSON.stringify
+ */
+function formatErrorForMetadata(error: unknown): Record<string, any> | undefined {
+  if (!error) return undefined;
+
+  // Handle Error objects
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      name: error.name,
+    };
+  }
+
+  // Handle objects with message property (like ChatMessageError)
+  if (typeof error === 'object' && 'message' in error) {
+    return error as Record<string, any>;
+  }
+
+  // Fallback: wrap in object
+  return { message: String(error) };
+}
 
 /**
  * Internal params for execAgent with step lifecycle callbacks
@@ -53,6 +78,7 @@ export class AiAgentService {
   private readonly userId: string;
   private readonly db: LobeChatDatabase;
   private readonly agentModel: AgentModel;
+  private readonly agentService: AgentService;
   private readonly messageModel: MessageModel;
   private readonly pluginModel: PluginModel;
   private readonly threadModel: ThreadModel;
@@ -63,6 +89,7 @@ export class AiAgentService {
     this.userId = userId;
     this.db = db;
     this.agentModel = new AgentModel(db, userId);
+    this.agentService = new AgentService(db, userId);
     this.messageModel = new MessageModel(db, userId);
     this.pluginModel = new PluginModel(db, userId);
     this.threadModel = new ThreadModel(db, userId);
@@ -106,8 +133,8 @@ export class AiAgentService {
 
     log('execAgent: identifier=%s, prompt=%s', identifier, prompt.slice(0, 50));
 
-    // 1. Get agent configuration from database (supports both id and slug)
-    const agentConfig = await this.agentModel.getAgentConfig(identifier);
+    // 1. Get agent configuration with default config merged (supports both id and slug)
+    const agentConfig = await this.agentService.getAgentConfig(identifier);
     if (!agentConfig) {
       throw new Error(`Agent not found: ${identifier}`);
     }
@@ -616,6 +643,11 @@ export class AiAgentService {
           }
         }
 
+        // Log error when task fails
+        if (reason === 'error' && finalState.error) {
+          console.error('execSubAgentTask: task failed for thread %s:', threadId, finalState.error);
+        }
+
         try {
           // Extract summary from last assistant message and update task message content
           const lastAssistantMessage = finalState.messages
@@ -630,12 +662,15 @@ export class AiAgentService {
             log('execSubAgentTask: updated task message %s with summary', sourceMessageId);
           }
 
+          // Format error for proper serialization (Error objects don't serialize with JSON.stringify)
+          const formattedError = formatErrorForMetadata(finalState.error);
+
           // Update Thread metadata
           await this.threadModel.update(threadId, {
             metadata: {
               completedAt,
               duration,
-              error: finalState.error,
+              error: formattedError,
               operationId: finalState.operationId,
               startedAt,
               totalCost: finalState.cost?.total,

@@ -27,8 +27,8 @@ export interface ThreadMetadata {
   completedAt?: string;
   /** Execution duration in milliseconds */
   duration?: number;
-  /** Error message when task failed */
-  error?: string;
+  /** Error details when task failed */
+  error?: any;
   /** Operation ID for tracking */
   operationId?: string;
   /** Task start time, used to calculate duration */
