@@ -12,6 +12,7 @@ import { useToolStore } from '@/store/tool';
 import {
   klavisStoreSelectors,
   lobehubSkillStoreSelectors,
+  mcpStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore/types';
@@ -42,6 +43,14 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
     // Get LobehubSkill server state
     const lobehubSkillServer = useToolStore((s) =>
       lobehubSkillStoreSelectors.getServers(s).find((srv) => srv.identifier === identifier),
+    );
+
+    // Get Market MCP plugin info
+    const marketPlugin = useToolStore((s) => mcpStoreSelectors.getPluginById(identifier)(s));
+
+    // Get Builtin tool info
+    const builtinTool = useToolStore((s) =>
+      s.builtinTools.find((tool) => tool.identifier === identifier),
     );
 
     // Check if it's a Klavis tool
@@ -166,19 +175,34 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
       );
     }
 
-    // Render MCP marketplace plugin
+    // Render MCP marketplace plugin or Builtin tool
     // Note: The actual installation happens in ExecutionRuntime after user approves
+    const pluginName = marketPlugin?.name || builtinTool?.manifest?.meta?.title || identifier;
+    const pluginIcon = marketPlugin?.icon || builtinTool?.manifest?.meta?.avatar;
+    const pluginType = source === 'market' ? 'MCP Plugin' : 'Builtin Tool';
+
     return (
       <Flexbox
         gap={12}
         style={{ background: 'var(--lobe-fill-tertiary)', borderRadius: 8, padding: 16 }}
       >
         <Flexbox align="center" gap={12} horizontal>
-          <Avatar avatar="🔧" size={40} style={{ borderRadius: 8 }} />
+          {pluginIcon && typeof pluginIcon === 'string' && pluginIcon.startsWith('http') ? (
+            <Image
+              alt={pluginName}
+              height={40}
+              src={pluginIcon}
+              style={{ borderRadius: 8 }}
+              unoptimized
+              width={40}
+            />
+          ) : (
+            <Avatar avatar={pluginIcon || '🔧'} size={40} style={{ borderRadius: 8 }} />
+          )}
           <Flexbox flex={1} gap={4}>
             <Flexbox align="center" gap={8} horizontal>
-              <span style={{ fontWeight: 600 }}>{identifier}</span>
-              <span style={{ color: 'var(--lobe-text-tertiary)', fontSize: 12 }}>MCP Plugin</span>
+              <span style={{ fontWeight: 600 }}>{pluginName}</span>
+              <span style={{ color: 'var(--lobe-text-tertiary)', fontSize: 12 }}>{pluginType}</span>
             </Flexbox>
             <span style={{ color: 'var(--lobe-text-secondary)', fontSize: 12 }}>
               {t('agentBuilder.installPlugin.clickApproveToInstall')}
