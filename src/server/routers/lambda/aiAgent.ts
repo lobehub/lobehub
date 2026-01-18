@@ -17,21 +17,6 @@ import { nanoid } from '@/utils/uuid';
 
 const log = debug('lobe-server:ai-agent-router');
 
-/**
- * Serialize error to string
- * Handles Error objects, plain objects, and primitives
- */
-const serializeError = (error: unknown): string | undefined => {
-  if (error === undefined || error === null) return undefined;
-  if (typeof error === 'string') return error;
-  if (error instanceof Error) return error.message;
-  try {
-    return JSON.stringify(error);
-  } catch {
-    return String(error);
-  }
-};
-
 // Zod schemas for agent operation
 const CreateAgentOperationSchema = z.object({
   agentConfig: z.record(z.any()).optional().default({}),
