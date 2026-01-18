@@ -50,13 +50,13 @@ export interface GroupSupervisorAgentInfo {
  * @example
  * ```typescript
  * const agents = [
- *   { id: 'agt_xxx', title: '创意总监' },
- *   { id: 'agt_yyy', title: '设计师' },
+ *   { id: 'agt_xxx', title: 'Creative Director' },
+ *   { id: 'agt_yyy', title: 'Designer' },
  * ];
  * const xml = buildGroupMembersXml(agents);
  * // Returns:
- * //   <member name="创意总监" id="agt_xxx" />
- * //   <member name="设计师" id="agt_yyy" />
+ * //   <member name="Creative Director" id="agt_xxx" />
+ * //   <member name="Designer" id="agt_yyy" />
  * ```
  */
 export const buildGroupMembersXml = (agents: GroupSupervisorAgentInfo[]): string => {

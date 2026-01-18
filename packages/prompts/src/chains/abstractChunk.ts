@@ -8,7 +8,7 @@ export const chainAbstractChunkText = (text: string): Partial<ChatStreamPayload>
 
 Rules:
 - Output ONLY the summary text itself, nothing else
-- NO labels, prefixes, or meta-text (like "Summary:", "摘要:", etc.)
+- NO labels, prefixes, or meta-text (like "Summary:", etc.)
 - NO explanations, commentary, or additional context
 - MUST be 1-2 complete sentences maximum (count carefully!)
 - MUST use the SAME language as the input text
@@ -23,8 +23,8 @@ Rules:
 <input>The useState hook in React allows you to add state...</input>
 <output>The useState hook in React enables functional components to manage state using a state variable and setter function.</output>
 
-<input>深度学习是机器学习的一个分支...</input>
-<output>深度学习是机器学习的一个分支，使用多层神经网络学习数据表示，在图像识别、自然语言处理等领域取得突破。</output>
+<input>Deep learning is a branch of machine learning...</input>
+<output>Deep learning is a branch of machine learning that uses multi-layer neural networks to learn data representations, achieving breakthroughs in areas such as image recognition and natural language processing.</output>
 </examples>
 `,
         role: 'system',

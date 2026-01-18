@@ -104,7 +104,7 @@ const formatIdentityItem = (item: UserMemoryIdentityItem): string => {
 
 /**
  * Format identities grouped by type as XML
- * Types: personal (角色), professional (职业), demographic (属性)
+ * Types: personal (role), professional (occupation), demographic (attributes)
  */
 const formatIdentitiesSection = (identities: UserMemoryIdentityItem[]): string => {
   const personal = identities.filter((i) => i.type === 'personal');
