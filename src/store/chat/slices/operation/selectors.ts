@@ -356,6 +356,28 @@ const isAnyMessageLoading =
   };
 
 /**
+ * Get the deepest running operation for a message (leaf node in operation tree)
+ * Operations form a tree structure via parentOperationId/childOperationIds
+ * This returns the most specific (deepest) running operation for UI display
+ */
+const getDeepestRunningOperationByMessage =
+  (messageId: string) =>
+  (s: ChatStoreState): Operation | undefined => {
+    const operations = getOperationsByMessage(messageId)(s);
+    const runningOps = operations.filter((op) => op.status === 'running');
+
+    if (runningOps.length === 0) return undefined;
+
+    const runningOpIds = new Set(runningOps.map((op) => op.id));
+
+    // A leaf running operation has no running children
+    return runningOps.find((op) => {
+      const childIds = op.childOperationIds || [];
+      return !childIds.some((childId) => runningOpIds.has(childId));
+    });
+  };
+
+/**
  * Check if a specific message is being regenerated
  */
 const isMessageRegenerating =
@@ -440,6 +462,7 @@ export const operationSelectors = {
   getCurrentContextOperations,
   getCurrentOperationLabel,
   getCurrentOperationProgress,
+  getDeepestRunningOperationByMessage,
   getOperationById,
   getOperationContextFromMessage,
   getOperationsByContext,

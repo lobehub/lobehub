@@ -27,7 +27,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-export const ExecuteTasksInspector = memo<BuiltinInspectorProps<ExecuteTasksParams>>(
+export const ExecuteAgentTasksInspector = memo<BuiltinInspectorProps<ExecuteTasksParams>>(
   ({ args, partialArgs, isArgumentsStreaming }) => {
     const { t } = useTranslation('plugin');
 
@@ -84,7 +84,3 @@ export const ExecuteTasksInspector = memo<BuiltinInspectorProps<ExecuteTasksPara
     );
   },
 );
-
-ExecuteTasksInspector.displayName = 'ExecuteTasksInspector';
-
-export default ExecuteTasksInspector;
