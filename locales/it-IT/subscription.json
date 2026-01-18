@@ -54,6 +54,8 @@
   "funds.packages.expiresIn": "Scade tra {{days}} giorni",
   "funds.packages.expiresToday": "Scade oggi",
   "funds.packages.expiringSoon": "In scadenza",
+  "funds.packages.gift": "Regalo",
+  "funds.packages.giftedOn": "Regalato il {{date}}",
   "funds.packages.noPackages": "Nessun pacchetto crediti",
   "funds.packages.purchaseFirst": "Acquista il tuo primo pacchetto crediti",
   "funds.packages.purchasedOn": "Acquistato il {{date}}",

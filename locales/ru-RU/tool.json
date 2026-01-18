@@ -15,6 +15,8 @@
   "agentGroupManagement.executeTask.thread": "ID потока",
   "agentGroupManagement.executeTask.timeout": "Время выполнения истекло",
   "agentGroupManagement.executeTask.tokens": "Использование токенов",
+  "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "Подробная инструкция для агента по выполнению этой задачи...",
+  "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "Название задачи...",
   "codeInterpreter-legacy.error": "Ошибка выполнения",
   "codeInterpreter-legacy.executing": "Выполнение...",
   "codeInterpreter-legacy.files": "Файлы:",

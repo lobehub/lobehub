@@ -54,6 +54,8 @@
   "funds.packages.expiresIn": "Läuft in {{days}} Tagen ab",
   "funds.packages.expiresToday": "Läuft heute ab",
   "funds.packages.expiringSoon": "Läuft bald ab",
+  "funds.packages.gift": "Geschenk",
+  "funds.packages.giftedOn": "Verschenkt am {{date}}",
   "funds.packages.noPackages": "Keine Guthabenpakete",
   "funds.packages.purchaseFirst": "Kaufe dein erstes Guthabenpaket",
   "funds.packages.purchasedOn": "Gekauft am {{date}}",

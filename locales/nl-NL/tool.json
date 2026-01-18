@@ -15,6 +15,8 @@
   "agentGroupManagement.executeTask.thread": "Thread-ID",
   "agentGroupManagement.executeTask.timeout": "Uitvoeringstijd verstreken",
   "agentGroupManagement.executeTask.tokens": "Tokengebruik",
+  "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "Gedetailleerde instructie voor de agent om deze taak uit te voeren...",
+  "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "Taaktitel...",
   "codeInterpreter-legacy.error": "Uitvoeringsfout",
   "codeInterpreter-legacy.executing": "Bezig met uitvoeren...",
   "codeInterpreter-legacy.files": "Bestanden:",

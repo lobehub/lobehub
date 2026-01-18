@@ -15,6 +15,8 @@
   "agentGroupManagement.executeTask.thread": "ID del Hilo",
   "agentGroupManagement.executeTask.timeout": "Tiempo de Ejecución Agotado",
   "agentGroupManagement.executeTask.tokens": "Uso de Tokens",
+  "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "Instrucciones detalladas para que el agente realice esta tarea...",
+  "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "Título de la tarea...",
   "codeInterpreter-legacy.error": "Error de Ejecución",
   "codeInterpreter-legacy.executing": "Ejecutando...",
   "codeInterpreter-legacy.files": "Archivos:",

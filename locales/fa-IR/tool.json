@@ -15,6 +15,8 @@
   "agentGroupManagement.executeTask.thread": "شناسه رشته",
   "agentGroupManagement.executeTask.timeout": "زمان اجرای وظیفه به پایان رسید",
   "agentGroupManagement.executeTask.tokens": "مصرف توکن",
+  "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "دستورالعمل دقیق برای انجام این وظیفه توسط عامل...",
+  "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "عنوان وظیفه...",
   "codeInterpreter-legacy.error": "خطای اجرا",
   "codeInterpreter-legacy.executing": "در حال اجرا...",
   "codeInterpreter-legacy.files": "فایل‌ها:",

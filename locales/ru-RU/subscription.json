@@ -54,6 +54,8 @@
   "funds.packages.expiresIn": "Истекает через {{days}} дн.",
   "funds.packages.expiresToday": "Истекает сегодня",
   "funds.packages.expiringSoon": "Скоро истекает",
+  "funds.packages.gift": "Подарок",
+  "funds.packages.giftedOn": "Подарено {{date}}",
   "funds.packages.noPackages": "Нет пакетов кредитов",
   "funds.packages.purchaseFirst": "Купите первый пакет кредитов",
   "funds.packages.purchasedOn": "Куплено {{date}}",

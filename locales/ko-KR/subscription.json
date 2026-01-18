@@ -54,6 +54,8 @@
   "funds.packages.expiresIn": "{{days}}일 후 만료",
   "funds.packages.expiresToday": "오늘 만료",
   "funds.packages.expiringSoon": "곧 만료 예정",
+  "funds.packages.gift": "선물",
+  "funds.packages.giftedOn": "{{date}}에 선물됨",
   "funds.packages.noPackages": "사용 가능한 크레딧 패키지가 없습니다",
   "funds.packages.purchaseFirst": "첫 크레딧 패키지를 구매하세요",
   "funds.packages.purchasedOn": "{{date}}에 구매됨",

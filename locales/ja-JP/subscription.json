@@ -54,6 +54,8 @@
   "funds.packages.expiresIn": "{{days}}日後に期限切れ",
   "funds.packages.expiresToday": "本日期限切れ",
   "funds.packages.expiringSoon": "まもなく期限切れ",
+  "funds.packages.gift": "ギフト",
+  "funds.packages.giftedOn": "{{date}} に贈られました",
   "funds.packages.noPackages": "クレジットパッケージがありません",
   "funds.packages.purchaseFirst": "最初のクレジットパッケージを購入",
   "funds.packages.purchasedOn": "{{date}} に購入",

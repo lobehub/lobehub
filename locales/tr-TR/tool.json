@@ -15,6 +15,8 @@
   "agentGroupManagement.executeTask.thread": "İş Parçacığı Kimliği",
   "agentGroupManagement.executeTask.timeout": "Yürütme Süresi Aşıldı",
   "agentGroupManagement.executeTask.tokens": "Token Kullanımı",
+  "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "Bu görevi gerçekleştirmesi için ajana verilecek detaylı talimat...",
+  "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "Görev başlığı...",
   "codeInterpreter-legacy.error": "Yürütme Hatası",
   "codeInterpreter-legacy.executing": "Yürütülüyor...",
   "codeInterpreter-legacy.files": "Dosyalar:",

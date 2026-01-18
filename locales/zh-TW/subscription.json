@@ -54,6 +54,8 @@
   "funds.packages.expiresIn": "{{days}} 天後過期",
   "funds.packages.expiresToday": "今日過期",
   "funds.packages.expiringSoon": "即將過期",
+  "funds.packages.gift": "禮物",
+  "funds.packages.giftedOn": "於 {{date}} 贈送",
   "funds.packages.noPackages": "尚無點數方案",
   "funds.packages.purchaseFirst": "購買您的第一個點數方案",
   "funds.packages.purchasedOn": "購買於 {{date}}",
