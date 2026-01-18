@@ -2,6 +2,31 @@
 
 # Changelog
 
+## [Version 2.0.0-next.303](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.302...v2.0.0-next.303)
+
+<sup>Released on **2026-01-18**</sup>
+
+#### 💄 Styles
+
+- **misc**: Improve operation hint and fix scroll issue.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Styles
+
+- **misc**: Improve operation hint and fix scroll issue, closes [#11573](https://github.com/lobehub/lobe-chat/issues/11573) ([8505d14](https://github.com/lobehub/lobe-chat/commit/8505d14))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.302](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.301...v2.0.0-next.302)
 
 <sup>Released on **2026-01-17**</sup>

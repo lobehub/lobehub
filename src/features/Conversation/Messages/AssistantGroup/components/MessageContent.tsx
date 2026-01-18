@@ -1,9 +1,9 @@
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 
-import BubblesLoading from '@/components/BubblesLoading';
 import { LOADING_FLAT } from '@/const/message';
 import MarkdownMessage from '@/features/Conversation/Markdown';
+import ContentLoading from '@/features/Conversation/Messages/components/ContentLoading';
 
 import { normalizeThinkTags, processWithArtifact } from '../../../utils/markdown';
 import { useMarkdown } from '../useMarkdown';
@@ -25,12 +25,12 @@ const MessageContent = memo<ContentBlockProps>(({ content, hasTools, id }) => {
   const message = normalizeThinkTags(processWithArtifact(content));
   const markdownProps = useMarkdown(id);
 
-  if (!content && !hasTools) return <BubblesLoading />;
+  if (!content && !hasTools) return <ContentLoading id={id} />;
 
   if (content === LOADING_FLAT) {
     if (hasTools) return null;
 
-    return <BubblesLoading />;
+    return <ContentLoading id={id} />;
   }
 
   return (
