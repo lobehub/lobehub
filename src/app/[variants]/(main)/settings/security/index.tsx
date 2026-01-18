@@ -1,12 +1,12 @@
 'use client';
 
 import { Skeleton } from '@lobehub/ui';
-import dynamic from '@/libs/next/dynamic';
 import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
 import { enableClerk } from '@/envs/auth';
+import dynamic from '@/libs/next/dynamic';
 
 const ClerkProfile = dynamic(() => import('./features/ClerkProfile'), {
   loading: () => (
@@ -26,7 +26,5 @@ const Page = () => {
     </>
   );
 };
-
-Page.displayName = 'SecuritySetting';
 
 export default Page;

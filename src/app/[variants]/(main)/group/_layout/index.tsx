@@ -30,6 +30,4 @@ const Layout: FC = () => {
   );
 };
 
-Layout.displayName = 'DesktopChatLayout';
-
 export default Layout;

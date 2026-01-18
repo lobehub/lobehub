@@ -1,4 +1,4 @@
-import { Popover, TooltipGroup } from '@lobehub/ui';
+import { Popover } from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 
 import { PanelContent } from './components/PanelContent';
@@ -29,28 +29,26 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
     );
 
     return (
-      <TooltipGroup>
-        <Popover
-          classNames={{
-            content: styles.container,
-          }}
-          content={
-            <PanelContent
-              isOpen={isOpen}
-              model={modelProp}
-              onModelChange={onModelChange}
-              onOpenChange={handleOpenChange}
-              provider={providerProp}
-            />
-          }
-          nativeButton={false}
-          onOpenChange={handleOpenChange}
-          open={isOpen}
-          placement={placement}
-        >
-          {children}
-        </Popover>
-      </TooltipGroup>
+      <Popover
+        classNames={{
+          content: styles.container,
+        }}
+        content={
+          <PanelContent
+            isOpen={isOpen}
+            model={modelProp}
+            onModelChange={onModelChange}
+            onOpenChange={handleOpenChange}
+            provider={providerProp}
+          />
+        }
+        nativeButton={false}
+        onOpenChange={handleOpenChange}
+        open={isOpen}
+        placement={placement}
+      >
+        {children}
+      </Popover>
     );
   },
 );

@@ -14,6 +14,4 @@ const ChatPortal = () => {
   );
 };
 
-ChatPortal.displayName = 'ChatPortal';
-
 export default ChatPortal;

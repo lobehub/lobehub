@@ -116,7 +116,6 @@ export const VirtualItemRenderer = memo<VirtualItemRendererProps>(
             <ModelItemRender
               {...item.model}
               {...item.model.abilities}
-              infoTagTooltip={false}
               newBadgeLabel={newLabel}
               showInfoTag
             />

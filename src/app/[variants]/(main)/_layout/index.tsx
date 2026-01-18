@@ -89,6 +89,4 @@ const Layout: FC = () => {
   );
 };
 
-Layout.displayName = 'DesktopMainLayout';
-
 export default Layout;

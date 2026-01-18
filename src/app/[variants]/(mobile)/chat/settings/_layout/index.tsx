@@ -14,6 +14,4 @@ const Layout = ({ children }: PropsWithChildren) => (
   </MobileContentLayout>
 );
 
-Layout.displayName = 'MobileSessionSettingsLayout';
-
 export default Layout;

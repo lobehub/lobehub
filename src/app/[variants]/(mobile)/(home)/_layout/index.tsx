@@ -15,6 +15,4 @@ const Layout: FC = () => {
   );
 };
 
-Layout.displayName = 'MobileHomeLayout';
-
 export default Layout;

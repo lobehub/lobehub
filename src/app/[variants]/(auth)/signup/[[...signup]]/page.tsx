@@ -1,7 +1,7 @@
 import { SignUp } from '@clerk/nextjs';
-import { notFound } from '@/libs/next/navigation';
 
 import { enableBetterAuth, enableClerk } from '@/envs/auth';
+import { notFound } from '@/libs/next/navigation';
 import { metadataModule } from '@/server/metadata';
 import { translation } from '@/server/translation';
 import { type DynamicLayoutProps } from '@/types/next';
@@ -47,7 +47,5 @@ const Page = () => {
 
   return notFound();
 };
-
-Page.displayName = 'SignUp';
 
 export default Page;

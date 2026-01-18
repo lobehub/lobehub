@@ -16,6 +16,4 @@ const Page = () => {
   );
 };
 
-Page.displayName = 'CommonSetting';
-
 export default Page;

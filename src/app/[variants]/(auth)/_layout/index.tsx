@@ -49,6 +49,4 @@ const AuthContainer: FC<PropsWithChildren> = ({ children }) => {
   );
 };
 
-AuthContainer.displayName = 'AuthContainer';
-
 export default AuthContainer;

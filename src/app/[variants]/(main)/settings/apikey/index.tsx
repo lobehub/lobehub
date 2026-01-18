@@ -14,6 +14,4 @@ const Page = () => {
   );
 };
 
-Page.displayName = 'ApiKeySetting';
-
 export default Page;

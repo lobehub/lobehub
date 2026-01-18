@@ -1,8 +1,8 @@
 import { SignIn } from '@clerk/nextjs';
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { notFound } from '@/libs/next/navigation';
 
 import { enableClerk } from '@/envs/auth';
+import { notFound } from '@/libs/next/navigation';
 import { metadataModule } from '@/server/metadata';
 import { translation } from '@/server/translation';
 import { type DynamicLayoutProps } from '@/types/next';
@@ -23,7 +23,5 @@ const Page = () => {
 
   return <SignIn path="/login" />;
 };
-
-Page.displayName = 'Login';
 
 export default Page;

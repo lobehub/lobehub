@@ -58,6 +58,4 @@ const OnboardingContainer: FC<PropsWithChildren> = ({ children }) => {
   );
 };
 
-OnboardingContainer.displayName = 'OnboardingContainer';
-
 export default OnboardingContainer;

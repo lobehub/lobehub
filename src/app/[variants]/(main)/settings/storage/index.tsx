@@ -14,6 +14,4 @@ const Page = () => {
   );
 };
 
-Page.displayName = 'StorageSetting';
-
 export default Page;

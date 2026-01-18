@@ -4,6 +4,4 @@ const Layout = () => {
   return <Outlet />;
 };
 
-Layout.displayName = 'MobileDiscoverStoreLayout';
-
 export default Layout;

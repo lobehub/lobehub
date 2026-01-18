@@ -1,11 +1,11 @@
 'use client';
 
-import dynamic from '@/libs/next/dynamic';
 import { type FC, Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
+import dynamic from '@/libs/next/dynamic';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { NavigatorRegistrar } from '@/utils/router';
 
@@ -41,7 +41,5 @@ const MobileMainLayout: FC = () => {
     </>
   );
 };
-
-MobileMainLayout.displayName = 'MobileMainLayout';
 
 export default MobileMainLayout;

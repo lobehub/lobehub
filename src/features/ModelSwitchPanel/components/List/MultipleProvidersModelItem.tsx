@@ -89,7 +89,6 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
         <ModelItemRender
           {...data.model}
           {...data.model.abilities}
-          infoTagTooltip={false}
           newBadgeLabel={newLabel}
           showInfoTag={true}
         />

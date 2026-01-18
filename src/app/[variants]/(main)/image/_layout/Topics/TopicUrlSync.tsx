@@ -32,6 +32,4 @@ const TopicUrlSync = () => {
   return null;
 };
 
-TopicUrlSync.displayName = 'TopicUrlSync';
-
 export default TopicUrlSync;

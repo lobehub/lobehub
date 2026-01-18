@@ -18,6 +18,4 @@ const Layout = () => {
   );
 };
 
-Layout.displayName = 'DesktopDiscoverModelsLayout';
-
 export default Layout;

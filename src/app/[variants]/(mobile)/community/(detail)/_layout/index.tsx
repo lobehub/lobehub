@@ -16,6 +16,4 @@ const Layout = () => {
   );
 };
 
-Layout.displayName = 'MobileDiscoverDetailLayout';
-
 export default Layout;

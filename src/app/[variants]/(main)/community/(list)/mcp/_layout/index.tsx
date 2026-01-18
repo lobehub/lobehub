@@ -18,6 +18,4 @@ const Layout = () => {
   );
 };
 
-Layout.displayName = 'DesktopDiscoverToolsLayout';
-
 export default Layout;

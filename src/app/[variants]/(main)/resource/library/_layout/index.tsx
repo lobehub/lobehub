@@ -21,6 +21,4 @@ const LibraryLayout: FC = () => {
   );
 };
 
-LibraryLayout.displayName = 'ResourceLibraryLayout';
-
 export default LibraryLayout;

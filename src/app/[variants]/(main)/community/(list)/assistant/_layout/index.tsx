@@ -18,6 +18,4 @@ const Layout = () => {
   );
 };
 
-Layout.displayName = 'DesktopDiscoverAssistantsLayout';
-
 export default Layout;

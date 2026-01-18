@@ -48,6 +48,4 @@ const OnBoardingContainer: FC<PropsWithChildren> = ({ children }) => {
   );
 };
 
-OnBoardingContainer.displayName = 'OnBoardingContainer';
-
 export default OnBoardingContainer;

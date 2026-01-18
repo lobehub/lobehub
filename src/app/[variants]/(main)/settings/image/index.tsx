@@ -14,6 +14,4 @@ const Page = () => {
   );
 };
 
-Page.displayName = 'ImageSetting';
-
 export default Page;

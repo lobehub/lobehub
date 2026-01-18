@@ -197,6 +197,4 @@ const MasonryView = memo(function MasonryView() {
   );
 });
 
-MasonryView.displayName = 'MasonryView';
-
 export default MasonryView;

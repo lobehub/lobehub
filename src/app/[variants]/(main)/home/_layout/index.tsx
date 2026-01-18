@@ -64,6 +64,4 @@ const Layout: FC<LayoutProps> = ({ children }) => {
   );
 };
 
-Layout.displayName = 'DesktopHomeLayout';
-
 export default Layout;

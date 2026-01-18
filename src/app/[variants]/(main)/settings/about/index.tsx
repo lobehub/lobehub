@@ -16,6 +16,4 @@ const Page = ({ mobile }: { mobile?: boolean }) => {
   );
 };
 
-Page.displayName = 'AboutSetting';
-
 export default Page;

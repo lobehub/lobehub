@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { type ModelAbilities } from 'model-bank';
 import numeral from 'numeral';
-import { CSSProperties, type ComponentProps, type FC, memo, useState } from 'react';
+import { CSSProperties, type ComponentProps, type FC, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type AiProviderSourceType } from '@/types/aiProvider';
@@ -65,13 +65,6 @@ interface ModelInfoTagsProps extends ModelAbilities {
   isCustom?: boolean;
   placement?: 'top' | 'right';
   style?: CSSProperties;
-  /**
-   * Whether to render tooltip overlays for each tag.
-   * Disable this when rendering a large list (e.g. dropdown menus) to avoid mounting hundreds of Tooltip instances.
-   *
-   * When `false`, tags are rendered without any tooltip/title fallback by design.
-   */
-  withTooltip?: boolean;
 }
 
 interface FeatureTagsProps extends Pick<
@@ -80,7 +73,6 @@ interface FeatureTagsProps extends Pick<
 > {
   placement: 'top' | 'right';
   tagClassName: string;
-  withTooltip: boolean;
 }
 
 interface FeatureTagItemProps {
@@ -91,11 +83,10 @@ interface FeatureTagItemProps {
   placement: 'top' | 'right';
   title: string;
   tooltipStyles?: ComponentProps<typeof Tooltip>['styles'];
-  withTooltip: boolean;
 }
 
 const FeatureTagItem = memo<FeatureTagItemProps>(
-  ({ className, color, enabled, icon, placement, title, tooltipStyles, withTooltip }) => {
+  ({ className, color, enabled, icon, placement, title, tooltipStyles }) => {
     if (!enabled) return null;
 
     const tag = (
@@ -103,8 +94,6 @@ const FeatureTagItem = memo<FeatureTagItemProps>(
         <Icon icon={icon} />
       </Tag>
     );
-
-    if (!withTooltip) return tag;
 
     return (
       <Tooltip placement={placement} styles={tooltipStyles ?? DEFAULT_TOOLTIP_STYLES} title={title}>
@@ -125,7 +114,6 @@ const FeatureTags = memo<FeatureTagsProps>(
     tagClassName,
     video,
     vision,
-    withTooltip,
   }) => {
     const { t } = useTranslation('components');
 
@@ -138,7 +126,6 @@ const FeatureTags = memo<FeatureTagsProps>(
           icon={LucidePaperclip}
           placement={placement}
           title={t('ModelSelect.featureTag.file')}
-          withTooltip={withTooltip}
         />
         <FeatureTagItem
           className={tagClassName}
@@ -147,7 +134,6 @@ const FeatureTags = memo<FeatureTagsProps>(
           icon={LucideImage}
           placement={placement}
           title={t('ModelSelect.featureTag.imageOutput')}
-          withTooltip={withTooltip}
         />
         <FeatureTagItem
           className={tagClassName}
@@ -156,7 +142,6 @@ const FeatureTags = memo<FeatureTagsProps>(
           icon={LucideEye}
           placement={placement}
           title={t('ModelSelect.featureTag.vision')}
-          withTooltip={withTooltip}
         />
         <FeatureTagItem
           className={tagClassName}
@@ -165,7 +150,6 @@ const FeatureTags = memo<FeatureTagsProps>(
           icon={Video}
           placement={placement}
           title={t('ModelSelect.featureTag.video')}
-          withTooltip={withTooltip}
         />
         <FeatureTagItem
           className={tagClassName}
@@ -175,7 +159,6 @@ const FeatureTags = memo<FeatureTagsProps>(
           placement={placement}
           title={t('ModelSelect.featureTag.functionCall')}
           tooltipStyles={FUNCTION_CALL_TOOLTIP_STYLES}
-          withTooltip={withTooltip}
         />
         <FeatureTagItem
           className={tagClassName}
@@ -184,7 +167,6 @@ const FeatureTags = memo<FeatureTagsProps>(
           icon={AtomIcon}
           placement={placement}
           title={t('ModelSelect.featureTag.reasoning')}
-          withTooltip={withTooltip}
         />
         <FeatureTagItem
           className={tagClassName}
@@ -193,7 +175,6 @@ const FeatureTags = memo<FeatureTagsProps>(
           icon={LucideGlobe}
           placement={placement}
           title={t('ModelSelect.featureTag.search')}
-          withTooltip={withTooltip}
         />
       </>
     );
@@ -203,14 +184,12 @@ const FeatureTags = memo<FeatureTagsProps>(
 const Context = memo(
   ({
     contextWindowTokens,
-    withTooltip,
     placement,
     styles,
   }: {
     contextWindowTokens: number;
     placement: 'top' | 'right';
     styles: TooltipStyles;
-    withTooltip: boolean;
   }) => {
     const { t } = useTranslation('components');
     const tokensText = contextWindowTokens === 0 ? '∞' : formatTokenNumber(contextWindowTokens);
@@ -220,8 +199,6 @@ const Context = memo(
         {contextWindowTokens === 0 ? <Infinity size={17} strokeWidth={1.6} /> : tokensText}
       </Tag>
     );
-
-    if (!withTooltip) return tag;
 
     return (
       <Tooltip
@@ -238,7 +215,7 @@ const Context = memo(
 );
 
 export const ModelInfoTags = memo<ModelInfoTagsProps>(
-  ({ directionReverse, placement = 'top', withTooltip = true, style, ...model }) => {
+  ({ directionReverse, placement = 'top', style, ...model }) => {
     return (
       <Flexbox
         className={TAG_CLASSNAME}
@@ -257,14 +234,12 @@ export const ModelInfoTags = memo<ModelInfoTagsProps>(
           tagClassName={styles.tag}
           video={model.video}
           vision={model.vision}
-          withTooltip={withTooltip}
         />
         {typeof model.contextWindowTokens === 'number' && (
           <Context
             contextWindowTokens={model.contextWindowTokens}
             placement={placement}
             styles={styles}
-            withTooltip={withTooltip}
           />
         )}
       </Flexbox>
@@ -274,15 +249,6 @@ export const ModelInfoTags = memo<ModelInfoTagsProps>(
 
 interface ModelItemRenderProps extends ChatModelCard, Partial<Omit<FlexboxProps, 'id' | 'title'>> {
   abilities?: ModelAbilities;
-  infoTagTooltip?: boolean;
-  /**
-   * Only mounts Tooltip components while hovering the item, to reduce initial render cost in large dropdown lists.
-   *
-   * Note: hover is not available on mobile, so this will be ignored on mobile.
-   * Also note: since tooltips are mounted lazily, the very first hover may require a tiny pointer movement
-   * before the tooltip system detects the hover target (depends on the underlying tooltip implementation).
-   */
-  infoTagTooltipOnHover?: boolean;
   newBadgeLabel?: string;
   showInfoTag?: boolean;
 }
@@ -291,8 +257,6 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
   ({
     showInfoTag = true,
     abilities,
-    infoTagTooltip = true,
-    infoTagTooltipOnHover = false,
     contextWindowTokens,
     files,
     functionCall,
@@ -308,14 +272,6 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
     ...rest
   }) => {
     const { mobile } = useResponsive();
-    const [hovered, setHovered] = useState(false);
-
-    const shouldLazyMountTooltip = infoTagTooltipOnHover && !mobile;
-    /**
-     * When `infoTagTooltipOnHover` is enabled, we don't mount Tooltip components until the row is hovered.
-     * This avoids creating many overlays on dropdown open, while keeping the tooltip UX on demand.
-     */
-    const withTooltip = infoTagTooltip && (!shouldLazyMountTooltip || hovered);
     const displayNameOrId = displayName || id;
 
     return (
@@ -324,7 +280,6 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
         gap={32}
         horizontal
         justify={'space-between'}
-        onMouseEnter={shouldLazyMountTooltip && !hovered ? () => setHovered(true) : undefined}
         {...rest}
         style={{
           overflow: 'hidden',
@@ -341,13 +296,9 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
         >
           <ModelIcon model={id} size={20} />
           <Text
-            ellipsis={
-              withTooltip
-                ? {
-                    tooltip: displayNameOrId,
-                  }
-                : true
-            }
+            ellipsis={{
+              tooltip: displayNameOrId,
+            }}
             style={mobile ? { maxWidth: '60vw' } : { minWidth: 0, overflow: 'hidden' }}
           >
             {displayNameOrId}
@@ -369,7 +320,6 @@ export const ModelItemRender = memo<ModelItemRenderProps>(
             style={{ zoom: 0.9 }}
             video={video ?? abilities?.video}
             vision={vision ?? abilities?.vision}
-            withTooltip={withTooltip}
           />
         )}
       </Flexbox>

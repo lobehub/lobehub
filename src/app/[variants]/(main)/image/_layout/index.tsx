@@ -22,6 +22,4 @@ const Layout: FC = () => {
   );
 };
 
-Layout.displayName = 'DesktopAiImageLayout';
-
 export default Layout;

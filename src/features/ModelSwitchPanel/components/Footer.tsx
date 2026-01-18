@@ -38,5 +38,3 @@ export const Footer: FC<FooterProps> = ({ onClose }) => {
     </Flexbox>
   );
 };
-
-Footer.displayName = 'Footer';
