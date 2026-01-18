@@ -4,10 +4,12 @@ import electronLog from 'electron-log';
 import { getDesktopEnv } from '@/env';
 
 const nodeEnv = process.env.NODE_ENV;
+const forceDebug = !!process.env.DEBUG;
 // 配置 electron-log
-electronLog.transports.file.level = 'info'; // 生产环境记录 info 及以上级别
-electronLog.transports.console.level =
-  nodeEnv === 'development'
+electronLog.transports.file.level = forceDebug ? 'debug' : 'info'; // 生产环境记录 info 及以上级别
+electronLog.transports.console.level = forceDebug
+  ? 'debug'
+  : nodeEnv === 'development'
     ? 'debug' // 开发环境显示更多日志
     : 'warn'; // 生产环境只显示警告和错误
 
