@@ -29,6 +29,22 @@ vi.mock('@/database/models/agent', () => ({
   })),
 }));
 
+// Mock AgentService
+vi.mock('@/server/services/agent', () => ({
+  AgentService: vi.fn().mockImplementation(() => ({
+    getAgentConfig: vi.fn().mockResolvedValue({
+      chatConfig: {},
+      files: [],
+      id: 'agent-1',
+      knowledgeBases: [],
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+      systemRole: 'You are a helpful assistant',
+    }),
+  })),
+}));
+
 // Mock PluginModel
 vi.mock('@/database/models/plugin', () => ({
   PluginModel: vi.fn().mockImplementation(() => ({
@@ -74,15 +90,19 @@ vi.mock('@/server/modules/Mecha', () => ({
 }));
 
 // Mock model-bank
-vi.mock('model-bank', () => ({
-  LOBE_DEFAULT_MODEL_LIST: [
-    {
-      abilities: { functionCall: true, video: false, vision: true },
-      id: 'gpt-4',
-      providerId: 'openai',
-    },
-  ],
-}));
+vi.mock('model-bank', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('model-bank')>();
+  return {
+    ...actual,
+    LOBE_DEFAULT_MODEL_LIST: [
+      {
+        abilities: { functionCall: true, video: false, vision: true },
+        id: 'gpt-4',
+        providerId: 'openai',
+      },
+    ],
+  };
+});
 
 describe('AiAgentService.execAgent - threadId handling', () => {
   let service: AiAgentService;
