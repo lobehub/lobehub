@@ -28,31 +28,6 @@ import {
 
 import { useIsMobile } from '@/hooks/useIsMobile';
 
-const isInteractiveDropdownTarget = (target: EventTarget | null) => {
-  if (!(target instanceof Element)) return false;
-
-  const selector =
-    'input,textarea,select,option,[contenteditable="true"],[data-dropdown-interactive="true"]';
-
-  // 检查元素本身或父级
-  if (target.closest(selector)) return true;
-
-  // 检查相邻的兄弟元素
-  const previousSibling = target.previousElementSibling;
-  const nextSibling = target.nextElementSibling;
-
-  if (previousSibling?.matches(selector)) return true;
-  if (nextSibling?.matches(selector)) return true;
-
-  return false;
-};
-
-type PopupPointerDownEvent = Parameters<
-  NonNullable<DropdownMenuPopupProps['onPointerDownCapture']>
->[0];
-
-type OpenChangeDetails = Parameters<NonNullable<ActionDropdownProps['onOpenChange']>>[1];
-
 const styles = createStaticStyles(({ css }) => ({
   dropdownMenu: css`
     .ant-avatar {
@@ -61,9 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-export interface ActionDropdownMenuItem extends MenuItemType {
-  scheduleClose?: boolean;
-}
+export type ActionDropdownMenuItem = MenuItemType;
 
 export type ActionDropdownMenuItems = MenuProps<ActionDropdownMenuItem>['items'];
 
@@ -114,29 +87,11 @@ const ActionDropdown = memo<ActionDropdownProps>(
     const isMobile = useIsMobile();
     const [uncontrolledOpen, setUncontrolledOpen] = useState(Boolean(defaultOpen));
     const menuItemsRef = useRef<ReactNode[] | null>(null);
-    const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
       if (open === undefined) return;
       setUncontrolledOpen(open);
     }, [open]);
-
-    useEffect(() => {
-      return () => {
-        if (closeTimerRef.current) {
-          clearTimeout(closeTimerRef.current);
-          closeTimerRef.current = null;
-        }
-      };
-    }, []);
-
-    const scheduleClose = useCallback(() => {
-      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = setTimeout(() => {
-        onOpenChange?.(false, undefined as unknown as OpenChangeDetails);
-        if (open === undefined) setUncontrolledOpen(false);
-      }, 3000);
-    }, [onOpenChange, open]);
 
     const handleOpenChange = useCallback(
       (nextOpen: boolean, details: Parameters<NonNullable<typeof onOpenChange>>[1]) => {
@@ -191,52 +146,31 @@ const ActionDropdown = memo<ActionDropdownProps>(
           }
           const itemOnClick = 'onClick' in item ? item.onClick : undefined;
           const closeOnClick = 'closeOnClick' in item ? item.closeOnClick : undefined;
-          const scheduleCloseOnClick = 'scheduleClose' in item ? item.scheduleClose : undefined;
           const keepOpenOnClick = closeOnClick === false;
-          const hasLabel = 'label' in item;
-          const itemLabel = hasLabel ? item.label : undefined;
+          const itemLabel = 'label' in item ? item.label : undefined;
           const shouldKeepOpen = isValidElement(itemLabel);
 
           const resolvedCloseOnClick = closeOnClick ?? (shouldKeepOpen ? false : undefined);
-          const resolvedLabel =
-            scheduleCloseOnClick && hasLabel ? (
-              <span data-dropdown-schedule-close="true">{itemLabel}</span>
-            ) : (
-              itemLabel
-            );
-          const restItem = { ...item } as ActionDropdownMenuItem;
-          delete restItem.scheduleClose;
 
           return {
-            ...restItem,
+            ...item,
             ...(resolvedCloseOnClick !== undefined ? { closeOnClick: resolvedCloseOnClick } : null),
-            ...(hasLabel ? { label: resolvedLabel } : null),
             onClick: (info) => {
-              if (isInteractiveDropdownTarget(info.domEvent.target)) {
-                info.domEvent.stopPropagation();
-                info.domEvent.preventDefault();
-
-                if (scheduleCloseOnClick) scheduleClose();
-                return;
-              }
-
               if (keepOpenOnClick) {
                 info.domEvent.stopPropagation();
                 menu.onClick?.(info);
                 itemOnClick?.(info);
-                if (scheduleCloseOnClick) scheduleClose();
                 return;
               }
 
               info.domEvent.preventDefault();
               menu.onClick?.(info);
               itemOnClick?.(info);
-              if (scheduleCloseOnClick) scheduleClose();
             },
           };
         });
       },
-      [menu, scheduleClose],
+      [menu],
     );
 
     const renderedItems = useMemo(() => {
@@ -293,15 +227,6 @@ const ActionDropdown = memo<ActionDropdownProps>(
       if (!popupProps) {
         return {
           className: resolvedPopupClassName,
-          onPointerDownCapture: (event: PopupPointerDownEvent) => {
-            if (
-              isInteractiveDropdownTarget(event.target) &&
-              event.target instanceof Element &&
-              event.target.closest('[data-dropdown-schedule-close="true"]')
-            ) {
-              scheduleClose();
-            }
-          },
           style: resolvedPopupStyle,
         };
       }
@@ -309,19 +234,9 @@ const ActionDropdown = memo<ActionDropdownProps>(
       return {
         ...popupProps,
         className: resolvedPopupClassName,
-        onPointerDownCapture: (event: PopupPointerDownEvent) => {
-          popupProps?.onPointerDownCapture?.(event);
-          if (
-            isInteractiveDropdownTarget(event.target) &&
-            event.target instanceof Element &&
-            event.target.closest('[data-dropdown-schedule-close="true"]')
-          ) {
-            scheduleClose();
-          }
-        },
         style: resolvedPopupStyle,
       };
-    }, [popupProps, resolvedPopupClassName, resolvedPopupStyle, scheduleClose]);
+    }, [popupProps, resolvedPopupClassName, resolvedPopupStyle]);
 
     const { container: portalContainer, ...restPortalProps } = portalProps ?? {};
     const resolvedPortalContainer = useMemo<HTMLElement | null | undefined>(() => {
