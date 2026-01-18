@@ -30,17 +30,20 @@ export enum RelationshipEnum {
   Uncle = 'uncle',
   Wife = 'wife',
 }
+export const RELATIONSHIPS = Object.values(RelationshipEnum);
 
 export enum MergeStrategyEnum {
   Merge = 'merge',
   Replace = 'replace',
 }
+export const MERGE_STRATEGIES = Object.values(MergeStrategyEnum);
 
 export enum IdentityTypeEnum {
   Demographic = 'demographic',
   Personal = 'personal',
   Professional = 'professional',
 }
+export const IDENTITY_TYPES = Object.values(IdentityTypeEnum);
 
 export enum LayersEnum {
   Context = 'context',
@@ -48,6 +51,7 @@ export enum LayersEnum {
   Identity = 'identity',
   Preference = 'preference',
 }
+export const MEMORY_LAYERS = Object.values(LayersEnum);
 
 export enum TypesEnum {
   Activity = 'activity',
@@ -61,6 +65,7 @@ export enum TypesEnum {
   Technology = 'technology',
   Topic = 'topic',
 }
+export const MEMORY_TYPES = Object.values(TypesEnum);
 
 export enum ContextStatusEnum {
   Aborted = 'aborted',
@@ -68,5 +73,6 @@ export enum ContextStatusEnum {
   Completed = 'completed',
   OnHold = 'on_hold',
   Ongoing = 'ongoing',
-  Planned = 'planned'
+  Planned = 'planned',
 }
+export const CONTEXT_STATUS = Object.values(ContextStatusEnum);
