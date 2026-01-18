@@ -19,6 +19,7 @@ import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
 import { dbMessageSelectors } from '../../message/selectors';
+import { RemoteToolExecutor, klavisExecutor, lobehubSkillExecutor } from './exector';
 
 const log = debug('lobe-store:plugin-types');
 
@@ -86,6 +87,16 @@ export interface PluginTypesAction {
    * Internal method to call plugin API
    */
   internal_callPluginApi: (id: string, payload: ChatToolPayload) => Promise<string | undefined>;
+
+  /**
+   * Internal unified method to invoke remote tool plugins (Klavis, LobeHub Skill, etc.)
+   */
+  internal_invokeRemoteToolPlugin: (
+    id: string,
+    payload: ChatToolPayload,
+    executor: RemoteToolExecutor,
+    logPrefix: string,
+  ) => Promise<string | undefined>;
 }
 
 export const pluginTypes: StateCreator<
@@ -360,191 +371,21 @@ export const pluginTypes: StateCreator<
   },
 
   invokeKlavisTypePlugin: async (id, payload) => {
-    let data: MCPToolCallResult | undefined;
-
-    // Get message to extract sessionId/topicId
-    const message = dbMessageSelectors.getDbMessageById(id)(get());
-
-    // Get abort controller from operation
-    const operationId = get().messageOperationMap[id];
-    const operation = operationId ? get().operations[operationId] : undefined;
-    const abortController = operation?.abortController;
-
-    log(
-      '[invokeKlavisTypePlugin] messageId=%s, tool=%s, operationId=%s, aborted=%s',
+    return get().internal_invokeRemoteToolPlugin(
       id,
-      payload.apiName,
-      operationId,
-      abortController?.signal.aborted,
+      payload,
+      klavisExecutor,
+      'invokeKlavisTypePlugin',
     );
-
-    try {
-      // payload.identifier 现在是存储用的 identifier（如 'google-calendar'）
-      const identifier = payload.identifier;
-      const klavisServers = useToolStore.getState().servers || [];
-      const server = klavisServers.find((s) => s.identifier === identifier);
-
-      if (!server) {
-        throw new Error(`Klavis server not found: ${identifier}`);
-      }
-
-      // Parse arguments
-      const args = safeParseJSON(payload.arguments) || {};
-
-      // Call Klavis tool via store action
-      const result = await useToolStore.getState().callKlavisTool({
-        serverUrl: server.serverUrl,
-        toolArgs: args,
-        toolName: payload.apiName,
-      });
-
-      if (!result.success) {
-        throw new Error(result.error || 'Klavis tool execution failed');
-      }
-
-      // result.data is MCPToolCallProcessedResult from server
-      // Convert to MCPToolCallResult format
-      const toolResult = result.data;
-      if (toolResult) {
-        data = {
-          content: toolResult.content,
-          error: toolResult.state?.isError ? toolResult.state : undefined,
-          state: toolResult.state,
-          success: toolResult.success,
-        };
-      }
-    } catch (error) {
-      console.error('[invokeKlavisTypePlugin] Error:', error);
-
-      // ignore the aborted request error
-      const err = error as Error;
-      if (err.message.includes('aborted')) {
-        log('[invokeKlavisTypePlugin] Request aborted: messageId=%s, tool=%s', id, payload.apiName);
-      } else {
-        const result = await messageService.updateMessageError(id, error as any, {
-          agentId: message?.agentId,
-          topicId: message?.topicId,
-        });
-        if (result?.success && result.messages) {
-          get().replaceMessages(result.messages, {
-            context: {
-              agentId: message?.agentId,
-              topicId: message?.topicId,
-            },
-          });
-        }
-      }
-    }
-
-    // 如果报错则结束了
-    if (!data) return;
-
-    // operationId already declared above, reuse it
-    const context = operationId ? { operationId } : undefined;
-
-    // Use optimisticUpdateToolMessage to update content and state/error in a single call
-    await get().optimisticUpdateToolMessage(
-      id,
-      {
-        content: data.content,
-        pluginError: data.success ? undefined : data.error,
-        pluginState: data.success ? data.state : undefined,
-      },
-      context,
-    );
-
-    return data.content;
   },
 
   invokeLobehubSkillTypePlugin: async (id, payload) => {
-    let data: MCPToolCallResult | undefined;
-
-    // Get message to extract sessionId/topicId
-    const message = dbMessageSelectors.getDbMessageById(id)(get());
-
-    // Get abort controller from operation
-    const operationId = get().messageOperationMap[id];
-    const operation = operationId ? get().operations[operationId] : undefined;
-    const abortController = operation?.abortController;
-
-    log(
-      '[invokeLobehubSkillTypePlugin] messageId=%s, tool=%s, operationId=%s, aborted=%s',
+    return get().internal_invokeRemoteToolPlugin(
       id,
-      payload.apiName,
-      operationId,
-      abortController?.signal.aborted,
+      payload,
+      lobehubSkillExecutor,
+      'invokeLobehubSkillTypePlugin',
     );
-
-    try {
-      // payload.identifier is the provider id (e.g., 'linear', 'microsoft')
-      const provider = payload.identifier;
-
-      // Parse arguments
-      const args = safeParseJSON(payload.arguments) || {};
-
-      // Call LobeHub Skill tool via store action
-      const result = await useToolStore.getState().callLobehubSkillTool({
-        args,
-        provider,
-        toolName: payload.apiName,
-      });
-
-      if (!result.success) {
-        throw new Error(result.error || 'LobeHub Skill tool execution failed');
-      }
-
-      // Convert to MCPToolCallResult format
-      const content = typeof result.data === 'string' ? result.data : JSON.stringify(result.data);
-      data = {
-        content,
-        error: undefined,
-        state: { content: [{ text: content, type: 'text' }] },
-        success: true,
-      };
-    } catch (error) {
-      console.error('[invokeLobehubSkillTypePlugin] Error:', error);
-
-      // ignore the aborted request error
-      const err = error as Error;
-      if (err.message.includes('aborted')) {
-        log(
-          '[invokeLobehubSkillTypePlugin] Request aborted: messageId=%s, tool=%s',
-          id,
-          payload.apiName,
-        );
-      } else {
-        const result = await messageService.updateMessageError(id, error as any, {
-          agentId: message?.agentId,
-          topicId: message?.topicId,
-        });
-        if (result?.success && result.messages) {
-          get().replaceMessages(result.messages, {
-            context: {
-              agentId: message?.agentId,
-              topicId: message?.topicId,
-            },
-          });
-        }
-      }
-    }
-
-    // If error occurred, exit
-    if (!data) return;
-
-    const context = operationId ? { operationId } : undefined;
-
-    // Use optimisticUpdateToolMessage to update content and state/error in a single call
-    await get().optimisticUpdateToolMessage(
-      id,
-      {
-        content: data.content,
-        pluginError: data.success ? undefined : data.error,
-        pluginState: data.success ? data.state : undefined,
-      },
-      context,
-    );
-
-    return data.content;
   },
 
   invokeMarkdownTypePlugin: async (id, payload) => {
@@ -637,6 +478,70 @@ export const pluginTypes: StateCreator<
     if (!data) return;
 
     // operationId already declared above, reuse it
+    const context = operationId ? { operationId } : undefined;
+
+    // Use optimisticUpdateToolMessage to update content and state/error in a single call
+    await get().optimisticUpdateToolMessage(
+      id,
+      {
+        content: data.content,
+        pluginError: data.success ? undefined : data.error,
+        pluginState: data.success ? data.state : undefined,
+      },
+      context,
+    );
+
+    return data.content;
+  },
+
+  internal_invokeRemoteToolPlugin: async (id, payload, executor, logPrefix) => {
+    let data: MCPToolCallResult | undefined;
+
+    // Get message to extract sessionId/topicId
+    const message = dbMessageSelectors.getDbMessageById(id)(get());
+
+    // Get abort controller from operation
+    const operationId = get().messageOperationMap[id];
+    const operation = operationId ? get().operations[operationId] : undefined;
+    const abortController = operation?.abortController;
+
+    log(
+      '[%s] messageId=%s, tool=%s, operationId=%s, aborted=%s',
+      logPrefix,
+      id,
+      payload.apiName,
+      operationId,
+      abortController?.signal.aborted,
+    );
+
+    try {
+      data = await executor(payload);
+    } catch (error) {
+      console.error(`[${logPrefix}] Error:`, error);
+
+      // ignore the aborted request error
+      const err = error as Error;
+      if (err.message.includes('aborted')) {
+        log('[%s] Request aborted: messageId=%s, tool=%s', logPrefix, id, payload.apiName);
+      } else {
+        const result = await messageService.updateMessageError(id, error as any, {
+          agentId: message?.agentId,
+          topicId: message?.topicId,
+        });
+        if (result?.success && result.messages) {
+          get().replaceMessages(result.messages, {
+            context: {
+              agentId: message?.agentId,
+              topicId: message?.topicId,
+            },
+          });
+        }
+      }
+    }
+
+    // If error occurred, exit
+    if (!data) return;
+
     const context = operationId ? { operationId } : undefined;
 
     // Use optimisticUpdateToolMessage to update content and state/error in a single call

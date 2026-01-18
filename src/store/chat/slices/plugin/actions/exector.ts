@@ -1,0 +1,77 @@
+import { MCPToolCallResult } from '@/libs/mcp';
+import { useToolStore } from '@/store/tool';
+import { ChatToolPayload } from '@/types/message';
+import { safeParseJSON } from '@/utils/safeParseJSON';
+
+/**
+ * Executor function type for remote tool invocation
+ * @param payload - Tool call payload
+ * @returns Promise with MCPToolCallResult data or undefined
+ */
+export type RemoteToolExecutor = (payload: ChatToolPayload) => Promise<MCPToolCallResult>;
+
+export const klavisExecutor: RemoteToolExecutor = async (p) => {
+  // payload.identifier 现在是存储用的 identifier（如 'google-calendar'）
+  const identifier = p.identifier;
+  const klavisServers = useToolStore.getState().servers || [];
+  const server = klavisServers.find((s) => s.identifier === identifier);
+
+  if (!server) {
+    throw new Error(`Klavis server not found: ${identifier}`);
+  }
+
+  // Parse arguments
+  const args = safeParseJSON(p.arguments) || {};
+
+  // Call Klavis tool via store action
+  const result = await useToolStore.getState().callKlavisTool({
+    serverUrl: server.serverUrl,
+    toolArgs: args,
+    toolName: p.apiName,
+  });
+
+  if (!result.success) {
+    throw new Error(result.error || 'Klavis tool execution failed');
+  }
+
+  // result.data is MCPToolCallProcessedResult from server
+  // Convert to MCPToolCallResult format
+  const toolResult = result.data;
+  if (toolResult) {
+    return {
+      content: toolResult.content,
+      error: toolResult.state?.isError ? toolResult.state : undefined,
+      state: toolResult.state,
+      success: toolResult.success,
+    };
+  }
+  return undefined;
+};
+
+export const lobehubSkillExecutor: RemoteToolExecutor = async (p) => {
+  // payload.identifier is the provider id (e.g., 'linear', 'microsoft')
+  const provider = p.identifier;
+
+  // Parse arguments
+  const args = safeParseJSON(p.arguments) || {};
+
+  // Call LobeHub Skill tool via store action
+  const result = await useToolStore.getState().callLobehubSkillTool({
+    args,
+    provider,
+    toolName: p.apiName,
+  });
+
+  if (!result.success) {
+    throw new Error(result.error || 'LobeHub Skill tool execution failed');
+  }
+
+  // Convert to MCPToolCallResult format
+  const content = typeof result.data === 'string' ? result.data : JSON.stringify(result.data);
+  return {
+    content,
+    error: undefined,
+    state: { content: [{ text: content, type: 'text' }] },
+    success: true,
+  };
+};
