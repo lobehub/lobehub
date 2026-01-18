@@ -344,7 +344,139 @@ export class AgentBuilderExecutionRuntime {
   }
 
   /**
-   * Open OAuth window and wait for authentication completion
+   * Open OAuth window and wait for LobehubSkill authentication completion
+   * Returns a Promise that resolves when OAuth completes or fails
+   */
+  private openLobehubSkillOAuthWindowAndWait(
+    oauthUrl: string,
+    provider: string,
+  ): Promise<{ cancelled: boolean; success: boolean }> {
+    return new Promise((resolve) => {
+      // Configuration
+      const WINDOW_CHECK_INTERVAL_MS = 500;
+      const POLL_INTERVAL_MS = 1000;
+      const POLL_TIMEOUT_MS = 300_000; // 5 minutes timeout
+
+      let pollInterval: ReturnType<typeof setInterval> | null = null;
+      let pollTimeout: ReturnType<typeof setTimeout> | null = null;
+      let windowCheckInterval: ReturnType<typeof setInterval> | null = null;
+      let messageHandler: ((event: MessageEvent) => void) | null = null;
+      let resolved = false;
+
+      const cleanup = () => {
+        if (windowCheckInterval) {
+          clearInterval(windowCheckInterval);
+          windowCheckInterval = null;
+        }
+        if (pollInterval) {
+          clearInterval(pollInterval);
+          pollInterval = null;
+        }
+        if (pollTimeout) {
+          clearTimeout(pollTimeout);
+          pollTimeout = null;
+        }
+        if (messageHandler) {
+          window.removeEventListener('message', messageHandler);
+          messageHandler = null;
+        }
+      };
+
+      const resolveOnce = (result: { cancelled: boolean; success: boolean }) => {
+        if (resolved) return;
+        resolved = true;
+        cleanup();
+        resolve(result);
+      };
+
+      // Listen for OAuth success message from popup window
+      messageHandler = async (event: MessageEvent) => {
+        // Verify origin for security
+        if (event.origin !== window.location.origin) return;
+
+        if (
+          event.data?.type === 'LOBEHUB_SKILL_AUTH_SUCCESS' &&
+          event.data?.provider === provider
+        ) {
+          console.log('[LobehubSkill] OAuth success message received for provider:', provider);
+
+          // Refresh status to get the connected state
+          const server = await getToolStoreState().checkLobehubSkillStatus(provider);
+          const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
+
+          resolveOnce({ cancelled: false, success: isConnected });
+        }
+      };
+
+      window.addEventListener('message', messageHandler);
+
+      // eslint-disable-next-line unicorn/consistent-function-scoping
+      const checkAuthStatus = async (): Promise<boolean> => {
+        try {
+          // Check LobehubSkill status
+          const server = await getToolStoreState().checkLobehubSkillStatus(provider);
+          return server?.status === LobehubSkillStatus.CONNECTED;
+        } catch (error) {
+          console.error('[LobehubSkill] Failed to check auth status:', error);
+          return false;
+        }
+      };
+
+      const startFallbackPolling = () => {
+        if (pollInterval) return;
+
+        pollInterval = setInterval(async () => {
+          const isConnected = await checkAuthStatus();
+          if (isConnected) {
+            resolveOnce({ cancelled: false, success: true });
+          }
+        }, POLL_INTERVAL_MS);
+
+        // Timeout after 5 minutes
+        pollTimeout = setTimeout(() => {
+          resolveOnce({ cancelled: true, success: false });
+        }, POLL_TIMEOUT_MS);
+      };
+
+      // Open OAuth window
+      const oauthWindow = window.open(oauthUrl, '_blank', 'width=600,height=700');
+
+      if (oauthWindow) {
+        // Monitor window close
+        windowCheckInterval = setInterval(async () => {
+          try {
+            if (oauthWindow.closed) {
+              if (windowCheckInterval) {
+                clearInterval(windowCheckInterval);
+                windowCheckInterval = null;
+              }
+
+              // Window closed, check auth status
+              const isConnected = await checkAuthStatus();
+              resolveOnce({ cancelled: !isConnected, success: isConnected });
+            }
+          } catch {
+            // COOP blocked window.closed access, fall back to polling
+            console.log(
+              '[LobehubSkill] COOP blocked window.closed access, falling back to polling',
+            );
+            if (windowCheckInterval) {
+              clearInterval(windowCheckInterval);
+              windowCheckInterval = null;
+            }
+            startFallbackPolling();
+          }
+        }, WINDOW_CHECK_INTERVAL_MS);
+      } else {
+        // Window was blocked, use polling
+        console.log('[LobehubSkill] OAuth window was blocked, falling back to polling');
+        startFallbackPolling();
+      }
+    });
+  }
+
+  /**
+   * Open OAuth window and wait for Klavis authentication completion
    * Returns a Promise that resolves when OAuth completes or fails
    */
   private openOAuthWindowAndWait(
@@ -777,34 +909,187 @@ export class AgentBuilderExecutionRuntime {
                   success: true,
                 };
               } else {
-                // Server exists but not connected - need to reconnect
+                // Server exists but not connected - need to reconnect via OAuth
+                try {
+                  // Get OAuth authorization URL with correct redirectUri
+                  const redirectUri =
+                    typeof window !== 'undefined'
+                      ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(identifier)}`
+                      : undefined;
+                  const authInfo = await getToolStoreState().getLobehubSkillAuthorizeUrl(
+                    identifier,
+                    {
+                      redirectUri,
+                    },
+                  );
+
+                  if (!authInfo.authorizeUrl) {
+                    return {
+                      content: `LobehubSkill provider "${lobehubSkillProviderInfo.label}" requires OAuth authorization but no authorization URL is available.`,
+                      state: {
+                        installed: false,
+                        isLobehubSkill: true,
+                        pluginId: identifier,
+                        pluginName: lobehubSkillProviderInfo.label,
+                        serverStatus: lobehubSkillServer.status,
+                        success: false,
+                      } as InstallPluginState,
+                      success: false,
+                    };
+                  }
+
+                  // Open OAuth window and wait for authorization
+                  const authResult = await this.openLobehubSkillOAuthWindowAndWait(
+                    authInfo.authorizeUrl,
+                    identifier,
+                  );
+
+                  if (authResult.success) {
+                    // OAuth successful, enable the plugin
+                    const agentState = getAgentStoreState();
+                    const currentPlugins =
+                      agentSelectors.getAgentConfigById(agentId)(agentState).plugins || [];
+
+                    if (!currentPlugins.includes(identifier)) {
+                      await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
+                        plugins: [...currentPlugins, identifier],
+                      });
+                    }
+
+                    return {
+                      content: `Successfully reconnected and enabled LobehubSkill provider: ${lobehubSkillProviderInfo.label}`,
+                      state: {
+                        installed: true,
+                        isLobehubSkill: true,
+                        pluginId: identifier,
+                        pluginName: lobehubSkillProviderInfo.label,
+                        serverStatus: 'connected',
+                        success: true,
+                      } as InstallPluginState,
+                      success: true,
+                    };
+                  } else {
+                    // OAuth cancelled or failed
+                    return {
+                      content: `OAuth authorization was cancelled or failed for LobehubSkill provider: ${lobehubSkillProviderInfo.label}. Please try again.`,
+                      state: {
+                        installed: false,
+                        isLobehubSkill: true,
+                        pluginId: identifier,
+                        pluginName: lobehubSkillProviderInfo.label,
+                        serverStatus: lobehubSkillServer.status,
+                        success: false,
+                      } as InstallPluginState,
+                      success: false,
+                    };
+                  }
+                } catch (authError) {
+                  const err = authError as Error;
+                  return {
+                    content: `Failed to reconnect LobehubSkill provider "${lobehubSkillProviderInfo.label}": ${err.message}`,
+                    error: authError,
+                    state: {
+                      error: err.message,
+                      installed: false,
+                      isLobehubSkill: true,
+                      pluginId: identifier,
+                      pluginName: lobehubSkillProviderInfo.label,
+                      serverStatus: lobehubSkillServer.status,
+                      success: false,
+                    } as InstallPluginState,
+                    success: false,
+                  };
+                }
+              }
+            } else {
+              // Server doesn't exist - need to initiate OAuth authorization
+              try {
+                // Get OAuth authorization URL with correct redirectUri
+                const redirectUri =
+                  typeof window !== 'undefined'
+                    ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(identifier)}`
+                    : undefined;
+                const authInfo = await getToolStoreState().getLobehubSkillAuthorizeUrl(identifier, {
+                  redirectUri,
+                });
+
+                if (!authInfo.authorizeUrl) {
+                  return {
+                    content: `LobehubSkill provider "${lobehubSkillProviderInfo.label}" requires OAuth authorization but no authorization URL is available.`,
+                    state: {
+                      installed: false,
+                      isLobehubSkill: true,
+                      pluginId: identifier,
+                      pluginName: lobehubSkillProviderInfo.label,
+                      serverStatus: 'not_connected',
+                      success: false,
+                    } as InstallPluginState,
+                    success: false,
+                  };
+                }
+
+                // Open OAuth window and wait for authorization
+                const authResult = await this.openLobehubSkillOAuthWindowAndWait(
+                  authInfo.authorizeUrl,
+                  identifier,
+                );
+
+                if (authResult.success) {
+                  // OAuth successful, enable the plugin
+                  const agentState = getAgentStoreState();
+                  const currentPlugins =
+                    agentSelectors.getAgentConfigById(agentId)(agentState).plugins || [];
+
+                  if (!currentPlugins.includes(identifier)) {
+                    await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
+                      plugins: [...currentPlugins, identifier],
+                    });
+                  }
+
+                  return {
+                    content: `Successfully connected and enabled LobehubSkill provider: ${lobehubSkillProviderInfo.label}`,
+                    state: {
+                      installed: true,
+                      isLobehubSkill: true,
+                      pluginId: identifier,
+                      pluginName: lobehubSkillProviderInfo.label,
+                      serverStatus: 'connected',
+                      success: true,
+                    } as InstallPluginState,
+                    success: true,
+                  };
+                } else {
+                  // OAuth cancelled or failed
+                  return {
+                    content: `OAuth authorization was cancelled or failed for LobehubSkill provider: ${lobehubSkillProviderInfo.label}. Please try again.`,
+                    state: {
+                      installed: false,
+                      isLobehubSkill: true,
+                      pluginId: identifier,
+                      pluginName: lobehubSkillProviderInfo.label,
+                      serverStatus: 'not_connected',
+                      success: false,
+                    } as InstallPluginState,
+                    success: false,
+                  };
+                }
+              } catch (authError) {
+                const err = authError as Error;
                 return {
-                  content: `LobehubSkill provider "${lobehubSkillProviderInfo.label}" is not connected. Please reconnect it from the tools settings.`,
+                  content: `Failed to authorize LobehubSkill provider "${lobehubSkillProviderInfo.label}": ${err.message}`,
+                  error: authError,
                   state: {
+                    error: err.message,
                     installed: false,
                     isLobehubSkill: true,
                     pluginId: identifier,
                     pluginName: lobehubSkillProviderInfo.label,
-                    serverStatus: lobehubSkillServer.status,
+                    serverStatus: 'not_connected',
                     success: false,
                   } as InstallPluginState,
                   success: false,
                 };
               }
-            } else {
-              // Server doesn't exist - need to connect first
-              return {
-                content: `LobehubSkill provider "${lobehubSkillProviderInfo.label}" is not connected. Please connect it from the tools settings first.`,
-                state: {
-                  installed: false,
-                  isLobehubSkill: true,
-                  pluginId: identifier,
-                  pluginName: lobehubSkillProviderInfo.label,
-                  serverStatus: 'not_connected',
-                  success: false,
-                } as InstallPluginState,
-                success: false,
-              };
             }
           }
         }
@@ -878,18 +1163,65 @@ export class AgentBuilderExecutionRuntime {
         };
       }
 
-      // Plugin needs to be installed - return state requiring approval
-      // The actual installation will happen when user approves
-      return {
-        content: `MCP plugin "${identifier}" will be installed. Please approve to continue.`,
-        state: {
-          awaitingApproval: true,
-          installed: false,
-          pluginId: identifier,
-          success: true,
-        } as InstallPluginState,
-        success: true,
-      };
+      // Plugin needs to be installed - trigger actual installation from market
+      try {
+        // Call the store's installMCPPlugin to trigger the real installation flow
+        const installSuccess = await getToolStoreState().installMCPPlugin(identifier);
+
+        if (installSuccess) {
+          // Installation successful, enable it for the agent
+          const agentState = getAgentStoreState();
+          const currentPlugins =
+            agentSelectors.getAgentConfigById(agentId)(agentState).plugins || [];
+
+          if (!currentPlugins.includes(identifier)) {
+            await getAgentStoreState().optimisticUpdateAgentConfig(agentId, {
+              plugins: [...currentPlugins, identifier],
+            });
+          }
+
+          // Refresh tool state to get the installed plugin info
+          await getToolStoreState().refreshPlugins();
+          const freshToolState = getToolStoreState();
+          const installedPlugin =
+            pluginSelectors.getInstalledPluginById(identifier)(freshToolState);
+
+          return {
+            content: `Successfully installed and enabled MCP plugin "${installedPlugin?.manifest?.meta?.title || identifier}".`,
+            state: {
+              installed: true,
+              pluginId: identifier,
+              pluginName: installedPlugin?.manifest?.meta?.title || identifier,
+              success: true,
+            } as InstallPluginState,
+            success: true,
+          };
+        } else {
+          // Installation failed or was cancelled
+          return {
+            content: `Failed to install MCP plugin "${identifier}". Installation was cancelled or configuration is needed.`,
+            state: {
+              installed: false,
+              pluginId: identifier,
+              success: false,
+            } as InstallPluginState,
+            success: false,
+          };
+        }
+      } catch (installError) {
+        const err = installError as Error;
+        return {
+          content: `Failed to install MCP plugin "${identifier}": ${err.message}`,
+          error: installError,
+          state: {
+            error: err.message,
+            installed: false,
+            pluginId: identifier,
+            success: false,
+          } as InstallPluginState,
+          success: false,
+        };
+      }
     } catch (error) {
       const err = error as Error;
       return {
