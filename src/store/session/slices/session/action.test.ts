@@ -2,9 +2,9 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { message } from '@/components/AntdStaticMethods';
-import { SESSION_CHAT_URL } from '@/const/url';
 import { chatGroupService } from '@/services/chatGroup';
 import { sessionService } from '@/services/session';
+import { useChatStore } from '@/store/chat';
 import { useSessionStore } from '@/store/session';
 import { LobeSessionType } from '@/types/session';
 
@@ -41,12 +41,24 @@ vi.mock('@/components/AntdStaticMethods', () => ({
   },
 }));
 
+vi.mock('@/store/chat', () => ({
+  useChatStore: {
+    getState: vi.fn(),
+  },
+}));
+
 const mockRefresh = vi.fn();
+const mockSwitchTopic = vi.fn();
+
 beforeEach(() => {
   vi.clearAllMocks();
   useSessionStore.setState({
     refreshSessions: mockRefresh,
   });
+  // Setup default mock for useChatStore.getState
+  vi.mocked(useChatStore.getState).mockReturnValue({
+    switchTopic: mockSwitchTopic,
+  } as any);
 });
 
 afterEach(() => {
@@ -151,6 +163,40 @@ describe('SessionAction', () => {
       });
 
       expect(result.current.activeAgentId).toBe(sessionId);
+      expect(mockSwitchTopic).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
+    });
+  });
+
+  describe('switchSession', () => {
+    it('should switch session and update activeAgentId', async () => {
+      const { result } = renderHook(() => useSessionStore());
+      const sessionId = 'switch-session-id';
+
+      act(() => {
+        result.current.switchSession(sessionId);
+      });
+
+      expect(result.current.activeAgentId).toBe(sessionId);
+      expect(mockSwitchTopic).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
+    });
+
+    it('should not update state when switching to the same session', async () => {
+      const { result } = renderHook(() => useSessionStore());
+      const sessionId = 'same-session-id';
+
+      act(() => {
+        result.current.switchSession(sessionId);
+      });
+
+      const stateAfterFirstSwitch = result.current.activeAgentId;
+      mockSwitchTopic.mockClear();
+
+      act(() => {
+        result.current.switchSession(sessionId);
+      });
+
+      expect(result.current.activeAgentId).toBe(stateAfterFirstSwitch);
+      expect(mockSwitchTopic).not.toHaveBeenCalled();
     });
   });
 

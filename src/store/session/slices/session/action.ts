@@ -11,6 +11,7 @@ import { mutate, useClientDataSWR } from '@/libs/swr';
 import { chatGroupService } from '@/services/chatGroup';
 import { sessionService } from '@/services/session';
 import { getChatGroupStoreState } from '@/store/agentGroup';
+import { useChatStore } from '@/store/chat';
 import { type SessionStore } from '@/store/session';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import { settingsSelectors, userProfileSelectors } from '@/store/user/selectors';
@@ -214,6 +215,9 @@ export const createSessionSlice: StateCreator<
 
   switchSession: (sessionId) => {
     if (get().activeAgentId === sessionId) return;
+
+    // Synchronously clear active topic to prevent message pollution when switching sessions
+    useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
 
     set({ activeAgentId: sessionId }, false, n(`activeSession/${sessionId}`));
   },
