@@ -1,14 +1,26 @@
-import { MCPToolCallResult } from '@/libs/mcp';
+import { type MCPToolCallResult } from '@/libs/mcp';
 import { useToolStore } from '@/store/tool';
-import { ChatToolPayload } from '@/types/message';
+import { type ChatToolPayload } from '@/types/message';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
 /**
  * Executor function type for remote tool invocation
  * @param payload - Tool call payload
- * @returns Promise with MCPToolCallResult data or undefined
+ * @returns Promise with MCPToolCallResult data
  */
 export type RemoteToolExecutor = (payload: ChatToolPayload) => Promise<MCPToolCallResult>;
+
+/**
+ * Create a failed MCPToolCallResult
+ */
+const createFailedResult = (
+  errorMessage: string,
+): { content: string; error: any; state: any; success: false } => ({
+  content: errorMessage,
+  error: { message: errorMessage },
+  state: {},
+  success: false,
+});
 
 export const klavisExecutor: RemoteToolExecutor = async (p) => {
   // payload.identifier 现在是存储用的 identifier（如 'google-calendar'）
@@ -17,7 +29,7 @@ export const klavisExecutor: RemoteToolExecutor = async (p) => {
   const server = klavisServers.find((s) => s.identifier === identifier);
 
   if (!server) {
-    throw new Error(`Klavis server not found: ${identifier}`);
+    return createFailedResult(`Klavis server not found: ${identifier}`);
   }
 
   // Parse arguments
@@ -31,7 +43,7 @@ export const klavisExecutor: RemoteToolExecutor = async (p) => {
   });
 
   if (!result.success) {
-    throw new Error(result.error || 'Klavis tool execution failed');
+    return createFailedResult(result.error || 'Klavis tool execution failed');
   }
 
   // result.data is MCPToolCallProcessedResult from server
@@ -45,7 +57,8 @@ export const klavisExecutor: RemoteToolExecutor = async (p) => {
       success: toolResult.success,
     };
   }
-  return undefined;
+
+  return createFailedResult('Klavis tool returned empty result');
 };
 
 export const lobehubSkillExecutor: RemoteToolExecutor = async (p) => {
@@ -63,7 +76,9 @@ export const lobehubSkillExecutor: RemoteToolExecutor = async (p) => {
   });
 
   if (!result.success) {
-    throw new Error(result.error || 'LobeHub Skill tool execution failed');
+    return createFailedResult(
+      result.error || `LobeHub Skill tool ${provider} ${p.apiName} execution failed`,
+    );
   }
 
   // Convert to MCPToolCallResult format

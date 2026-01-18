@@ -80,6 +80,8 @@ export interface ExecuteTaskParams {
   skipCallSupervisor?: boolean;
   task: string;
   timeout?: number;
+  /** Brief title describing what this task does (shown in UI) */
+  title: string;
 }
 
 export interface TaskItem {

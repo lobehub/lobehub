@@ -95,6 +95,10 @@ export const GroupManagementManifest: BuiltinToolManifest = {
             description: 'The ID of the agent to execute the task.',
             type: 'string',
           },
+          title: {
+            description: 'Brief title describing what this task does (shown in UI).',
+            type: 'string',
+          },
           task: {
             description:
               'Clear description of the task to perform. Be specific about expected deliverables.',
@@ -113,7 +117,7 @@ export const GroupManagementManifest: BuiltinToolManifest = {
             type: 'boolean',
           },
         },
-        required: ['agentId', 'task'],
+        required: ['agentId', 'title', 'task'],
         type: 'object',
       },
     },
