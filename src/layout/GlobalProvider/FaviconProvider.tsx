@@ -25,7 +25,7 @@ const stateToFileName: Record<FaviconState, string> = {
   default: '',
   done: '-done',
   error: '-error',
-  progress: '-inprogress',
+  progress: '-progress',
 };
 
 const getFaviconPath = (state: FaviconState, isDev: boolean, size?: '32x32'): string => {
@@ -43,9 +43,6 @@ const updateFaviconDOM = (state: FaviconState, isDev: boolean) => {
     'link[rel="icon"], link[rel="shortcut icon"]',
   );
 
-  console.log('[FaviconProvider] updateFaviconDOM called with state:', state, 'isDev:', isDev);
-  console.log('[FaviconProvider] Found links:', existingLinks.length);
-
   // Remove existing favicon links and create new ones to bust cache
   existingLinks.forEach((link) => {
     const oldHref = link.href;
@@ -60,8 +57,6 @@ const updateFaviconDOM = (state: FaviconState, isDev: boolean) => {
     newLink.rel = rel;
     newLink.href = `${getFaviconPath(state, isDev, is32 ? '32x32' : undefined)}?v=${Date.now()}`;
     head.append(newLink);
-
-    console.log(`[FaviconProvider] Replaced: ${oldHref} -> ${newLink.href}`);
   });
 };
 

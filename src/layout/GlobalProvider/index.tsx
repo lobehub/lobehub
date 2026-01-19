@@ -15,7 +15,6 @@ import { getAntdLocale } from '@/utils/locale';
 
 import AppTheme from './AppTheme';
 import { FaviconProvider } from './FaviconProvider';
-import { FaviconTestPanel } from './FaviconTestPanel';
 import { GroupWizardProvider } from './GroupWizardProvider';
 import ImportSettings from './ImportSettings';
 import Locale from './Locale';
@@ -68,7 +67,7 @@ const GlobalLayout = async ({
               <QueryProvider>
                 <StoreInitialization />
                 <FaviconProvider>
-                  {process.env.NODE_ENV === 'development' && <FaviconTestPanel />}
+                  {/* {process.env.NODE_ENV === 'development' && <FaviconTestPanel />} */}
                   <GroupWizardProvider>
                     <DragUploadProvider>
                       <LazyMotion features={domMax}>
