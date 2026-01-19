@@ -133,14 +133,6 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
   routers: Routers;
 }
 
-const formatErrorMessage = (error: unknown): string => {
-  if (error instanceof Error) {
-    return error.name ? `${error.name}: ${error.message}` : error.message;
-  }
-
-  return String(error);
-};
-
 export const createRouterRuntime = ({
   id,
   routers,
@@ -310,30 +302,28 @@ export const createRouterRuntime = ({
         } catch (error) {
           lastError = error;
 
-          const message = formatErrorMessage(error);
           if (attempt < totalOptions) {
             log(
-              'attempt failed, fallback to next: model=%s attempt=%d/%d apiType=%s channelId=%s remark=%s error=%s',
-              model,
+              'attempt %d/%d failed (model=%s apiType=%s channelId=%s remark=%s), trying next',
               attempt,
               totalOptions,
+              model,
               resolvedApiType,
               channelId ?? '',
               remark ?? '',
-              message,
             );
           } else {
             log(
-              'attempt failed, no more fallbacks: model=%s attempt=%d/%d apiType=%s channelId=%s remark=%s error=%s',
-              model,
+              'attempt %d/%d failed (model=%s apiType=%s channelId=%s remark=%s), no more fallbacks',
               attempt,
               totalOptions,
+              model,
               resolvedApiType,
               channelId ?? '',
               remark ?? '',
-              message,
             );
           }
+          console.error(error);
         }
       }
 
