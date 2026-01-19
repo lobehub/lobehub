@@ -1,16 +1,20 @@
-import { type CodeInterpreterToolName } from '@lobehub/market-sdk';
 import {
   type ISandboxService,
   type SandboxCallToolResult,
   type SandboxExportFileResult,
 } from '@lobechat/builtin-tool-cloud-sandbox';
+import { type CodeInterpreterToolName } from '@lobehub/market-sdk';
 import debug from 'debug';
+import { sha256 } from 'js-sha256';
 
+import { FileS3 } from '@/server/modules/S3';
+import { type FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 
 const log = debug('lobe-server:sandbox-service');
 
 export interface ServerSandboxServiceOptions {
+  fileService: FileService;
   marketService: MarketService;
   topicId: string;
   userId: string;
@@ -28,11 +32,13 @@ export interface ServerSandboxServiceOptions {
  * - MarketService handles authentication via trustedClientToken
  */
 export class ServerSandboxService implements ISandboxService {
+  private fileService: FileService;
   private marketService: MarketService;
   private topicId: string;
   private userId: string;
 
   constructor(options: ServerSandboxServiceOptions) {
+    this.fileService = options.fileService;
     this.marketService = options.marketService;
     this.topicId = options.topicId;
     this.userId = options.userId;
@@ -45,11 +51,12 @@ export class ServerSandboxService implements ISandboxService {
     log('Calling sandbox tool: %s with params: %O, topicId: %s', toolName, params, this.topicId);
 
     try {
-      const response = await this.marketService.getSDK().plugins.runBuildInTool(
-        toolName as CodeInterpreterToolName,
-        params as any,
-        { topicId: this.topicId, userId: this.userId },
-      );
+      const response = await this.marketService
+        .getSDK()
+        .plugins.runBuildInTool(toolName as CodeInterpreterToolName, params as any, {
+          topicId: this.topicId,
+          userId: this.userId,
+        });
 
       log('Sandbox tool %s response: %O', toolName, response);
 
@@ -86,26 +93,85 @@ export class ServerSandboxService implements ISandboxService {
   }
 
   /**
-   * Export and upload a file from sandbox
+   * Export and upload a file from sandbox to S3
    *
-   * Note: This is a simplified version for server-side use.
-   * The full implementation with S3 upload is in the tRPC router.
+   * Steps:
+   * 1. Generate S3 pre-signed upload URL
+   * 2. Call sandbox exportFile tool to upload file
+   * 3. Verify upload success and get metadata
+   * 4. Create persistent file record
    */
   async exportAndUploadFile(path: string, filename: string): Promise<SandboxExportFileResult> {
     log('Exporting file: %s from path: %s, topicId: %s', filename, path, this.topicId);
 
-    // For server-side, we need to call the exportFile tool
-    // The full S3 upload logic should be handled separately
-    // This is a basic implementation that can be extended
-
     try {
+      const s3 = new FileS3();
+
+      // Use date-based sharding for privacy compliance (GDPR, CCPA)
+      const today = new Date().toISOString().split('T')[0];
+
+      // Generate a unique key for the exported file
+      const key = `code-interpreter-exports/${today}/${this.topicId}/${filename}`;
+
+      // Step 1: Generate pre-signed upload URL
+      const uploadUrl = await s3.createPreSignedUrl(key);
+      log('Generated upload URL for key: %s', key);
+
+      // Step 2: Call sandbox's exportFile tool with the upload URL
+      const response = await this.marketService.exportFile({
+        path,
+        topicId: this.topicId,
+        uploadUrl,
+        userId: this.userId,
+      });
+
+      log('Sandbox exportFile response: %O', response);
+
+      if (!response.success) {
+        return {
+          error: { message: response.error?.message || 'Failed to export file from sandbox' },
+          filename,
+          success: false,
+        };
+      }
+
+      const result = response.data?.result;
+      const uploadSuccess = result?.success !== false;
+
+      if (!uploadSuccess) {
+        return {
+          error: { message: result?.error || 'Failed to upload file from sandbox' },
+          filename,
+          success: false,
+        };
+      }
+
+      // Step 3: Get file metadata from S3 to verify upload and get actual size
+      const metadata = await s3.getFileMetadata(key);
+      const fileSize = metadata.contentLength;
+      const mimeType = metadata.contentType || result?.mimeType || 'application/octet-stream';
+
+      // Step 4: Create persistent file record using FileService
+      // Generate a simple hash from the key (since we don't have the actual file content)
+      const fileHash = sha256(key + Date.now().toString());
+
+      const { fileId, url } = await this.fileService.createFileRecord({
+        fileHash,
+        fileType: mimeType,
+        name: filename,
+        size: fileSize,
+        url: key, // Store S3 key
+      });
+
+      log('Created file record: fileId=%s, url=%s', fileId, url);
+
       return {
-        error: {
-          message:
-            'Server-side file export not fully implemented. Use tRPC endpoint for file exports.',
-        },
+        fileId,
         filename,
-        success: false,
+        mimeType,
+        size: fileSize,
+        success: true,
+        url, // This is the permanent /f/:id URL
       };
     } catch (error) {
       log('Error exporting file: %O', error);

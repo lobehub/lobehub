@@ -281,6 +281,19 @@ export class MarketService {
   }
 
   /**
+   * Export file from sandbox to upload URL
+   */
+  async exportFile(params: { path: string; topicId: string; uploadUrl: string; userId: string }) {
+    const { path, uploadUrl, topicId, userId } = params;
+
+    return this.market.plugins.runBuildInTool(
+      'exportFile',
+      { path, uploadUrl },
+      { topicId, userId },
+    );
+  }
+
+  /**
    * Get plugin manifest
    */
   async getPluginManifest(params: {
