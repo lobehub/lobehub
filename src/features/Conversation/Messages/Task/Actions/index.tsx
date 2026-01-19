@@ -129,8 +129,6 @@ export const AssistantActionsBar = memo<AssistantActionsBarProps>(
         defaultActions.copy,
         collapseAction,
         defaultActions.divider,
-
-        defaultActions.divider,
         defaultActions.share,
         defaultActions.divider,
         defaultActions.regenerate,

@@ -30,7 +30,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     padding-block: 8px;
-    padding-inline: 16px;
   `,
   footer: css`
     padding-block-start: 8px;
