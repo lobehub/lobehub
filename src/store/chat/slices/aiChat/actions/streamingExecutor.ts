@@ -731,6 +731,14 @@ export const streamingExecutor: StateCreator<
         result.newState.status,
       );
 
+      // After parallel tool batch completes, refresh messages to ensure all tool results are synced
+      // This fixes the race condition where each tool's replaceMessages may overwrite others
+      // REMEMBER: There is no test for it (too hard to add), if you want to change it , ask @arvinxx first
+      if (result.nextContext?.phase === 'tools_batch_result') {
+        log('[internal_execAgentRuntime] Tools batch completed, refreshing messages to sync state');
+        await get().refreshMessages(context);
+      }
+
       // Handle completion and error events
       for (const event of result.events) {
         switch (event.type) {
