@@ -407,18 +407,20 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
    * Execute a single async task
    *
    * This method triggers async task execution by returning a special state.
-   * The AgentRuntime's executor will recognize this state and trigger the exec_task instruction.
+   * The AgentRuntime's executor will recognize this state and trigger the appropriate instruction.
    *
    * Flow:
-   * 1. GTD tool returns stop: true with state.type = 'execTask'
-   * 2. AgentRuntime executor recognizes the state and triggers exec_task instruction
-   * 3. exec_task executor creates task message and polls for completion
+   * 1. GTD tool returns stop: true with state.type = 'execTask' or 'execClientTask'
+   * 2. AgentRuntime executor recognizes the state and triggers exec_task or exec_client_task instruction
+   * 3. The executor creates task message and handles execution
+   *
+   * @param params.runInClient - If true, returns 'execClientTask' state for client-side execution
    */
   execTask = async (
     params: ExecTaskParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
-    const { description, instruction, inheritMessages, timeout } = params;
+    const { description, instruction, inheritMessages, timeout, runInClient } = params;
 
     if (!description || !instruction) {
       return {
@@ -427,19 +429,25 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
       };
     }
 
+    const task = {
+      description,
+      inheritMessages,
+      instruction,
+      runInClient,
+      timeout,
+    };
+
+    // Determine state type based on runInClient
+    // If runInClient is true, return 'execClientTask' to trigger client-side executor
+    const stateType = runInClient ? 'execClientTask' : 'execTask';
+
     // Return stop: true with special state that AgentRuntime will recognize
-    // The exec_task executor will be triggered by the runtime when it sees this state
     return {
-      content: `🚀 Triggered async task for execution:\n- ${description}`,
+      content: `🚀 Triggered async task for ${runInClient ? 'client-side' : ''} execution:\n- ${description}`,
       state: {
         parentMessageId: ctx.messageId,
-        task: {
-          description,
-          inheritMessages,
-          instruction,
-          timeout,
-        },
-        type: 'execTask',
+        task,
+        type: stateType,
       },
       stop: true,
       success: true,
@@ -450,12 +458,15 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
    * Execute one or more async tasks
    *
    * This method triggers async task execution by returning a special state.
-   * The AgentRuntime's executor will recognize this state and trigger the exec_tasks instruction.
+   * The AgentRuntime's executor will recognize this state and trigger the appropriate instruction.
    *
    * Flow:
-   * 1. GTD tool returns stop: true with state.type = 'execTasks'
-   * 2. AgentRuntime executor recognizes the state and triggers exec_tasks instruction
-   * 3. exec_tasks executor creates task messages and polls for completion
+   * 1. GTD tool returns stop: true with state.type = 'execTasks' or 'execClientTasks'
+   * 2. AgentRuntime executor recognizes the state and triggers exec_tasks or exec_client_tasks instruction
+   * 3. The executor creates task messages and handles execution
+   *
+   * Note: If any task has runInClient=true, all tasks will be routed to 'execClientTasks'.
+   * This is because client-side execution is the "special" case requiring local tool access.
    */
   execTasks = async (
     params: ExecTasksParams,
@@ -473,14 +484,20 @@ class GTDExecutor extends BaseExecutor<typeof GTDApiNameEnum> {
     const taskCount = tasks.length;
     const taskList = tasks.map((t, i) => `${i + 1}. ${t.description}`).join('\n');
 
+    // Check if any task requires client-side execution
+    const hasClientTasks = tasks.some((t) => t.runInClient);
+
+    // Determine state type: if any task needs client-side, route all to client executor
+    const stateType = hasClientTasks ? 'execClientTasks' : 'execTasks';
+    const executionMode = hasClientTasks ? 'client-side' : '';
+
     // Return stop: true with special state that AgentRuntime will recognize
-    // The exec_tasks executor will be triggered by the runtime when it sees this state
     return {
-      content: `🚀 Triggered ${taskCount} async task${taskCount > 1 ? 's' : ''} for execution:\n${taskList}`,
+      content: `🚀 Triggered ${taskCount} async task${taskCount > 1 ? 's' : ''} for ${executionMode} execution:\n${taskList}`,
       state: {
         parentMessageId: ctx.messageId,
         tasks,
-        type: 'execTasks',
+        type: stateType,
       },
       stop: true,
       success: true,

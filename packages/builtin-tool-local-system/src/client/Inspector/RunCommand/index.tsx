@@ -47,7 +47,7 @@ export const RunCommandInspector = memo<BuiltinInspectorProps<RunCommandParams, 
 
     // Get execution result from pluginState
     const result = pluginState?.result;
-    const isSuccess = result?.success && result?.exit_code === 0;
+    const isSuccess = result?.success || result?.exit_code === 0;
 
     return (
       <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>

@@ -14,43 +14,25 @@ export const GTDApiName = {
   /** Clear completed or all todos */
   clearTodos: 'clearTodos',
 
-  
   // ==================== Planning ====================
-/** Create a structured plan by breaking down a goal into actionable steps */
-createPlan: 'createPlan',
+  /** Create a structured plan by breaking down a goal into actionable steps */
+  createPlan: 'createPlan',
 
-  
-  
+  /** Create new todo items */
+  createTodos: 'createTodos',
 
-/** Create new todo items */
-createTodos: 'createTodos',
+  // ==================== Async Tasks ====================
+  /** Execute a single async task */
+  execTask: 'execTask',
 
-  
-  
-  
-// ==================== Async Tasks ====================
-/** Execute a single async task */
-execTask: 'execTask',
+  /** Execute one or more async tasks */
+  execTasks: 'execTasks',
 
-  
-  
+  /** Update an existing plan */
+  updatePlan: 'updatePlan',
 
-
-/** Execute one or more async tasks */
-execTasks: 'execTasks',
-
-  
-  
-  
-
-
-/** Update an existing plan */
-updatePlan: 'updatePlan',
-
-  
-  
-/** Update todo items with batch operations (add, update, remove, complete, processing) */
-updateTodos: 'updateTodos',
+  /** Update todo items with batch operations (add, update, remove, complete, processing) */
+  updateTodos: 'updateTodos',
 } as const;
 
 export type GTDApiNameType = (typeof GTDApiName)[keyof typeof GTDApiName];
@@ -258,6 +240,14 @@ export interface ExecTaskItem {
   inheritMessages?: boolean;
   /** Detailed instruction/prompt for the task execution */
   instruction: string;
+  /**
+   * Whether to execute the task on the client side (desktop only).
+   * When true and running on desktop, the task will be executed locally
+   * with access to local tools (file system, shell commands, etc.).
+   *
+   * MUST be true when task requires local-system tools.
+   */
+  runInClient?: boolean;
   /** Timeout in milliseconds (optional, default 30 minutes) */
   timeout?: number;
 }
@@ -273,6 +263,14 @@ export interface ExecTaskParams {
   inheritMessages?: boolean;
   /** Detailed instruction/prompt for the task execution */
   instruction: string;
+  /**
+   * Whether to execute the task on the client side (desktop only).
+   * When true and running on desktop, the task will be executed locally
+   * with access to local tools (file system, shell commands, etc.).
+   *
+   * MUST be true when task requires local-system tools.
+   */
+  runInClient?: boolean;
   /** Timeout in milliseconds (optional, default 30 minutes) */
   timeout?: number;
 }
@@ -287,7 +285,7 @@ export interface ExecTasksParams {
 }
 
 /**
- * State returned after triggering exec_task
+ * State returned after triggering exec_task (server-side)
  */
 export interface ExecTaskState {
   /** Parent message ID (tool message) */
@@ -299,7 +297,7 @@ export interface ExecTaskState {
 }
 
 /**
- * State returned after triggering exec_tasks
+ * State returned after triggering exec_tasks (server-side)
  */
 export interface ExecTasksState {
   /** Parent message ID (tool message) */
@@ -308,4 +306,28 @@ export interface ExecTasksState {
   tasks: ExecTaskItem[];
   /** Type identifier for render component */
   type: 'execTasks';
+}
+
+/**
+ * State returned after triggering exec_client_task (client-side, desktop only)
+ */
+export interface ExecClientTaskState {
+  /** Parent message ID (tool message) */
+  parentMessageId: string;
+  /** The task definition that was triggered */
+  task: ExecTaskItem;
+  /** Type identifier for render component */
+  type: 'execClientTask';
+}
+
+/**
+ * State returned after triggering exec_client_tasks (client-side, desktop only)
+ */
+export interface ExecClientTasksState {
+  /** Parent message ID (tool message) */
+  parentMessageId: string;
+  /** Array of task definitions that were triggered */
+  tasks: ExecTaskItem[];
+  /** Type identifier for render component */
+  type: 'execClientTasks';
 }

@@ -1,5 +1,6 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
+import { isDesktop } from './const';
 import { systemPrompt } from './systemRole';
 import { GTDApiName } from './types';
 
@@ -171,6 +172,13 @@ export const GTDManifest: BuiltinToolManifest = {
               'Whether to inherit context messages from the parent conversation. Default is false.',
             type: 'boolean',
           },
+          ...(isDesktop && {
+            runInClient: {
+              description:
+                'Whether to run on the desktop client (for local file/shell access). MUST be true when task requires local-system tools. Default is false (server execution).',
+              type: 'boolean',
+            },
+          }),
           timeout: {
             description: 'Optional timeout in milliseconds. Default is 30 minutes.',
             type: 'number',
@@ -203,6 +211,13 @@ export const GTDManifest: BuiltinToolManifest = {
                     'Whether to inherit context messages from the parent conversation. Default is false.',
                   type: 'boolean',
                 },
+                ...(isDesktop && {
+                  runInClient: {
+                    description:
+                      'Whether to run on the desktop client (for local file/shell access). MUST be true when task requires local-system tools. Default is false (server execution).',
+                    type: 'boolean',
+                  },
+                }),
                 timeout: {
                   description: 'Optional timeout in milliseconds. Default is 30 minutes.',
                   type: 'number',

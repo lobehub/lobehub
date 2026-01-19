@@ -368,6 +368,216 @@ describe('GeneralChatAgent', () => {
   });
 
   describe('tool_result phase', () => {
+    describe('GTD async tasks', () => {
+      it('should return exec_task for single async task (execTask)', async () => {
+        const agent = new GeneralChatAgent({
+          agentConfig: { maxSteps: 100 },
+          operationId: 'test-session',
+          modelRuntimeConfig: mockModelRuntimeConfig,
+        });
+
+        const state = createMockState();
+        const context = createMockContext('tool_result', {
+          parentMessageId: 'tool-msg-1',
+          stop: true,
+          data: {
+            state: {
+              type: 'execTask',
+              parentMessageId: 'exec-parent-msg',
+              task: { instruction: 'Do something async', timeout: 30000 },
+            },
+          },
+        });
+
+        const result = await agent.runner(context, state);
+
+        expect(result).toEqual({
+          type: 'exec_task',
+          payload: {
+            parentMessageId: 'exec-parent-msg',
+            task: { instruction: 'Do something async', timeout: 30000 },
+          },
+        });
+      });
+
+      it('should return exec_tasks for multiple async tasks (execTasks)', async () => {
+        const agent = new GeneralChatAgent({
+          agentConfig: { maxSteps: 100 },
+          operationId: 'test-session',
+          modelRuntimeConfig: mockModelRuntimeConfig,
+        });
+
+        const state = createMockState();
+        const tasks = [
+          { instruction: 'Task 1', timeout: 30000 },
+          { instruction: 'Task 2', timeout: 30000 },
+        ];
+        const context = createMockContext('tool_result', {
+          parentMessageId: 'tool-msg-1',
+          stop: true,
+          data: {
+            state: {
+              type: 'execTasks',
+              parentMessageId: 'exec-parent-msg',
+              tasks,
+            },
+          },
+        });
+
+        const result = await agent.runner(context, state);
+
+        expect(result).toEqual({
+          type: 'exec_tasks',
+          payload: {
+            parentMessageId: 'exec-parent-msg',
+            tasks,
+          },
+        });
+      });
+
+      it('should return exec_client_task for single client-side async task (execClientTask)', async () => {
+        const agent = new GeneralChatAgent({
+          agentConfig: { maxSteps: 100 },
+          operationId: 'test-session',
+          modelRuntimeConfig: mockModelRuntimeConfig,
+        });
+
+        const state = createMockState();
+        const context = createMockContext('tool_result', {
+          parentMessageId: 'tool-msg-1',
+          stop: true,
+          data: {
+            state: {
+              type: 'execClientTask',
+              parentMessageId: 'exec-parent-msg',
+              task: { type: 'localFile', path: '/path/to/file' },
+            },
+          },
+        });
+
+        const result = await agent.runner(context, state);
+
+        expect(result).toEqual({
+          type: 'exec_client_task',
+          payload: {
+            parentMessageId: 'exec-parent-msg',
+            task: { type: 'localFile', path: '/path/to/file' },
+          },
+        });
+      });
+
+      it('should return exec_client_tasks for multiple client-side async tasks (execClientTasks)', async () => {
+        const agent = new GeneralChatAgent({
+          agentConfig: { maxSteps: 100 },
+          operationId: 'test-session',
+          modelRuntimeConfig: mockModelRuntimeConfig,
+        });
+
+        const state = createMockState();
+        const tasks = [
+          { type: 'localFile', path: '/path/to/file1' },
+          { type: 'localFile', path: '/path/to/file2' },
+        ];
+        const context = createMockContext('tool_result', {
+          parentMessageId: 'tool-msg-1',
+          stop: true,
+          data: {
+            state: {
+              type: 'execClientTasks',
+              parentMessageId: 'exec-parent-msg',
+              tasks,
+            },
+          },
+        });
+
+        const result = await agent.runner(context, state);
+
+        expect(result).toEqual({
+          type: 'exec_client_tasks',
+          payload: {
+            parentMessageId: 'exec-parent-msg',
+            tasks,
+          },
+        });
+      });
+
+      it('should not trigger exec_task when stop is false', async () => {
+        const agent = new GeneralChatAgent({
+          agentConfig: { maxSteps: 100 },
+          operationId: 'test-session',
+          modelRuntimeConfig: mockModelRuntimeConfig,
+        });
+
+        const state = createMockState({
+          messages: [
+            { role: 'user', content: 'Hello' },
+            { role: 'assistant', content: '' },
+            { role: 'tool', content: 'Result', tool_call_id: 'call-1' },
+          ] as any,
+        });
+        const context = createMockContext('tool_result', {
+          parentMessageId: 'tool-msg-1',
+          stop: false, // stop is false, should not trigger exec_task
+          data: {
+            state: {
+              type: 'execTask',
+              parentMessageId: 'exec-parent-msg',
+              task: { instruction: 'Do something async' },
+            },
+          },
+        });
+
+        const result = await agent.runner(context, state);
+
+        // Should return call_llm instead of exec_task
+        expect(result).toEqual({
+          type: 'call_llm',
+          payload: {
+            messages: state.messages,
+            model: 'gpt-4o-mini',
+            parentMessageId: 'tool-msg-1',
+            provider: 'openai',
+            tools: undefined,
+          },
+        });
+      });
+
+      it('should not trigger exec_task when data.state is undefined', async () => {
+        const agent = new GeneralChatAgent({
+          agentConfig: { maxSteps: 100 },
+          operationId: 'test-session',
+          modelRuntimeConfig: mockModelRuntimeConfig,
+        });
+
+        const state = createMockState({
+          messages: [
+            { role: 'user', content: 'Hello' },
+            { role: 'assistant', content: '' },
+            { role: 'tool', content: 'Result', tool_call_id: 'call-1' },
+          ] as any,
+        });
+        const context = createMockContext('tool_result', {
+          parentMessageId: 'tool-msg-1',
+          stop: true,
+          data: {}, // No state property
+        });
+
+        const result = await agent.runner(context, state);
+
+        // Should return call_llm instead of exec_task
+        expect(result).toEqual({
+          type: 'call_llm',
+          payload: {
+            messages: state.messages,
+            model: 'gpt-4o-mini',
+            parentMessageId: 'tool-msg-1',
+            provider: 'openai',
+            tools: undefined,
+          },
+        });
+      });
+    });
+
     it('should return call_llm when no pending tools', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },

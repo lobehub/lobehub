@@ -18,7 +18,7 @@ interface ContentLoadingProps {
 const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
   const { t } = useTranslation('chat');
   const runningOp = useChatStore(operationSelectors.getDeepestRunningOperationByMessage(id));
-  console.log('runningOp', runningOp);
+
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [startTime, setStartTime] = useState(runningOp?.metadata?.startTime);
 
