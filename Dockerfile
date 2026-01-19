@@ -44,6 +44,7 @@ ARG NEXT_PUBLIC_ANALYTICS_UMAMI
 ARG NEXT_PUBLIC_UMAMI_SCRIPT_URL
 ARG NEXT_PUBLIC_UMAMI_WEBSITE_ID
 ARG FEATURE_FLAGS
+ARG MAX_DURATION
 
 ENV NEXT_PUBLIC_BASE_PATH="${NEXT_PUBLIC_BASE_PATH}" \
     FEATURE_FLAGS="${FEATURE_FLAGS}"
@@ -56,7 +57,8 @@ ENV NEXT_PUBLIC_ENABLE_BETTER_AUTH="${NEXT_PUBLIC_ENABLE_BETTER_AUTH:-0}" \
     APP_URL="http://app.com" \
     DATABASE_DRIVER="node" \
     DATABASE_URL="postgres://postgres:password@localhost:5432/postgres" \
-    KEY_VAULTS_SECRET="use-for-build"
+    KEY_VAULTS_SECRET="use-for-build" \
+    MAX_DURATION="${MAX_DURATION:-300}"
 
 # Sentry
 ENV NEXT_PUBLIC_SENTRY_DSN="${NEXT_PUBLIC_SENTRY_DSN}" \
@@ -104,6 +106,8 @@ pnpm add pg drizzle-orm
 EOF
 
 COPY . .
+
+RUN sed -i "s/export const maxDuration = 300;/export const maxDuration = ${MAX_DURATION};/g" "src/app/(backend)/webapi/chat/[provider]/route.ts"
 
 # run build standalone for docker version
 RUN npm run build:docker
