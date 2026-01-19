@@ -1,6 +1,10 @@
 'use client';
 
-import { AuthorizationProgress, useWatchBroadcast } from '@lobechat/electron-client-ipc';
+import {
+  AuthorizationPhase,
+  AuthorizationProgress,
+  useWatchBroadcast,
+} from '@lobechat/electron-client-ipc';
 import { Alert, Button, Center, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
@@ -9,6 +13,7 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
+import UserInfo from '@/features/User/UserInfo';
 import { remoteServerService } from '@/services/electron/remoteServer';
 import { useElectronStore } from '@/store/electron';
 import { setDesktopAutoOidcFirstOpenHandled } from '@/utils/electron/autoOidc';
@@ -20,6 +25,13 @@ type LoginMethod = 'cloud' | 'selfhost';
 
 // 登录状态类型
 type LoginStatus = 'idle' | 'loading' | 'success' | 'error';
+
+const authorizationPhaseI18nKeyMap: Record<AuthorizationPhase, string> = {
+  browser_opened: 'screen5.auth.phase.browserOpened',
+  cancelled: 'screen5.actions.cancel',
+  verifying: 'screen5.auth.phase.verifying',
+  waiting_for_auth: 'screen5.auth.phase.waitingForAuth',
+};
 
 const loginMethodMetas = {
   cloud: {
@@ -181,6 +193,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
     setAuthProgress(progress);
     if (progress.phase === 'cancelled') {
       setCloudLoginStatus('idle');
+      setSelfhostLoginStatus('idle');
       setAuthProgress(null);
     }
   });
@@ -188,6 +201,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
   const handleCancelAuth = async () => {
     await remoteServerService.cancelAuthorization();
     setCloudLoginStatus('idle');
+    setSelfhostLoginStatus('idle');
     setAuthProgress(null);
   };
 
@@ -195,12 +209,18 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
   const renderCloudContent = () => {
     if (cloudLoginStatus === 'success') {
       return (
-        <Flexbox gap={12} style={{ width: '100%' }}>
+        <Flexbox gap={16} style={{ width: '100%' }}>
           <Alert
             description={t('authResult.success.desc')}
             style={{ width: '100%' }}
             title={t('authResult.success.title')}
             type={'success'}
+          />
+          <UserInfo
+            style={{
+              background: cssVar.colorFillSecondary,
+              borderRadius: 8,
+            }}
           />
           <Button
             block
@@ -239,27 +259,35 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
     }
 
     if (cloudLoginStatus === 'loading') {
+      const phaseText = t(authorizationPhaseI18nKeyMap[authProgress?.phase ?? 'browser_opened'], {
+        defaultValue: t('screen5.actions.signingIn'),
+      });
+      const remainingSeconds = authProgress
+        ? Math.max(0, Math.ceil((authProgress.maxPollTime - authProgress.elapsed) / 1000))
+        : null;
+
       return (
         <Flexbox gap={8} style={{ width: '100%' }}>
           <Button block disabled={true} icon={Cloud} loading={true} size={'large'} type={'primary'}>
-            {authProgress
-              ? t(`screen5.auth.phase.${authProgress.phase}`, {
-                  defaultValue: t('screen5.actions.signingIn'),
-                })
-              : t('screen5.actions.signingIn')}
+            {t('screen5.actions.signingIn')}
           </Button>
-          {authProgress && (
-            <Flexbox align={'center'} horizontal justify={'space-between'}>
+          <Text style={{ color: cssVar.colorTextDescription }} type={'secondary'}>
+            {phaseText}
+          </Text>
+          <Flexbox align={'center'} horizontal justify={'space-between'}>
+            {remainingSeconds !== null ? (
               <Text style={{ color: cssVar.colorTextDescription }} type={'secondary'}>
                 {t('screen5.auth.remaining', {
-                  time: Math.round((authProgress.maxPollTime - authProgress.elapsed) / 1000),
+                  time: remainingSeconds,
                 })}
               </Text>
-              <Button onClick={handleCancelAuth} size={'small'} type={'text'}>
-                {t('screen5.actions.cancel')}
-              </Button>
-            </Flexbox>
-          )}
+            ) : (
+              <div />
+            )}
+            <Button onClick={handleCancelAuth} size={'small'} type={'text'}>
+              {t('screen5.actions.cancel')}
+            </Button>
+          </Flexbox>
         </Flexbox>
       );
     }
@@ -283,12 +311,18 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
   const renderSelfhostContent = () => {
     if (selfhostLoginStatus === 'success') {
       return (
-        <Flexbox gap={12} style={{ width: '100%' }}>
+        <Flexbox gap={16} style={{ width: '100%' }}>
           <Alert
             description={t('authResult.success.desc')}
             style={{ width: '100%' }}
             title={t('authResult.success.title')}
             type={'success'}
+          />
+          <UserInfo
+            style={{
+              background: cssVar.colorFillSecondary,
+              borderRadius: 8,
+            }}
           />
           <Button
             block
@@ -354,8 +388,8 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
   };
 
   return (
-    <Flexbox gap={32}>
-      <Flexbox>
+    <Center gap={32} style={{ height: '100%', minHeight: '100%' }}>
+      <Flexbox align={'flex-start'} justify={'flex-start'} style={{ width: '100%' }}>
         <LobeMessage sentences={[t('screen5.title'), t('screen5.title2'), t('screen5.title3')]} />
         <Text as={'p'}>{t('screen5.description')}</Text>
       </Flexbox>
@@ -401,7 +435,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
           </Button>
         </Flexbox>
       )}
-    </Flexbox>
+    </Center>
   );
 });
 

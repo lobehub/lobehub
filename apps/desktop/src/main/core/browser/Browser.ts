@@ -1,4 +1,4 @@
-import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
+import { APP_WINDOW_MIN_SIZE, TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
 import {
   BrowserWindow,
@@ -291,9 +291,19 @@ export default class Browser {
     });
   }
 
-  setWindowResizable(resizable: boolean): void {
-    logger.debug(`[${this.identifier}] Setting window resizable: ${resizable}`);
-    this._browserWindow?.setResizable(resizable);
+  setWindowMinimumSize(size: { height?: number; width?: number }): void {
+    logger.debug(`[${this.identifier}] Setting window minimum size: ${JSON.stringify(size)}`);
+
+    const currentMinimumSize = this._browserWindow?.getMinimumSize?.() ?? [0, 0];
+    const rawWidth = size.width ?? currentMinimumSize[0];
+    const rawHeight = size.height ?? currentMinimumSize[1];
+
+    // Electron doesn't "reset" minimum size with 0x0 reliably.
+    // Treat 0 / negative as fallback to app-level default preset.
+    const width = rawWidth > 0 ? rawWidth : APP_WINDOW_MIN_SIZE.width;
+    const height = rawHeight > 0 ? rawHeight : APP_WINDOW_MIN_SIZE.height;
+
+    this._browserWindow?.setMinimumSize?.(width, height);
   }
 
   // ==================== Window Position ====================

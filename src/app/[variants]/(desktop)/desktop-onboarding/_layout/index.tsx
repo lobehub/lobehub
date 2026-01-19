@@ -3,7 +3,7 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Center, Flexbox, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { cx } from 'antd-style';
+import { css, cx } from 'antd-style';
 import type { FC, PropsWithChildren } from 'react';
 
 import SimpleTitleBar from '@/features/Electron/titlebar/SimpleTitleBar';
@@ -13,6 +13,9 @@ import { useIsDark } from '@/hooks/useIsDark';
 
 import { styles } from './style';
 
+const contentContainer = css`
+  overflow: auto;
+`;
 const OnboardingContainer: FC<PropsWithChildren> = ({ children }) => {
   const isDarkMode = useIsDark();
   return (
@@ -44,9 +47,9 @@ const OnboardingContainer: FC<PropsWithChildren> = ({ children }) => {
               <ThemeButton placement={'bottomRight'} size={18} />
             </Flexbox>
           </Flexbox>
-          <Center height={'100%'} padding={16} width={'100%'}>
+          <Flexbox align={'center'} className={cx(contentContainer)} height={'100%'} width={'100%'}>
             {children}
-          </Center>
+          </Flexbox>
           <Center padding={24}>
             <Text align={'center'} type={'secondary'}>
               © 2025 LobeHub. All rights reserved.

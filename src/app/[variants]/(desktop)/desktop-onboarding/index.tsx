@@ -1,5 +1,6 @@
 'use client';
 
+import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { Suspense, memo, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -50,12 +51,11 @@ const DesktopOnboardingPage = memo(() => {
 
   // 设置窗口大小和可调整性
   useEffect(() => {
-    const fixedSize = { height: 900, width: 1400 };
+    const minimumSize = { height: 900, width: 1200 };
 
     const applyWindowSettings = async () => {
       try {
-        await electronSystemService.setWindowSize(fixedSize);
-        await electronSystemService.setWindowResizable({ resizable: false });
+        await electronSystemService.setWindowMinimumSize(minimumSize);
       } catch (error) {
         console.error('[DesktopOnboarding] Failed to apply window settings:', error);
       }
@@ -64,7 +64,8 @@ const DesktopOnboardingPage = memo(() => {
     applyWindowSettings();
 
     return () => {
-      electronSystemService.setWindowResizable({ resizable: true }).catch((error) => {
+      // Restore to app-level default minimum size preset
+      electronSystemService.setWindowMinimumSize(APP_WINDOW_MIN_SIZE).catch((error) => {
         console.error('[DesktopOnboarding] Failed to restore window settings:', error);
       });
     };
@@ -127,9 +128,9 @@ const DesktopOnboardingPage = memo(() => {
           // 如果是第4步（LoginStep），完成 onboarding
           setDesktopOnboardingCompleted();
           clearDesktopOnboardingStep(); // Clear persisted step since onboarding is complete
-          // Restore window resizable before hard reload (cleanup won't run due to hard navigation)
+          // Restore window minimum size before hard reload (cleanup won't run due to hard navigation)
           electronSystemService
-            .setWindowResizable({ resizable: true })
+            .setWindowMinimumSize(APP_WINDOW_MIN_SIZE)
             .catch(console.error)
             .finally(() => {
               // Use hard reload instead of SPA navigation to ensure the app boots with the new desktop state.
@@ -196,7 +197,7 @@ const DesktopOnboardingPage = memo(() => {
 
   return (
     <OnboardingContainer>
-      <Flexbox gap={24} style={{ maxWidth: 560, width: '100%' }}>
+      <Flexbox gap={24} style={{ maxWidth: 560, minHeight: '100%', width: '100%' }}>
         <Suspense
           fallback={
             <Flexbox gap={8}>

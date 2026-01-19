@@ -3,6 +3,7 @@ export interface WindowSizeParams {
   width?: number;
 }
 
-export interface WindowResizableParams {
-  resizable: boolean;
+export interface WindowMinimumSizeParams {
+  height?: number;
+  width?: number;
 }
