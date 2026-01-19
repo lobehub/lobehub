@@ -3,6 +3,7 @@
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { createStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
+import type { Klavis } from 'klavis';
 import { memo, useMemo, useState } from 'react';
 
 import IntegrationDetailModal from '@/features/IntegrationDetailModal';
@@ -14,6 +15,7 @@ import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types'
 
 import Empty from '../Empty';
 import Item from './Item';
+import { useSkillConnect } from './useSkillConnect';
 
 const useStyles = createStyles(({ css }) => ({
   grid: css`
@@ -36,8 +38,35 @@ interface LobeHubListProps {
 
 interface DetailState {
   identifier: string;
+  serverName?: Klavis.McpServerName;
   type: 'klavis' | 'lobehub';
 }
+
+interface DetailModalWithConnectProps {
+  detailState: DetailState;
+  onClose: () => void;
+}
+
+const DetailModalWithConnect = memo<DetailModalWithConnectProps>(({ detailState, onClose }) => {
+  const { handleConnect, isConnecting } = useSkillConnect({
+    identifier: detailState.identifier,
+    serverName: detailState.serverName,
+    type: detailState.type,
+  });
+
+  return (
+    <IntegrationDetailModal
+      identifier={detailState.identifier}
+      isConnecting={isConnecting}
+      onClose={onClose}
+      onConnect={handleConnect}
+      open
+      type={detailState.type}
+    />
+  );
+});
+
+DetailModalWithConnect.displayName = 'DetailModalWithConnect';
 
 export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
   const { styles } = useStyles();
@@ -131,7 +160,11 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
               key={item.serverType.identifier}
               label={item.serverType.label}
               onOpenDetail={() =>
-                setDetailState({ identifier: item.serverType.identifier, type: 'klavis' })
+                setDetailState({
+                  identifier: item.serverType.identifier,
+                  serverName: item.serverType.serverName,
+                  type: 'klavis',
+                })
               }
               serverName={item.serverType.serverName}
               type="klavis"
@@ -140,11 +173,9 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
         })}
       </div>
       {detailState && (
-        <IntegrationDetailModal
-          identifier={detailState.identifier}
+        <DetailModalWithConnect
+          detailState={detailState}
           onClose={() => setDetailState(null)}
-          open
-          type={detailState.type}
         />
       )}
     </>
