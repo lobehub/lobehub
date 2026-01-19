@@ -3,6 +3,7 @@ import { type ChatToolPayload } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
+import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
 
 import { getServerRuntime, hasServerRuntime } from './serverRuntimes';
@@ -12,9 +13,11 @@ const log = debug('lobe-server:builtin-tools-executor');
 
 export class BuiltinToolsExecutor implements IToolExecutor {
   private marketService: MarketService;
+  private klavisService: KlavisService;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.marketService = new MarketService({ userInfo: { userId } });
+    this.klavisService = new KlavisService({ db, userId });
   }
 
   async execute(
@@ -37,6 +40,15 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       return this.marketService.executeLobehubSkill({
         args,
         provider: identifier,
+        toolName: apiName,
+      });
+    }
+
+    // Route Klavis tools to KlavisService
+    if (source === 'klavis') {
+      return this.klavisService.executeKlavisTool({
+        args,
+        identifier,
         toolName: apiName,
       });
     }

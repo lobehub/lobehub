@@ -28,6 +28,7 @@ import {
 import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import type { StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
+import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -93,6 +94,7 @@ export class AiAgentService {
   private readonly topicModel: TopicModel;
   private readonly agentRuntimeService: AgentRuntimeService;
   private readonly marketService: MarketService;
+  private readonly klavisService: KlavisService;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.userId = userId;
@@ -105,6 +107,7 @@ export class AiAgentService {
     this.topicModel = new TopicModel(db, userId);
     this.agentRuntimeService = new AgentRuntimeService(db, userId);
     this.marketService = new MarketService({ userInfo: { userId } });
+    this.klavisService = new KlavisService({ db, userId });
   }
 
   /**
@@ -205,7 +208,16 @@ export class AiAgentService {
     }
     log('execAgent: got %d lobehub skill manifests', lobehubSkillManifests.length);
 
-    // 6. Create tools using Server AgentToolsEngine
+    // 6. Fetch Klavis tool manifests from database
+    let klavisManifests: LobeToolManifest[] = [];
+    try {
+      klavisManifests = await this.klavisService.getKlavisManifests();
+    } catch (error) {
+      log('execAgent: failed to fetch klavis manifests: %O', error);
+    }
+    log('execAgent: got %d klavis manifests', klavisManifests.length);
+
+    // 7. Create tools using Server AgentToolsEngine
     const hasEnabledKnowledgeBases =
       agentConfig.knowledgeBases?.some((kb: { enabled?: boolean | null }) => kb.enabled === true) ??
       false;
@@ -216,7 +228,7 @@ export class AiAgentService {
     };
 
     const toolsEngine = createServerAgentToolsEngine(toolsContext, {
-      additionalManifests: lobehubSkillManifests,
+      additionalManifests: [...lobehubSkillManifests, ...klavisManifests],
       agentConfig: {
         chatConfig: agentConfig.chatConfig ?? undefined,
         plugins: agentConfig.plugins ?? undefined,
@@ -254,15 +266,20 @@ export class AiAgentService {
     for (const manifest of lobehubSkillManifests) {
       toolSourceMap[manifest.identifier] = 'lobehubSkill';
     }
+    // Mark klavis tools
+    for (const manifest of klavisManifests) {
+      toolSourceMap[manifest.identifier] = 'klavis';
+    }
 
     log(
-      'execAgent: generated %d tools from %d configured plugins, %d lobehub skills',
+      'execAgent: generated %d tools from %d configured plugins, %d lobehub skills, %d klavis tools',
       tools?.length ?? 0,
       pluginIds.length,
       lobehubSkillManifests.length,
+      klavisManifests.length,
     );
 
-    // 6. Get existing messages if provided
+    // 8. Get existing messages if provided
     let historyMessages: any[] = [];
     if (existingMessageIds.length > 0) {
       historyMessages = await this.messageModel.query({
@@ -275,7 +292,7 @@ export class AiAgentService {
       }
     }
 
-    // 7. Create user message in database
+    // 9. Create user message in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const userMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
@@ -286,7 +303,7 @@ export class AiAgentService {
     });
     log('execAgent: created user message %s', userMessageRecord.id);
 
-    // 8. Create assistant message placeholder in database
+    // 10. Create assistant message placeholder in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const assistantMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
@@ -306,7 +323,7 @@ export class AiAgentService {
     // Combine history messages with user message
     const allMessages = [...historyMessages, userMessage];
 
-    // 9. Process messages using Server ContextEngineering
+    // 11. Process messages using Server ContextEngineering
     const processedMessages = await serverMessagesEngine({
       capabilities: {
         isCanUseFC: isModelSupportToolUse,
@@ -341,11 +358,11 @@ export class AiAgentService {
 
     log('execAgent: processed %d messages', processedMessages.length);
 
-    // 10. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
+    // 12. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
     const timestamp = Date.now();
     const operationId = `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
-    // 11. Create initial context
+    // 13. Create initial context
     const initialContext: AgentRuntimeContext = {
       payload: {
         // Pass assistant message ID so agent runtime knows which message to update
@@ -366,7 +383,7 @@ export class AiAgentService {
       },
     };
 
-    // 12. Log final operation parameters summary
+    // 14. Log final operation parameters summary
     log(
       'execAgent: creating operation %s with params: model=%s, provider=%s, tools=%d, messages=%d, manifests=%d',
       operationId,
@@ -377,7 +394,7 @@ export class AiAgentService {
       Object.keys(toolManifestMap).length,
     );
 
-    // 13. Create operation using AgentRuntimeService
+    // 15. Create operation using AgentRuntimeService
     // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
     // If createOperation fails, we still have valid messages that need error info
     try {
