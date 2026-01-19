@@ -6,9 +6,9 @@ import type {
   ExportAndUploadFileResult,
 } from '@/server/routers/tools/market';
 
-class CodeInterpreterService {
+class CloudSandboxService {
   /**
-   * Call a cloud code interpreter tool
+   * Call a cloud sandbox tool
    * @param toolName - The name of the tool to call (e.g., 'runCommand', 'writeLocalFile')
    * @param params - The parameters for the tool
    * @param context - Session context containing userId and topicId for isolation
@@ -51,4 +51,4 @@ class CodeInterpreterService {
   }
 }
 
-export const codeInterpreterService = new CodeInterpreterService();
+export const cloudSandboxService = new CloudSandboxService();

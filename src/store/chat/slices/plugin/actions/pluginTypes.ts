@@ -1,5 +1,4 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import { CloudSandboxIdentifier, type ExportFileState } from '@lobechat/builtin-tool-cloud-sandbox';
 import { type ChatToolPayload, type RuntimeStepContext } from '@lobechat/types';
 import { PluginErrorType } from '@lobehub/chat-plugin-sdk';
 import debug from 'debug';
@@ -14,8 +13,6 @@ import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation';
 import { type ChatStore } from '@/store/chat/store';
 import { useToolStore } from '@/store/tool';
 import { hasExecutor } from '@/store/tool/slices/builtin/executors';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
 import { dbMessageSelectors } from '../../message/selectors';
@@ -41,14 +38,6 @@ export interface PluginTypesAction {
     payload: ChatToolPayload,
     stepContext?: RuntimeStepContext,
   ) => Promise<any>;
-
-  /**
-   * Invoke Cloud Code Interpreter tool
-   */
-  invokeCloudCodeInterpreterTool: (
-    id: string,
-    payload: ChatToolPayload,
-  ) => Promise<string | undefined>;
 
   /**
    * Invoke default type plugin (returns data)
@@ -114,11 +103,6 @@ export const pluginTypes: StateCreator<
     // Check if this is a LobeHub Skill tool by source field
     if (payload.source === 'lobehubSkill') {
       return await get().invokeLobehubSkillTypePlugin(id, payload);
-    }
-
-    // Check if this is Cloud Code Interpreter - route to specific handler
-    if (payload.identifier === CloudSandboxIdentifier) {
-      return await get().invokeCloudCodeInterpreterTool(id, payload);
     }
 
     const params = safeParseJSON(payload.arguments);
@@ -243,121 +227,6 @@ export const pluginTypes: StateCreator<
       `[invokeBuiltinTool] No executor found for: ${payload.identifier}/${payload.apiName}`,
     );
     return;
-  },
-
-  invokeCloudCodeInterpreterTool: async (id, payload) => {
-    // Get message to extract topicId
-    const message = dbMessageSelectors.getDbMessageById(id)(get());
-
-    // Get abort controller from operation
-    const operationId = get().messageOperationMap[id];
-    const operation = operationId ? get().operations[operationId] : undefined;
-    const abortController = operation?.abortController;
-
-    log(
-      '[invokeCloudCodeInterpreterTool] messageId=%s, tool=%s, operationId=%s, aborted=%s',
-      id,
-      payload.apiName,
-      operationId,
-      abortController?.signal.aborted,
-    );
-
-    let data: { content: string; error?: any; state?: any; success: boolean } | undefined;
-
-    try {
-      // Import ExecutionRuntime dynamically to avoid circular dependencies
-      const { CloudSandboxExecutionRuntime } =
-        await import('@lobechat/builtin-tool-cloud-sandbox/executionRuntime');
-
-      // Get userId from user store
-      const userId = userProfileSelectors.userId(useUserStore.getState()) || 'anonymous';
-
-      // Create runtime with context
-      const runtime = new CloudSandboxExecutionRuntime({
-        topicId: message?.topicId || 'default',
-        userId,
-      });
-
-      // Parse arguments
-      const args = safeParseJSON(payload.arguments) || {};
-
-      // Call the appropriate method based on apiName
-      const apiMethod = (runtime as Record<string, any>)[payload.apiName];
-      if (!apiMethod) {
-        throw new Error(`Cloud Code Interpreter API not found: ${payload.apiName}`);
-      }
-
-      data = await apiMethod.call(runtime, args);
-    } catch (error) {
-      console.error('[invokeCloudCodeInterpreterTool] Error:', error);
-
-      const err = error as Error;
-      if (err.message.includes('aborted') || err.message.includes('The user aborted a request.')) {
-        log(
-          '[invokeCloudCodeInterpreterTool] Request aborted: messageId=%s, tool=%s',
-          id,
-          payload.apiName,
-        );
-      } else {
-        const result = await messageService.updateMessageError(id, error as any, {
-          agentId: message?.agentId,
-          topicId: message?.topicId,
-        });
-        if (result?.success && result.messages) {
-          get().replaceMessages(result.messages, {
-            context: {
-              agentId: message?.agentId,
-              topicId: message?.topicId,
-            },
-          });
-        }
-      }
-    }
-
-    if (!data) return;
-
-    const context = operationId ? { operationId } : undefined;
-
-    // Use optimisticUpdateToolMessage to update content and state/error in a single call
-    await get().optimisticUpdateToolMessage(
-      id,
-      {
-        content: data.content,
-        pluginError: data.success ? undefined : data.error,
-        pluginState: data.success ? data.state : undefined,
-      },
-      context,
-    );
-
-    // Handle exportFile: associate the file (already created by server) with assistant message (parent)
-    if (payload.apiName === 'exportFile' && data.success && data.state) {
-      const exportState = data.state as ExportFileState;
-      // Server now creates the file record and returns fileId in the response
-      if (exportState.fileId && exportState.filename) {
-        try {
-          // Associate file with the assistant message (parent of tool message)
-          // The current message (id) is the tool message, we need to attach to its parent
-          const targetMessageId = message?.parentId || id;
-
-          await messageService.addFilesToMessage(targetMessageId, [exportState.fileId], {
-            agentId: message?.agentId,
-            topicId: message?.topicId,
-          });
-
-          log(
-            '[invokeCloudCodeInterpreterTool] Associated exported file with message: targetMessageId=%s, fileId=%s, filename=%s',
-            targetMessageId,
-            exportState.fileId,
-            exportState.filename,
-          );
-        } catch (error) {
-          // Log error but don't fail the tool execution
-          console.error('[invokeCloudCodeInterpreterTool] Failed to save exported file:', error);
-        }
-      }
-    }
-
-    return data.content;
   },
 
   invokeDefaultTypePlugin: async (id, payload) => {

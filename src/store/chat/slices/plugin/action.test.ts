@@ -1606,53 +1606,5 @@ describe('ChatPluginAction', () => {
         );
       });
     });
-
-    describe('invokeCloudCodeInterpreterTool', () => {
-      it('should use optimisticUpdateToolMessage for successful result', async () => {
-        const mockResult = {
-          content: 'code interpreter result',
-          state: { output: 'test output' },
-          success: true,
-        };
-
-        // Mock CloudSandboxExecutionRuntime using doMock for dynamic mocking
-        vi.doMock('@lobechat/builtin-tool-cloud-sandbox/executionRuntime', () => ({
-          CloudSandboxExecutionRuntime: class {
-            'test-api' = vi.fn().mockResolvedValue(mockResult);
-          },
-        }));
-
-        const optimisticUpdateToolMessageMock = vi.fn().mockResolvedValue(undefined);
-
-        act(() => {
-          useChatStore.setState({
-            activeAgentId: 'session-id',
-            messagesMap: { [messageMapKey({ agentId: 'session-id' })]: [] },
-            optimisticUpdateToolMessage: optimisticUpdateToolMessageMock,
-            replaceMessages: vi.fn(),
-            messageOperationMap: {},
-            operations: {},
-          });
-        });
-
-        const { result } = renderHook(() => useChatStore());
-
-        await act(async () => {
-          await result.current.invokeCloudCodeInterpreterTool(messageId, payload);
-        });
-
-        expect(optimisticUpdateToolMessageMock).toHaveBeenCalledWith(
-          messageId,
-          {
-            content: mockResult.content,
-            pluginError: undefined,
-            pluginState: mockResult.state,
-          },
-          undefined,
-        );
-
-        vi.doUnmock('@lobechat/builtin-tool-cloud-sandbox/executionRuntime');
-      });
-    });
   });
 });
