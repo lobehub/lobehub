@@ -8,6 +8,7 @@ import type {
   ExecGroupAgentResult,
   ExecSubAgentTaskParams,
   ExecSubAgentTaskResult,
+  UserInterventionConfig,
 } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
@@ -66,6 +67,11 @@ interface InternalExecAgentParams extends ExecAgentParams {
   stepCallbacks?: StepLifecycleCallbacks;
   /** Topic creation trigger source ('cron' | 'chat' | 'api') */
   trigger?: string;
+  /**
+   * User intervention configuration
+   * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
+   */
+  userInterventionConfig?: UserInterventionConfig;
 }
 
 /**
@@ -125,6 +131,7 @@ export class AiAgentService {
       stepCallbacks,
       trigger,
       cronJobId,
+      userInterventionConfig,
     } = params;
 
     // Validate that either agentId or slug is provided
@@ -231,10 +238,6 @@ export class AiAgentService {
 
     const tools = toolsResult.tools;
 
-    // Log detailed tools generation result
-    if (toolsResult.filteredTools && toolsResult.filteredTools.length > 0) {
-      log('execAgent: filtered tools: %O', toolsResult.filteredTools);
-    }
     log('execAgent: enabled tool ids: %O', toolsResult.enabledToolIds);
 
     // Get manifest map and convert from Map to Record
@@ -396,6 +399,7 @@ export class AiAgentService {
         toolSourceMap,
         tools,
         userId: this.userId,
+        userInterventionConfig,
       });
 
       log('execAgent: created operation %s (autoStarted: %s)', operationId, result.autoStarted);
@@ -572,12 +576,14 @@ export class AiAgentService {
 
     // 4. Delegate to execAgent with threadId in appContext and callbacks
     // The instruction will be created as user message in the Thread
+    // Use headless mode to skip human approval in async task execution
     const result = await this.execAgent({
       agentId,
       appContext: { groupId, threadId: thread.id, topicId },
       autoStart: true,
       prompt: instruction,
       stepCallbacks,
+      userInterventionConfig: { approvalMode: 'headless' },
     });
 
     log(

@@ -1,5 +1,6 @@
 import { type AgentRuntimeContext, type AgentState } from '@lobechat/agent-runtime';
 import { type LobeToolManifest } from '@lobechat/context-engine';
+import type { UserInterventionConfig } from '@lobechat/types';
 
 // ==================== Step Lifecycle Callbacks ====================
 
@@ -90,6 +91,12 @@ export interface OperationCreationParams {
   toolSourceMap?: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'>;
   tools?: any[];
   userId?: string;
+  /**
+   * User intervention configuration
+   * Controls how tools requiring approval are handled
+   * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
+   */
+  userInterventionConfig?: UserInterventionConfig;
 }
 
 export interface OperationCreationResult {

@@ -233,6 +233,7 @@ export class AgentRuntimeService {
       toolManifestMap,
       toolSourceMap,
       stepCallbacks,
+      userInterventionConfig,
     } = params;
 
     try {
@@ -261,6 +262,8 @@ export class AgentRuntimeService {
         toolManifestMap,
         toolSourceMap,
         tools,
+        // User intervention config for headless mode in async tasks
+        userInterventionConfig,
       } as Partial<AgentState>;
 
       // Use coordinator to create operation, automatically sends initialization event
