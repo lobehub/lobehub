@@ -40,11 +40,12 @@ const PanelContent = memo<{ closePopover: () => void }>(({ closePopover }) => {
       try {
         const { remoteServerService } = await import('@/services/electron/remoteServer');
         await remoteServerService.clearRemoteServerConfig();
+      } catch (error) {
+        console.error(error);
+      } finally {
         clearDesktopOnboardingCompleted();
         signOut();
         navigateToDesktopOnboarding(DesktopOnboardingScreen.Login);
-      } catch (error) {
-        console.error(error);
       }
       return;
     }
