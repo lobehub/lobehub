@@ -28,7 +28,7 @@ const Related = memo(() => {
               category,
               source: marketSource,
             },
-            url: '/community/assistant',
+            url: '/community/agent',
           },
           { skipNull: true },
         )}
@@ -40,7 +40,7 @@ const Related = memo(() => {
           const link = qs.stringifyUrl(
             {
               query: marketSource ? { source: marketSource } : undefined,
-              url: urlJoin('/community/assistant', item.identifier),
+              url: urlJoin('/community/agent', item.identifier),
             },
             { skipNull: true },
           );

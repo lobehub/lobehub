@@ -38,7 +38,7 @@ const TagList = memo<{ tags: string[] }>(({ tags }) => {
                   q: tag,
                   source: marketSource,
                 },
-                url: '/community/assistant',
+                url: '/community/agent',
               },
               { skipNull: true },
             )}

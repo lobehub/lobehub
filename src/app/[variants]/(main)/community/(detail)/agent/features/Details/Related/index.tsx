@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@/hooks/useQuery';
 import { type AssistantMarketSource } from '@/types/discover';
 
-import McpList from '../../../../../(list)/assistant/features/List';
+import McpList from '../../../../../(list)/agent/features/List';
 import Title from '../../../../../features/Title';
 import { useDetailContext } from '../../DetailProvider';
 
@@ -25,7 +25,7 @@ const Related = memo(() => {
               category,
               source: marketSource,
             },
-            url: '/community/assistant',
+            url: '/community/agent',
           },
           { skipNull: true },
         )}

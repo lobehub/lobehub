@@ -21,7 +21,7 @@ const ActionButton = memo<{ mobile?: boolean }>(({ mobile }) => {
           desc: description,
           hashtags: tags,
           title: title,
-          url: urlJoin(OFFICIAL_URL, '/community/assistant', identifier as string),
+          url: urlJoin(OFFICIAL_URL, '/community/agent', identifier as string),
         }}
       />
     </Flexbox>

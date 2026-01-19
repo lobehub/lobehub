@@ -87,7 +87,7 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
         event: 'add',
         identifier,
         source: location.pathname,
-       })
+      });
     }
 
     if (shouldNavigate) {

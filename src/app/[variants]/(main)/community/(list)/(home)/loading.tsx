@@ -9,7 +9,7 @@ const Loading = memo(() => {
 
   return (
     <>
-      <Title more={t('home.more')} moreLink={'/community/assistant'}>
+      <Title more={t('home.more')} moreLink={'/community/agent'}>
         {t('home.featuredAssistants')}
       </Title>
       <ListLoading length={8} rows={4} />

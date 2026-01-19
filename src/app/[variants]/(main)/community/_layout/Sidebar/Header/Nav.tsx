@@ -3,12 +3,12 @@
 import { Flexbox } from '@lobehub/ui';
 import { McpIcon, ProviderIcon } from '@lobehub/ui/icons';
 import { Bot, Brain, ShapesIcon } from 'lucide-react';
-import { usePathname } from '@/libs/router/navigation';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
 import NavItem, { type NavItemProps } from '@/features/NavPanel/components/NavItem';
+import { usePathname } from '@/libs/router/navigation';
 import { DiscoverTab } from '@/types/discover';
 
 interface Item {
@@ -42,7 +42,7 @@ const Nav = memo(() => {
         icon: Bot,
         key: DiscoverTab.Assistants,
         title: t('tab.assistant'),
-        url: '/community/assistant',
+        url: '/community/agent',
       },
       {
         icon: McpIcon,

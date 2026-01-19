@@ -1,7 +1,7 @@
 'use client';
 
 import { ExclamationCircleOutlined, FolderOpenOutlined } from '@ant-design/icons';
-import { FluentEmoji, Text , Button } from '@lobehub/ui';
+import { Button, FluentEmoji, Text } from '@lobehub/ui';
 import { Result } from 'antd';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -16,7 +16,7 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
   const { t } = useTranslation('discover');
 
   const handleBackToMarket = () => {
-    navigate('/community/assistant');
+    navigate('/community/agent');
   };
 
   // 审核中状态

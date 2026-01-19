@@ -267,7 +267,7 @@ export function defineConfig(config: CustomNextConfig) {
         source: '/manifest.json',
       },
       {
-        destination: '/community/assistant',
+        destination: '/community/agent',
         permanent: true,
         source: '/community/assistants',
       },

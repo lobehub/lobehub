@@ -7,7 +7,7 @@ import { useDiscoverStore } from '@/store/discover';
 import { AssistantSorts, McpSorts } from '@/types/discover';
 
 import Title from '../../components/Title';
-import AssistantList from '../assistant/features/List';
+import AssistantList from '../agent/features/List';
 import McpList from '../mcp/features/List';
 import Loading from './loading';
 
@@ -32,7 +32,7 @@ const HomePage = memo(() => {
 
   return (
     <>
-      <Title more={t('home.more')} moreLink={'/community/assistant'}>
+      <Title more={t('home.more')} moreLink={'/community/agent'}>
         {t('home.featuredAssistants')}
       </Title>
       <AssistantList data={assistantList.items} rows={4} />

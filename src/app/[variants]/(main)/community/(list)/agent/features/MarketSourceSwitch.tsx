@@ -41,7 +41,7 @@ const MarketSourceSwitch = memo(() => {
   );
 
   const handleChange = (value: AssistantMarketSource) => {
-    router.push('/community/assistant', {
+    router.push('/community/agent', {
       query: {
         page: null,
         source: value === 'new' ? null : value,

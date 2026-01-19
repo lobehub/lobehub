@@ -65,10 +65,10 @@ export const mobileRoutes: RouteConfig[] = [
                 children: [
                   {
                     element: dynamicElement(
-                      () => import('../../(main)/community/(list)/assistant'),
-                      'Mobile > Discover > List > Assistant',
+                      () => import('../../(main)/community/(list)/agent'),
+                      'Mobile > Discover > List > Agent',
                     ),
-                    path: 'assistant',
+                    path: 'agent',
                   },
                 ],
               },
@@ -113,12 +113,12 @@ export const mobileRoutes: RouteConfig[] = [
               {
                 element: dynamicElement(
                   () =>
-                    import('../../(main)/community/(detail)/assistant').then(
+                    import('../../(main)/community/(detail)/agent').then(
                       (m) => m.MobileDiscoverAssistantDetailPage,
                     ),
-                  'Mobile > Discover > Detail > Assistant',
+                  'Mobile > Discover > Detail > Agent',
                 ),
-                path: 'assistant/:slug',
+                path: 'agent/:slug',
               },
               {
                 element: dynamicElement(

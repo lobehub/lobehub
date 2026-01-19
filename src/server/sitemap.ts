@@ -213,7 +213,7 @@ export class Sitemap {
       const sitmap = pageAssistants
         .filter((item) => item.identifier) // Filter out items with empty identifiers
         .map((item) =>
-          this._genSitemap(urlJoin('/community/assistant', item.identifier), {
+          this._genSitemap(urlJoin('/community/agent', item.identifier), {
             lastModified: item?.lastModified || LAST_MODIFIED,
           }),
         );
@@ -224,7 +224,7 @@ export class Sitemap {
     const sitmap = list
       .filter((item) => item.identifier) // 过滤掉 identifier 为空的项目
       .map((item) =>
-        this._genSitemap(urlJoin('/community/assistant', item.identifier), {
+        this._genSitemap(urlJoin('/community/agent', item.identifier), {
           lastModified: item?.lastModified || LAST_MODIFIED,
         }),
       );
@@ -311,7 +311,7 @@ export class Sitemap {
 
       /* ↑ cloud slot ↑ */
       ...this._genSitemap('/community', { changeFrequency: 'daily', priority: 0.7 }),
-      ...this._genSitemap('/community/assistant', { changeFrequency: 'daily', priority: 0.7 }),
+      ...this._genSitemap('/community/agent', { changeFrequency: 'daily', priority: 0.7 }),
       ...this._genSitemap('/community/mcp', { changeFrequency: 'daily', priority: 0.7 }),
       ...this._genSitemap('/community/plugin', { changeFrequency: 'daily', priority: 0.7 }),
       ...this._genSitemap('/community/model', { changeFrequency: 'daily', priority: 0.7 }),

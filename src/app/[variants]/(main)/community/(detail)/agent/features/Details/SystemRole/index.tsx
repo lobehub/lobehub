@@ -4,7 +4,7 @@ import { MessageCircleHeartIcon, MessageCircleQuestionIcon } from 'lucide-react'
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import TokenTag from '../../../../../(list)/assistant/features/List/TokenTag';
+import TokenTag from '../../../../../(list)/agent/features/List/TokenTag';
 import Title from '../../../../../features/Title';
 import MarkdownRender from '../../../../features/MakedownRender';
 import { useDetailContext } from '../../DetailProvider';

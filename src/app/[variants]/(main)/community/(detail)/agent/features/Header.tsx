@@ -32,7 +32,7 @@ import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { socialService } from '@/services/social';
 import { formatIntergerNumber } from '@/utils/format';
 
-import { useCategory } from '../../../(list)/assistant/features/Category/useCategory';
+import { useCategory } from '../../../(list)/agent/features/Category/useCategory';
 import PublishedTime from '../../../../../../../components/PublishedTime';
 import { useDetailContext } from './DetailProvider';
 
@@ -142,7 +142,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     <Link
       to={qs.stringifyUrl({
         query: { category: cate?.key },
-        url: '/community/assistant',
+        url: '/community/agent',
       })}
     >
       <Button icon={cate?.icon} size={'middle'} variant={'outlined'}>

@@ -73,7 +73,7 @@ const AssistantItem = memo<DiscoverAssistantItem>(
     const navigate = useNavigate();
     const { source } = useQuery() as { source?: AssistantMarketSource };
     const isGroupAgent = type === 'agent-group';
-    const basePath = isGroupAgent ? '/community/group_agent' : '/community/assistant';
+    const basePath = isGroupAgent ? '/community/group_agent' : '/community/agent';
     const link = qs.stringifyUrl(
       {
         query: { source },

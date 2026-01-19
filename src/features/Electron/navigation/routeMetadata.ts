@@ -79,7 +79,7 @@ const routePatterns: RoutePattern[] = [
   // Community/Discover routes
   {
     icon: Compass,
-    test: (p) => p.startsWith('/community/assistant'),
+    test: (p) => p.startsWith('/community/agent'),
     titleKey: 'navigation.discoverAssistants',
   },
   {

@@ -96,7 +96,7 @@ const FavoriteAgentCard = memo<FavoriteAgentCardProps>(
     const link = qs.stringifyUrl(
       {
         query: { source: 'new' },
-        url: urlJoin('/community/assistant', identifier),
+        url: urlJoin('/community/agent', identifier),
       },
       { skipNull: true },
     );
