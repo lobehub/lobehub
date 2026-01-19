@@ -3,6 +3,7 @@ import type {
   GroupOrchestrationExecutor,
   GroupOrchestrationExecutorOutput,
   SupervisorInstruction,
+  SupervisorInstructionBatchExecAsyncTasks,
   SupervisorInstructionCallAgent,
   SupervisorInstructionCallSupervisor,
   SupervisorInstructionDelegate,
@@ -588,6 +589,299 @@ export const createGroupOrchestrationExecutors = (
           },
         };
       }
+    },
+
+    /**
+     * batch_exec_async_tasks Executor
+     * Executes multiple async tasks for agents in parallel using aiAgentService with polling
+     *
+     * Flow:
+     * 1. Create task messages (role: 'task') for each task as placeholders
+     * 2. Call execSubAgentTask API for each task in parallel
+     * 3. Poll for all tasks completion
+     * 4. Update task messages with results on completion
+     *
+     * Returns: tasks_completed result
+     */
+    batch_exec_async_tasks: async (
+      instruction,
+      state,
+    ): Promise<GroupOrchestrationExecutorOutput> => {
+      const { tasks, toolMessageId } = (instruction as SupervisorInstructionBatchExecAsyncTasks)
+        .payload;
+
+      const sessionLogId = `${state.operationId}:batch_exec_async_tasks`;
+      log(`[${sessionLogId}] Executing ${tasks.length} async tasks in parallel`);
+
+      const { groupId, topicId } = messageContext;
+
+      if (!groupId || !topicId) {
+        log(`[${sessionLogId}] No valid context, cannot execute async tasks`, groupId, topicId);
+        return {
+          events: [] as GroupOrchestrationEvent[],
+          newState: state,
+          result: {
+            payload: {
+              results: tasks.map((t) => ({
+                agentId: t.agentId,
+                error: 'No valid context available',
+                success: false,
+              })),
+            },
+            type: 'tasks_completed',
+          },
+        };
+      }
+
+      // Track all tasks with their messages and thread IDs
+      interface TaskTracker {
+        agentId: string;
+        error?: string;
+        result?: string;
+        status: 'pending' | 'running' | 'completed' | 'failed';
+        task: string;
+        taskMessageId?: string;
+        threadId?: string;
+        timeout: number;
+        title?: string;
+      }
+
+      const taskTrackers: TaskTracker[] = tasks.map((t) => ({
+        agentId: t.agentId,
+        status: 'pending',
+        task: t.task,
+        timeout: t.timeout || 1_800_000, // Default 30 minutes
+        title: t.title,
+      }));
+
+      // 1. Create task messages for all tasks in parallel
+      await Promise.all(
+        taskTrackers.map(async (tracker, index) => {
+          const taskLogId = `${sessionLogId}:task-${index}`;
+          try {
+            const taskMessageResult = await get().optimisticCreateMessage(
+              {
+                agentId: tracker.agentId,
+                content: '',
+                groupId,
+                metadata: { instruction: tracker.task, taskTitle: tracker.title },
+                parentId: toolMessageId,
+                role: 'task',
+                topicId,
+              },
+              { operationId: state.operationId },
+            );
+
+            if (taskMessageResult) {
+              tracker.taskMessageId = taskMessageResult.id;
+              log(`[${taskLogId}] Created task message: ${tracker.taskMessageId}`);
+            } else {
+              tracker.status = 'failed';
+              tracker.error = 'Failed to create task message';
+              console.error(`[${taskLogId}] Failed to create task message`);
+            }
+          } catch (error) {
+            tracker.status = 'failed';
+            tracker.error = error instanceof Error ? error.message : 'Unknown error';
+            console.error(`[${taskLogId}] Error creating task message: ${error}`);
+          }
+        }),
+      );
+
+      // 2. Start all tasks in parallel via backend API
+      await Promise.all(
+        taskTrackers.map(async (tracker, index) => {
+          if (tracker.status === 'failed' || !tracker.taskMessageId) return;
+
+          const taskLogId = `${sessionLogId}:task-${index}`;
+          try {
+            const createResult = await aiAgentService.execSubAgentTask({
+              agentId: tracker.agentId,
+              groupId,
+              instruction: tracker.task,
+              parentMessageId: tracker.taskMessageId,
+              title: tracker.title,
+              topicId,
+            });
+
+            if (createResult.success) {
+              tracker.threadId = createResult.threadId;
+              tracker.status = 'running';
+              log(`[${taskLogId}] Task started with threadId: ${tracker.threadId}`);
+            } else {
+              tracker.status = 'failed';
+              tracker.error = createResult.error;
+              log(`[${taskLogId}] Failed to start task: ${createResult.error}`);
+              // Update task message with error
+              await get().optimisticUpdateMessageContent(
+                tracker.taskMessageId,
+                `Task creation failed: ${createResult.error}`,
+                undefined,
+                { operationId: state.operationId },
+              );
+            }
+          } catch (error) {
+            tracker.status = 'failed';
+            tracker.error = error instanceof Error ? error.message : 'Unknown error';
+            console.error(`[${taskLogId}] Error starting task: ${error}`);
+          }
+        }),
+      );
+
+      // 3. Poll for all tasks completion
+      const pollInterval = 3000; // 3 seconds
+      const startTime = Date.now();
+      const maxTimeout = Math.max(...taskTrackers.map((t) => t.timeout));
+
+      while (Date.now() - startTime < maxTimeout) {
+        // Check if operation has been cancelled
+        const currentOperation = get().operations[state.operationId];
+        if (currentOperation?.status === 'cancelled') {
+          console.warn(`[${sessionLogId}] Operation cancelled, stopping polling`);
+          return {
+            events: [] as GroupOrchestrationEvent[],
+            newState: { ...state, status: 'done' },
+            result: {
+              payload: {
+                results: taskTrackers.map((t) => ({
+                  agentId: t.agentId,
+                  error: t.status === 'running' ? 'Operation cancelled' : t.error,
+                  result: t.result,
+                  success: t.status === 'completed',
+                })),
+              },
+              type: 'tasks_completed',
+            },
+          };
+        }
+
+        // Check status of all running tasks
+        const runningTasks = taskTrackers.filter((t) => t.status === 'running');
+        if (runningTasks.length === 0) {
+          // All tasks have completed or failed
+          break;
+        }
+
+        await Promise.all(
+          runningTasks.map(async (tracker, index) => {
+            if (!tracker.threadId || !tracker.taskMessageId) return;
+
+            const taskLogId = `${sessionLogId}:task-${index}`;
+            try {
+              const status = await aiAgentService.getSubAgentTaskStatus({
+                threadId: tracker.threadId,
+              });
+
+              // Update taskDetail in message if available
+              if (status.taskDetail) {
+                get().internal_dispatchMessage(
+                  {
+                    id: tracker.taskMessageId,
+                    type: 'updateMessage',
+                    value: { taskDetail: status.taskDetail },
+                  },
+                  { operationId: state.operationId },
+                );
+              }
+
+              switch (status.status) {
+              case 'completed': {
+                tracker.status = 'completed';
+                tracker.result = status.result;
+                log(`[${taskLogId}] Task completed successfully`);
+                if (status.result) {
+                  await get().optimisticUpdateMessageContent(
+                    tracker.taskMessageId,
+                    status.result,
+                    undefined,
+                    { operationId: state.operationId },
+                  );
+                }
+              
+              break;
+              }
+              case 'failed': {
+                tracker.status = 'failed';
+                tracker.error = status.error;
+                console.error(`[${taskLogId}] Task failed: ${status.error}`);
+                await get().optimisticUpdateMessageContent(
+                  tracker.taskMessageId,
+                  `Task failed: ${status.error}`,
+                  undefined,
+                  { operationId: state.operationId },
+                );
+              
+              break;
+              }
+              case 'cancel': {
+                tracker.status = 'failed';
+                tracker.error = 'Task was cancelled';
+                log(`[${taskLogId}] Task was cancelled`);
+                await get().optimisticUpdateMessageContent(
+                  tracker.taskMessageId,
+                  'Task was cancelled',
+                  undefined,
+                  { operationId: state.operationId },
+                );
+              
+              break;
+              }
+              // No default
+              }
+
+              // Check individual task timeout
+              if (tracker.status === 'running' && Date.now() - startTime > tracker.timeout) {
+                tracker.status = 'failed';
+                tracker.error = `Task timeout after ${tracker.timeout}ms`;
+                log(`[${taskLogId}] Task timeout`);
+                await get().optimisticUpdateMessageContent(
+                  tracker.taskMessageId,
+                  `Task timeout after ${tracker.timeout}ms`,
+                  undefined,
+                  { operationId: state.operationId },
+                );
+              }
+            } catch (error) {
+              console.error(`[${taskLogId}] Error polling task status: ${error}`);
+            }
+          }),
+        );
+
+        // Wait before next poll
+        await sleep(pollInterval);
+      }
+
+      // Mark any remaining running tasks as timed out
+      for (const tracker of taskTrackers) {
+        if (tracker.status === 'running' && tracker.taskMessageId) {
+          tracker.status = 'failed';
+          tracker.error = `Task timeout after ${tracker.timeout}ms`;
+          await get().optimisticUpdateMessageContent(
+            tracker.taskMessageId,
+            `Task timeout after ${tracker.timeout}ms`,
+            undefined,
+            { operationId: state.operationId },
+          );
+        }
+      }
+
+      log(`[${sessionLogId}] All tasks completed`);
+
+      return {
+        events: [] as GroupOrchestrationEvent[],
+        newState: state,
+        result: {
+          payload: {
+            results: taskTrackers.map((t) => ({
+              agentId: t.agentId,
+              error: t.error,
+              result: t.result,
+              success: t.status === 'completed',
+            })),
+          },
+          type: 'tasks_completed',
+        },
+      };
     },
   };
 };
