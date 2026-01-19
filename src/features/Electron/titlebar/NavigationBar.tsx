@@ -53,13 +53,12 @@ const NavigationBar = memo(() => {
   return (
     <Flexbox
       align="center"
-      className={electronStylish.nodrag}
       data-width={leftPanelWidth}
       horizontal
       justify="end"
       style={{ width: `${leftPanelWidth - 12}px` }}
     >
-      <Flexbox align="center" gap={2} horizontal>
+      <Flexbox align="center" className={electronStylish.nodrag} gap={2} horizontal>
         <ActionIcon disabled={!canGoBack} icon={ArrowLeft} onClick={goBack} size="small" />
         <ActionIcon disabled={!canGoForward} icon={ArrowRight} onClick={goForward} size="small" />
         <Popover
