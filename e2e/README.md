@@ -90,7 +90,7 @@ Feature: Community Smoke Tests
 
   @COMMUNITY-SMOKE-001 @P0
   Scenario: Load community assistant list page
-    Given I navigate to "/community/assistant"
+    Given I navigate to "/community/agent"
     Then the page should load without errors
     And I should see the page body
     And I should see the search bar

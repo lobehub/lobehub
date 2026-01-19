@@ -8,7 +8,7 @@ import { CustomWorld } from '../../support/world';
 // ============================================
 
 Given('I wait for the page to fully load', async function (this: CustomWorld) {
-   // Use domcontentloaded instead of networkidle to avoid hanging on persistent connections
+  // Use domcontentloaded instead of networkidle to avoid hanging on persistent connections
   await this.page.waitForLoadState('domcontentloaded', { timeout: 10_000 });
   // Short wait for React hydration
   await this.page.waitForTimeout(1000);
@@ -135,9 +135,9 @@ Then('I should be on the assistant list page', async function (this: CustomWorld
 
   const currentUrl = this.page.url();
   // Check if URL is assistant list (not detail page) or community home
-  // After back navigation, URL should be /community/assistant or /community
+  // After back navigation, URL should be /community/agent or /community
   const isListPage =
-    (currentUrl.includes('/community/assistant') &&
+    (currentUrl.includes('/community/agent') &&
       !/\/community\/assistant\/[\dA-Za-z-]+$/.test(currentUrl)) ||
     currentUrl.endsWith('/community') ||
     currentUrl.includes('/community#');
@@ -176,7 +176,9 @@ Then('I should see the model description', async function (this: CustomWorld) {
 
   // Model detail page shows description below the title, it might be a placeholder like "model.description"
   // or actual content. Just verify the page structure is correct.
-  const descriptionArea = this.page.locator('main, article, [class*="detail"], [class*="content"]').first();
+  const descriptionArea = this.page
+    .locator('main, article, [class*="detail"], [class*="content"]')
+    .first();
   const isVisible = await descriptionArea.isVisible().catch(() => false);
 
   // Pass if any content area is visible - the description might be a placeholder

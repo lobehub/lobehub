@@ -11,14 +11,14 @@ Feature: Discover Interactions
 
   @COMMUNITY-INTERACT-001 @P1
   Scenario: Search for assistants
-    Given I navigate to "/community/assistant"
+    Given I navigate to "/community/agent"
     When I type "developer" in the search bar
     And I wait for the search results to load
     Then I should see filtered assistant cards
 
   @COMMUNITY-INTERACT-002 @P1
   Scenario: Filter assistants by category
-    Given I navigate to "/community/assistant"
+    Given I navigate to "/community/agent"
     When I click on a category in the category menu
     And I wait for the filtered results to load
     Then I should see assistant cards filtered by the selected category
@@ -26,7 +26,7 @@ Feature: Discover Interactions
 
   @COMMUNITY-INTERACT-003 @P1
   Scenario: Navigate to next page of assistants
-    Given I navigate to "/community/assistant"
+    Given I navigate to "/community/agent"
     When I click the next page button
     And I wait for the next page to load
     Then I should see different assistant cards
@@ -34,7 +34,7 @@ Feature: Discover Interactions
 
   @COMMUNITY-INTERACT-004 @P1
   Scenario: Navigate to assistant detail page
-    Given I navigate to "/community/assistant"
+    Given I navigate to "/community/agent"
     When I click on the first assistant card
     Then I should be navigated to the assistant detail page
     And I should see the assistant detail content
@@ -95,7 +95,7 @@ Feature: Discover Interactions
   Scenario: Navigate from home to assistant list
     Given I navigate to "/community"
     When I click on the "more" link in the featured assistants section
-    Then I should be navigated to "/community/assistant"
+    Then I should be navigated to "/community/agent"
     And I should see the page body
 
   @COMMUNITY-INTERACT-011 @P1
