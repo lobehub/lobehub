@@ -199,10 +199,13 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
   });
 
   const handleCancelAuth = async () => {
-    await remoteServerService.cancelAuthorization();
+    setRemoteError(null);
+    clearRemoteServerSyncError();
+
     setCloudLoginStatus('idle');
     setSelfhostLoginStatus('idle');
     setAuthProgress(null);
+    await remoteServerService.cancelAuthorization();
   };
 
   // 渲染 Cloud 登录内容
@@ -238,10 +241,9 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
 
     if (cloudLoginStatus === 'error') {
       return (
-        <>
+        <Flexbox style={{ width: '100%' }}>
           <Alert
             description={remoteError || t('authResult.failed.desc')}
-            style={{ width: '100%' }}
             title={t('authResult.failed.title')}
             type={'secondary'}
           />
@@ -254,7 +256,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
           >
             {t('screen5.actions.tryAgain')}
           </Button>
-        </>
+        </Flexbox>
       );
     }
 
@@ -340,16 +342,56 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
 
     if (selfhostLoginStatus === 'error') {
       return (
-        <Flexbox gap={16}>
+        <Flexbox gap={16} style={{ width: '100%' }}>
           <Alert
             description={remoteError || t('authResult.failed.desc')}
-            style={{ width: '100%' }}
             title={t('authResult.failed.title')}
             type={'secondary'}
           />
           <Button icon={Server} onClick={() => setSelfhostLoginStatus('idle')} type={'primary'}>
             {t('screen5.actions.tryAgain')}
           </Button>
+        </Flexbox>
+      );
+    }
+
+    if (selfhostLoginStatus === 'loading') {
+      const phaseText = t(authorizationPhaseI18nKeyMap[authProgress?.phase ?? 'browser_opened'], {
+        defaultValue: t('screen5.actions.connecting'),
+      });
+      const remainingSeconds = authProgress
+        ? Math.max(0, Math.ceil((authProgress.maxPollTime - authProgress.elapsed) / 1000))
+        : null;
+
+      return (
+        <Flexbox gap={8} style={{ width: '100%' }}>
+          <Button
+            block
+            disabled={true}
+            icon={Server}
+            loading={true}
+            size={'large'}
+            type={'primary'}
+          >
+            {t('screen5.actions.connecting')}
+          </Button>
+          <Text style={{ color: cssVar.colorTextDescription }} type={'secondary'}>
+            {phaseText}
+          </Text>
+          <Flexbox align={'center'} horizontal justify={'space-between'}>
+            {remainingSeconds !== null ? (
+              <Text style={{ color: cssVar.colorTextDescription }} type={'secondary'}>
+                {t('screen5.auth.remaining', {
+                  time: remainingSeconds,
+                })}
+              </Text>
+            ) : (
+              <div />
+            )}
+            <Button onClick={handleCancelAuth} size={'small'} type={'text'}>
+              {t('screen5.actions.cancel')}
+            </Button>
+          </Flexbox>
         </Flexbox>
       );
     }
@@ -365,6 +407,11 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
             const { electronSystemService } = await import('@/services/electron/system');
             await electronSystemService.showContextMenu('edit');
           }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              handleSelfhostConnect();
+            }
+          }}
           placeholder={t('screen5.selfhost.endpointPlaceholder')}
           prefix={<Icon icon={Server} style={{ marginRight: 4 }} />}
           size={'large'}
@@ -372,16 +419,14 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
           value={endpoint}
         />
         <Button
-          disabled={!endpoint.trim() || selfhostLoginStatus === 'loading' || isConnectingServer}
-          loading={selfhostLoginStatus === 'loading'}
+          disabled={!endpoint.trim() || isConnectingServer}
+          loading={false}
           onClick={handleSelfhostConnect}
           size={'large'}
           style={{ width: '100%' }}
           type={'primary'}
         >
-          {selfhostLoginStatus === 'loading'
-            ? t('screen5.actions.connecting')
-            : t('screen5.actions.connectToServer')}
+          {t('screen5.actions.connectToServer')}
         </Button>
       </Flexbox>
     );

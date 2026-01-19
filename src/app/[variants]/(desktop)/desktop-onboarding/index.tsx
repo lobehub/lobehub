@@ -14,40 +14,79 @@ import LoginStep from './features/LoginStep';
 import PermissionsStep from './features/PermissionsStep';
 import WelcomeStep from './features/WelcomeStep';
 import {
-  clearDesktopOnboardingStep,
-  getDesktopOnboardingStep,
+  clearDesktopOnboardingScreen,
+  getDesktopOnboardingScreen,
   setDesktopOnboardingCompleted,
-  setDesktopOnboardingStep,
+  setDesktopOnboardingScreen,
 } from './storage';
+import { DesktopOnboardingScreen, isDesktopOnboardingScreen } from './types';
 
 const DesktopOnboardingPage = memo(() => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isMac, setIsMac] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 从 localStorage 或 URL query 参数获取初始步骤
-  // 优先使用 localStorage 以支持重启后恢复
-  const getInitialStep = useCallback(() => {
-    // First try localStorage (for app restart scenario)
-    const savedStep = getDesktopOnboardingStep();
-    if (savedStep !== null) {
-      return savedStep;
-    }
-    // Then try URL params
-    const stepParam = searchParams.get('step');
-    if (stepParam) {
-      const step = parseInt(stepParam, 10);
-      if (step >= 1 && step <= 4) return step;
-    }
-    return 1;
+  const flow = isMac
+    ? [
+        DesktopOnboardingScreen.Welcome,
+        DesktopOnboardingScreen.Permissions,
+        DesktopOnboardingScreen.DataMode,
+        DesktopOnboardingScreen.Login,
+      ]
+    : [
+        DesktopOnboardingScreen.Welcome,
+        DesktopOnboardingScreen.DataMode,
+        DesktopOnboardingScreen.Login,
+      ];
+
+  const resolveScreenForPlatform = useCallback(
+    (screen: DesktopOnboardingScreen) => {
+      if (!isMac && screen === DesktopOnboardingScreen.Permissions)
+        return DesktopOnboardingScreen.DataMode;
+      return screen;
+    },
+    [isMac],
+  );
+
+  const getRequestedScreenFromUrl = useCallback((): DesktopOnboardingScreen | null => {
+    const screenParam = searchParams.get('screen');
+    if (isDesktopOnboardingScreen(screenParam)) return screenParam;
+
+    return null;
   }, [searchParams]);
 
-  const [currentStep, setCurrentStep] = useState(getInitialStep);
+  const [currentScreen, setCurrentScreen] = useState<DesktopOnboardingScreen>(
+    DesktopOnboardingScreen.Welcome,
+  );
 
-  // 持久化当前步骤到 localStorage
   useEffect(() => {
-    setDesktopOnboardingStep(currentStep);
-  }, [currentStep]);
+    if (isLoading) return;
+
+    const saved = getDesktopOnboardingScreen();
+    const requested = getRequestedScreenFromUrl();
+
+    const initial = resolveScreenForPlatform(requested ?? saved ?? DesktopOnboardingScreen.Welcome);
+
+    setCurrentScreen(initial);
+
+    // Canonicalize URL to `?screen=...`
+    const currentUrlScreen = searchParams.get('screen');
+    if (currentUrlScreen !== initial) {
+      setSearchParams({ screen: initial });
+    }
+  }, [
+    getRequestedScreenFromUrl,
+    isLoading,
+    resolveScreenForPlatform,
+    searchParams,
+    setSearchParams,
+  ]);
+
+  // Persist current screen to localStorage.
+  useEffect(() => {
+    if (isLoading) return;
+    setDesktopOnboardingScreen(currentScreen);
+  }, [currentScreen, isLoading]);
 
   // 设置窗口大小和可调整性
   useEffect(() => {
@@ -91,79 +130,48 @@ const DesktopOnboardingPage = memo(() => {
     };
   }, []);
 
-  // 监听 URL query 参数变化
+  // Listen URL changes: allow deep-linking between screens.
   useEffect(() => {
-    const stepParam = searchParams.get('step');
-    if (stepParam) {
-      const step = parseInt(stepParam, 10);
-      if (step >= 1 && step <= 4 && step !== currentStep) {
-        setCurrentStep(step);
-      }
-    }
-  }, [searchParams, currentStep]);
+    if (isLoading) return;
+    const requested = getRequestedScreenFromUrl();
+    if (!requested) return;
+    const resolved = resolveScreenForPlatform(requested);
+    if (resolved !== currentScreen) setCurrentScreen(resolved);
+  }, [currentScreen, getRequestedScreenFromUrl, isLoading, resolveScreenForPlatform]);
 
   const goToNextStep = useCallback(() => {
-    setCurrentStep((prev) => {
-      let nextStep: number;
-      // 如果是第1步（WelcomeStep），下一步根据平台决定
-      switch (prev) {
-        case 1: {
-          nextStep = isMac ? 2 : 3; // macOS 显示权限页，其他平台跳过
+    setCurrentScreen((prev) => {
+      const idx = flow.indexOf(prev);
+      const next = flow[idx + 1];
 
-          break;
-        }
-        case 2: {
-          // 如果是第2步（PermissionsStep，仅 macOS），下一步是第3步
-          nextStep = 3;
+      if (!next) {
+        // Complete onboarding.
+        setDesktopOnboardingCompleted();
+        clearDesktopOnboardingScreen();
 
-          break;
-        }
-        case 3: {
-          // 如果是第3步（DataModeStep），下一步是第4步
-          nextStep = 4;
+        // Restore window minimum size before hard reload (cleanup won't run due to hard navigation)
+        electronSystemService
+          .setWindowMinimumSize(APP_WINDOW_MIN_SIZE)
+          .catch(console.error)
+          .finally(() => {
+            // Use hard reload instead of SPA navigation to ensure the app boots with the new desktop state.
+            window.location.replace('/');
+          });
 
-          break;
-        }
-        case 4: {
-          // 如果是第4步（LoginStep），完成 onboarding
-          setDesktopOnboardingCompleted();
-          clearDesktopOnboardingStep(); // Clear persisted step since onboarding is complete
-          // Restore window minimum size before hard reload (cleanup won't run due to hard navigation)
-          electronSystemService
-            .setWindowMinimumSize(APP_WINDOW_MIN_SIZE)
-            .catch(console.error)
-            .finally(() => {
-              // Use hard reload instead of SPA navigation to ensure the app boots with the new desktop state.
-              window.location.replace('/');
-            });
-          return prev;
-        }
-        default: {
-          nextStep = prev + 1;
-        }
+        return prev;
       }
-      // 更新 URL query 参数
-      setSearchParams({ step: nextStep.toString() });
-      return nextStep;
+
+      setSearchParams({ screen: next });
+      return next;
     });
   }, [isMac, setSearchParams]);
 
   const goToPreviousStep = useCallback(() => {
-    setCurrentStep((prev) => {
-      if (prev <= 1) return 1;
-      let prevStep: number;
-      // 如果当前是第3步（DataModeStep），上一步根据平台决定
-      if (prev === 3) {
-        prevStep = isMac ? 2 : 1;
-      } else if (prev === 2) {
-        // 如果当前是第2步（PermissionsStep），上一步是第1步
-        prevStep = 1;
-      } else {
-        prevStep = prev - 1;
-      }
-      // 更新 URL query 参数
-      setSearchParams({ step: prevStep.toString() });
-      return prevStep;
+    setCurrentScreen((prev) => {
+      const idx = flow.indexOf(prev);
+      const prevScreen = flow[Math.max(0, idx - 1)] ?? DesktopOnboardingScreen.Welcome;
+      setSearchParams({ screen: prevScreen });
+      return prevScreen;
     });
   }, [isMac, setSearchParams]);
 
@@ -172,21 +180,22 @@ const DesktopOnboardingPage = memo(() => {
   }
 
   const renderStep = () => {
-    switch (currentStep) {
-      case 1: {
+    switch (currentScreen) {
+      case DesktopOnboardingScreen.Welcome: {
         return <WelcomeStep onNext={goToNextStep} />;
       }
-      case 2: {
-        // 仅 macOS 显示权限页
+      case DesktopOnboardingScreen.Permissions: {
+        // macOS-only screen; fallback to DataMode if platform doesn't support.
         if (!isMac) {
-          return <DataModeStep onBack={goToPreviousStep} onNext={goToNextStep} />;
+          setCurrentScreen(DesktopOnboardingScreen.DataMode);
+          return null;
         }
         return <PermissionsStep onBack={goToPreviousStep} onNext={goToNextStep} />;
       }
-      case 3: {
+      case DesktopOnboardingScreen.DataMode: {
         return <DataModeStep onBack={goToPreviousStep} onNext={goToNextStep} />;
       }
-      case 4: {
+      case DesktopOnboardingScreen.Login: {
         return <LoginStep onBack={goToPreviousStep} onNext={goToNextStep} />;
       }
       default: {

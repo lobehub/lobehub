@@ -1,5 +1,7 @@
+import { DesktopOnboardingScreen, isDesktopOnboardingScreen } from './types';
+
 export const DESKTOP_ONBOARDING_STORAGE_KEY = 'lobechat:desktop:onboarding:completed:v1';
-export const DESKTOP_ONBOARDING_STEP_KEY = 'lobechat:desktop:onboarding:step:v1';
+export const DESKTOP_ONBOARDING_SCREEN_KEY = 'lobechat:desktop:onboarding:screen:v1';
 
 export const getDesktopOnboardingCompleted = () => {
   if (typeof window === 'undefined') return true;
@@ -35,33 +37,29 @@ export const clearDesktopOnboardingCompleted = () => {
 };
 
 /**
- * Get the persisted onboarding step (for restoring after app restart)
+ * Get the persisted onboarding screen (for restoring after app restart)
  */
-export const getDesktopOnboardingStep = (): number | null => {
+export const getDesktopOnboardingScreen = () => {
   if (typeof window === 'undefined') return null;
 
   try {
-    const step = window.localStorage.getItem(DESKTOP_ONBOARDING_STEP_KEY);
-    if (step) {
-      const parsedStep = Number.parseInt(step, 10);
-      if (parsedStep >= 1 && parsedStep <= 4) {
-        return parsedStep;
-      }
-    }
-    return null;
+    const screen = window.localStorage.getItem(DESKTOP_ONBOARDING_SCREEN_KEY);
+    if (!screen) return null;
+    if (!isDesktopOnboardingScreen(screen)) return null;
+    return screen;
   } catch {
     return null;
   }
 };
 
 /**
- * Persist the current onboarding step
+ * Persist the current onboarding screen
  */
-export const setDesktopOnboardingStep = (step: number) => {
+export const setDesktopOnboardingScreen = (screen: DesktopOnboardingScreen) => {
   if (typeof window === 'undefined') return false;
 
   try {
-    window.localStorage.setItem(DESKTOP_ONBOARDING_STEP_KEY, step.toString());
+    window.localStorage.setItem(DESKTOP_ONBOARDING_SCREEN_KEY, screen);
     return true;
   } catch {
     return false;
@@ -69,13 +67,13 @@ export const setDesktopOnboardingStep = (step: number) => {
 };
 
 /**
- * Clear the persisted onboarding step (called when onboarding completes)
+ * Clear the persisted onboarding screen (called when onboarding completes)
  */
-export const clearDesktopOnboardingStep = () => {
+export const clearDesktopOnboardingScreen = () => {
   if (typeof window === 'undefined') return false;
 
   try {
-    window.localStorage.removeItem(DESKTOP_ONBOARDING_STEP_KEY);
+    window.localStorage.removeItem(DESKTOP_ONBOARDING_SCREEN_KEY);
     return true;
   } catch {
     return false;
