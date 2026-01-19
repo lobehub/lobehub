@@ -13,7 +13,6 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { isMacOS } from '@/utils/platform';
 
 import { useNavPanelSizeChangeHandler } from '../hooks/useNavPanel';
-import { BACK_BUTTON_ID } from './BackButton';
 
 const motionVariants = {
   animate: { opacity: 1, x: 0 },
@@ -78,12 +77,6 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
         width 0.2s ${cssVar.motionEaseOut};
     }
 
-    #${BACK_BUTTON_ID} {
-      width: 0 !important;
-      opacity: 0;
-      transition: all 0.2s ${cssVar.motionEaseOut};
-    }
-
     &:hover {
       #${TOGGLE_BUTTON_ID} {
         width: 32px !important;
@@ -93,13 +86,6 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
       #${USER_DROPDOWN_ICON_ID} {
         width: 14px !important;
         opacity: 1;
-      }
-
-      &:hover {
-        #${BACK_BUTTON_ID} {
-          width: 24px !important;
-          opacity: 1;
-        }
       }
     }
   `,

@@ -332,10 +332,7 @@ export class AgentRuntimeService {
       });
 
       // Get operation state and metadata
-      const [agentState, operationMetadata] = await Promise.all([
-        this.coordinator.loadAgentState(operationId),
-        this.coordinator.getOperationMetadata(operationId),
-      ]);
+      const agentState = await this.coordinator.loadAgentState(operationId);
 
       if (!agentState) {
         throw new Error(`Agent state not found for operation ${operationId}`);
