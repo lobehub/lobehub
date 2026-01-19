@@ -2,20 +2,9 @@
  * Route metadata mapping for navigation history
  * Provides title and icon information based on route path
  */
-import {
-  Brain,
-  Circle,
-  Compass,
-  Database,
-  FileText,
-  Home,
-  Image,
-  type LucideIcon,
-  MessageSquare,
-  Rocket,
-  Settings,
-  Users,
-} from 'lucide-react';
+import { Circle, Compass, Home, type LucideIcon, MessageSquare, Rocket, Users } from 'lucide-react';
+
+import { getRouteById } from '@/config/routes';
 
 export interface RouteMetadata {
   icon?: LucideIcon;
@@ -34,18 +23,26 @@ interface RoutePattern {
   useDynamicTitle?: boolean;
 }
 
+// Get shared icons
+const communityIcon = getRouteById('community')?.icon;
+const resourceIcon = getRouteById('resource')?.icon;
+const memoryIcon = getRouteById('memory')?.icon;
+const imageIcon = getRouteById('image')?.icon;
+const pageIcon = getRouteById('page')?.icon;
+const settingsIcon = getRouteById('settings')?.icon;
+
 /**
  * Route patterns ordered by specificity (most specific first)
  */
 const routePatterns: RoutePattern[] = [
   // Settings routes
   {
-    icon: Settings,
+    icon: settingsIcon,
     test: (p) => p.startsWith('/settings/provider'),
     titleKey: 'navigation.provider',
   },
   {
-    icon: Settings,
+    icon: settingsIcon,
     test: (p) => p.startsWith('/settings'),
     titleKey: 'navigation.settings',
   },
@@ -83,81 +80,81 @@ const routePatterns: RoutePattern[] = [
     titleKey: 'navigation.discoverAssistants',
   },
   {
-    icon: Compass,
+    icon: communityIcon,
     test: (p) => p.startsWith('/community/model'),
     titleKey: 'navigation.discoverModels',
   },
   {
-    icon: Compass,
+    icon: communityIcon,
     test: (p) => p.startsWith('/community/provider'),
     titleKey: 'navigation.discoverProviders',
   },
   {
-    icon: Compass,
+    icon: communityIcon,
     test: (p) => p.startsWith('/community/mcp'),
     titleKey: 'navigation.discoverMcp',
   },
   {
-    icon: Compass,
+    icon: communityIcon,
     test: (p) => p.startsWith('/community'),
     titleKey: 'navigation.discover',
   },
 
   // Resource/Knowledge routes
   {
-    icon: Database,
+    icon: resourceIcon,
     test: (p) => p.startsWith('/resource/library'),
     titleKey: 'navigation.knowledgeBase',
   },
   {
-    icon: Database,
+    icon: resourceIcon,
     test: (p) => p.startsWith('/resource'),
     titleKey: 'navigation.resources',
   },
 
   // Memory routes
   {
-    icon: Brain,
+    icon: memoryIcon,
     test: (p) => p.startsWith('/memory/identities'),
     titleKey: 'navigation.memoryIdentities',
   },
   {
-    icon: Brain,
+    icon: memoryIcon,
     test: (p) => p.startsWith('/memory/contexts'),
     titleKey: 'navigation.memoryContexts',
   },
   {
-    icon: Brain,
+    icon: memoryIcon,
     test: (p) => p.startsWith('/memory/preferences'),
     titleKey: 'navigation.memoryPreferences',
   },
   {
-    icon: Brain,
+    icon: memoryIcon,
     test: (p) => p.startsWith('/memory/experiences'),
     titleKey: 'navigation.memoryExperiences',
   },
   {
-    icon: Brain,
+    icon: memoryIcon,
     test: (p) => p.startsWith('/memory'),
     titleKey: 'navigation.memory',
   },
 
   // Image routes
   {
-    icon: Image,
+    icon: imageIcon,
     test: (p) => p.startsWith('/image'),
     titleKey: 'navigation.image',
   },
 
   // Page routes - use dynamic title for specific page names
   {
-    icon: FileText,
+    icon: pageIcon,
     test: (p) => p.startsWith('/page/'),
     titleKey: 'navigation.page',
     useDynamicTitle: true,
   },
   {
-    icon: FileText,
+    icon: pageIcon,
     test: (p) => p === '/page',
     titleKey: 'navigation.pages',
   },
