@@ -19,6 +19,7 @@ export default {
   'inviteCode.currentEmail': 'Current account: {{email}}',
   'inviteCode.desc':
     'An invite code is required to access LobeHub. Please enter a valid invite code to continue.',
+  'inviteCode.friends': 'Friends',
   'inviteCode.getCodeHint': 'Get an invite code from:',
   'inviteCode.title': 'Invite Code Required',
   'loginRequired.desc': 'You will be redirected to the login page shortly',

@@ -288,7 +288,7 @@
   "referral.rules.backfill.description": "忘记填写邀请码？注册三天内可以补填",
   "referral.rules.backfill.expiredTip": "补填期限已过，注册超过三天后无法补填",
   "referral.rules.backfill.link": "补填邀请码",
-  "referral.rules.backfill.placeholder": "请输入邀请码",
+  "referral.rules.backfill.placeholder": "请输入邀请码或链接",
   "referral.rules.backfill.submit": "确认绑定",
   "referral.rules.backfill.success": "邀请码绑定成功",
   "referral.rules.backfill.title": "补填邀请码",
