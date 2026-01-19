@@ -185,6 +185,9 @@ describe('AiAgentService.execSubAgentTask', () => {
           onAfterStep: expect.any(Function),
           onComplete: expect.any(Function),
         }),
+        userInterventionConfig: {
+          approvalMode: 'headless',
+        },
       });
     });
 
