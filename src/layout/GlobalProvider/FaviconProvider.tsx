@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, memo, useCallback, useContext, useState, type ReactNode } from 'react';
+import { type ReactNode, createContext, memo, useCallback, useContext, useState } from 'react';
 
 export type FaviconState = 'default' | 'done' | 'error' | 'progress';
 
@@ -40,7 +40,7 @@ const updateFaviconDOM = (state: FaviconState, isDev: boolean) => {
 
   const head = document.head;
   const existingLinks = document.querySelectorAll<HTMLLinkElement>(
-    'link[rel="icon"], link[rel="shortcut icon"]'
+    'link[rel="icon"], link[rel="shortcut icon"]',
   );
 
   console.log('[FaviconProvider] updateFaviconDOM called with state:', state, 'isDev:', isDev);
@@ -59,7 +59,7 @@ const updateFaviconDOM = (state: FaviconState, isDev: boolean) => {
     const newLink = document.createElement('link');
     newLink.rel = rel;
     newLink.href = `${getFaviconPath(state, isDev, is32 ? '32x32' : undefined)}?v=${Date.now()}`;
-    head.appendChild(newLink);
+    head.append(newLink);
 
     console.log(`[FaviconProvider] Replaced: ${oldHref} -> ${newLink.href}`);
   });
@@ -76,7 +76,7 @@ export const FaviconProvider = memo<{ children: ReactNode }>(({ children }) => {
       setCurrentState(state);
       updateFaviconDOM(state, isDevMode);
     },
-    [isDevMode]
+    [isDevMode],
   );
 
   const setIsDevMode = useCallback(
@@ -84,7 +84,7 @@ export const FaviconProvider = memo<{ children: ReactNode }>(({ children }) => {
       setIsDevModeState(isDev);
       updateFaviconDOM(currentState, isDev);
     },
-    [currentState]
+    [currentState],
   );
 
   return (
