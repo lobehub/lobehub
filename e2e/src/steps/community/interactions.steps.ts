@@ -381,7 +381,7 @@ Then('the URL should contain the category parameter', async function (this: Cust
     currentUrl.includes('category=') ||
     currentUrl.includes('tag=') ||
     // For path-based routing like /community/agent/category-name
-    /\/community\/assistant\/[^/?]+/.test(currentUrl);
+    /\/community\/agent\/[^/?]+/.test(currentUrl);
 
   expect(
     hasCategory,
@@ -433,8 +433,8 @@ Then('I should be navigated to the assistant detail page', async function (this:
   await this.page.waitForLoadState('networkidle', { timeout: 30_000 });
 
   const currentUrl = this.page.url();
-  // Verify that URL changed and contains /assistant/ followed by an identifier
-  const hasAssistantDetail = /\/community\/assistant\/[^#?]+/.test(currentUrl);
+  // Verify that URL changed and contains /agent/ followed by an identifier
+  const hasAssistantDetail = /\/community\/agent\/[^#?]+/.test(currentUrl);
   const urlChanged = currentUrl !== this.testContext.previousUrl;
 
   expect(

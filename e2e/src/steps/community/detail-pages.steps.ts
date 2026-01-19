@@ -68,7 +68,7 @@ Then('I should be on an assistant detail page', async function (this: CustomWorl
 
   const currentUrl = this.page.url();
   // Check if URL matches assistant detail page pattern
-  const hasAssistantDetail = /\/community\/assistant\/[^#?]+/.test(currentUrl);
+  const hasAssistantDetail = /\/community\/agent\/[^#?]+/.test(currentUrl);
   expect(
     hasAssistantDetail,
     `Expected URL to match assistant detail page pattern, but got: ${currentUrl}`,
@@ -138,7 +138,7 @@ Then('I should be on the assistant list page', async function (this: CustomWorld
   // After back navigation, URL should be /community/agent or /community
   const isListPage =
     (currentUrl.includes('/community/agent') &&
-      !/\/community\/assistant\/[\dA-Za-z-]+$/.test(currentUrl)) ||
+      !/\/community\/agent\/[\dA-Za-z-]+$/.test(currentUrl)) ||
     currentUrl.endsWith('/community') ||
     currentUrl.includes('/community#');
 
