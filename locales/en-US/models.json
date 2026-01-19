@@ -396,6 +396,7 @@
   "deepseek/deepseek-chat-v3-0324:free.description": "DeepSeek V3 is a 685B-parameter MoE model and the latest iteration of DeepSeek’s flagship chat series.\n\nIt builds on [DeepSeek V3](/deepseek/deepseek-chat-v3) and performs strongly across tasks.",
   "deepseek/deepseek-chat-v3.1.description": "DeepSeek-V3.1 is DeepSeek’s long-context hybrid reasoning model, supporting mixed thinking/non-thinking modes and tool integration.",
   "deepseek/deepseek-chat.description": "DeepSeek-V3 is DeepSeek’s high-performance hybrid reasoning model for complex tasks and tool integration.",
+  "deepseek/deepseek-math-v2.description": "DeepSeek Math V2 is a model that has made significant breakthroughs in mathematical reasoning capabilities. Its core innovation lies in the \"self-verification\" training mechanism, and it has achieved gold medal levels in several top mathematics competitions.",
   "deepseek/deepseek-r1-0528.description": "DeepSeek R1 0528 is an updated variant focused on open availability and deeper reasoning.",
   "deepseek/deepseek-r1-0528:free.description": "DeepSeek-R1 greatly improves reasoning with minimal labeled data and outputs a chain-of-thought before the final answer to improve accuracy.",
   "deepseek/deepseek-r1-distill-llama-70b.description": "DeepSeek R1 Distill Llama 70B is a distilled LLM based on Llama 3.3 70B, fine-tuned using DeepSeek R1 outputs to achieve competitive performance with large frontier models.",
