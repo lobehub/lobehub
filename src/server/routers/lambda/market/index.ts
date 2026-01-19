@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DiscoverService } from '@/server/services/discover';
+import { MarketService } from '@/server/services/market';
 import {
   AssistantSorts,
   McpConnectionType,
@@ -34,6 +35,10 @@ const marketProcedure = publicProcedure
     return next({
       ctx: {
         discoverService: new DiscoverService({
+          accessToken: ctx.marketAccessToken,
+          userInfo: ctx.marketUserInfo,
+        }),
+        marketService: new MarketService({
           accessToken: ctx.marketAccessToken,
           userInfo: ctx.marketUserInfo,
         }),

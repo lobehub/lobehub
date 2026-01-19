@@ -3,7 +3,7 @@ import { buildTrustedClientPayload, createTrustedClientToken } from '@lobehub/ma
 import { appEnv } from '@/envs/app';
 
 export interface TrustedClientUserInfo {
-  email: string;
+  email?: string;
   name?: string;
   userId: string;
 }

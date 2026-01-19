@@ -152,7 +152,7 @@ export class AgentRuntimeService {
 
     // Initialize ToolExecutionService with dependencies
     const pluginGatewayService = new PluginGatewayService();
-    const builtinToolsExecutor = new BuiltinToolsExecutor();
+    const builtinToolsExecutor = new BuiltinToolsExecutor(db, userId);
 
     this.toolExecutionService = new ToolExecutionService({
       builtinToolsExecutor,

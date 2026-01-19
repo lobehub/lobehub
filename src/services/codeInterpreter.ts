@@ -5,16 +5,6 @@ import type {
   ExportAndUploadFileInput,
   ExportAndUploadFileResult,
 } from '@/server/routers/tools/market';
-import { useUserStore } from '@/store/user';
-import { settingsSelectors } from '@/store/user/slices/settings/selectors/settings';
-
-/**
- * Get Market access token from user settings (stored by MarketAuthProvider)
- */
-const getMarketAccessToken = (): string | undefined => {
-  const settings = settingsSelectors.currentSettings(useUserStore.getState());
-  return settings.market?.accessToken;
-};
 
 class CodeInterpreterService {
   /**
@@ -28,10 +18,7 @@ class CodeInterpreterService {
     params: Record<string, any>,
     context: { topicId: string; userId: string },
   ): Promise<CallToolResult> {
-    const marketAccessToken = getMarketAccessToken();
-
     const input: CallCodeInterpreterToolInput = {
-      marketAccessToken,
       params,
       toolName,
       topicId: context.topicId,

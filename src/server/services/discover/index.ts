@@ -62,10 +62,11 @@ import { cloneDeep, countBy, isString, merge, uniq, uniqBy } from 'es-toolkit/co
 import matter from 'gray-matter';
 import urlJoin from 'url-join';
 
-import { type TrustedClientUserInfo, generateTrustedClientToken } from '@/libs/trusted-client';
+import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { normalizeLocale } from '@/locales/resources';
 import { AssistantStore } from '@/server/modules/AssistantStore';
 import { PluginStore } from '@/server/modules/PluginStore';
+import { MarketService } from '@/server/services/market';
 
 const log = debug('lobe-server:discover');
 
@@ -84,18 +85,14 @@ export class DiscoverService {
   constructor(options: DiscoverServiceOptions = {}) {
     const { accessToken, userInfo } = options;
 
-    // Generate trusted client token if user info is available
-    const trustedClientToken = userInfo ? generateTrustedClientToken(userInfo) : undefined;
+    // Use MarketService to initialize MarketSDK
+    const marketService = new MarketService({ accessToken, userInfo });
+    this.market = marketService.market;
 
-    this.market = new MarketSDK({
-      accessToken,
-      baseURL: process.env.NEXT_PUBLIC_MARKET_BASE_URL,
-      trustedClientToken,
-    });
     log(
-      'DiscoverService initialized with market baseURL: %s, hasTrustedToken: %s, userId: %s',
+      'DiscoverService initialized with market baseURL: %s, hasAuth: %s, userId: %s',
       process.env.NEXT_PUBLIC_MARKET_BASE_URL,
-      !!trustedClientToken,
+      !!(accessToken || userInfo),
       userInfo?.userId,
     );
   }
@@ -135,14 +132,12 @@ export class DiscoverService {
   }
 
   async fetchM2MToken(params: { clientId: string; clientSecret: string }) {
-    // 使用传入的客户端凭证创建新的 MarketSDK 实例
-    const tokenMarket = new MarketSDK({
-      baseURL: process.env.NEXT_PUBLIC_MARKET_BASE_URL,
-      clientId: params.clientId,
-      clientSecret: params.clientSecret,
+    // Use MarketService with M2M credentials
+    const marketService = new MarketService({
+      clientCredentials: params,
     });
 
-    const tokenInfo = await tokenMarket.fetchM2MToken();
+    const tokenInfo = await marketService.fetchM2MToken();
 
     return {
       accessToken: tokenInfo.accessToken,

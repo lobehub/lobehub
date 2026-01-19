@@ -11,7 +11,6 @@ import type {
 } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
-import { MarketSDK } from '@lobehub/market-sdk';
 import debug from 'debug';
 
 import { LOADING_FLAT } from '@/const/message';
@@ -20,8 +19,6 @@ import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
-import { UserModel } from '@/database/models/user';
-import { generateTrustedClientToken } from '@/libs/trusted-client';
 import {
   type ServerAgentToolsContext,
   createServerAgentToolsEngine,
@@ -30,6 +27,7 @@ import {
 import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import type { StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
+import { MarketService } from '@/server/services/market';
 
 const log = debug('lobe-server:ai-agent-service');
 
@@ -88,6 +86,7 @@ export class AiAgentService {
   private readonly threadModel: ThreadModel;
   private readonly topicModel: TopicModel;
   private readonly agentRuntimeService: AgentRuntimeService;
+  private readonly marketService: MarketService;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.userId = userId;
@@ -99,6 +98,7 @@ export class AiAgentService {
     this.threadModel = new ThreadModel(db, userId);
     this.topicModel = new TopicModel(db, userId);
     this.agentRuntimeService = new AgentRuntimeService(db, userId);
+    this.marketService = new MarketService({ userInfo: { userId } });
   }
 
   /**
@@ -190,7 +190,12 @@ export class AiAgentService {
     };
 
     // 5. Fetch LobeHub Skills manifests (temporary solution until LOBE-3517 is implemented)
-    const lobehubSkillManifests = await this.fetchLobehubSkillManifests();
+    let lobehubSkillManifests: LobeToolManifest[] = [];
+    try {
+      lobehubSkillManifests = await this.marketService.getLobehubSkillManifests();
+    } catch (error) {
+      log('execAgent: failed to fetch lobehub skill manifests: %O', error);
+    }
     log('execAgent: got %d lobehub skill manifests', lobehubSkillManifests.length);
 
     // 6. Create tools using Server AgentToolsEngine
@@ -734,98 +739,6 @@ export class AiAgentService {
         }
       },
     };
-  }
-
-  /**
-   * Fetch LobeHub Skills manifests from Market API
-   * This is a temporary solution until LOBE-3517 is implemented (store skills in DB)
-   */
-  private async fetchLobehubSkillManifests(): Promise<LobeToolManifest[]> {
-    try {
-      // 1. Get user info for trusted client token
-      const user = await UserModel.findById(this.db, this.userId);
-      if (!user?.email) {
-        log('fetchLobehubSkillManifests: user email not found, skipping');
-        return [];
-      }
-
-      // 2. Generate trusted client token
-      const trustedClientToken = generateTrustedClientToken({
-        email: user.email,
-        name: user.fullName || user.firstName || undefined,
-        userId: this.userId,
-      });
-
-      if (!trustedClientToken) {
-        log('fetchLobehubSkillManifests: trusted client not configured, skipping');
-        return [];
-      }
-
-      // 3. Create MarketSDK instance
-      const marketSDK = new MarketSDK({
-        baseURL: process.env.NEXT_PUBLIC_MARKET_BASE_URL,
-        trustedClientToken,
-      });
-
-      // 4. Get user's connected skills
-      const { connections } = await marketSDK.connect.listConnections();
-      if (!connections || connections.length === 0) {
-        log('fetchLobehubSkillManifests: no connected skills found');
-        return [];
-      }
-
-      log('fetchLobehubSkillManifests: found %d connected skills', connections.length);
-
-      // 5. Fetch tools for each connection and build manifests
-      const manifests: LobeToolManifest[] = [];
-
-      for (const connection of connections) {
-        try {
-          // Connection returns providerId (e.g., 'twitter', 'linear'), not numeric id
-          const providerId = (connection as any).providerId;
-          if (!providerId) {
-            log('fetchLobehubSkillManifests: connection missing providerId: %O', connection);
-            continue;
-          }
-          const providerName =
-            (connection as any).providerName || (connection as any).name || providerId;
-          const icon = (connection as any).icon;
-
-          const { tools } = await marketSDK.skills.listTools(providerId);
-          if (!tools || tools.length === 0) continue;
-
-          const manifest: LobeToolManifest = {
-            api: tools.map((tool: any) => ({
-              description: tool.description || '',
-              name: tool.name,
-              parameters: tool.inputSchema || { properties: {}, type: 'object' },
-            })),
-            identifier: providerId,
-            meta: {
-              avatar: icon || '🔗',
-              description: `LobeHub Skill: ${providerName}`,
-              tags: ['lobehub-skill', providerId],
-              title: providerName,
-            },
-            type: 'builtin',
-          };
-
-          manifests.push(manifest);
-          log(
-            'fetchLobehubSkillManifests: built manifest for %s with %d tools',
-            providerId,
-            tools.length,
-          );
-        } catch (error) {
-          log('fetchLobehubSkillManifests: failed to fetch tools for connection: %O', error);
-        }
-      }
-
-      return manifests;
-    } catch (error) {
-      log('fetchLobehubSkillManifests: error fetching skills: %O', error);
-      return [];
-    }
   }
 
   /**

@@ -1,13 +1,14 @@
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebBrowsingExecutionRuntime } from '@lobechat/builtin-tool-web-browsing/executionRuntime';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { type ChatToolPayload } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
-import { LobehubSkillService } from '@/server/services/lobehubSkill';
+import { MarketService } from '@/server/services/market';
 import { SearchService } from '@/server/services/search';
 
-import { type IToolExecutor, type ToolExecutionContext, type ToolExecutionResult } from './types';
+import { type IToolExecutor, type ToolExecutionResult } from './types';
 
 const log = debug('lobe-server:builtin-tools-executor');
 
@@ -16,10 +17,12 @@ const BuiltinToolServerRuntimes: Record<string, any> = {
 };
 
 export class BuiltinToolsExecutor implements IToolExecutor {
-  async execute(
-    payload: ChatToolPayload,
-    context: ToolExecutionContext,
-  ): Promise<ToolExecutionResult> {
+  private marketService: MarketService;
+
+  constructor(db: LobeChatDatabase, userId: string) {
+    this.marketService = new MarketService({ userInfo: { userId } });
+  }
+  async execute(payload: ChatToolPayload): Promise<ToolExecutionResult> {
     const { identifier, apiName, arguments: argsStr, source } = payload;
     const args = safeParseJSON(argsStr) || {};
 
@@ -31,18 +34,9 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       args,
     );
 
-    // Route LobeHub Skills to dedicated service
+    // Route LobeHub Skills to MarketService
     if (source === 'lobehubSkill') {
-      if (!context.serverDB || !context.userId) {
-        return {
-          content: 'Server context not available for LobeHub Skills execution.',
-          error: { code: 'CONTEXT_NOT_AVAILABLE' },
-          success: false,
-        };
-      }
-
-      const skillService = new LobehubSkillService(context.serverDB, context.userId);
-      return skillService.execute({
+      return this.marketService.executeLobehubSkill({
         args,
         provider: identifier,
         toolName: apiName,

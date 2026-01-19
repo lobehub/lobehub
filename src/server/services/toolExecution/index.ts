@@ -4,7 +4,11 @@ import debug from 'debug';
 import { type MCPService } from '../mcp';
 import { type PluginGatewayService } from '../pluginGateway';
 import { type BuiltinToolsExecutor } from './builtin';
-import { type ToolExecutionContext, type ToolExecutionResult, type ToolExecutionResultResponse } from './types';
+import {
+  type ToolExecutionContext,
+  type ToolExecutionResult,
+  type ToolExecutionResultResponse,
+} from './types';
 
 const log = debug('lobe-server:tool-execution-service');
 
@@ -43,7 +47,7 @@ export class ToolExecutionService {
       let data: ToolExecutionResult;
       switch (typeStr) {
         case 'builtin': {
-          data = await this.builtinToolsExecutor.execute(payload, context);
+          data = await this.builtinToolsExecutor.execute(payload);
           break;
         }
 
