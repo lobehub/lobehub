@@ -1,6 +1,8 @@
 'use client';
 
+import { Avatar } from '@lobehub/ui';
 import { Command } from 'cmdk';
+import { CornerDownLeft } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +10,7 @@ import { useLocation } from 'react-router-dom';
 
 import { useGlobalStore } from '@/store/global';
 
+import AskAgentCommands from './AskAgentCommands';
 import AskAIMenu from './AskAIMenu';
 import { CommandMenuProvider, useCommandMenuContext } from './CommandMenuContext';
 import MainMenu from './MainMenu';
@@ -23,10 +26,19 @@ import { useCommandMenu } from './useCommandMenu';
  */
 const CommandMenuContent = memo(() => {
   const { t } = useTranslation('common');
-  const { closeCommandMenu, handleBack, hasSearch, isSearching, searchQuery, searchResults } =
-    useCommandMenu();
+  const {
+    closeCommandMenu,
+    handleBack,
+    handleSendToSelectedAgent,
+    hasSearch,
+    isSearching,
+    searchQuery,
+    searchResults,
+    selectedAgent,
+  } = useCommandMenu();
 
-  const { setPages, page, pages, search, setTypeFilter, typeFilter } = useCommandMenuContext();
+  const { setPages, page, pages, search, setTypeFilter, setSelectedAgent, typeFilter } =
+    useCommandMenuContext();
 
   return (
     <div className={styles.overlay} onClick={closeCommandMenu}>
@@ -34,40 +46,81 @@ const CommandMenuContent = memo(() => {
         <Command
           className={styles.commandRoot}
           onKeyDown={(e) => {
+            // Enter key to send message to selected agent
+            if (e.key === 'Enter' && selectedAgent && search.trim()) {
+              e.preventDefault();
+              handleSendToSelectedAgent();
+              return;
+            }
             // Tab key to ask AI
-            if (e.key === 'Tab' && page !== 'ask-ai') {
+            if (e.key === 'Tab' && page !== 'ask-ai' && !selectedAgent) {
               e.preventDefault();
               setPages([...pages, 'ask-ai']);
               return;
             }
-            // Escape goes to previous page or closes
+            // Escape goes to previous page, clears selected agent, or closes
             if (e.key === 'Escape') {
               e.preventDefault();
-              if (pages.length > 0) {
+              if (selectedAgent) {
+                setSelectedAgent(undefined);
+              } else if (pages.length > 0) {
                 handleBack();
               } else {
                 closeCommandMenu();
               }
             }
-            // Backspace goes to previous page when search is empty
-            if (e.key === 'Backspace' && !search && pages.length > 0) {
-              e.preventDefault();
-              setPages((prev) => prev.slice(0, -1));
+            // Backspace clears selected agent when search is empty, or goes to previous page
+            if (e.key === 'Backspace' && !search) {
+              if (selectedAgent) {
+                e.preventDefault();
+                setSelectedAgent(undefined);
+              } else if (pages.length > 0) {
+                e.preventDefault();
+                setPages((prev) => prev.slice(0, -1));
+              }
             }
           }}
-          shouldFilter={page !== 'ask-ai'}
+          shouldFilter={page !== 'ask-ai' && !selectedAgent && !search.trimStart().startsWith('@')}
         >
           <CommandInput />
 
           <Command.List>
             <Command.Empty>{t('cmdk.noResults')}</Command.Empty>
 
-            {!page && <MainMenu />}
+            {/* Show send command when agent is selected */}
+            {selectedAgent && (
+              <Command.Group>
+                <Command.Item
+                  disabled={!search.trim()}
+                  onSelect={handleSendToSelectedAgent}
+                  value="send-to-agent"
+                >
+                  <Avatar
+                    avatar={selectedAgent.avatar}
+                    emojiScaleWithBackground
+                    shape="square"
+                    size={20}
+                  />
+                  <div className={styles.itemContent}>
+                    <div className={styles.itemLabel}>
+                      {t('cmdk.sendToAgent', { agent: selectedAgent.title } as any)}
+                    </div>
+                  </div>
+                  <CornerDownLeft className={styles.icon} />
+                </Command.Item>
+              </Command.Group>
+            )}
+
+            {/* @ mention agent commands */}
+            {!page && !selectedAgent && <AskAgentCommands />}
+
+            {/* Hide MainMenu and SearchResults when in @ mention mode */}
+            {!page && !selectedAgent && !search.trimStart().startsWith('@') && <MainMenu />}
 
             {page === 'theme' && <ThemeMenu />}
             {page === 'ask-ai' && <AskAIMenu />}
 
-            {!page && hasSearch && (
+            {!page && !selectedAgent && hasSearch && !search.trimStart().startsWith('@') && (
               <SearchResults
                 isLoading={isSearching}
                 onClose={closeCommandMenu}

@@ -10,7 +10,7 @@ import {
   useState,
 } from 'react';
 
-import { type MenuContext, type PageType } from './types';
+import { type MenuContext, type PageType, type SelectedAgent } from './types';
 import { detectContext } from './utils/context';
 import type { ValidSearchType } from './utils/queryParser';
 
@@ -21,8 +21,10 @@ interface CommandMenuContextValue {
   pages: PageType[];
   pathname: string | null;
   search: string;
+  selectedAgent: SelectedAgent | undefined;
   setPages: Dispatch<SetStateAction<PageType[]>>;
   setSearch: (search: string) => void;
+  setSelectedAgent: (agent: SelectedAgent | undefined) => void;
   setTypeFilter: (typeFilter: ValidSearchType | undefined) => void;
   setViewMode: (viewMode: MenuViewMode) => void;
   typeFilter: ValidSearchType | undefined;
@@ -45,6 +47,7 @@ export const CommandMenuProvider = ({ children, pathname }: CommandMenuProviderP
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<ValidSearchType | undefined>(undefined);
   const [mounted, setMounted] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<SelectedAgent | undefined>(undefined);
 
   // Derived values
   const page = pages.at(-1);
@@ -71,8 +74,10 @@ export const CommandMenuProvider = ({ children, pathname }: CommandMenuProviderP
         pages,
         pathname,
         search,
+        selectedAgent,
         setPages,
         setSearch,
+        setSelectedAgent,
         setTypeFilter,
         setViewMode,
         typeFilter,

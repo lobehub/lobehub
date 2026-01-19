@@ -35,6 +35,8 @@ export const useCommandMenu = () => {
     page,
     menuContext: context,
     pathname,
+    selectedAgent,
+    setSelectedAgent,
   } = useCommandMenuContext();
 
   const navigate = useNavigate();
@@ -133,6 +135,15 @@ export const useCommandMenu = () => {
     setPages((prev) => prev.slice(0, -1));
   };
 
+  const handleSendToSelectedAgent = () => {
+    if (selectedAgent && search.trim()) {
+      const message = encodeURIComponent(search.trim());
+      navigate(`/agent/${selectedAgent.id}?message=${message}`);
+      setSelectedAgent(undefined);
+      closeCommandMenu();
+    }
+  };
+
   const handleCreateSession = async () => {
     const result = await createAgent({});
     await refreshAgentList();
@@ -190,6 +201,7 @@ export const useCommandMenu = () => {
     handleCreateTopic,
     handleExternalLink,
     handleNavigate,
+    handleSendToSelectedAgent,
     handleThemeChange,
     hasSearch,
     isSearching,
@@ -201,7 +213,9 @@ export const useCommandMenu = () => {
     search,
     searchQuery,
     searchResults: searchResults || ([] as SearchResult[]),
+    selectedAgent,
     setSearch,
+    setSelectedAgent,
     setTypeFilter,
     typeFilter,
   };
