@@ -30,12 +30,15 @@ const TOOL_PRICING: Record<string, number> = {
 
 export interface RuntimeExecutorContext {
   fileService?: any;
+  marketAccessToken?: string;
   messageModel: MessageModel;
   operationId: string;
   serverDB: LobeChatDatabase;
   stepIndex: number;
   streamManager: IStreamEventManager;
   toolExecutionService: ToolExecutionService;
+  topicId?: string;
+  trustedClientToken?: string;
   userId?: string;
 }
 
@@ -473,8 +476,11 @@ export const createRuntimeExecutors = (
       // Execute tool using ToolExecutionService
       log(`[${operationLogId}] Executing tool ${toolName} ...`);
       const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
+        marketAccessToken: ctx.marketAccessToken,
         serverDB: ctx.serverDB,
         toolManifestMap: state.toolManifestMap,
+        topicId: ctx.topicId,
+        trustedClientToken: ctx.trustedClientToken,
         userId: ctx.userId,
       });
 

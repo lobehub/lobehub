@@ -1,20 +1,14 @@
-import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { WebBrowsingExecutionRuntime } from '@lobechat/builtin-tool-web-browsing/executionRuntime';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type ChatToolPayload } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
 import { MarketService } from '@/server/services/market';
-import { SearchService } from '@/server/services/search';
 
+import { getServerRuntime, hasServerRuntime } from './serverRuntimes';
 import { type IToolExecutor, type ToolExecutionResult } from './types';
 
 const log = debug('lobe-server:builtin-tools-executor');
-
-const BuiltinToolServerRuntimes: Record<string, any> = {
-  [WebBrowsingManifest.identifier]: WebBrowsingExecutionRuntime,
-};
 
 export class BuiltinToolsExecutor implements IToolExecutor {
   private marketService: MarketService;
@@ -43,19 +37,15 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       });
     }
 
-    // Default: original builtin runtime logic
-    const ServerRuntime = BuiltinToolServerRuntimes[identifier];
-
-    if (!ServerRuntime) {
+    // Use server runtime registry (handles both pre-instantiated and per-request runtimes)
+    if (!hasServerRuntime(identifier)) {
       throw new Error(`Builtin tool "${identifier}" is not implemented`);
     }
 
-    const runtime = new ServerRuntime({
-      searchService: new SearchService(),
-    });
+    const runtime = getServerRuntime(identifier, context);
 
     if (!runtime[apiName]) {
-      throw new Error(`Builtin tool ${identifier} 's ${apiName} is not implemented`);
+      throw new Error(`Builtin tool ${identifier}'s ${apiName} is not implemented`);
     }
 
     try {
@@ -64,7 +54,7 @@ export class BuiltinToolsExecutor implements IToolExecutor {
       const error = e as Error;
       console.error('Error executing builtin tool %s:%s: %O', identifier, apiName, error);
 
-      return { content: error.message, error: error, success: false };
+      return { content: error.message, error, success: false };
     }
   }
 }
