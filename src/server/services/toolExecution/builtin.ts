@@ -6,7 +6,7 @@ import debug from 'debug';
 import { MarketService } from '@/server/services/market';
 
 import { getServerRuntime, hasServerRuntime } from './serverRuntimes';
-import { type IToolExecutor, type ToolExecutionResult } from './types';
+import { type IToolExecutor, type ToolExecutionContext, type ToolExecutionResult } from './types';
 
 const log = debug('lobe-server:builtin-tools-executor');
 
@@ -16,7 +16,11 @@ export class BuiltinToolsExecutor implements IToolExecutor {
   constructor(db: LobeChatDatabase, userId: string) {
     this.marketService = new MarketService({ userInfo: { userId } });
   }
-  async execute(payload: ChatToolPayload): Promise<ToolExecutionResult> {
+
+  async execute(
+    payload: ChatToolPayload,
+    context: ToolExecutionContext,
+  ): Promise<ToolExecutionResult> {
     const { identifier, apiName, arguments: argsStr, source } = payload;
     const args = safeParseJSON(argsStr) || {};
 

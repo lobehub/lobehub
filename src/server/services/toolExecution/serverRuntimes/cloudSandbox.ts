@@ -3,6 +3,7 @@ import {
   CloudSandboxIdentifier,
 } from '@lobechat/builtin-tool-cloud-sandbox';
 
+import { MarketService } from '@/server/services/market';
 import { ServerSandboxService } from '@/server/services/sandbox';
 
 import { type ServerRuntimeRegistration } from './types';
@@ -17,10 +18,10 @@ export const cloudSandboxRuntime: ServerRuntimeRegistration = {
       throw new Error('userId and topicId are required for Cloud Sandbox execution');
     }
 
+    const marketService = new MarketService({ userInfo: { userId: context.userId } });
     const sandboxService = new ServerSandboxService({
-      accessToken: context.marketAccessToken,
+      marketService,
       topicId: context.topicId,
-      trustedClientToken: context.trustedClientToken,
       userId: context.userId,
     });
 

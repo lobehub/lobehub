@@ -356,7 +356,7 @@ export class AgentRuntimeService {
       }
 
       // Create Agent and Runtime instances
-      // Use agentState.metadata which contains the full app context (topicId, marketAccessToken, etc.)
+      // Use agentState.metadata which contains the full app context (topicId, agentId, etc.)
       // operationMetadata only contains basic fields (agentConfig, modelRuntimeConfig, userId)
       const { runtime } = await this.createAgentRuntime({
         metadata: agentState?.metadata,
@@ -849,7 +849,6 @@ export class AgentRuntimeService {
 
     // Create streaming executor context
     const executorContext: RuntimeExecutorContext = {
-      marketAccessToken: metadata?.marketAccessToken,
       messageModel: this.messageModel,
       operationId,
       serverDB: this.serverDB,
@@ -857,7 +856,6 @@ export class AgentRuntimeService {
       streamManager: this.streamManager,
       toolExecutionService: this.toolExecutionService,
       topicId: metadata?.topicId,
-      trustedClientToken: metadata?.trustedClientToken,
       userId: metadata?.userId,
     };
 

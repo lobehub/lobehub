@@ -3,15 +3,11 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { type ChatToolPayload } from '@lobechat/types';
 
 export interface ToolExecutionContext {
-  /** Market access token for MarketSDK authentication */
-  marketAccessToken?: string;
   /** Server database for LobeHub Skills execution */
   serverDB?: LobeChatDatabase;
   toolManifestMap: Record<string, LobeToolManifest>;
   /** Topic ID for sandbox session management */
   topicId?: string;
-  /** Trusted client token for server-to-server authentication */
-  trustedClientToken?: string;
   userId?: string;
 }
 

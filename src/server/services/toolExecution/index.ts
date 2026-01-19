@@ -47,7 +47,7 @@ export class ToolExecutionService {
       let data: ToolExecutionResult;
       switch (typeStr) {
         case 'builtin': {
-          data = await this.builtinToolsExecutor.execute(payload);
+          data = await this.builtinToolsExecutor.execute(payload, context);
           break;
         }
 

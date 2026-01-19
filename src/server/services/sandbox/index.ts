@@ -1,4 +1,4 @@
-import { type CodeInterpreterToolName, MarketSDK } from '@lobehub/market-sdk';
+import { type CodeInterpreterToolName } from '@lobehub/market-sdk';
 import {
   type ISandboxService,
   type SandboxCallToolResult,
@@ -6,12 +6,13 @@ import {
 } from '@lobechat/builtin-tool-cloud-sandbox';
 import debug from 'debug';
 
+import { MarketService } from '@/server/services/market';
+
 const log = debug('lobe-server:sandbox-service');
 
 export interface ServerSandboxServiceOptions {
-  accessToken?: string;
+  marketService: MarketService;
   topicId: string;
-  trustedClientToken?: string;
   userId: string;
 }
 
@@ -20,34 +21,31 @@ export interface ServerSandboxServiceOptions {
  *
  * This service implements ISandboxService for server-side execution.
  * Context (topicId, userId) is bound at construction time.
- * It directly uses MarketSDK to call sandbox tools, bypassing tRPC.
+ * It uses MarketService to call sandbox tools.
  *
  * Usage:
  * - Used by BuiltinToolsExecutor when executing CloudSandbox tools on server
- * - Requires either accessToken or trustedClientToken for authentication
+ * - MarketService handles authentication via trustedClientToken
  */
 export class ServerSandboxService implements ISandboxService {
-  private marketSDK: MarketSDK;
+  private marketService: MarketService;
   private topicId: string;
   private userId: string;
 
   constructor(options: ServerSandboxServiceOptions) {
-    this.marketSDK = new MarketSDK({
-      accessToken: options.accessToken,
-      trustedClientToken: options.trustedClientToken,
-    });
+    this.marketService = options.marketService;
     this.topicId = options.topicId;
     this.userId = options.userId;
   }
 
   /**
-   * Call a sandbox tool via MarketSDK
+   * Call a sandbox tool via MarketService
    */
   async callTool(toolName: string, params: Record<string, any>): Promise<SandboxCallToolResult> {
     log('Calling sandbox tool: %s with params: %O, topicId: %s', toolName, params, this.topicId);
 
     try {
-      const response = await this.marketSDK.plugins.runBuildInTool(
+      const response = await this.marketService.getSDK().plugins.runBuildInTool(
         toolName as CodeInterpreterToolName,
         params as any,
         { topicId: this.topicId, userId: this.userId },
