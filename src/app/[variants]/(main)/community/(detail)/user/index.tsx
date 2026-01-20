@@ -46,6 +46,9 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
         // Call the original onSuccess callback if provided
         onSuccess?.(profile);
 
+        // Refresh page data to show updated profile
+        mutate();
+
         // Navigate to new URL if userName changed
         const newUserName = profile.userName || profile.namespace;
         if (newUserName && newUserName !== currentUserName) {
@@ -53,7 +56,7 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
         }
       });
     },
-    [data?.user?.userName, data?.user?.namespace, openProfileSetup, navigate],
+    [data?.user?.userName, data?.user?.namespace, openProfileSetup, navigate, mutate],
   );
 
   const contextConfig = useMemo(() => {
