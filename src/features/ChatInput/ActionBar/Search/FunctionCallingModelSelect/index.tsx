@@ -1,6 +1,6 @@
-import { Select, type SelectProps, TooltipGroup } from '@lobehub/ui';
+import { LobeSelect, type LobeSelectProps, TooltipGroup } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, useMemo } from 'react';
+import { type ReactNode, memo, useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
@@ -18,12 +18,12 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface ModelOption {
-  label: any;
+  label: ReactNode;
   provider: string;
   value: string;
 }
 
-interface ModelSelectProps extends SelectProps {
+interface ModelSelectProps extends Omit<LobeSelectProps, 'onChange' | 'value'> {
   onChange?: (props: WorkingModel) => void;
   showAbility?: boolean;
   value?: WorkingModel;
@@ -32,7 +32,7 @@ interface ModelSelectProps extends SelectProps {
 const ModelSelect = memo<ModelSelectProps>(({ value, onChange, ...rest }) => {
   const enabledList = useEnabledChatModels();
 
-  const options = useMemo<SelectProps['options']>(() => {
+  const options = useMemo<LobeSelectProps['options']>(() => {
     const getChatModels = (provider: EnabledProviderWithModels) =>
       provider.children
         .filter((model) => !!model.abilities.functionCall)
@@ -69,7 +69,7 @@ const ModelSelect = memo<ModelSelectProps>(({ value, onChange, ...rest }) => {
 
   return (
     <TooltipGroup>
-      <Select
+      <LobeSelect
         onChange={(value, option) => {
           const model = value.split('/').slice(1).join('/');
           onChange?.({ model, provider: (option as unknown as ModelOption).provider });
