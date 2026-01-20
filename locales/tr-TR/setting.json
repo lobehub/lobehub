@@ -665,8 +665,9 @@
   "tools.notInstalledWarning": "Bu yetenek şu anda yüklü değil, bu temsilcinin işlevselliğini etkileyebilir.",
   "tools.plugins.enabled": "Etkin: {{num}}",
   "tools.plugins.groupName": "Yetenekler",
+  "tools.plugins.management": "Yetenek Yönetimi",
   "tools.plugins.noEnabled": "Etkin yetenek yok",
-  "tools.plugins.store": "Yetenek Mağazası",
+  "tools.plugins.store": "Yetenek Ekle",
   "tools.tabs.all": "Tümü",
   "tools.tabs.installed": "Etkin",
   "tools.title": "Eklenti Araçları"

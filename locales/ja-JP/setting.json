@@ -665,8 +665,9 @@
   "tools.notInstalledWarning": "このスキルはまだインストールされておらず、アシスタントの使用に影響する可能性があります",
   "tools.plugins.enabled": "{{num}} が有効",
   "tools.plugins.groupName": "スキル",
+  "tools.plugins.management": "スキル管理",
   "tools.plugins.noEnabled": "有効なスキルはありません",
-  "tools.plugins.store": "スキルストア",
+  "tools.plugins.store": "スキルを追加",
   "tools.tabs.all": "すべて",
   "tools.tabs.installed": "有効化済み",
   "tools.title": "拡張ツール"

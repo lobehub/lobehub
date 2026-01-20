@@ -665,8 +665,9 @@
   "tools.notInstalledWarning": "Deze vaardigheid is momenteel niet geïnstalleerd, wat de functionaliteit van de agent kan beïnvloeden.",
   "tools.plugins.enabled": "Ingeschakeld: {{num}}",
   "tools.plugins.groupName": "Vaardigheden",
+  "tools.plugins.management": "Vaardighedenbeheer",
   "tools.plugins.noEnabled": "Geen vaardigheden ingeschakeld",
-  "tools.plugins.store": "Vaardighedenwinkel",
+  "tools.plugins.store": "Vaardigheid toevoegen",
   "tools.tabs.all": "Alles",
   "tools.tabs.installed": "Ingeschakeld",
   "tools.title": "Extensietools"

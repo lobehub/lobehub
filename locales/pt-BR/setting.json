@@ -665,8 +665,9 @@
   "tools.notInstalledWarning": "Esta habilidade não está instalada atualmente, o que pode afetar a funcionalidade do agente.",
   "tools.plugins.enabled": "Ativadas: {{num}}",
   "tools.plugins.groupName": "Habilidades",
+  "tools.plugins.management": "Gerenciamento de Habilidades",
   "tools.plugins.noEnabled": "Nenhuma habilidade ativada",
-  "tools.plugins.store": "Loja de Habilidades",
+  "tools.plugins.store": "Adicionar Habilidade",
   "tools.tabs.all": "Todas",
   "tools.tabs.installed": "Ativadas",
   "tools.title": "Ferramentas de Extensão"

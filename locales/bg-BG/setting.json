@@ -665,8 +665,9 @@
   "tools.notInstalledWarning": "Това умение не е инсталирано в момента, което може да повлияе на функционалността на агента.",
   "tools.plugins.enabled": "Активирани: {{num}}",
   "tools.plugins.groupName": "Умения",
+  "tools.plugins.management": "Управление на умения",
   "tools.plugins.noEnabled": "Няма активирани умения",
-  "tools.plugins.store": "Магазин за умения",
+  "tools.plugins.store": "Добавяне на умение",
   "tools.tabs.all": "Всички",
   "tools.tabs.installed": "Активирани",
   "tools.title": "Разширения и инструменти"

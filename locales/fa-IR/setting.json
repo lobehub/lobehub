@@ -665,8 +665,9 @@
   "tools.notInstalledWarning": "این مهارت در حال حاضر نصب نشده است و ممکن است عملکرد عامل را تحت تأثیر قرار دهد.",
   "tools.plugins.enabled": "فعال‌شده: {{num}}",
   "tools.plugins.groupName": "مهارت‌ها",
+  "tools.plugins.management": "مدیریت مهارت‌ها",
   "tools.plugins.noEnabled": "هیچ مهارتی فعال نیست",
-  "tools.plugins.store": "فروشگاه مهارت‌ها",
+  "tools.plugins.store": "افزودن مهارت",
   "tools.tabs.all": "همه",
   "tools.tabs.installed": "فعال‌شده",
   "tools.title": "ابزارهای افزونه"

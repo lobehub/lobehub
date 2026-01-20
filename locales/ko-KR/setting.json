@@ -665,8 +665,9 @@
   "tools.notInstalledWarning": "현재 기능이 설치되지 않아 도우미 사용에 영향을 줄 수 있습니다",
   "tools.plugins.enabled": "활성화됨 {{num}}",
   "tools.plugins.groupName": "기능",
+  "tools.plugins.management": "스킬 관리",
   "tools.plugins.noEnabled": "활성화된 기능이 없음",
-  "tools.plugins.store": "기능 스토어",
+  "tools.plugins.store": "스킬 추가",
   "tools.tabs.all": "전체",
   "tools.tabs.installed": "활성화됨",
   "tools.title": "확장 도구"

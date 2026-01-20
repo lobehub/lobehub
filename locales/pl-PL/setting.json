@@ -665,8 +665,9 @@
   "tools.notInstalledWarning": "Ta umiejętność nie jest obecnie zainstalowana, co może wpłynąć na funkcjonalność agenta.",
   "tools.plugins.enabled": "Włączone: {{num}}",
   "tools.plugins.groupName": "Umiejętności",
+  "tools.plugins.management": "Zarządzanie umiejętnościami",
   "tools.plugins.noEnabled": "Brak włączonych umiejętności",
-  "tools.plugins.store": "Sklep z umiejętnościami",
+  "tools.plugins.store": "Dodaj umiejętność",
   "tools.tabs.all": "Wszystkie",
   "tools.tabs.installed": "Włączone",
   "tools.title": "Narzędzia rozszerzeń"

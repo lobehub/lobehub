@@ -665,8 +665,9 @@
   "tools.notInstalledWarning": "Этот навык не установлен, что может повлиять на работу агента.",
   "tools.plugins.enabled": "Включено: {{num}}",
   "tools.plugins.groupName": "Навыки",
+  "tools.plugins.management": "Управление навыками",
   "tools.plugins.noEnabled": "Нет включённых навыков",
-  "tools.plugins.store": "Магазин навыков",
+  "tools.plugins.store": "Добавить навык",
   "tools.tabs.all": "Все",
   "tools.tabs.installed": "Включено",
   "tools.title": "Расширения"

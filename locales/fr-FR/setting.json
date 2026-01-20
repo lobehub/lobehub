@@ -665,8 +665,9 @@
   "tools.notInstalledWarning": "Cette compétence n’est pas installée actuellement, ce qui peut affecter le fonctionnement de l’agent.",
   "tools.plugins.enabled": "Activées : {{num}}",
   "tools.plugins.groupName": "Compétences",
+  "tools.plugins.management": "Gestion des compétences",
   "tools.plugins.noEnabled": "Aucune compétence activée",
-  "tools.plugins.store": "Boutique de compétences",
+  "tools.plugins.store": "Ajouter une compétence",
   "tools.tabs.all": "Toutes",
   "tools.tabs.installed": "Activées",
   "tools.title": "Outils d’extension"

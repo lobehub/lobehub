@@ -665,8 +665,9 @@
   "tools.notInstalledWarning": "Diese Fähigkeit ist derzeit nicht installiert, was die Funktionalität des Agenten beeinträchtigen kann.",
   "tools.plugins.enabled": "Aktiviert: {{num}}",
   "tools.plugins.groupName": "Fähigkeiten",
+  "tools.plugins.management": "Fähigkeitenverwaltung",
   "tools.plugins.noEnabled": "Keine Fähigkeiten aktiviert",
-  "tools.plugins.store": "Fähigkeiten-Store",
+  "tools.plugins.store": "Fähigkeit hinzufügen",
   "tools.tabs.all": "Alle",
   "tools.tabs.installed": "Aktiviert",
   "tools.title": "Erweiterungswerkzeuge"

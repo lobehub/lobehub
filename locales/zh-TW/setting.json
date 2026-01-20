@@ -665,8 +665,9 @@
   "tools.notInstalledWarning": "目前外掛尚未安裝，可能會影響助手使用",
   "tools.plugins.enabled": "已啟用 {{num}}",
   "tools.plugins.groupName": "插件",
+  "tools.plugins.management": "技能管理",
   "tools.plugins.noEnabled": "暫無啟用插件",
-  "tools.plugins.store": "插件商店",
+  "tools.plugins.store": "新增技能",
   "tools.tabs.all": "全部",
   "tools.tabs.installed": "已啟用",
   "tools.title": "擴展工具"
