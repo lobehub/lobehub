@@ -331,6 +331,7 @@
   "task.batchTasks": "{{count}} 个批量子任务",
   "task.instruction": "任务说明",
   "task.intermediateSteps": "{{count}} 个中间步骤",
+  "task.metrics.duration": "（用时 {{duration}}）",
   "task.metrics.stepsShort": "步",
   "task.metrics.toolCallsShort": "次技能调用",
   "task.status.cancelled": "任务已取消",

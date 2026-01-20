@@ -4,7 +4,9 @@ import {
   AgentRuntime,
   type AgentRuntimeContext,
   type AgentState,
+  type Cost,
   GeneralChatAgent,
+  type Usage,
   computeStepContext,
 } from '@lobechat/agent-runtime';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
@@ -130,7 +132,7 @@ export interface StreamingExecutorAction {
      */
     parentOperationId?: string;
     skipCreateFirstMessage?: boolean;
-  }) => Promise<void>;
+  }) => Promise<{ cost?: Cost; usage?: Usage } | void>;
 }
 
 export const streamingExecutor: StateCreator<
@@ -875,5 +877,8 @@ export const streamingExecutor: StateCreator<
         console.error('Desktop notification error:', error);
       }
     }
+
+    // Return usage and cost data for caller to use
+    return { cost: state.cost, usage: state.usage };
   },
 });

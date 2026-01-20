@@ -62,6 +62,10 @@ const ClientTaskDetail = memo<ClientTaskDetailProps>(({ taskDetail }) => {
   const instruction = threadMessages.find((item) => item.role === 'user')?.content;
   const childrenCount = assistantGroupMessage?.children?.length ?? 0;
 
+  // Get model/provider from assistantGroup message
+  const model = assistantGroupMessage?.model;
+  const provider = assistantGroupMessage?.provider;
+
   // Initializing state: no status yet (task just created, waiting for client execution)
   if (threadMessages.length === 0 || !assistantGroupMessage?.children || childrenCount === 0) {
     return <InitializingState />;
@@ -77,12 +81,20 @@ const ClientTaskDetail = memo<ClientTaskDetailProps>(({ taskDetail }) => {
         <ProcessingState
           assistantId={assistantGroupMessage.id}
           blocks={assistantGroupMessage.children}
+          model={model ?? undefined}
+          provider={provider ?? undefined}
           startTime={assistantGroupMessage.createdAt}
         />
       ) : (
         <CompletedState
           assistantId={assistantGroupMessage.id}
           blocks={assistantGroupMessage.children}
+          duration={taskDetail?.duration}
+          model={model ?? undefined}
+          provider={provider ?? undefined}
+          totalCost={taskDetail?.totalCost}
+          totalTokens={taskDetail?.totalTokens}
+          totalToolCalls={taskDetail?.totalToolCalls}
         />
       )}
     </Flexbox>

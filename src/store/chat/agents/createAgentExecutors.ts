@@ -24,6 +24,8 @@ import pMap from 'p-map';
 
 import { LOADING_FLAT } from '@/const/message';
 import { aiAgentService } from '@/services/aiAgent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
+import { getAgentStoreState } from '@/store/agent/store';
 import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { sleep } from '@/utils/sleep';
@@ -1637,14 +1639,21 @@ export const createAgentExecutors = (context: {
 
       const taskLogId = `${sessionLogId}:client-task`;
 
+      // Get agent's model and provider configuration
+      const agentState = getAgentStoreState();
+      const taskModel = agentByIdSelectors.getAgentModelById(agentId)(agentState);
+      const taskProvider = agentByIdSelectors.getAgentModelProviderById(agentId)(agentState);
+
       try {
-        // 1. Create task message as placeholder
+        // 1. Create task message as placeholder with model/provider
         const taskMessageResult = await context.get().optimisticCreateMessage(
           {
             agentId,
             content: '',
             metadata: { instruction: task.instruction, taskTitle: task.description },
+            model: taskModel,
             parentId: parentMessageId,
+            provider: taskProvider,
             role: 'task',
             topicId,
           },
@@ -1768,7 +1777,7 @@ export const createAgentExecutors = (context: {
         // 7. Execute using internal_execAgentRuntime (client-side with local tools access)
         log('[%s][exec_client_task] Starting client-side AgentRuntime execution', taskLogId);
 
-        await context.get().internal_execAgentRuntime({
+        const runtimeResult = await context.get().internal_execAgentRuntime({
           context: subContext,
           messages: subMessages,
           parentMessageId: userMessageId, // Use server-returned userMessageId
@@ -1779,7 +1788,7 @@ export const createAgentExecutors = (context: {
 
         log('[%s][exec_client_task] Client-side AgentRuntime execution completed', taskLogId);
 
-        // 7. Get execution result from sub-task messages
+        // 8. Get execution result from sub-task messages
         const subMessageKey = messageMapKey(subContext);
         const subTaskMessages = context.get().dbMessagesMap[subMessageKey] || [];
         const lastAssistant = subTaskMessages.findLast((m) => m.role === 'assistant');
@@ -1791,24 +1800,53 @@ export const createAgentExecutors = (context: {
           resultContent.length,
         );
 
-        // 8. Update task message with result
-        await context
-          .get()
-          .optimisticUpdateMessageContent(taskMessageId, resultContent, undefined, {
-            operationId: state.operationId,
-          });
+        // Count tool calls
+        const totalToolCalls = subTaskMessages.filter((m) => m.role === 'tool').length;
 
-        // 9. Update Thread status via API
+        // Get usage data from runtime result
+        const { usage, cost } = runtimeResult || {};
+
+        log(
+          '[%s][exec_client_task] Runtime usage: tokens=%d, cost=%s, model=%s',
+          taskLogId,
+          usage?.llm?.tokens?.total,
+          cost?.total,
+          taskModel,
+        );
+
+        // 9. Update task message with result and usage (model/provider already set at creation)
+        await context.get().optimisticUpdateMessageContent(
+          taskMessageId,
+          resultContent,
+          {
+            metadata: {
+              cost: cost?.total,
+              duration: usage?.llm?.processingTimeMs,
+              totalInputTokens: usage?.llm?.tokens?.input,
+              totalOutputTokens: usage?.llm?.tokens?.output,
+              totalTokens: usage?.llm?.tokens?.total,
+            },
+          },
+          { operationId: state.operationId },
+        );
+
+        // 10. Update Thread status via API with metadata
         await aiAgentService.updateClientTaskThreadStatus({
           threadId,
           completionReason: 'done',
           resultContent,
+          metadata: {
+            totalCost: cost?.total,
+            totalMessages: subTaskMessages.length,
+            totalTokens: usage?.llm?.tokens?.total,
+            totalToolCalls,
+          },
         });
 
-        // 10. Complete operation
+        // 11. Complete operation
         context.get().completeOperation(taskOperationId);
 
-        // 11. Return success result
+        // 12. Return success result
         const updatedMessages = context.get().dbMessagesMap[context.messageKey] || [];
         return {
           events,
