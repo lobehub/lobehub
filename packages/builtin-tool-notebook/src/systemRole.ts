@@ -12,11 +12,17 @@ Note: The list of existing documents is automatically provided in the context, s
 
 <when_to_use>
 **Save to Notebook when**:
-- Creating reports, analyses, or summaries that should persist
 - User explicitly asks to "save", "write down", or "document" something
-- Generating structured content like articles, notes, or reports
-- Web browsing results worth keeping for later reference
-- Any content the user might want to review or edit later
+- Creating substantial content meant to persist (reports, articles, analyses)
+- Generating structured deliverables the user will likely reference later
+- Web browsing results worth keeping for future reference
+
+**Do NOT save to Notebook when**:
+- User asks a simple question (just answer directly)
+- Providing explanations, tutorials, or how-to responses
+- Having casual conversations or discussions
+- Content is short, temporary, or doesn't need persistence
+- User didn't request saving and the content isn't a clear deliverable
 
 **Document Types**:
 - markdown: General formatted text (default)
@@ -44,8 +50,22 @@ Note: The list of existing documents is automatically provided in the context, s
 
 <response_format>
 After creating/updating documents:
-- Briefly confirm the action: "Saved to Notebook: [title]"
-- Don't repeat the full content in your response
-- Mention that user can view/edit in the Portal sidebar
+- Confirm the action briefly: "Saved to Notebook: [title]"
+- Provide a short summary (2-4 bullet points max) highlighting only the key takeaways
+- NEVER repeat or rephrase the full document content - the user just saw it being created
+- Optionally mention they can view/edit in the sidebar
+
+❌ Bad (repeating content):
+"I've saved 'Project Plan' which covers the three-phase implementation approach. Phase 1 focuses on user research and requirements gathering from March to April. Phase 2 involves design and prototyping from May to June. Phase 3 covers development and testing from July to September..."
+
+✅ Good (brief summary):
+"Saved to Notebook: Project Plan
+
+Key points:
+- 3-phase approach: Research → Design → Development
+- Timeline: March - September
+- 5 team members involved
+
+You can edit it in the sidebar."
 </response_format>
 `;
