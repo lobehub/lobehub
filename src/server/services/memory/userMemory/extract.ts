@@ -38,6 +38,7 @@ import {
 } from '@lobechat/observability-otel/modules/memory-user-memory';
 import { attributesCommon } from '@lobechat/observability-otel/node';
 import type {
+  AiProviderRuntimeState,
   IdentityMemoryDetail,
   MemoryExtractionAgentCallTrace,
   MemoryExtractionTraceError,
@@ -55,6 +56,7 @@ import type { ListUsersForMemoryExtractorCursor } from '@/database/models/user';
 import { UserModel } from '@/database/models/user';
 import { UserMemoryModel } from '@/database/models/userMemory';
 import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemory/sources/benchmarkLoCoMo';
+import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { getServerDB } from '@/database/server';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import {
@@ -64,7 +66,7 @@ import {
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { S3 } from '@/server/modules/S3';
 import type { GlobalMemoryLayer } from '@/types/serverConfig';
-import type { UserKeyVaults } from '@/types/user/settings';
+import type { ProviderConfig } from '@/types/user/settings';
 import {
   LayersEnum,
   MemorySourceType,
@@ -212,6 +214,11 @@ export interface TopicBatchWorkflowPayload extends MemoryExtractionPayloadInput 
   userId: string;
 }
 
+type ProviderKeyVaultMap = Record<
+  string,
+  AiProviderRuntimeState['runtimeConfig'][string]['keyVaults'] | undefined
+>;
+
 export const buildWorkflowPayloadInput = (
   payload: MemoryExtractionNormalizedPayload,
 ): MemoryExtractionPayloadInput => ({
@@ -232,11 +239,9 @@ export const buildWorkflowPayloadInput = (
   userIds: payload.userIds,
 });
 
-const normalizeProvider = (provider: string) => provider.toLowerCase() as keyof UserKeyVaults;
+const normalizeProvider = (provider: string) => provider.toLowerCase();
 
-const extractCredentialsFromVault = (provider: string, keyVaults?: UserKeyVaults) => {
-  const vault = keyVaults?.[normalizeProvider(provider)];
-
+const extractCredentialsFromVault = (vault?: Record<string, unknown>) => {
   if (!vault || typeof vault !== 'object') return {};
 
   const apiKey = 'apiKey' in vault && typeof vault.apiKey === 'string' ? vault.apiKey : undefined;
@@ -275,11 +280,10 @@ const maskSecret = (value?: string) => {
   return `${value.slice(0, 6)}***${value.slice(-4)}`;
 };
 
-const resolveRuntimeAgentConfig = (agent: MemoryAgentConfig, keyVaults?: UserKeyVaults) => {
+const resolveRuntimeAgentConfig = (agent: MemoryAgentConfig, keyVaults?: ProviderKeyVaultMap) => {
   const provider = agent.provider || 'openai';
   const { apiKey: userApiKey, baseURL: userBaseURL } = extractCredentialsFromVault(
-    provider,
-    keyVaults,
+    keyVaults?.[normalizeProvider(provider)],
   );
 
   // Only use the user baseURL if we are also using their API key; otherwise fall back entirely
@@ -309,7 +313,7 @@ const debugRuntimeInit = (
   });
 };
 
-const initRuntimeForAgent = async (agent: MemoryAgentConfig, keyVaults?: UserKeyVaults) => {
+const initRuntimeForAgent = async (agent: MemoryAgentConfig, keyVaults?: ProviderKeyVaultMap) => {
   const resolved = resolveRuntimeAgentConfig(agent, keyVaults);
   debugRuntimeInit(agent, resolved);
 
@@ -366,6 +370,13 @@ type MemoryExtractionConfig = ReturnType<typeof parseMemoryExtractionConfig>;
 type ServerConfig = Awaited<ReturnType<typeof getServerGlobalConfig>>;
 
 export class MemoryExtractionExecutor {
+  private readonly aiProviderConfig: Record<string, ProviderConfig>;
+  private readonly embeddingPreferredModels?: string[];
+  private readonly embeddingPreferredProviders?: string[];
+  private readonly gatekeeperPreferredModels?: string[];
+  private readonly gatekeeperPreferredProviders?: string[];
+  private readonly layerPreferredModels?: string[];
+  private readonly layerPreferredProviders?: string[];
   private readonly privateConfig: MemoryExtractionConfig;
   private readonly modelConfig: {
     embeddingsModel: string;
@@ -380,6 +391,13 @@ export class MemoryExtractionExecutor {
 
   private constructor(serverConfig: ServerConfig, privateConfig: MemoryExtractionConfig) {
     this.privateConfig = privateConfig;
+    this.aiProviderConfig = (serverConfig.aiProvider || {}) as Record<string, ProviderConfig>;
+    this.embeddingPreferredProviders = privateConfig.embeddingPreferredProviders;
+    this.embeddingPreferredModels = privateConfig.embeddingPreferredModels;
+    this.gatekeeperPreferredProviders = privateConfig.agentGateKeeperPreferredProviders;
+    this.gatekeeperPreferredModels = privateConfig.agentGateKeeperPreferredModels;
+    this.layerPreferredProviders = privateConfig.agentLayerExtractorPreferredProviders;
+    this.layerPreferredModels = privateConfig.agentLayerExtractorPreferredModels;
 
     const publicMemoryConfig = serverConfig.memory?.userMemory;
 
@@ -1014,8 +1032,11 @@ export class MemoryExtractionExecutor {
           };
 
           const userModel = new UserModel(db, job.userId);
-          const userState = await userModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults);
-          const keyVaults = userState.settings?.keyVaults as UserKeyVaults | undefined;
+          const [userState, aiProviderRuntimeState] = await Promise.all([
+            userModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults),
+            this.getAiProviderRuntimeState(job.userId),
+          ]);
+          const keyVaults = this.resolveRuntimeKeyVaults(aiProviderRuntimeState);
           const language = userState.settings?.general?.responseLanguage;
 
           const runtimes = await this.getRuntime(job.userId, keyVaults);
@@ -1625,7 +1646,112 @@ export class MemoryExtractionExecutor {
     };
   }
 
-  private async getRuntime(userId: string, keyVaults?: UserKeyVaults): Promise<RuntimeBundle> {
+  private async getAiProviderRuntimeState(userId: string): Promise<AiProviderRuntimeState> {
+    const db = await this.db;
+    const aiInfraRepos = new AiInfraRepos(db, userId, this.aiProviderConfig);
+
+    return aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults);
+  }
+
+  private resolveRuntimeKeyVaults(runtimeState: AiProviderRuntimeState): ProviderKeyVaultMap {
+    const normalizedRuntimeConfig = Object.fromEntries(
+      Object.entries(runtimeState.runtimeConfig || {}).map(([providerId, config]) => [
+        normalizeProvider(providerId),
+        config,
+      ]),
+    );
+    const providerModels = runtimeState.enabledAiModels.reduce<Record<string, Set<string>>>(
+      (acc, model) => {
+        const providerId = normalizeProvider(model.providerId);
+        acc[providerId] = acc[providerId] || new Set<string>();
+        acc[providerId].add(model.id);
+        return acc;
+      },
+      {},
+    );
+
+    const resolveProviderForModel = (
+      modelId: string,
+      fallbackProvider?: string,
+      preferredProviders?: string[],
+      preferredModels?: string[],
+      label?: string,
+    ) => {
+      const providerOrder = Array.from(
+        new Set(
+          [
+            ...(preferredProviders?.map(normalizeProvider) || []),
+            fallbackProvider ? normalizeProvider(fallbackProvider) : undefined,
+            ...Object.keys(providerModels),
+          ].filter(Boolean) as string[],
+        ),
+      );
+
+      const candidateModels = preferredModels && preferredModels.length > 0 ? preferredModels : [];
+
+      for (const providerId of providerOrder) {
+        const models = providerModels[providerId];
+        if (!models) continue;
+
+        if (models.has(modelId)) return providerId;
+
+        const preferredMatch = candidateModels.find((preferredModel) => models.has(preferredModel));
+        if (preferredMatch) return providerId;
+      }
+
+      throw new Error(
+        `Unable to resolve provider for ${label || 'model'} "${modelId}". Check preferred providers/models configuration.`,
+      );
+    };
+
+    const keyVaults: ProviderKeyVaultMap = {};
+
+    const gatekeeperProvider = resolveProviderForModel(
+      this.modelConfig.gateModel,
+      this.privateConfig.agentGateKeeper.provider,
+      this.gatekeeperPreferredProviders,
+      this.gatekeeperPreferredModels,
+      'gatekeeper',
+    );
+    const gatekeeperRuntime = normalizedRuntimeConfig[gatekeeperProvider];
+    if (gatekeeperRuntime?.keyVaults) {
+      keyVaults[gatekeeperProvider] = gatekeeperRuntime.keyVaults;
+    }
+
+    const embeddingProvider = resolveProviderForModel(
+      this.modelConfig.embeddingsModel,
+      this.privateConfig.embedding.provider,
+      this.embeddingPreferredProviders,
+      this.embeddingPreferredModels,
+      'embedding',
+    );
+    const embeddingRuntime = normalizedRuntimeConfig[embeddingProvider];
+    if (embeddingRuntime?.keyVaults) {
+      keyVaults[embeddingProvider] = embeddingRuntime.keyVaults;
+    }
+
+    Object.values(this.modelConfig.layerModels).forEach((model) => {
+      if (!model) return;
+      const providerId = resolveProviderForModel(
+        model,
+        this.privateConfig.agentLayerExtractor.provider,
+        this.layerPreferredProviders,
+        this.layerPreferredModels,
+        'layer extractor',
+      );
+      const runtime = normalizedRuntimeConfig[providerId];
+      if (runtime?.keyVaults) {
+        keyVaults[providerId] = runtime.keyVaults;
+      }
+    });
+
+    return keyVaults;
+  }
+
+  private async getRuntime(
+    userId: string,
+    keyVaults?: ProviderKeyVaultMap,
+  ): Promise<RuntimeBundle> {
     // TODO: implement a better cache eviction strategy
     // TODO: make cache size configurable
     if (this.runtimeCache.keys.length > 200) {
@@ -1673,8 +1799,11 @@ export class MemoryExtractionExecutor {
         try {
           const db = await this.db;
           const userModel = new UserModel(db, params.userId);
-          const userState = await userModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults);
-          const keyVaults = userState.settings?.keyVaults as UserKeyVaults | undefined;
+          const [userState, aiProviderRuntimeState] = await Promise.all([
+            userModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults),
+            this.getAiProviderRuntimeState(params.userId),
+          ]);
+          const keyVaults = this.resolveRuntimeKeyVaults(aiProviderRuntimeState);
           const language = params.language || userState.settings?.general?.responseLanguage;
 
           const runtimes = await this.getRuntime(params.userId, keyVaults);
@@ -1849,7 +1978,10 @@ export class MemoryExtractionWorkflowService {
     return this.client;
   }
 
-  static triggerProcessUsers(payload: MemoryExtractionPayloadInput, options?: { extraHeaders?: Record<string, string> }) {
+  static triggerProcessUsers(
+    payload: MemoryExtractionPayloadInput,
+    options?: { extraHeaders?: Record<string, string> },
+  ) {
     if (!payload.baseUrl) {
       throw new Error('Missing baseUrl for workflow trigger');
     }
@@ -1858,7 +1990,10 @@ export class MemoryExtractionWorkflowService {
     return this.getClient().trigger({ body: payload, headers: options?.extraHeaders, url });
   }
 
-  static triggerProcessUserTopics(payload: UserTopicWorkflowPayload, options?: { extraHeaders?: Record<string, string> }) {
+  static triggerProcessUserTopics(
+    payload: UserTopicWorkflowPayload,
+    options?: { extraHeaders?: Record<string, string> },
+  ) {
     if (!payload.baseUrl) {
       throw new Error('Missing baseUrl for workflow trigger');
     }
@@ -1867,7 +2002,10 @@ export class MemoryExtractionWorkflowService {
     return this.getClient().trigger({ body: payload, headers: options?.extraHeaders, url });
   }
 
-  static triggerProcessTopics(payload: MemoryExtractionPayloadInput, options?: { extraHeaders?: Record<string, string> }) {
+  static triggerProcessTopics(
+    payload: MemoryExtractionPayloadInput,
+    options?: { extraHeaders?: Record<string, string> },
+  ) {
     if (!payload.baseUrl) {
       throw new Error('Missing baseUrl for workflow trigger');
     }
