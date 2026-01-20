@@ -17,6 +17,7 @@ import {
   sql,
 } from 'drizzle-orm';
 
+import { VIRTUAL_ROOT_MESSAGE_CONTENT } from '../constants/message';
 import { TopicItem, agents, agentsToSessions, messages, topics } from '../schemas';
 import { LobeChatDatabase } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
@@ -428,12 +429,28 @@ export class TopicModel {
       // Insert new topic
       const [topic] = await tx.insert(topics).values(insertData).returning();
 
+      // Create virtual root message for the topic
+      await tx.insert(messages).values(this.buildVirtualRootMessage(topic));
+
       // Update associated messages' topicId
       if (messageIds && messageIds.length > 0) {
         await tx
           .update(messages)
           .set({ topicId: topic.id })
           .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIds)));
+
+        // Re-parent root messages to the virtual root
+        await tx
+          .update(messages)
+          .set({ parentId: topic.id })
+          .where(
+            and(
+              eq(messages.userId, this.userId),
+              inArray(messages.id, messageIds),
+              isNull(messages.parentId),
+              ne(messages.id, topic.id),
+            ),
+          );
       }
 
       return topic;
@@ -459,6 +476,13 @@ export class TopicModel {
         )
         .returning();
 
+      // Create virtual root messages for each topic
+      if (createdTopics.length > 0) {
+        await tx
+          .insert(messages)
+          .values(createdTopics.map((topic) => this.buildVirtualRootMessage(topic)));
+      }
+
       // For each newly created topic, update the topicId of associated messages
       await Promise.all(
         createdTopics.map(async (topic, index) => {
@@ -468,6 +492,18 @@ export class TopicModel {
               .update(messages)
               .set({ topicId: topic.id })
               .where(and(eq(messages.userId, this.userId), inArray(messages.id, messageIds)));
+
+            await tx
+              .update(messages)
+              .set({ parentId: topic.id })
+              .where(
+                and(
+                  eq(messages.userId, this.userId),
+                  inArray(messages.id, messageIds),
+                  isNull(messages.parentId),
+                  ne(messages.id, topic.id),
+                ),
+              );
           }
         }),
       );
@@ -504,15 +540,48 @@ export class TopicModel {
         .from(messages)
         .where(and(eq(messages.topicId, topicId), eq(messages.userId, this.userId)));
 
-      // copy messages
+      const originalVirtualRoot = originalMessages.find(
+        (message) => message.id === topicId || message.metadata?.isVirtualRoot,
+      );
+      const originalActiveBranchIndex =
+        typeof (originalVirtualRoot?.metadata as any)?.activeBranchIndex === 'number'
+          ? (originalVirtualRoot?.metadata as any).activeBranchIndex
+          : 0;
+
+      // Create virtual root message for duplicated topic
+      await tx
+        .insert(messages)
+        .values(this.buildVirtualRootMessage(duplicatedTopic, originalActiveBranchIndex));
+
+      const virtualRootIds = new Set(
+        originalMessages
+          .filter((message) => message.id === topicId || message.metadata?.isVirtualRoot)
+          .map((message) => message.id),
+      );
+
+      const messagesToCopy = originalMessages.filter((message) => !virtualRootIds.has(message.id));
+      const idMap = new Map<string, string>();
+
+      for (const message of messagesToCopy) {
+        idMap.set(message.id, idGenerator('messages'));
+      }
+
+      const resolveParentId = (parentId: string | null) => {
+        if (!parentId) return duplicatedTopic.id;
+        return idMap.get(parentId) ?? duplicatedTopic.id;
+      };
+
+      // copy messages (excluding virtual root)
       const duplicatedMessages = await Promise.all(
-        originalMessages.map(async (message) => {
+        messagesToCopy.map(async (message) => {
+          const newId = idMap.get(message.id)!;
           const result = (await tx
             .insert(messages)
             .values({
               ...message,
               clientId: null,
-              id: idGenerator('messages'),
+              id: newId,
+              parentId: resolveParentId(message.parentId),
               topicId: duplicatedTopic.id,
             })
             .returning()) as DBMessageItem[];
@@ -628,6 +697,19 @@ export class TopicModel {
   // **************** Helper *************** //
 
   private genId = () => idGenerator('topics');
+
+  private buildVirtualRootMessage = (topic: TopicItem, activeBranchIndex: number = 0) => ({
+    agentId: topic.agentId,
+    content: VIRTUAL_ROOT_MESSAGE_CONTENT,
+    groupId: topic.groupId,
+    id: topic.id,
+    metadata: { activeBranchIndex, isVirtualRoot: true },
+    parentId: null,
+    role: 'user',
+    sessionId: topic.sessionId,
+    topicId: topic.id,
+    userId: this.userId,
+  });
 
   private matchSession = (sessionId?: string | null) =>
     sessionId ? eq(topics.sessionId, sessionId) : isNull(topics.sessionId);

@@ -303,7 +303,9 @@ describe('Multi-Round Tool Execution', () => {
       .from(messages)
       .where(eq(messages.agentId, testAgentWithToolsId));
 
-    const toolMessages = allMessages.filter((m) => m.role === 'tool');
+    const nonRootMessages = allMessages.filter((message) => !message.metadata?.isVirtualRoot);
+
+    const toolMessages = nonRootMessages.filter((m) => m.role === 'tool');
     expect(toolMessages).toHaveLength(4);
 
     const toolCallIdsFromContent = toolMessages
@@ -327,9 +329,9 @@ describe('Multi-Round Tool Execution', () => {
       'call_search_round2',
     ]);
 
-    expect(allMessages).toHaveLength(8);
+    expect(nonRootMessages).toHaveLength(8);
 
-    const assistantMessages = allMessages.filter((m) => m.role === 'assistant');
+    const assistantMessages = nonRootMessages.filter((m) => m.role === 'assistant');
     expect(assistantMessages).toHaveLength(3);
 
     expect(mockResponsesCreate).toHaveBeenCalledTimes(3);

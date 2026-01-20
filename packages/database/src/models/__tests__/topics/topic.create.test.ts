@@ -74,12 +74,21 @@ describe('TopicModel - Create', () => {
         .where(inArray(messages.id, topicData.messages!));
       expect(associatedMessages).toHaveLength(2);
       expect(associatedMessages.every((msg) => msg.topicId === topicId)).toBe(true);
+      expect(associatedMessages.every((msg) => msg.parentId === topicId)).toBe(true);
 
       const unassociatedMessage = await serverDB
         .select()
         .from(messages)
         .where(eq(messages.id, 'message3'));
       expect(unassociatedMessage[0].topicId).toBeNull();
+
+      const virtualRoot = await serverDB.select().from(messages).where(eq(messages.id, topicId));
+      expect(virtualRoot).toHaveLength(1);
+      expect(virtualRoot[0].parentId).toBeNull();
+      expect(virtualRoot[0].metadata).toMatchObject({
+        activeBranchIndex: 0,
+        isVirtualRoot: true,
+      });
     });
 
     it('should create a new topic without associating messages', async () => {
@@ -116,6 +125,9 @@ describe('TopicModel - Create', () => {
       const dbTopic = await serverDB.select().from(topics).where(eq(topics.id, topicId));
       expect(dbTopic).toHaveLength(1);
       expect(dbTopic[0]).toEqual(createdTopic);
+
+      const virtualRoot = await serverDB.select().from(messages).where(eq(messages.id, topicId));
+      expect(virtualRoot).toHaveLength(1);
     });
 
     it('should create a new topic with agentId', async () => {
@@ -193,11 +205,21 @@ describe('TopicModel - Create', () => {
       expect(items[0]).toMatchObject({ title: 'Topic 1', favorite: true, sessionId, userId });
       expect(items[1]).toMatchObject({ title: 'Topic 2', favorite: false, sessionId, userId });
 
-      const updatedMessages = await serverDB.select().from(messages);
+      const updatedMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(inArray(messages.id, ['message1', 'message2', 'message3']));
       expect(updatedMessages).toHaveLength(3);
       expect(updatedMessages[0].topicId).toBe(createdTopics[0].id);
       expect(updatedMessages[1].topicId).toBe(createdTopics[0].id);
       expect(updatedMessages[2].topicId).toBe(createdTopics[1].id);
+      expect(updatedMessages.every((msg) => msg.parentId !== null)).toBe(true);
+
+      const virtualRoots = await serverDB
+        .select()
+        .from(messages)
+        .where(inArray(messages.id, createdTopics.map((topic) => topic.id)));
+      expect(virtualRoots).toHaveLength(2);
     });
 
     it('should generate topic IDs if not provided', async () => {

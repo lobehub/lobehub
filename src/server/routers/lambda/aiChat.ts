@@ -123,12 +123,16 @@ export const aiChatRouter = router({
 
       // create user message
       log('creating user message with content length: %d', input.newUserMessage.content.length);
+      // For new topics, or existing topics without explicit parentId, default to virtual root
+      const userMessageParentId = isCreateNewTopic
+        ? topicId
+        : (input.newUserMessage.parentId ?? topicId);
       const userMessageItem = await ctx.messageModel.create({
         agentId: input.agentId,
         content: input.newUserMessage.content,
         files: input.newUserMessage.files,
         groupId: input.groupId,
-        parentId: input.newUserMessage.parentId,
+        parentId: userMessageParentId,
         role: 'user',
         sessionId,
         threadId,

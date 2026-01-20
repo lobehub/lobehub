@@ -58,9 +58,9 @@ const MessageContent = memo<MessageContentProps>(
     className,
     variant,
   }) => {
-    const [toggleMessageEditing, updateMessageContent] = useConversationStore((s) => [
+    const [toggleMessageEditing, editMessageAndCreateBranch] = useConversationStore((s) => [
       s.toggleMessageEditing,
-      s.updateMessageContent,
+      s.editMessageAndCreateBranch,
     ]);
 
     const onEditingChange = useCallback(
@@ -89,8 +89,10 @@ const MessageContent = memo<MessageContentProps>(
             <EditorModal
               onCancel={() => onEditingChange(false)}
               onConfirm={async (value) => {
-                await updateMessageContent(id, value);
                 onEditingChange(false);
+                void editMessageAndCreateBranch(id, value).catch((error) => {
+                  console.error('Failed to edit message and create branch:', error);
+                });
               }}
               open={editing}
               value={message ? String(message) : ''}

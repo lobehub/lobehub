@@ -21,7 +21,7 @@ export const generateFullExport = ({
   withSystemRole,
 }: FullExportParams): ExportedTopic => {
   const exportedMessages: Record<string, any>[] = messages
-    .filter((m) => m.content !== LOADING_FLAT)
+    .filter((m) => m.content !== LOADING_FLAT && !m.metadata?.isVirtualRoot)
     .map((m) =>
       /* eslint-disable sort-keys-fix/sort-keys-fix */
       cleanObject({

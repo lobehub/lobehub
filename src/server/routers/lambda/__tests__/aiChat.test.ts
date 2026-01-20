@@ -111,7 +111,15 @@ describe('aiChatRouter', () => {
       topicId: 't-exist',
     } as any);
 
-    expect(mockCreateMessage).toHaveBeenCalled();
+    expect(mockCreateMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        parentId: 't-exist',
+        role: 'user',
+        sessionId: 's1',
+        topicId: 't-exist',
+      }),
+    );
     expect(mockGet).toHaveBeenCalledWith(
       expect.objectContaining({
         includeTopic: false,

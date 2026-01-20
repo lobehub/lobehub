@@ -15,7 +15,7 @@ export const generateMessages = ({
   systemRole,
 }: JSONParams) => {
   const defaultMessages = messages
-    .filter((m) => m.content !== LOADING_FLAT)
+    .filter((m) => m.content !== LOADING_FLAT && !m.metadata?.isVirtualRoot)
     .filter((m) => (!includeTool ? m.role !== 'tool' : true))
     .map((m) => ({
       content: m.content.trim(),

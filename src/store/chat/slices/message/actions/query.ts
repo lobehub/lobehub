@@ -99,13 +99,14 @@ export const messageQuery: StateCreator<
 
     // Parse messages using conversation-flow
     const { flatList } = parse(messages);
+    const filteredFlatList = flatList.filter((message) => !message.metadata?.isVirtualRoot);
 
     set(
       {
         // Store raw messages from backend
         dbMessagesMap: nextDbMap,
         // Store parsed messages for display
-        messagesMap: { ...get().messagesMap, [messagesKey]: flatList },
+        messagesMap: { ...get().messagesMap, [messagesKey]: filteredFlatList },
       },
       false,
       params?.action ?? 'replaceMessages',

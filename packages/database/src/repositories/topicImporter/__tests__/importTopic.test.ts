@@ -51,10 +51,17 @@ describe('TopicImporterRepo.importTopic', () => {
         .where(eq(messages.topicId, result.topicId))
         .orderBy(messages.createdAt);
 
-      expect(insertedMessages.length).toBe(3);
-      expect(insertedMessages[0].parentId).toBeNull();
-      expect(insertedMessages[1].parentId).toBe(insertedMessages[0].id);
-      expect(insertedMessages[2].parentId).toBe(insertedMessages[1].id);
+      expect(insertedMessages.length).toBe(4);
+
+      const virtualRoot = insertedMessages.find((m) => (m.metadata as any)?.isVirtualRoot);
+      expect(virtualRoot).toBeDefined();
+      expect(virtualRoot!.id).toBe(result.topicId);
+
+      const orderedMessages = insertedMessages.filter((m) => !(m.metadata as any)?.isVirtualRoot);
+      expect(orderedMessages.length).toBe(3);
+      expect(orderedMessages[0].parentId).toBe(virtualRoot!.id);
+      expect(orderedMessages[1].parentId).toBe(orderedMessages[0].id);
+      expect(orderedMessages[2].parentId).toBe(orderedMessages[1].id);
     });
   });
 
@@ -87,30 +94,33 @@ describe('TopicImporterRepo.importTopic', () => {
         .where(eq(messages.topicId, result.topicId))
         .orderBy(messages.createdAt);
 
-      expect(insertedMessages.length).toBe(11);
+      expect(insertedMessages.length).toBe(12);
 
-      // Build id -> message map for verification
-      const messageMap = new Map(insertedMessages.map((m) => [m.id, m]));
+      const virtualRoot = insertedMessages.find((m) => (m.metadata as any)?.isVirtualRoot);
+      expect(virtualRoot).toBeDefined();
+
+      const nonRootMessages = insertedMessages.filter((m) => !(m.metadata as any)?.isVirtualRoot);
+      expect(nonRootMessages.length).toBe(11);
 
       // Verify parentId relationships
-      // Message 0: root - no parent
-      expect(insertedMessages[0].parentId).toBeNull();
+      // Message 0: root - parent should be virtual root
+      expect(nonRootMessages[0].parentId).toBe(virtualRoot!.id);
 
       // Messages 1 and 2: both should have message 0 as parent (branching)
-      expect(insertedMessages[1].parentId).toBe(insertedMessages[0].id);
-      expect(insertedMessages[2].parentId).toBe(insertedMessages[0].id);
+      expect(nonRootMessages[1].parentId).toBe(nonRootMessages[0].id);
+      expect(nonRootMessages[2].parentId).toBe(nonRootMessages[0].id);
 
       // Message 3: should have message 2 as parent
-      expect(insertedMessages[3].parentId).toBe(insertedMessages[2].id);
+      expect(nonRootMessages[3].parentId).toBe(nonRootMessages[2].id);
 
       // Verify the rest of the chain
-      expect(insertedMessages[4].parentId).toBe(insertedMessages[3].id);
-      expect(insertedMessages[5].parentId).toBe(insertedMessages[4].id);
-      expect(insertedMessages[6].parentId).toBe(insertedMessages[5].id);
-      expect(insertedMessages[7].parentId).toBe(insertedMessages[6].id);
-      expect(insertedMessages[8].parentId).toBe(insertedMessages[7].id);
-      expect(insertedMessages[9].parentId).toBe(insertedMessages[8].id);
-      expect(insertedMessages[10].parentId).toBe(insertedMessages[9].id);
+      expect(nonRootMessages[4].parentId).toBe(nonRootMessages[3].id);
+      expect(nonRootMessages[5].parentId).toBe(nonRootMessages[4].id);
+      expect(nonRootMessages[6].parentId).toBe(nonRootMessages[5].id);
+      expect(nonRootMessages[7].parentId).toBe(nonRootMessages[6].id);
+      expect(nonRootMessages[8].parentId).toBe(nonRootMessages[7].id);
+      expect(nonRootMessages[9].parentId).toBe(nonRootMessages[8].id);
+      expect(nonRootMessages[10].parentId).toBe(nonRootMessages[9].id);
     });
 
     it('should preserve plugin and pluginState fields in message_plugins table', async () => {
@@ -244,8 +254,13 @@ describe('TopicImporterRepo.importTopic', () => {
         .where(eq(messages.topicId, result.topicId))
         .orderBy(messages.createdAt);
 
-      const rootId = insertedMessages[0].id;
-      const messagesWithRootAsParent = insertedMessages.filter((m) => m.parentId === rootId);
+      const virtualRoot = insertedMessages.find((m) => (m.metadata as any)?.isVirtualRoot);
+      expect(virtualRoot).toBeDefined();
+
+      const rootMessage = insertedMessages.find((m) => m.parentId === virtualRoot!.id);
+      expect(rootMessage).toBeDefined();
+
+      const messagesWithRootAsParent = insertedMessages.filter((m) => m.parentId === rootMessage!.id);
 
       // Should have 2 children (branching from root)
       expect(messagesWithRootAsParent.length).toBe(2);
