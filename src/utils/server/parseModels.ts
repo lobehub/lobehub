@@ -26,7 +26,6 @@ export const parseModelString = async (
 
     if (withDeploymentName) {
       [id, deploymentName] = id.split('->');
-      // if (!deploymentName) deploymentName = id;
     }
 
     if (disable) {

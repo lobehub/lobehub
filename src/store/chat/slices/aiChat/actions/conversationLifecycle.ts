@@ -399,9 +399,6 @@ export const conversationLifecycle: StateCreator<
         skipCreateFirstMessage: true,
       });
 
-      //
-      // // if there is relative files, then add files to agent
-      // // only available in server mode
       const userFiles = dbMessageSelectors
         .dbUserFiles(get())
         .map((f) => f?.id)
