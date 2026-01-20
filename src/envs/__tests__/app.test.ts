@@ -7,12 +7,6 @@ describe('getServerConfig', () => {
     vi.resetModules();
   });
 
-  // it('correctly handles values for OPENAI_FUNCTION_REGIONS', () => {
-  //   process.env.OPENAI_FUNCTION_REGIONS = 'iad1,sfo1';
-  //   const config = getAppConfig();
-  //   expect(config.OPENAI_FUNCTION_REGIONS).toStrictEqual(['iad1', 'sfo1']);
-  // });
-
   describe('index url', () => {
     it('should return default URLs when no environment variables are set', async () => {
       const { getAppConfig } = await import('../app');

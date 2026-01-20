@@ -235,35 +235,6 @@ describe('SessionModel', () => {
     });
   });
 
-  // describe('getAgentConfigById', () => {
-  //   it('should return agent config by id', async () => {
-  //     await serverDB.transaction(async (trx) => {
-  //       await trx.insert(agents).values([
-  //         { id: '1', userId, model: 'gpt-3.5-turbo' },
-  //         { id: '2', userId, model: 'gpt-3.5' },
-  //       ]);
-  //
-  //       // @ts-ignore
-  //       await trx.insert(plugins).values([
-  //         { id: 1, userId, identifier: 'abc', title: 'A1', locale: 'en-US', manifest: {} },
-  //         { id: 2, userId, identifier: 'b2', title: 'A2', locale: 'en-US', manifest: {} },
-  //       ]);
-  //
-  //       await trx.insert(agentsPlugins).values([
-  //         { agentId: '1', pluginId: 1 },
-  //         { agentId: '2', pluginId: 2 },
-  //         { agentId: '1', pluginId: 2 },
-  //       ]);
-  //     });
-  //
-  //     const result = await sessionModel.getAgentConfigById('1');
-  //
-  //     expect(result?.id).toBe('1');
-  //     expect(result?.plugins).toBe(['abc', 'b2']);
-  //     expect(result?.model).toEqual('gpt-3.5-turbo');
-  //     expect(result?.chatConfig).toBeDefined();
-  //   });
-  // });
   describe('count', () => {
     it('should return the count of sessions for the user', async () => {
       // 创建测试数据
