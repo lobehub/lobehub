@@ -80,10 +80,10 @@ export const CommunityList = memo(() => {
 
           const nextItem = allItems[index + 1];
           return (
-            <Flexbox gap={12} horizontal paddingBlock={6} paddingInline={16}>
-              <Item {...item} />
-              {nextItem && <Item {...nextItem} />}
-            </Flexbox>
+            <Flexbox gap={12} horizontal paddingInline={16} style={{ paddingBottom: 12 }}>
+                <Item {...item} />
+                {nextItem && <Item {...nextItem} />}
+              </Flexbox>
           );
         }}
         overscan={24}

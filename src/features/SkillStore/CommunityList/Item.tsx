@@ -1,8 +1,7 @@
 'use client';
 
-import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Modal, Text } from '@lobehub/ui';
+import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Modal } from '@lobehub/ui';
 import { App, Button } from 'antd';
-import { createStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
 import React, { memo, useState } from 'react';
@@ -18,34 +17,10 @@ import { useToolStore } from '@/store/tool';
 import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
 import { type DiscoverMcpItem } from '@/types/discover';
 
-const useStyles = createStyles(({ css, token }) => ({
-  container: css`
-    position: relative;
-    overflow: hidden;
-    flex: 1;
-    min-width: 0;
-  `,
-  description: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    color: ${token.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  title: css`
-    overflow: hidden;
-
-    font-size: 14px;
-    font-weight: 500;
-    color: ${token.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
+import { useItemStyles } from '../style';
 
 const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => {
-  const { styles } = useStyles();
+  const { styles } = useItemStyles();
   const { t } = useTranslation('plugin');
   const { modal } = App.useApp();
   const [detailOpen, setDetailOpen] = useState(false);
@@ -153,9 +128,7 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
           <PluginAvatar avatar={icon} size={40} />
           <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
             <span className={styles.title}>{name}</span>
-            <Text className={styles.description} type={'secondary'}>
-              {description}
-            </Text>
+            {description && <span className={styles.description}>{description}</span>}
           </Flexbox>
           <div onClick={(e) => e.stopPropagation()}>{renderAction()}</div>
         </Block>

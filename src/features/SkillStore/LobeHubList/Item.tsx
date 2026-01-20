@@ -2,51 +2,14 @@
 
 import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Image } from '@lobehub/ui';
 import { App } from 'antd';
-import { createStyles, cssVar } from 'antd-style';
+import { cssVar } from 'antd-style';
 import type { Klavis } from 'klavis';
 import { Loader2, MoreVerticalIcon, Plus, Unplug } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useItemStyles } from '../style';
 import { useSkillConnect } from './useSkillConnect';
-
-const useStyles = createStyles(({ css, token }) => ({
-  container: css`
-    position: relative;
-    overflow: hidden;
-    flex: 1;
-    min-width: 0;
-  `,
-  description: css`
-    overflow: hidden;
-
-    font-size: 12px;
-    color: ${token.colorTextSecondary};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-  icon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
-
-    background: ${token.colorFillTertiary};
-  `,
-  title: css`
-    overflow: hidden;
-
-    font-size: 14px;
-    font-weight: 500;
-    color: ${token.colorText};
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  `,
-}));
 
 interface ItemProps {
   description?: string;
@@ -62,7 +25,7 @@ interface ItemProps {
 const Item = memo<ItemProps>(
   ({ description, icon, identifier, label, onOpenDetail, serverName, type }) => {
     const { t } = useTranslation('setting');
-    const { styles } = useStyles();
+    const { styles } = useItemStyles();
     const { modal } = App.useApp();
 
     const { handleConnect, handleDisconnect, isConnected, isConnecting } = useSkillConnect({
@@ -92,9 +55,9 @@ const Item = memo<ItemProps>(
 
     const renderIcon = () => {
       if (typeof icon === 'string') {
-        return <Image alt={label} height={20} src={icon} width={20} />;
+        return <Image alt={label} height={40} src={icon} width={40} />;
       }
-      return <Icon fill={cssVar.colorText} icon={icon as any} size={20} />;
+      return <Icon fill={cssVar.colorText} icon={icon as any} size={40} />;
     };
 
     const renderAction = () => {
@@ -137,8 +100,8 @@ const Item = memo<ItemProps>(
         style={{ cursor: 'pointer' }}
         variant={'filled'}
       >
-        <div className={styles.icon}>{renderIcon()}</div>
-        <Flexbox flex={1} gap={2} style={{ minWidth: 0, overflow: 'hidden' }}>
+        {renderIcon()}
+        <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
           <span className={styles.title}>{label}</span>
           {localizedDescription && (
             <span className={styles.description}>{localizedDescription}</span>
