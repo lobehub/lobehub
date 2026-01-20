@@ -1,7 +1,8 @@
 import { Flexbox } from '@lobehub/ui';
 import { useResponsive } from 'antd-style';
-import { useQueryState } from 'nuqs';
 import { memo } from 'react';
+
+import { useQueryState } from '@/hooks/useQueryParam';
 
 import Sidebar from '../Sidebar';
 import Nav, { GroupAgentNavKey } from './Nav';
@@ -11,37 +12,33 @@ import Versions from './Versions';
 
 const Details = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { mobile = isMobile } = useResponsive();
-  const [activeTabParam, setActiveTab] = useQueryState('activeTab');
-  const activeTab = activeTabParam || GroupAgentNavKey.Overview;
+  const [activeTab, setActiveTab] = useQueryState('activeTab', {
+    clearOnDefault: true,
+    defaultValue: GroupAgentNavKey.Overview,
+  });
 
   return (
     <Flexbox gap={24}>
-      {/* Navigation */}
       <Nav
         activeTab={activeTab as GroupAgentNavKey}
         mobile={mobile}
-        setActiveTab={(tab) => setActiveTab(tab)}
+        setActiveTab={setActiveTab}
       />
-
       <Flexbox
         gap={48}
         horizontal={!mobile}
         style={mobile ? { flexDirection: 'column-reverse' } : undefined}
       >
-        {/* Main Content */}
         <Flexbox
           style={{
             overflow: 'hidden',
           }}
           width={'100%'}
         >
-          {/* Tab Content */}
           {activeTab === GroupAgentNavKey.Overview && <Overview />}
           {activeTab === GroupAgentNavKey.SystemRole && <SystemRole />}
           {activeTab === GroupAgentNavKey.Versions && <Versions />}
         </Flexbox>
-
-        {/* Sidebar */}
         <Sidebar mobile={mobile} />
       </Flexbox>
     </Flexbox>
