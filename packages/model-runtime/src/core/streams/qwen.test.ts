@@ -871,28 +871,73 @@ describe('parallel tool calls streaming bug', () => {
       outputChunks.push(decoder.decode(chunk, { stream: true }));
     }
 
-    // Verify that we get 3 separate tool calls
-    expect(aggregatedToolCalls).toHaveLength(3);
+    // Verify streaming chunks output format (SSE protocol)
+    // Each tool call chunk should have correct id based on its index
+    expect(outputChunks).toEqual([
+      // Chunk 0: First tool call starts (index=0)
+      `id: ${streamId}\n`,
+      'event: tool_calls\n',
+      'data: [{"function":{"arguments":"","name":"time____get_time____mcp"},"id":"call_c7d8b4984a4d4f54a4956bca","index":0,"type":"function"}]\n\n',
+      // Chunk 1: First tool call continues
+      `id: ${streamId}\n`,
+      'event: tool_calls\n',
+      'data: [{"function":{"arguments":"","name":null},"id":"call_c7d8b4984a4d4f54a4956bca","index":0,"type":"function"}]\n\n',
+      // Chunk 2: First tool call arguments part 1
+      `id: ${streamId}\n`,
+      'event: tool_calls\n',
+      'data: [{"function":{"arguments":"{\\"location\\": \\"北京","name":null},"id":"call_c7d8b4984a4d4f54a4956bca","index":0,"type":"function"}]\n\n',
+      // Chunk 3: First tool call arguments part 2
+      `id: ${streamId}\n`,
+      'event: tool_calls\n',
+      'data: [{"function":{"arguments":"\\"}","name":null},"id":"call_c7d8b4984a4d4f54a4956bca","index":0,"type":"function"}]\n\n',
+      // Chunk 4: Empty arguments
+      `id: ${streamId}\n`,
+      'event: tool_calls\n',
+      'data: [{"function":{"arguments":"","name":null},"id":"call_c7d8b4984a4d4f54a4956bca","index":0,"type":"function"}]\n\n',
+      // Chunk 5: Second tool call starts (index=1) - should have its own id
+      `id: ${streamId}\n`,
+      'event: tool_calls\n',
+      'data: [{"function":{"arguments":"","name":"time____get_time____mcp"},"id":"call_f564785a14534d9a8c5ee641","index":1,"type":"function"}]\n\n',
+      // Chunk 6: Second tool call arguments - should use index=1's stored id
+      `id: ${streamId}\n`,
+      'event: tool_calls\n',
+      'data: [{"function":{"arguments":"{\\"location\\": \\"上海","name":null},"id":"call_f564785a14534d9a8c5ee641","index":1,"type":"function"}]\n\n',
+      // Chunk 7: Second tool call arguments part 2
+      `id: ${streamId}\n`,
+      'event: tool_calls\n',
+      'data: [{"function":{"arguments":"\\"}","name":null},"id":"call_f564785a14534d9a8c5ee641","index":1,"type":"function"}]\n\n',
+      // Chunk 8: Third tool call starts (index=2)
+      `id: ${streamId}\n`,
+      'event: tool_calls\n',
+      'data: [{"function":{"arguments":"{\\"location\\": \\"","name":"time____get_time____mcp"},"id":"call_19693813aebd434aab821f06","index":2,"type":"function"}]\n\n',
+      // Chunk 9: Third tool call arguments - should use index=2's stored id
+      `id: ${streamId}\n`,
+      'event: tool_calls\n',
+      'data: [{"function":{"arguments":"南京\\"","name":null},"id":"call_19693813aebd434aab821f06","index":2,"type":"function"}]\n\n',
+      // Chunk 10: Third tool call arguments final
+      `id: ${streamId}\n`,
+      'event: tool_calls\n',
+      'data: [{"function":{"arguments":"}","name":null},"id":"call_19693813aebd434aab821f06","index":2,"type":"function"}]\n\n',
+      // Chunk 11: Finish
+      `id: ${streamId}\n`,
+      'event: stop\n',
+      'data: "tool_calls"\n\n',
+    ]);
 
-    // Verify each tool call has the correct arguments
+    // Verify aggregated tool calls have correct arguments (not merged incorrectly)
+    expect(aggregatedToolCalls).toHaveLength(3);
     expect(aggregatedToolCalls[0]).toMatchObject({
       id: 'call_c7d8b4984a4d4f54a4956bca',
       function: { name: 'time____get_time____mcp', arguments: '{"location": "北京"}' },
     });
-
     expect(aggregatedToolCalls[1]).toMatchObject({
       id: 'call_f564785a14534d9a8c5ee641',
       function: { name: 'time____get_time____mcp', arguments: '{"location": "上海"}' },
     });
-
     expect(aggregatedToolCalls[2]).toMatchObject({
       id: 'call_19693813aebd434aab821f06',
       function: { name: 'time____get_time____mcp', arguments: '{"location": "南京"}' },
     });
-
-    // Verify arguments are NOT incorrectly concatenated (the bug we fixed)
-    expect(aggregatedToolCalls[0].function.arguments).not.toContain('上海');
-    expect(aggregatedToolCalls[0].function.arguments).not.toContain('南京');
   });
 });
 
