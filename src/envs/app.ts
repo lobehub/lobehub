@@ -12,12 +12,24 @@ declare global {
 }
 const isInVercel = process.env.VERCEL === '1';
 
-const vercelUrl = `https://${process.env.VERCEL_URL}`;
+// Vercel URL fallback order (by stability):
+// 1. VERCEL_PROJECT_PRODUCTION_URL - project level, most stable
+// 2. VERCEL_BRANCH_URL - branch level, stable across deployments on same branch
+// 3. VERCEL_URL - deployment level, changes every deployment
+const getVercelUrl = () => {
+  if (process.env.VERCEL_ENV === 'production' && process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+  if (process.env.VERCEL_BRANCH_URL) {
+    return `https://${process.env.VERCEL_BRANCH_URL}`;
+  }
+  return `https://${process.env.VERCEL_URL}`;
+};
 
 const APP_URL = process.env.APP_URL
   ? process.env.APP_URL
   : isInVercel
-    ? vercelUrl
+    ? getVercelUrl()
     : process.env.NODE_ENV === 'development'
       ? 'http://localhost:3010'
       : 'http://localhost:3210';
