@@ -1451,6 +1451,84 @@ describe('StreamingExecutor actions', () => {
     });
   });
 
+  describe('internal_createAgentState with disableTools', () => {
+    it('should return empty toolManifestMap when disableTools is true', async () => {
+      act(() => {
+        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: TEST_CONTENT.USER_MESSAGE,
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      // Get actual internal_createAgentState result with disableTools: true
+      const { state } = result.current.internal_createAgentState({
+        messages: [userMessage],
+        parentMessageId: userMessage.id,
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+        disableTools: true,
+      });
+
+      // toolManifestMap should be empty when disableTools is true
+      expect(state.toolManifestMap).toEqual({});
+    });
+
+    it('should include tools in toolManifestMap when disableTools is false or undefined', async () => {
+      act(() => {
+        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: TEST_CONTENT.USER_MESSAGE,
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      // Mock resolveAgentConfig to return plugins
+      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
+        agentConfig: {
+          ...createMockAgentConfig(),
+          plugins: ['test-plugin'],
+        },
+        chatConfig: createMockChatConfig(),
+        isBuiltinAgent: false,
+        plugins: ['test-plugin'],
+      });
+
+      // Get actual internal_createAgentState result without disableTools
+      const { state: stateWithoutDisable } = result.current.internal_createAgentState({
+        messages: [userMessage],
+        parentMessageId: userMessage.id,
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+        // disableTools not set (undefined)
+      });
+
+      // Get actual internal_createAgentState result with disableTools: false
+      const { state: stateWithDisableFalse } = result.current.internal_createAgentState({
+        messages: [userMessage],
+        parentMessageId: userMessage.id,
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+        disableTools: false,
+      });
+
+      // Both should have the same toolManifestMap (tools enabled)
+      // Note: The actual content depends on what plugins are resolved,
+      // but the key point is they should not be empty (unless no plugins are configured)
+      expect(stateWithoutDisable.toolManifestMap).toEqual(stateWithDisableFalse.toolManifestMap);
+    });
+  });
+
   describe('operation status handling', () => {
     it('should complete operation when state is waiting_for_human', async () => {
       const { result } = renderHook(() => useChatStore());

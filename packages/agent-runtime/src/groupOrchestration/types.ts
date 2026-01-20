@@ -32,6 +32,11 @@ export interface SupervisorInstructionCallAgent {
 export interface SupervisorInstructionParallelCallAgents {
   payload: {
     agentIds: string[];
+    /**
+     * Whether to disable tools for broadcast agents
+     * When true, agents will respond without calling any tools
+     */
+    disableTools?: boolean;
     instruction?: string;
     /**
      * The tool message ID that triggered the broadcast

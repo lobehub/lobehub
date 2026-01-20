@@ -60,6 +60,11 @@ export interface StreamingExecutorAction {
      */
     agentId?: string;
     /**
+     * Whether to disable tools for this agent execution
+     * When true, agent will respond without calling any tools
+     */
+    disableTools?: boolean;
+    /**
      * Explicit topicId for this execution (avoids using global activeTopicId)
      */
     topicId?: string | null;
@@ -118,6 +123,11 @@ export interface StreamingExecutorAction {
      */
     context: ConversationContext;
     /**
+     * Whether to disable tools for this agent execution
+     * When true, agent will respond without calling any tools
+     */
+    disableTools?: boolean;
+    /**
      * Initial agent runtime context (for resuming execution from a specific phase)
      */
     initialContext?: AgentRuntimeContext;
@@ -156,6 +166,7 @@ export const streamingExecutor: StateCreator<
     messages,
     parentMessageId,
     agentId: paramAgentId,
+    disableTools,
     topicId: paramTopicId,
     threadId,
     initialState,
@@ -192,19 +203,25 @@ export const streamingExecutor: StateCreator<
 
     log('[internal_createAgentState] resolved plugins=%o, isSubTask=%s', pluginIds, isSubTask);
 
-    // Get tools manifest map
-    const toolsEngine = createAgentToolsEngine({
-      model: agentConfigData.model,
-      provider: agentConfigData.provider!,
-    });
-    const { enabledToolIds } = toolsEngine.generateToolsDetailed({
-      model: agentConfigData.model,
-      provider: agentConfigData.provider!,
-      toolIds: pluginIds,
-    });
-    const toolManifestMap = Object.fromEntries(
-      toolsEngine.getEnabledPluginManifests(enabledToolIds).entries(),
-    );
+    // Get tools manifest map (skip if disableTools is true)
+    let toolManifestMap: Record<string, unknown> = {};
+    let enabledToolIds: string[] = [];
+
+    if (!disableTools) {
+      const toolsEngine = createAgentToolsEngine({
+        model: agentConfigData.model,
+        provider: agentConfigData.provider!,
+      });
+      const toolsDetailed = toolsEngine.generateToolsDetailed({
+        model: agentConfigData.model,
+        provider: agentConfigData.provider!,
+        toolIds: pluginIds,
+      });
+      enabledToolIds = toolsDetailed.enabledToolIds;
+      toolManifestMap = Object.fromEntries(
+        toolsEngine.getEnabledPluginManifests(enabledToolIds).entries(),
+      );
+    }
 
     // Get user intervention config
     const userStore = getUserStoreState();
@@ -549,6 +566,7 @@ export const streamingExecutor: StateCreator<
 
   internal_execAgentRuntime: async (params) => {
     const {
+      disableTools,
       messages: originalMessages,
       parentMessageId,
       parentMessageType,

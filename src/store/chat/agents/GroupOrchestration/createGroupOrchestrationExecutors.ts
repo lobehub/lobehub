@@ -235,13 +235,14 @@ export const createGroupOrchestrationExecutors = (
     parallel_call_agents: async (instruction, state): Promise<GroupOrchestrationExecutorOutput> => {
       const {
         agentIds,
+        disableTools,
         instruction: agentInstruction,
         toolMessageId,
       } = (instruction as SupervisorInstructionParallelCallAgents).payload;
 
       const sessionLogId = `${state.operationId}:parallel_call_agents`;
       log(
-        `[${sessionLogId}] Broadcasting to agents: ${agentIds.join(', ')}, instruction: ${agentInstruction}, toolMessageId: ${toolMessageId}`,
+        `[${sessionLogId}] Broadcasting to agents: ${agentIds.join(', ')}, instruction: ${agentInstruction}, toolMessageId: ${toolMessageId}, disableTools: ${disableTools}`,
       );
 
       const messages = getMessages();
@@ -279,10 +280,12 @@ export const createGroupOrchestrationExecutors = (
       // - messageContext keeps the group's main conversation context (for message storage)
       // - subAgentId specifies which agent's config to use for each agent
       // - toolMessageId is used as parentMessageId so agent responses are children of the tool message
+      // - disableTools prevents broadcast agents from calling tools (expected behavior for broadcast)
       await Promise.all(
         agentIds.map(async (agentId) => {
           await get().internal_execAgentRuntime({
             context: { ...messageContext, subAgentId: agentId },
+            disableTools,
             messages: messagesWithInstruction,
             parentMessageId: toolMessageId,
             parentMessageType: 'tool',
@@ -776,48 +779,48 @@ export const createGroupOrchestrationExecutors = (
               }
 
               switch (status.status) {
-              case 'completed': {
-                tracker.status = 'completed';
-                tracker.result = status.result;
-                log(`[${taskLogId}] Task completed successfully`);
-                if (status.result) {
+                case 'completed': {
+                  tracker.status = 'completed';
+                  tracker.result = status.result;
+                  log(`[${taskLogId}] Task completed successfully`);
+                  if (status.result) {
+                    await get().optimisticUpdateMessageContent(
+                      tracker.taskMessageId,
+                      status.result,
+                      undefined,
+                      { operationId: state.operationId },
+                    );
+                  }
+
+                  break;
+                }
+                case 'failed': {
+                  tracker.status = 'failed';
+                  tracker.error = status.error;
+                  console.error(`[${taskLogId}] Task failed: ${status.error}`);
                   await get().optimisticUpdateMessageContent(
                     tracker.taskMessageId,
-                    status.result,
+                    `Task failed: ${status.error}`,
                     undefined,
                     { operationId: state.operationId },
                   );
+
+                  break;
                 }
-              
-              break;
-              }
-              case 'failed': {
-                tracker.status = 'failed';
-                tracker.error = status.error;
-                console.error(`[${taskLogId}] Task failed: ${status.error}`);
-                await get().optimisticUpdateMessageContent(
-                  tracker.taskMessageId,
-                  `Task failed: ${status.error}`,
-                  undefined,
-                  { operationId: state.operationId },
-                );
-              
-              break;
-              }
-              case 'cancel': {
-                tracker.status = 'failed';
-                tracker.error = 'Task was cancelled';
-                log(`[${taskLogId}] Task was cancelled`);
-                await get().optimisticUpdateMessageContent(
-                  tracker.taskMessageId,
-                  'Task was cancelled',
-                  undefined,
-                  { operationId: state.operationId },
-                );
-              
-              break;
-              }
-              // No default
+                case 'cancel': {
+                  tracker.status = 'failed';
+                  tracker.error = 'Task was cancelled';
+                  log(`[${taskLogId}] Task was cancelled`);
+                  await get().optimisticUpdateMessageContent(
+                    tracker.taskMessageId,
+                    'Task was cancelled',
+                    undefined,
+                    { operationId: state.operationId },
+                  );
+
+                  break;
+                }
+                // No default
               }
 
               // Check individual task timeout

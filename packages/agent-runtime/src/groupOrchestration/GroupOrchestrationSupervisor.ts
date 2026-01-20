@@ -76,6 +76,8 @@ export class GroupOrchestrationSupervisor implements IGroupOrchestrationSupervis
             return {
               payload: {
                 agentIds: params.agentIds as string[],
+                // Broadcast agents should not call tools by default
+                disableTools: true,
                 instruction: params.instruction as string | undefined,
                 toolMessageId: params.toolMessageId as string,
               },
