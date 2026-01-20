@@ -62,7 +62,7 @@ export const CommandMenuProvider = ({ children, pathname }: CommandMenuProviderP
     (value: SelectedAgent | undefined) => setSelectedAgentState(value),
     [],
   );
-  const setViewMode = useCallback((_value: MenuViewMode) => {
+  const setViewMode = useCallback(() => {
     // viewMode is now derived from search, this is a no-op for backwards compatibility
   }, []);
 
@@ -100,9 +100,7 @@ export const CommandMenuProvider = ({ children, pathname }: CommandMenuProviderP
     ],
   );
 
-  return (
-    <CommandMenuContext.Provider value={contextValue}>{children}</CommandMenuContext.Provider>
-  );
+  return <CommandMenuContext.Provider value={contextValue}>{children}</CommandMenuContext.Provider>;
 };
 
 export const useCommandMenuContext = () => {
