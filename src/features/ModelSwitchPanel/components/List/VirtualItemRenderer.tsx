@@ -106,6 +106,7 @@ export const VirtualItemRenderer = memo<VirtualItemRendererProps>(
           <Block
             className={styles.menuItem}
             clickable
+            data-model-key={key}
             key={key}
             onClick={async () => {
               onModelChange(item.model.id, item.provider.id);
@@ -132,6 +133,7 @@ export const VirtualItemRenderer = memo<VirtualItemRendererProps>(
           <Block
             className={styles.menuItem}
             clickable
+            data-model-key={key}
             key={key}
             onClick={async () => {
               onModelChange(item.data.model.id, singleProvider.id);
@@ -150,11 +152,15 @@ export const VirtualItemRenderer = memo<VirtualItemRendererProps>(
           (p) => menuKey(p.id, item.data.model.id) === activeKey,
         );
         const isActive = !!activeProvider;
+        const activeModelKey = activeProvider
+          ? menuKey(activeProvider.id, item.data.model.id)
+          : undefined;
 
         return (
           <Block
             className={styles.menuItem}
             clickable
+            data-model-key={activeModelKey}
             key={item.data.displayName}
             variant={isActive ? 'filled' : 'borderless'}
           >
