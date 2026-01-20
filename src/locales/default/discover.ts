@@ -170,6 +170,8 @@ export default {
 
   'fork.viewAllForks': 'View all forks',
 
+  'groupAgents.tag': 'Group',
+
   'home.communityAgents': 'Community Agents',
 
   'home.featuredAssistants': 'Featured Agents',

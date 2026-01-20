@@ -139,6 +139,7 @@ const AssistantItem = memo<DiscoverAssistantItem>(
           horizontal
           justify={'space-between'}
           padding={16}
+          style={{ paddingRight: isGroupAgent ? 80 : 16 }}
           width={'100%'}
         >
           <Flexbox
