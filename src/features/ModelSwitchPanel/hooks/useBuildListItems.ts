@@ -2,16 +2,16 @@ import { useMemo } from 'react';
 
 import type { EnabledProviderWithModels } from '@/types/aiProvider';
 
-import type { GroupMode, ModelWithProviders, VirtualItem } from '../types';
+import type { GroupMode, ListItem, ModelWithProviders } from '../types';
 
-export const useBuildVirtualItems = (
+export const useBuildListItems = (
   enabledList: EnabledProviderWithModels[],
   groupMode: GroupMode,
   searchKeyword: string = '',
-): VirtualItem[] => {
+): ListItem[] => {
   return useMemo(() => {
     if (enabledList.length === 0) {
-      return [{ type: 'no-provider' }] as VirtualItem[];
+      return [{ type: 'no-provider' }] as ListItem[];
     }
 
     // Filter function for search
@@ -85,7 +85,7 @@ export const useBuildVirtualItems = (
         }));
     } else {
       // Group by provider (original structure)
-      const items: VirtualItem[] = [];
+      const items: ListItem[] = [];
 
       for (const providerItem of sortedProviders) {
         // Filter models by search keyword

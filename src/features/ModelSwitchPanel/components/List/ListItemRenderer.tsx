@@ -9,21 +9,22 @@ import urlJoin from 'url-join';
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 
 import { styles } from '../../styles';
-import type { VirtualItem } from '../../types';
+import type { ListItem } from '../../types';
 import { menuKey } from '../../utils';
 import { MultipleProvidersModelItem } from './MultipleProvidersModelItem';
 import { SingleProviderModelItem } from './SingleProviderModelItem';
 
-interface VirtualItemRendererProps {
+interface ListItemRendererProps {
   activeKey: string;
-  item: VirtualItem;
+  isScrolling: boolean;
+  item: ListItem;
   newLabel: string;
   onClose: () => void;
   onModelChange: (modelId: string, providerId: string) => Promise<void>;
 }
 
-export const VirtualItemRenderer = memo<VirtualItemRendererProps>(
-  ({ activeKey, item, newLabel, onModelChange, onClose }) => {
+export const ListItemRenderer = memo<ListItemRendererProps>(
+  ({ activeKey, isScrolling, item, newLabel, onModelChange, onClose }) => {
     const { t } = useTranslation('components');
     const navigate = useNavigate();
 
@@ -145,27 +146,16 @@ export const VirtualItemRenderer = memo<VirtualItemRendererProps>(
       }
 
       case 'model-item-multiple': {
-        // Check if any provider of this model is active
-        const activeProvider = item.data.providers.find(
-          (p) => menuKey(p.id, item.data.model.id) === activeKey,
-        );
-        const isActive = !!activeProvider;
-
         return (
-          <Block
-            className={styles.menuItem}
-            clickable
+          <MultipleProvidersModelItem
+            activeKey={activeKey}
+            data={item.data}
+            isScrolling={isScrolling}
             key={item.data.displayName}
-            variant={isActive ? 'filled' : 'borderless'}
-          >
-            <MultipleProvidersModelItem
-              activeKey={activeKey}
-              data={item.data}
-              newLabel={newLabel}
-              onClose={onClose}
-              onModelChange={onModelChange}
-            />
-          </Block>
+            newLabel={newLabel}
+            onClose={onClose}
+            onModelChange={onModelChange}
+          />
         );
       }
 
@@ -176,4 +166,4 @@ export const VirtualItemRenderer = memo<VirtualItemRendererProps>(
   },
 );
 
-VirtualItemRenderer.displayName = 'VirtualItemRenderer';
+ListItemRenderer.displayName = 'ListItemRenderer';

@@ -13,7 +13,6 @@ import { List } from './List';
 import { Toolbar } from './Toolbar';
 
 interface PanelContentProps {
-  isOpen: boolean;
   model?: string;
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
   onOpenChange?: (open: boolean) => void;
@@ -21,7 +20,6 @@ interface PanelContentProps {
 }
 
 export const PanelContent: FC<PanelContentProps> = ({
-  isOpen,
   model: modelProp,
   onModelChange: onModelChangeProp,
   onOpenChange,
@@ -62,7 +60,6 @@ export const PanelContent: FC<PanelContentProps> = ({
       />
       <List
         groupMode={groupMode}
-        isOpen={isOpen}
         model={modelProp}
         onModelChange={onModelChangeProp}
         onOpenChange={onOpenChange}
