@@ -1,3 +1,4 @@
+import type { DropdownMenuPlacement } from '@lobehub/ui';
 import type { AiModelForSelect } from 'model-bank';
 import type { ReactNode } from 'react';
 
@@ -16,7 +17,7 @@ export interface ModelWithProviders {
   }>;
 }
 
-export type VirtualItem =
+export type ListItem =
   | {
       data: ModelWithProviders;
       type: 'model-item-single';
@@ -42,13 +43,7 @@ export type VirtualItem =
       type: 'no-provider';
     };
 
-export type DropdownPlacement =
-  | 'bottom'
-  | 'bottomLeft'
-  | 'bottomRight'
-  | 'top'
-  | 'topLeft'
-  | 'topRight';
+export type DropdownPlacement = DropdownMenuPlacement;
 
 export interface ModelSwitchPanelProps {
   children?: ReactNode;

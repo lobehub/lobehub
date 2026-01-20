@@ -3,7 +3,7 @@
 import { CheckCircleFilled } from '@ant-design/icons';
 import { type ChatMessageError, TraceNameMap } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
-import { Alert, Button, Flexbox, Highlighter, Icon, Select } from '@lobehub/ui';
+import { Alert, Button, Flexbox, Highlighter, Icon, LobeSelect as Select } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
 import { type ReactNode, memo, useEffect, useState } from 'react';

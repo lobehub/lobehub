@@ -3,6 +3,7 @@ import { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-c
 import {
   BrowserWindow,
   BrowserWindowConstructorOptions,
+  Menu,
   session as electronSession,
   ipcMain,
   screen,
@@ -11,7 +12,7 @@ import console from 'node:console';
 import { join } from 'node:path';
 
 import { preloadDir, resourcesDir } from '@/const/dir';
-import { isMac } from '@/const/env';
+import { isDev, isMac } from '@/const/env';
 import { ELECTRON_BE_PROTOCOL_SCHEME } from '@/const/protocol';
 import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import { backendProxyProtocolManager } from '@/core/infrastructure/BackendProxyProtocolManager';
@@ -191,6 +192,7 @@ export default class Browser {
     this.setupCloseListener(browserWindow);
     this.setupFocusListener(browserWindow);
     this.setupWillPreventUnloadListener(browserWindow);
+    this.setupDevContextMenu(browserWindow);
   }
 
   private setupWillPreventUnloadListener(browserWindow: BrowserWindow): void {
@@ -233,6 +235,43 @@ export default class Browser {
     browserWindow.on('focus', () => {
       logger.debug(`[${this.identifier}] Window 'focus' event fired.`);
       this.broadcast('windowFocused');
+    });
+  }
+
+  /**
+   * Setup context menu with "Inspect Element" option in development mode
+   */
+  private setupDevContextMenu(browserWindow: BrowserWindow): void {
+    if (!isDev) return;
+
+    logger.debug(`[${this.identifier}] Setting up dev context menu.`);
+
+    browserWindow.webContents.on('context-menu', (_event, params) => {
+      const { x, y } = params;
+
+      const menu = Menu.buildFromTemplate([
+        {
+          click: () => {
+            browserWindow.webContents.inspectElement(x, y);
+          },
+          label: 'Inspect Element',
+        },
+        { type: 'separator' },
+        {
+          click: () => {
+            browserWindow.webContents.openDevTools();
+          },
+          label: 'Open DevTools',
+        },
+        {
+          click: () => {
+            browserWindow.webContents.reload();
+          },
+          label: 'Reload',
+        },
+      ]);
+
+      menu.popup({ window: browserWindow });
     });
   }
 

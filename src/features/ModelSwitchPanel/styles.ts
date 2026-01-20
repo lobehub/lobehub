@@ -69,6 +69,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       }
     }
   `,
+  menuItemActive: css`
+    background: ${cssVar.colorFillTertiary};
+  `,
   toolbar: css`
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,

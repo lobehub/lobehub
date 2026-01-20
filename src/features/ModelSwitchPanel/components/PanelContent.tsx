@@ -13,7 +13,6 @@ import { List } from './List';
 import { Toolbar } from './Toolbar';
 
 interface PanelContentProps {
-  isOpen: boolean;
   model?: string;
   onModelChange?: (params: { model: string; provider: string }) => Promise<void>;
   onOpenChange?: (open: boolean) => void;
@@ -21,19 +20,13 @@ interface PanelContentProps {
 }
 
 export const PanelContent: FC<PanelContentProps> = ({
-  isOpen,
   model: modelProp,
   onModelChange: onModelChangeProp,
   onOpenChange,
   provider: providerProp,
 }) => {
-  // Get enabled models list
   const enabledList = useEnabledChatModels();
-
-  // Search keyword state
   const [searchKeyword, setSearchKeyword] = useState('');
-
-  // Hooks for state management
   const { groupMode, handleGroupModeChange } = usePanelState();
   const { panelHeight, panelWidth, handlePanelWidthChange } = usePanelSize(enabledList.length);
   const { handleClose } = usePanelHandlers({
@@ -62,7 +55,6 @@ export const PanelContent: FC<PanelContentProps> = ({
       />
       <List
         groupMode={groupMode}
-        isOpen={isOpen}
         model={modelProp}
         onModelChange={onModelChangeProp}
         onOpenChange={onOpenChange}

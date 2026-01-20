@@ -1,4 +1,10 @@
-import { Popover } from '@lobehub/ui';
+import {
+  DropdownMenuPopup,
+  DropdownMenuPortal,
+  DropdownMenuPositioner,
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
+} from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 
 import { PanelContent } from './components/PanelContent';
@@ -16,8 +22,6 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
     provider: providerProp,
   }) => {
     const [internalOpen, setInternalOpen] = useState(false);
-
-    // Use controlled open if provided, otherwise use internal state
     const isOpen = open ?? internalOpen;
 
     const handleOpenChange = useCallback(
@@ -29,26 +33,23 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
     );
 
     return (
-      <Popover
-        classNames={{
-          content: styles.container,
-        }}
-        content={
-          <PanelContent
-            isOpen={isOpen}
-            model={modelProp}
-            onModelChange={onModelChange}
-            onOpenChange={handleOpenChange}
-            provider={providerProp}
-          />
-        }
-        nativeButton={false}
-        onOpenChange={handleOpenChange}
-        open={isOpen}
-        placement={placement}
-      >
-        {children}
-      </Popover>
+      <DropdownMenuRoot onOpenChange={handleOpenChange} open={isOpen}>
+        <DropdownMenuTrigger nativeButton={false} openOnHover>
+          {children}
+        </DropdownMenuTrigger>
+        <DropdownMenuPortal>
+          <DropdownMenuPositioner hoverTrigger placement={placement}>
+            <DropdownMenuPopup className={styles.container}>
+              <PanelContent
+                model={modelProp}
+                onModelChange={onModelChange}
+                onOpenChange={handleOpenChange}
+                provider={providerProp}
+              />
+            </DropdownMenuPopup>
+          </DropdownMenuPositioner>
+        </DropdownMenuPortal>
+      </DropdownMenuRoot>
     );
   },
 );

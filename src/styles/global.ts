@@ -59,4 +59,10 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
   .${CLASSNAMES.DropdownMenuTrigger}[data-popup-open]:not([data-no-highlight]) {
     background: ${token.colorFillTertiary};
   }
+
+  .ant-form-item-control:has([role='combobox'][aria-controls^='base-ui-']),
+  .ant-form-item-control:has([role='combobox'][aria-haspopup='listbox']) {
+    width: min(70%, 800px);
+    min-width: min(70%, 800px) !important;
+  }
 `;

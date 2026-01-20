@@ -145,7 +145,7 @@ export interface RouteConfig {
  */
 export function renderRoutes(routes: RouteConfig[]): ReactElement[] {
   return routes.map((route, index) => {
-    const { path, element, children, index: isIndex, loader } = route;
+    const { path, element, children, index: isIndex } = route;
 
     const childRoutes = children ? renderRoutes(children) : undefined;
 
