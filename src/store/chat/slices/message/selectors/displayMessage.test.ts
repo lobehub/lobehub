@@ -347,6 +347,16 @@ describe('displayMessageSelectors', () => {
         messageMapKey({ agentId: 'testId', groupId: 'groupId', topicId: 'topicId' }),
       );
     });
+
+    it('should generate correct key with activeThreadId for thread conversations', () => {
+      const state: Partial<ChatStore> = {
+        activeAgentId: 'testId',
+        activeThreadId: 'threadId',
+        activeTopicId: 'topicId',
+      };
+      const result = displayMessageSelectors.currentDisplayChatKey(state as ChatStore);
+      expect(result).toBe('thread_testId_topicId_threadId');
+    });
   });
 
   describe('activeDisplayMessages with group chat messages', () => {

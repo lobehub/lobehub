@@ -106,12 +106,11 @@ export const dataSlice: StateCreator<
     // Also skip fetch when topicId is null (new conversation state) - there's no server data,
     // only local optimistic updates. Fetching would return empty array and overwrite local data.
     const shouldFetch = !skipFetch && !!context.agentId && !!context.topicId;
+
     return useClientDataSWRWithSync<UIChatMessage[]>(
       shouldFetch ? ['CONVERSATION_FETCH_MESSAGES', context] : null,
 
-      async () => {
-        return messageService.getMessages(context);
-      },
+      () => messageService.getMessages(context),
       {
         onData: (data) => {
           if (!data) return;

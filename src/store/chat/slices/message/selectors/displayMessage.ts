@@ -30,6 +30,7 @@ export const currentDisplayChatKey = (s: ChatStoreState) =>
   messageMapKey({
     agentId: s.activeAgentId,
     groupId: s.activeGroupId,
+    threadId: s.activeThreadId,
     topicId: s.activeTopicId,
   });
 
