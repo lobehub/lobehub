@@ -95,6 +95,11 @@ export const userRouter = router({
           meta: input.meta ?? {},
         };
 
+        // Remove avatarUrl if it's a relative path (not a full URL)
+        if (normalizedPayload.avatarUrl && !normalizedPayload.avatarUrl.startsWith('http')) {
+          delete normalizedPayload.avatarUrl;
+        }
+
         const response = await ctx.marketSDK.user.updateUserInfo(normalizedPayload);
         return response;
       } catch (error) {
