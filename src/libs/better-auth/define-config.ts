@@ -14,6 +14,7 @@ import { admin, emailOTP, genericOAuth, magicLink } from 'better-auth/plugins';
 import { type BetterAuthPlugin } from 'better-auth/types';
 
 import { businessEmailValidator } from '@/business/server/better-auth';
+import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import {
   getMagicLinkEmailTemplate,
@@ -36,9 +37,9 @@ const VERIFICATION_LINK_EXPIRES_IN = 3600;
  * Returns undefined if APP_URL is not set (e.g., in e2e tests).
  */
 const getPasskeyRpID = (): string | undefined => {
-  if (!process.env.APP_URL) return undefined;
+  if (!appEnv.APP_URL) return undefined;
   try {
-    return new URL(process.env.APP_URL).hostname;
+    return new URL(appEnv.APP_URL).hostname;
   } catch {
     return undefined;
   }
@@ -49,9 +50,9 @@ const getPasskeyRpID = (): string | undefined => {
  * Returns undefined if APP_URL is not set (e.g., in e2e tests).
  */
 const getPasskeyOrigins = (): string[] | undefined => {
-  if (!process.env.APP_URL) return undefined;
+  if (!appEnv.APP_URL) return undefined;
   try {
-    return [new URL(process.env.APP_URL).origin];
+    return [new URL(appEnv.APP_URL).origin];
   } catch {
     return undefined;
   }
@@ -82,7 +83,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
       },
     },
 
-    baseURL: process.env.APP_URL,
+    baseURL: appEnv.APP_URL,
     secret: authEnv.AUTH_SECRET,
     trustedOrigins: getTrustedOrigins(enabledSSOProviders),
 

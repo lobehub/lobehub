@@ -10,6 +10,7 @@ import urlJoin from 'url-join';
 
 import { MessageModel } from '@/database/models/message';
 import { type LobeChatDatabase } from '@/database/type';
+import { appEnv } from '@/envs/app';
 import {
   AgentRuntimeCoordinator,
   type AgentRuntimeCoordinatorOptions,
@@ -126,7 +127,7 @@ export class AgentRuntimeService {
   private stepCallbacks: Map<string, StepLifecycleCallbacks> = new Map();
   private get baseURL() {
     const baseUrl =
-      process.env.AGENT_RUNTIME_BASE_URL || process.env.APP_URL || 'http://localhost:3010';
+      process.env.AGENT_RUNTIME_BASE_URL || appEnv.APP_URL || 'http://localhost:3010';
 
     return urlJoin(baseUrl, '/api/agent');
   }
