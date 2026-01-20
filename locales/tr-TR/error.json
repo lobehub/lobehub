@@ -12,6 +12,11 @@
   "import.importConfigFile.title": "İçe Aktarma Başarısız",
   "import.incompatible.description": "Bu dosya daha yüksek bir sürümden dışa aktarılmış. Lütfen en son sürüme yükseltip tekrar içe aktarın.",
   "import.incompatible.title": "Mevcut uygulama bu dosyanın içe aktarımını desteklemiyor",
+  "inviteCode.currentEmail": "Mevcut hesap: {{email}}",
+  "inviteCode.desc": "LobeHub'a erişim için bir davet kodu gereklidir. Lütfen devam etmek için geçerli bir davet kodu girin.",
+  "inviteCode.friends": "Arkadaşlar",
+  "inviteCode.getCodeHint": "Davet kodunu şuradan edinin:",
+  "inviteCode.title": "Davet Kodu Gerekli",
   "loginRequired.desc": "Kısa süre içinde giriş sayfasına yönlendirileceksiniz",
   "loginRequired.title": "Bu özelliği kullanmak için lütfen giriş yapın",
   "notFound.backHome": "Ana Sayfaya Dön",
@@ -144,5 +149,9 @@
   "upload.networkError": "Lütfen ağ bağlantınızı ve dosya depolama hizmetinin çapraz kaynak yapılandırmasının doğru olduğundan emin olun.",
   "upload.title": "Dosya yükleme başarısız oldu. Lütfen ağ bağlantınızı kontrol edin veya daha sonra tekrar deneyin",
   "upload.unknownError": "Hata nedeni: {{reason}}",
-  "upload.uploadFailed": "Dosya yükleme başarısız oldu."
+  "upload.uploadFailed": "Dosya yükleme başarısız oldu.",
+  "waitlist.currentEmail": "Mevcut hesap: {{email}}",
+  "waitlist.desc": "Hesabınız beyaz listede değil. Lütfen erişim talebi için yöneticiyle iletişime geçin.",
+  "waitlist.switchAccount": "Hesabı Değiştir",
+  "waitlist.title": "Erişim Kısıtlandı"
 }

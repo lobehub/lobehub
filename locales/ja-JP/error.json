@@ -12,6 +12,11 @@
   "import.importConfigFile.title": "インポート中に問題が発生しました",
   "import.incompatible.description": "このファイルはより高いバージョンからエクスポートされました。最新版にアップグレードしてから再度インポートしてください",
   "import.incompatible.title": "バージョン非互換",
+  "inviteCode.currentEmail": "現在のアカウント：{{email}}",
+  "inviteCode.desc": "LobeHub にアクセスするには招待コードが必要です。有効な招待コードを入力してください。",
+  "inviteCode.friends": "友達",
+  "inviteCode.getCodeHint": "招待コードの取得先：",
+  "inviteCode.title": "招待コードが必要です",
   "loginRequired.desc": "ログインページへリダイレクトします。ログイン後に続けてください",
   "loginRequired.title": "ログインが必要です",
   "notFound.backHome": "ホームに戻る",
@@ -144,5 +149,9 @@
   "upload.networkError": "ネットワーク異常または CORS 設定が正しくありません。ファイルストレージサービスの CORS 設定を確認してから再試行してください",
   "upload.title": "アップロードが完了できませんでした",
   "upload.unknownError": "原因：{{reason}}",
-  "upload.uploadFailed": "アップロードが完了できませんでした"
+  "upload.uploadFailed": "アップロードが完了できませんでした",
+  "waitlist.currentEmail": "現在のアカウント：{{email}}",
+  "waitlist.desc": "お使いのアカウントはホワイトリストに登録されていません。アクセスを希望する場合は管理者にご連絡ください。",
+  "waitlist.switchAccount": "アカウントを切り替える",
+  "waitlist.title": "アクセス制限中"
 }

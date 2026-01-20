@@ -12,6 +12,11 @@
   "import.importConfigFile.title": "Import nieudany",
   "import.incompatible.description": "Ten plik został wyeksportowany z nowszej wersji. Zaktualizuj aplikację do najnowszej wersji i spróbuj ponownie zaimportować.",
   "import.incompatible.title": "Aktualna wersja aplikacji nie obsługuje importu tego pliku",
+  "inviteCode.currentEmail": "Bieżące konto: {{email}}",
+  "inviteCode.desc": "Aby uzyskać dostęp do LobeHub, wymagany jest kod zaproszenia. Wprowadź ważny kod, aby kontynuować.",
+  "inviteCode.friends": "Znajomi",
+  "inviteCode.getCodeHint": "Uzyskaj kod zaproszenia od:",
+  "inviteCode.title": "Wymagany kod zaproszenia",
   "loginRequired.desc": "Zaraz nastąpi przekierowanie do strony logowania",
   "loginRequired.title": "Zaloguj się, aby skorzystać z tej funkcji",
   "notFound.backHome": "Powrót do strony głównej",
@@ -144,5 +149,9 @@
   "upload.networkError": "Sprawdź połączenie sieciowe i konfigurację CORS usługi przechowywania plików.",
   "upload.title": "Przesyłanie pliku nie powiodło się. Sprawdź połączenie sieciowe lub spróbuj ponownie później.",
   "upload.unknownError": "Powód błędu: {{reason}}",
-  "upload.uploadFailed": "Przesyłanie pliku nie powiodło się."
+  "upload.uploadFailed": "Przesyłanie pliku nie powiodło się.",
+  "waitlist.currentEmail": "Bieżące konto: {{email}}",
+  "waitlist.desc": "Twoje konto nie znajduje się na liście uprawnionych. Skontaktuj się z administratorem, aby uzyskać dostęp.",
+  "waitlist.switchAccount": "Zmień konto",
+  "waitlist.title": "Dostęp ograniczony"
 }

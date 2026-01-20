@@ -12,6 +12,11 @@
   "import.importConfigFile.title": "匯入失敗",
   "import.incompatible.description": "該檔案由更高版本匯出，請嘗試升級到最新版本後再重新匯入",
   "import.incompatible.title": "當前應用不支援匯入該檔案",
+  "inviteCode.currentEmail": "當前帳號：{{email}}",
+  "inviteCode.desc": "需要邀請碼才能存取 LobeHub。請輸入有效的邀請碼以繼續。",
+  "inviteCode.friends": "朋友",
+  "inviteCode.getCodeHint": "請向以下來源取得邀請碼：",
+  "inviteCode.title": "需要邀請碼",
   "loginRequired.desc": "即將自動跳轉到登入頁面",
   "loginRequired.title": "請登入後使用該功能",
   "notFound.backHome": "返回首頁",
@@ -144,5 +149,9 @@
   "upload.networkError": "請確認你的網路是否正常，並檢查檔案儲存服務的跨域配置是否正確",
   "upload.title": "檔案上傳失敗，請檢查網路連線或稍後再試",
   "upload.unknownError": "錯誤原因: {{reason}}",
-  "upload.uploadFailed": "檔案上傳失敗"
+  "upload.uploadFailed": "檔案上傳失敗",
+  "waitlist.currentEmail": "當前帳號：{{email}}",
+  "waitlist.desc": "您的帳號尚未列入白名單。請聯絡管理員以申請存取權限。",
+  "waitlist.switchAccount": "切換帳號",
+  "waitlist.title": "存取受限"
 }

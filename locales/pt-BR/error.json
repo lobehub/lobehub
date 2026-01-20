@@ -12,6 +12,11 @@
   "import.importConfigFile.title": "Falha na Importação",
   "import.incompatible.description": "Este arquivo foi exportado de uma versão mais recente. Tente atualizar para a versão mais recente e importar novamente.",
   "import.incompatible.title": "O aplicativo atual não suporta a importação deste arquivo",
+  "inviteCode.currentEmail": "Conta atual: {{email}}",
+  "inviteCode.desc": "É necessário um código de convite para acessar o LobeHub. Por favor, insira um código válido para continuar.",
+  "inviteCode.friends": "Amigos",
+  "inviteCode.getCodeHint": "Obtenha um código de convite em:",
+  "inviteCode.title": "Código de Convite Necessário",
   "loginRequired.desc": "Você será redirecionado para a página de login em instantes",
   "loginRequired.title": "Faça login para usar este recurso",
   "notFound.backHome": "Voltar para a Página Inicial",
@@ -144,5 +149,9 @@
   "upload.networkError": "Verifique sua conexão de rede e a configuração de CORS do serviço de armazenamento de arquivos.",
   "upload.title": "Falha no upload do arquivo. Verifique sua conexão ou tente novamente mais tarde.",
   "upload.unknownError": "Motivo do erro: {{reason}}",
-  "upload.uploadFailed": "Falha no upload do arquivo."
+  "upload.uploadFailed": "Falha no upload do arquivo.",
+  "waitlist.currentEmail": "Conta atual: {{email}}",
+  "waitlist.desc": "Sua conta não está na lista de permissões. Entre em contato com o administrador para solicitar acesso.",
+  "waitlist.switchAccount": "Trocar de Conta",
+  "waitlist.title": "Acesso Restrito"
 }

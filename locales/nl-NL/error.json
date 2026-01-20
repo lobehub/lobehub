@@ -12,6 +12,11 @@
   "import.importConfigFile.title": "Importeren mislukt",
   "import.incompatible.description": "Dit bestand is geëxporteerd vanuit een nieuwere versie. Probeer te upgraden naar de nieuwste versie en importeer opnieuw.",
   "import.incompatible.title": "Huidige applicatie ondersteunt het importeren van dit bestand niet",
+  "inviteCode.currentEmail": "Huidige account: {{email}}",
+  "inviteCode.desc": "Een uitnodigingscode is vereist om toegang te krijgen tot LobeHub. Voer een geldige uitnodigingscode in om door te gaan.",
+  "inviteCode.friends": "Vrienden",
+  "inviteCode.getCodeHint": "Ontvang een uitnodigingscode van:",
+  "inviteCode.title": "Uitnodigingscode Vereist",
   "loginRequired.desc": "Je wordt zo meteen doorgestuurd naar de inlogpagina",
   "loginRequired.title": "Log in om deze functie te gebruiken",
   "notFound.backHome": "Terug naar home",
@@ -144,5 +149,9 @@
   "upload.networkError": "Controleer je netwerkverbinding en zorg dat de cross-origin-instellingen van de opslagservice correct zijn.",
   "upload.title": "Uploaden van bestand mislukt. Controleer je netwerkverbinding of probeer later opnieuw.",
   "upload.unknownError": "Foutreden: {{reason}}",
-  "upload.uploadFailed": "Uploaden van bestand mislukt."
+  "upload.uploadFailed": "Uploaden van bestand mislukt.",
+  "waitlist.currentEmail": "Huidige account: {{email}}",
+  "waitlist.desc": "Je account staat niet op de whitelist. Neem contact op met de beheerder om toegang aan te vragen.",
+  "waitlist.switchAccount": "Wissel van account",
+  "waitlist.title": "Toegang Beperkt"
 }

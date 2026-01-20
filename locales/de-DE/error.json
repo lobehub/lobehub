@@ -12,6 +12,11 @@
   "import.importConfigFile.title": "Import fehlgeschlagen",
   "import.incompatible.description": "Diese Datei wurde aus einer neueren Version exportiert. Bitte aktualisieren Sie auf die neueste Version und versuchen Sie den Import erneut.",
   "import.incompatible.title": "Aktuelle Anwendung unterstützt den Import dieser Datei nicht",
+  "inviteCode.currentEmail": "Aktuelles Konto: {{email}}",
+  "inviteCode.desc": "Ein Einladungscode ist erforderlich, um auf LobeHub zuzugreifen. Bitte gib einen gültigen Einladungscode ein, um fortzufahren.",
+  "inviteCode.friends": "Freunde",
+  "inviteCode.getCodeHint": "Einen Einladungscode erhalten von:",
+  "inviteCode.title": "Einladungscode erforderlich",
   "loginRequired.desc": "Sie werden in Kürze zur Anmeldeseite weitergeleitet",
   "loginRequired.title": "Bitte melden Sie sich an, um diese Funktion zu nutzen",
   "notFound.backHome": "Zurück zur Startseite",
@@ -144,5 +149,9 @@
   "upload.networkError": "Bitte überprüfen Sie Ihre Netzwerkverbindung und die CORS-Konfiguration des Speicherdienstes.",
   "upload.title": "Datei-Upload fehlgeschlagen. Bitte Netzwerk prüfen oder später erneut versuchen.",
   "upload.unknownError": "Fehlerursache: {{reason}}",
-  "upload.uploadFailed": "Datei-Upload fehlgeschlagen."
+  "upload.uploadFailed": "Datei-Upload fehlgeschlagen.",
+  "waitlist.currentEmail": "Aktuelles Konto: {{email}}",
+  "waitlist.desc": "Dein Konto befindet sich nicht auf der Whitelist. Bitte kontaktiere den Administrator, um Zugriff zu beantragen.",
+  "waitlist.switchAccount": "Konto wechseln",
+  "waitlist.title": "Zugriff eingeschränkt"
 }
