@@ -7,6 +7,26 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
     },
+    contextWindowTokens: 192_000,
+    description:
+      'MiniMax-M2.1 是一个专为代理能力优化的开源大型语言模型，在编程、工具使用、指令遵循和长期规划方面表现出色。模型支持多语言软件开发和复杂的多步骤工作流执行，在 SWE-bench Verified 上达到 74.0 分，在多语言场景中超越 Claude Sonnet 4.5',
+    displayName: 'MiniMax-M2.1 (Pro)',
+    id: 'Pro/MiniMaxAI/MiniMax-M2.1',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2.1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 8.4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-23',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
     contextWindowTokens: 200_000,
     description:
       "GLM-4.7 is Zhipu's new generation flagship model with 355B total parameters and 32B active parameters, fully upgraded in general dialogue, reasoning, and agent capabilities. GLM-4.7 enhances Interleaved Thinking and introduces Preserved Thinking and Turn-level Thinking.",
