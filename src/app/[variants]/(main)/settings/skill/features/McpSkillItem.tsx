@@ -43,7 +43,7 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
 }));
 
-interface InstalledSkillItemProps {
+interface McpSkillItemProps {
   author?: string;
   avatar?: string;
   identifier: string;
@@ -52,7 +52,7 @@ interface InstalledSkillItemProps {
   type: LobeToolType;
 }
 
-const InstalledSkillItem = memo<InstalledSkillItemProps>(
+const McpSkillItem = memo<McpSkillItemProps>(
   ({ identifier, title, avatar, type, runtimeType, author }) => {
     const { styles } = useStyles();
     const { t } = useTranslation('plugin');
@@ -111,6 +111,6 @@ const InstalledSkillItem = memo<InstalledSkillItemProps>(
   },
 );
 
-InstalledSkillItem.displayName = 'InstalledSkillItem';
+McpSkillItem.displayName = 'McpSkillItem';
 
-export default InstalledSkillItem;
+export default McpSkillItem;

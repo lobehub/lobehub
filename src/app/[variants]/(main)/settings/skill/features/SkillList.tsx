@@ -29,7 +29,7 @@ import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { type LobeToolType } from '@/types/tool/tool';
 
-import InstalledSkillItem from './InstalledSkillItem';
+import McpSkillItem from './McpSkillItem';
 import KlavisSkillItem from './KlavisSkillItem';
 import LobehubSkillItem from './LobehubSkillItem';
 
@@ -199,7 +199,7 @@ const SkillList = memo(() => {
 
   const renderCommunityMCPs = () =>
     communityMCPs.map((plugin) => (
-      <InstalledSkillItem
+      <McpSkillItem
         author={plugin.author}
         avatar={plugin.avatar}
         identifier={plugin.identifier}
@@ -212,7 +212,7 @@ const SkillList = memo(() => {
 
   const renderCustomMCPs = () =>
     customMCPs.map((plugin) => (
-      <InstalledSkillItem
+      <McpSkillItem
         author={plugin.author}
         avatar={plugin.avatar}
         identifier={plugin.identifier}
