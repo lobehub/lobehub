@@ -76,7 +76,6 @@ vi.mock('@/modules/updater/configs', () => ({
       checkUpdateInterval: 60 * 60 * 1000,
     },
     enableAppUpdate: true,
-    enableRenderHotUpdate: true,
   },
 }));
 

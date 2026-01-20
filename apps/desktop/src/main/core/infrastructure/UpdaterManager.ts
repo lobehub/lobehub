@@ -45,7 +45,8 @@ export class UpdaterManager {
   public initialize = async () => {
     logger.debug('Initializing UpdaterManager');
     // If updates are disabled and in production environment, don't initialize updates
-    if (!updaterConfig.enableAppUpdate && !isDev) {
+
+    if (!updaterConfig.enableAppUpdate) {
       logger.info('App updates are disabled, skipping updater initialization');
       return;
     }

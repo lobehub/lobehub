@@ -27,10 +27,6 @@ export const updaterConfig = {
     // Update check interval (milliseconds)
     checkUpdateInterval: 60 * 60 * 1000, // 1 hour
   },
-
   // Whether to enable application updates
   enableAppUpdate: !isDev,
-
-  // 是否启用渲染层热更新
-  enableRenderHotUpdate: !isDev,
 };
