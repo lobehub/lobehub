@@ -17,11 +17,7 @@ interface TaskDetailPanelProps {
 }
 
 const TaskDetailPanel = memo<TaskDetailPanelProps>(({ taskDetail, content, messageId }) => {
-  return (
-    <>
-      <StatusContent content={content} messageId={messageId} taskDetail={taskDetail} />
-    </>
-  );
+  return <StatusContent content={content} messageId={messageId} taskDetail={taskDetail} />;
 });
 
 TaskDetailPanel.displayName = 'TaskDetailPanel';

@@ -1,3 +1,5 @@
+import type { UpdateInfo } from '@lobechat/electron-client-ipc';
+import { app as electronApp } from 'electron';
 import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
 
@@ -120,10 +122,22 @@ export class UpdaterManager {
     try {
       await autoUpdater.checkForUpdates();
     } catch (error) {
-      logger.error('Error checking for updates:', error.message);
+      const message = error instanceof Error ? error.message : String(error);
+
+      // Edge case: Release tag exists but update manifest assets (latest/stable-*.yml) aren't uploaded yet.
+      // Treat this gap period as "no updates available" instead of a user-facing error.
+      if (this.isMissingUpdateManifestError(error)) {
+        logger.warn('[Updater] Update manifest not ready yet, treating as no update:', message);
+        if (manual) {
+          this.mainWindow.broadcast('manualUpdateNotAvailable', this.getCurrentUpdateInfo());
+        }
+        return;
+      }
+
+      logger.error('Error checking for updates:', message);
 
       if (manual) {
-        this.mainWindow.broadcast('updateError', (error as Error).message);
+        this.mainWindow.broadcast('updateError', message);
       }
     } finally {
       this.checking = false;
@@ -397,6 +411,18 @@ export class UpdaterManager {
     });
 
     autoUpdater.on('error', async (err) => {
+      const message = err instanceof Error ? err.message : String(err);
+
+      // Edge case: Release tag exists but update manifest assets aren't uploaded yet.
+      // Skip fallback switching and avoid user-facing errors.
+      if (this.isMissingUpdateManifestError(err)) {
+        logger.warn('[Updater] Update manifest not ready yet, skipping error handling:', message);
+        if (this.isManualCheck) {
+          this.mainWindow.broadcast('manualUpdateNotAvailable', this.getCurrentUpdateInfo());
+        }
+        return;
+      }
+
       logger.error('Error in auto-updater:', err);
       logger.error('[Updater Error Context] Channel:', autoUpdater.channel);
       logger.error('[Updater Error Context] allowPrerelease:', autoUpdater.allowPrerelease);
@@ -435,5 +461,29 @@ export class UpdaterManager {
     });
 
     logger.debug('Updater events registered');
+  }
+
+  private isMissingUpdateManifestError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error ?? '');
+    if (!message) return false;
+
+    // Expect patterns like:
+    // - "Cannot find latest-mac.yml ... HttpError: 404 ..."
+    // - "Cannot find stable.yml ... 404 ..."
+    if (!/cannot find/i.test(message)) return false;
+    if (!/\b404\b/.test(message)) return false;
+
+    // Match channel manifest filenames across platforms/architectures:
+    // latest.yml, latest-mac.yml, latest-linux.yml, stable.yml, stable-mac.yml, etc.
+    const manifestMatch = message.match(/\b(?:latest|stable)(?:-[\da-z]+)?\.yml\b/i);
+    return Boolean(manifestMatch);
+  }
+
+  private getCurrentUpdateInfo(): UpdateInfo {
+    const version = autoUpdater.currentVersion?.version || electronApp.getVersion();
+    return {
+      releaseDate: new Date().toISOString(),
+      version,
+    };
   }
 }

@@ -31,6 +31,7 @@ vi.mock('electron-updater', () => ({
     autoInstallOnAppQuit: false,
     channel: 'stable',
     checkForUpdates: vi.fn(),
+    currentVersion: undefined as any,
     downloadUpdate: vi.fn(),
     forceDevUpdateConfig: false,
     logger: null as any,
@@ -46,6 +47,7 @@ vi.mock('electron', () => ({
     getAllWindows: mockGetAllWindows,
   },
   app: {
+    getVersion: vi.fn().mockReturnValue('0.0.0'),
     releaseSingleInstanceLock: mockReleaseSingleInstanceLock,
   },
 }));
@@ -108,6 +110,7 @@ describe('UpdaterManager', () => {
     (autoUpdater as any).allowPrerelease = false;
     (autoUpdater as any).allowDowngrade = false;
     (autoUpdater as any).forceDevUpdateConfig = false;
+    (autoUpdater as any).currentVersion = undefined;
 
     // Capture registered events
     registeredEvents = new Map();
@@ -211,6 +214,24 @@ describe('UpdaterManager', () => {
       await updaterManager.checkForUpdates({ manual: true });
 
       expect(mockBroadcast).toHaveBeenCalledWith('updateError', 'Network error');
+    });
+
+    it('should treat missing latest/stable yml 404 as not-available during manual check', async () => {
+      const error = new Error(
+        'Cannot find latest-mac.yml in the latest release artifacts (https://github.com/lobehub/lobe-chat/releases/download/v2.0.0-next.311/latest-mac.yml): HttpError: 404',
+      );
+      vi.mocked(autoUpdater.checkForUpdates).mockRejectedValueOnce(error);
+
+      await updaterManager.checkForUpdates({ manual: true });
+
+      expect(mockBroadcast).toHaveBeenCalledWith(
+        'manualUpdateNotAvailable',
+        expect.objectContaining({
+          releaseDate: expect.any(String),
+          version: expect.any(String),
+        }),
+      );
+      expect(mockBroadcast).not.toHaveBeenCalledWith('updateError', expect.anything());
     });
   });
 
@@ -484,6 +505,26 @@ describe('UpdaterManager', () => {
         const handler = registeredEvents.get('error');
         handler?.(error);
 
+        expect(mockBroadcast).not.toHaveBeenCalledWith('updateError', expect.anything());
+      });
+
+      it('should not broadcast updateError for missing manifest 404 (gap period)', async () => {
+        vi.mocked(autoUpdater.checkForUpdates).mockResolvedValue({} as any);
+        await updaterManager.checkForUpdates({ manual: true });
+
+        const error = new Error(
+          'Cannot find latest-mac.yml in the latest release artifacts (https://github.com/lobehub/lobe-chat/releases/download/v2.0.0-next.311/latest-mac.yml): HttpError: 404',
+        );
+        const handler = registeredEvents.get('error');
+        await handler?.(error);
+
+        expect(mockBroadcast).toHaveBeenCalledWith(
+          'manualUpdateNotAvailable',
+          expect.objectContaining({
+            releaseDate: expect.any(String),
+            version: expect.any(String),
+          }),
+        );
         expect(mockBroadcast).not.toHaveBeenCalledWith('updateError', expect.anything());
       });
     });

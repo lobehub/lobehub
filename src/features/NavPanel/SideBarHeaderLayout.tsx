@@ -8,6 +8,8 @@ import { type ReactNode, memo } from 'react';
 import { flushSync } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 
+import { isDesktop } from '@/const/version';
+
 import ToggleLeftPanelButton from './ToggleLeftPanelButton';
 import BackButton from './components/BackButton';
 
@@ -35,7 +37,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   container: css`
     overflow: hidden;
-    margin-block-start: 8px;
+    margin-block-start: ${isDesktop ? '' : '8px'};
   `,
 }));
 
