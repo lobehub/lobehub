@@ -48,7 +48,6 @@ export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
   }
 
   const defaults = [
-    authEnv.NEXT_PUBLIC_AUTH_URL,
     normalizeOrigin(process.env.APP_URL),
     normalizeOrigin(process.env.VERCEL_BRANCH_URL),
     normalizeOrigin(process.env.VERCEL_URL),

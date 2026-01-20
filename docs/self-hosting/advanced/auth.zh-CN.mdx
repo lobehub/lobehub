@@ -37,12 +37,11 @@ LobeChat 与 Clerk 做了深度集成，能够为用户提供一个更加安全�
 
 要在 LobeChat 中启用 Better Auth，请设置以下环境变量：
 
-| 环境变量                             | 类型 | 描述                                                                                                               |
-| -------------------------------- | -- | ---------------------------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_ENABLE_BETTER_AUTH` | 必选 | 设置为 `1` 以启用 Better Auth 服务                                                                                       |
-| `AUTH_SECRET`                    | 必选 | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`                                                                   |
-| `NEXT_PUBLIC_AUTH_URL`           | 必选 | 浏览器可访问的 Better Auth 基础 URL（例如 `http://localhost:3010`、`https://lobechat.com`）。Vercel 部署时可选（会自动从 `VERCEL_URL` 获取） |
-| `AUTH_SSO_PROVIDERS`             | 可选 | 启用的 SSO 提供商列表，以逗号分隔，例如 `google,github,microsoft`                                                                 |
+| 环境变量                             | 类型 | 描述                                                          |
+| -------------------------------- | -- | ----------------------------------------------------------- |
+| `NEXT_PUBLIC_ENABLE_BETTER_AUTH` | 必选 | 设置为 `1` 以启用 Better Auth 服务                                   |
+| `AUTH_SECRET`                    | 必选 | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`              |
+| `AUTH_SSO_PROVIDERS`             | 可选 | 启用的 SSO 提供商列表，以逗号分隔，例如 `google,github,microsoft`             |
 
 <Callout type={'error'}>
   **重要提示**：Better Auth 目前仅适用于**全新部署**的场景。如果你已经使用 NextAuth 或 Clerk 并且数据库中存在用户数据，**请暂时不要切换到 Better Auth**，否则现有用户将无法登录。
