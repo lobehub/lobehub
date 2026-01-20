@@ -33,15 +33,6 @@ export const useFaviconSetters = () => {
   return context;
 };
 
-/**
- * @deprecated Use useFaviconState and useFaviconSetters instead for better performance
- */
-export const useFavicon = () => {
-  const state = useFaviconState();
-  const setters = useFaviconSetters();
-  return { ...state, ...setters };
-};
-
 const stateToFileName: Record<FaviconState, string> = {
   default: '',
   done: '-done',
