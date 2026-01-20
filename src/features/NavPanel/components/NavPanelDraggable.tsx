@@ -13,6 +13,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { isMacOS } from '@/utils/platform';
 
 import { useNavPanelSizeChangeHandler } from '../hooks/useNavPanel';
+import { BACK_BUTTON_ID } from './BackButton';
 
 const motionVariants = {
   animate: { opacity: 1, x: 0 },
@@ -75,6 +76,9 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
       transition:
         opacity,
         width 0.2s ${cssVar.motionEaseOut};
+    }
+    #${BACK_BUTTON_ID} {
+      width: 24px !important;
     }
 
     &:hover {
