@@ -293,6 +293,7 @@ describe('MessageService', () => {
           current: 0,
           groupId: undefined,
           pageSize: 9999,
+          threadId: undefined,
           topicId: undefined,
         },
         expect.objectContaining({
@@ -327,6 +328,42 @@ describe('MessageService', () => {
           current: 0,
           groupId: 'group-1',
           pageSize: 9999,
+          threadId: undefined,
+          topicId: 'topic-1',
+        },
+        expect.objectContaining({
+          postProcessUrl: expect.any(Function),
+        }),
+      );
+      expect(result.id).toBe('msg-1');
+      expect(result.messages).toEqual(mockMessages);
+    });
+
+    it('should create message with threadId and query thread messages', async () => {
+      const params = {
+        agentId: 'agent-1',
+        content: 'Hello in thread',
+        groupId: 'group-1',
+        role: 'user' as const,
+        threadId: 'thread-1',
+        topicId: 'topic-1',
+      };
+      const createdMessage = { id: 'msg-1', ...params };
+      const mockMessages = [createdMessage];
+
+      vi.mocked(mockMessageModel.create).mockResolvedValue(createdMessage as any);
+      vi.mocked(mockMessageModel.query).mockResolvedValue(mockMessages as any);
+
+      const result = await messageService.createMessage(params as any);
+
+      expect(mockMessageModel.create).toHaveBeenCalledWith(params);
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        {
+          agentId: 'agent-1',
+          current: 0,
+          groupId: 'group-1',
+          pageSize: 9999,
+          threadId: 'thread-1',
           topicId: 'topic-1',
         },
         expect.objectContaining({

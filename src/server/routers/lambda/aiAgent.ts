@@ -280,21 +280,35 @@ export const aiAgentRouter = router({
 
         log('createClientTaskThread: created user message %s', userMessage.id);
 
-        // 3. Query messages by full params (using existing query method)
-        const messages = await ctx.messageModel.query({
-          agentId,
-          threadId: thread.id,
-          topicId,
-        });
+        // 3. Query thread messages and main chat messages in parallel
+        const [threadMessages, messages] = await Promise.all([
+          // Thread messages (messages within this thread)
+          ctx.messageModel.query({
+            agentId,
+            threadId: thread.id,
+            topicId,
+          }),
+          // Main chat messages (messages without threadId, includes updated taskDetail)
+          ctx.messageModel.query({
+            agentId,
+            topicId,
+            // No threadId - matchThread will filter for threadId IS NULL (main chat)
+          }),
+        ]);
 
-        log('createClientTaskThread: queried %d messages', messages.length);
+        log(
+          'createClientTaskThread: queried %d thread messages, %d main messages',
+          threadMessages.length,
+          messages.length,
+        );
 
-        // 5. Return Thread, userMessageId and messages
+        // 4. Return Thread, userMessageId, threadMessages and messages
         return {
           messages,
           startedAt,
           success: true,
           threadId: thread.id,
+          threadMessages,
           userMessageId: userMessage.id,
         };
       } catch (error: any) {
