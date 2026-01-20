@@ -58,7 +58,7 @@ const ProcessingState = memo<ProcessingStateProps>(({ blocks, assistantId, start
 
   return (
     <Flexbox gap={8}>
-      <Flexbox align="center" gap={8} horizontal>
+      <Flexbox align="center" gap={8} horizontal paddingInline={4}>
         <Block
           align="center"
           flex="none"
@@ -95,7 +95,7 @@ const ProcessingState = memo<ProcessingStateProps>(({ blocks, assistantId, start
         offset={12}
         onScroll={handleScroll}
         ref={ref as RefObject<HTMLDivElement>}
-        size={12}
+        size={8}
       >
         <Flexbox gap={8}>
           {blocks.map((block) => (

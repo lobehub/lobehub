@@ -19,7 +19,11 @@ export const WriteFileStreaming = memo<BuiltinStreamingProps<WriteLocalFileParam
 
   // Use Markdown for .md files, Highlighter for others
   if (ext === 'md' || ext === 'mdx') {
-    return <Markdown style={{ overflow: 'auto' }}>{content}</Markdown>;
+    return (
+      <Markdown animated style={{ overflow: 'auto' }} variant={'chat'}>
+        {content}
+      </Markdown>
+    );
   }
 
   return (

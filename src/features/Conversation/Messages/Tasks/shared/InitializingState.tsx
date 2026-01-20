@@ -57,10 +57,6 @@ const InitializingState = memo(() => {
           {t('task.status.initializing')}
         </Text>
       </Flexbox>
-
-      <div className={styles.progress}>
-        <div className={styles.progressShimmer} />
-      </div>
     </Flexbox>
   );
 });
