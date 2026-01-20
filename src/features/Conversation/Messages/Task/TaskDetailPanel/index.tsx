@@ -19,16 +19,6 @@ interface TaskDetailPanelProps {
 const TaskDetailPanel = memo<TaskDetailPanelProps>(({ taskDetail, content, messageId }) => {
   return (
     <>
-      {/* Instruction Header */}
-      {/*{instruction && (*/}
-      {/*  <Block padding={12}>*/}
-      {/*    <Text fontSize={13} type={'secondary'}>*/}
-      {/*      {instruction}*/}
-      {/*    </Text>*/}
-      {/*  </Block>*/}
-      {/*)}*/}
-
-      {/* Status Content */}
       <StatusContent content={content} messageId={messageId} taskDetail={taskDetail} />
     </>
   );

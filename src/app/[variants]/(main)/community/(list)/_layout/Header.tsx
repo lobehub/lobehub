@@ -26,7 +26,6 @@ const Header = memo(() => {
       right={
         !isHome && (
           <>
-            {/*{activeKey === DiscoverTab.Assistants && <MarketSourceSwitch />}*/}
             <SortButton />
             <UserAvatar />
           </>

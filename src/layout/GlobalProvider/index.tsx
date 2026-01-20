@@ -67,7 +67,6 @@ const GlobalLayout = async ({
               <QueryProvider>
                 <StoreInitialization />
                 <FaviconProvider>
-                  {/* {process.env.NODE_ENV === 'development' && <FaviconTestPanel />} */}
                   <GroupWizardProvider>
                     <DragUploadProvider>
                       <LazyMotion features={domMax}>
