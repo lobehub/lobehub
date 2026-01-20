@@ -3,7 +3,6 @@
 import { type AssistantContentBlock } from '@lobechat/types';
 import { Block, Flexbox, ScrollShadow, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { Coins } from 'lucide-react';
 import { type RefObject, memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -95,41 +94,6 @@ const ProcessingState = memo<ProcessingStateProps>(
               <Text as="span" type="secondary">
                 ({formatElapsedTime(elapsedTime)})
               </Text>
-            )}
-            {/* Token usage display */}
-            {accumulatedUsage.totalTokens && accumulatedUsage.totalTokens > 0 && (
-              <>
-                <Text as="span" type="secondary">
-                  ·
-                </Text>
-                <Text as="span" type="secondary" weight={500}>
-                  <AnimatedNumber
-                    duration={500}
-                    formatter={(v) => Math.round(v).toLocaleString()}
-                    value={accumulatedUsage.totalTokens}
-                  />
-                </Text>
-                <Text as="span" type="secondary">
-                  tokens
-                </Text>
-              </>
-            )}
-            {/* Cost display */}
-            {accumulatedUsage.cost && accumulatedUsage.cost > 0 && (
-              <>
-                <Text as="span" type="secondary">
-                  ·
-                </Text>
-                <Coins size={12} style={{ opacity: 0.6 }} />
-                <Text as="span" type="secondary" weight={500}>
-                  $
-                  <AnimatedNumber
-                    duration={500}
-                    formatter={(v) => v.toFixed(4)}
-                    value={accumulatedUsage.cost}
-                  />
-                </Text>
-              </>
             )}
           </Flexbox>
         </Flexbox>
