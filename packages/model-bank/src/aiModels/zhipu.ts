@@ -870,12 +870,32 @@ const zhipuChatModels: AIChatModelCard[] = [
 ];
 
 const zhipuImageModels: AIImageModelCard[] = [
-  // https://bigmodel.cn/dev/api/image-model/cogview
+  {
+    description:
+      'Zhipu’s latest image generation model delivers state-of-the-art open-source performance in text rendering, while excelling at both global instruction understanding and fine-grained local detail representation. It performs particularly well in knowledge-dense scenarios such as posters, presentations, and educational illustrations.',
+    displayName: 'GLM-Image',
+    enabled: true,
+    id: 'glm-image',
+    parameters: {
+      prompt: {
+        default: '',
+      },
+      size: {
+        default: '1280x1280',
+        enum: ['1280x1280', '1568x1056', '1056×1568', '1472×1088', '1088×1472', '1728×960', '960×1728'],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.1, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-01-14',
+    type: 'image',
+  },
   {
     description:
       'CogView-4 is Zhipu’s first open-source text-to-image model that can generate Chinese characters. It improves semantic understanding, image quality, and Chinese/English text rendering, supports arbitrary-length bilingual prompts, and can generate images at any resolution within specified ranges.',
     displayName: 'CogView-4',
-    enabled: true,
     id: 'cogview-4',
     parameters: {
       prompt: {
