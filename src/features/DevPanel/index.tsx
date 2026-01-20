@@ -15,15 +15,6 @@ const FloatPanel = dynamic(() => import('./features/FloatPanel'), {
 const DevPanel = () => (
   <FloatPanel
     items={[
-      // ...(isDesktop
-      //   ? [
-      //       {
-      //         children: <PostgresViewer />,
-      //         icon: <DatabaseIcon size={16} />,
-      //         key: 'Postgres Viewer',
-      //       },
-      //     ]
-      //   : []),
       {
         children: <MetadataViewer />,
         icon: <BookText size={16} />,

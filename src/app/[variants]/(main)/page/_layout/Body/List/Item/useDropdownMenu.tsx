@@ -56,12 +56,6 @@ export const useDropdownMenu = ({
           label: t('rename'),
           onClick: () => toggleEditing(true),
         },
-        // {
-        //   icon: <Icon icon={Copy} />,
-        //   key: 'copy',
-        //   label: t('pageList.copyContent', { ns: 'file' }),
-        //   onClick: handleCopy,
-        // },
         {
           icon: <Icon icon={CopyPlus} />,
           key: 'duplicate',

@@ -52,8 +52,6 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
       <head>
         {/* eslint-disable-next-line @typescript-eslint/no-use-before-define */}
         <script dangerouslySetInnerHTML={{ __html: `(${outdateBrowserScript.toString()})();` }} />
-
-        {/* <script dangerouslySetInnerHTML={{ __html: 'setTimeout(() => {debugger}, 16)' }} /> */}
         {process.env.DEBUG_REACT_SCAN === '1' && (
           <Script
             crossOrigin={'anonymous'}
