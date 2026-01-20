@@ -1,7 +1,7 @@
 'use client';
 
 import { type KlavisServerType } from '@lobechat/const';
-import { ActionIcon, DropdownMenu, Flexbox, Icon, Image } from '@lobehub/ui';
+import { ActionIcon, Avatar, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { App, Button } from 'antd';
 import { createStyles, cssVar } from 'antd-style';
 import { Loader2, MoreVerticalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
@@ -223,9 +223,9 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
   const renderIcon = () => {
     const { icon, label } = serverType;
     if (typeof icon === 'string') {
-      return <Image alt={label} height={24} src={icon} width={24} />;
+      return <Avatar alt={label} avatar={icon} size={32} />;
     }
-    return <Icon fill={cssVar.colorText} icon={icon} size={24} />;
+    return <Icon fill={cssVar.colorText} icon={icon} size={32} />;
   };
 
   const renderStatus = () => {
