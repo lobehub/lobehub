@@ -18,12 +18,7 @@ import {
   UsageCounter,
 } from '@lobechat/agent-runtime';
 import { isDesktop } from '@lobechat/const';
-import type {
-  ChatToolPayload,
-  ConversationContext,
-  CreateMessageParams,
-  UIChatMessage,
-} from '@lobechat/types';
+import type { ChatToolPayload, ConversationContext, CreateMessageParams } from '@lobechat/types';
 import debug from 'debug';
 import pMap from 'p-map';
 
@@ -1685,23 +1680,7 @@ export const createAgentExecutors = (context: {
         const taskMessageId = taskMessageResult.id;
         log('[%s][exec_client_task] Created task message: %s', taskLogId, taskMessageId);
 
-        // 2. Create a child operation for task execution
-        const { operationId: taskOperationId } = context.get().startOperation({
-          type: 'execClientTask',
-          context: {
-            agentId,
-            topicId,
-          },
-          parentOperationId: state.operationId,
-          metadata: {
-            startTime: Date.now(),
-            taskDescription: task.description,
-            taskMessageId,
-            executionMode: 'client',
-          },
-        });
-
-        // 3. Create Thread via API (also creates initial user message)
+        // 2. Create Thread via API first (to get threadId for operation context)
         const threadResult = await aiAgentService.createClientTaskThread({
           agentId,
           instruction: task.instruction,
@@ -1712,10 +1691,6 @@ export const createAgentExecutors = (context: {
 
         if (!threadResult.success) {
           log('[%s][exec_client_task] Failed to create client task thread', taskLogId);
-          context.get().failOperation(taskOperationId, {
-            type: 'ThreadCreationError',
-            message: 'Failed to create client task thread',
-          });
           await context
             .get()
             .optimisticUpdateMessageContent(
@@ -1749,6 +1724,22 @@ export const createAgentExecutors = (context: {
         }
 
         const { threadId, userMessageId, messages: initialMessages } = threadResult;
+
+        // 3. Build sub-task ConversationContext (uses threadId for isolation)
+        const subContext: ConversationContext = { agentId, topicId, threadId, scope: 'thread' };
+
+        // 4. Create a child operation for task execution (now with threadId)
+        const { operationId: taskOperationId } = context.get().startOperation({
+          type: 'execClientTask',
+          context: subContext,
+          parentOperationId: state.operationId,
+          metadata: {
+            startTime: Date.now(),
+            taskDescription: task.description,
+            taskMessageId,
+            executionMode: 'client',
+          },
+        });
         log(
           '[%s][exec_client_task] Created thread: %s, userMessageId: %s, messages: %d',
           taskLogId,
@@ -1756,14 +1747,6 @@ export const createAgentExecutors = (context: {
           userMessageId,
           initialMessages.length,
         );
-
-        // 4. Build sub-task ConversationContext (uses threadId for isolation)
-        const subContext: ConversationContext = {
-          agentId,
-          topicId,
-          threadId, // Key: Use threadId to isolate messages from main conversation
-          scope: 'main',
-        };
 
         // 5. Use server-returned messages (already persisted)
         let subMessages = [...initialMessages];
@@ -1774,7 +1757,10 @@ export const createAgentExecutors = (context: {
           subMessages = [...parentMessages, ...subMessages];
         }
 
-        // 6. Execute using internal_execAgentRuntime (client-side with local tools access)
+        // 6. Sync initial messages to dbMessagesMap before execution
+        context.get().replaceMessages(subMessages, { context: subContext });
+
+        // 7. Execute using internal_execAgentRuntime (client-side with local tools access)
         log('[%s][exec_client_task] Starting client-side AgentRuntime execution', taskLogId);
 
         await context.get().internal_execAgentRuntime({
@@ -1794,7 +1780,11 @@ export const createAgentExecutors = (context: {
         const lastAssistant = subTaskMessages.findLast((m) => m.role === 'assistant');
         const resultContent = lastAssistant?.content || 'Task completed';
 
-        log('[%s][exec_client_task] Got result from sub-task: %d chars', taskLogId, resultContent.length);
+        log(
+          '[%s][exec_client_task] Got result from sub-task: %d chars',
+          taskLogId,
+          resultContent.length,
+        );
 
         // 8. Update task message with result
         await context
@@ -1988,24 +1978,7 @@ export const createAgentExecutors = (context: {
             const taskMessageId = taskMessageResult.id;
             log('[%s] Created task message: %s', taskLogId, taskMessageId);
 
-            // 2. Create a child operation for task execution
-            const { operationId: taskOperationId } = context.get().startOperation({
-              type: 'execClientTask',
-              context: {
-                agentId,
-                topicId,
-              },
-              parentOperationId: state.operationId,
-              metadata: {
-                startTime: Date.now(),
-                taskDescription: task.description,
-                taskIndex,
-                taskMessageId,
-                executionMode: 'client',
-              },
-            });
-
-            // 3. Create Thread via API (also creates initial user message)
+            // 2. Create Thread via API first (to get threadId for operation context)
             const threadResult = await aiAgentService.createClientTaskThread({
               agentId,
               instruction: task.instruction,
@@ -2016,10 +1989,6 @@ export const createAgentExecutors = (context: {
 
             if (!threadResult.success) {
               log('[%s] Failed to create client task thread', taskLogId);
-              context.get().failOperation(taskOperationId, {
-                type: 'ThreadCreationError',
-                message: 'Failed to create client task thread',
-              });
               await context
                 .get()
                 .optimisticUpdateMessageContent(
@@ -2045,13 +2014,27 @@ export const createAgentExecutors = (context: {
               initialMessages.length,
             );
 
-            // 4. Build sub-task ConversationContext (uses threadId for isolation)
+            // 3. Build sub-task ConversationContext (uses threadId for isolation)
             const subContext: ConversationContext = {
               agentId,
               topicId,
-              threadId, // Key: Use threadId to isolate messages from main conversation
-              scope: 'main',
+              threadId,
+              scope: 'thread',
             };
+
+            // 4. Create a child operation for task execution (now with threadId)
+            const { operationId: taskOperationId } = context.get().startOperation({
+              type: 'execClientTask',
+              context: subContext,
+              parentOperationId: state.operationId,
+              metadata: {
+                startTime: Date.now(),
+                taskDescription: task.description,
+                taskIndex,
+                taskMessageId,
+                executionMode: 'client',
+              },
+            });
 
             // 5. Use server-returned messages (already persisted)
             let subMessages = [...initialMessages];
@@ -2062,7 +2045,10 @@ export const createAgentExecutors = (context: {
               subMessages = [...parentMessages, ...subMessages];
             }
 
-            // 6. Execute using internal_execAgentRuntime (client-side with local tools access)
+            // 6. Sync initial messages to dbMessagesMap before execution
+            context.get().replaceMessages(subMessages as any, { context: subContext });
+
+            // 7. Execute using internal_execAgentRuntime (client-side with local tools access)
             log('[%s] Starting client-side AgentRuntime execution', taskLogId);
 
             await context.get().internal_execAgentRuntime({

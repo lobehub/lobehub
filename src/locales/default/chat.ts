@@ -354,6 +354,7 @@ export default {
   'tab.profile': 'Agent Profile',
   'tab.search': 'Search',
   'task.activity.calling': 'Calling Skill...',
+  'task.activity.clientExecuting': 'Executing locally...',
   'task.activity.generating': 'Generating response...',
   'task.activity.gotResult': 'Tool result received',
   'task.activity.toolCalling': 'Calling {{toolName}}...',

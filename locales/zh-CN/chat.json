@@ -322,6 +322,7 @@
   "tab.profile": "助理档案",
   "tab.search": "搜索",
   "task.activity.calling": "正在调用技能…",
+  "task.activity.clientExecuting": "本地执行中…",
   "task.activity.generating": "正在生成回复…",
   "task.activity.gotResult": "已获取技能结果",
   "task.activity.toolCalling": "正在调用 {{toolName}}…",
