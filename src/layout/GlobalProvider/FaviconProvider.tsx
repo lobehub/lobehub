@@ -1,24 +1,45 @@
 'use client';
 
-import { type ReactNode, createContext, memo, useCallback, useContext, useState } from 'react';
+import { type ReactNode, createContext, memo, useCallback, useContext, useMemo, useState } from 'react';
 
 export type FaviconState = 'default' | 'done' | 'error' | 'progress';
 
-interface FaviconContextValue {
+interface FaviconStateContextValue {
   currentState: FaviconState;
   isDevMode: boolean;
+}
+
+interface FaviconSettersContextValue {
   setFavicon: (state: FaviconState) => void;
   setIsDevMode: (isDev: boolean) => void;
 }
 
-const FaviconContext = createContext<FaviconContextValue | null>(null);
+const FaviconStateContext = createContext<FaviconStateContextValue | null>(null);
+const FaviconSettersContext = createContext<FaviconSettersContextValue | null>(null);
 
-export const useFavicon = () => {
-  const context = useContext(FaviconContext);
+export const useFaviconState = () => {
+  const context = useContext(FaviconStateContext);
   if (!context) {
-    throw new Error('useFavicon must be used within FaviconProvider');
+    throw new Error('useFaviconState must be used within FaviconProvider');
   }
   return context;
+};
+
+export const useFaviconSetters = () => {
+  const context = useContext(FaviconSettersContext);
+  if (!context) {
+    throw new Error('useFaviconSetters must be used within FaviconProvider');
+  }
+  return context;
+};
+
+/**
+ * @deprecated Use useFaviconState and useFaviconSetters instead for better performance
+ */
+export const useFavicon = () => {
+  const state = useFaviconState();
+  const setters = useFaviconSetters();
+  return { ...state, ...setters };
 };
 
 const stateToFileName: Record<FaviconState, string> = {
@@ -66,26 +87,38 @@ export const FaviconProvider = memo<{ children: ReactNode }>(({ children }) => {
   const [currentState, setCurrentState] = useState<FaviconState>('default');
   const [isDevMode, setIsDevModeState] = useState<boolean>(defaultIsDev);
 
-  const setFavicon = useCallback(
-    (state: FaviconState) => {
-      setCurrentState(state);
-      updateFaviconDOM(state, isDevMode);
-    },
-    [isDevMode],
+  const setFavicon = useCallback((state: FaviconState) => {
+    setCurrentState(state);
+    setIsDevModeState((isDev) => {
+      updateFaviconDOM(state, isDev);
+      return isDev;
+    });
+  }, []);
+
+  const setIsDevMode = useCallback((isDev: boolean) => {
+    setIsDevModeState(isDev);
+    setCurrentState((state) => {
+      updateFaviconDOM(state, isDev);
+      return state;
+    });
+  }, []);
+
+  const stateValue = useMemo(
+    () => ({ currentState, isDevMode }),
+    [currentState, isDevMode],
   );
 
-  const setIsDevMode = useCallback(
-    (isDev: boolean) => {
-      setIsDevModeState(isDev);
-      updateFaviconDOM(currentState, isDev);
-    },
-    [currentState],
+  const settersValue = useMemo(
+    () => ({ setFavicon, setIsDevMode }),
+    [setFavicon, setIsDevMode],
   );
 
   return (
-    <FaviconContext.Provider value={{ currentState, isDevMode, setFavicon, setIsDevMode }}>
-      {children}
-    </FaviconContext.Provider>
+    <FaviconStateContext.Provider value={stateValue}>
+      <FaviconSettersContext.Provider value={settersValue}>
+        {children}
+      </FaviconSettersContext.Provider>
+    </FaviconStateContext.Provider>
   );
 });
 
