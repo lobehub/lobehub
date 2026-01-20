@@ -112,6 +112,7 @@ const ClientTaskDetail = memo<ClientTaskDetailProps>(({ taskDetail }) => {
         <ProcessingState
           assistantId={assistantGroupMessage.id}
           blocks={assistantGroupMessage.children}
+          startTime={assistantGroupMessage.createdAt}
         />
       ) : (
         <CompletedState

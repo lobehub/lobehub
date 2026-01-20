@@ -32,7 +32,7 @@ const WriteFile = memo<BuiltinRenderProps<WriteLocalFileParams>>(({ args }) => {
 
     if (ext === 'md' || ext === 'mdx') {
       return (
-        <Markdown style={{ maxHeight: 240, overflow: 'auto', padding: '0 8px' }}>
+        <Markdown style={{ maxHeight: 240, overflow: 'auto', padding: '0 8px' }} variant={'chat'}>
           {args.content}
         </Markdown>
       );

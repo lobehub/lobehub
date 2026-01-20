@@ -230,6 +230,7 @@ export default {
   'noSelectedAgents': 'No members selected yet',
   'openInNewWindow': 'Open in New Window',
   'operation.execAgentRuntime': 'Preparing response',
+  'operation.execClientTask': 'Executing task',
   'operation.sendMessage': 'Sending message',
   'owner': 'Group owner',
   'pageCopilot.title': 'Page Agent',

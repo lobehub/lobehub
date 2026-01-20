@@ -204,6 +204,7 @@
   "noSelectedAgents": "还未选择成员",
   "openInNewWindow": "在新窗口打开",
   "operation.execAgentRuntime": "准备响应中",
+  "operation.execClientTask": "执行任务中",
   "operation.sendMessage": "消息发送中",
   "owner": "群主",
   "pageCopilot.title": "文稿助理",
