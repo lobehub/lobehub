@@ -25,13 +25,8 @@ export const PanelContent: FC<PanelContentProps> = ({
   onOpenChange,
   provider: providerProp,
 }) => {
-  // Get enabled models list
   const enabledList = useEnabledChatModels();
-
-  // Search keyword state
   const [searchKeyword, setSearchKeyword] = useState('');
-
-  // Hooks for state management
   const { groupMode, handleGroupModeChange } = usePanelState();
   const { panelHeight, panelWidth, handlePanelWidthChange } = usePanelSize(enabledList.length);
   const { handleClose } = usePanelHandlers({

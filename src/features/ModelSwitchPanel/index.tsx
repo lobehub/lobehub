@@ -22,8 +22,6 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
     provider: providerProp,
   }) => {
     const [internalOpen, setInternalOpen] = useState(false);
-
-    // Use controlled open if provided, otherwise use internal state
     const isOpen = open ?? internalOpen;
 
     const handleOpenChange = useCallback(

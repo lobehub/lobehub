@@ -35,25 +35,15 @@ export const List: FC<ListProps> = ({
   const { t: tCommon } = useTranslation('common');
   const newLabel = tCommon('new');
 
-  // Track scrolling state to close submenus
   const [isScrolling, setIsScrolling] = useState(false);
-
-  // Get enabled models list
   const enabledList = useEnabledChatModels();
-
-  // Get model and provider
   const { model, provider } = useModelAndProvider(modelProp, providerProp);
-
-  // Get handlers
   const { handleModelChange, handleClose } = usePanelHandlers({
     onModelChange: onModelChangeProp,
     onOpenChange,
   });
-
-  // Build list items
   const listItems = useBuildListItems(enabledList, groupMode, searchKeyword);
 
-  // Calculate panel height
   const panelHeight = useMemo(
     () =>
       enabledList.length === 0

@@ -41,14 +41,12 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
     const navigate = useNavigate();
     const [submenuOpen, setSubmenuOpen] = useState(false);
 
-    // Close submenu when scrolling starts
     useEffect(() => {
       if (isScrolling) {
         setSubmenuOpen(false);
       }
     }, [isScrolling]);
 
-    // Check if any provider of this model is active
     const isActive = data.providers.some((p) => menuKey(p.id, data.model.id) === activeKey);
 
     return (

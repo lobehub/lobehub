@@ -32,6 +32,10 @@ This repository adopts a monorepo structure.
 
 see @.cursor/rules/typescript.mdc
 
+### Code Comments
+
+- **Avoid meaningless comments**: Do not write comments that merely restate what the code does. Comments should explain _why_ something is done, not _what_ is being done. The code itself should be self-explanatory.
+
 ### Testing
 
 - **Required Rule**: read `.cursor/rules/testing-guide/testing-guide.mdc` before writing tests
