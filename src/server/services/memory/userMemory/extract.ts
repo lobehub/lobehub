@@ -1660,6 +1660,7 @@ export class MemoryExtractionExecutor {
         config,
       ]),
     );
+
     const providerModels = runtimeState.enabledAiModels.reduce<Record<string, Set<string>>>(
       (acc, model) => {
         const providerId = normalizeProvider(model.providerId);
@@ -1692,15 +1693,23 @@ export class MemoryExtractionExecutor {
       for (const providerId of providerOrder) {
         const models = providerModels[providerId];
         if (!models) continue;
-
         if (models.has(modelId)) return providerId;
 
         const preferredMatch = candidateModels.find((preferredModel) => models.has(preferredModel));
         if (preferredMatch) return providerId;
       }
+      if (fallbackProvider) {
+        console.warn(
+          `[memory-extraction] no enabled provider found for ${label || 'model'} "${modelId}"`,
+          `(preferred ${preferredProviders}), falling back to server-configured provider "${fallbackProvider}".`,
+        );
+
+        return normalizeProvider(fallbackProvider);
+      }
 
       throw new Error(
-        `Unable to resolve provider for ${label || 'model'} "${modelId}". Check preferred providers/models configuration.`,
+        `Unable to resolve provider for ${label || 'model'} "${modelId}". ` +
+          `Check preferred providers/models configuration.`,
       );
     };
 
