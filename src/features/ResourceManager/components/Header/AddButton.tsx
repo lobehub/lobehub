@@ -187,22 +187,6 @@ const AddButton = () => {
             label: 'Notion',
             onClick: handleOpenNotionGuide,
           },
-          // {
-          //   icon: <Icon icon={Notion} />,
-          //   key: 'connect-google-drive',
-          //   label: 'Google Drive',
-          //   onClick: () => {
-          //     // TODO: Implement Google Drive connection
-          //   },
-          // },
-          // {
-          //   icon: <Icon icon={Notion} />,
-          //   key: 'connect-onedrive',
-          //   label: 'OneDrive',
-          //   onClick: () => {
-          //     // TODO: Implement OneDrive connection
-          //   },
-          // },
         ],
         icon: <Icon icon={Link} />,
         key: 'connect',

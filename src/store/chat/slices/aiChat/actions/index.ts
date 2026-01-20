@@ -14,9 +14,7 @@ export interface ChatAIChatAction
     ConversationLifecycleAction,
     ConversationControlAction,
     StreamingExecutorAction,
-    StreamingStatesAction {
-  /**/
-}
+    StreamingStatesAction {}
 
 export const chatAiChat: StateCreator<
   ChatStore,

@@ -141,11 +141,6 @@ export const DndContextWrapper = memo<PropsWithChildren>(({ children }) => {
         return;
       }
 
-      // Save current drag data before clearing state
-      // const draggedItemId = currentDrag.id;
-      // const draggedItemData = currentDrag.data;
-
-      // Clear drag state immediately for better UX
       setCurrentDrag(null);
 
       // Show loading toast

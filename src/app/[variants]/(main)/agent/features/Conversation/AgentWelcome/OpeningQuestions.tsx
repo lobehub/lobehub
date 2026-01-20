@@ -7,8 +7,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation';
 
-// import { useSend } from '../../features/ChatInput/useSend';
-
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`
     padding-block: 8px;

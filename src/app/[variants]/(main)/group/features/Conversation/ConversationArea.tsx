@@ -18,8 +18,6 @@ import ThreadHydration from './ThreadHydration';
 import { useActionsBarConfig } from './useActionsBarConfig';
 import { useGroupContext } from './useGroupContext';
 
-// import { useGroupHooks } from './useGroupHooks';
-
 interface ConversationAreaProps {
   mobile?: boolean;
 }
@@ -45,18 +43,13 @@ const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
   // Get operation state from ChatStore for reactive updates
   const operationState = useOperationState(context);
 
-  // Get actionsBar config with branching support from ChatStore
   const actionsBarConfig = useActionsBarConfig();
-
-  // Get group-specific hooks for send logic
-  // const groupHooks = useGroupHooks(context);
 
   return (
     <ConversationProvider
       actionsBar={actionsBarConfig}
       context={context}
       hasInitMessages={!!messages}
-      // hooks={groupHooks}
       messages={messages}
       onMessagesChange={(messages, ctx) => {
         replaceMessages(messages, { context: ctx });

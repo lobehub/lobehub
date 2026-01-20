@@ -33,28 +33,6 @@ export const useControls = ({
   ]);
 
   const items: ItemType[] = [
-    // {
-    //   children: [
-    //     {
-    //       icon: <RepoIcon />,
-    //       key: 'allFiles',
-    //       label: <KnowledgeBaseItem id={'all'} label={t('knowledgeBase.allFiles')} />,
-    //     },
-    //     {
-    //       icon: <RepoIcon />,
-    //       key: 'allRepos',
-    //       label: <KnowledgeBaseItem id={'all'} label={t('knowledgeBase.allLibraries')} />,
-    //     },
-    //   ],
-    //   key: 'all',
-    //   label: (
-    //     <Flexbox horizontal justify={'space-between'}>
-    //       {t('knowledgeBase.all')}
-    //       {/*<Link href={'/files'}>{t('knowledgeBase.more')}</Link>*/}
-    //     </Flexbox>
-    //   ),
-    //   type: 'group',
-    // },
     {
       children: [
         // first the files

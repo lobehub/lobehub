@@ -15,8 +15,6 @@ export interface Action {
 
 export type Store = Action & State;
 
-// const t = setNamespace('ChatInput');
-
 type CreateStore = (
   initState?: Partial<PublicState>,
 ) => StateCreator<Store, [['zustand/devtools', never]]>;

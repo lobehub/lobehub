@@ -41,11 +41,7 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
   const toggleThread = useAgentGroupStore((s) => s.toggleThread);
   const pushPortalView = useChatStore((s) => s.pushPortalView);
 
-  // Get members from store (excluding supervisor)
   const groupMembers = useAgentGroupStore(agentGroupSelectors.getGroupMembers(groupId || ''));
-
-  // const [agentSettingsOpen, setAgentSettingsOpen] = useState(false);
-  // const [selectedAgentId, setSelectedAgentId] = useState<string | undefined>();
 
   const handleAddMembers = async (selectedAgents: string[]) => {
     if (!groupId) {

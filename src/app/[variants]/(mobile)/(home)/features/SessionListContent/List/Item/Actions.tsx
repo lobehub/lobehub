@@ -66,7 +66,6 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
   const { modal, message } = App.useApp();
 
   const isDefault = group === SessionDefaultGroup.Default;
-  // const hasDivider = !isDefault || Object.keys(sessionByGroup).length > 0;
 
   const items = useMemo(
     () =>

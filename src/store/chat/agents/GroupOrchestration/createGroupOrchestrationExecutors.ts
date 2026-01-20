@@ -120,11 +120,6 @@ export const createGroupOrchestrationExecutors = (
         };
       }
 
-      // Variable to capture the decision from tool handler
-      // let decision: ExecutorResult['type'] | undefined;
-      // let decisionParams: Record<string, unknown> = {};
-      // let skipCallSupervisor = false;
-
       // Execute Supervisor agent with the supervisor's agentId in context
       // Mark isSupervisor=true so assistant messages get metadata.isSupervisor for UI rendering
       // Note: Don't pass operationId - let it create a new child operation (same as call_agent)
@@ -138,10 +133,6 @@ export const createGroupOrchestrationExecutors = (
       });
 
       log(`[${sessionLogId}] Supervisor agent finished`);
-
-      // Check what decision was made by the supervisor
-      // This is captured from the groupOrchestration callbacks registered by tools
-      // const orchestrationCallbacks = get().getGroupOrchestrationCallbacks();
 
       // If no tool was called (supervisor finished normally), end orchestration
       // The actual decision is captured via the afterCompletion callbacks

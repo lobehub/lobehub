@@ -35,7 +35,6 @@ const rightActions: ActionKeys[] = [];
  */
 const Desktop = memo((props: { targetMemberId?: string }) => {
   const { t } = useTranslation('chat');
-  // const { send, generating, disabled, stop } = useSendGroupMessage();
 
   const isDMPortal = !!props.targetMemberId;
   const currentGroupMembers = useAgentGroupStore(agentGroupSelectors.currentGroupAgents, isEqual);
@@ -93,7 +92,6 @@ const Desktop = memo((props: { targetMemberId?: string }) => {
         useChatStore.setState({ inputMessage: content });
       }}
       rightActions={isDMPortal ? [] : rightActions}
-      // sendButtonProps={{ disabled, generating, onStop: stop }}
       sendMenu={{
         items: sendMenuItems,
       }}

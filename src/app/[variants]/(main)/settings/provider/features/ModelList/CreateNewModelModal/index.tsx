@@ -51,7 +51,6 @@ const ModelConfigModal = memo<ModelConfigModalProps>(({ open, setOpen }) => {
               setLoading(false);
               closeModal();
             } catch {
-              /*  */
               setLoading(false);
             }
           }}
