@@ -23,7 +23,6 @@ import debug from 'debug';
 import pMap from 'p-map';
 
 import { LOADING_FLAT } from '@/const/message';
-import { preloadToolRenderComponents } from '@/features/Conversation/Messages/Tool/preload';
 import { aiAgentService } from '@/services/aiAgent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { getAgentStoreState } from '@/store/agent/store';
@@ -194,8 +193,6 @@ export const createAgentExecutors = (context: {
       }
       if (toolCalls.length > 0) {
         log(`[${sessionLogId}][toolsCalling] `, toolCalls);
-        // Preload Tool Render components to avoid Suspense flash on first expand
-        preloadToolRenderComponents();
       }
 
       // Log usage
