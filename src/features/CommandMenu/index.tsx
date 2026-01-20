@@ -10,8 +10,8 @@ import { useLocation } from 'react-router-dom';
 
 import { useGlobalStore } from '@/store/global';
 
-import AskAgentCommands from './AskAgentCommands';
 import AskAIMenu from './AskAIMenu';
+import AskAgentCommands from './AskAgentCommands';
 import { CommandMenuProvider, useCommandMenuContext } from './CommandMenuContext';
 import MainMenu from './MainMenu';
 import SearchResults from './SearchResults';
@@ -162,27 +162,36 @@ const CommandMenu = memo(() => {
   useEffect(() => {
     if (!mounted) return;
 
-    const findAppRoot = () => {
-      const appElement = document.querySelector('.ant-app') as HTMLElement;
-      if (appElement) {
-        setAppRoot(appElement);
-      } else {
-        // Fallback to body if App root not found
-        setAppRoot(document.body);
+    const appElement = document.querySelector('.ant-app') as HTMLElement;
+    if (appElement) {
+      setAppRoot(appElement);
+      return;
+    }
+
+    // Fallback: use MutationObserver only if .ant-app not found yet
+    // Observe only direct children of body for better performance
+    const observer = new MutationObserver((_, obs) => {
+      const el = document.querySelector('.ant-app') as HTMLElement;
+      if (el) {
+        setAppRoot(el);
+        obs.disconnect(); // Stop observing once found
       }
-    };
+    });
 
-    findAppRoot();
-
-    // Use MutationObserver to handle dynamic rendering
-    const observer = new MutationObserver(findAppRoot);
     observer.observe(document.body, {
       childList: true,
-      subtree: true,
+      subtree: false, // Only watch direct children, not entire DOM tree
     });
+
+    // Fallback timeout: if .ant-app not found after 2s, use body
+    const timeoutId = setTimeout(() => {
+      observer.disconnect();
+      setAppRoot((prev) => prev || document.body);
+    }, 2000);
 
     return () => {
       observer.disconnect();
+      clearTimeout(timeoutId);
     };
   }, [mounted]);
 
