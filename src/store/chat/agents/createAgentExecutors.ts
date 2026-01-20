@@ -15,12 +15,13 @@ import {
   type TasksBatchResultPayload,
   UsageCounter,
 } from '@lobechat/agent-runtime';
-import type { ChatToolPayload, CreateMessageParams } from '@lobechat/types';
+import type { ChatToolPayload, CreateMessageParams, UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 import pMap from 'p-map';
 
 import { LOADING_FLAT } from '@/const/message';
 import { aiAgentService } from '@/services/aiAgent';
+import { displayMessageSelectors } from '@/store/chat/selectors';
 import type { ChatStore } from '@/store/chat/store';
 import { sleep } from '@/utils/sleep';
 
@@ -30,6 +31,71 @@ const log = debug('lobe-store:agent-executors');
 const TOOL_PRICING: Record<string, number> = {
   'lobe-web-browsing/craw': 0.002,
   'lobe-web-browsing/search': 0.001,
+};
+
+const collectActiveMessageIds = (messages: UIChatMessage[]) => {
+  const ids = new Set<string>();
+
+  function collectFromAssistantGroup(message: UIChatMessage): void {
+    if (message.id) ids.add(message.id);
+    message.children?.forEach((child) => {
+      if (child.id) ids.add(child.id);
+      child.tools?.forEach((tool) => {
+        if (tool.result_msg_id) ids.add(tool.result_msg_id);
+      });
+    });
+  }
+
+  // walk is defined after this function, but that's intentional for mutual recursion
+  // eslint-disable-next-line @typescript-eslint/no-use-before-define
+  function collectFromCompare(message: UIChatMessage): void {
+    const columns = (message as any).columns as UIChatMessage[][] | undefined;
+    if (columns && columns.length > 0) {
+      const activeColumnId = (message as any).activeColumnId as string | undefined;
+      const activeColumn = activeColumnId
+        ? columns.find((column) => column.some((colMessage) => colMessage.id === activeColumnId))
+        : columns[0];
+
+      // eslint-disable-next-line @typescript-eslint/no-use-before-define
+      (activeColumn ?? columns[0]).forEach(walk);
+      return;
+    }
+
+    const compareChildren = (message as any).children as UIChatMessage[] | undefined;
+    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+    compareChildren?.forEach(walk);
+  }
+
+  function walk(message?: UIChatMessage): void {
+    if (!message) return;
+
+    const role = message.role as string;
+    if (role === 'assistantGroup' || role === 'supervisor') {
+      collectFromAssistantGroup(message);
+      return;
+    }
+
+    if (role === 'agentCouncil') {
+      message.members?.forEach(walk);
+      return;
+    }
+
+    if (role === 'compare' || role === 'compareGroup') {
+      collectFromCompare(message);
+      return;
+    }
+
+    if (role === 'tasks') {
+      message.tasks?.forEach(walk);
+      return;
+    }
+
+    if (message.id) ids.add(message.id);
+  }
+
+  messages.forEach(walk);
+
+  return ids;
 };
 
 /**
@@ -149,7 +215,38 @@ export const createAgentExecutors = (context: {
       // - Loading state management
       // - Error handling
       // Use messages from state (already contains full conversation history)
-      const messages = llmPayload.messages.filter((message) => message.id !== assistantMessageId);
+      const dbMessagesMap = context.get().dbMessagesMap[context.messageKey] || [];
+      // Use displayMessages from messagesMap for filtering, fall back to empty if not available
+      let displayMessages: UIChatMessage[] = [];
+      try {
+        displayMessages =
+          displayMessageSelectors.getDisplayMessagesByKey(context.messageKey)(context.get()) || [];
+      } catch {
+        // messagesMap may not exist in test environment
+        displayMessages = [];
+      }
+
+      const activeMessageIds = collectActiveMessageIds(displayMessages);
+      if (activeMessageIds.size > 0) {
+        dbMessagesMap.forEach((message) => {
+          if (
+            message.role === 'tool' &&
+            message.parentId &&
+            activeMessageIds.has(message.parentId)
+          ) {
+            activeMessageIds.add(message.id);
+          }
+        });
+      }
+
+      const rawMessageIds = new Set(dbMessagesMap.map((message) => message.id));
+      const messages = llmPayload.messages.filter((message) => {
+        if (message.id === assistantMessageId) return false;
+        if (!message.id) return true;
+        if (activeMessageIds.size === 0) return true;
+        if (!rawMessageIds.has(message.id)) return true;
+        return activeMessageIds.has(message.id);
+      });
       const {
         isFunctionCall,
         content,

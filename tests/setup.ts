@@ -14,6 +14,34 @@ import discover from '@/locales/default/discover';
 import home from '@/locales/default/home';
 import oauth from '@/locales/default/oauth';
 
+const ensureLocalStorage = () => {
+  const storage = (globalThis as any).localStorage;
+  if (storage && typeof storage.getItem === 'function') return;
+
+  const store = new Map<string, string>();
+  const fallbackStorage = {
+    clear: () => store.clear(),
+    getItem: (key: string) => (store.has(key) ? store.get(key)! : null),
+    key: (index: number) => Array.from(store.keys())[index] ?? null,
+    get length() {
+      return store.size;
+    },
+    removeItem: (key: string) => {
+      store.delete(key);
+    },
+    setItem: (key: string, value: string) => {
+      store.set(key, String(value));
+    },
+  };
+
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: fallbackStorage,
+    writable: true,
+  });
+};
+
+ensureLocalStorage();
+
 // Global mock for @lobehub/analytics/react to avoid AnalyticsProvider dependency
 // This prevents tests from failing when components use useAnalytics hook
 vi.mock('@lobehub/analytics/react', () => ({

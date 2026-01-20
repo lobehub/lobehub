@@ -7,6 +7,7 @@ import {
   createAssistantMessage,
   createCallLLMInstruction,
   createMockStore,
+  createToolMessage,
   createUserMessage,
 } from './fixtures';
 import {
@@ -1032,6 +1033,119 @@ describe('call_llm executor', () => {
       expect(mockStore.internal_fetchAIChatMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           messages: expect.not.arrayContaining([expect.objectContaining({ id: 'msg_assistant' })]),
+        }),
+      );
+    });
+  });
+
+  describe('Display Message Filtering', () => {
+    it('should keep only active compare column messages', async () => {
+      // Given
+      const mockStore = createMockStore();
+      const context = createTestContext();
+      const state = createInitialState();
+
+      const activeMessage = createAssistantMessage({ id: 'msg_active' });
+      const inactiveMessage = createAssistantMessage({ id: 'msg_inactive' });
+
+      const instruction = createCallLLMInstruction({
+        messages: [activeMessage, inactiveMessage],
+      });
+
+      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
+        content: 'AI response',
+        finishType: 'stop',
+        isFunctionCall: false,
+      });
+
+      mockStore.dbMessagesMap[context.messageKey] = [activeMessage, inactiveMessage];
+      const compareMessage = {
+        activeColumnId: 'msg_active',
+        columns: [[inactiveMessage], [activeMessage]],
+        content: '',
+        createdAt: Date.now(),
+        id: 'compare_root',
+        role: 'compare',
+        updatedAt: Date.now(),
+      } as unknown as UIChatMessage;
+
+      mockStore.messagesMap[context.messageKey] = [compareMessage];
+
+      // When
+      await executeWithMockContext({
+        executor: 'call_llm',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then
+      expect(mockStore.internal_fetchAIChatMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([expect.objectContaining({ id: 'msg_active' })]),
+        }),
+      );
+      expect(mockStore.internal_fetchAIChatMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.not.arrayContaining([expect.objectContaining({ id: 'msg_inactive' })]),
+        }),
+      );
+    });
+
+    it('should keep tool messages whose parent is active', async () => {
+      // Given
+      const mockStore = createMockStore();
+      const context = createTestContext();
+      const state = createInitialState();
+
+      const assistantMessage = createAssistantMessage({ id: 'msg_parent' });
+      const activeToolMessage = createToolMessage({
+        id: 'msg_tool_active',
+        parentId: 'msg_parent',
+      });
+      const inactiveToolMessage = createToolMessage({
+        id: 'msg_tool_inactive',
+        parentId: 'msg_other',
+      });
+
+      const instruction = createCallLLMInstruction({
+        messages: [assistantMessage, activeToolMessage, inactiveToolMessage],
+      });
+
+      mockStore.internal_fetchAIChatMessage = vi.fn().mockResolvedValue({
+        content: 'AI response',
+        finishType: 'stop',
+        isFunctionCall: false,
+      });
+
+      mockStore.dbMessagesMap[context.messageKey] = [
+        assistantMessage,
+        activeToolMessage,
+        inactiveToolMessage,
+      ];
+      mockStore.messagesMap[context.messageKey] = [assistantMessage];
+
+      // When
+      await executeWithMockContext({
+        executor: 'call_llm',
+        instruction,
+        state,
+        mockStore,
+        context,
+      });
+
+      // Then
+      expect(mockStore.internal_fetchAIChatMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.arrayContaining([expect.objectContaining({ id: 'msg_tool_active' })]),
+        }),
+      );
+      expect(mockStore.internal_fetchAIChatMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: expect.not.arrayContaining([
+            expect.objectContaining({ id: 'msg_tool_inactive' }),
+          ]),
         }),
       );
     });
