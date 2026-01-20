@@ -5,7 +5,7 @@ import { type SegmentedOptions } from 'antd/es/segmented';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AddPluginButton from '@/features/PluginStore/AddPluginButton';
+import AddSkillButton from './AddSkillButton';
 
 import CommunityList from './CommunityList';
 import LobeHubList from './LobeHubList';
@@ -40,7 +40,7 @@ export const Content = memo(() => {
             value={activeTab}
             variant={'filled'}
           />
-          <AddPluginButton />
+          <AddSkillButton />
         </Flexbox>
         <Search activeTab={activeTab} onLobeHubSearch={setLobehubKeywords} />
       </Flexbox>

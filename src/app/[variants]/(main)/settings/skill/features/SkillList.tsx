@@ -16,7 +16,7 @@ import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import AddPluginButton from '@/features/PluginStore/AddPluginButton';
+import AddSkillButton from '@/features/SkillStore/AddSkillButton';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
@@ -172,7 +172,7 @@ const SkillList = memo(() => {
       <div className={styles.container}>
         <p className={styles.description}>{t('tab.skillDesc')}</p>
         <div className={styles.empty}>{t('tab.skillEmpty')}</div>
-        <AddPluginButton />
+        <AddSkillButton />
       </div>
     );
   }
@@ -233,7 +233,7 @@ const SkillList = memo(() => {
       )}
       {customMCPs.length > 0 && renderCustomMCPs()}
       <div style={{ marginTop: 8 }}>
-        <AddPluginButton />
+        <AddSkillButton />
       </div>
     </div>
   );
