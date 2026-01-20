@@ -150,383 +150,754 @@ export default {
   'footer.desc':
     'Evolve with AI users worldwide. Become a creator to submit your agents and skills to the LobeHub Community.',
   'footer.title': 'Share your creation on LobeHub Community today',
+
+  'fork.alreadyForked': 'You have already forked this agent. Navigating to your fork...',
+
+  'fork.failed': 'Fork failed. Please try again.',
+
+  // Fork related
+  'fork.forkAndChat': 'Fork & Chat',
+
+  'fork.forkedFrom': 'Forked from',
+
+  'fork.forks': 'forks',
+
+  'fork.forksCount': '{{count}} fork',
+
+  'fork.forksCount_other': '{{count}} forks',
+
+  'fork.success': 'Forked successfully!',
+
+  'fork.viewAllForks': 'View all forks',
+
   'home.communityAgents': 'Community Agents',
+
   'home.featuredAssistants': 'Featured Agents',
+
   'home.featuredModels': 'Featured Models',
+
   'home.featuredPlugins': 'Featured Skills',
+
   'home.featuredProviders': 'Featured Providers',
+
   'home.featuredTools': 'Featured Skills',
+
   'home.more': 'Discover More',
+
   'isClaimed': 'Claimed',
+
   'isFeatured': 'Featured',
+
   'isOfficial': 'Officially Verified',
+
   'like': 'Like',
+
   'mcp.categories.all.description': 'All MCP Servers',
+
   'mcp.categories.all.name': 'All',
+
   'mcp.categories.business.description': 'Business and Enterprise Services',
+
   'mcp.categories.business.name': 'Business Services',
+
   'mcp.categories.developer.description': 'Developer-related Tools and Services',
+
   'mcp.categories.developer.name': 'Developer Tools',
+
   'mcp.categories.discover.description': 'Recommended and trending MCP servers',
+
   'mcp.categories.discover.name': 'Discover',
+
   'mcp.categories.gaming-entertainment.description': 'Games, Entertainment, and Leisure Activities',
+
   'mcp.categories.gaming-entertainment.name': 'Gaming & Entertainment',
+
   'mcp.categories.health-wellness.description': 'Health, Fitness, and Wellness',
+
   'mcp.categories.health-wellness.name': 'Health & Wellness',
+
   'mcp.categories.lifestyle.description': 'Personal Lifestyle, Habits, and Daily Activities',
+
   'mcp.categories.lifestyle.name': 'Lifestyle',
+
   'mcp.categories.media-generate.description': 'Media Generation, Editing, and Processing',
+
   'mcp.categories.media-generate.name': 'Media Generation',
+
   'mcp.categories.news.description': 'News Aggregation, Reporting, and Information Services',
+
   'mcp.categories.news.name': 'News & Information',
+
   'mcp.categories.productivity.description': 'Task Management, Notes, and Productivity Tools',
+
   'mcp.categories.productivity.name': 'Productivity Tools',
+
   'mcp.categories.science-education.description':
     'Scientific Research, Learning, and Educational Tools',
+
   'mcp.categories.science-education.name': 'Science & Education',
+
   'mcp.categories.social.description': 'Social Networks and Communication',
+
   'mcp.categories.social.name': 'Social Media',
+
   'mcp.categories.stocks-finance.description': 'Financial Markets, Trading, and Investment',
+
   'mcp.categories.stocks-finance.name': 'Stocks & Finance',
+
   'mcp.categories.tools.description': 'General-purpose Practical Tools and Services',
+
   'mcp.categories.tools.name': 'Utility Tools',
+
   'mcp.categories.travel-transport.description': 'Travel Planning and Transportation',
+
   'mcp.categories.travel-transport.name': 'Travel & Transport',
+
   'mcp.categories.weather.description': 'Weather Forecasting and Meteorological Services',
+
   'mcp.categories.weather.name': 'Weather',
+
   'mcp.categories.web-search.description': 'Web Search and Information Retrieval',
+
   'mcp.categories.web-search.name': 'Information Retrieval',
+
   'mcp.details.connectionType.hybrid.desc':
     'This service can run locally or in the cloud depending on configuration or usage scenario, offering dual operation capability.',
+
   'mcp.details.connectionType.hybrid.title': 'Hybrid Service',
+
   'mcp.details.connectionType.local.desc':
     'This server can only run on the client’s local device, requiring installation and relying on local resources.',
+
   'mcp.details.connectionType.local.title': 'Local Service',
+
   'mcp.details.connectionType.remote.desc':
     'This server is hosted remotely because it mainly depends on remote services and does not rely on the local environment.',
+
   'mcp.details.connectionType.remote.title': 'Cloud Service',
+
   'mcp.details.deployment.args': 'Arguments',
+
   'mcp.details.deployment.checkCommand': 'Check Command',
+
   'mcp.details.deployment.command': 'Command',
+
   'mcp.details.deployment.commandLine': 'System Dependencies',
+
   'mcp.details.deployment.connection': 'Connection Method',
+
   'mcp.details.deployment.connectionType': 'Connection Type',
+
   'mcp.details.deployment.description': 'Skill Installation and Deployment Method',
+
   'mcp.details.deployment.descriptionPlaceholder': 'Optional Description',
+
   'mcp.details.deployment.empty': 'No Deployment Options Available',
+
   'mcp.details.deployment.env': 'Environment Variables',
+
   'mcp.details.deployment.guide': 'Installation Guide',
+
   'mcp.details.deployment.installation': 'Install via {{method}}',
+
   'mcp.details.deployment.installationMethod': 'Installation Method',
+
   'mcp.details.deployment.other': 'Other Settings',
+
   'mcp.details.deployment.packageName': 'Package Name',
+
   'mcp.details.deployment.platform.steps.claude':
     '- Open the **Claude Desktop** app\n- Go to **Settings**, then select **Developer**\n- Click **Edit Configuration**\n- Open the **claude_desktop_config.json** file\n- Copy and paste the server configuration into the existing file, then save',
+
   'mcp.details.deployment.platform.steps.cline':
     '- Open VS Code with the Cline extension installed\n- Click the Cline icon in the sidebar\n- Select **MCP Servers** from the dropdown menu\n- In the **Remote Servers** tab, enter the server name and your MCP server URL\n- Click **Add Server** to connect',
+
   'mcp.details.deployment.platform.steps.cursor':
     '- Navigate to **Settings**, then select Cursor settings\n- Choose **MCP** on the left\n- Click **Add New Global MCP Server** at the top right\n- Copy and paste the server configuration into the existing file, then save',
+
   'mcp.details.deployment.platform.steps.lobeChat':
     '- Open the **LobeHub Desktop** app\n- Go to **Settings** - **Default Agent**\n- Then select **Skill Settings** - **Custom Skills**\n- Click **Quick Import JSON Configuration**\n- Copy and paste the server configuration into the text box, then install',
+
   'mcp.details.deployment.platform.steps.openai':
     '- Open your **OpenAI app** or development environment\n- Configure MCP tools in the **Responses API**\n- Add MCP blocks to the **tools** array in API requests\n- Set **server_url** to your MCP server endpoint\n- Include required authentication headers (API key, token, etc.)\n- Use the `allowed_tools` parameter to restrict exposed tools\n- Set `require_approval` to control tool execution approval',
+
   'mcp.details.deployment.platform.steps.vscode':
     '- Open VS Code\n- Open the command palette (`Ctrl+Shift+P` / `Cmd+Shift+P`)\n- Type **MCP: Add Server** and select it\n- Choose to add to workspace or user settings\n- Copy and paste the server configuration',
+
   'mcp.details.deployment.platform.title': 'Install on {{platform}}',
+
   'mcp.details.deployment.recommended': 'Recommended',
+
   'mcp.details.deployment.systemDependencies': 'System Dependencies',
+
   'mcp.details.deployment.table.description': 'Description',
+
   'mcp.details.deployment.table.name': 'Name',
+
   'mcp.details.deployment.table.required': 'Required',
+
   'mcp.details.deployment.table.type': 'Type',
+
   'mcp.details.deployment.title': 'Installation Method',
+
   'mcp.details.githubBadge.desc':
     'LobeHub regularly scans code repositories and documentation to: - Confirm MCP server operational status.\n- Extract server features such as tools, resources, prompts, and required parameters.\n- Our badge helps users quickly assess MCP server security, feature set, and installation instructions. Please copy the following code into your `README.md` file:',
+
   'mcp.details.nav.needHelp': 'Need Help?',
+
   'mcp.details.nav.reportIssue': 'Report Issue',
+
   'mcp.details.nav.viewSourceCode': 'View Source Code',
+
   'mcp.details.overview.title': 'Overview',
+
   'mcp.details.related.listTitle': 'Related MCP Servers',
+
   'mcp.details.related.more': 'View More',
+
   'mcp.details.related.title': 'Related Recommendations',
+
   'mcp.details.schema.mode.docs': 'Documentation',
+
   'mcp.details.schema.prompts.arguments': 'Parameter Configuration',
+
   'mcp.details.schema.prompts.desc': 'Interactive templates triggered by user selection',
+
   'mcp.details.schema.prompts.empty': 'No Prompts Available',
+
   'mcp.details.schema.prompts.instructions': 'Instruction Description',
+
   'mcp.details.schema.prompts.table.description': 'Description',
+
   'mcp.details.schema.prompts.table.name': 'Name',
+
   'mcp.details.schema.prompts.table.required': 'Required',
+
   'mcp.details.schema.prompts.title': 'Prompt List',
+
   'mcp.details.schema.resources.desc': 'Context data attached and managed by the client',
+
   'mcp.details.schema.resources.empty': 'No Resources Available',
+
   'mcp.details.schema.resources.table.description': 'Description',
+
   'mcp.details.schema.resources.table.mineType': 'MIME Type',
+
   'mcp.details.schema.resources.table.name': 'Name',
+
   'mcp.details.schema.resources.table.uri': 'URI',
+
   'mcp.details.schema.resources.title': 'Resource List',
+
   'mcp.details.schema.title': 'Skill Features',
+
   'mcp.details.schema.tools.desc':
     'Functional interfaces exposed to large language models (LLM) to perform operations',
+
   'mcp.details.schema.tools.empty': 'No Tools Available',
+
   'mcp.details.schema.tools.inputSchema': 'Input Description',
+
   'mcp.details.schema.tools.instructions': 'Instruction Description',
+
   'mcp.details.schema.tools.table.description': 'Description',
+
   'mcp.details.schema.tools.table.name': 'Name',
+
   'mcp.details.schema.tools.table.required': 'Required',
+
   'mcp.details.schema.tools.table.type': 'Type',
+
   'mcp.details.schema.tools.title': 'Tool List',
+
   'mcp.details.score.claimed.desc':
     'This MCP Server has been claimed by the owner, ensuring its ownership and management.',
+
   'mcp.details.score.claimed.title': 'Claimed by Owner',
+
   'mcp.details.score.deployMoreThanManual.desc':
     'This MCP Server offers installation methods friendlier than Manual, allowing users to deploy and use it easily.',
+
   'mcp.details.score.deployMoreThanManual.title': 'Offers Friendly Installation Methods',
+
   'mcp.details.score.deployment.desc':
     'This MCP Server provides at least one installation method, allowing users to deploy and use it.',
+
   'mcp.details.score.deployment.descWithCount':
     'This MCP Server provides {{number}} installation methods, allowing users to deploy and use it.',
+
   'mcp.details.score.deployment.title': 'Provides At Least One Installation Method',
+
   'mcp.details.score.license.desc': 'This repository contains a LICENSE file.',
+
   'mcp.details.score.license.descWithlicense': 'This repository is licensed under {{license}}.',
+
   'mcp.details.score.license.title': 'Has LICENSE',
+
   'mcp.details.score.listTitle': 'Score Details',
+
   'mcp.details.score.notClaimed.desc':
     'If you are the owner of this MCP Server, you can claim it by the following methods.',
+
   'mcp.details.score.notClaimed.title': 'Not Claimed by Owner',
+
   'mcp.details.score.prompts.desc':
     'This MCP Server provides prompts, allowing users to interact with the service.',
+
   'mcp.details.score.prompts.descWithCount':
     'This MCP Server provides {{number}} prompts, allowing users to interact with the service.',
+
   'mcp.details.score.prompts.title': 'Includes Prompts',
+
   'mcp.details.score.readme.desc': 'This repository contains a README.md file.',
+
   'mcp.details.score.readme.title': 'Has README',
+
   'mcp.details.score.resources.desc':
     'This MCP Server provides resources, allowing users to attach and manage context data.',
+
   'mcp.details.score.resources.descWithCount':
     'This MCP Server provides {{number}} resources, allowing users to attach and manage context data.',
+
   'mcp.details.score.resources.title': 'Includes Resources',
+
   'mcp.details.score.title': 'Score',
+
   'mcp.details.score.tools.desc':
     'The service must provide at least one tool, allowing users to perform specific operations.',
+
   'mcp.details.score.tools.descWithCount':
     'This MCP Server provides {{number}} tool features, allowing users to perform specific operations.',
+
   'mcp.details.score.tools.title': 'Includes At Least One Tool',
+
   'mcp.details.score.validated.desc':
     'This MCP Server has passed installation validation, ensuring its quality and reliability.',
+
   'mcp.details.score.validated.title': 'Validated',
+
   'mcp.details.scoreLevel.a.desc':
     'This MCP Server has been rigorously validated, providing comprehensive features and a high-quality user experience.',
+
   'mcp.details.scoreLevel.a.fullTitle': 'Excellent Skill',
+
   'mcp.details.scoreLevel.a.title': 'Premium',
+
   'mcp.details.scoreLevel.b.desc':
     'This MCP Server offers good features and user experience but may need improvements in some areas.',
+
   'mcp.details.scoreLevel.b.fullTitle': 'Good Functionality',
+
   'mcp.details.scoreLevel.b.title': 'Good',
+
   'mcp.details.scoreLevel.f.desc':
     'This MCP Server is incomplete or of low quality; users are advised to use it cautiously.',
+
   'mcp.details.scoreLevel.f.fullTitle': 'Poor Quality',
+
   'mcp.details.scoreLevel.f.title': 'Poor',
+
   'mcp.details.settings.capabilities.prompts': 'Prompts',
+
   'mcp.details.settings.capabilities.resources': 'Resources',
+
   'mcp.details.settings.capabilities.title': 'Skill Capabilities',
+
   'mcp.details.settings.capabilities.tools': 'Tools',
+
   'mcp.details.settings.configuration.title': 'Skill Configuration',
+
   'mcp.details.settings.connection.args': 'Startup Arguments',
+
   'mcp.details.settings.connection.command': 'Startup Command',
+
   'mcp.details.settings.connection.title': 'Connection Information',
+
   'mcp.details.settings.connection.type': 'Connection Type',
+
   'mcp.details.settings.connection.url': 'Service URL',
+
   'mcp.details.settings.saveSettings': 'Save Settings',
+
   'mcp.details.settings.title': 'Skill Settings',
+
   'mcp.details.sidebar.install': 'Install MCP Server',
+
   'mcp.details.sidebar.meta.homepage': 'Official Homepage',
+
   'mcp.details.sidebar.meta.installCount': 'Install Count',
+
   'mcp.details.sidebar.meta.language': 'Source Language',
+
   'mcp.details.sidebar.meta.license': 'License',
+
   'mcp.details.sidebar.meta.published': 'Published Date',
+
   'mcp.details.sidebar.meta.repo': 'Source Repository',
+
   'mcp.details.sidebar.meta.stars': 'Stars',
+
   'mcp.details.sidebar.meta.title': 'Details',
+
   'mcp.details.sidebar.meta.updated': 'Last Updated',
+
   'mcp.details.sidebar.moreServerConfig': 'View Details',
+
   'mcp.details.sidebar.recommendServers': 'Related MCP',
+
   'mcp.details.sidebar.serverConfig': 'Installation Configuration',
+
   'mcp.details.sidebar.toc': 'Table of Contents',
+
   'mcp.details.summary.title': 'What can you do with this MCP Server?',
+
   'mcp.details.totalScore.description': 'Total score calculated based on various indicators',
+
   'mcp.details.totalScore.legend.aGrade': 'Grade A ({{minPercent}}-100%)',
+
   'mcp.details.totalScore.legend.bGrade': 'Grade B ({{minPercent}}-{{maxPercent}}%)',
+
   'mcp.details.totalScore.legend.fGrade': 'Grade F (0-{{maxPercent}}%)',
+
   'mcp.details.totalScore.pointsFormat': '{{score}}/{{total}} points',
+
   'mcp.details.totalScore.popover.completedOptional': '✅ Completed Optional Items ({{count}})',
+
   'mcp.details.totalScore.popover.completedRequired': '✅ Completed Required Items ({{count}})',
+
   'mcp.details.totalScore.popover.incompleteOptional': '⏸️ Incomplete Optional Items ({{count}})',
+
   'mcp.details.totalScore.popover.incompleteRequired': '❌ Incomplete Required Items ({{count}})',
+
   'mcp.details.totalScore.popover.title': 'Score Details',
+
   'mcp.details.totalScore.ratingFormat': 'Rating: {{level}}',
+
   'mcp.details.totalScore.scoreInfo.items': 'Items',
+
   'mcp.details.totalScore.scoreInfo.points': 'Points',
+
   'mcp.details.totalScore.scoreInfo.requiredItems': 'Required Items',
+
   'mcp.details.totalScore.title': 'Total Score',
+
   'mcp.details.versions.table.isLatest': 'Latest Version',
+
   'mcp.details.versions.table.isValidated': 'Validated',
+
   'mcp.details.versions.table.publishAt': 'Published Date',
+
   'mcp.details.versions.table.version': 'Version',
+
   'mcp.details.versions.title': 'Version History',
+
   'mcp.hero.desc':
     'An open-source, deployable MCP Server community—helping AI systems access file systems, databases, APIs, and other key resources.',
+
   'mcp.hero.subTitle': 'Open-source, ready to run',
+
   'mcp.hero.title': 'Open-source MCP Community for AI',
+
   'mcp.sorts.createdAt': 'Recently Added',
+
   'mcp.sorts.installCount': 'Install Count',
+
   'mcp.sorts.isFeatured': 'Featured Skills',
+
   'mcp.sorts.isValidated': 'Validated Skills',
+
   'mcp.sorts.promptsCount': 'Number of Prompts',
+
   'mcp.sorts.ratingCount': 'Number of Ratings',
+
   'mcp.sorts.recommended': 'Recommended',
+
   'mcp.sorts.resourcesCount': 'Number of Resources',
+
   'mcp.sorts.toolsCount': 'Number of Tools',
+
   'mcp.sorts.updatedAt': 'Recently Updated',
+
   'mcp.title': 'MCP Community',
+
   'mcp.unvalidated.desc': 'This MCP Server has not been validated yet',
+
   'mcp.unvalidated.title': 'Unvalidated',
+
   'mcp.validated.desc': 'This MCP Server has been validated to ensure its quality and reliability.',
+
   'mcp.validated.descWithDate':
     'This MCP Server was validated on {{date}} to ensure its quality and reliability.',
+
   'mcp.validated.title': 'Validated',
+
   'mcpEmpty.description': 'Try adjusting filters or searching with different keywords.',
+
   'mcpEmpty.search': 'No matching MCP Servers found',
+
   'mcpEmpty.title': 'No MCP Servers found',
+
   'models.abilities': 'Model Capabilities',
+
   'models.chat': 'Start Conversation',
+
   'models.contentLength': 'Maximum Context Length',
+
   'models.details.overview.title': 'Overview',
+
   'models.details.related.listTitle': 'Related Models',
+
   'models.details.related.more': 'View More',
+
   'models.details.related.title': 'Related Recommendations',
+
   'models.empty.description': 'Try adjusting the filters to see more models',
+
   'models.empty.search': 'No matching models found',
+
   'models.empty.title': 'No models available',
+
   'models.free': 'Free',
+
   'models.guide': 'Configuration Guide',
+
   'models.list': 'Model List',
+
   'models.more': 'More',
+
   'models.parameterList.defaultValue': 'Default Value',
+
   'models.parameterList.docs': 'View Documentation',
+
   'models.parameterList.frequency_penalty.desc':
     'This setting adjusts the frequency at which the model reuses specific vocabulary that has already appeared in the input. Higher values reduce the likelihood of such repetition, while negative values have the opposite effect. Vocabulary penalties do not increase with frequency of occurrence. Negative values encourage vocabulary reuse.',
+
   'models.parameterList.frequency_penalty.title': 'Frequency Penalty',
+
   'models.parameterList.max_tokens.desc':
     'This setting defines the maximum length that the model can generate in a single response. Setting a higher value allows the model to produce longer replies, while a lower value restricts the length of the response, making it more concise. Adjusting this value appropriately based on different application scenarios can help achieve the desired response length and level of detail.',
+
   'models.parameterList.max_tokens.title': 'Single Response Limit',
+
   'models.parameterList.presence_penalty.desc':
     'This setting aims to control the reuse of vocabulary based on its frequency in the input. It attempts to use less of those words that appear more frequently in the input, with usage frequency proportional to occurrence frequency. Vocabulary penalties increase with frequency of occurrence. Negative values encourage vocabulary reuse.',
+
   'models.parameterList.presence_penalty.title': 'Topic Freshness',
+
   'models.parameterList.range': 'Range',
+
   'models.parameterList.reasoning_effort.desc':
     'This setting controls the intensity of reasoning the model applies before generating a response. Low intensity prioritizes response speed and saves tokens, while high intensity provides more comprehensive reasoning but consumes more tokens and slows down response time. The default value is medium, balancing reasoning accuracy with response speed.',
+
   'models.parameterList.reasoning_effort.title': 'Reasoning Intensity',
+
   'models.parameterList.temperature.desc':
     "This setting affects the diversity of the model's responses. Lower values lead to more predictable and typical responses, while higher values encourage more diverse and less common responses. When set to 0, the model always gives the same response to a given input.",
+
   'models.parameterList.temperature.title': 'Randomness',
+
   'models.parameterList.title': 'Model Parameters',
+
   'models.parameterList.top_p.desc':
     "This setting limits the model's selection to a certain proportion of the most likely vocabulary: only selecting those top words whose cumulative probability reaches P. Lower values make the model's responses more predictable, while the default setting allows the model to choose from the entire range of vocabulary.",
+
   'models.parameterList.top_p.title': 'Nucleus Sampling',
+
   'models.parameterList.type': 'Type',
+
   'models.providerInfo.apiTooltip': 'LobeHub supports using a custom API key for this provider.',
+
   'models.providerInfo.input': 'Input Price',
+
   'models.providerInfo.inputTooltip': 'Cost per million tokens',
+
   'models.providerInfo.latency': 'Latency',
+
   'models.providerInfo.latencyTooltip':
     'Average response time for the provider to send the first token',
+
   'models.providerInfo.maxOutput': 'Maximum Output Length',
+
   'models.providerInfo.maxOutputTooltip': 'Maximum number of tokens this endpoint can generate',
+
   'models.providerInfo.officialTooltip': 'LobeHub Official Service',
+
   'models.providerInfo.output': 'Output Price',
+
   'models.providerInfo.outputTooltip': 'Cost per million tokens',
+
   'models.providerInfo.streamCancellationTooltip': 'This provider supports stream cancellation.',
+
   'models.providerInfo.throughput': 'Throughput',
+
   'models.providerInfo.throughputTooltip':
     'Average number of tokens transmitted per second for stream requests',
+
   'models.sorts.contextWindowTokens': 'Context Length',
+
   'models.sorts.identifier': 'Model ID',
+
   'models.sorts.inputPrice': 'Input Price',
+
   'models.sorts.outputPrice': 'Output Price',
+
   'models.sorts.providerCount': 'Number of Providers',
+
   'models.sorts.releasedAt': 'Recently Released',
+
   'models.suggestions': 'Related Models',
+
   'models.supportedProviders': 'Providers Supporting This Model',
+
   'plugins.builtinTag': 'Built-in',
+
   'plugins.community': 'Community Skills',
+
   'plugins.details.settings.title': 'Skill Settings',
+
   'plugins.details.summary.title': 'What can you do with this skill?',
+
   'plugins.details.tools.title': 'Skill Tools',
+
   'plugins.install': 'Install Skill',
+
   'plugins.installed': 'Installed',
+
   'plugins.legacyTag': 'Legacy',
+
   'plugins.list': 'Skill List',
+
   'plugins.meta.description': 'Description',
+
   'plugins.meta.parameter': 'Parameter',
+
   'plugins.meta.title': 'Tool Parameters',
+
   'plugins.meta.type': 'Type',
+
   'plugins.more': 'More',
+
   'plugins.official': 'Official Skills',
+
   'plugins.recentSubmits': 'Recently Updated',
+
   'plugins.sorts.createdAt': 'Recently Published',
+
   'plugins.sorts.identifier': 'Skill ID',
+
   'plugins.sorts.title': 'Skill Name',
+
   'plugins.suggestions': 'Related Recommendations',
+
   'providers.config': 'Configure Provider',
+
   'providers.details.guide.title': 'Integration guide',
+
   'providers.details.overview.title': 'Overview',
+
   'providers.details.related.listTitle': 'Related Providers',
+
   'providers.details.related.more': 'View More',
+
   'providers.details.related.title': 'Related Recommendations',
+
   'providers.empty.description': 'Try adjusting filters to see more Providers.',
+
   'providers.empty.search': 'No matching Providers found',
+
   'providers.empty.title': 'No Providers found',
+
   'providers.list': 'Provider list',
+
   'providers.modelCount': '{{count}} models',
+
   'providers.modelName': 'Model Name',
+
   'providers.modelSite': 'Model Documentation',
+
   'providers.more': 'More',
+
   'providers.officialSite': 'Official Website',
+
   'providers.showAllModels': 'Show All Models',
+
   'providers.sorts.default': 'Default',
+
   'providers.sorts.identifier': 'Provider ID',
+
   'providers.sorts.modelCount': 'Number of Models',
+
   'providers.suggestions': 'Related Providers',
+
   'providers.supportedModels': 'Supported Models',
+
   'publishedTime': 'Published',
+
   'search.placeholder': 'Search by name, description, or keywords...',
+
   'search.result': '{{count}} results about <highlight>{{keyword}}</highlight>',
+
   'search.searching': 'Searching...',
+
   'tab.assistant': 'Agent',
+
   'tab.home': 'Home',
+
   'tab.model': 'Model',
+
   'tab.plugin': 'Skill',
+
   'tab.provider': 'Provider',
+
   'tab.user': 'User',
+
   'user.agents': 'Agents',
+
   'user.downloads': 'Downloads',
+
   'user.editProfile': 'Edit Profile',
+
   'user.favoriteAgents': 'Saved Agents',
+
   'user.favoritePlugins': 'Saved Skills',
+
   'user.follow': 'Follow',
+
   'user.followers': 'Followers',
+
   'user.following': 'Following',
+
+  'user.forkedAgentGroups': 'Forked Agent Groups',
+
+  // User fork lists
+  'user.forkedAgents': 'Forked Agents',
+
   'user.login': 'Become a Creator',
+
   'user.logout': 'Logout',
+
   'user.myProfile': 'My Profile',
+
   'user.noAgents': 'This user hasn’t published any Agents yet',
+
   'user.noFavoriteAgents': 'No saved Agents yet',
+
   'user.noFavoritePlugins': 'No saved Skills yet',
+
+  'user.noForkedAgentGroups': 'No forked Agent Groups yet',
+
+  'user.noForkedAgents': 'No forked Agents yet',
+
   'user.publishedAgents': 'Created Agents',
+
   'user.tabs.favorites': 'Favorites',
+
+  'user.tabs.forkedAgents': 'Forked',
+
   'user.tabs.publishedAgents': 'Created',
+
   'user.unfavorite': 'Unsave',
+
   'user.unfavoriteFailed': 'Failed to unsave',
   'user.unfavoriteSuccess': 'Unsaved',
   'user.unfollow': 'Unfollow',

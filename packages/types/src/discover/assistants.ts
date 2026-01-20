@@ -48,6 +48,15 @@ export interface DiscoverAssistantItem extends Omit<LobeAgentSettings, 'meta'>, 
   author: string;
   category?: AssistantCategory;
   createdAt: string;
+  /**
+   * Fork count - number of times this agent has been forked
+   */
+  forkCount?: number;
+  /**
+   * Forked from agent ID - ID of the source agent if this is a fork
+   * null means this is an original agent
+   */
+  forkedFromAgentId?: number | null;
   homepage: string;
   identifier: string;
   installCount?: number;

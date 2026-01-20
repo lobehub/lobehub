@@ -5,6 +5,16 @@ import {
 } from '@lobehub/market-sdk';
 
 import { lambdaClient } from '@/libs/trpc/client';
+import type {
+  AgentForkRequest,
+  AgentForkResponse,
+  AgentForkSourceResponse,
+  AgentForksResponse,
+  AgentGroupForkRequest,
+  AgentGroupForkResponse,
+  AgentGroupForkSourceResponse,
+  AgentGroupForksResponse,
+} from '@/types/discover';
 
 interface GetOwnAgentsParams {
   page?: number;
@@ -100,6 +110,74 @@ export class MarketApiService {
   // Get own agents (requires authentication)
   async getOwnAgents(params?: GetOwnAgentsParams): Promise<AgentListResponse> {
     return lambdaClient.market.agent.getOwnAgents.query(params) as Promise<AgentListResponse>;
+  }
+
+  // ==================== Fork Agent API ====================
+
+  /**
+   * Fork an agent
+   * @param sourceIdentifier - Source agent identifier
+   * @param forkData - Fork request parameters
+   */
+  async forkAgent(
+    sourceIdentifier: string,
+    forkData: AgentForkRequest,
+  ): Promise<AgentForkResponse> {
+    return lambdaClient.market.agent.forkAgent.mutate({
+      sourceIdentifier,
+      ...forkData,
+    });
+  }
+
+  /**
+   * Get all forks of an agent
+   * @param identifier - Agent identifier
+   */
+  async getAgentForks(identifier: string): Promise<AgentForksResponse> {
+    return lambdaClient.market.agent.getAgentForks.query({ identifier });
+  }
+
+  /**
+   * Get the fork source of an agent
+   * @param identifier - Agent identifier
+   * @returns Fork source information (null if not a fork)
+   */
+  async getAgentForkSource(identifier: string): Promise<AgentForkSourceResponse> {
+    return lambdaClient.market.agent.getAgentForkSource.query({ identifier });
+  }
+
+  // ==================== Fork Agent Group API ====================
+
+  /**
+   * Fork an agent group
+   * @param sourceIdentifier - Source agent group identifier
+   * @param forkData - Fork request parameters
+   */
+  async forkAgentGroup(
+    sourceIdentifier: string,
+    forkData: AgentGroupForkRequest,
+  ): Promise<AgentGroupForkResponse> {
+    return lambdaClient.market.agentGroup.forkAgentGroup.mutate({
+      sourceIdentifier,
+      ...forkData,
+    });
+  }
+
+  /**
+   * Get all forks of an agent group
+   * @param identifier - Agent group identifier
+   */
+  async getAgentGroupForks(identifier: string): Promise<AgentGroupForksResponse> {
+    return lambdaClient.market.agentGroup.getAgentGroupForks.query({ identifier });
+  }
+
+  /**
+   * Get the fork source of an agent group
+   * @param identifier - Agent group identifier
+   * @returns Fork source information (null if not a fork)
+   */
+  async getAgentGroupForkSource(identifier: string): Promise<AgentGroupForkSourceResponse> {
+    return lambdaClient.market.agentGroup.getAgentGroupForkSource.query({ identifier });
   }
 }
 

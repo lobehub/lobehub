@@ -13,6 +13,7 @@ export interface LobeChatGroupMetaConfig {
 
 export interface LobeChatGroupChatConfig {
   allowDM?: boolean;
+  forkedFromIdentifier?: string;
   openingMessage?: string;
   openingQuestions?: string[];
   revealDM?: boolean;
@@ -25,6 +26,7 @@ export type LobeChatGroupConfig = LobeChatGroupChatConfig;
 // Zod schema for ChatGroupConfig (database insert)
 export const ChatGroupConfigSchema = z.object({
   allowDM: z.boolean().optional(),
+  forkedFromIdentifier: z.string().optional(),
   openingMessage: z.string().optional(),
   openingQuestions: z.array(z.string()).optional(),
   revealDM: z.boolean().optional(),

@@ -19,6 +19,8 @@ import {
   BookmarkIcon,
   CoinsIcon,
   DotIcon,
+  GitBranchIcon,
+  GitForkIcon,
   HeartIcon,
 } from 'lucide-react';
 import qs from 'query-string';
@@ -29,6 +31,7 @@ import useSWR from 'swr';
 import urlJoin from 'url-join';
 
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
+import { marketApiService } from '@/services/marketApi';
 import { socialService } from '@/services/social';
 import { formatIntergerNumber } from '@/utils/format';
 
@@ -57,6 +60,8 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     pluginCount,
     knowledgeCount,
     userName,
+    forkCount,
+    forkedFromAgentId,
   } = useDetailContext();
   const { mobile = isMobile } = useResponsive();
   const { isAuthenticated, signIn, session } = useMarketAuth();
@@ -84,6 +89,13 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     { revalidateOnFocus: false },
   );
   const isLiked = likeStatus?.isLiked ?? false;
+
+  // Fetch fork source info
+  const { data: forkSource } = useSWR(
+    identifier && forkedFromAgentId ? ['fork-source', identifier] : null,
+    () => marketApiService.getAgentForkSource(identifier!),
+    { revalidateOnFocus: false },
+  );
 
   const handleFavoriteClick = async () => {
     if (!isAuthenticated) {
@@ -223,6 +235,31 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               template={'MMM DD, YYYY'}
             />
           </Flexbox>
+
+          {/* Fork information */}
+          {(forkSource?.source || (forkCount && forkCount > 0)) && (
+            <Flexbox align={'center'} gap={12} horizontal>
+              {forkSource?.source && (
+                <Flexbox align={'center'} gap={6} horizontal>
+                  <Icon icon={GitForkIcon} size={'small'} />
+                  <Text className={styles.time} type={'secondary'}>
+                    {t('fork.forkedFrom')}:{' '}
+                    <Link to={urlJoin('/community/agent', forkSource.source.identifier)}>
+                      {forkSource.source.name}
+                    </Link>
+                  </Text>
+                </Flexbox>
+              )}
+              {forkCount && forkCount > 0 && (
+                <Flexbox align={'center'} gap={6} horizontal>
+                  <Icon icon={GitBranchIcon} size={'small'} />
+                  <Text className={styles.time} type={'secondary'}>
+                    {forkCount} {t('fork.forks')}
+                  </Text>
+                </Flexbox>
+              )}
+            </Flexbox>
+          )}
         </Flexbox>
       </Flexbox>
       <TooltipGroup>

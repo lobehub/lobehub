@@ -165,12 +165,14 @@ export const agentGroupRouter = router({
           )
         : undefined;
 
+      const normalizedConfig = ctx.agentGroupService.normalizeGroupConfig(
+        input.groupConfig.config as ChatGroupConfig | null,
+      );
+
       const { group, supervisorAgentId } = await ctx.agentGroupRepo.createGroupWithSupervisor(
         {
           ...input.groupConfig,
-          config: ctx.agentGroupService.normalizeGroupConfig(
-            input.groupConfig.config as ChatGroupConfig | null,
-          ),
+          config: normalizedConfig,
         },
         memberAgentIds,
         supervisorConfig as any,
@@ -211,6 +213,20 @@ export const agentGroupRouter = router({
     .input(z.object({ groupId: z.string() }))
     .query(async ({ input, ctx }) => {
       return ctx.chatGroupModel.getGroupAgents(input.groupId);
+    }),
+
+  /**
+   * Get a group by forkedFromIdentifier stored in config
+   * @returns group id if exists, null otherwise
+   */
+  getGroupByForkedFromIdentifier: agentGroupProcedure
+    .input(
+      z.object({
+        forkedFromIdentifier: z.string(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      return ctx.chatGroupModel.getGroupByForkedFromIdentifier(input.forkedFromIdentifier);
     }),
 
   getGroupDetail: agentGroupProcedure

@@ -8,14 +8,14 @@ import { OFFICIAL_URL } from '@/const/url';
 
 import ShareButton from '../../../../features/ShareButton';
 import { useDetailContext } from '../../DetailProvider';
-import AddGroupAgent from './AddGroupAgent';
+import ForkGroupAndChat from './ForkGroupAndChat';
 
 const ActionButton = memo<{ mobile?: boolean }>(({ mobile }) => {
   const { avatar, title, description, tags, identifier } = useDetailContext();
 
   return (
     <Flexbox align={'center'} gap={8} horizontal>
-      <AddGroupAgent mobile={mobile} />
+      <ForkGroupAndChat mobile={mobile} />
       {identifier && (
         <ShareButton
           meta={{

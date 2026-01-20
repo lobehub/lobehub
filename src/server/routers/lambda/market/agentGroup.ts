@@ -200,13 +200,214 @@ export const agentGroupRouter = router({
       }
     }),
 
+  
   /**
+   * Fork an agent group
+   * POST /market/agent-group/:identifier/fork
+   */
+forkAgentGroup: agentGroupProcedure
+    .input(
+      z.object({
+        identifier: z.string(),
+        name: z.string().optional(),
+        sourceIdentifier: z.string(),
+        status: z.enum(['published', 'unpublished', 'archived', 'deprecated']).optional(),
+        versionNumber: z.number().optional(),
+        visibility: z.enum(['public', 'private', 'internal']).optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      log('forkAgentGroup input: %O', input);
+
+      try {
+        // Call Market API directly to fork agent group
+        const forkUrl = `${MARKET_BASE_URL}/api/v1/agent-groups/${input.sourceIdentifier}/fork`;
+
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+
+        // Use trustedClientToken or accessToken for authentication
+        const userInfo = ctx.marketUserInfo as TrustedClientUserInfo | undefined;
+        const accessToken = (ctx as { marketOidcAccessToken?: string }).marketOidcAccessToken;
+
+        if (userInfo) {
+          const trustedClientToken = generateTrustedClientToken(userInfo);
+          if (trustedClientToken) {
+            headers['x-lobe-trust-token'] = trustedClientToken;
+          }
+        }
+
+        if (!headers['x-lobe-trust-token'] && accessToken) {
+          headers['Authorization'] = `Bearer ${accessToken}`;
+        }
+
+        const response = await fetch(forkUrl, {
+          body: JSON.stringify({
+            identifier: input.identifier,
+            name: input.name,
+            status: input.status,
+            versionNumber: input.versionNumber,
+            visibility: input.visibility,
+          }),
+          headers,
+          method: 'POST',
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          log(
+            'Fork agent group failed: %s %s - %s',
+            response.status,
+            response.statusText,
+            errorText,
+          );
+          throw new Error(`Failed to fork agent group: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        log('Fork agent group success: %O', result);
+        return result;
+      } catch (error) {
+        log('Error forking agent group: %O', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to fork agent group',
+        });
+      }
+    }),
+
+  
+  
+/**
+   * Get the fork source of an agent group
+   * GET /market/agent-group/:identifier/fork-source
+   */
+getAgentGroupForkSource: agentGroupProcedure
+    .input(z.object({ identifier: z.string() }))
+    .query(async ({ input, ctx }) => {
+      log('getAgentGroupForkSource input: %O', input);
+
+      try {
+        const forkSourceUrl = `${MARKET_BASE_URL}/api/v1/agent-groups/${input.identifier}/fork-source`;
+
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+
+        const userInfo = ctx.marketUserInfo as TrustedClientUserInfo | undefined;
+        const accessToken = (ctx as { marketOidcAccessToken?: string }).marketOidcAccessToken;
+
+        if (userInfo) {
+          const trustedClientToken = generateTrustedClientToken(userInfo);
+          if (trustedClientToken) {
+            headers['x-lobe-trust-token'] = trustedClientToken;
+          }
+        }
+
+        if (!headers['x-lobe-trust-token'] && accessToken) {
+          headers['Authorization'] = `Bearer ${accessToken}`;
+        }
+
+        const response = await fetch(forkSourceUrl, {
+          headers,
+          method: 'GET',
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          log(
+            'Get agent group fork source failed: %s %s - %s',
+            response.status,
+            response.statusText,
+            errorText,
+          );
+          throw new Error(`Failed to get agent group fork source: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        return result;
+      } catch (error) {
+        log('Error getting agent group fork source: %O', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to get agent group fork source',
+        });
+      }
+    }),
+
+  
+  
+
+/**
+   * Get all forks of an agent group
+   * GET /market/agent-group/:identifier/forks
+   */
+getAgentGroupForks: agentGroupProcedure
+    .input(z.object({ identifier: z.string() }))
+    .query(async ({ input, ctx }) => {
+      log('getAgentGroupForks input: %O', input);
+
+      try {
+        const forksUrl = `${MARKET_BASE_URL}/api/v1/agent-groups/${input.identifier}/forks`;
+
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+
+        const userInfo = ctx.marketUserInfo as TrustedClientUserInfo | undefined;
+        const accessToken = (ctx as { marketOidcAccessToken?: string }).marketOidcAccessToken;
+
+        if (userInfo) {
+          const trustedClientToken = generateTrustedClientToken(userInfo);
+          if (trustedClientToken) {
+            headers['x-lobe-trust-token'] = trustedClientToken;
+          }
+        }
+
+        if (!headers['x-lobe-trust-token'] && accessToken) {
+          headers['Authorization'] = `Bearer ${accessToken}`;
+        }
+
+        const response = await fetch(forksUrl, {
+          headers,
+          method: 'GET',
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          log(
+            'Get agent group forks failed: %s %s - %s',
+            response.status,
+            response.statusText,
+            errorText,
+          );
+          throw new Error(`Failed to get agent group forks: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        return result;
+      } catch (error) {
+        log('Error getting agent group forks: %O', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to get agent group forks',
+        });
+      }
+    }),
+
+  
+  
+/**
    * Unified publish or create agent group flow
    * 1. Check if identifier exists and if current user is owner
    * 2. If not owner or no identifier, create new group
    * 3. Create new version for the group if updating
    */
-  publishOrCreate: agentGroupProcedure
+publishOrCreate: agentGroupProcedure
     .input(publishOrCreateGroupSchema)
     .mutation(async ({ input, ctx }) => {
       log('publishOrCreate input: %O', input);
@@ -294,3 +495,5 @@ export const agentGroupRouter = router({
       }
     }),
 });
+
+export type AgentGroupRouter = typeof agentGroupRouter;

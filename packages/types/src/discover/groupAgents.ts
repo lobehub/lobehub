@@ -43,6 +43,10 @@ export type GroupAgentCategory =
  */
 export interface GroupAgentConfig {
   /**
+   * Additional configuration
+   */
+  [key: string]: any;
+  /**
    * Opening message when starting a conversation with the group
    */
   openingMessage?: string;
@@ -54,10 +58,6 @@ export interface GroupAgentConfig {
    * System role/prompt for the group
    */
   systemRole?: string;
-  /**
-   * Additional configuration
-   */
-  [key: string]: any;
 }
 
 /**
@@ -71,6 +71,15 @@ export interface DiscoverGroupAgentItem extends MetaData {
   config?: GroupAgentConfig;
   createdAt: string;
   description?: string;
+  /**
+   * Fork count - number of times this agent group has been forked
+   */
+  forkCount?: number;
+  /**
+   * Forked from group ID - ID of the source agent group if this is a fork
+   * null means this is an original agent group
+   */
+  forkedFromGroupId?: number | null;
   homepage?: string;
   identifier: string;
   installCount?: number;

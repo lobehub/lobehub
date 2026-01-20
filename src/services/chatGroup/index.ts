@@ -34,6 +34,14 @@ export interface SupervisorConfig {
 
 class ChatGroupService {
   /**
+   * Get a group by forkedFromIdentifier stored in config
+   * @returns group id if exists, null otherwise
+   */
+  getGroupByForkedFromIdentifier = async (forkedFromIdentifier: string): Promise<string | null> => {
+    return lambdaClient.group.getGroupByForkedFromIdentifier.query({ forkedFromIdentifier });
+  };
+
+  /**
    * Create a group with a supervisor agent.
    * The supervisor agent is automatically created as a virtual agent.
    */

@@ -1736,6 +1736,8 @@ export class DiscoverService {
         locale,
       })) as UserInfoResponse & {
         agentGroups?: any[];
+        forkedAgentGroups?: any[];
+        forkedAgents?: any[];
       };
 
       if (!response?.user) {
@@ -1743,7 +1745,7 @@ export class DiscoverService {
         return undefined;
       }
 
-      const { user, agents, agentGroups } = response;
+      const { user, agents, agentGroups, forkedAgents, forkedAgentGroups } = response;
 
       // Transform agents to DiscoverAssistantItem format
       const transformedAgents: DiscoverAssistantItem[] = (agents || []).map((agent: any) => ({
@@ -1783,9 +1785,55 @@ export class DiscoverService {
         updatedAt: group.updatedAt,
       }));
 
+      // Transform forkedAgents to DiscoverAssistantItem format
+      const transformedForkedAgents: DiscoverAssistantItem[] = (forkedAgents || []).map(
+        (agent: any) => ({
+          author: user.displayName || user.userName || user.namespace || '',
+          avatar: agent.avatar || '',
+          category: agent.category as any,
+          config: {} as any,
+          createdAt: agent.createdAt,
+          description: agent.description || '',
+          forkCount: agent.forkCount || 0,
+          forkedFromAgentId: agent.forkedFromAgentId || null,
+          homepage: `https://lobehub.com/discover/assistant/${agent.identifier}`,
+          identifier: agent.identifier,
+          installCount: agent.installCount,
+          knowledgeCount: agent.knowledgeCount || 0,
+          pluginCount: agent.pluginCount || 0,
+          schemaVersion: 1,
+          tags: agent.tags || [],
+          title: agent.name || agent.identifier,
+          tokenUsage: agent.tokenUsage || 0,
+        }),
+      );
+
+      // Transform forkedAgentGroups to DiscoverGroupAgentItem format
+      const transformedForkedAgentGroups = (forkedAgentGroups || []).map((group: any) => ({
+        author: user.displayName || user.userName || user.namespace || '',
+        avatar: group.avatar || '👥',
+        category: group.category as any,
+        createdAt: group.createdAt,
+        description: group.description || '',
+        forkCount: group.forkCount || 0,
+        forkedFromGroupId: group.forkedFromGroupId || null,
+        homepage: `https://lobehub.com/discover/group_agent/${group.identifier}`,
+        identifier: group.identifier,
+        installCount: group.installCount || 0,
+        isFeatured: group.isFeatured || false,
+        isOfficial: group.isOfficial || false,
+        memberCount: 0, // Will be populated from memberAgents in detail view
+        schemaVersion: 1,
+        tags: group.tags || [],
+        title: group.name || group.identifier,
+        updatedAt: group.updatedAt,
+      }));
+
       const result: DiscoverUserProfile = {
         agentGroups: transformedAgentGroups,
         agents: transformedAgents,
+        forkedAgentGroups: transformedForkedAgentGroups,
+        forkedAgents: transformedForkedAgents,
         user: {
           avatarUrl: user.avatarUrl || null,
           bannerUrl: user.meta?.bannerUrl || null,
@@ -1803,9 +1851,11 @@ export class DiscoverService {
       };
 
       log(
-        'getUserInfo: returning user profile with %d agents and %d groups',
+        'getUserInfo: returning user profile with %d agents, %d groups, %d forked agents, %d forked groups',
         result.agents.length,
         result.agentGroups?.length || 0,
+        result.forkedAgents?.length || 0,
+        result.forkedAgentGroups?.length || 0,
       );
       return result;
     } catch (error) {

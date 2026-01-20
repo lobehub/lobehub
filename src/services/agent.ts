@@ -77,6 +77,14 @@ class AgentService {
   };
 
   /**
+   * Get an agent by forkedFromIdentifier stored in params
+   * @returns agent id if exists, null otherwise
+   */
+  getAgentByForkedFromIdentifier = async (forkedFromIdentifier: string): Promise<string | null> => {
+    return lambdaClient.agent.getAgentByForkedFromIdentifier.query({ forkedFromIdentifier });
+  };
+
+  /**
    * Create a new agent with session.
    * Automatically normalizes market agent config (handles model as object).
    */
