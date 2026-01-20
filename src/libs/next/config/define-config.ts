@@ -308,6 +308,11 @@ export function defineConfig(config: CustomNextConfig) {
         permanent: false,
         source: '/repos',
       },
+      {
+        destination: '/',
+        permanent: true,
+        source: '/chat',
+      },
       ...(config.redirects ?? []),
     ],
 
