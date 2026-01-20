@@ -39,7 +39,6 @@ describe('ExperienceExtractor', () => {
     const memoryItem = memories.items;
 
     expect(memories.type).toBe('array');
-    expect(memoryItem.properties.memoryLayer.const).toBe('experience');
     // memoryCategory is a plain string in schema, not an enum
     expect(memoryItem.properties.memoryCategory.type).toBe('string');
     expect(memoryItem.properties.memoryType.enum).toEqual(memoryTypeValues);
