@@ -2,9 +2,10 @@
 
 import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { ListChecksIcon, Loader2, XIcon } from 'lucide-react';
+import { ListChecksIcon, XIcon } from 'lucide-react';
 import { memo } from 'react';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { ThreadStatus } from '@/types/index';
 
 import { isProcessingStatus } from '../shared';
@@ -27,7 +28,7 @@ const TaskStatusIndicator = memo<{ status?: ThreadStatus }>(({ status }) => {
   } else if (isError) {
     icon = <Icon color={cssVar.colorError} icon={XIcon} />;
   } else if (isProcessing || isInitializing) {
-    icon = <Icon color={cssVar.colorTextDescription} icon={Loader2} spin />;
+    icon = <NeuralNetworkLoading size={16} />;
   } else {
     return null;
   }
