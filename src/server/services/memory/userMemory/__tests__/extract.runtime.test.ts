@@ -89,8 +89,9 @@ describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
     });
   });
 
-  it('throws when no provider can satisfy an embedding model', () => {
+  it('warns and falls back to server provider when no enabled provider satisfies embedding model', () => {
     const executor = createExecutor();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
     const runtimeState = createRuntimeState(
       [
@@ -106,6 +107,15 @@ describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
       },
     );
 
-    expect(() => (executor as any).resolveRuntimeKeyVaults(runtimeState)).toThrow(/embedding/i);
+    const keyVaults = (executor as any).resolveRuntimeKeyVaults(runtimeState);
+
+    expect(keyVaults).toMatchObject({
+      'provider-b': { apiKey: 'b-key' },
+      'provider-l': { apiKey: 'l-key' },
+    });
+    expect(keyVaults).not.toHaveProperty('provider-e');
+    expect(warnSpy).toHaveBeenCalled();
+
+    warnSpy.mockRestore();
   });
 });
