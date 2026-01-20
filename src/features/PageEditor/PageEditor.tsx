@@ -15,6 +15,7 @@ import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
 import { usePageStore } from '@/store/page';
+import { StyleSheet } from '@/utils/styles';
 
 import Copilot from './Copilot';
 import EditorCanvas from './EditorCanvas';
@@ -24,6 +25,22 @@ import { PageEditorProvider } from './PageEditorProvider';
 import PageTitle from './PageTitle';
 import TitleSection from './TitleSection';
 import { usePageEditorStore } from './store';
+
+const styles = StyleSheet.create({
+  contentWrapper: {
+    display: 'flex',
+    overflowY: 'auto',
+    position: 'relative',
+  },
+  editorContainer: {
+    minWidth: 0,
+    position: 'relative',
+  },
+  editorContent: {
+    overflowY: 'auto',
+    position: 'relative',
+  },
+});
 
 interface PageEditorProps {
   emoji?: string;
@@ -77,16 +94,11 @@ const PageEditorCanvas = memo(() => {
         style={{ backgroundColor: cssVar.colorBgContainer }}
         width={'100%'}
       >
-        <Flexbox flex={1} height={'100%'} style={{ position: 'relative' }}>
+        <Flexbox flex={1} height={'100%'} style={styles.editorContainer}>
           <Header />
-          <Flexbox
-            height={'100%'}
-            horizontal
-            style={{ display: 'flex', overflowY: 'auto', position: 'relative' }}
-            width={'100%'}
-          >
+          <Flexbox height={'100%'} horizontal style={styles.contentWrapper} width={'100%'}>
             <WideScreenContainer onClick={() => editor?.focus()} wrapperStyle={{ cursor: 'text' }}>
-              <Flexbox flex={1} style={{ overflowY: 'auto', position: 'relative' }}>
+              <Flexbox flex={1} style={styles.editorContent}>
                 <TitleSection />
                 <EditorCanvas />
               </Flexbox>
