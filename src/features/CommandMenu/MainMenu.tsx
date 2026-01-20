@@ -121,7 +121,7 @@ const MainMenu = memo(() => {
                 onSelect={() => handleNavigate(route.path)}
                 value={route.id}
               >
-                {t(route.cmdkKey)}
+                {t(route.cmdkKey as any)}
               </CommandItem>
             )
           );
