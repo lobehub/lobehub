@@ -1723,7 +1723,7 @@ export const createAgentExecutors = (context: {
           };
         }
 
-        const { threadId, userMessageId, messages: initialMessages } = threadResult;
+        const { threadId, userMessageId, threadMessages, messages } = threadResult;
 
         // 3. Build sub-task ConversationContext (uses threadId for isolation)
         const subContext: ConversationContext = { agentId, topicId, threadId, scope: 'thread' };
@@ -1741,24 +1741,29 @@ export const createAgentExecutors = (context: {
           },
         });
         log(
-          '[%s][exec_client_task] Created thread: %s, userMessageId: %s, messages: %d',
+          '[%s][exec_client_task] Created thread: %s, userMessageId: %s, threadMessages: %d',
           taskLogId,
           threadId,
           userMessageId,
-          initialMessages.length,
+          threadMessages.length,
         );
 
-        // 5. Use server-returned messages (already persisted)
-        let subMessages = [...initialMessages];
+        // 5. Sync messages to store
+        // Update main chat messages with latest taskDetail status
+        context.get().replaceMessages(messages, { operationId: state.operationId });
+        // Update thread messages
+        context.get().replaceMessages(threadMessages, { context: subContext });
+
+        // 6. Use server-returned thread messages (already persisted)
+        let subMessages = [...threadMessages];
 
         // Optionally inherit messages from parent conversation
         if (task.inheritMessages) {
           const parentMessages = state.messages.filter((m) => m.role !== 'task');
           subMessages = [...parentMessages, ...subMessages];
+          // Re-sync with inherited messages
+          context.get().replaceMessages(subMessages, { context: subContext });
         }
-
-        // 6. Sync initial messages to dbMessagesMap before execution
-        context.get().replaceMessages(subMessages, { context: subContext });
 
         // 7. Execute using internal_execAgentRuntime (client-side with local tools access)
         log('[%s][exec_client_task] Starting client-side AgentRuntime execution', taskLogId);
@@ -2005,13 +2010,13 @@ export const createAgentExecutors = (context: {
               };
             }
 
-            const { threadId, userMessageId, messages: initialMessages } = threadResult;
+            const { threadId, userMessageId, threadMessages, messages } = threadResult;
             log(
-              '[%s] Created thread: %s, userMessageId: %s, messages: %d',
+              '[%s] Created thread: %s, userMessageId: %s, threadMessages: %d',
               taskLogId,
               threadId,
               userMessageId,
-              initialMessages.length,
+              threadMessages.length,
             );
 
             // 3. Build sub-task ConversationContext (uses threadId for isolation)
@@ -2036,17 +2041,22 @@ export const createAgentExecutors = (context: {
               },
             });
 
-            // 5. Use server-returned messages (already persisted)
-            let subMessages = [...initialMessages];
+            // 5. Sync messages to store
+            // Update main chat messages with latest taskDetail status
+            context.get().replaceMessages(messages, { operationId: state.operationId });
+            // Update thread messages
+            context.get().replaceMessages(threadMessages, { context: subContext });
+
+            // 6. Use server-returned thread messages (already persisted)
+            let subMessages = [...threadMessages];
 
             // Optionally inherit messages from parent conversation
             if (task.inheritMessages) {
               const parentMessages = state.messages.filter((m) => m.role !== 'task');
               subMessages = [...parentMessages, ...subMessages];
+              // Re-sync with inherited messages
+              context.get().replaceMessages(subMessages, { context: subContext });
             }
-
-            // 6. Sync initial messages to dbMessagesMap before execution
-            context.get().replaceMessages(subMessages as any, { context: subContext });
 
             // 7. Execute using internal_execAgentRuntime (client-side with local tools access)
             log('[%s] Starting client-side AgentRuntime execution', taskLogId);
