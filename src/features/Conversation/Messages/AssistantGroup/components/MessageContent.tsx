@@ -28,8 +28,6 @@ const MessageContent = memo<ContentBlockProps>(({ content, hasTools, id }) => {
   if (!content && !hasTools) return <ContentLoading id={id} />;
 
   if (content === LOADING_FLAT) {
-    if (hasTools) return null;
-
     return <ContentLoading id={id} />;
   }
 

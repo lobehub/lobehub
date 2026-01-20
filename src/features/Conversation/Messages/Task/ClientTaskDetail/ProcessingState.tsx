@@ -16,7 +16,7 @@ import Usage from '../../components/Extras/Usage';
 
 const styles = createStaticStyles(({ css }) => ({
   contentScroll: css`
-    max-height: min(50vh, 400px);
+    max-height: min(50vh, 300px);
   `,
 }));
 

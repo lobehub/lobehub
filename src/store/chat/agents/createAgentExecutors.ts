@@ -1853,7 +1853,8 @@ export const createAgentExecutors = (context: {
           newState: { ...state, messages: updatedMessages },
           nextContext: {
             payload: {
-              parentMessageId,
+              // Use taskMessageId as parent so subsequent messages are created after the task
+              parentMessageId: taskMessageId,
               result: {
                 result: resultContent,
                 success: true,
@@ -2160,12 +2161,16 @@ export const createAgentExecutors = (context: {
       const updatedMessages = context.get().dbMessagesMap[context.messageKey] || [];
       const newState = { ...state, messages: updatedMessages };
 
+      // Use the last successful task's message ID as parent for subsequent messages
+      const lastSuccessfulTaskId = results.findLast((r) => r.success)?.taskMessageId;
+
       return {
         events,
         newState,
         nextContext: {
           payload: {
-            parentMessageId,
+            // Use last task message as parent so subsequent messages are created after the tasks
+            parentMessageId: lastSuccessfulTaskId || parentMessageId,
             results,
           } as TasksBatchResultPayload,
           phase: 'tasks_batch_result',
