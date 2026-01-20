@@ -19,6 +19,7 @@ import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { normalizeThinkTags, processWithArtifact } from '../../utils/markdown';
 import { AssistantActionsBar } from './Actions';
+import ClientTaskDetail from './ClientTaskDetail';
 import TaskDetailPanel from './TaskDetailPanel';
 
 interface TaskMessageProps {
@@ -91,12 +92,16 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
       time={createdAt}
       titleAddon={<Tag>{t('task.subtask')}</Tag>}
     >
-      <TaskDetailPanel
-        content={content}
-        instruction={metadata?.instruction}
-        messageId={id}
-        taskDetail={taskDetail}
-      />
+      {taskDetail?.clientMode ? (
+        <ClientTaskDetail content={content} messageId={id} taskDetail={taskDetail} />
+      ) : (
+        <TaskDetailPanel
+          content={content}
+          instruction={metadata?.instruction}
+          messageId={id}
+          taskDetail={taskDetail}
+        />
+      )}
     </ChatItem>
   );
 }, isEqual);
