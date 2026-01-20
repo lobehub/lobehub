@@ -6,11 +6,11 @@ import {
   type RefObject,
   memo,
   useEffect,
-  useRef,
   useState,
 } from 'react';
 
 import MarkdownMessage from '@/features/Conversation/Markdown';
+import { useAutoScroll } from '@/hooks/useAutoScroll';
 import { type ChatCitationItem } from '@/types/index';
 
 import Title from './Title';
@@ -40,38 +40,16 @@ interface ThinkingProps {
 const Thinking = memo<ThinkingProps>((props) => {
   const { content, duration, thinking, citations, thinkingAnimated } = props;
   const [showDetail, setShowDetail] = useState(false);
-  const contentRef = useRef<HTMLDivElement | null>(null);
+
+  const { ref, handleScroll } = useAutoScroll<HTMLDivElement>({
+    deps: [content, showDetail],
+    enabled: thinking && showDetail,
+    threshold: 120,
+  });
 
   useEffect(() => {
     setShowDetail(!!thinking);
   }, [thinking]);
-
-  // 当内容变更且正在思考时，如果用户接近底部则自动滚动到底部
-  useEffect(() => {
-    if (!thinking || !showDetail) return;
-    const container = contentRef.current;
-    if (!container) return;
-
-    // 仅当用户接近底部时才自动滚动，避免打断用户查看上方内容
-    const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    const isNearBottom = distanceToBottom < 120;
-
-    if (isNearBottom) {
-      requestAnimationFrame(() => {
-        container.scrollTop = container.scrollHeight;
-      });
-    }
-  }, [content, thinking, showDetail]);
-
-  // 展开时滚动到底部，便于查看最新内容
-  useEffect(() => {
-    if (!showDetail) return;
-    const container = contentRef.current;
-    if (!container) return;
-    requestAnimationFrame(() => {
-      container.scrollTop = container.scrollHeight;
-    });
-  }, [showDetail]);
 
   return (
     <Accordion
@@ -88,7 +66,8 @@ const Thinking = memo<ThinkingProps>((props) => {
         <ScrollShadow
           className={styles.contentScroll}
           offset={12}
-          ref={contentRef as unknown as RefObject<HTMLDivElement>}
+          onScroll={handleScroll}
+          ref={ref as RefObject<HTMLDivElement>}
           size={12}
         >
           {typeof content === 'string' ? (

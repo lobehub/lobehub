@@ -360,6 +360,7 @@ export default {
   'task.activity.toolCalling': 'Calling {{toolName}}...',
   'task.activity.toolResult': '{{toolName}} result received',
   'task.batchTasks': '{{count}} Batch Subtasks',
+  'task.intermediateSteps': '{{count}} intermediate steps',
   'task.metrics.stepsShort': 'steps',
   'task.metrics.toolCallsShort': 'tool uses',
   'task.status.cancelled': 'Task Cancelled',

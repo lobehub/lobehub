@@ -68,6 +68,7 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
   // Use taskTitle from metadata if available, otherwise fall back to avatar title
   const title = metadata?.taskTitle || avatar?.title;
 
+  console.log('taskDetail:', taskDetail);
   return (
     <ChatItem
       aboveMessage={null}
