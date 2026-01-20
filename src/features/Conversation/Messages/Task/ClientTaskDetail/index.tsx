@@ -1,16 +1,18 @@
 'use client';
 
 import { type TaskDetail, ThreadStatus } from '@lobechat/types';
-import { Block, Flexbox } from '@lobehub/ui';
+import { Accordion, AccordionItem, Block, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
+import { ScrollText } from 'lucide-react';
 import { memo, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
 import { displayMessageSelectors } from '@/store/chat/selectors';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import { InitializingState } from '../../Tasks/shared';
 import CompletedState from './CompletedState';
+import InitializingState from './InitializingState';
 import ProcessingState from './ProcessingState';
 
 interface ClientTaskDetailProps {
@@ -20,6 +22,7 @@ interface ClientTaskDetailProps {
 }
 
 const ClientTaskDetail = memo<ClientTaskDetailProps>(({ taskDetail }) => {
+  const { t } = useTranslation('chat');
   const threadId = taskDetail?.threadId;
   const isExecuting = taskDetail?.status === ThreadStatus.Processing;
 
@@ -66,10 +69,45 @@ const ClientTaskDetail = memo<ClientTaskDetailProps>(({ taskDetail }) => {
   }
 
   return (
-    <Flexbox gap={8}>
-      <Block padding={12} variant={'outlined'}>
-        <span style={{ color: cssVar.colorTextSecondary }}>{instruction}</span>
-      </Block>
+    <Flexbox gap={4}>
+      {instruction && (
+        <Accordion defaultExpandedKeys={['instruction']} gap={8}>
+          <AccordionItem
+            itemKey="instruction"
+            paddingBlock={4}
+            paddingInline={8}
+            title={
+              <Flexbox align="center" gap={8} horizontal>
+                <Block
+                  align="center"
+                  flex="none"
+                  gap={4}
+                  height={24}
+                  horizontal
+                  justify="center"
+                  style={{ fontSize: 12 }}
+                  variant="outlined"
+                  width={24}
+                >
+                  <Icon color={cssVar.colorTextSecondary} icon={ScrollText} />
+                </Block>
+                <Text as="span" type="secondary">
+                  {t('task.instruction')}
+                </Text>
+              </Flexbox>
+            }
+          >
+            <Block
+              padding={12}
+              style={{ marginBlock: 8, maxHeight: 300, overflow: 'auto' }}
+              variant={'outlined'}
+            >
+              <Markdown variant={'chat'}>{instruction}</Markdown>
+            </Block>
+          </AccordionItem>
+        </Accordion>
+      )}
+
       {isExecuting ? (
         <ProcessingState
           assistantId={assistantGroupMessage.id}

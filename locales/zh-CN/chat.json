@@ -328,6 +328,7 @@
   "task.activity.toolCalling": "正在调用 {{toolName}}…",
   "task.activity.toolResult": "已获取 {{toolName}} 结果",
   "task.batchTasks": "{{count}} 个批量子任务",
+  "task.instruction": "任务说明",
   "task.intermediateSteps": "{{count}} 个中间步骤",
   "task.metrics.stepsShort": "步",
   "task.metrics.toolCallsShort": "次技能调用",

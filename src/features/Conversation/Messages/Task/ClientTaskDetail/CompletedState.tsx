@@ -68,7 +68,7 @@ const CompletedState = memo<CompletedStateProps>(({ blocks, assistantId }) => {
       {intermediateBlocks.length > 0 && (
         <Accordion defaultExpandedKeys={[]} gap={8}>
           <AccordionItem itemKey="intermediate" paddingBlock={4} paddingInline={8} title={title}>
-            <Flexbox gap={8}>
+            <Flexbox gap={8} paddingInline={4} style={{ marginTop: 8 }}>
               {intermediateBlocks.map((block) => (
                 <ContentBlock {...block} assistantId={assistantId} disableEditing key={block.id} />
               ))}
