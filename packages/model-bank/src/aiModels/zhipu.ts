@@ -75,6 +75,33 @@ const zhipuChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
+      "GLM-4.7-Flash, as a 30B-scale state-of-the-art model, offers a new option that balances performance and efficiency. It strengthens capabilities for agentic coding scenarios, including coding proficiency, long-horizon task planning, and tool collaboration, and achieves leading results among open-source models of the same size on current leaderboards across multiple public benchmarks. In executing complex agent tasks, it demonstrates stronger instruction adherence during tool invocation, while further improving frontend aesthetics for artifacts and the efficiency of long-horizon task completion in agentic coding.",
+    displayName: 'GLM-4.7-Flash',
+    enabled: true,
+    id: 'glm-4.7-flash',
+    maxOutput: 131_072,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput_cacheRead', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
       "Zhipu's latest flagship model GLM-4.6 (355B) fully surpasses its predecessors in advanced coding, long-text processing, reasoning, and agent capabilities. It particularly aligns with Claude Sonnet 4 in programming ability, becoming China's top Coding model.",
     displayName: 'GLM-4.6',
     id: 'glm-4.6',
@@ -442,7 +469,6 @@ const zhipuChatModels: AIChatModelCard[] = [
     contextWindowTokens: 131_072,
     description: 'Free GLM-4.5 tier with strong performance in reasoning, coding, and agent tasks.',
     displayName: 'GLM-4.5-Flash',
-    enabled: true,
     id: 'glm-4.5-flash',
     maxOutput: 98_304,
     pricing: {
