@@ -1,4 +1,12 @@
-import { Brain, Compass, Database, FileText, Image, type LucideIcon, Settings } from 'lucide-react';
+import {
+  BrainCircuit,
+  FilePenIcon,
+  Image,
+  LibraryBigIcon,
+  type LucideIcon,
+  Settings,
+  ShapesIcon,
+} from 'lucide-react';
 
 export interface NavigationRoute {
   /** CMDK i18n key in common namespace */
@@ -27,7 +35,7 @@ export const NAVIGATION_ROUTES: NavigationRoute[] = [
   {
     cmdkKey: 'cmdk.community',
     electronKey: 'navigation.discover',
-    icon: Compass,
+    icon: ShapesIcon,
     id: 'community',
     keywords: ['discover', 'market', 'assistant', 'model', 'provider', 'mcp'],
     path: '/community',
@@ -45,7 +53,7 @@ export const NAVIGATION_ROUTES: NavigationRoute[] = [
   {
     cmdkKey: 'cmdk.resource',
     electronKey: 'navigation.resources',
-    icon: Database,
+    icon: LibraryBigIcon,
     id: 'resource',
     keywords: ['knowledge', 'files', 'library', 'documents'],
     path: '/resource',
@@ -54,7 +62,7 @@ export const NAVIGATION_ROUTES: NavigationRoute[] = [
   {
     cmdkKey: 'cmdk.pages',
     electronKey: 'navigation.pages',
-    icon: FileText,
+    icon: FilePenIcon,
     id: 'page',
     keywords: ['documents', 'write', 'notes'],
     path: '/page',
@@ -64,7 +72,7 @@ export const NAVIGATION_ROUTES: NavigationRoute[] = [
   {
     cmdkKey: 'cmdk.memory',
     electronKey: 'navigation.memory',
-    icon: Brain,
+    icon: BrainCircuit,
     id: 'memory',
     keywords: ['identities', 'contexts', 'preferences', 'experiences'],
     path: '/memory',
@@ -91,4 +99,6 @@ export const getRouteById = (id: string): NavigationRoute | undefined =>
  * Get navigable routes for CMDK (excludes settings which has separate handling)
  */
 export const getNavigableRoutes = (): NavigationRoute[] =>
-  NAVIGATION_ROUTES.filter((r) => ['community', 'image', 'resource', 'page', 'memory'].includes(r.id));
+  NAVIGATION_ROUTES.filter((r) =>
+    ['community', 'image', 'resource', 'page', 'memory'].includes(r.id),
+  );

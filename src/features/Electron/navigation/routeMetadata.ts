@@ -2,7 +2,15 @@
  * Route metadata mapping for navigation history
  * Provides title and icon information based on route path
  */
-import { Circle, Compass, Home, type LucideIcon, MessageSquare, Rocket, Users } from 'lucide-react';
+import {
+  Circle,
+  Home,
+  type LucideIcon,
+  MessageSquare,
+  Rocket,
+  ShapesIcon,
+  Users,
+} from 'lucide-react';
 
 import { getRouteById } from '@/config/routes';
 
@@ -75,7 +83,7 @@ const routePatterns: RoutePattern[] = [
 
   // Community/Discover routes
   {
-    icon: Compass,
+    icon: ShapesIcon,
     test: (p) => p.startsWith('/community/agent'),
     titleKey: 'navigation.discoverAssistants',
   },
