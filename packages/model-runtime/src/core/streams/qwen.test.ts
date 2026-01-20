@@ -631,346 +631,266 @@ describe('parallel tool calls streaming bug', () => {
     // User asks: "查一下北京、上海、南京的时间，同时调用3次mcp"
     // Model returns 3 parallel tool calls with index 0, 1, 2
     // Subsequent chunks contain arguments without id field, only index
+    const streamId = 'chatcmpl-23f324a2-059f-9ab4-b7b3-f47bcba5ebf7';
+
+    // Define all chunks as an array for clarity and maintainability
+    const chunks = [
+      // Chunk 0: First tool call starts (index=0)
+      {
+        id: streamId,
+        object: 'chat.completion.chunk',
+        created: 1768906556,
+        model: 'qwen3-max',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              role: 'assistant',
+              tool_calls: [
+                {
+                  id: 'call_c7d8b4984a4d4f54a4956bca',
+                  type: 'function',
+                  function: { name: 'time____get_time____mcp', arguments: '' },
+                  index: 0,
+                },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+      // Chunk 1: First tool call continues with empty arguments
+      {
+        id: streamId,
+        object: 'chat.completion.chunk',
+        created: 1768906556,
+        model: 'qwen3-max',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              tool_calls: [
+                {
+                  id: 'call_c7d8b4984a4d4f54a4956bca',
+                  type: 'function',
+                  function: { arguments: '' },
+                  index: 0,
+                },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+      // Chunk 2: First tool call arguments part 1 (北京)
+      {
+        id: streamId,
+        object: 'chat.completion.chunk',
+        created: 1768906556,
+        model: 'qwen3-max',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              tool_calls: [
+                { type: 'function', function: { arguments: '{"location": "北京' }, index: 0 },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+      // Chunk 3: First tool call arguments part 2
+      {
+        id: streamId,
+        object: 'chat.completion.chunk',
+        created: 1768906556,
+        model: 'qwen3-max',
+        choices: [
+          {
+            index: 0,
+            delta: { tool_calls: [{ type: 'function', function: { arguments: '"}' }, index: 0 }] },
+            finish_reason: null,
+          },
+        ],
+      },
+      // Chunk 4: Empty arguments for first tool call
+      {
+        id: streamId,
+        object: 'chat.completion.chunk',
+        created: 1768906556,
+        model: 'qwen3-max',
+        choices: [
+          {
+            index: 0,
+            delta: { tool_calls: [{ type: 'function', function: { arguments: '' }, index: 0 }] },
+            finish_reason: null,
+          },
+        ],
+      },
+      // Chunk 5: Second tool call starts (index=1) - 上海
+      {
+        id: streamId,
+        object: 'chat.completion.chunk',
+        created: 1768906556,
+        model: 'qwen3-max',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              tool_calls: [
+                {
+                  id: 'call_f564785a14534d9a8c5ee641',
+                  type: 'function',
+                  function: { name: 'time____get_time____mcp', arguments: '' },
+                  index: 1,
+                },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+      // Chunk 6: Second tool call arguments (上海)
+      {
+        id: streamId,
+        object: 'chat.completion.chunk',
+        created: 1768906556,
+        model: 'qwen3-max',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              tool_calls: [
+                { type: 'function', function: { arguments: '{"location": "上海' }, index: 1 },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+      // Chunk 7: Second tool call arguments part 2
+      {
+        id: streamId,
+        object: 'chat.completion.chunk',
+        created: 1768906556,
+        model: 'qwen3-max',
+        choices: [
+          {
+            index: 0,
+            delta: { tool_calls: [{ type: 'function', function: { arguments: '"}' }, index: 1 }] },
+            finish_reason: null,
+          },
+        ],
+      },
+      // Chunk 8: Third tool call starts (index=2) - 南京
+      {
+        id: streamId,
+        object: 'chat.completion.chunk',
+        created: 1768906556,
+        model: 'qwen3-max',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              tool_calls: [
+                {
+                  id: 'call_19693813aebd434aab821f06',
+                  type: 'function',
+                  function: { name: 'time____get_time____mcp', arguments: '{"location": "' },
+                  index: 2,
+                },
+              ],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+      // Chunk 9: Third tool call arguments (南京)
+      {
+        id: streamId,
+        object: 'chat.completion.chunk',
+        created: 1768906556,
+        model: 'qwen3-max',
+        choices: [
+          {
+            index: 0,
+            delta: {
+              tool_calls: [{ type: 'function', function: { arguments: '南京"' }, index: 2 }],
+            },
+            finish_reason: null,
+          },
+        ],
+      },
+      // Chunk 10: Third tool call arguments final
+      {
+        id: streamId,
+        object: 'chat.completion.chunk',
+        created: 1768906556,
+        model: 'qwen3-max',
+        choices: [
+          {
+            index: 0,
+            delta: { tool_calls: [{ type: 'function', function: { arguments: '}' }, index: 2 }] },
+            finish_reason: null,
+          },
+        ],
+      },
+      // Chunk 11: Finish
+      {
+        id: streamId,
+        object: 'chat.completion.chunk',
+        created: 1768906556,
+        model: 'qwen3-max',
+        choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
+      },
+    ];
+
     const mockOpenAIStream = new ReadableStream({
       start(controller) {
-        // Chunk 0: First tool call starts (index=0)
-        controller.enqueue({
-          id: 'chatcmpl-23f324a2-059f-9ab4-b7b3-f47bcba5ebf7',
-          object: 'chat.completion.chunk',
-          created: 1768906556,
-          model: 'qwen3-max',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                role: 'assistant',
-                tool_calls: [
-                  {
-                    id: 'call_c7d8b4984a4d4f54a4956bca',
-                    type: 'function',
-                    function: { name: 'time____get_time____mcp', arguments: '' },
-                    index: 0,
-                  },
-                ],
-              },
-              finish_reason: null,
-            },
-          ],
-        });
-
-        // Chunk 1: First tool call continues with empty arguments
-        controller.enqueue({
-          id: 'chatcmpl-23f324a2-059f-9ab4-b7b3-f47bcba5ebf7',
-          object: 'chat.completion.chunk',
-          created: 1768906556,
-          model: 'qwen3-max',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                tool_calls: [
-                  {
-                    id: 'call_c7d8b4984a4d4f54a4956bca',
-                    type: 'function',
-                    function: { arguments: '' },
-                    index: 0,
-                  },
-                ],
-              },
-              finish_reason: null,
-            },
-          ],
-        });
-
-        // Chunk 2: First tool call arguments part 1 (北京)
-        controller.enqueue({
-          id: 'chatcmpl-23f324a2-059f-9ab4-b7b3-f47bcba5ebf7',
-          object: 'chat.completion.chunk',
-          created: 1768906556,
-          model: 'qwen3-max',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                tool_calls: [
-                  {
-                    type: 'function',
-                    function: { arguments: '{"location": "北京' },
-                    index: 0,
-                  },
-                ],
-              },
-              finish_reason: null,
-            },
-          ],
-        });
-
-        // Chunk 3: First tool call arguments part 2
-        controller.enqueue({
-          id: 'chatcmpl-23f324a2-059f-9ab4-b7b3-f47bcba5ebf7',
-          object: 'chat.completion.chunk',
-          created: 1768906556,
-          model: 'qwen3-max',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                tool_calls: [
-                  {
-                    type: 'function',
-                    function: { arguments: '"}' },
-                    index: 0,
-                  },
-                ],
-              },
-              finish_reason: null,
-            },
-          ],
-        });
-
-        // Chunk 4: Empty arguments for first tool call
-        controller.enqueue({
-          id: 'chatcmpl-23f324a2-059f-9ab4-b7b3-f47bcba5ebf7',
-          object: 'chat.completion.chunk',
-          created: 1768906556,
-          model: 'qwen3-max',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                tool_calls: [
-                  {
-                    type: 'function',
-                    function: { arguments: '' },
-                    index: 0,
-                  },
-                ],
-              },
-              finish_reason: null,
-            },
-          ],
-        });
-
-        // Chunk 5: Second tool call starts (index=1) - 上海
-        controller.enqueue({
-          id: 'chatcmpl-23f324a2-059f-9ab4-b7b3-f47bcba5ebf7',
-          object: 'chat.completion.chunk',
-          created: 1768906556,
-          model: 'qwen3-max',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                tool_calls: [
-                  {
-                    id: 'call_f564785a14534d9a8c5ee641',
-                    type: 'function',
-                    function: { name: 'time____get_time____mcp', arguments: '' },
-                    index: 1,
-                  },
-                ],
-              },
-              finish_reason: null,
-            },
-          ],
-        });
-
-        // Chunk 6: Second tool call arguments (上海)
-        controller.enqueue({
-          id: 'chatcmpl-23f324a2-059f-9ab4-b7b3-f47bcba5ebf7',
-          object: 'chat.completion.chunk',
-          created: 1768906556,
-          model: 'qwen3-max',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                tool_calls: [
-                  {
-                    type: 'function',
-                    function: { arguments: '{"location": "上海' },
-                    index: 1,
-                  },
-                ],
-              },
-              finish_reason: null,
-            },
-          ],
-        });
-
-        // Chunk 7: Second tool call arguments part 2
-        controller.enqueue({
-          id: 'chatcmpl-23f324a2-059f-9ab4-b7b3-f47bcba5ebf7',
-          object: 'chat.completion.chunk',
-          created: 1768906556,
-          model: 'qwen3-max',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                tool_calls: [
-                  {
-                    type: 'function',
-                    function: { arguments: '"}' },
-                    index: 1,
-                  },
-                ],
-              },
-              finish_reason: null,
-            },
-          ],
-        });
-
-        // Chunk 8: Third tool call starts (index=2) - 南京
-        controller.enqueue({
-          id: 'chatcmpl-23f324a2-059f-9ab4-b7b3-f47bcba5ebf7',
-          object: 'chat.completion.chunk',
-          created: 1768906556,
-          model: 'qwen3-max',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                tool_calls: [
-                  {
-                    id: 'call_19693813aebd434aab821f06',
-                    type: 'function',
-                    function: { name: 'time____get_time____mcp', arguments: '{"location": "' },
-                    index: 2,
-                  },
-                ],
-              },
-              finish_reason: null,
-            },
-          ],
-        });
-
-        // Chunk 9: Third tool call arguments (南京)
-        controller.enqueue({
-          id: 'chatcmpl-23f324a2-059f-9ab4-b7b3-f47bcba5ebf7',
-          object: 'chat.completion.chunk',
-          created: 1768906556,
-          model: 'qwen3-max',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                tool_calls: [
-                  {
-                    type: 'function',
-                    function: { arguments: '南京"' },
-                    index: 2,
-                  },
-                ],
-              },
-              finish_reason: null,
-            },
-          ],
-        });
-
-        // Chunk 10: Third tool call arguments final
-        controller.enqueue({
-          id: 'chatcmpl-23f324a2-059f-9ab4-b7b3-f47bcba5ebf7',
-          object: 'chat.completion.chunk',
-          created: 1768906556,
-          model: 'qwen3-max',
-          choices: [
-            {
-              index: 0,
-              delta: {
-                tool_calls: [
-                  {
-                    type: 'function',
-                    function: { arguments: '}' },
-                    index: 2,
-                  },
-                ],
-              },
-              finish_reason: null,
-            },
-          ],
-        });
-
-        // Chunk 11: Finish
-        controller.enqueue({
-          id: 'chatcmpl-23f324a2-059f-9ab4-b7b3-f47bcba5ebf7',
-          object: 'chat.completion.chunk',
-          created: 1768906556,
-          model: 'qwen3-max',
-          choices: [
-            {
-              index: 0,
-              delta: {},
-              finish_reason: 'tool_calls',
-            },
-          ],
-        });
-
+        chunks.forEach((chunk) => controller.enqueue(chunk));
         controller.close();
       },
     });
 
-    const onToolCallMock = vi.fn();
     let aggregatedToolCalls: any[] = [];
 
     const protocolStream = QwenAIStream(mockOpenAIStream, {
       callbacks: {
         onToolsCalling: ({ toolsCalling }) => {
           aggregatedToolCalls = toolsCalling;
-          onToolCallMock(toolsCalling);
         },
       },
     });
 
     const decoder = new TextDecoder();
-    const chunks: string[] = [];
+    const outputChunks: string[] = [];
 
     // @ts-ignore
     for await (const chunk of protocolStream) {
-      chunks.push(decoder.decode(chunk, { stream: true }));
+      outputChunks.push(decoder.decode(chunk, { stream: true }));
     }
 
     // Verify that we get 3 separate tool calls
     expect(aggregatedToolCalls).toHaveLength(3);
 
     // Verify each tool call has the correct arguments
-    // Tool call 1: 北京
     expect(aggregatedToolCalls[0]).toMatchObject({
       id: 'call_c7d8b4984a4d4f54a4956bca',
-      function: {
-        name: 'time____get_time____mcp',
-        arguments: '{"location": "北京"}',
-      },
+      function: { name: 'time____get_time____mcp', arguments: '{"location": "北京"}' },
     });
 
-    // Tool call 2: 上海
     expect(aggregatedToolCalls[1]).toMatchObject({
       id: 'call_f564785a14534d9a8c5ee641',
-      function: {
-        name: 'time____get_time____mcp',
-        arguments: '{"location": "上海"}',
-      },
+      function: { name: 'time____get_time____mcp', arguments: '{"location": "上海"}' },
     });
 
-    // Tool call 3: 南京
     expect(aggregatedToolCalls[2]).toMatchObject({
       id: 'call_19693813aebd434aab821f06',
-      function: {
-        name: 'time____get_time____mcp',
-        arguments: '{"location": "南京"}',
-      },
+      function: { name: 'time____get_time____mcp', arguments: '{"location": "南京"}' },
     });
 
-    // BUG: Currently, the arguments are incorrectly merged:
-    // - Tool call 1 gets ALL arguments: '{"location": "北京"}{"location": "上海"}南京"}'
-    // - Tool call 2 gets incomplete: '{}'
-    // - Tool call 3 gets incomplete: '{"location": "'
-    //
-    // This is because streamContext.tool only stores ONE tool's info,
-    // but we have 3 parallel tool calls. When subsequent chunks don't have 'id',
-    // they all get associated with the first tool's id.
-
-    // Verify arguments are NOT incorrectly concatenated
+    // Verify arguments are NOT incorrectly concatenated (the bug we fixed)
     expect(aggregatedToolCalls[0].function.arguments).not.toContain('上海');
     expect(aggregatedToolCalls[0].function.arguments).not.toContain('南京');
   });
