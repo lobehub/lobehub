@@ -898,7 +898,7 @@ const zhipuChatModels: AIChatModelCard[] = [
 const zhipuImageModels: AIImageModelCard[] = [
   {
     description:
-      'Zhipu’s latest image generation model delivers state-of-the-art open-source performance in text rendering, while excelling at both global instruction understanding and fine-grained local detail representation. It performs particularly well in knowledge-dense scenarios such as posters, presentations, and educational illustrations.',
+      'GLM-Image is Zhipu’s new flagship image generation model. The model was trained end-to-end on domestically produced chips and adopts an original hybrid architecture that combines autoregressive modeling with a diffusion decoder. This design enables strong global instruction understanding alongside fine-grained local detail rendering, overcoming long-standing challenges in generating knowledge-dense content such as posters, presentations, and educational diagrams. It represents an important exploration toward a new generation of “cognitive generative” technology paradigms, exemplified by Nano Banana Pro.',
     displayName: 'GLM-Image',
     enabled: true,
     id: 'glm-image',
