@@ -1,4 +1,4 @@
-import { ModelProvider, openrouter as OpenRouterModels } from 'model-bank';
+import { ModelProvider } from 'model-bank';
 
 import {
   OpenAICompatibleFactoryOptions,
@@ -16,34 +16,27 @@ export const params = {
   baseURL: 'https://openrouter.ai/api/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { thinking, model, max_tokens } = payload;
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { reasoning_effort, thinking, reasoning: _reasoning, ...rest } = payload;
 
-      let reasoning: OpenRouterReasoning = {};
+      let reasoning: OpenRouterReasoning | undefined;
 
-      if (thinking?.type === 'enabled') {
-        const modelConfig = OpenRouterModels.find((m) => m.id === model);
-        const defaultMaxOutput = modelConfig?.maxOutput;
-
-        // 配置优先级：用户设置 > 模型配置 > 硬编码默认值
-        const getMaxTokens = () => {
-          if (max_tokens) return max_tokens;
-          if (defaultMaxOutput) return defaultMaxOutput;
-          return undefined;
-        };
-
-        const maxTokens = getMaxTokens() || 32_000; // Claude Opus 4 has minimum maxOutput
-
-        reasoning = {
-          max_tokens: thinking?.budget_tokens
-            ? Math.min(thinking.budget_tokens, maxTokens - 1)
-            : 1024,
-        };
+      if (thinking?.type || thinking?.budget_tokens !== undefined || reasoning_effort) {
+        if (thinking?.type === 'disabled') {
+          reasoning = { enabled: false };
+        } else if (thinking?.budget_tokens !== undefined) {
+          reasoning = {
+            max_tokens: thinking?.budget_tokens,
+          };
+        } else if (reasoning_effort) {
+          reasoning = { effort: reasoning_effort };
+        }
       }
 
       return {
-        ...payload,
+        ...rest,
         model: payload.enabledSearch ? `${payload.model}:online` : payload.model,
-        reasoning,
+        ...(reasoning && { reasoning }),
         stream: payload.stream ?? true,
       } as any;
     },
@@ -104,6 +97,8 @@ export const params = {
         displayName += ' (free)';
       }
 
+      const hasReasoning = supported_parameters.includes('reasoning');
+
       return {
         contextWindowTokens: top_provider.context_length || model.context_length,
         description: model.description,
@@ -113,16 +108,41 @@ export const params = {
         maxOutput:
           typeof top_provider.max_completion_tokens === 'number'
             ? top_provider.max_completion_tokens
-            : undefined,
+            : typeof model.context_length === 'number'
+              ? model.context_length
+              : undefined,
         pricing: {
           cachedInput: cachedInputPrice,
           input: inputPrice,
           output: outputPrice,
           writeCacheInput: writeCacheInputPrice,
         },
-        reasoning: supported_parameters.includes('reasoning'),
+        reasoning: hasReasoning,
         releasedAt: new Date(model.created * 1000).toISOString().split('T')[0],
         vision: inputModalities.includes('image'),
+        // Merge all applicable extendParams for settings
+        ...(() => {
+          const extendParams: string[] = [];
+          if (model.description && model.description.includes('`reasoning` `enabled`')) {
+            extendParams.push('enableReasoning');
+          }
+          if (hasReasoning && model.id.includes('gpt-5')) {
+            extendParams.push('gpt5ReasoningEffort');
+          }
+          if (hasReasoning && model.id.includes('openai') && !model.id.includes('gpt-5')) {
+            extendParams.push('reasoningEffort');
+          }
+          if (hasReasoning && model.id.includes('claude')) {
+            extendParams.push('enableReasoning', 'reasoningBudgetToken');
+          }
+          if (model.id.includes('claude') && writeCacheInputPrice && writeCacheInputPrice !== 0) {
+            extendParams.push('disableContextCaching');
+          }
+          if (hasReasoning && model.id.includes('gemini-2.5')) {
+            extendParams.push('reasoningBudgetToken');
+          }
+          return extendParams.length > 0 ? { settings: { extendParams } } : {};
+        })(),
       };
     });
 

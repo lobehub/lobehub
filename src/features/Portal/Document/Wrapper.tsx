@@ -1,25 +1,17 @@
 'use client';
 
+import { EditorProvider } from '@lobehub/editor/react';
 import { type PropsWithChildren, memo } from 'react';
 
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
-import { DocumentEditorProvider } from './DocumentEditorProvider';
-
 const Wrapper = memo<PropsWithChildren>(({ children }) => {
-  const [topicId, documentId] = useChatStore((s) => [
-    s.activeTopicId,
-    chatPortalSelectors.portalDocumentId(s),
-  ]);
+  const documentId = useChatStore(chatPortalSelectors.portalDocumentId);
 
   if (!documentId) return null;
 
-  return (
-    <DocumentEditorProvider documentId={documentId} topicId={topicId}>
-      {children}
-    </DocumentEditorProvider>
-  );
+  return <EditorProvider>{children}</EditorProvider>;
 });
 
 export default Wrapper;

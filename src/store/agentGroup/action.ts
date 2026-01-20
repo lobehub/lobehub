@@ -48,6 +48,12 @@ export interface ChatGroupInternalAction {
           type: string;
         },
   ) => void;
+  /**
+   * Fetch group detail directly and update store.
+   * Unlike refreshGroupDetail which uses SWR mutate, this method fetches immediately
+   * and is useful when SWR hook is not yet mounted (e.g., after createGroup).
+   */
+  internal_fetchGroupDetail: (groupId: string) => Promise<void>;
   internal_updateGroupMaps: (groups: ChatGroupItem[]) => void;
   loadGroups: () => Promise<void>;
   refreshGroupDetail: (groupId: string) => Promise<void>;
@@ -90,6 +96,30 @@ const chatGroupInternalSlice: StateCreator<
 
   return {
     internal_dispatchChatGroup: dispatch,
+
+    internal_fetchGroupDetail: async (groupId: string) => {
+      const groupDetail = await chatGroupService.getGroupDetail(groupId);
+      if (!groupDetail) return;
+
+      // Update groupMap with full group detail including supervisorAgentId and agents
+      dispatch({ payload: { id: groupDetail.id, value: groupDetail }, type: 'updateGroup' });
+
+      // Sync group agents to agentStore for builtin agent resolution
+      const agentStore = getAgentStoreState();
+      for (const agent of groupDetail.agents) {
+        agentStore.internal_dispatchAgentMap(agent.id, agent as any);
+      }
+
+      // Set activeAgentId to supervisor for correct model resolution
+      if (groupDetail.supervisorAgentId) {
+        agentStore.setActiveAgentId(groupDetail.supervisorAgentId);
+        useChatStore.setState(
+          { activeAgentId: groupDetail.supervisorAgentId },
+          false,
+          'syncActiveAgentIdFromAgentGroup',
+        );
+      }
+    },
 
     internal_updateGroupMaps: (groups) => {
       // Build a candidate map from incoming groups

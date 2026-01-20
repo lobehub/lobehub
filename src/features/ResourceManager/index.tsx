@@ -1,13 +1,14 @@
 'use client';
 
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { Flexbox } from '@lobehub/ui';
 import { createStyles, cssVar } from 'antd-style';
-import dynamic from 'next/dynamic';
 import { memo, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import { PageEditor } from '@/features/PageEditor';
+import dynamic from '@/libs/next/dynamic';
 import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';
 import { documentSelectors } from '@/store/file/slices/document/selectors';
@@ -22,6 +23,7 @@ const useStyles = createStyles(({ css, token }) => {
   return {
     container: css`
       position: relative;
+      overflow: hidden;
     `,
     editorOverlay: css`
       position: absolute;
@@ -90,6 +92,8 @@ const ResourceManager = memo(() => {
       prev.delete('file');
       return prev;
     });
+    // Reset document title to default
+    document.title = BRANDING_NAME;
   };
 
   return (

@@ -5,7 +5,7 @@ import { memo } from 'react';
 
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
-import { DiscoverTab, type McpQueryParams } from '@/types/discover';
+import { DiscoverTab, McpSorts, type McpQueryParams } from '@/types/discover';
 
 import Pagination from '../features/Pagination';
 import List from './features/List';
@@ -20,7 +20,7 @@ const McpPage = memo(() => {
     page,
     pageSize: 21,
     q,
-    sort,
+    sort: sort ?? McpSorts.Recommended,
   });
 
   if (isLoading || !data) return <Loading />;

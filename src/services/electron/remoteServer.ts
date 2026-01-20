@@ -1,4 +1,5 @@
 import { type DataSyncConfig, type MarketAuthorizationParams } from '@lobechat/electron-client-ipc';
+
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 class RemoteServerService {
@@ -35,6 +36,13 @@ class RemoteServerService {
    */
   requestMarketAuthorization = async (params: MarketAuthorizationParams) => {
     return ensureElectronIpc().auth.requestMarketAuthorization(params);
+  };
+
+  /**
+   * Cancel authorization
+   */
+  cancelAuthorization = async () => {
+    return ensureElectronIpc().auth.cancelAuthorization();
   };
 }
 

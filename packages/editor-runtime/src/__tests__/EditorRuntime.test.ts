@@ -19,7 +19,7 @@ describe('EditorRuntime', () => {
 
   beforeEach(() => {
     resetRandomKey();
-    editor = new Kernel();
+    editor = new Kernel() as unknown as IEditor;
     editor.registerPlugins([CommonPlugin, MarkdownPlugin, LitexmlPlugin]);
     editor.initNodeEditor();
 

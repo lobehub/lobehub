@@ -8,6 +8,7 @@ export enum AssistantCategory {
   Career = 'career',
   CopyWriting = 'copywriting',
   Design = 'design',
+  Discover = 'discover',
   Education = 'education',
   Emotions = 'emotions',
   Entertainment = 'entertainment',
@@ -26,6 +27,7 @@ export enum AssistantSorts {
   KnowledgeCount = 'knowledgeCount',
   MyOwn = 'myown',
   PluginCount = 'pluginCount',
+  Recommended = 'recommended',
   Title = 'title',
   TokenUsage = 'tokenUsage',
 }
@@ -40,6 +42,8 @@ export enum AssistantNavKey {
 
 export type AgentStatus = 'published' | 'unpublished' | 'archived' | 'deprecated';
 
+export type AgentType = 'agent' | 'agent-group';
+
 export interface DiscoverAssistantItem extends Omit<LobeAgentSettings, 'meta'>, MetaData {
   author: string;
   category?: AssistantCategory;
@@ -51,6 +55,7 @@ export interface DiscoverAssistantItem extends Omit<LobeAgentSettings, 'meta'>, 
   pluginCount: number;
   status?: AgentStatus;
   tokenUsage: number;
+  type?: AgentType;
   userName?: string;
 }
 
@@ -58,6 +63,7 @@ export type AssistantMarketSource = 'legacy' | 'new';
 
 export interface AssistantQueryParams {
   category?: string;
+  includeAgentGroup?: boolean;
   locale?: string;
   order?: 'asc' | 'desc';
   ownerId?: string;

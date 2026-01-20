@@ -9,6 +9,7 @@ interface CustomNextConfig {
   experimental?: NextConfig['experimental'];
   headers?: Header[];
   redirects?: Redirect[];
+  serverExternalPackages?: NextConfig['serverExternalPackages'];
   turbopack?: NextConfig['turbopack'];
   webpack?: NextConfig['webpack'];
 }
@@ -266,7 +267,7 @@ export function defineConfig(config: CustomNextConfig) {
         source: '/manifest.json',
       },
       {
-        destination: '/community/assistant',
+        destination: '/community/agent',
         permanent: true,
         source: '/community/assistants',
       },
@@ -311,7 +312,9 @@ export function defineConfig(config: CustomNextConfig) {
     ],
 
     // when external packages in dev mode with turbopack, this config will lead to bundle error
-    serverExternalPackages: ['pdfkit'],
+    serverExternalPackages: config.serverExternalPackages
+      ? config.serverExternalPackages
+      : ['pdfkit'],
 
     transpilePackages: ['pdfjs-dist', 'mermaid', 'better-auth-harmony'],
     turbopack: {

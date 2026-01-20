@@ -26,6 +26,4 @@ const Home: FC = () => {
   );
 };
 
-Home.displayName = 'Home';
-
 export default Home;

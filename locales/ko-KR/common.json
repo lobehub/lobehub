@@ -134,6 +134,8 @@
   "cmdk.search.communityAgent": "커뮤니티 도우미",
   "cmdk.search.file": "파일",
   "cmdk.search.files": "파일",
+  "cmdk.search.folder": "폴더",
+  "cmdk.search.folders": "폴더들",
   "cmdk.search.loading": "검색 중…",
   "cmdk.search.market": "커뮤니티",
   "cmdk.search.mcp": "MCP 서버",

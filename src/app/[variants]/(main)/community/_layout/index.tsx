@@ -19,6 +19,4 @@ const Layout: FC = () => {
   );
 };
 
-Layout.displayName = 'DesktopDiscoverStoreLayout';
-
 export default Layout;

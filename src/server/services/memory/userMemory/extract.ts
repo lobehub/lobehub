@@ -4,21 +4,20 @@ import {
 } from '@lobechat/const';
 import { messages, topics } from '@lobechat/database/schemas';
 import {
+  BenchmarkLocomoContextProvider,
   LobeChatTopicContextProvider,
   LobeChatTopicResultRecorder,
   MemoryExtractionService,
   RetrievalUserMemoryContextProvider,
   RetrievalUserMemoryIdentitiesProvider,
-  BenchmarkLocomoContextProvider,
 } from '@lobechat/memory-user-memory';
 import type {
+  BenchmarkLocomoPart,
   MemoryExtractionAgent,
   MemoryExtractionJob,
   MemoryExtractionResult,
-  BenchmarkLocomoPart,
   PersistedMemoryResult,
 } from '@lobechat/memory-user-memory';
-import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemory/sources/benchmarkLoCoMo';
 import { ModelRuntime } from '@lobechat/model-runtime';
 import type {
   Embeddings,
@@ -45,6 +44,7 @@ import type {
   MemoryExtractionTracePayload,
 } from '@lobechat/types';
 import { Client } from '@upstash/workflow';
+import debug from 'debug';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { join } from 'pathe';
 import { z } from 'zod';
@@ -54,6 +54,7 @@ import { TopicModel } from '@/database/models/topic';
 import type { ListUsersForMemoryExtractorCursor } from '@/database/models/user';
 import { UserModel } from '@/database/models/user';
 import { UserMemoryModel } from '@/database/models/userMemory';
+import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemory/sources/benchmarkLoCoMo';
 import { getServerDB } from '@/database/server';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import {
@@ -64,7 +65,12 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { S3 } from '@/server/modules/S3';
 import type { GlobalMemoryLayer } from '@/types/serverConfig';
 import type { UserKeyVaults } from '@/types/user/settings';
-import { LayersEnum, type MergeStrategyEnum, TypesEnum, MemorySourceType } from '@/types/userMemory';
+import {
+  LayersEnum,
+  MemorySourceType,
+  type MergeStrategyEnum,
+  TypesEnum,
+} from '@/types/userMemory';
 import { encodeAsync } from '@/utils/tokenizer';
 
 const SOURCE_ALIAS_MAP: Record<string, MemorySourceType> = {
@@ -262,19 +268,58 @@ const resolveLayerModels = (
   preference: layers?.preference ?? fallback.preference,
 });
 
-const initRuntimeForAgent = async (agent: MemoryAgentConfig, keyVaults?: UserKeyVaults) => {
+const maskSecret = (value?: string) => {
+  if (!value) return 'undefined';
+  if (value.length <= 8) return `${value[0]}***${value.at(-1)}`;
+
+  return `${value.slice(0, 6)}***${value.slice(-4)}`;
+};
+
+const resolveRuntimeAgentConfig = (agent: MemoryAgentConfig, keyVaults?: UserKeyVaults) => {
   const provider = agent.provider || 'openai';
   const { apiKey: userApiKey, baseURL: userBaseURL } = extractCredentialsFromVault(
     provider,
     keyVaults,
   );
 
-  const apiKey = userApiKey || agent.apiKey;
-  if (!apiKey) throw new Error(`Missing API key for ${provider} memory extraction runtime`);
+  // Only use the user baseURL if we are also using their API key; otherwise fall back entirely
+  // to system config to avoid mixing credentials.
+  const useUserCredential = !!userApiKey;
+  const apiKey = useUserCredential ? userApiKey : agent.apiKey;
+  const baseURL = useUserCredential ? userBaseURL || agent.baseURL : agent.baseURL;
+  const source = useUserCredential ? 'user-keyvault' : 'system-config';
 
-  return ModelRuntime.initializeWithProvider(provider, {
-    apiKey,
-    baseURL: userBaseURL || agent.baseURL,
+  return { apiKey, baseURL, provider, source };
+};
+
+const logRuntime = debug('lobe-server:memory:user-memory:runtime');
+
+const debugRuntimeInit = (
+  agent: MemoryAgentConfig,
+  resolved: ReturnType<typeof resolveRuntimeAgentConfig>,
+) => {
+  if (!logRuntime.enabled) return;
+  logRuntime('init runtime', {
+    agentModel: agent.model,
+    agentProvider: agent.provider || 'openai',
+    apiKey: maskSecret(resolved.apiKey),
+    baseURL: resolved.baseURL,
+    provider: resolved.provider,
+    source: resolved.source,
+  });
+};
+
+const initRuntimeForAgent = async (agent: MemoryAgentConfig, keyVaults?: UserKeyVaults) => {
+  const resolved = resolveRuntimeAgentConfig(agent, keyVaults);
+  debugRuntimeInit(agent, resolved);
+
+  if (!resolved.apiKey) {
+    throw new Error(`Missing API key for ${resolved.provider} memory extraction runtime`);
+  }
+
+  return ModelRuntime.initializeWithProvider(resolved.provider, {
+    apiKey: resolved.apiKey,
+    baseURL: resolved.baseURL,
   });
 };
 
@@ -873,7 +918,10 @@ export class MemoryExtractionExecutor {
     };
   }
 
-  async listUserMemoryIdentities(job: MemoryExtractionJob, userId: string): Promise<IdentityMemoryDetail[]> {
+  async listUserMemoryIdentities(
+    job: MemoryExtractionJob,
+    userId: string,
+  ): Promise<IdentityMemoryDetail[]> {
     const db = await this.db;
     const userMemoryModel = new UserMemoryModel(db, userId);
 
@@ -1801,30 +1849,30 @@ export class MemoryExtractionWorkflowService {
     return this.client;
   }
 
-  static triggerProcessUsers(payload: MemoryExtractionPayloadInput) {
+  static triggerProcessUsers(payload: MemoryExtractionPayloadInput, options?: { extraHeaders?: Record<string, string> }) {
     if (!payload.baseUrl) {
       throw new Error('Missing baseUrl for workflow trigger');
     }
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.users, payload.baseUrl);
-    return this.getClient().trigger({ body: payload, url });
+    return this.getClient().trigger({ body: payload, headers: options?.extraHeaders, url });
   }
 
-  static triggerProcessUserTopics(payload: UserTopicWorkflowPayload) {
+  static triggerProcessUserTopics(payload: UserTopicWorkflowPayload, options?: { extraHeaders?: Record<string, string> }) {
     if (!payload.baseUrl) {
       throw new Error('Missing baseUrl for workflow trigger');
     }
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.userTopics, payload.baseUrl);
-    return this.getClient().trigger({ body: payload, url });
+    return this.getClient().trigger({ body: payload, headers: options?.extraHeaders, url });
   }
 
-  static triggerProcessTopics(payload: MemoryExtractionPayloadInput) {
+  static triggerProcessTopics(payload: MemoryExtractionPayloadInput, options?: { extraHeaders?: Record<string, string> }) {
     if (!payload.baseUrl) {
       throw new Error('Missing baseUrl for workflow trigger');
     }
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.topicBatch, payload.baseUrl);
-    return this.getClient().trigger({ body: payload, url });
+    return this.getClient().trigger({ body: payload, headers: options?.extraHeaders, url });
   }
 }

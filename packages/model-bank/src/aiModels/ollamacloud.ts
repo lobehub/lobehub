@@ -46,7 +46,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_048_576,
     description:
-      'Gemini 3 Flash is the most intelligent model built for speed, combining cutting-edge intelligence with exceptional search grounding.',
+      'Gemini 3 Flash is the smartest model built for speed, combining cutting-edge intelligence with excellent search grounding.',
     displayName: 'Gemini 3 Flash Preview',
     id: 'gemini-3-flash-preview',
     releasedAt: '2025-12-17',
@@ -70,7 +70,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 204_800,
     description:
-      'MiniMax M2 is an efficient large language model specifically built for coding and agent workflows.',
+      'MiniMax M2 is an efficient large language model built specifically for coding and agent workflows.',
     displayName: 'MiniMax M2',
     id: 'minimax-m2',
     type: 'chat',
@@ -82,7 +82,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      "GLM-4.7 is Zhipu's latest flagship model, strengthening coding capabilities, long-term task planning, and tool collaboration for Agentic Coding scenarios, and achieving leading performance among open-source models in multiple public benchmarks of the current period. General capabilities are improved, responses are more concise and natural, writing is more immersive. In executing complex agent tasks, instruction following is stronger during tool calls, and the front-end aesthetics and long-term task completion efficiency of Artifacts and Agentic Coding are further improved.",
+      "GLM-4.7 is Zhipu's latest flagship model, enhanced for Agentic Coding scenarios with improved coding capabilities, long-term task planning, and tool collaboration. It achieves leading performance among open-source models on multiple public benchmarks. General capabilities are improved with more concise and natural responses and more immersive writing. For complex agent tasks, instruction following during tool calls is stronger, and the frontend aesthetics and long-term task completion efficiency of Artifacts and Agentic Coding are further enhanced.",
     displayName: 'GLM-4.7',
     enabled: true,
     id: 'glm-4.7',
@@ -95,7 +95,7 @@ const ollamaCloudModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      "Zhipu's flagship model GLM-4.6 (355B) comprehensively surpasses previous generations in advanced coding, long-text processing, reasoning, and agent capabilities, especially aligning with Claude Sonnet 4 in programming capabilities, becoming China's top Coding model.",
+      "Zhipu's flagship model GLM-4.6 (355B) fully surpasses its predecessors in advanced coding, long-text processing, reasoning, and agent capabilities. It particularly aligns with Claude Sonnet 4 in programming ability, becoming China's top Coding model.",
     displayName: 'GLM-4.6',
     id: 'glm-4.6',
     type: 'chat',

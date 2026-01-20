@@ -16,16 +16,20 @@ import { useUserActions } from './useUserActions';
 // Helper to strip handleClick from action items before passing to ActionIconGroup
 const stripHandleClick = (item: MessageActionItemOrDivider): ActionIconGroupItemType => {
   if ('type' in item && item.type === 'divider') return item as unknown as ActionIconGroupItemType;
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { handleClick, children, ...rest } = item as MessageActionItem;
+  const { children, ...rest } = item as MessageActionItem;
+  const baseItem = { ...rest } as MessageActionItem;
+  delete (baseItem as { handleClick?: unknown }).handleClick;
   if (children) {
     return {
-      ...rest,
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      children: children.map(({ handleClick: _, ...child }) => child),
+      ...baseItem,
+      children: children.map((child) => {
+        const nextChild = { ...child } as MessageActionItem;
+        delete (nextChild as { handleClick?: unknown }).handleClick;
+        return nextChild;
+      }),
     } as ActionIconGroupItemType;
   }
-  return rest as ActionIconGroupItemType;
+  return baseItem as ActionIconGroupItemType;
 };
 
 // Build action items map for handleAction lookup
@@ -76,7 +80,11 @@ export const UserActionsBar = memo<UserActionsProps>(({ actionsConfig, id, data 
   // Use external config if provided, otherwise use defaults
   // Append extra actions from factories
   const barItems = useMemo(() => {
-    const base = actionsConfig?.bar ?? [defaultActions.regenerate, defaultActions.edit];
+    const base = actionsConfig?.bar ?? [
+      defaultActions.regenerate,
+      defaultActions.edit,
+      defaultActions.copy,
+    ];
     return [...base, ...extraBarItems];
   }, [actionsConfig?.bar, defaultActions.regenerate, defaultActions.edit, extraBarItems]);
 

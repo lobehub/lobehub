@@ -1,3 +1,4 @@
+import { InsertChatGroupSchema } from '@lobechat/types';
 import { z } from 'zod';
 
 import { AgentModel } from '@/database/models/agent';
@@ -5,7 +6,6 @@ import { ChatGroupModel } from '@/database/models/chatGroup';
 import { UserModel } from '@/database/models/user';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
 import { insertAgentSchema } from '@/database/schemas';
-import { insertChatGroupSchema } from '@/database/schemas/chatGroup';
 import { type ChatGroupConfig } from '@/database/types/chatGroup';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -38,6 +38,45 @@ export const agentGroupRouter = router({
     }),
 
   /**
+   * Batch create virtual agents and add them to an existing group.
+   * This is more efficient than calling createAgentOnly multiple times.
+   */
+  batchCreateAgentsInGroup: agentGroupProcedure
+    .input(
+      z.object({
+        agents: z.array(
+          insertAgentSchema
+            .omit({
+              chatConfig: true,
+              openingMessage: true,
+              openingQuestions: true,
+              tts: true,
+              userId: true,
+            })
+            .partial(),
+        ),
+        groupId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Batch create virtual agents
+      const agentConfigs = input.agents.map((agent) => ({
+        ...agent,
+        plugins: agent.plugins as string[] | undefined,
+        tags: agent.tags as string[] | undefined,
+        virtual: true,
+      }));
+
+      const createdAgents = await ctx.agentModel.batchCreate(agentConfigs);
+      const agentIds = createdAgents.map((agent) => agent.id);
+
+      // Add all agents to the group
+      await ctx.chatGroupModel.addAgentsToGroup(input.groupId, agentIds);
+
+      return { agentIds, agents: createdAgents };
+    }),
+
+  /**
    * Check agents before removal to identify virtual agents that will be permanently deleted.
    * This allows the frontend to show a confirmation dialog.
    */
@@ -57,16 +96,14 @@ export const agentGroupRouter = router({
    * The supervisor agent is automatically created as a virtual agent.
    * Returns the groupId and supervisorAgentId.
    */
-  createGroup: agentGroupProcedure
-    .input(insertChatGroupSchema.omit({ userId: true }))
-    .mutation(async ({ input, ctx }) => {
-      const { group, supervisorAgentId } = await ctx.agentGroupRepo.createGroupWithSupervisor({
-        ...input,
-        config: ctx.agentGroupService.normalizeGroupConfig(input.config as ChatGroupConfig | null),
-      });
+  createGroup: agentGroupProcedure.input(InsertChatGroupSchema).mutation(async ({ input, ctx }) => {
+    const { group, supervisorAgentId } = await ctx.agentGroupRepo.createGroupWithSupervisor({
+      ...input,
+      config: ctx.agentGroupService.normalizeGroupConfig(input.config as ChatGroupConfig | null),
+    });
 
-      return { group, supervisorAgentId };
-    }),
+    return { group, supervisorAgentId };
+  }),
 
   /**
    * Create a group with virtual member agents in one request.
@@ -80,7 +117,7 @@ export const agentGroupRouter = router({
   createGroupWithMembers: agentGroupProcedure
     .input(
       z.object({
-        groupConfig: insertChatGroupSchema.omit({ userId: true }),
+        groupConfig: InsertChatGroupSchema,
         members: z.array(
           insertAgentSchema
             .omit({
@@ -92,6 +129,19 @@ export const agentGroupRouter = router({
             })
             .partial(),
         ),
+        supervisorConfig: z
+          .object({
+            avatar: z.string().nullish(),
+            backgroundColor: z.string().nullish(),
+            description: z.string().nullish(),
+            model: z.string().nullish(),
+            params: z.any().nullish(),
+            provider: z.string().nullish(),
+            systemRole: z.string().nullish(),
+            tags: z.array(z.string()).nullish(),
+            title: z.string().nullish(),
+          })
+          .optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -107,6 +157,14 @@ export const agentGroupRouter = router({
       const memberAgentIds = createdAgents.map((agent) => agent.id);
 
       // 2. Create group with supervisor and member agents
+      // Filter out null/undefined values from supervisorConfig
+      const supervisorConfig = input.supervisorConfig
+        ? Object.fromEntries(
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars, eqeqeq
+            Object.entries(input.supervisorConfig).filter(([_, v]) => v != null),
+          )
+        : undefined;
+
       const { group, supervisorAgentId } = await ctx.agentGroupRepo.createGroupWithSupervisor(
         {
           ...input.groupConfig,
@@ -115,6 +173,7 @@ export const agentGroupRouter = router({
           ),
         },
         memberAgentIds,
+        supervisorConfig as any,
       );
 
       return { agentIds: memberAgentIds, groupId: group.id, supervisorAgentId };
@@ -124,6 +183,22 @@ export const agentGroupRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.agentGroupService.deleteGroup(input.id);
+    }),
+
+  /**
+   * Duplicate a chat group with all its members.
+   * Creates a new group with the same config, a new supervisor, and copies of virtual members.
+   * Non-virtual members are referenced (not copied).
+   */
+  duplicateGroup: agentGroupProcedure
+    .input(
+      z.object({
+        groupId: z.string(),
+        newTitle: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      return ctx.agentGroupRepo.duplicate(input.groupId, input.newTitle);
     }),
 
   getGroup: agentGroupProcedure
@@ -211,7 +286,7 @@ export const agentGroupRouter = router({
     .input(
       z.object({
         id: z.string(),
-        value: insertChatGroupSchema.partial(),
+        value: InsertChatGroupSchema.partial(),
       }),
     )
     .mutation(async ({ input, ctx }) => {

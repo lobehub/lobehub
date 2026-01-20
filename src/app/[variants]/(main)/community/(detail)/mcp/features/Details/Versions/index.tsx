@@ -5,8 +5,8 @@ import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Link from '@/app/[variants]/(main)/components/Link';
-import { usePathname } from '@/app/[variants]/(main)/hooks/usePathname';
+import Link from '@/libs/router/Link';
+import { usePathname } from '@/libs/router/navigation';
 import InlineTable from '@/components/InlineTable';
 
 import PublishedTime from '../../../../../../../../../components/PublishedTime';

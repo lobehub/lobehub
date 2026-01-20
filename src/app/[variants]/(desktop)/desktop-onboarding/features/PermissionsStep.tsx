@@ -1,5 +1,6 @@
 'use client';
 
+import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import {
@@ -17,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 import LobeMessage from '../components/LobeMessage';
+import OnboardingFooterActions from '../components/OnboardingFooterActions';
 
 type PermissionMeta = {
   descriptionKey: string;
@@ -93,12 +95,15 @@ const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
     const micStatus = await ipc.system.getMediaAccessStatus('microphone');
     const screenStatus = await ipc.system.getMediaAccessStatus('screen');
     const accessibilityStatus = await ipc.system.getAccessibilityStatus();
+    // Full Disk Access can now be checked by attempting to read protected directories
+    const fullDiskStatus = await ipc.system.getFullDiskAccessStatus();
 
     setPermissions((prev) =>
       prev.map((p) => {
         if (p.id === 1) return { ...p, granted: notifStatus === 'authorized' };
-        // Full Disk Access cannot be checked programmatically, so it remains manual
-        if (p.id === 2) return { ...p, buttonKey: 'screen3.actions.openSettings', granted: false };
+        // Full Disk Access status is detected by reading protected directories
+        if (p.id === 2)
+          return { ...p, buttonKey: 'screen3.actions.openSettings', granted: fullDiskStatus };
         if (p.id === 3)
           return { ...p, granted: micStatus === 'granted' && screenStatus === 'granted' };
         if (p.id === 4) return { ...p, granted: accessibilityStatus };
@@ -111,28 +116,11 @@ const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
     checkAllPermissions();
   }, [checkAllPermissions]);
 
-  // When this page regains focus (e.g. back from System Settings), re-check permission states and refresh UI.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-
-    const handleFocus = () => {
-      checkAllPermissions();
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        checkAllPermissions();
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
-  }, [checkAllPermissions]);
+  // Listen for window focus event from Electron main process
+  // This is more reliable than browser focus events in Electron environment
+  useWatchBroadcast('windowFocused', () => {
+    checkAllPermissions();
+  });
 
   const handlePermissionRequest = async (permissionId: number) => {
     const ipc = ensureElectronIpc();
@@ -143,7 +131,8 @@ const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
         break;
       }
       case 2: {
-        await ipc.system.openFullDiskAccessSettings({ autoAdd: true });
+        // Use native prompt dialog for Full Disk Access
+        await ipc.system.promptFullDiskAccessIfNotGranted();
         break;
       }
       case 3: {
@@ -166,7 +155,7 @@ const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
   };
 
   return (
-    <Flexbox gap={16}>
+    <Flexbox gap={16} style={{ height: '100%', minHeight: '100%' }}>
       <Flexbox>
         <LobeMessage sentences={[t('screen3.title'), t('screen3.title2'), t('screen3.title3')]} />
         <Text as={'p'}>{t('screen3.description')}</Text>
@@ -175,7 +164,7 @@ const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
         {permissions.map((permission) => (
           <Block
             align={'center'}
-            clickable={!permission.granted || permission.id === 2}
+            clickable={!permission.granted}
             gap={16}
             horizontal
             key={permission.id}
@@ -197,7 +186,7 @@ const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
                 {t(permission.descriptionKey as any)}
               </Text>
             </Flexbox>
-            {permission.granted && permission.id !== 2 ? (
+            {permission.granted ? (
               <Icon color={cssVar.colorSuccess} icon={Check} size={20} />
             ) : (
               <Button
@@ -213,27 +202,29 @@ const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
                 }}
                 type={'text'}
               >
-                {permission.granted && permission.id === 2
-                  ? t('screen3.actions.granted')
-                  : t(permission.buttonKey)}
+                {t(permission.buttonKey)}
               </Button>
             )}
           </Block>
         ))}
       </Block>
-      <Flexbox horizontal justify={'space-between'} style={{ marginTop: 32 }}>
-        <Button
-          icon={Undo2Icon}
-          onClick={onBack}
-          style={{ color: cssVar.colorTextDescription }}
-          type={'text'}
-        >
-          {t('back')}
-        </Button>
-        <Button onClick={onNext} type={'primary'}>
-          {t('next')}
-        </Button>
-      </Flexbox>
+      <OnboardingFooterActions
+        left={
+          <Button
+            icon={Undo2Icon}
+            onClick={onBack}
+            style={{ color: cssVar.colorTextDescription }}
+            type={'text'}
+          >
+            {t('back')}
+          </Button>
+        }
+        right={
+          <Button onClick={onNext} type={'primary'}>
+            {t('next')}
+          </Button>
+        }
+      />
     </Flexbox>
   );
 });

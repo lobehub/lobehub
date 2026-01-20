@@ -18,11 +18,23 @@ const Header = memo(() => {
   const navigate = useNavigate();
 
   const handleGoBack = () => {
-    // Extract the path segment (assistant, model, provider, mcp)
+    // Extract the path segment (agent, model, provider, mcp, group_agent, user)
     const path = location.pathname.split('/').filter(Boolean);
-    if (path[1] && path[1] !== 'user') {
-      navigate(urlJoin('/community', path[1]));
+    const detailType = path[1];
+
+    // group_agent goes back to agent list page
+    if (detailType === 'group_agent') {
+      navigate('/community/agent');
+      return;
+    }
+
+    // Types that have their own list pages
+    const typesWithListPage = ['agent', 'model', 'provider', 'mcp'];
+
+    if (detailType && typesWithListPage.includes(detailType)) {
+      navigate(urlJoin('/community', detailType));
     } else {
+      // For user or any other type without a list page
       navigate('/community');
     }
   };

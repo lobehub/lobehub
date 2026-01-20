@@ -36,6 +36,4 @@ const ClientRouter = () => {
   );
 };
 
-ClientRouter.displayName = 'ClientRouter';
-
 export default ClientRouter;

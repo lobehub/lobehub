@@ -8,7 +8,7 @@ import { Col, Flex, Row } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { AuthError } from 'next-auth';
 import { signIn } from 'next-auth/react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from '@/libs/next/navigation';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

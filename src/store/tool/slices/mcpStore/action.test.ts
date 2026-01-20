@@ -12,6 +12,37 @@ import { CheckMcpInstallResult, MCPInstallStep } from '@/types/plugins';
 
 import { useToolStore } from '../../store';
 
+vi.mock('@/libs/trpc/client', () => ({
+  asyncClient: {},
+  lambdaClient: {
+    market: {
+      getMcpCategories: { query: vi.fn() },
+      getMcpDetail: { query: vi.fn() },
+      getMcpList: { query: vi.fn() },
+      getMcpManifest: { query: vi.fn() },
+      registerClientInMarketplace: {
+        mutate: vi.fn().mockResolvedValue({
+          clientId: 'test-client-id',
+          clientSecret: 'test-client-secret',
+        }),
+      },
+      registerM2MToken: { query: vi.fn().mockResolvedValue({ success: true }) },
+      reportCall: { mutate: vi.fn().mockResolvedValue(undefined) },
+      reportMcpEvent: { mutate: vi.fn().mockResolvedValue(undefined) },
+      reportMcpInstallResult: { mutate: vi.fn().mockResolvedValue(undefined) },
+    },
+  },
+  toolsClient: {
+    market: {
+      callCloudMcpEndpoint: { mutate: vi.fn() },
+    },
+    mcp: {
+      callTool: { mutate: vi.fn() },
+      getStreamableMcpServerManifest: { query: vi.fn() },
+    },
+  },
+}));
+
 // Keep zustand mock as it's needed globally
 vi.mock('zustand/traditional');
 
@@ -60,6 +91,13 @@ const bootstrapToolStoreWithDesktop = async (isDesktopEnv: boolean) => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+
+  vi.spyOn(discoverService, 'injectMPToken').mockResolvedValue(undefined);
+  vi.spyOn(discoverService, 'registerClient').mockResolvedValue({
+    clientId: 'test-client-id',
+    clientSecret: 'test-client-secret',
+  });
+  vi.spyOn(discoverService, 'reportMcpEvent').mockResolvedValue(undefined as any);
 
   // Reset store state
   act(() => {

@@ -1,4 +1,5 @@
 import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
+import type { LobeToolManifest } from '@lobechat/context-engine';
 import { type LobeChatDatabase } from '@lobechat/database';
 import type {
   ExecAgentParams,
@@ -7,6 +8,7 @@ import type {
   ExecGroupAgentResult,
   ExecSubAgentTaskParams,
   ExecSubAgentTaskResult,
+  UserInterventionConfig,
 } from '@lobechat/types';
 import { ThreadStatus, ThreadType } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
@@ -23,18 +25,54 @@ import {
   createServerAgentToolsEngine,
   serverMessagesEngine,
 } from '@/server/modules/Mecha';
+import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';
 import type { StepLifecycleCallbacks } from '@/server/services/agentRuntime/types';
+import { KlavisService } from '@/server/services/klavis';
+import { MarketService } from '@/server/services/market';
 
 const log = debug('lobe-server:ai-agent-service');
+
+/**
+ * Format error for storage in thread metadata
+ * Handles Error objects which don't serialize properly with JSON.stringify
+ */
+function formatErrorForMetadata(error: unknown): Record<string, any> | undefined {
+  if (!error) return undefined;
+
+  // Handle Error objects
+  if (error instanceof Error) {
+    return {
+      message: error.message,
+      name: error.name,
+    };
+  }
+
+  // Handle objects with message property (like ChatMessageError)
+  if (typeof error === 'object' && 'message' in error) {
+    return error as Record<string, any>;
+  }
+
+  // Fallback: wrap in object
+  return { message: String(error) };
+}
 
 /**
  * Internal params for execAgent with step lifecycle callbacks
  * This extends the public ExecAgentParams with server-side only options
  */
 interface InternalExecAgentParams extends ExecAgentParams {
+  /** Cron job ID that triggered this execution (if trigger is 'cron') */
+  cronJobId?: string;
   /** Step lifecycle callbacks for operation tracking (server-side only) */
   stepCallbacks?: StepLifecycleCallbacks;
+  /** Topic creation trigger source ('cron' | 'chat' | 'api') */
+  trigger?: string;
+  /**
+   * User intervention configuration
+   * Use { approvalMode: 'headless' } for async tasks that should never wait for human approval
+   */
+  userInterventionConfig?: UserInterventionConfig;
 }
 
 /**
@@ -49,21 +87,27 @@ export class AiAgentService {
   private readonly userId: string;
   private readonly db: LobeChatDatabase;
   private readonly agentModel: AgentModel;
+  private readonly agentService: AgentService;
   private readonly messageModel: MessageModel;
   private readonly pluginModel: PluginModel;
   private readonly threadModel: ThreadModel;
   private readonly topicModel: TopicModel;
   private readonly agentRuntimeService: AgentRuntimeService;
+  private readonly marketService: MarketService;
+  private readonly klavisService: KlavisService;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.userId = userId;
     this.db = db;
     this.agentModel = new AgentModel(db, userId);
+    this.agentService = new AgentService(db, userId);
     this.messageModel = new MessageModel(db, userId);
     this.pluginModel = new PluginModel(db, userId);
     this.threadModel = new ThreadModel(db, userId);
     this.topicModel = new TopicModel(db, userId);
     this.agentRuntimeService = new AgentRuntimeService(db, userId);
+    this.marketService = new MarketService({ userInfo: { userId } });
+    this.klavisService = new KlavisService({ db, userId });
   }
 
   /**
@@ -88,6 +132,9 @@ export class AiAgentService {
       autoStart = true,
       existingMessageIds = [],
       stepCallbacks,
+      trigger,
+      cronJobId,
+      userInterventionConfig,
     } = params;
 
     // Validate that either agentId or slug is provided
@@ -100,8 +147,8 @@ export class AiAgentService {
 
     log('execAgent: identifier=%s, prompt=%s', identifier, prompt.slice(0, 50));
 
-    // 1. Get agent configuration from database (supports both id and slug)
-    const agentConfig = await this.agentModel.getAgentConfig(identifier);
+    // 1. Get agent configuration with default config merged (supports both id and slug)
+    const agentConfig = await this.agentService.getAgentConfig(identifier);
     if (!agentConfig) {
       throw new Error(`Agent not found: ${identifier}`);
     }
@@ -114,12 +161,22 @@ export class AiAgentService {
     // 2. Handle topic creation: if no topicId provided, create a new topic; otherwise reuse existing
     let topicId = appContext?.topicId;
     if (!topicId) {
+      // Prepare metadata with cronJobId if provided
+      const metadata = cronJobId ? { cronJobId } : undefined;
+
       const newTopic = await this.topicModel.create({
         agentId: resolvedAgentId,
+        metadata,
         title: prompt.slice(0, 50) + (prompt.length > 50 ? '...' : ''),
+        trigger,
       });
       topicId = newTopic.id;
-      log('execAgent: created new topic %s', topicId);
+      log(
+        'execAgent: created new topic %s with trigger %s, cronJobId %s',
+        topicId,
+        trigger || 'default',
+        cronJobId || 'none',
+      );
     } else {
       log('execAgent: reusing existing topic %s', topicId);
     }
@@ -142,7 +199,25 @@ export class AiAgentService {
       return info?.abilities?.functionCall ?? true;
     };
 
-    // 5. Create tools using Server AgentToolsEngine
+    // 5. Fetch LobeHub Skills manifests (temporary solution until LOBE-3517 is implemented)
+    let lobehubSkillManifests: LobeToolManifest[] = [];
+    try {
+      lobehubSkillManifests = await this.marketService.getLobehubSkillManifests();
+    } catch (error) {
+      log('execAgent: failed to fetch lobehub skill manifests: %O', error);
+    }
+    log('execAgent: got %d lobehub skill manifests', lobehubSkillManifests.length);
+
+    // 6. Fetch Klavis tool manifests from database
+    let klavisManifests: LobeToolManifest[] = [];
+    try {
+      klavisManifests = await this.klavisService.getKlavisManifests();
+    } catch (error) {
+      log('execAgent: failed to fetch klavis manifests: %O', error);
+    }
+    log('execAgent: got %d klavis manifests', klavisManifests.length);
+
+    // 7. Create tools using Server AgentToolsEngine
     const hasEnabledKnowledgeBases =
       agentConfig.knowledgeBases?.some((kb: { enabled?: boolean | null }) => kb.enabled === true) ??
       false;
@@ -153,6 +228,7 @@ export class AiAgentService {
     };
 
     const toolsEngine = createServerAgentToolsEngine(toolsContext, {
+      additionalManifests: [...lobehubSkillManifests, ...klavisManifests],
       agentConfig: {
         chatConfig: agentConfig.chatConfig ?? undefined,
         plugins: agentConfig.plugins ?? undefined,
@@ -164,6 +240,8 @@ export class AiAgentService {
 
     // Generate tools and manifest map
     const pluginIds = agentConfig.plugins || [];
+    log('execAgent: agent configured plugins: %O', pluginIds);
+
     const toolsResult = toolsEngine.generateToolsDetailed({
       model,
       provider,
@@ -172,6 +250,8 @@ export class AiAgentService {
 
     const tools = toolsResult.tools;
 
+    log('execAgent: enabled tool ids: %O', toolsResult.enabledToolIds);
+
     // Get manifest map and convert from Map to Record
     const manifestMap = toolsEngine.getEnabledPluginManifests(pluginIds);
     const toolManifestMap: Record<string, any> = {};
@@ -179,9 +259,27 @@ export class AiAgentService {
       toolManifestMap[id] = manifest;
     });
 
-    log('execAgent: generated %d tools', tools?.length ?? 0);
+    // Build toolSourceMap for routing tool execution
+    const toolSourceMap: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'> =
+      {};
+    // Mark lobehub skills
+    for (const manifest of lobehubSkillManifests) {
+      toolSourceMap[manifest.identifier] = 'lobehubSkill';
+    }
+    // Mark klavis tools
+    for (const manifest of klavisManifests) {
+      toolSourceMap[manifest.identifier] = 'klavis';
+    }
 
-    // 6. Get existing messages if provided
+    log(
+      'execAgent: generated %d tools from %d configured plugins, %d lobehub skills, %d klavis tools',
+      tools?.length ?? 0,
+      pluginIds.length,
+      lobehubSkillManifests.length,
+      klavisManifests.length,
+    );
+
+    // 8. Get existing messages if provided
     let historyMessages: any[] = [];
     if (existingMessageIds.length > 0) {
       historyMessages = await this.messageModel.query({
@@ -194,7 +292,7 @@ export class AiAgentService {
       }
     }
 
-    // 7. Create user message in database
+    // 9. Create user message in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const userMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
@@ -205,7 +303,7 @@ export class AiAgentService {
     });
     log('execAgent: created user message %s', userMessageRecord.id);
 
-    // 8. Create assistant message placeholder in database
+    // 10. Create assistant message placeholder in database
     // Include threadId if provided (for SubAgent task execution in isolated Thread)
     const assistantMessageRecord = await this.messageModel.create({
       agentId: resolvedAgentId,
@@ -225,7 +323,7 @@ export class AiAgentService {
     // Combine history messages with user message
     const allMessages = [...historyMessages, userMessage];
 
-    // 9. Process messages using Server ContextEngineering
+    // 11. Process messages using Server ContextEngineering
     const processedMessages = await serverMessagesEngine({
       capabilities: {
         isCanUseFC: isModelSupportToolUse,
@@ -260,11 +358,11 @@ export class AiAgentService {
 
     log('execAgent: processed %d messages', processedMessages.length);
 
-    // 10. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
+    // 12. Generate operation ID: agt_{timestamp}_{agentId}_{topicId}_{random}
     const timestamp = Date.now();
     const operationId = `op_${timestamp}_${resolvedAgentId}_${topicId}_${nanoid(8)}`;
 
-    // 11. Create initial context
+    // 13. Create initial context
     const initialContext: AgentRuntimeContext = {
       payload: {
         // Pass assistant message ID so agent runtime knows which message to update
@@ -285,7 +383,18 @@ export class AiAgentService {
       },
     };
 
-    // 12. Create operation using AgentRuntimeService
+    // 14. Log final operation parameters summary
+    log(
+      'execAgent: creating operation %s with params: model=%s, provider=%s, tools=%d, messages=%d, manifests=%d',
+      operationId,
+      model,
+      provider,
+      tools?.length ?? 0,
+      processedMessages.length,
+      Object.keys(toolManifestMap).length,
+    );
+
+    // 15. Create operation using AgentRuntimeService
     // Wrap in try-catch to handle operation startup failures (e.g., QStash unavailable)
     // If createOperation fails, we still have valid messages that need error info
     try {
@@ -304,8 +413,10 @@ export class AiAgentService {
         operationId,
         stepCallbacks,
         toolManifestMap,
+        toolSourceMap,
         tools,
         userId: this.userId,
+        userInterventionConfig,
       });
 
       log('execAgent: created operation %s (autoStarted: %s)', operationId, result.autoStarted);
@@ -397,6 +508,7 @@ export class AiAgentService {
         groupId,
         messages: newTopic?.topicMessageIds,
         title: topicTitle,
+        // Note: execGroupAgent doesn't have trigger param yet, defaults to null
       });
       topicId = topicItem.id;
       isCreateNewTopic = true;
@@ -481,12 +593,14 @@ export class AiAgentService {
 
     // 4. Delegate to execAgent with threadId in appContext and callbacks
     // The instruction will be created as user message in the Thread
+    // Use headless mode to skip human approval in async task execution
     const result = await this.execAgent({
       agentId,
       appContext: { groupId, threadId: thread.id, topicId },
       autoStart: true,
       prompt: instruction,
       stepCallbacks,
+      userInterventionConfig: { approvalMode: 'headless' },
     });
 
     log(
@@ -599,6 +713,11 @@ export class AiAgentService {
           }
         }
 
+        // Log error when task fails
+        if (reason === 'error' && finalState.error) {
+          console.error('execSubAgentTask: task failed for thread %s:', threadId, finalState.error);
+        }
+
         try {
           // Extract summary from last assistant message and update task message content
           const lastAssistantMessage = finalState.messages
@@ -613,12 +732,15 @@ export class AiAgentService {
             log('execSubAgentTask: updated task message %s with summary', sourceMessageId);
           }
 
+          // Format error for proper serialization (Error objects don't serialize with JSON.stringify)
+          const formattedError = formatErrorForMetadata(finalState.error);
+
           // Update Thread metadata
           await this.threadModel.update(threadId, {
             metadata: {
               completedAt,
               duration,
-              error: finalState.error,
+              error: formattedError,
               operationId: finalState.operationId,
               startedAt,
               totalCost: finalState.cost?.total,

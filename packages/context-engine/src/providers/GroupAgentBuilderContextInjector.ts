@@ -1,6 +1,6 @@
 import debug from 'debug';
 
-import { BaseProvider } from '../base/BaseProvider';
+import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
 const log = debug('context-engine:provider:GroupAgentBuilderContextInjector');
@@ -47,8 +47,8 @@ export interface GroupOfficialToolItem {
   installed?: boolean;
   /** Tool display name */
   name: string;
-  /** Tool type: 'builtin' for built-in tools, 'klavis' for LobeHub Mcp servers */
-  type: 'builtin' | 'klavis';
+  /** Tool type: 'builtin' for built-in tools, 'klavis' for LobeHub Mcp servers, 'lobehub-skill' for LobeHub Skill providers */
+  type: 'builtin' | 'klavis' | 'lobehub-skill';
 }
 
 /**
@@ -195,6 +195,7 @@ const defaultFormatGroupContext = (context: GroupAgentBuilderContext): string =>
   if (context.officialTools && context.officialTools.length > 0) {
     const builtinTools = context.officialTools.filter((t) => t.type === 'builtin');
     const klavisTools = context.officialTools.filter((t) => t.type === 'klavis');
+    const lobehubSkillTools = context.officialTools.filter((t) => t.type === 'lobehub-skill');
 
     const toolsSections: string[] = [];
 
@@ -226,6 +227,21 @@ const defaultFormatGroupContext = (context: GroupAgentBuilderContext): string =>
       toolsSections.push(`  <klavis_tools>\n${klavisItems}\n  </klavis_tools>`);
     }
 
+    if (lobehubSkillTools.length > 0) {
+      const lobehubSkillItems = lobehubSkillTools
+        .map((t) => {
+          const attrs = [
+            `id="${t.identifier}"`,
+            `installed="${t.installed ? 'true' : 'false'}"`,
+            `enabled="${t.enabled ? 'true' : 'false'}"`,
+          ].join(' ');
+          const desc = t.description ? ` - ${escapeXml(t.description)}` : '';
+          return `    <tool ${attrs}>${escapeXml(t.name)}${desc}</tool>`;
+        })
+        .join('\n');
+      toolsSections.push(`  <lobehub_skill_tools>\n${lobehubSkillItems}\n  </lobehub_skill_tools>`);
+    }
+
     if (toolsSections.length > 0) {
       parts.push(
         `<available_official_tools>\n${toolsSections.join('\n')}\n</available_official_tools>`,
@@ -246,8 +262,10 @@ ${parts.join('\n')}
 /**
  * Group Agent Builder Context Injector
  * Responsible for injecting current group context when Group Agent Builder tool is enabled
+ *
+ * Extends BaseFirstUserContentProvider to consolidate with other first-user-message injectors
  */
-export class GroupAgentBuilderContextInjector extends BaseProvider {
+export class GroupAgentBuilderContextInjector extends BaseFirstUserContentProvider {
   readonly name = 'GroupAgentBuilderContextInjector';
 
   constructor(
@@ -257,19 +275,17 @@ export class GroupAgentBuilderContextInjector extends BaseProvider {
     super(options);
   }
 
-  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
-    const clonedContext = this.cloneContext(context);
-
+  protected buildContent(): string | null {
     // Skip if Group Agent Builder is not enabled
     if (!this.config.enabled) {
       log('Group Agent Builder not enabled, skipping injection');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
     // Skip if no group context
     if (!this.config.groupContext) {
       log('No group context provided, skipping injection');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
     // Format group context
@@ -279,34 +295,21 @@ export class GroupAgentBuilderContextInjector extends BaseProvider {
     // Skip if no content to inject
     if (!formattedContent) {
       log('No content to inject after formatting');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
-    // Find the first user message index
-    const firstUserIndex = clonedContext.messages.findIndex((msg) => msg.role === 'user');
+    log('Group Agent Builder context prepared for injection');
+    return formattedContent;
+  }
 
-    if (firstUserIndex === -1) {
-      log('No user messages found, skipping injection');
-      return this.markAsExecuted(clonedContext);
+  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
+    const result = await super.doProcess(context);
+
+    // Update metadata if content was injected
+    if (this.config.enabled && this.config.groupContext) {
+      result.metadata.groupAgentBuilderContextInjected = true;
     }
 
-    // Insert a new user message with group context before the first user message
-    const groupContextMessage = {
-      content: formattedContent,
-      createdAt: Date.now(),
-      id: `group-agent-builder-context-${Date.now()}`,
-      meta: { injectType: 'group-agent-builder-context', systemInjection: true },
-      role: 'user' as const,
-      updatedAt: Date.now(),
-    };
-
-    clonedContext.messages.splice(firstUserIndex, 0, groupContextMessage);
-
-    // Update metadata
-    clonedContext.metadata.groupAgentBuilderContextInjected = true;
-
-    log('Group Agent Builder context injected as new user message');
-
-    return this.markAsExecuted(clonedContext);
+    return result;
   }
 }

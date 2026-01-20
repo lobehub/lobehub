@@ -88,6 +88,4 @@ const UserAvatar = forwardRef<HTMLDivElement, UserAvatarProps>(
   },
 );
 
-UserAvatar.displayName = 'UserAvatar';
-
 export default UserAvatar;

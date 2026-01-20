@@ -14,7 +14,13 @@ export interface FileUploadState {
   speed: number;
 }
 
-export type FileUploadStatus = 'pending' | 'uploading' | 'processing' | 'success' | 'error';
+export type FileUploadStatus =
+  | 'pending'
+  | 'uploading'
+  | 'processing'
+  | 'success'
+  | 'error'
+  | 'cancelled';
 
 export type FileProcessStatus = 'pending' | 'chunking' | 'embedding' | 'success' | 'error';
 
@@ -22,6 +28,10 @@ export const UPLOAD_STATUS_SET = new Set(['uploading', 'pending', 'processing'])
 
 // the file that is upload at chat page
 export interface UploadFileItem {
+  /**
+   * AbortController to cancel the upload
+   */
+  abortController?: AbortController;
   /**
    * base64 data, it will use in other data
    */

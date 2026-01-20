@@ -10,12 +10,15 @@
  * 3. Replaces the deprecated pluginState passing pattern
  */
 
+/** Status of a todo item */
+export type StepContextTodoStatus = 'todo' | 'processing' | 'completed';
+
 /**
  * Todo item structure
  * Duplicated here to avoid circular dependency with builtin-tool-gtd
  */
 export interface StepContextTodoItem {
-  completed: boolean;
+  status: StepContextTodoStatus;
   text: string;
 }
 

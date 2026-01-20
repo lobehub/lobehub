@@ -1,6 +1,6 @@
 import type {
   ElectronAppState,
-  WindowResizableParams,
+  WindowMinimumSizeParams,
   WindowSizeParams,
 } from '@lobechat/electron-client-ipc';
 
@@ -36,12 +36,12 @@ class ElectronSystemService {
     return this.ipc.windows.minimizeWindow();
   }
 
-  async setWindowResizable(params: WindowResizableParams): Promise<void> {
-    return this.ipc.windows.setWindowResizable(params);
-  }
-
   async setWindowSize(params: WindowSizeParams): Promise<void> {
     return this.ipc.windows.setWindowSize(params);
+  }
+
+  async setWindowMinimumSize(params: WindowMinimumSizeParams): Promise<void> {
+    return this.ipc.windows.setWindowMinimumSize(params);
   }
 
   async openExternalLink(url: string): Promise<void> {

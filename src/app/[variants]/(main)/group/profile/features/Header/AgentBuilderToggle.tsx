@@ -3,12 +3,11 @@ import { BotMessageSquareIcon } from 'lucide-react';
 import { memo } from 'react';
 
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
-
-import { useProfileStore } from '../store';
+import { useGroupProfileStore } from '@/store/groupProfile';
 
 const AgentBuilderToggle = memo(() => {
-  const chatPanelExpanded = useProfileStore((s) => s.chatPanelExpanded);
-  const setChatPanelExpanded = useProfileStore((s) => s.setChatPanelExpanded);
+  const chatPanelExpanded = useGroupProfileStore((s) => s.chatPanelExpanded);
+  const setChatPanelExpanded = useGroupProfileStore((s) => s.setChatPanelExpanded);
 
   return (
     <ActionIcon

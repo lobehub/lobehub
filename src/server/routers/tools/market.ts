@@ -1,4 +1,4 @@
-import { type CodeInterpreterToolName, MarketSDK } from '@lobehub/market-sdk';
+import { type CodeInterpreterToolName } from '@lobehub/market-sdk';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
@@ -7,10 +7,12 @@ import { z } from 'zod';
 import { type ToolCallContent } from '@/libs/mcp';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
-import { generateTrustedClientToken, isTrustedClientEnabled } from '@/libs/trusted-client';
+import { marketSDK, requireMarketAuth } from '@/libs/trpc/lambda/middleware/marketSDK';
+import { isTrustedClientEnabled } from '@/libs/trusted-client';
 import { FileS3 } from '@/server/modules/S3';
 import { DiscoverService } from '@/server/services/discover';
 import { FileService } from '@/server/services/file';
+import { MarketService } from '@/server/services/market';
 import {
   contentBlocksToString,
   processContentBlocks,
@@ -36,10 +38,31 @@ const marketToolProcedure = authedProcedure
           userInfo: ctx.marketUserInfo,
         }),
         fileService: new FileService(ctx.serverDB, ctx.userId),
+        marketService: new MarketService({
+          accessToken: ctx.marketAccessToken,
+          userInfo: ctx.marketUserInfo,
+        }),
         userModel,
       },
     });
   });
+
+// ============================== LobeHub Skill Procedures ==============================
+/**
+ * LobeHub Skill procedure with SDK and optional auth
+ * Used for routes that may work without auth (like listing providers)
+ */
+const lobehubSkillBaseProcedure = authedProcedure
+  .use(serverDatabase)
+  .use(telemetry)
+  .use(marketUserInfo)
+  .use(marketSDK);
+
+/**
+ * LobeHub Skill procedure with required auth
+ * Used for routes that require user authentication
+ */
+const lobehubSkillAuthProcedure = lobehubSkillBaseProcedure.use(requireMarketAuth);
 
 // ============================== Schema Definitions ==============================
 
@@ -61,7 +84,6 @@ const metaSchema = z
 
 // Schema for code interpreter tool call request
 const callCodeInterpreterToolSchema = z.object({
-  marketAccessToken: z.string().optional(),
   params: z.record(z.any()),
   toolName: z.string(),
   topicId: z.string(),
@@ -206,27 +228,17 @@ export const marketRouter = router({
   callCodeInterpreterTool: marketToolProcedure
     .input(callCodeInterpreterToolSchema)
     .mutation(async ({ input, ctx }) => {
-      const { toolName, params, userId, topicId, marketAccessToken } = input;
+      const { toolName, params, userId, topicId } = input;
 
       log('Calling cloud code interpreter tool: %s with params: %O', toolName, {
         params,
         topicId,
         userId,
       });
-      log('Market access token available: %s', marketAccessToken ? 'yes' : 'no');
-
-      // Generate trusted client token if user info is available
-      const trustedClientToken = ctx.marketUserInfo
-        ? generateTrustedClientToken(ctx.marketUserInfo)
-        : undefined;
 
       try {
-        // Initialize MarketSDK with market access token and trusted client token
-        const market = new MarketSDK({
-          accessToken: marketAccessToken,
-          baseURL: process.env.NEXT_PUBLIC_MARKET_BASE_URL,
-          trustedClientToken,
-        });
+        // Use marketService from ctx
+        const market = ctx.marketService.market;
 
         // Call market-sdk's runBuildInTool
         const response = await market.plugins.runBuildInTool(
@@ -269,6 +281,249 @@ export const marketRouter = router({
       }
     }),
 
+  // ============================== LobeHub Skill ==============================
+  /**
+   * Call a LobeHub Skill tool
+   */
+  connectCallTool: lobehubSkillAuthProcedure
+    .input(
+      z.object({
+        args: z.record(z.any()).optional(),
+        provider: z.string(),
+        toolName: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { provider, toolName, args } = input;
+      log('connectCallTool: provider=%s, tool=%s', provider, toolName);
+
+      try {
+        const response = await ctx.marketSDK.skills.callTool(provider, {
+          args: args || {},
+          tool: toolName,
+        });
+
+        log('connectCallTool response: %O', response);
+
+        return {
+          data: response.data,
+          success: response.success,
+        };
+      } catch (error) {
+        const errorMessage = (error as Error).message;
+        log('connectCallTool error: %s', errorMessage);
+
+        if (errorMessage.includes('NOT_CONNECTED')) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Provider not connected. Please authorize first.',
+          });
+        }
+
+        if (errorMessage.includes('TOKEN_EXPIRED')) {
+          throw new TRPCError({
+            code: 'UNAUTHORIZED',
+            message: 'Token expired. Please re-authorize.',
+          });
+        }
+
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to call tool: ${errorMessage}`,
+        });
+      }
+    }),
+
+  /**
+   * Get all connections health status
+   */
+  connectGetAllHealth: lobehubSkillAuthProcedure.query(async ({ ctx }) => {
+    log('connectGetAllHealth');
+
+    try {
+      const response = await ctx.marketSDK.connect.getAllHealth();
+      return {
+        connections: response.connections || [],
+        summary: response.summary,
+      };
+    } catch (error) {
+      log('connectGetAllHealth error: %O', error);
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to get connections health: ${(error as Error).message}`,
+      });
+    }
+  }),
+
+  /**
+   * Get authorize URL for a provider
+   * This calls the SDK's authorize method which generates a secure authorization URL
+   */
+  connectGetAuthorizeUrl: lobehubSkillAuthProcedure
+    .input(
+      z.object({
+        provider: z.string(),
+        redirectUri: z.string().optional(),
+        scopes: z.array(z.string()).optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      log('connectGetAuthorizeUrl: provider=%s', input.provider);
+
+      try {
+        const response = await ctx.marketSDK.connect.authorize(input.provider, {
+          redirect_uri: input.redirectUri,
+          scopes: input.scopes,
+        });
+
+        return {
+          authorizeUrl: response.authorize_url,
+          code: response.code,
+          expiresIn: response.expires_in,
+        };
+      } catch (error) {
+        log('connectGetAuthorizeUrl error: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to get authorize URL: ${(error as Error).message}`,
+        });
+      }
+    }),
+
+  /**
+   * Get connection status for a provider
+   */
+  connectGetStatus: lobehubSkillAuthProcedure
+    .input(z.object({ provider: z.string() }))
+    .query(async ({ input, ctx }) => {
+      log('connectGetStatus: provider=%s', input.provider);
+
+      try {
+        const response = await ctx.marketSDK.connect.getStatus(input.provider);
+        return {
+          connected: response.connected,
+          connection: response.connection,
+          icon: (response as any).icon,
+          providerName: (response as any).providerName,
+        };
+      } catch (error) {
+        log('connectGetStatus error: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to get status: ${(error as Error).message}`,
+        });
+      }
+    }),
+
+  /**
+   * List all user connections
+   */
+  connectListConnections: lobehubSkillAuthProcedure.query(async ({ ctx }) => {
+    log('connectListConnections');
+
+    try {
+      const response = await ctx.marketSDK.connect.listConnections();
+      // Debug logging
+      log('connectListConnections raw response: %O', response);
+      log('connectListConnections connections: %O', response.connections);
+      return {
+        connections: response.connections || [],
+      };
+    } catch (error) {
+      log('connectListConnections error: %O', error);
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to list connections: ${(error as Error).message}`,
+      });
+    }
+  }),
+
+  /**
+   * List available providers (public, no auth required)
+   */
+  connectListProviders: lobehubSkillBaseProcedure.query(async ({ ctx }) => {
+    log('connectListProviders');
+
+    try {
+      const response = await ctx.marketSDK.skills.listProviders();
+      return {
+        providers: response.providers || [],
+      };
+    } catch (error) {
+      log('connectListProviders error: %O', error);
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to list providers: ${(error as Error).message}`,
+      });
+    }
+  }),
+
+  /**
+   * List tools for a provider
+   */
+  connectListTools: lobehubSkillBaseProcedure
+    .input(z.object({ provider: z.string() }))
+    .query(async ({ input, ctx }) => {
+      log('connectListTools: provider=%s', input.provider);
+
+      try {
+        const response = await ctx.marketSDK.skills.listTools(input.provider);
+        return {
+          provider: input.provider,
+          tools: response.tools || [],
+        };
+      } catch (error) {
+        log('connectListTools error: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to list tools: ${(error as Error).message}`,
+        });
+      }
+    }),
+
+  /**
+   * Refresh token for a provider
+   */
+  connectRefresh: lobehubSkillAuthProcedure
+    .input(z.object({ provider: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      log('connectRefresh: provider=%s', input.provider);
+
+      try {
+        const response = await ctx.marketSDK.connect.refresh(input.provider);
+        return {
+          connection: response.connection,
+          refreshed: response.refreshed,
+        };
+      } catch (error) {
+        log('connectRefresh error: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to refresh token: ${(error as Error).message}`,
+        });
+      }
+    }),
+
+  /**
+   * Revoke connection for a provider
+   */
+  connectRevoke: lobehubSkillAuthProcedure
+    .input(z.object({ provider: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      log('connectRevoke: provider=%s', input.provider);
+
+      try {
+        await ctx.marketSDK.connect.revoke(input.provider);
+        return { success: true };
+      } catch (error) {
+        log('connectRevoke error: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to revoke connection: ${(error as Error).message}`,
+        });
+      }
+    }),
+
   /**
    * Export a file from sandbox and upload to S3, then create a persistent file record
    * This combines the previous getExportFileUploadUrl + callCodeInterpreterTool + createFileRecord flow
@@ -294,34 +549,8 @@ export const marketRouter = router({
         const uploadUrl = await s3.createPreSignedUrl(key);
         log('Generated upload URL for key: %s', key);
 
-        // Step 2: Generate trusted client token if user info is available
-        const trustedClientToken = ctx.marketUserInfo
-          ? generateTrustedClientToken(ctx.marketUserInfo)
-          : undefined;
-
-        // Only require user accessToken if trusted client is not available
-        let userAccessToken: string | undefined;
-        if (!trustedClientToken) {
-          const userState = await ctx.userModel.getUserState(async () => ({}));
-          userAccessToken = userState.settings?.market?.accessToken;
-
-          if (!userAccessToken) {
-            return {
-              error: { message: 'User access token not found. Please sign in to Market first.' },
-              filename,
-              success: false,
-            } as ExportAndUploadFileResult;
-          }
-        } else {
-          log('Using trusted client authentication for exportAndUploadFile');
-        }
-
-        // Initialize MarketSDK
-        const market = new MarketSDK({
-          accessToken: userAccessToken,
-          baseURL: process.env.NEXT_PUBLIC_MARKET_BASE_URL,
-          trustedClientToken,
-        });
+        // Step 2: Use MarketService from ctx
+        const market = ctx.marketService.market;
 
         // Step 3: Call sandbox's exportFile tool with the upload URL
         const response = await market.plugins.runBuildInTool(

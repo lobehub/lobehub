@@ -15,6 +15,4 @@ const Page = () => {
   );
 };
 
-Page.displayName = 'ChatAppearanceSetting';
-
 export default Page;

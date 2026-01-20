@@ -4,13 +4,22 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
     "./executor": "./src/executor/index.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
-    "@lobechat/memory-user-memory": "workspace:*"
+    "@lobechat/memory-user-memory": "workspace:*",
+    "@lobechat/prompts": "workspace:*"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^4",
+    "antd-style": "*",
+    "lucide-react": "*",
+    "react": "*",
+    "react-i18next": "*"
   }
 }

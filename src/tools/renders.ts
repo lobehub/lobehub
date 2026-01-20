@@ -2,6 +2,8 @@ import { AgentBuilderManifest } from '@lobechat/builtin-tool-agent-builder';
 import { AgentBuilderRenders } from '@lobechat/builtin-tool-agent-builder/client';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CloudSandboxRenders } from '@lobechat/builtin-tool-cloud-sandbox/client';
+import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
+import { GroupAgentBuilderRenders } from '@lobechat/builtin-tool-group-agent-builder/client';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { GroupManagementRenders } from '@lobechat/builtin-tool-group-management/client';
 import { GTDManifest, GTDRenders } from '@lobechat/builtin-tool-gtd/client';
@@ -13,6 +15,7 @@ import {
   LocalSystemManifest,
   LocalSystemRenders,
 } from '@lobechat/builtin-tool-local-system/client';
+import { MemoryManifest, MemoryRenders } from '@lobechat/builtin-tool-memory/client';
 import { NotebookManifest, NotebookRenders } from '@lobechat/builtin-tool-notebook/client';
 import {
   WebBrowsingManifest,
@@ -27,11 +30,13 @@ import { type BuiltinRender } from '@lobechat/types';
 const BuiltinToolsRenders: Record<string, Record<string, BuiltinRender>> = {
   [AgentBuilderManifest.identifier]: AgentBuilderRenders as Record<string, BuiltinRender>,
   [CloudSandboxManifest.identifier]: CloudSandboxRenders as Record<string, BuiltinRender>,
+  [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderRenders as Record<string, BuiltinRender>,
   [GroupManagementManifest.identifier]: GroupManagementRenders as Record<string, BuiltinRender>,
   [GTDManifest.identifier]: GTDRenders as Record<string, BuiltinRender>,
-  [NotebookManifest.identifier]: NotebookRenders as Record<string, BuiltinRender>,
   [KnowledgeBaseManifest.identifier]: KnowledgeBaseRenders as Record<string, BuiltinRender>,
   [LocalSystemManifest.identifier]: LocalSystemRenders as Record<string, BuiltinRender>,
+  [MemoryManifest.identifier]: MemoryRenders as Record<string, BuiltinRender>,
+  [NotebookManifest.identifier]: NotebookRenders as Record<string, BuiltinRender>,
   [WebBrowsingManifest.identifier]: WebBrowsingRenders as Record<string, BuiltinRender>,
 };
 

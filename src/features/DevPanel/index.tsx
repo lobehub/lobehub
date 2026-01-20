@@ -1,7 +1,7 @@
 'use client';
 
 import { BookText, Cog, FlagIcon, GlobeLockIcon } from 'lucide-react';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 
 import CacheViewer from './CacheViewer';
 import FeatureFlagViewer from './FeatureFlagViewer';

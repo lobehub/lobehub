@@ -9,13 +9,9 @@ const Page = () => {
   return (
     <>
       <SettingHeader title={t('tab.proxy')} />
-      <div style={{ maxWidth: '1024px', width: '100%' }}>
-        <ProxyForm />
-      </div>
+      <ProxyForm />
     </>
   );
 };
-
-Page.displayName = 'ProxySetting';
 
 export default Page;

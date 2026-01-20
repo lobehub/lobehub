@@ -11,7 +11,6 @@ import { isDev } from '@/const/env';
 import { ELECTRON_BE_PROTOCOL_SCHEME } from '@/const/protocol';
 import { IControlModule } from '@/controllers';
 import { IServiceModule } from '@/services';
-import { getServerMethodMetadata } from '@/utils/ipc';
 import { createLogger } from '@/utils/logger';
 
 import { BrowserManager } from './browser/BrowserManager';
@@ -128,7 +127,7 @@ export class App {
     // initialize protocol handlers
     this.protocolManager.initialize();
 
-    // 统一处理 before-quit 事件
+    // Unified handling of before-quit event
     app.on('before-quit', this.handleBeforeQuit);
 
     // Initialize theme mode from store
@@ -225,10 +224,10 @@ export class App {
 
   /**
    * Handle protocol request by dispatching to registered handlers
-   * @param urlType 协议URL类型 (如: 'plugin')
-   * @param action 操作类型 (如: 'install')
-   * @param data 解析后的协议数据
-   * @returns 是否成功处理
+   * @param urlType Protocol URL type (e.g., 'plugin')
+   * @param action Action type (e.g., 'install')
+   * @param data Parsed protocol data
+   * @returns Whether successfully handled
    */
   async handleProtocolRequest(urlType: string, action: string, data: any): Promise<boolean> {
     const key = `${urlType}:${action}`;
@@ -242,7 +241,7 @@ export class App {
     try {
       logger.debug(`Dispatching protocol request ${key} to controller`);
       const result = await handler.controller[handler.methodName](data);
-      return result !== false; // 假设控制器返回 false 表示处理失败
+      return result !== false; // Assume controller returning false indicates handling failure
     } catch (error) {
       logger.error(`Error handling protocol request ${key}:`, error);
       return false;
@@ -330,15 +329,6 @@ export class App {
     const controller = new ControllerClass(this);
     this.controllers.set(ControllerClass, controller);
 
-    const serverMethods = getServerMethodMetadata(ControllerClass);
-    serverMethods?.forEach((methodName, propertyKey) => {
-      const channel = `${ControllerClass.groupName}.${methodName}`;
-      this.ipcServerEventMap.set(channel, {
-        controller,
-        methodName: propertyKey,
-      });
-    });
-
     IoCContainer.shortcuts.get(ControllerClass)?.forEach((shortcut) => {
       this.shortcutMethodMap.set(shortcut.name, async () => {
         controller[shortcut.methodName]();
@@ -395,17 +385,17 @@ export class App {
     this.ipcServer = new ElectronIPCServer(name, ipcServerEvents);
   }
 
-  // 新增 before-quit 处理函数
+  // Add before-quit handler function
   private handleBeforeQuit = () => {
     logger.info('Application is preparing to quit');
     this.isQuiting = true;
 
-    // 销毁托盘
+    // Destroy tray
     if (process.platform === 'win32') {
       this.trayManager.destroyAll();
     }
 
-    // 执行清理操作
+    // Execute cleanup operations
     this.staticFileServerManager.destroy();
   };
 }

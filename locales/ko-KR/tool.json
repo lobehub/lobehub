@@ -15,6 +15,8 @@
   "agentGroupManagement.executeTask.thread": "스레드 ID",
   "agentGroupManagement.executeTask.timeout": "실행 시간 초과",
   "agentGroupManagement.executeTask.tokens": "토큰 사용량",
+  "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "이 작업을 수행하기 위한 에이전트의 자세한 지침...",
+  "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "작업 제목...",
   "codeInterpreter-legacy.error": "실행 오류",
   "codeInterpreter-legacy.executing": "실행 중...",
   "codeInterpreter-legacy.files": "파일:",

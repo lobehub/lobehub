@@ -16,6 +16,4 @@ const Page = () => {
   );
 };
 
-Page.displayName = 'TtsSetting';
-
 export default Page;

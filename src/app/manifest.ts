@@ -16,7 +16,7 @@ const manifest = async (): Promise<MetadataRoute.Manifest> => {
       ],
       name: 'LobeChat',
       short_name: 'LobeChat',
-      start_url: '/agent',
+      start_url: '/',
       theme_color: '#000000',
     };
   }

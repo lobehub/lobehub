@@ -134,6 +134,8 @@
   "cmdk.search.communityAgent": "Community-Agent",
   "cmdk.search.file": "Datei",
   "cmdk.search.files": "Dateien",
+  "cmdk.search.folder": "Ordner",
+  "cmdk.search.folders": "Ordner",
   "cmdk.search.loading": "Suche läuft...",
   "cmdk.search.market": "Community",
   "cmdk.search.mcp": "MCP-Server",

@@ -33,6 +33,11 @@ export interface VirtuaListAction {
   ) => void;
 
   /**
+   * Set active index directly (derived from scroll position)
+   */
+  setActiveIndex: (index: number | null) => void;
+
+  /**
    * Update scroll state (atBottom, isScrolling)
    */
   setScrollState: (state: { atBottom?: boolean; isScrolling?: boolean }) => void;
@@ -105,6 +110,10 @@ export const virtuaListSlice: StateCreator<State & VirtuaListAction, [], [], Vir
   scrollToIndex: (index, options) => {
     const { virtuaScrollMethods } = get();
     virtuaScrollMethods?.scrollToIndex(index, options);
+  },
+
+  setActiveIndex: (index) => {
+    set({ activeIndex: index });
   },
 
   setScrollState: (state) => {

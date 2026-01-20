@@ -15,6 +15,8 @@
   "agentGroupManagement.executeTask.thread": "ID Wątku",
   "agentGroupManagement.executeTask.timeout": "Przekroczono Czas Wykonania",
   "agentGroupManagement.executeTask.tokens": "Zużycie Tokenów",
+  "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "Szczegółowa instrukcja dla agenta do wykonania tego zadania...",
+  "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "Tytuł zadania...",
   "codeInterpreter-legacy.error": "Błąd Wykonania",
   "codeInterpreter-legacy.executing": "Wykonywanie...",
   "codeInterpreter-legacy.files": "Pliki:",

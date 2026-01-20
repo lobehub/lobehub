@@ -1,8 +1,9 @@
 'use client';
 
 import { ActionIcon, Flexbox } from '@lobehub/ui';
+import { App } from 'antd';
 import { cssVar } from 'antd-style';
-import { SearchIcon } from 'lucide-react';
+import { BookMinusIcon, FileBoxIcon, SearchIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,7 +19,8 @@ import ViewSwitcher from '../ToolBar/ViewSwitcher';
 import Breadcrumb from './Breadcrumb';
 
 const Header = memo(() => {
-  const { t } = useTranslation('file');
+  const { t } = useTranslation(['components', 'common', 'file', 'knowledgeBase']);
+  const { modal, message } = App.useApp();
 
   // Get state and actions from store
   const [libraryId, category, onActionClick, selectFileIds] = useResourceManagerStore((s) => [
@@ -29,18 +31,69 @@ const Header = memo(() => {
   ]);
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
 
-  // Disable batch actions dropdown when no items selected and not in any library
-  const isBatchActionsDisabled = selectFileIds.length === 0 && !libraryId;
+  const selectCount = selectFileIds.length;
+  const isMultiSelected = selectCount > 1;
 
-  // If no libraryId, show just the category name
-  const leftContent =
-    !libraryId && category && category !== FilesTabs.All ? (
-      <Flexbox style={{ marginLeft: 8 }}>{t(`tab.${category as FilesTabs}` as any)}</Flexbox>
-    ) : (
-      <Flexbox style={{ marginLeft: 8 }}>
-        <Breadcrumb category={category} knowledgeBaseId={libraryId} />
-      </Flexbox>
-    );
+  // If no libraryId, show category name or "Resource" for All
+  const leftContent = isMultiSelected ? (
+    <Flexbox align={'center'} gap={8} horizontal style={{ marginLeft: 0 }}>
+      {libraryId ? (
+        <ActionIcon
+          icon={BookMinusIcon}
+          onClick={() => {
+            modal.confirm({
+              okButtonProps: {
+                danger: true,
+              },
+              onOk: async () => {
+                await onActionClick('removeFromKnowledgeBase');
+                message.success(t('FileManager.actions.removeFromKnowledgeBaseSuccess'));
+              },
+              title: t('FileManager.actions.confirmRemoveFromKnowledgeBase', {
+                count: selectCount,
+              }),
+            });
+          }}
+          title={t('FileManager.actions.removeFromKnowledgeBase')}
+        />
+      ) : null}
+
+      <ActionIcon
+        icon={FileBoxIcon}
+        onClick={async () => {
+          await onActionClick('batchChunking');
+        }}
+        title={t('FileManager.actions.batchChunking')}
+      />
+
+      <ActionIcon
+        icon={Trash2Icon}
+        onClick={() => {
+          modal.confirm({
+            okButtonProps: {
+              danger: true,
+            },
+            onOk: async () => {
+              await onActionClick('delete');
+              message.success(t('FileManager.actions.deleteSuccess'));
+            },
+            title: t('FileManager.actions.confirmDeleteMultiFiles', { count: selectCount }),
+          });
+        }}
+        title={t('delete', { ns: 'common' })}
+      />
+    </Flexbox>
+  ) : !libraryId ? (
+    <Flexbox style={{ marginLeft: 8 }}>
+      {category === FilesTabs.All
+        ? t('resource', { defaultValue: 'Resource' })
+        : t(`tab.${category as FilesTabs}` as any)}
+    </Flexbox>
+  ) : (
+    <Flexbox style={{ marginLeft: 8 }}>
+      <Breadcrumb category={category} knowledgeBaseId={libraryId} />
+    </Flexbox>
+  );
 
   return (
     <NavHeader
@@ -49,11 +102,7 @@ const Header = memo(() => {
         <>
           <ActionIcon icon={SearchIcon} onClick={() => toggleCommandMenu(true)} />
           <SortDropdown />
-          <BatchActionsDropdown
-            disabled={isBatchActionsDisabled}
-            onActionClick={onActionClick}
-            selectCount={selectFileIds.length}
-          />
+          <BatchActionsDropdown onActionClick={onActionClick} selectCount={selectCount} />
           <ViewSwitcher />
           <Flexbox style={{ marginLeft: 8 }}>
             <AddButton />

@@ -10,10 +10,6 @@ import AutoScroll from './AutoScroll';
 
 interface VirtualizedListProps {
   dataSource: string[];
-  /**
-   * Whether AI is generating (for auto-scroll)
-   */
-  isGenerating?: boolean;
   itemContent: (index: number, data: string) => ReactNode;
 }
 
@@ -22,7 +18,7 @@ interface VirtualizedListProps {
  *
  * Based on ConversationStore data flow, no dependency on global ChatStore.
  */
-const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent, isGenerating }) => {
+const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent }) => {
   const virtuaRef = useRef<VListHandle>(null);
   const prevDataLengthRef = useRef(dataSource.length);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -34,7 +30,9 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent, i
   const setScrollState = useConversationStore((s) => s.setScrollState);
   const resetVisibleItems = useConversationStore((s) => s.resetVisibleItems);
   const scrollToBottom = useConversationStore((s) => s.scrollToBottom);
+  const setActiveIndex = useConversationStore((s) => s.setActiveIndex);
   const atBottom = useConversationStore(virtuaListSelectors.atBottom);
+  const activeIndex = useConversationStore(virtuaListSelectors.activeIndex);
 
   // Check if at bottom based on scroll position
   const checkAtBottom = useCallback(() => {
@@ -50,6 +48,16 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent, i
 
   // Handle scroll events
   const handleScroll = useCallback(() => {
+    const refForActive = virtuaRef.current;
+    const activeFromFindRaw =
+      refForActive && typeof refForActive.findItemIndex === 'function'
+        ? refForActive.findItemIndex(refForActive.scrollOffset + refForActive.viewportSize * 0.25)
+        : null;
+    const activeFromFind =
+      typeof activeFromFindRaw === 'number' && activeFromFindRaw >= 0 ? activeFromFindRaw : null;
+
+    if (activeFromFind !== activeIndex) setActiveIndex(activeFromFind);
+
     setScrollState({ isScrolling: true });
 
     // Check if at bottom
@@ -65,7 +73,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent, i
     scrollEndTimerRef.current = setTimeout(() => {
       setScrollState({ isScrolling: false });
     }, 150);
-  }, [checkAtBottom, setScrollState]);
+  }, [activeIndex, checkAtBottom, setActiveIndex, setScrollState]);
 
   const handleScrollEnd = useCallback(() => {
     setScrollState({ isScrolling: false });
@@ -81,12 +89,18 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent, i
         getViewportSize: () => ref.viewportSize,
         scrollToIndex: (index, options) => ref.scrollToIndex(index, options),
       });
+
+      // Seed active index once on mount (avoid requiring user scroll)
+      const initialActiveRaw = ref.findItemIndex(ref.scrollOffset + ref.viewportSize * 0.25);
+      const initialActive =
+        typeof initialActiveRaw === 'number' && initialActiveRaw >= 0 ? initialActiveRaw : null;
+      setActiveIndex(initialActive);
     }
 
     return () => {
       registerVirtuaScrollMethods(null);
     };
-  }, [registerVirtuaScrollMethods]);
+  }, [registerVirtuaScrollMethods, setActiveIndex]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -154,7 +168,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent, i
           position: 'relative',
         }}
       >
-        <AutoScroll isGenerating={isGenerating} />
+        <AutoScroll />
       </WideScreenContainer>
     </>
   );

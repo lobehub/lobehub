@@ -54,6 +54,8 @@
   "funds.packages.expiresIn": "Wygasa za {{days}} dni",
   "funds.packages.expiresToday": "Wygasa dzisiaj",
   "funds.packages.expiringSoon": "Wkrótce wygaśnie",
+  "funds.packages.gift": "Prezent",
+  "funds.packages.giftedOn": "Podarowano {{date}}",
   "funds.packages.noPackages": "Brak pakietów kredytowych",
   "funds.packages.purchaseFirst": "Kup swój pierwszy pakiet kredytowy",
   "funds.packages.purchasedOn": "Zakupiono {{date}}",

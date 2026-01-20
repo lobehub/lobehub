@@ -1,4 +1,4 @@
-import { ActionIcon, Button, Dropdown, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { InfoIcon, MoreVerticalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -54,36 +54,33 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
   return (
     <Flexbox align={'center'} horizontal>
       {enabled ? (
-        <Dropdown
-          menu={{
-            items: [
-              {
-                icon: <Icon icon={InfoIcon} />,
-                key: 'detail',
-                label: t('knowledgeBase.library.action.detail'),
-                onClick: () => {
-                  if (type === KnowledgeType.KnowledgeBase) {
-                    window.open(`/resource/library/${id}`);
-                    return;
-                  }
+        <DropdownMenu
+          items={[
+            {
+              icon: <Icon icon={InfoIcon} />,
+              key: 'detail',
+              label: t('knowledgeBase.library.action.detail'),
+              onClick: () => {
+                if (type === KnowledgeType.KnowledgeBase) {
+                  window.open(`/resource/library/${id}`);
+                  return;
+                }
 
-                  window.open(`/knowledge?file=${id}`);
-                },
+                window.open(`/knowledge?file=${id}`);
               },
-              {
-                danger: true,
-                icon: <Icon icon={Trash2} />,
-                key: 'remove',
-                label: t('knowledgeBase.library.action.remove'),
-                onClick: removeKnowledge,
-              },
-            ],
-          }}
+            },
+            {
+              danger: true,
+              icon: <Icon icon={Trash2} />,
+              key: 'remove',
+              label: t('knowledgeBase.library.action.remove'),
+              onClick: removeKnowledge,
+            },
+          ]}
           placement="bottomRight"
-          trigger={['click']}
         >
           <ActionIcon icon={MoreVerticalIcon} loading={loading} />
-        </Dropdown>
+        </DropdownMenu>
       ) : (
         <Button
           loading={loading}

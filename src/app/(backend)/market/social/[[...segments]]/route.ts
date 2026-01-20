@@ -1,25 +1,11 @@
-import { MarketSDK } from '@lobehub/market-sdk';
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { getTrustedClientTokenForSession } from '@/libs/trusted-client';
+import { MarketService } from '@/server/services/market';
 
 type RouteContext = {
   params: Promise<{
     segments?: string[];
   }>;
-};
-
-const MARKET_BASE_URL = process.env.NEXT_PUBLIC_MARKET_BASE_URL || 'https://market.lobehub.com';
-
-/**
- * Helper to get authorization header
- */
-const getAccessToken = (req: NextRequest): string | undefined => {
-  const authHeader = req.headers.get('authorization');
-  if (authHeader?.startsWith('Bearer ')) {
-    return authHeader.slice(7);
-  }
-  return undefined;
 };
 
 /**
@@ -34,22 +20,9 @@ const getAccessToken = (req: NextRequest): string | undefined => {
 export const POST = async (req: NextRequest, context: RouteContext) => {
   const { segments = [] } = await context.params;
   const action = segments[0];
-  const accessToken = getAccessToken(req);
-  const trustedClientToken = await getTrustedClientTokenForSession();
 
-  const market = new MarketSDK({
-    accessToken,
-    baseURL: MARKET_BASE_URL,
-    trustedClientToken,
-  });
-
-  // Only require accessToken if trusted client token is not available
-  if (!accessToken && !trustedClientToken) {
-    return NextResponse.json(
-      { error: 'unauthorized', message: 'Access token required' },
-      { status: 401 },
-    );
-  }
+  const marketService = await MarketService.createFromRequest(req);
+  const market = marketService.market;
 
   try {
     const body = await req.json();
@@ -135,14 +108,9 @@ export const POST = async (req: NextRequest, context: RouteContext) => {
 export const GET = async (req: NextRequest, context: RouteContext) => {
   const { segments = [] } = await context.params;
   const action = segments[0];
-  const accessToken = getAccessToken(req);
-  const trustedClientToken = await getTrustedClientTokenForSession();
 
-  const market = new MarketSDK({
-    accessToken,
-    baseURL: MARKET_BASE_URL,
-    trustedClientToken,
-  });
+  const marketService = await MarketService.createFromRequest(req);
+  const market = marketService.market;
 
   const url = new URL(req.url);
   const limit = url.searchParams.get('pageSize') || url.searchParams.get('limit');
@@ -158,9 +126,6 @@ export const GET = async (req: NextRequest, context: RouteContext) => {
       // Follow queries
       case 'follow-status': {
         const targetUserId = Number(segments[1]);
-        if (!accessToken && !trustedClientToken) {
-          return NextResponse.json({ isFollowing: false, isMutual: false });
-        }
         const result = await market.follows.checkFollowStatus(targetUserId);
         return NextResponse.json(result);
       }
@@ -193,9 +158,6 @@ export const GET = async (req: NextRequest, context: RouteContext) => {
       case 'favorite-status': {
         const targetType = segments[1] as 'agent' | 'plugin';
         const targetIdOrIdentifier = segments[2];
-        if (!accessToken && !trustedClientToken) {
-          return NextResponse.json({ isFavorited: false });
-        }
         // SDK accepts both number (targetId) and string (identifier)
         const isNumeric = /^\d+$/.test(targetIdOrIdentifier);
         const targetValue = isNumeric ? Number(targetIdOrIdentifier) : targetIdOrIdentifier;
@@ -204,12 +166,6 @@ export const GET = async (req: NextRequest, context: RouteContext) => {
       }
 
       case 'favorites': {
-        if (!accessToken) {
-          return NextResponse.json(
-            { error: 'unauthorized', message: 'Access token required' },
-            { status: 401 },
-          );
-        }
         const result = await market.favorites.getMyFavorites(paginationParams);
         return NextResponse.json(result);
       }
@@ -236,9 +192,6 @@ export const GET = async (req: NextRequest, context: RouteContext) => {
       case 'like-status': {
         const targetType = segments[1] as 'agent' | 'plugin';
         const targetIdOrIdentifier = segments[2];
-        if (!accessToken && !trustedClientToken) {
-          return NextResponse.json({ isLiked: false });
-        }
         const isNumeric = /^\d+$/.test(targetIdOrIdentifier);
         const targetValue = isNumeric ? Number(targetIdOrIdentifier) : targetIdOrIdentifier;
         const result = await market.likes.checkLike(targetType, targetValue as number);

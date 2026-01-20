@@ -26,7 +26,7 @@ export interface ChatPluginPayload {
 /**
  * Tool source indicates where the tool comes from
  */
-export type ToolSource = 'builtin' | 'plugin' | 'mcp' | 'klavis';
+export type ToolSource = 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill';
 
 export interface ChatToolPayload {
   apiName: string;

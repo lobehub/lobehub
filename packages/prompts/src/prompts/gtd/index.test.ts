@@ -15,12 +15,12 @@ describe('formatTodoStateSummary', () => {
 
   it('should format todo list with only pending items', () => {
     const todos = [
-      { text: 'Task A', completed: false },
-      { text: 'Task B', completed: false },
-      { text: 'Task C', completed: false },
+      { text: 'Task A', status: 'todo' as const },
+      { text: 'Task B', status: 'todo' as const },
+      { text: 'Task C', status: 'todo' as const },
     ];
     expect(formatTodoStateSummary(todos)).toMatchInlineSnapshot(`
-      "📋 Current Todo List (3 pending, 0 completed):
+      "📋 Current Todo List (3 todo, 0 processing, 0 completed):
       - [ ] Task A
       - [ ] Task B
       - [ ] Task C"
@@ -29,11 +29,11 @@ describe('formatTodoStateSummary', () => {
 
   it('should format todo list with only completed items', () => {
     const todos = [
-      { text: 'Done task 1', completed: true },
-      { text: 'Done task 2', completed: true },
+      { text: 'Done task 1', status: 'completed' as const },
+      { text: 'Done task 2', status: 'completed' as const },
     ];
     expect(formatTodoStateSummary(todos)).toMatchInlineSnapshot(`
-      "📋 Current Todo List (0 pending, 2 completed):
+      "📋 Current Todo List (0 todo, 0 processing, 2 completed):
       - [x] Done task 1
       - [x] Done task 2"
     `);
@@ -41,12 +41,12 @@ describe('formatTodoStateSummary', () => {
 
   it('should format todo list with mixed items', () => {
     const todos = [
-      { text: 'Pending task', completed: false },
-      { text: 'Completed task', completed: true },
-      { text: 'Another pending', completed: false },
+      { text: 'Pending task', status: 'todo' as const },
+      { text: 'Completed task', status: 'completed' as const },
+      { text: 'Another pending', status: 'todo' as const },
     ];
     expect(formatTodoStateSummary(todos)).toMatchInlineSnapshot(`
-      "📋 Current Todo List (2 pending, 1 completed):
+      "📋 Current Todo List (2 todo, 0 processing, 1 completed):
       - [ ] Pending task
       - [x] Completed task
       - [ ] Another pending"
@@ -55,21 +55,37 @@ describe('formatTodoStateSummary', () => {
 
   it('should format todo list with timestamp', () => {
     const todos = [
-      { text: 'Task 1', completed: false },
-      { text: 'Task 2', completed: true },
+      { text: 'Task 1', status: 'todo' as const },
+      { text: 'Task 2', status: 'completed' as const },
     ];
     expect(formatTodoStateSummary(todos, '2025-01-15T10:30:00.000Z')).toMatchInlineSnapshot(`
-      "📋 Current Todo List (1 pending, 1 completed) | Updated: 2025-01-15T10:30:00.000Z:
+      "📋 Current Todo List (1 todo, 0 processing, 1 completed) | Updated: 2025-01-15T10:30:00.000Z:
       - [ ] Task 1
       - [x] Task 2"
     `);
   });
 
   it('should handle single item', () => {
-    const todos = [{ text: 'Only task', completed: false }];
+    const todos = [{ text: 'Only task', status: 'todo' as const }];
     expect(formatTodoStateSummary(todos)).toMatchInlineSnapshot(`
-      "📋 Current Todo List (1 pending, 0 completed):
+      "📋 Current Todo List (1 todo, 0 processing, 0 completed):
       - [ ] Only task"
+    `);
+  });
+
+  it('should format todo list with processing items', () => {
+    const todos = [
+      { text: 'Todo task', status: 'todo' as const },
+      { text: 'Processing task 1', status: 'processing' as const },
+      { text: 'Processing task 2', status: 'processing' as const },
+      { text: 'Done task', status: 'completed' as const },
+    ];
+    expect(formatTodoStateSummary(todos)).toMatchInlineSnapshot(`
+      "📋 Current Todo List (1 todo, 2 processing, 1 completed):
+      - [ ] Todo task
+      - [~] Processing task 1
+      - [~] Processing task 2
+      - [x] Done task"
     `);
   });
 });

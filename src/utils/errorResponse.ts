@@ -1,6 +1,16 @@
 import { AgentRuntimeErrorType, type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { ChatErrorType, type ErrorResponse, type ErrorType } from '@lobechat/types';
 
+/**
+ * Error types that indicate a real authentication failure.
+ * When these errors occur, the response will include X-Auth-Required header
+ * to signal the client that re-authentication is needed.
+ */
+const AUTH_REQUIRED_ERROR_TYPES = new Set<ErrorType>([
+  ChatErrorType.Unauthorized,
+  ChatErrorType.InvalidClerkUser,
+]);
+
 const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
   // InvalidAccessCode / InvalidAzureAPIKey / InvalidOpenAIAPIKey / InvalidZhipuAPIKey ....
   if (errorType.toString().includes('Invalid')) return 401;
@@ -71,5 +81,15 @@ export const createErrorResponse = (
     );
   }
 
-  return new Response(JSON.stringify(data), { status: statusCode });
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  // Add X-Auth-Required header for real authentication failures
+  // This allows the client to distinguish between auth failures and other 401 errors (e.g., invalid API keys)
+  if (AUTH_REQUIRED_ERROR_TYPES.has(errorType as ErrorType)) {
+    headers['X-Auth-Required'] = 'true';
+  }
+
+  return new Response(JSON.stringify(data), { headers, status: statusCode });
 };

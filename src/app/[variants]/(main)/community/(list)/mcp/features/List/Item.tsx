@@ -5,7 +5,7 @@ import { ActionIcon, Avatar, Block, Flexbox, Icon, Tag, Text, Tooltip } from '@l
 import { Spotlight } from '@lobehub/ui/awesome';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ClockIcon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
@@ -14,6 +14,7 @@ import InstallationIcon from '@/components/MCPDepsIcon';
 import OfficialIcon from '@/components/OfficialIcon';
 import PublishedTime from '@/components/PublishedTime';
 import Scores from '@/features/MCP/Scores';
+import { discoverService } from '@/services/discover';
 import { type DiscoverMcpItem } from '@/types/discover';
 
 import ConnectionTypeTag from './ConnectionTypeTag';
@@ -77,14 +78,23 @@ const McpItem = memo<DiscoverMcpItem>(
     const { t } = useTranslation('discover');
     const navigate = useNavigate();
     const link = urlJoin('/community/mcp', identifier);
+
+    const handleClick = useCallback(() => {
+      discoverService.reportMcpEvent({
+        event: 'click',
+        identifier,
+        source: location.pathname,
+      }).catch(() => {});
+
+      navigate(link);
+    }, [identifier, link, navigate]);
+
     return (
       <Block
         clickable
         data-testid="mcp-item"
         height={'100%'}
-        onClick={() => {
-          navigate(link);
-        }}
+        onClick={handleClick}
         style={{
           overflow: 'hidden',
           position: 'relative',

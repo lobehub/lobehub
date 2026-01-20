@@ -1,6 +1,4 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import { CloudSandboxIdentifier, type ExportFileState } from '@lobechat/builtin-tool-cloud-sandbox';
-import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { type ChatToolPayload, type RuntimeStepContext } from '@lobechat/types';
 import { PluginErrorType } from '@lobehub/chat-plugin-sdk';
 import debug from 'debug';
@@ -15,11 +13,10 @@ import { AI_RUNTIME_OPERATION_TYPES } from '@/store/chat/slices/operation';
 import { type ChatStore } from '@/store/chat/store';
 import { useToolStore } from '@/store/tool';
 import { hasExecutor } from '@/store/tool/slices/builtin/executors';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
 import { dbMessageSelectors } from '../../message/selectors';
+import { RemoteToolExecutor, klavisExecutor, lobehubSkillExecutor } from './exector';
 
 const log = debug('lobe-store:plugin-types');
 
@@ -43,14 +40,6 @@ export interface PluginTypesAction {
   ) => Promise<any>;
 
   /**
-   * Invoke Cloud Code Interpreter tool
-   */
-  invokeCloudCodeInterpreterTool: (
-    id: string,
-    payload: ChatToolPayload,
-  ) => Promise<string | undefined>;
-
-  /**
    * Invoke default type plugin (returns data)
    */
   invokeDefaultTypePlugin: (id: string, payload: any) => Promise<string | undefined>;
@@ -59,6 +48,14 @@ export interface PluginTypesAction {
    * Invoke Klavis type plugin
    */
   invokeKlavisTypePlugin: (id: string, payload: ChatToolPayload) => Promise<string | undefined>;
+
+  /**
+   * Invoke LobeHub Skill type plugin
+   */
+  invokeLobehubSkillTypePlugin: (
+    id: string,
+    payload: ChatToolPayload,
+  ) => Promise<string | undefined>;
 
   /**
    * Invoke markdown type plugin
@@ -79,6 +76,16 @@ export interface PluginTypesAction {
    * Internal method to call plugin API
    */
   internal_callPluginApi: (id: string, payload: ChatToolPayload) => Promise<string | undefined>;
+
+  /**
+   * Internal unified method to invoke remote tool plugins (Klavis, LobeHub Skill, etc.)
+   */
+  internal_invokeRemoteToolPlugin: (
+    id: string,
+    payload: ChatToolPayload,
+    executor: RemoteToolExecutor,
+    logPrefix: string,
+  ) => Promise<string | undefined>;
 }
 
 export const pluginTypes: StateCreator<
@@ -93,9 +100,9 @@ export const pluginTypes: StateCreator<
       return await get().invokeKlavisTypePlugin(id, payload);
     }
 
-    // Check if this is Cloud Code Interpreter - route to specific handler
-    if (payload.identifier === CloudSandboxIdentifier) {
-      return await get().invokeCloudCodeInterpreterTool(id, payload);
+    // Check if this is a LobeHub Skill tool by source field
+    if (payload.source === 'lobehubSkill') {
+      return await get().invokeLobehubSkillTypePlugin(id, payload);
     }
 
     const params = safeParseJSON(payload.arguments);
@@ -111,9 +118,27 @@ export const pluginTypes: StateCreator<
       const context = operationId ? { operationId } : undefined;
 
       // Get agent ID, group ID, and topic ID from operation context
-      const agentId = operation?.context?.agentId;
-      const groupId = operation?.context?.groupId;
+      let agentId = operation?.context?.agentId;
+      let groupId = operation?.context?.groupId;
       const topicId = operation?.context?.topicId;
+
+      // For agent-builder tools, inject activeAgentId from store if not in context
+      // This is needed because AgentBuilderProvider uses a separate scope for messages
+      // but the tools need the correct agentId for execution
+      if (payload.identifier === 'lobe-agent-builder') {
+        const activeAgentId = get().activeAgentId;
+        if (activeAgentId) {
+          agentId = activeAgentId;
+        }
+      }
+
+      // For group-agent-builder tools, inject activeGroupId from store if not in context
+      // This is needed because AgentBuilderProvider uses a separate scope for messages
+      // but still needs groupId for tool execution
+      if (!groupId && payload.identifier === 'lobe-group-agent-builder') {
+        const { getChatGroupStoreState } = await import('@/store/agentGroup');
+        groupId = getChatGroupStoreState().activeGroupId;
+      }
 
       // Get group orchestration callbacks if available (for group management tools)
       const groupOrchestration = get().getGroupOrchestrationCallbacks?.();
@@ -196,140 +221,12 @@ export const pluginTypes: StateCreator<
       return result;
     }
 
-    // Route GroupAgentBuilder to its dedicated action
-    if (payload.identifier === GroupAgentBuilderIdentifier) {
-      log('[invokeBuiltinTool] Routing to GroupAgentBuilder: %s', payload.apiName);
-      return await get().internal_triggerGroupAgentBuilderToolCalling(id, payload.apiName, params);
-    }
-
-    // run tool api call (fallback for AgentBuilder and other legacy tools)
-    // @ts-ignore
-    const { [payload.apiName]: action } = get();
-    if (!action) {
-      console.error(`[invokeBuiltinTool] plugin Action not found: ${payload.apiName}`);
-      return;
-    }
-
-    const content = safeParseJSON(payload.arguments);
-
-    if (!content) return;
-
-    return await action(id, content);
-  },
-
-  invokeCloudCodeInterpreterTool: async (id, payload) => {
-    // Get message to extract topicId
-    const message = dbMessageSelectors.getDbMessageById(id)(get());
-
-    // Get abort controller from operation
-    const operationId = get().messageOperationMap[id];
-    const operation = operationId ? get().operations[operationId] : undefined;
-    const abortController = operation?.abortController;
-
-    log(
-      '[invokeCloudCodeInterpreterTool] messageId=%s, tool=%s, operationId=%s, aborted=%s',
-      id,
-      payload.apiName,
-      operationId,
-      abortController?.signal.aborted,
+    // All builtin tools should be handled by the executor registry above
+    // If we reach here, it means the tool is not registered
+    console.error(
+      `[invokeBuiltinTool] No executor found for: ${payload.identifier}/${payload.apiName}`,
     );
-
-    let data: { content: string; error?: any; state?: any; success: boolean } | undefined;
-
-    try {
-      // Import ExecutionRuntime dynamically to avoid circular dependencies
-      const { CloudSandboxExecutionRuntime } =
-        await import('@lobechat/builtin-tool-cloud-sandbox/executionRuntime');
-
-      // Get userId from user store
-      const userId = userProfileSelectors.userId(useUserStore.getState()) || 'anonymous';
-
-      // Create runtime with context
-      const runtime = new CloudSandboxExecutionRuntime({
-        topicId: message?.topicId || 'default',
-        userId,
-      });
-
-      // Parse arguments
-      const args = safeParseJSON(payload.arguments) || {};
-
-      // Call the appropriate method based on apiName
-      const apiMethod = (runtime as Record<string, any>)[payload.apiName];
-      if (!apiMethod) {
-        throw new Error(`Cloud Code Interpreter API not found: ${payload.apiName}`);
-      }
-
-      data = await apiMethod.call(runtime, args);
-    } catch (error) {
-      console.error('[invokeCloudCodeInterpreterTool] Error:', error);
-
-      const err = error as Error;
-      if (err.message.includes('aborted') || err.message.includes('The user aborted a request.')) {
-        log(
-          '[invokeCloudCodeInterpreterTool] Request aborted: messageId=%s, tool=%s',
-          id,
-          payload.apiName,
-        );
-      } else {
-        const result = await messageService.updateMessageError(id, error as any, {
-          agentId: message?.agentId,
-          topicId: message?.topicId,
-        });
-        if (result?.success && result.messages) {
-          get().replaceMessages(result.messages, {
-            context: {
-              agentId: message?.agentId,
-              topicId: message?.topicId,
-            },
-          });
-        }
-      }
-    }
-
-    if (!data) return;
-
-    const context = operationId ? { operationId } : undefined;
-
-    // Use optimisticUpdateToolMessage to update content and state/error in a single call
-    await get().optimisticUpdateToolMessage(
-      id,
-      {
-        content: data.content,
-        pluginError: data.success ? undefined : data.error,
-        pluginState: data.success ? data.state : undefined,
-      },
-      context,
-    );
-
-    // Handle exportFile: associate the file (already created by server) with assistant message (parent)
-    if (payload.apiName === 'exportFile' && data.success && data.state) {
-      const exportState = data.state as ExportFileState;
-      // Server now creates the file record and returns fileId in the response
-      if (exportState.fileId && exportState.filename) {
-        try {
-          // Associate file with the assistant message (parent of tool message)
-          // The current message (id) is the tool message, we need to attach to its parent
-          const targetMessageId = message?.parentId || id;
-
-          await messageService.addFilesToMessage(targetMessageId, [exportState.fileId], {
-            agentId: message?.agentId,
-            topicId: message?.topicId,
-          });
-
-          log(
-            '[invokeCloudCodeInterpreterTool] Associated exported file with message: targetMessageId=%s, fileId=%s, filename=%s',
-            targetMessageId,
-            exportState.fileId,
-            exportState.filename,
-          );
-        } catch (error) {
-          // Log error but don't fail the tool execution
-          console.error('[invokeCloudCodeInterpreterTool] Failed to save exported file:', error);
-        }
-      }
-    }
-
-    return data.content;
+    return;
   },
 
   invokeDefaultTypePlugin: async (id, payload) => {
@@ -343,100 +240,21 @@ export const pluginTypes: StateCreator<
   },
 
   invokeKlavisTypePlugin: async (id, payload) => {
-    let data: MCPToolCallResult | undefined;
-
-    // Get message to extract sessionId/topicId
-    const message = dbMessageSelectors.getDbMessageById(id)(get());
-
-    // Get abort controller from operation
-    const operationId = get().messageOperationMap[id];
-    const operation = operationId ? get().operations[operationId] : undefined;
-    const abortController = operation?.abortController;
-
-    log(
-      '[invokeKlavisTypePlugin] messageId=%s, tool=%s, operationId=%s, aborted=%s',
+    return get().internal_invokeRemoteToolPlugin(
       id,
-      payload.apiName,
-      operationId,
-      abortController?.signal.aborted,
+      payload,
+      klavisExecutor,
+      'invokeKlavisTypePlugin',
     );
+  },
 
-    try {
-      // payload.identifier 现在是存储用的 identifier（如 'google-calendar'）
-      const identifier = payload.identifier;
-      const klavisServers = useToolStore.getState().servers || [];
-      const server = klavisServers.find((s) => s.identifier === identifier);
-
-      if (!server) {
-        throw new Error(`Klavis server not found: ${identifier}`);
-      }
-
-      // Parse arguments
-      const args = safeParseJSON(payload.arguments) || {};
-
-      // Call Klavis tool via store action
-      const result = await useToolStore.getState().callKlavisTool({
-        serverUrl: server.serverUrl,
-        toolArgs: args,
-        toolName: payload.apiName,
-      });
-
-      if (!result.success) {
-        throw new Error(result.error || 'Klavis tool execution failed');
-      }
-
-      // result.data is MCPToolCallProcessedResult from server
-      // Convert to MCPToolCallResult format
-      const toolResult = result.data;
-      if (toolResult) {
-        data = {
-          content: toolResult.content,
-          error: toolResult.state?.isError ? toolResult.state : undefined,
-          state: toolResult.state,
-          success: toolResult.success,
-        };
-      }
-    } catch (error) {
-      console.error('[invokeKlavisTypePlugin] Error:', error);
-
-      // ignore the aborted request error
-      const err = error as Error;
-      if (err.message.includes('aborted')) {
-        log('[invokeKlavisTypePlugin] Request aborted: messageId=%s, tool=%s', id, payload.apiName);
-      } else {
-        const result = await messageService.updateMessageError(id, error as any, {
-          agentId: message?.agentId,
-          topicId: message?.topicId,
-        });
-        if (result?.success && result.messages) {
-          get().replaceMessages(result.messages, {
-            context: {
-              agentId: message?.agentId,
-              topicId: message?.topicId,
-            },
-          });
-        }
-      }
-    }
-
-    // 如果报错则结束了
-    if (!data) return;
-
-    // operationId already declared above, reuse it
-    const context = operationId ? { operationId } : undefined;
-
-    // Use optimisticUpdateToolMessage to update content and state/error in a single call
-    await get().optimisticUpdateToolMessage(
+  invokeLobehubSkillTypePlugin: async (id, payload) => {
+    return get().internal_invokeRemoteToolPlugin(
       id,
-      {
-        content: data.content,
-        pluginError: data.success ? undefined : data.error,
-        pluginState: data.success ? data.state : undefined,
-      },
-      context,
+      payload,
+      lobehubSkillExecutor,
+      'invokeLobehubSkillTypePlugin',
     );
-
-    return data.content;
   },
 
   invokeMarkdownTypePlugin: async (id, payload) => {
@@ -529,6 +347,70 @@ export const pluginTypes: StateCreator<
     if (!data) return;
 
     // operationId already declared above, reuse it
+    const context = operationId ? { operationId } : undefined;
+
+    // Use optimisticUpdateToolMessage to update content and state/error in a single call
+    await get().optimisticUpdateToolMessage(
+      id,
+      {
+        content: data.content,
+        pluginError: data.success ? undefined : data.error,
+        pluginState: data.success ? data.state : undefined,
+      },
+      context,
+    );
+
+    return data.content;
+  },
+
+  internal_invokeRemoteToolPlugin: async (id, payload, executor, logPrefix) => {
+    let data: MCPToolCallResult | undefined;
+
+    // Get message to extract sessionId/topicId
+    const message = dbMessageSelectors.getDbMessageById(id)(get());
+
+    // Get abort controller from operation
+    const operationId = get().messageOperationMap[id];
+    const operation = operationId ? get().operations[operationId] : undefined;
+    const abortController = operation?.abortController;
+
+    log(
+      '[%s] messageId=%s, tool=%s, operationId=%s, aborted=%s',
+      logPrefix,
+      id,
+      payload.apiName,
+      operationId,
+      abortController?.signal.aborted,
+    );
+
+    try {
+      data = await executor(payload);
+    } catch (error) {
+      console.error(`[${logPrefix}] Error:`, error);
+
+      // ignore the aborted request error
+      const err = error as Error;
+      if (err.message.includes('aborted')) {
+        log('[%s] Request aborted: messageId=%s, tool=%s', logPrefix, id, payload.apiName);
+      } else {
+        const result = await messageService.updateMessageError(id, error as any, {
+          agentId: message?.agentId,
+          topicId: message?.topicId,
+        });
+        if (result?.success && result.messages) {
+          get().replaceMessages(result.messages, {
+            context: {
+              agentId: message?.agentId,
+              topicId: message?.topicId,
+            },
+          });
+        }
+      }
+    }
+
+    // If error occurred, exit
+    if (!data) return;
+
     const context = operationId ? { operationId } : undefined;
 
     // Use optimisticUpdateToolMessage to update content and state/error in a single call

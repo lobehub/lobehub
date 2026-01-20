@@ -14,6 +14,4 @@ const ResourceLayout: FC = () => {
   );
 };
 
-ResourceLayout.displayName = 'ResourceLayout';
-
 export default ResourceLayout;

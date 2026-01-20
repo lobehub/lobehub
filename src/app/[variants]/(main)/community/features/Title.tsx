@@ -3,7 +3,6 @@
 import { Flexbox, type FlexboxProps, Icon } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
-import NextLink from 'next/link';
 import { type ReactNode, memo } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 
@@ -51,10 +50,10 @@ const Title = memo<TitleProps>(
     if (moreLink) {
       if (isExternalLink) {
         moreLinkElement = (
-          <NextLink className={styles.more} href={moreLink} target="_blank">
+          <a className={styles.more} href={moreLink} rel="noreferrer" target="_blank">
             <span style={{ marginRight: 4 }}>{more}</span>
             <Icon icon={ChevronRight} />
-          </NextLink>
+          </a>
         );
       } else if (isCommunityRoute) {
         moreLinkElement = (
@@ -64,11 +63,12 @@ const Title = memo<TitleProps>(
           </RouterLink>
         );
       } else {
+        // For non-external, non-community routes (like auth pages), use RouterLink
         moreLinkElement = (
-          <NextLink className={styles.more} href={moreLink}>
+          <RouterLink className={styles.more} to={moreLink}>
             <span style={{ marginRight: 4 }}>{more}</span>
             <Icon icon={ChevronRight} />
-          </NextLink>
+          </RouterLink>
         );
       }
     }

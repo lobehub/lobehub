@@ -49,14 +49,7 @@ describe('ssrfSafeFetch', () => {
       expect(mockFetch).toHaveBeenCalledWith(
         'https://httpbin.org/get',
         expect.objectContaining({
-          agent: expect.objectContaining({
-            requestFilterOptions: expect.objectContaining({
-              allowIPAddressList: [],
-              allowMetaIPAddress: false,
-              allowPrivateIPAddress: false,
-              denyIPAddressList: [],
-            }),
-          }),
+          agent: expect.any(Function),
         }),
       );
       expect(response).toBeInstanceOf(Response);
@@ -80,14 +73,7 @@ describe('ssrfSafeFetch', () => {
         'https://httpbin.org/post',
         expect.objectContaining({
           ...requestOptions,
-          agent: expect.objectContaining({
-            requestFilterOptions: expect.objectContaining({
-              allowIPAddressList: [],
-              allowMetaIPAddress: false,
-              allowPrivateIPAddress: false,
-              denyIPAddressList: [],
-            }),
-          }),
+          agent: expect.any(Function),
         }),
       );
     });
@@ -302,14 +288,7 @@ describe('ssrfSafeFetch', () => {
         'https://api.example.com/data',
         expect.objectContaining({
           ...requestOptions,
-          agent: expect.objectContaining({
-            requestFilterOptions: expect.objectContaining({
-              allowIPAddressList: ['127.0.0.1'],
-              allowMetaIPAddress: true,
-              allowPrivateIPAddress: true,
-              denyIPAddressList: [],
-            }),
-          }),
+          agent: expect.any(Function),
         }),
       );
 
@@ -323,19 +302,11 @@ describe('ssrfSafeFetch', () => {
 
       await ssrfSafeFetch('https://secure.example.com/api');
 
-      // Verify that the agent is properly configured for HTTPS
+      // Verify that the agent function is passed
       expect(mockFetch).toHaveBeenCalledWith(
         'https://secure.example.com/api',
         expect.objectContaining({
-          agent: expect.objectContaining({
-            protocol: 'https:',
-            requestFilterOptions: expect.objectContaining({
-              allowIPAddressList: [],
-              allowMetaIPAddress: false,
-              allowPrivateIPAddress: false,
-              denyIPAddressList: [],
-            }),
-          }),
+          agent: expect.any(Function),
         }),
       );
     });

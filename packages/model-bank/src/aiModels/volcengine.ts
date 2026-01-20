@@ -10,12 +10,13 @@ const doubaoChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
-      deploymentName: 'doubao-seed-1-8-251215',
+      deploymentName: 'doubao-seed-1-8-251228',
     },
     contextWindowTokens: 256_000,
     description:
-      'Doubao-Seed-1.8 has stronger multimodal understanding and Agent capabilities, supporting text/image/video input and context caching, and can provide better performance in complex tasks.',
+      'Doubao-Seed-1.8 has stronger multimodal understanding and Agent capabilities, supports text/image/video input and context caching, and can deliver excellent performance in complex tasks.',
     displayName: 'Doubao Seed 1.8',
+    enabled: true,
     id: 'doubao-seed-1.8',
     maxOutput: 64_000,
     pricing: {
@@ -126,7 +127,7 @@ const doubaoChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'DeepSeek-V3.2 is the first hybrid reasoning model launched by DeepSeek that integrates thinking into tool use, using efficient architecture to save compute, large-scale reinforcement learning to improve capabilities, and large-scale synthetic task data to strengthen generalization. The combination of the three achieves performance comparable to GPT-5-High, with significantly reduced output length, greatly reducing computational overhead and user waiting time.',
+      'DeepSeek-V3.2 is the first hybrid reasoning model from DeepSeek that integrates thinking into tool usage. It uses efficient architecture to save computation, large-scale reinforcement learning to enhance capabilities, and large-scale synthetic task data to strengthen generalization. The combination of these three achieves performance comparable to GPT-5-High, with significantly reduced output length, notably decreasing computational overhead and user wait times.',
     displayName: 'DeepSeek V3.2',
     enabled: true,
     id: 'deepseek-v3.2',

@@ -3,16 +3,25 @@ import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type AgentItem, type LobeAgentConfig } from '@lobechat/types';
 import { cleanObject, merge } from '@lobechat/utils';
+import debug from 'debug';
 import type { PartialDeep } from 'type-fest';
 
 import { AgentModel } from '@/database/models/agent';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
 import { getRedisConfig } from '@/envs/redis';
-import { RedisKeyNamespace, RedisKeys, createRedisWithPrefix } from '@/libs/redis';
+import { RedisKeyNamespace, RedisKeys, initializeRedisWithPrefix, isRedisEnabled } from '@/libs/redis';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
 
 import { type UpdateAgentResult } from './type';
+
+const log = debug('lobe-agent:service');
+
+/**
+ * Agent config with required id field.
+ * Used when returning agent config from database (id is always present).
+ */
+export type AgentConfigWithId = LobeAgentConfig & { id: string };
 
 interface AgentWelcomeData {
   openQuestions: string[];
@@ -76,6 +85,25 @@ export class AgentService {
   }
 
   /**
+   * Get agent config by ID or slug with default config merged.
+   * Supports both agentId and slug lookup.
+   *
+   * The returned agent config is merged with:
+   * 1. DEFAULT_AGENT_CONFIG (hardcoded defaults)
+   * 2. Server's globalDefaultAgentConfig (from environment variable DEFAULT_AGENT_CONFIG)
+   * 3. User's defaultAgentConfig (from user settings)
+   * 4. The actual agent config from database
+   */
+  async getAgentConfig(idOrSlug: string): Promise<AgentConfigWithId | null> {
+    const [agent, defaultAgentConfig] = await Promise.all([
+      this.agentModel.getAgentConfig(idOrSlug),
+      this.userModel.getUserSettingsDefaultAgentConfig(),
+    ]);
+
+    return this.mergeDefaultConfig(agent, defaultAgentConfig) as AgentConfigWithId | null;
+  }
+
+  /**
    * Get agent config by ID with default config merged.
    *
    * The returned agent config is merged with:
@@ -113,7 +141,10 @@ export class AgentService {
    */
   private async getAgentWelcomeFromRedis(agentId: string): Promise<AgentWelcomeData | null> {
     try {
-      const redis = await createRedisWithPrefix(getRedisConfig(), RedisKeyNamespace.AI_GENERATION);
+      const redisConfig = getRedisConfig();
+      if (!isRedisEnabled(redisConfig)) return null;
+
+      const redis = await initializeRedisWithPrefix(redisConfig, RedisKeyNamespace.AI_GENERATION);
       if (!redis) return null;
 
       const key = RedisKeys.aiGeneration.agentWelcome(agentId);
@@ -121,8 +152,9 @@ export class AgentService {
       if (!value) return null;
 
       return JSON.parse(value) as AgentWelcomeData;
-    } catch {
-      // Silently fail - Redis errors shouldn't break agent retrieval
+    } catch (error) {
+      // Log error for observability but don't break agent retrieval
+      log('Failed to get agent welcome from Redis for agent %s: %O', agentId, error);
       return null;
     }
   }

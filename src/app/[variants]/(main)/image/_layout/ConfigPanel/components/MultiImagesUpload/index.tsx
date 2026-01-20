@@ -4,7 +4,7 @@
 import { Center } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Image as ImageIcon, X } from 'lucide-react';
-import Image from 'next/image';
+import Image from '@/libs/next/Image';
 import React, { type FC, memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -93,8 +93,8 @@ const styles = createStaticStyles(({ css }) => {
 
       overflow: hidden;
 
-      width: ${thumbnailSize};
-      height: ${thumbnailSize};
+      width: ${thumbnailSize}px;
+      height: ${thumbnailSize}px;
       border-radius: ${cssVar.borderRadius};
 
       background: ${cssVar.colorBgContainer};
@@ -112,7 +112,7 @@ const styles = createStaticStyles(({ css }) => {
       gap: 8px;
 
       width: 100%;
-      height: ${thumbnailSize};
+      height: ${thumbnailSize}px;
       padding: 0;
       border-radius: ${cssVar.borderRadiusLG};
 

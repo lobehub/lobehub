@@ -74,7 +74,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'MiniMax-M2.1 is the latest version in the MiniMax series, optimized for multilingual programming and real-world complex tasks. As an AI-native model, MiniMax-M2.1 achieves significant improvements in model performance, agent framework support, and multi-scenario adaptation, aiming to help enterprises and individuals find AI-native work and lifestyle faster.',
+      'MiniMax-M2.1 is the latest version of the MiniMax series, optimized for multilingual programming and real-world complex tasks. As an AI-native model, MiniMax-M2.1 achieves significant improvements in model performance, agent framework support, and multi-scenario adaptation, aiming to help enterprises and individuals find AI-native work and lifestyle more quickly.',
     displayName: 'MiniMax M2.1',
     enabled: true,
     id: 'minimax-m2.1',
@@ -95,7 +95,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      'MiniMax-M2 is an expert hybrid (MoE) language model optimized for coding and agent workflows, with approximately 230B total parameters and about 10B active parameters. While maintaining strong general intelligence, it deeply enhances for developer scenarios such as multi-file editing, code-run-fix loops, test validation and repair, performing stably and efficiently in real environments like terminals, IDEs, and CI.',
+      'MiniMax-M2 is a Mixture of Experts (MoE) language model optimized for coding and agent workflows, with approximately 230B total parameters and approximately 10B active parameters. While maintaining strong general intelligence, it is deeply enhanced for developer scenarios such as multi-file editing, code-run-fix loops, and test validation fixes, demonstrating stable and efficient performance in real environments like terminals, IDEs, and CI.',
     displayName: 'MiniMax M2',
     id: 'minimax-m2',
     maxOutput: 200_000,
@@ -115,7 +115,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'GLM-4.7 is the latest large language model released by Zhipu AI, featuring stronger reasoning and generation capabilities.',
+      'GLM-4.7 is the latest large language model launched by Zhipu AI, with enhanced reasoning and generation capabilities.',
     displayName: 'GLM-4.7',
     enabled: true,
     id: 'glm-4.7',
@@ -139,7 +139,7 @@ const infiniaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072,
     description:
-      'GLM-4.6 is the latest large language model released by Zhipu AI, featuring stronger reasoning and generation capabilities.',
+      'GLM-4.6 is the latest large language model launched by Zhipu AI, with enhanced reasoning and generation capabilities.',
     displayName: 'GLM-4.6',
     id: 'glm-4.6',
     maxOutput: 4096,

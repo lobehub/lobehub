@@ -43,7 +43,7 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
   const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
   const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
-  const newScreen = useNewScreen({ creating, isLatestItem });
+  const newScreen = useNewScreen({ creating: generating || creating, isLatestItem });
 
   const errorContent = useErrorContent(error);
 

@@ -1,19 +1,6 @@
-import { MarketSDK } from '@lobehub/market-sdk';
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { getTrustedClientTokenForSession } from '@/libs/trusted-client';
-
-const MARKET_BASE_URL = process.env.NEXT_PUBLIC_MARKET_BASE_URL || 'https://market.lobehub.com';
-
-const extractAccessToken = (req: NextRequest) => {
-  const authorization = req.headers.get('authorization');
-  if (!authorization) return undefined;
-
-  const [scheme, token] = authorization.split(' ');
-  if (scheme?.toLowerCase() !== 'bearer' || !token) return undefined;
-
-  return token;
-};
+import { MarketService } from '@/server/services/market';
 
 /**
  * PUT /market/user/me
@@ -28,26 +15,8 @@ const extractAccessToken = (req: NextRequest) => {
  * - meta?: { description?: string; socialLinks?: { github?: string; twitter?: string; website?: string } }
  */
 export const PUT = async (req: NextRequest) => {
-  const accessToken = extractAccessToken(req);
-  const trustedClientToken = await getTrustedClientTokenForSession();
-
-  const market = new MarketSDK({
-    accessToken,
-    baseURL: MARKET_BASE_URL,
-    trustedClientToken,
-  });
-
-  // Only require accessToken if trusted client token is not available
-  if (!accessToken && !trustedClientToken) {
-    return NextResponse.json(
-      {
-        error: 'unauthorized',
-        message: 'Authentication required to update user profile',
-        status: 'error',
-      },
-      { status: 401 },
-    );
-  }
+  const marketService = await MarketService.createFromRequest(req);
+  const market = marketService.market;
 
   try {
     const payload = await req.json();

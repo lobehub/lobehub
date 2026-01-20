@@ -1,4 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, TooltipGroup } from '@lobehub/ui';
 import type { FC } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -82,18 +82,20 @@ export const List: FC<ListProps> = ({
         paddingBlock: groupMode === 'byModel' ? 8 : 0,
       }}
     >
-      {virtualItems.slice(0, renderAll ? virtualItems.length : INITIAL_RENDER_COUNT).map((item) => (
-        <VirtualItemRenderer
-          activeKey={activeKey}
-          item={item}
-          key={getVirtualItemKey(item)}
-          newLabel={newLabel}
-          onClose={handleClose}
-          onModelChange={handleModelChange}
-        />
-      ))}
+      <TooltipGroup>
+        {virtualItems
+          .slice(0, renderAll ? virtualItems.length : INITIAL_RENDER_COUNT)
+          .map((item) => (
+            <VirtualItemRenderer
+              activeKey={activeKey}
+              item={item}
+              key={getVirtualItemKey(item)}
+              newLabel={newLabel}
+              onClose={handleClose}
+              onModelChange={handleModelChange}
+            />
+          ))}
+      </TooltipGroup>
     </Flexbox>
   );
 };
-
-List.displayName = 'List';

@@ -73,5 +73,3 @@ export const PanelContent: FC<PanelContentProps> = ({
     </Rnd>
   );
 };
-
-PanelContent.displayName = 'PanelContent';

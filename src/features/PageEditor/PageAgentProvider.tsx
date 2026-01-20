@@ -49,8 +49,8 @@ const PageAgentProvider = memo<PageAgentProviderProps>(({ pageAgentId, children 
       context={context}
       hasInitMessages={!!messages}
       messages={messages}
-      onMessagesChange={(msgs) => {
-        replaceMessages(msgs, { context });
+      onMessagesChange={(msgs, ctx) => {
+        replaceMessages(msgs, { context: ctx });
       }}
       operationState={operationState}
     >

@@ -204,8 +204,8 @@ const ThreadChat = memo(() => {
       hasInitMessages={!!messages}
       hooks={hooks}
       messages={messages}
-      onMessagesChange={(msgs) => {
-        replaceMessages(msgs, { context });
+      onMessagesChange={(msgs, ctx) => {
+        replaceMessages(msgs, { context: ctx });
       }}
       operationState={operationState}
       skipFetch={isCreatingNewThread}

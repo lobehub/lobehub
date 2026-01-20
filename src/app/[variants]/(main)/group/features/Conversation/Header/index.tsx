@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { memo } from 'react';
+import { Suspense, memo } from 'react';
 
 import NavHeader from '@/features/NavHeader';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
@@ -15,7 +15,9 @@ const Header = memo(() => {
       right={
         <Flexbox horizontal style={{ backgroundColor: cssVar.colorBgContainer }}>
           <WideScreenButton />
-          <ShareButton />
+          <Suspense>
+            <ShareButton />
+          </Suspense>
         </Flexbox>
       }
     />

@@ -2,7 +2,7 @@ import { Flexbox, Icon, SearchResultCards, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDown, ChevronRight, Globe } from 'lucide-react';
 import { AnimatePresence, m as motion } from 'motion/react';
-import Image from 'next/image';
+import Image from '@/libs/next/Image';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

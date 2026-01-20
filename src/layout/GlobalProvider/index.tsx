@@ -14,6 +14,7 @@ import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
 import { getAntdLocale } from '@/utils/locale';
 
 import AppTheme from './AppTheme';
+import { FaviconProvider } from './FaviconProvider';
 import { GroupWizardProvider } from './GroupWizardProvider';
 import ImportSettings from './ImportSettings';
 import Locale from './Locale';
@@ -64,19 +65,22 @@ const GlobalLayout = async ({
               serverConfig={serverConfig}
             >
               <QueryProvider>
-                <GroupWizardProvider>
-                  <DragUploadProvider>
-                    <LazyMotion features={domMax}>
-                      <TooltipGroup layoutAnimation={false}>
-                        <LobeAnalyticsProviderWrapper>{children}</LobeAnalyticsProviderWrapper>
-                      </TooltipGroup>
-                      <ModalHost />
-                      <ContextMenuHost />
-                    </LazyMotion>
-                  </DragUploadProvider>
-                </GroupWizardProvider>
+                <StoreInitialization />
+                <FaviconProvider>
+                  {/* {process.env.NODE_ENV === 'development' && <FaviconTestPanel />} */}
+                  <GroupWizardProvider>
+                    <DragUploadProvider>
+                      <LazyMotion features={domMax}>
+                        <TooltipGroup layoutAnimation={false}>
+                          <LobeAnalyticsProviderWrapper>{children}</LobeAnalyticsProviderWrapper>
+                        </TooltipGroup>
+                        <ModalHost />
+                        <ContextMenuHost />
+                      </LazyMotion>
+                    </DragUploadProvider>
+                  </GroupWizardProvider>
+                </FaviconProvider>
               </QueryProvider>
-              <StoreInitialization />
               <Suspense>
                 {ENABLE_BUSINESS_FEATURES ? <ReferralProvider /> : null}
                 <ImportSettings />

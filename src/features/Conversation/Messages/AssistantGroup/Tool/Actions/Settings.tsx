@@ -1,6 +1,6 @@
 import { ActionIcon, createRawModal } from '@lobehub/ui';
 import { LucideSettings } from 'lucide-react';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

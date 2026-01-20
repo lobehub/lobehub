@@ -13,10 +13,9 @@ import {
 } from '@lobehub/ui';
 import { Center, Flexbox, Skeleton } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
-import { Switch } from 'antd';
+import { Form as AntdForm, Switch } from 'antd';
 import { createStaticStyles, cssVar, cx, responsive } from 'antd-style';
 import { Loader2Icon, LockIcon } from 'lucide-react';
-import Link from 'next/link';
 import { type ReactNode, memo, useCallback, useLayoutEffect, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -150,28 +149,72 @@ const ProviderConfig = memo<ProviderConfigProps>(
       enabled,
       isLoading,
       configUpdating,
-      isFetchOnClient,
-      enableResponseApi,
-      isProviderEndpointNotEmpty,
-      isProviderApiKeyNotEmpty,
+      providerRuntimeConfig,
     ] = useAiInfraStore((s) => [
       aiProviderSelectors.providerDetailById(id)(s),
       s.updateAiProviderConfig,
       aiProviderSelectors.isProviderEnabled(id)(s),
       aiProviderSelectors.isAiProviderConfigLoading(id)(s),
       aiProviderSelectors.isProviderConfigUpdating(id)(s),
-      aiProviderSelectors.isProviderFetchOnClient(id)(s),
-      aiProviderSelectors.isProviderEnableResponseApi(id)(s),
-      aiProviderSelectors.isActiveProviderEndpointNotEmpty(s),
-      aiProviderSelectors.isActiveProviderApiKeyNotEmpty(s),
+      aiProviderSelectors.providerConfigById(id)(s),
     ]);
+
+    // Watch form values in real-time to show/hide switches immediately
+    // Watch nested form values for endpoints
+    const formBaseURL = AntdForm.useWatch(['keyVaults', 'baseURL'], form);
+    const formEndpoint = AntdForm.useWatch(['keyVaults', 'endpoint'], form);
+    // Watch all possible credential fields for different providers
+    const formApiKey = AntdForm.useWatch(['keyVaults', 'apiKey'], form);
+    const formAccessKeyId = AntdForm.useWatch(['keyVaults', 'accessKeyId'], form);
+    const formSecretAccessKey = AntdForm.useWatch(['keyVaults', 'secretAccessKey'], form);
+    const formUsername = AntdForm.useWatch(['keyVaults', 'username'], form);
+    const formPassword = AntdForm.useWatch(['keyVaults', 'password'], form);
+
+    // Check if provider has endpoint and apiKey based on runtime config
+    // Fallback to data.keyVaults if runtime config is not yet loaded
+    const keyVaults = providerRuntimeConfig?.keyVaults || data?.keyVaults;
+    // Use form values first (for immediate update), fallback to stored values
+    const isProviderEndpointNotEmpty =
+      !!formBaseURL || !!formEndpoint || !!keyVaults?.baseURL || !!keyVaults?.endpoint;
+    // Check if any credential is present for different authentication types:
+    // - Standard apiKey (OpenAI, Azure, Cloudflare, VertexAI, etc.)
+    // - AWS Bedrock credentials (accessKeyId, secretAccessKey)
+    // - ComfyUI basic auth (username and password)
+    const isProviderApiKeyNotEmpty = !!(
+      formApiKey ||
+      keyVaults?.apiKey ||
+      formAccessKeyId ||
+      keyVaults?.accessKeyId ||
+      formSecretAccessKey ||
+      keyVaults?.secretAccessKey ||
+      (formUsername && formPassword) ||
+      (keyVaults?.username && keyVaults?.password)
+    );
+
+    // Track the last initialized provider ID to avoid resetting form during edits
+    const lastInitializedIdRef = useRef<string | null>(null);
 
     useLayoutEffect(() => {
       if (isLoading) return;
 
-      // set the first time
-      form.setFieldsValue(data);
-    }, [isLoading, id, data]);
+      // Only initialize form when:
+      // 1. First load (lastInitializedIdRef.current === null)
+      // 2. Provider ID changed (switching between providers)
+      const shouldInitialize = lastInitializedIdRef.current !== id;
+      if (!shouldInitialize) return;
+
+      // Merge data from both sources to ensure all fields are initialized correctly
+      // data: contains basic info like apiKey, baseURL, fetchOnClient
+      // providerRuntimeConfig: contains nested config like enableResponseApi
+      const mergedData = {
+        ...data,
+        ...(providerRuntimeConfig?.config && { config: providerRuntimeConfig.config }),
+      };
+
+      // Set form values and mark as initialized
+      form.setFieldsValue(mergedData);
+      lastInitializedIdRef.current = id;
+    }, [isLoading, id, data, providerRuntimeConfig, form]);
 
     // 标记是否正在进行连接测试
     const isCheckingConnection = useRef(false);
@@ -217,7 +260,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
                   <span key="0" />,
                   <span key="1" />,
                   <span key="2" />,
-                  <Link href={apiKeyUrl} key="3" target={'_blank'} />,
+                  <a href={apiKeyUrl} key="3" rel="noreferrer" target="_blank" />,
                 ]}
                 i18nKey="providerModels.config.apiKey.descWithUrl"
                 ns={'modelProvider'}
@@ -238,7 +281,13 @@ const ProviderConfig = memo<ProviderConfigProps>(
           <Trans
             components={[
               <span key="0" />,
-              <Link href={AES_GCM_URL} key="1" style={{ marginInline: 4 }} target={'_blank'} />,
+              <a
+                href={AES_GCM_URL}
+                key="1"
+                rel="noreferrer"
+                style={{ marginInline: 4 }}
+                target="_blank"
+              />,
             ]}
             i18nKey="providerModels.config.aesGcm"
             ns={'modelProvider'}
@@ -300,28 +349,23 @@ const ProviderConfig = memo<ProviderConfigProps>(
       (defaultShowBrowserRequest ||
         (showEndpoint && isProviderEndpointNotEmpty) ||
         (showApiKey && isProviderApiKeyNotEmpty));
-    const clientFetchItem = showClientFetch && {
-      children: isLoading ? (
-        <SkeletonSwitch />
-      ) : (
-        <Switch checked={isFetchOnClient} disabled={configUpdating} />
-      ),
-      desc: t('providerModels.config.fetchOnClient.desc'),
-      label: t('providerModels.config.fetchOnClient.title'),
-      minWidth: undefined,
-      name: 'fetchOnClient',
-    };
+
+    const clientFetchItem = showClientFetch
+      ? {
+          children: isLoading ? <SkeletonSwitch /> : <Switch loading={configUpdating} />,
+          desc: t('providerModels.config.fetchOnClient.desc'),
+          label: t('providerModels.config.fetchOnClient.title'),
+          minWidth: undefined,
+          name: 'fetchOnClient',
+        }
+      : undefined;
 
     const configItems = [
       ...apiKeyItem,
       endpointItem,
       supportResponsesApi
         ? {
-            children: isLoading ? (
-              <Skeleton.Button active />
-            ) : (
-              <Switch loading={configUpdating} value={enableResponseApi} />
-            ),
+            children: isLoading ? <Skeleton.Button active /> : <Switch loading={configUpdating} />,
             desc: t('providerModels.config.responsesApi.desc'),
             label: t('providerModels.config.responsesApi.title'),
             minWidth: undefined,
@@ -370,7 +414,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
 
           {isCustom && <UpdateProviderInfo />}
           {canDeactivate && !(ENABLE_BUSINESS_FEATURES && id === 'lobehub') && (
-            <EnableSwitch id={id} />
+            <EnableSwitch id={id} key={id} />
           )}
         </Flexbox>
       ),
@@ -398,15 +442,16 @@ const ProviderConfig = memo<ProviderConfigProps>(
             <>
               {title ?? <ProviderCombine provider={id} size={24} />}
               <Tooltip title={t('providerModels.config.helpDoc')}>
-                <Link
+                <a
                   href={urlJoin(BASE_PROVIDER_DOC_URL, id)}
                   onClick={(e) => e.stopPropagation()}
-                  target={'_blank'}
+                  rel="noreferrer"
+                  target="_blank"
                 >
                   <Center className={styles.help} height={20} width={20}>
                     ?
                   </Center>
-                </Link>
+                </a>
               </Tooltip>
             </>
           )}

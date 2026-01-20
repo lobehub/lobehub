@@ -13,6 +13,10 @@ export async function getIsInWaitList(userId: string): Promise<boolean> {
   return false;
 }
 
+export async function getIsInviteCodeRequired(userId: string): Promise<boolean> {
+  return false;
+}
+
 export async function initNewUserForBusiness(
   userId: string,
   createdAt: Date | null | undefined,

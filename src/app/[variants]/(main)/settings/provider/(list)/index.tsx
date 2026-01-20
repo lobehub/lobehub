@@ -33,6 +33,4 @@ const Page = (props: { mobile?: boolean }) => {
   );
 };
 
-Page.displayName = 'ProviderGrid';
-
 export default Page;

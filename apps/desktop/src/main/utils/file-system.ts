@@ -4,11 +4,11 @@ export const makeSureDirExist = (dir: string) => {
   try {
     statSync(dir);
   } catch {
-    // 使用 recursive: true，如果目录已存在则此操作无效果，如果不存在则创建
+    // Use recursive: true, no effect if directory exists, create if it doesn't
     try {
       mkdirSync(dir, { recursive: true });
     } catch (mkdirError: any) {
-      // 如果创建目录失败（例如权限问题），则抛出错误
+      // Throw error if directory creation fails (e.g., permission issues)
       throw new Error(`Could not create target directory: ${dir}. Error: ${mkdirError.message}`);
     }
   }

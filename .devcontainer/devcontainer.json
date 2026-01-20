@@ -1,7 +1,9 @@
 {
   "features": {
     "ghcr.io/devcontainer-community/devcontainer-features/bun.sh:1": {},
-    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {
+      "moby": false
+    }
   },
   "image": "mcr.microsoft.com/devcontainers/typescript-node"
 }

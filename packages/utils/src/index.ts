@@ -10,6 +10,7 @@ export * from './merge';
 export * from './multimodalContent';
 export * from './number';
 export * from './object';
+export * from './platform';
 export * from './pricing';
 export * from './safeParseJSON';
 export * from './sleep';

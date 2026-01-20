@@ -1,0 +1,29 @@
+name: Desktop Build Setup
+description: Setup Node.js, pnpm and install dependencies for desktop build
+
+inputs:
+  node-version:
+    description: Node.js version
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        run_install: false
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        package-manager-cache: false
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --node-linker=hoisted
+
+    - name: Install deps on Desktop
+      shell: bash
+      run: npm run install-isolated --prefix=./apps/desktop

@@ -8,7 +8,7 @@ const minimaxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 204_800,
     description:
-      'Powerful multilingual programming capabilities, comprehensively upgrading the programming experience',
+      'Powerful multilingual programming capabilities, comprehensively upgraded programming experience',
     displayName: 'MiniMax M2.1',
     enabled: true,
     id: 'MiniMax-M2.1',
@@ -32,7 +32,7 @@ const minimaxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 204_800,
     description:
-      'Powerful multilingual programming capabilities, comprehensively upgrading the programming experience. Faster and more efficient.',
+      'Powerful multilingual programming capabilities, comprehensively upgraded programming experience. Faster and more efficient.',
     displayName: 'MiniMax M2.1 Lightning',
     id: 'MiniMax-M2.1-Lightning',
     maxOutput: 131_072,
@@ -54,7 +54,7 @@ const minimaxChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 204_800,
-    description: 'Born for efficient coding and Agent workflows',
+    description: 'Built specifically for efficient coding and Agent workflows',
     displayName: 'MiniMax M2',
     id: 'MiniMax-M2',
     maxOutput: 131_072,

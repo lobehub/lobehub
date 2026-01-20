@@ -1,21 +1,34 @@
 import { isDev } from '@/const/env';
 import { getDesktopEnv } from '@/env';
 
-// 更新频道（stable, beta, alpha 等）
-export const UPDATE_CHANNEL = getDesktopEnv().UPDATE_CHANNEL;
+// Update channel (stable, beta, alpha, etc.)
+export const UPDATE_CHANNEL = getDesktopEnv().UPDATE_CHANNEL || 'stable';
+
+// Determine if stable channel
+export const isStableChannel = UPDATE_CHANNEL === 'stable' || !UPDATE_CHANNEL;
+
+// Custom update server URL (for stable channel)
+// e.g., https://releases.lobehub.com/stable
+export const UPDATE_SERVER_URL = getDesktopEnv().UPDATE_SERVER_URL;
+
+// GitHub configuration (for beta/nightly channels, or as fallback)
+export const githubConfig = {
+  owner: 'lobehub',
+  repo: 'lobe-chat',
+};
 
 export const updaterConfig = {
-  // 应用更新配置
+  // 应用Update configuration
   app: {
-    // 是否自动检查更新
+    // Whether to auto-check for updates
     autoCheckUpdate: true,
-    // 是否自动下载更新
+    // Whether to auto-download updates
     autoDownloadUpdate: true,
-    // 检查更新的时间间隔（毫秒）
-    checkUpdateInterval: 60 * 60 * 1000, // 1小时
+    // Update check interval (milliseconds)
+    checkUpdateInterval: 60 * 60 * 1000, // 1 hour
   },
 
-  // 是否启用应用更新
+  // Whether to enable application updates
   enableAppUpdate: !isDev,
 
   // 是否启用渲染层热更新

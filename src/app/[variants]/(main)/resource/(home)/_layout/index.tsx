@@ -18,6 +18,4 @@ const HomeLayout: FC = () => {
   );
 };
 
-HomeLayout.displayName = 'ResourceHomeLayout';
-
 export default HomeLayout;

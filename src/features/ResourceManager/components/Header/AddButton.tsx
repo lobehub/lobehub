@@ -2,18 +2,18 @@
 
 import { FILE_URL } from '@lobechat/business-const';
 import { Notion } from '@lobehub/icons';
-import { Button, Dropdown, Icon, type MenuProps } from '@lobehub/ui';
+import { Button, DropdownMenu, Icon, type MenuProps } from '@lobehub/ui';
 import { Upload } from 'antd';
 import { FilePenLine, FileUp, FolderIcon, FolderUp, Link, Plus } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { type ChangeEvent, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
+import { message } from '@/components/AntdStaticMethods';
 import DragUpload from '@/components/DragUpload';
 import GuideModal from '@/components/GuideModal';
 import GuideVideo from '@/components/GuideVideo';
 import { useFileStore } from '@/store/file';
-import { DocumentSourceType } from '@/types/document';
 
 import useNotionImport from './hooks/useNotionImport';
 import useUploadFolder from './hooks/useUploadFolder';
@@ -22,9 +22,12 @@ const AddButton = () => {
   const { t } = useTranslation('file');
   const pushDockFileList = useFileStore((s) => s.pushDockFileList);
   const uploadFolderWithStructure = useFileStore((s) => s.uploadFolderWithStructure);
-  const createFolder = useFileStore((s) => s.createFolder);
+  const createResourceAndSync = useFileStore((s) => s.createResourceAndSync);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  // TODO: Migrate Notion import to use createResource
+  // Keep old functions temporarily for components not yet migrated
   const createDocument = useFileStore((s) => s.createDocument);
-  const refreshFileList = useFileStore((s) => s.refreshFileList);
 
   const [libraryId, currentFolderId, setCurrentViewItemId, setMode, setPendingRenameItemId] =
     useResourceManagerStore((s) => [
@@ -36,47 +39,64 @@ const AddButton = () => {
     ]);
 
   const handleOpenPageEditor = useCallback(async () => {
-    // Create a new page directly and switch to page view
+    // Create a new page and wait for server sync - ensures page editor can load the document
     const untitledTitle = t('pageList.untitled');
-    const newPage = await createDocument({
+    const realId = await createResourceAndSync({
       content: '',
+      fileType: 'custom/document',
       knowledgeBaseId: libraryId,
       parentId: currentFolderId ?? undefined,
+      sourceType: 'document',
       title: untitledTitle,
     });
 
-    // Add to local document map for immediate availability
-    const newDocumentMap = new Map(useFileStore.getState().localDocumentMap);
-    newDocumentMap.set(newPage.id, {
-      content: newPage.content || '',
-      createdAt: newPage.createdAt ? new Date(newPage.createdAt) : new Date(),
-      editorData:
-        typeof newPage.editorData === 'string'
-          ? JSON.parse(newPage.editorData)
-          : newPage.editorData || null,
-      fileType: 'custom/document',
-      filename: newPage.title || untitledTitle,
-      id: newPage.id,
-      metadata: newPage.metadata || {},
-      source: 'document',
-      sourceType: DocumentSourceType.EDITOR,
-      title: newPage.title || untitledTitle,
-      totalCharCount: newPage.content?.length || 0,
-      totalLineCount: 0,
-      updatedAt: newPage.updatedAt ? new Date(newPage.updatedAt) : new Date(),
-    });
-    useFileStore.setState({ localDocumentMap: newDocumentMap });
-
-    // Switch to page view mode
-    setCurrentViewItemId(newPage.id);
+    // Switch to page view mode with real ID
+    setCurrentViewItemId(realId);
     setMode('page');
-  }, [createDocument, currentFolderId, libraryId, setCurrentViewItemId, setMode, t]);
+  }, [createResourceAndSync, currentFolderId, libraryId, setCurrentViewItemId, setMode, t]);
 
   const handleCreateFolder = useCallback(async () => {
-    const folderId = await createFolder('Untitled', currentFolderId ?? undefined, libraryId);
-    // Trigger auto-rename
-    setPendingRenameItemId(folderId);
-  }, [createFolder, currentFolderId, libraryId, setPendingRenameItemId]);
+    // Create folder and wait for sync to complete before triggering rename
+    try {
+      // Get current resource list to check for duplicate folder names
+      const resourceList = useFileStore.getState().resourceList || [];
+
+      // Filter for folders at the same level
+      const foldersAtSameLevel = resourceList.filter(
+        (item) =>
+          item.fileType === 'custom/folder' &&
+          (item.parentId ?? null) === (currentFolderId ?? null),
+      );
+
+      // Generate unique folder name
+      const baseName = 'Untitled';
+      const existingNames = new Set(foldersAtSameLevel.map((folder) => folder.name));
+
+      let uniqueName = baseName;
+      let counter = 1;
+
+      while (existingNames.has(uniqueName)) {
+        uniqueName = `${baseName} ${counter}`;
+        counter++;
+      }
+
+      // Wait for sync to complete to get the real ID
+      const realId = await createResourceAndSync({
+        content: '',
+        fileType: 'custom/folder',
+        knowledgeBaseId: libraryId,
+        parentId: currentFolderId ?? undefined,
+        sourceType: 'document',
+        title: uniqueName,
+      });
+
+      // Trigger auto-rename with the real ID (after sync completes)
+      setPendingRenameItemId(realId);
+    } catch (error) {
+      message.error(t('header.actions.createFolderError'));
+      console.error('Failed to create folder:', error);
+    }
+  }, [createResourceAndSync, currentFolderId, libraryId, setPendingRenameItemId, t]);
 
   const {
     handleCloseNotionGuide,
@@ -89,7 +109,10 @@ const AddButton = () => {
     createDocument,
     currentFolderId,
     libraryId,
-    refreshFileList,
+    refetchResources: async () => {
+      const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
+      await revalidateResources();
+    },
     t,
   });
 
@@ -99,6 +122,13 @@ const AddButton = () => {
     t,
     uploadFolderWithStructure,
   });
+  const handleFolderUploadWithClose = useCallback(
+    (event: ChangeEvent<HTMLInputElement>) => {
+      setMenuOpen(false);
+      return handleFolderUpload(event);
+    },
+    [handleFolderUpload],
+  );
 
   const items = useMemo<MenuProps['items']>(
     () => [
@@ -122,11 +152,13 @@ const AddButton = () => {
         type: 'divider',
       },
       {
+        closeOnClick: false,
         icon: <Icon icon={FileUp} />,
         key: 'upload-file',
         label: (
           <Upload
             beforeUpload={async (file) => {
+              setMenuOpen(false);
               await pushDockFileList([file], libraryId, currentFolderId ?? undefined);
 
               return false;
@@ -139,6 +171,7 @@ const AddButton = () => {
         ),
       },
       {
+        closeOnClick: false,
         icon: <Icon icon={FolderUp} />,
         key: 'upload-folder',
         label: <label htmlFor="folder-upload-input">{t('header.actions.uploadFolder')}</label>,
@@ -189,18 +222,17 @@ const AddButton = () => {
 
   return (
     <>
-      <Dropdown menu={{ items }} placement="bottomRight" trigger={['hover']}>
-        <Button
-          icon={Plus}
-          onClick={(e) => {
-            // Prevent default button behavior that might interfere with dropdown
-            e.stopPropagation();
-          }}
-          type="primary"
-        >
+      <DropdownMenu
+        items={items}
+        onOpenChange={setMenuOpen}
+        open={menuOpen}
+        placement="bottomRight"
+        trigger="both"
+      >
+        <Button data-no-highlight icon={Plus} type="primary">
           {t('addLibrary')}
         </Button>
-      </Dropdown>
+      </DropdownMenu>
       <GuideModal
         cancelText={t('header.actions.notionGuide.cancel')}
         cover={<GuideVideo height={269} src={FILE_URL.importFromNotionGuide} width={358} />}
@@ -218,7 +250,7 @@ const AddButton = () => {
       <input
         id="folder-upload-input"
         multiple
-        onChange={handleFolderUpload}
+        onChange={handleFolderUploadWithClose}
         style={{ display: 'none' }}
         type="file"
         // @ts-expect-error - webkitdirectory is not in the React types

@@ -1,15 +1,17 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Flexbox } from '@lobehub/ui';
-import { useRouter } from 'next/navigation';
 import { memo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
+import { navigateToDesktopOnboarding } from '@/app/[variants]/(desktop)/desktop-onboarding/navigation';
 import { clearDesktopOnboardingCompleted } from '@/app/[variants]/(desktop)/desktop-onboarding/storage';
+import { DesktopOnboardingScreen } from '@/app/[variants]/(desktop)/desktop-onboarding/types';
 import BusinessPanelContent from '@/business/client/features/User/BusinessPanelContent';
 import BrandWatermark from '@/components/BrandWatermark';
 import Menu from '@/components/Menu';
 import { isDesktop } from '@/const/version';
 import { enableBetterAuth, enableNextAuth } from '@/envs/auth';
+import { useRouter } from '@/libs/next/navigation';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
@@ -21,7 +23,7 @@ import { useMenu } from './useMenu';
 
 const PanelContent = memo<{ closePopover: () => void }>(({ closePopover }) => {
   const router = useRouter();
-  const navigate = useNavigate();
+
   const isLoginWithAuth = useUserStore(authSelectors.isLoginWithAuth);
   const [openSignIn, signOut] = useUserStore((s) => [s.openLogin, s.logout]);
   const { mainItems, logoutItems } = useMenu();
@@ -35,17 +37,16 @@ const PanelContent = memo<{ closePopover: () => void }>(({ closePopover }) => {
     if (isDesktop) {
       closePopover();
 
-      // Desktop: clear OIDC tokens (electron main) + re-enter desktop onboarding at Screen5.
       try {
         const { remoteServerService } = await import('@/services/electron/remoteServer');
         await remoteServerService.clearRemoteServerConfig();
-      } catch {
-        // Ignore: even if IPC is unavailable, still proceed to onboarding.
+      } catch (error) {
+        console.error(error);
+      } finally {
+        clearDesktopOnboardingCompleted();
+        signOut();
+        navigateToDesktopOnboarding(DesktopOnboardingScreen.Login);
       }
-
-      clearDesktopOnboardingCompleted();
-      signOut();
-      navigate('/desktop-onboarding#5', { replace: true });
       return;
     }
 

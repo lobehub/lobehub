@@ -250,9 +250,14 @@ export class BrowserManager {
     browser?.setWindowSize(size);
   }
 
-  setWindowResizable(identifier: string, resizable: boolean) {
+  getWindowSize(identifier: string) {
     const browser = this.browsers.get(identifier);
-    browser?.setWindowResizable(resizable);
+    return browser?.browserWindow.getBounds();
+  }
+
+  setWindowMinimumSize(identifier: string, size: { height?: number; width?: number }) {
+    const browser = this.browsers.get(identifier);
+    browser?.setWindowMinimumSize(size);
   }
 
   getIdentifierByWebContents(webContents: WebContents): string | null {

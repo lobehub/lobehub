@@ -1,41 +1,37 @@
-import { Flexbox } from '@lobehub/ui';
-import { Suspense, memo } from 'react';
-
-import { createModal } from '@/components/FunctionModal';
+import { Flexbox, createModal, useModalContext } from '@lobehub/ui';
+import { Suspense, memo, useCallback } from 'react';
 
 import CreateForm from './CreateForm';
 
 interface ModalContentProps {
-  onClose?: () => void;
   onSuccess?: (id: string) => void;
 }
 
-const ModalContent = memo<ModalContentProps>(({ onClose, onSuccess }) => {
+const ModalContent = memo<ModalContentProps>(({ onSuccess }) => {
+  const { close } = useModalContext();
+
   return (
     <Flexbox paddingInline={16} style={{ paddingBottom: 16 }}>
-      <CreateForm onClose={onClose} onSuccess={onSuccess} />
+      <CreateForm onClose={close} onSuccess={onSuccess} />
     </Flexbox>
   );
 });
 
 ModalContent.displayName = 'KnowledgeBaseCreateModalContent';
 
-// eslint-disable-next-line unused-imports/no-unused-vars
-export const useCreateNewModal = createModal<{ onSuccess?: (id: string) => void }>(
-  (instance, props) => {
-    return {
-      content: (
+export const useCreateNewModal = () => {
+  const open = useCallback((props?: { onSuccess?: (id: string) => void }) => {
+    createModal({
+      children: (
         <Suspense fallback={<div style={{ minHeight: 200 }} />}>
-          <ModalContent
-            onClose={() => {
-              instance.current?.destroy();
-            }}
-            onSuccess={props?.onSuccess}
-          />
+          <ModalContent onSuccess={props?.onSuccess} />
         </Suspense>
       ),
       focusTriggerAfterClose: true,
-      footer: false,
-    };
-  },
-);
+      footer: null,
+      title: null,
+    });
+  }, []);
+
+  return { open };
+};

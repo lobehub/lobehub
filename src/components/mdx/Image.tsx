@@ -1,7 +1,7 @@
 'use server';
 
 import { Image } from '@lobehub/ui/mdx';
-import Img from 'next/image';
+import Img from '@/libs/next/Image';
 import { getPlaiceholder } from 'plaiceholder';
 import { type FC } from 'react';
 

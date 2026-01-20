@@ -10,6 +10,7 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import LobeMessage from '../components/LobeMessage';
+import OnboardingFooterActions from '../components/OnboardingFooterActions';
 
 type DataMode = 'share' | 'privacy';
 
@@ -48,7 +49,7 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
   );
 
   return (
-    <Flexbox gap={16}>
+    <Flexbox gap={16} style={{ height: '100%', minHeight: '100%' }}>
       <Flexbox>
         <LobeMessage sentences={[t('screen4.title'), t('screen4.title2'), t('screen4.title3')]} />
         <Text as={'p'}>{t('screen4.description')}</Text>
@@ -113,19 +114,23 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
       <Text color={cssVar.colorTextSecondary} fontSize={12} style={{ marginTop: 16 }}>
         {t('screen4.footerNote')}
       </Text>
-      <Flexbox horizontal justify={'space-between'} style={{ marginTop: 32 }}>
-        <Button
-          icon={Undo2Icon}
-          onClick={onBack}
-          style={{ color: cssVar.colorTextDescription }}
-          type={'text'}
-        >
-          {t('back')}
-        </Button>
-        <Button onClick={onNext} type={'primary'}>
-          {t('next')}
-        </Button>
-      </Flexbox>
+      <OnboardingFooterActions
+        left={
+          <Button
+            icon={Undo2Icon}
+            onClick={onBack}
+            style={{ color: cssVar.colorTextDescription }}
+            type={'text'}
+          >
+            {t('back')}
+          </Button>
+        }
+        right={
+          <Button onClick={onNext} type={'primary'}>
+            {t('next')}
+          </Button>
+        }
+      />
     </Flexbox>
   );
 });

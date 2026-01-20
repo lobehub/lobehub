@@ -102,7 +102,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      "GLM-4.7 is Zhipu's latest flagship model, strengthened in coding capabilities, long-term task planning, and tool coordination for Agentic Coding scenarios. It achieves leading performance among open-source models on multiple public benchmarks. General capabilities are enhanced with more concise and natural responses and more immersive writing. In executing complex agent tasks, instruction following in tool calling is stronger, and front-end aesthetics in Artifacts and Agentic Coding as well as long-term task completion efficiency are further improved.",
+      "GLM-4.7 is Zhipu's latest flagship model, enhanced for Agentic Coding scenarios with improved coding capabilities, long-term task planning, and tool collaboration. It achieves leading performance among open-source models on multiple public benchmarks. General capabilities are improved with more concise and natural responses and more immersive writing. For complex agent tasks, instruction following during tool calls is stronger, and the frontend aesthetics and long-term task completion efficiency of Artifacts and Agentic Coding are further enhanced.",
     displayName: 'GLM-4.7',
     enabled: true,
     id: 'glm-4.7',
@@ -165,7 +165,7 @@ const zhipuChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      "Zhipu's latest flagship model GLM-4.6 (355B) comprehensively surpasses its predecessors in advanced coding, long-text processing, reasoning, and agent capabilities. Especially in programming ability, it aligns with Claude Sonnet 4, becoming a top domestic Coding model.",
+      "Zhipu's latest flagship model GLM-4.6 (355B) fully surpasses its predecessors in advanced coding, long-text processing, reasoning, and agent capabilities. It particularly aligns with Claude Sonnet 4 in programming ability, becoming China's top Coding model.",
     displayName: 'GLM-4.6',
     id: 'glm-4.6',
     maxOutput: 131_072,

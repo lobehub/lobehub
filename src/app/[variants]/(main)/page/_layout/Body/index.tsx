@@ -1,12 +1,12 @@
 'use client';
 
-import { Accordion, AccordionItem, Dropdown, Flexbox, Text } from '@lobehub/ui';
+import { Accordion, AccordionItem, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
 import React, { Suspense, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import PageEmpty from '@/features/PageEmpty';
-import { documentSelectors, useFileStore } from '@/store/file';
+import { pageSelectors, usePageStore } from '@/store/page';
 
 import Actions from './Actions';
 import AllPagesDrawer from './AllPagesDrawer';
@@ -22,12 +22,18 @@ export enum GroupKey {
  */
 const Body = memo(() => {
   const { t } = useTranslation('file');
-  const isDocumentListLoading = useFileStore((s) => s.isDocumentListLoading);
-  const filteredPagesCount = useFileStore(documentSelectors.filteredPagesCount);
-  const filteredPages = useFileStore(documentSelectors.getFilteredPagesLimited);
-  const searchKeywords = useFileStore((s) => s.searchKeywords);
+
+  // Initialize documents list via SWR
+  const useFetchDocuments = usePageStore((s) => s.useFetchDocuments);
+  useFetchDocuments();
+
+  const isLoading = usePageStore(pageSelectors.isDocumentsLoading);
+
+  const filteredDocumentsCount = usePageStore(pageSelectors.filteredDocumentsCount);
+  const filteredDocuments = usePageStore(pageSelectors.getFilteredDocumentsLimited);
+  const searchKeywords = usePageStore((s) => s.searchKeywords);
   const dropdownMenu = useDropdownMenu();
-  const [allPagesDrawerOpen, closeAllPagesDrawer] = useFileStore((s) => [
+  const [allPagesDrawerOpen, closeAllPagesDrawer] = usePageStore((s) => [
     s.allPagesDrawerOpen,
     s.closeAllPagesDrawer,
   ]);
@@ -38,14 +44,7 @@ const Body = memo(() => {
         <AccordionItem
           action={<Actions />}
           headerWrapper={(header) => (
-            <Dropdown
-              menu={{
-                items: dropdownMenu,
-              }}
-              trigger={['contextMenu']}
-            >
-              {header}
-            </Dropdown>
+            <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>
           )}
           itemKey={GroupKey.AllPages}
           paddingBlock={4}
@@ -53,16 +52,16 @@ const Body = memo(() => {
           title={
             <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
               {t('pageList.title')}
-              {filteredPagesCount > 0 && ` ${filteredPagesCount}`}
+              {filteredDocumentsCount > 0 && ` ${filteredDocumentsCount}`}
             </Text>
           }
         >
           <Suspense fallback={<SkeletonList />}>
-            {isDocumentListLoading ? (
+            {isLoading ? (
               <SkeletonList />
             ) : (
               <Flexbox gap={1} paddingBlock={1}>
-                {filteredPages.length === 0 ? (
+                {filteredDocuments.length === 0 ? (
                   <PageEmpty search={Boolean(searchKeywords.trim())} />
                 ) : (
                   <List />

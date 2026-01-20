@@ -1,7 +1,7 @@
 import { Button, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Link2 } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/libs/router/Link';
 import { memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 

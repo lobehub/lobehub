@@ -8,7 +8,7 @@ const ZeroOne: ModelProviderCard = {
     '01.AI drives a human-centered AI 2.0 revolution, using LLMs to create economic and social value and build new AI ecosystems and business models.',
   id: 'zeroone',
   modelList: { showModelFetcher: true },
-  modelsUrl: 'https://platform.lingyiwanwu.com/docs#模型与计费',
+  modelsUrl: 'https://platform.lingyiwanwu.com/docs#models-and-pricing',
   name: '01.AI',
   settings: {
     proxyUrl: {

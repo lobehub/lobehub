@@ -1,5 +1,7 @@
+export type TodoStatus = 'todo' | 'processing' | 'completed';
+
 export interface TodoItem {
-  completed: boolean;
+  status: TodoStatus;
   text: string;
 }
 
@@ -17,13 +19,15 @@ export const formatTodoStateSummary = (todos: TodoItem[], updatedAt?: string): s
     return `📋 Current Todo List: (empty)${timeInfo}`;
   }
 
-  const completed = todos.filter((t) => t.completed).length;
-  const pending = todos.length - completed;
+  const completed = todos.filter((t) => t.status === 'completed').length;
+  const processing = todos.filter((t) => t.status === 'processing').length;
+  const pending = todos.length - completed - processing;
 
   const lines = todos.map((item) => {
-    const checkbox = item.completed ? '- [x]' : '- [ ]';
+    const checkbox =
+      item.status === 'completed' ? '- [x]' : item.status === 'processing' ? '- [~]' : '- [ ]';
     return `${checkbox} ${item.text}`;
   });
 
-  return `📋 Current Todo List (${pending} pending, ${completed} completed)${timeInfo}:\n${lines.join('\n')}`;
+  return `📋 Current Todo List (${pending} todo, ${processing} processing, ${completed} completed)${timeInfo}:\n${lines.join('\n')}`;
 };

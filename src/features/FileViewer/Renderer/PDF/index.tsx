@@ -7,6 +7,7 @@ import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/esm/Page/AnnotationLayer.css';
 import 'react-pdf/dist/esm/Page/TextLayer.css';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { lambdaQuery } from '@/libs/trpc/client';
 
 import HighlightLayer from './HighlightLayer';
@@ -62,13 +63,14 @@ const PDFViewer = memo<PDFViewerProps>(({ url, fileId }) => {
       <Flexbox
         align={'center'}
         className={styles.documentContainer}
+        justify={isLoaded ? undefined : 'center'}
         padding={24}
         ref={setContainerRef}
-        style={{ height: isLoaded ? undefined : '100%' }}
       >
         <Document
           className={styles.document}
           file={url}
+          loading={<NeuralNetworkLoading size={36} />}
           onLoadSuccess={onDocumentLoadSuccess}
           options={options}
         >

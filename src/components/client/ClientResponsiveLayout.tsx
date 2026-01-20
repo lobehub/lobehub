@@ -1,7 +1,7 @@
 'use client';
 
 import { type Loader } from 'next/dist/shared/lib/dynamic';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { type FC, type PropsWithChildren, memo } from 'react';
 
 import MobileSwitchLoading from '@/features/MobileSwitchLoading';

@@ -86,6 +86,7 @@ export class DocumentService {
       fileId,
       fileType,
       filename: title,
+      knowledgeBaseId, // Set knowledge_base_id column for all document types
       metadata: finalMetadata,
       pages: undefined,
       parentId,
@@ -98,6 +99,28 @@ export class DocumentService {
     });
 
     return document;
+  }
+
+  /**
+   * Create multiple documents in batch (optimized for folder creation)
+   * Returns array of created documents with same order as input
+   */
+  async createDocuments(
+    documents: Array<{
+      content?: string;
+      editorData: Record<string, any>;
+      fileType?: string;
+      knowledgeBaseId?: string;
+      metadata?: Record<string, any>;
+      parentId?: string;
+      slug?: string;
+      title: string;
+    }>,
+  ): Promise<DocumentItem[]> {
+    // Create all documents in parallel for better performance
+    const results = await Promise.all(documents.map((params) => this.createDocument(params)));
+
+    return results;
   }
 
   /**

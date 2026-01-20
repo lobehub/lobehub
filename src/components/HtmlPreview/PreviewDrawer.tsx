@@ -1,3 +1,4 @@
+import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { exportFile } from '@lobechat/utils/client';
 import { Block, Button, Flexbox, Highlighter, Segmented } from '@lobehub/ui';
 import { Drawer } from 'antd';
@@ -7,7 +8,6 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
-import { TITLE_BAR_HEIGHT } from '@/features/ElectronTitlebar';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`

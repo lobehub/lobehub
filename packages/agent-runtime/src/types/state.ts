@@ -17,6 +17,8 @@ export interface AgentState {
   tools?: any[];
   systemRole?: string;
   toolManifestMap: Record<string, any>;
+  /** Tool source map for routing tool execution to correct handler */
+  toolSourceMap?: Record<string, 'builtin' | 'plugin' | 'mcp' | 'klavis' | 'lobehubSkill'>;
 
   /**
    * Model runtime configuration

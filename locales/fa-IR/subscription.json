@@ -54,6 +54,8 @@
   "funds.packages.expiresIn": "منقضی در {{days}} روز",
   "funds.packages.expiresToday": "امروز منقضی می‌شود",
   "funds.packages.expiringSoon": "در شرف انقضا",
+  "funds.packages.gift": "هدیه",
+  "funds.packages.giftedOn": "هدیه شده در {{date}}",
   "funds.packages.noPackages": "بسته اعتباری وجود ندارد",
   "funds.packages.purchaseFirst": "ابتدا یک بسته اعتباری خریداری کنید",
   "funds.packages.purchasedOn": "خریداری شده در {{date}}",

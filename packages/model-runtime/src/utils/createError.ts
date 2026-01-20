@@ -12,5 +12,4 @@ export const AgentRuntimeError = {
     error?: any,
   ): AgentInitErrorPayload => ({ error, errorType }),
   createImage: (error: CreateImageErrorPayload): CreateImageErrorPayload => error,
-  textToImage: (error: any): any => error,
 };

@@ -76,7 +76,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
-      "GLM-4.7 is Zhipu's new generation flagship model with a total of 355B parameters and 32B activated parameters, comprehensively upgraded in general conversation, reasoning, and agent capabilities. GLM-4.7 enhances Interleaved Thinking and introduces Preserved Thinking and Turn-level Thinking.",
+      "GLM-4.7 is Zhipu's new generation flagship model with 355B total parameters and 32B active parameters, fully upgraded in general dialogue, reasoning, and agent capabilities. GLM-4.7 enhances Interleaved Thinking and introduces Preserved Thinking and Turn-level Thinking.",
     displayName: 'GLM-4.7 (Pro)',
     id: 'Pro/zai-org/glm-4.7',
     pricing: {

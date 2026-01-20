@@ -188,6 +188,171 @@ describe('Operation Selectors', () => {
     });
   });
 
+  describe('getDeepestRunningOperationByMessage', () => {
+    it('should return undefined when no operations exist', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      const deepestOp = operationSelectors.getDeepestRunningOperationByMessage('msg1')(
+        result.current,
+      );
+
+      expect(deepestOp).toBeUndefined();
+    });
+
+    it('should return undefined when no running operations exist', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let opId: string;
+      act(() => {
+        opId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'session1', messageId: 'msg1' },
+        }).operationId;
+        result.current.associateMessageWithOperation('msg1', opId);
+        result.current.completeOperation(opId);
+      });
+
+      const deepestOp = operationSelectors.getDeepestRunningOperationByMessage('msg1')(
+        result.current,
+      );
+
+      expect(deepestOp).toBeUndefined();
+    });
+
+    it('should return the only running operation when there is one', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let opId: string;
+      act(() => {
+        opId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'session1', messageId: 'msg1' },
+        }).operationId;
+        result.current.associateMessageWithOperation('msg1', opId);
+      });
+
+      const deepestOp = operationSelectors.getDeepestRunningOperationByMessage('msg1')(
+        result.current,
+      );
+
+      expect(deepestOp).toBeDefined();
+      expect(deepestOp?.type).toBe('execAgentRuntime');
+    });
+
+    it('should return the leaf operation in a parent-child tree', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let parentOpId: string;
+      let childOpId: string;
+
+      act(() => {
+        // Start parent operation
+        parentOpId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'session1', messageId: 'msg1' },
+        }).operationId;
+        result.current.associateMessageWithOperation('msg1', parentOpId);
+
+        // Start child operation
+        childOpId = result.current.startOperation({
+          type: 'reasoning',
+          context: { agentId: 'session1', messageId: 'msg1' },
+          parentOperationId: parentOpId,
+        }).operationId;
+        result.current.associateMessageWithOperation('msg1', childOpId);
+      });
+
+      const deepestOp = operationSelectors.getDeepestRunningOperationByMessage('msg1')(
+        result.current,
+      );
+
+      // Should return the child (reasoning) not the parent (execAgentRuntime)
+      expect(deepestOp).toBeDefined();
+      expect(deepestOp?.type).toBe('reasoning');
+      expect(deepestOp?.id).toBe(childOpId!);
+    });
+
+    it('should return the deepest leaf in a multi-level tree', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let rootOpId: string;
+      let level1OpId: string;
+      let level2OpId: string;
+
+      act(() => {
+        // Level 0: root operation
+        rootOpId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'session1', messageId: 'msg1' },
+        }).operationId;
+        result.current.associateMessageWithOperation('msg1', rootOpId);
+
+        // Level 1: child of root
+        level1OpId = result.current.startOperation({
+          type: 'callLLM',
+          context: { agentId: 'session1', messageId: 'msg1' },
+          parentOperationId: rootOpId,
+        }).operationId;
+        result.current.associateMessageWithOperation('msg1', level1OpId);
+
+        // Level 2: grandchild (deepest)
+        level2OpId = result.current.startOperation({
+          type: 'reasoning',
+          context: { agentId: 'session1', messageId: 'msg1' },
+          parentOperationId: level1OpId,
+        }).operationId;
+        result.current.associateMessageWithOperation('msg1', level2OpId);
+      });
+
+      const deepestOp = operationSelectors.getDeepestRunningOperationByMessage('msg1')(
+        result.current,
+      );
+
+      // Should return the deepest leaf (reasoning at level 2)
+      expect(deepestOp).toBeDefined();
+      expect(deepestOp?.type).toBe('reasoning');
+      expect(deepestOp?.id).toBe(level2OpId!);
+    });
+
+    it('should return parent when child operation completes', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let parentOpId: string;
+      let childOpId: string;
+
+      act(() => {
+        parentOpId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'session1', messageId: 'msg1' },
+        }).operationId;
+        result.current.associateMessageWithOperation('msg1', parentOpId);
+
+        childOpId = result.current.startOperation({
+          type: 'reasoning',
+          context: { agentId: 'session1', messageId: 'msg1' },
+          parentOperationId: parentOpId,
+        }).operationId;
+        result.current.associateMessageWithOperation('msg1', childOpId);
+      });
+
+      // Before completing child
+      let deepestOp = operationSelectors.getDeepestRunningOperationByMessage('msg1')(
+        result.current,
+      );
+      expect(deepestOp?.type).toBe('reasoning');
+
+      // Complete child operation
+      act(() => {
+        result.current.completeOperation(childOpId);
+      });
+
+      // After completing child, parent should be the deepest running
+      deepestOp = operationSelectors.getDeepestRunningOperationByMessage('msg1')(result.current);
+      expect(deepestOp?.type).toBe('execAgentRuntime');
+      expect(deepestOp?.id).toBe(parentOpId!);
+    });
+  });
+
   describe('isMessageProcessing', () => {
     it('should return true if message has running operations', () => {
       const { result } = renderHook(() => useChatStore());
@@ -341,6 +506,130 @@ describe('Operation Selectors', () => {
       expect(context?.agentId).toBe('session1');
       expect(context?.topicId).toBe('topic1');
       expect(context?.messageId).toBe('msg1');
+    });
+  });
+
+  describe('isAgentRunning', () => {
+    it('should return false when no operations exist', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      expect(operationSelectors.isAgentRunning('agent1')(result.current)).toBe(false);
+    });
+
+    it('should return true only for the agent with running operations', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'agent1' },
+        });
+      });
+
+      expect(operationSelectors.isAgentRunning('agent1')(result.current)).toBe(true);
+      expect(operationSelectors.isAgentRunning('agent2')(result.current)).toBe(false);
+    });
+
+    it('should return false when operation completes', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let opId: string;
+
+      act(() => {
+        opId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'agent1' },
+        }).operationId;
+      });
+
+      expect(operationSelectors.isAgentRunning('agent1')(result.current)).toBe(true);
+
+      act(() => {
+        result.current.completeOperation(opId!);
+      });
+
+      expect(operationSelectors.isAgentRunning('agent1')(result.current)).toBe(false);
+    });
+
+    it('should exclude aborting operations', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      let opId: string;
+
+      act(() => {
+        opId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'agent1' },
+        }).operationId;
+      });
+
+      expect(operationSelectors.isAgentRunning('agent1')(result.current)).toBe(true);
+
+      act(() => {
+        result.current.updateOperationMetadata(opId!, { isAborting: true });
+      });
+
+      expect(operationSelectors.isAgentRunning('agent1')(result.current)).toBe(false);
+    });
+
+    it('should detect any topic with running operations for the agent', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        // Agent 1, topic 1
+        result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'agent1', topicId: 'topic1' },
+        });
+
+        // Agent 1, topic 2
+        result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'agent1', topicId: 'topic2' },
+        });
+
+        // Agent 2, topic 3
+        result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'agent2', topicId: 'topic3' },
+        });
+      });
+
+      // Agent 1 should be running (has 2 topics with operations)
+      expect(operationSelectors.isAgentRunning('agent1')(result.current)).toBe(true);
+      // Agent 2 should also be running
+      expect(operationSelectors.isAgentRunning('agent2')(result.current)).toBe(true);
+      // Agent 3 should not be running
+      expect(operationSelectors.isAgentRunning('agent3')(result.current)).toBe(false);
+    });
+
+    it('should detect server agent runtime operations', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.startOperation({
+          type: 'execServerAgentRuntime',
+          context: { agentId: 'agent1', groupId: 'group1' },
+        });
+      });
+
+      expect(operationSelectors.isAgentRunning('agent1')(result.current)).toBe(true);
+      expect(operationSelectors.isAgentRunning('agent2')(result.current)).toBe(false);
+    });
+
+    it('should not detect non-AI-runtime operations', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        // sendMessage is not an AI runtime operation type
+        result.current.startOperation({
+          type: 'sendMessage',
+          context: { agentId: 'agent1' },
+        });
+      });
+
+      // sendMessage is not in AI_RUNTIME_OPERATION_TYPES, so should return false
+      expect(operationSelectors.isAgentRunning('agent1')(result.current)).toBe(false);
     });
   });
 

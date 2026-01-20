@@ -12,7 +12,6 @@ import {
   PackageCheckIcon,
   SettingsIcon,
 } from 'lucide-react';
-import Link from 'next/link';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -178,21 +177,22 @@ const Nav = memo<NavProps>(
         {nav}
         {!inModal && (
           <Flexbox gap={12} horizontal>
-            <Link className={styles.link} href={SOCIAL_URL.discord} target={'_blank'}>
+            <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
               {t('mcp.details.nav.needHelp')}
-            </Link>
+            </a>
             {github?.url && (
               <>
-                <Link className={styles.link} href={github.url} target={'_blank'}>
+                <a className={styles.link} href={github.url} rel="noreferrer" target="_blank">
                   {t('mcp.details.nav.viewSourceCode')}
-                </Link>
-                <Link
+                </a>
+                <a
                   className={styles.link}
                   href={urlJoin(github.url, 'issues')}
-                  target={'_blank'}
+                  rel="noreferrer"
+                  target="_blank"
                 >
                   {t('mcp.details.nav.reportIssue')}
-                </Link>
+                </a>
               </>
             )}
           </Flexbox>

@@ -90,6 +90,10 @@
                 "id": "msg-504",
                 "state": {
                   "cached": false
+                },
+                "error": {
+                  "type": "NameError",
+                  "message": "name 'result' is not defined"
                 }
               },
               "result_msg_id": "msg-504"

@@ -58,7 +58,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
     const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
     const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
     const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
-    const newScreen = useNewScreen({ creating, isLatestItem });
+    const newScreen = useNewScreen({ creating: creating || generating, isLatestItem });
 
     const errorContent = useErrorContent(error);
 

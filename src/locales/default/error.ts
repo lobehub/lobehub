@@ -16,6 +16,12 @@ export default {
   'import.incompatible.description':
     'This file was exported from a higher version. Please try upgrading to the latest version and then re-importing.',
   'import.incompatible.title': 'Current application does not support importing this file',
+  'inviteCode.currentEmail': 'Current account: {{email}}',
+  'inviteCode.desc':
+    'An invite code is required to access LobeHub. Please enter a valid invite code to continue.',
+  'inviteCode.friends': 'Friends',
+  'inviteCode.getCodeHint': 'Get an invite code from:',
+  'inviteCode.title': 'Invite Code Required',
   'loginRequired.desc': 'You will be redirected to the login page shortly',
   'loginRequired.title': 'Please log in to use this feature',
   'notFound.backHome': 'Back to Home',
@@ -238,5 +244,10 @@ export default {
   'upload.title': 'File upload failed. Please check your network connection or try again later',
   'upload.unknownError': 'Error reason: {{reason}}',
   'upload.uploadFailed': 'File upload failed.',
+  'waitlist.currentEmail': 'Current account: {{email}}',
+  'waitlist.desc':
+    'Your account is not on the whitelist. Please contact the administrator to request access.',
+  'waitlist.switchAccount': 'Switch Account',
+  'waitlist.title': 'Access Restricted',
   ...businessErrorsLocales,
 };

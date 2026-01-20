@@ -15,7 +15,6 @@ import {
 import { createStaticStyles, cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
 import { LinkIcon, Share2Icon } from 'lucide-react';
-import Link from 'next/link';
 import { type ReactNode, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -121,14 +120,14 @@ const ShareButton = memo<ShareButtonProps>(({ meta, ...rest }) => {
           {[x, reddit, telegram, whatsapp, mastodon, weibo].map(
             (item) =>
               item.icon && (
-                <Link href={item.link} key={item.title} target={'_blank'}>
+                <a href={item.link} key={item.title} rel="noreferrer" target="_blank">
                   <ActionIcon
                     className={styles.icon}
                     icon={item.icon}
                     size={{ blockSize: 36, borderRadius: 18, size: 16 }}
                     title={item.title}
                   />
-                </Link>
+                </a>
               ),
           )}
         </Flexbox>

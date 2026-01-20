@@ -223,7 +223,7 @@ export const transformAnthropicStream = (
 
 export interface AnthropicStreamOptions {
   callbacks?: ChatStreamCallbacks;
-  enableStreaming?: boolean; // 选择 TPS 计算方式（非流式时传 false）
+  enableStreaming?: boolean; // Select TPS calculation method (pass false for non-streaming)
   inputStartAt?: number;
   payload?: ChatPayloadForTransformStream;
 }

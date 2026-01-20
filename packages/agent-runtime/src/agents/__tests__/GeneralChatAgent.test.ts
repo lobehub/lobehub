@@ -911,7 +911,12 @@ describe('GeneralChatAgent', () => {
 
       const context = createMockContext('task_result', {
         parentMessageId: 'task-parent-msg',
-        result: { success: true, taskMessageId: 'task-1', threadId: 'thread-1', result: 'Task result' },
+        result: {
+          success: true,
+          taskMessageId: 'task-1',
+          threadId: 'thread-1',
+          result: 'Task result',
+        },
       });
 
       const result = await agent.runner(context, state);
@@ -1515,6 +1520,275 @@ describe('GeneralChatAgent', () => {
           type: 'request_human_approve',
           pendingToolsCalling: [toolCall],
           reason: 'human_intervention_required',
+        },
+      ]);
+    });
+  });
+
+  describe('headless mode (for async tasks)', () => {
+    it('should execute all tools directly in headless mode including those requiring approval', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const toolCall: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'dangerous-tool',
+        apiName: 'delete',
+        arguments: '{}',
+        type: 'default',
+      };
+
+      const state = createMockState({
+        toolManifestMap: {
+          'dangerous-tool': {
+            identifier: 'dangerous-tool',
+            humanIntervention: 'required', // Tool requires approval
+          },
+        },
+        userInterventionConfig: {
+          approvalMode: 'headless', // Headless mode for async tasks
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [toolCall],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      // Should execute directly in headless mode
+      expect(result).toEqual([
+        {
+          type: 'call_tool',
+          payload: {
+            parentMessageId: 'msg-1',
+            toolCalling: toolCall,
+          },
+        },
+      ]);
+    });
+
+    it('should execute tools with "always" policy in headless mode', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const alwaysTool: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'agent-builder',
+        apiName: 'installPlugin',
+        arguments: '{"identifier":"some-plugin","source":"market"}',
+        type: 'builtin',
+      };
+
+      const state = createMockState({
+        toolManifestMap: {
+          'agent-builder': {
+            identifier: 'agent-builder',
+            api: [
+              {
+                name: 'installPlugin',
+                humanIntervention: 'always', // Always requires intervention normally
+              },
+            ],
+          },
+        },
+        userInterventionConfig: {
+          approvalMode: 'headless', // Headless mode bypasses even 'always'
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [alwaysTool],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      // Should execute directly in headless mode, even for 'always' policy
+      expect(result).toEqual([
+        {
+          type: 'call_tool',
+          payload: {
+            parentMessageId: 'msg-1',
+            toolCalling: alwaysTool,
+          },
+        },
+      ]);
+    });
+
+    it('should skip security blacklisted tools in headless mode', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const blacklistedTool: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'bash',
+        apiName: 'bash',
+        arguments: '{"command":"rm -rf /"}', // Matches security blacklist
+        type: 'builtin',
+      };
+
+      const state = createMockState({
+        toolManifestMap: {
+          bash: {
+            identifier: 'bash',
+            humanIntervention: 'never',
+          },
+        },
+        userInterventionConfig: {
+          approvalMode: 'headless',
+        },
+        // Using default security blacklist which blocks "rm -rf /"
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [blacklistedTool],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      // Should return empty array (tool is skipped, not executed or pending)
+      expect(result).toEqual([]);
+    });
+
+    it('should handle mixed tools in headless mode - execute safe ones, skip blacklisted', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const safeTool: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'web-search',
+        apiName: 'search',
+        arguments: '{"query":"hello"}',
+        type: 'default',
+      };
+
+      const blacklistedTool: ChatToolPayload = {
+        id: 'call-2',
+        identifier: 'bash',
+        apiName: 'bash',
+        arguments: '{"command":"rm -rf /"}', // Matches security blacklist
+        type: 'builtin',
+      };
+
+      const alwaysTool: ChatToolPayload = {
+        id: 'call-3',
+        identifier: 'agent-builder',
+        apiName: 'installPlugin',
+        arguments: '{}',
+        type: 'builtin',
+      };
+
+      const state = createMockState({
+        toolManifestMap: {
+          'web-search': {
+            identifier: 'web-search',
+            humanIntervention: 'required',
+          },
+          'bash': {
+            identifier: 'bash',
+          },
+          'agent-builder': {
+            identifier: 'agent-builder',
+            api: [
+              {
+                name: 'installPlugin',
+                humanIntervention: 'always',
+              },
+            ],
+          },
+        },
+        userInterventionConfig: {
+          approvalMode: 'headless',
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [safeTool, blacklistedTool, alwaysTool],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      // Should execute safeTool and alwaysTool, skip blacklistedTool
+      expect(result).toEqual([
+        {
+          type: 'call_tools_batch',
+          payload: {
+            parentMessageId: 'msg-1',
+            toolsCalling: [safeTool, alwaysTool],
+          },
+        },
+      ]);
+    });
+
+    it('should execute multiple tools as batch in headless mode', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const tool1: ChatToolPayload = {
+        id: 'call-1',
+        identifier: 'search',
+        apiName: 'search',
+        arguments: '{}',
+        type: 'default',
+      };
+
+      const tool2: ChatToolPayload = {
+        id: 'call-2',
+        identifier: 'crawl',
+        apiName: 'crawl',
+        arguments: '{}',
+        type: 'default',
+      };
+
+      const state = createMockState({
+        toolManifestMap: {
+          search: { identifier: 'search', humanIntervention: 'required' },
+          crawl: { identifier: 'crawl', humanIntervention: 'always' },
+        },
+        userInterventionConfig: {
+          approvalMode: 'headless',
+        },
+      });
+
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [tool1, tool2],
+        parentMessageId: 'msg-1',
+      });
+
+      const result = await agent.runner(context, state);
+
+      // Should execute both tools as batch in headless mode
+      expect(result).toEqual([
+        {
+          type: 'call_tools_batch',
+          payload: {
+            parentMessageId: 'msg-1',
+            toolsCalling: [tool1, tool2],
+          },
         },
       ]);
     });

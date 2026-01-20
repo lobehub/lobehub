@@ -35,7 +35,7 @@ const McpDetailPage = memo<McpDetailPageProps>(({ mobile }) => {
   return (
     <TocProvider>
       <DetailProvider config={data}>
-        <Flexbox gap={16}>
+        <Flexbox data-testid="mcp-detail-content" gap={16}>
           <Header mobile={mobile} />
           <Details mobile={mobile} />
         </Flexbox>

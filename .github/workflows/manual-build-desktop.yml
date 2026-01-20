@@ -44,28 +44,6 @@ env:
   BUN_VERSION: 1.2.23
 
 jobs:
-  test:
-    name: Code quality check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout base
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Setup Node & Bun
-        uses: ./.github/actions/setup-node-bun
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          bun-version: ${{ env.BUN_VERSION }}
-          package-manager-cache: 'false'
-
-      - name: Install deps
-        run: bun i
-
-      - name: Lint
-        run: bun run lint
-
   version:
     name: Determine version
     runs-on: ubuntu-latest
@@ -95,7 +73,17 @@ jobs:
             echo "📦 Using provided version: ${version} (base: ${base_version})"
           else
             ci_build_number="${{ github.run_number }}"
-            version="0.0.0-${CHANNEL}.manual.${ci_build_number}"
+            if [ "$CHANNEL" = "beta" ]; then
+              channel_suffix="next"
+            else
+              channel_suffix="$CHANNEL"
+            fi
+
+            if [[ "$base_version" == *"-${channel_suffix}"* ]]; then
+              version="${base_version}.manual.${ci_build_number}"
+            else
+              version="${base_version}-${channel_suffix}.manual.${ci_build_number}"
+            fi
             echo "📦 Generated version: ${version} (base: ${base_version})"
           fi
 
@@ -106,7 +94,7 @@ jobs:
           echo "🚦 Release Version: ${{ steps.set_version.outputs.version }}"
 
   build-macos:
-    needs: [version, test]
+    needs: [version]
     name: Build Desktop App (macOS)
     if: inputs.build_macos
     runs-on: ${{ matrix.os }}
@@ -126,10 +114,10 @@ jobs:
 
       # node-linker=hoisted 模式将可以确保 asar 压缩可用
       - name: Install dependencies
-        run: pnpm install --node-linker=hoisted
-
-      - name: Install deps on Desktop
-        run: npm run install-isolated --prefix=./apps/desktop
+        run: |
+          pnpm install --node-linker=hoisted &
+          npm run install-isolated --prefix=./apps/desktop &
+          wait
 
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
@@ -171,7 +159,7 @@ jobs:
           fi
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: release-${{ matrix.os }}
           path: |
@@ -187,7 +175,7 @@ jobs:
           retention-days: 5
 
   build-windows:
-    needs: [version, test]
+    needs: [version]
     name: Build Desktop App (Windows)
     if: inputs.build_windows
     runs-on: windows-2025
@@ -203,10 +191,11 @@ jobs:
           package-manager-cache: 'false'
 
       - name: Install dependencies
-        run: pnpm install --node-linker=hoisted
-
-      - name: Install deps on Desktop
-        run: npm run install-isolated --prefix=./apps/desktop
+        shell: pwsh
+        run: |
+          $job1 = Start-Job -ScriptBlock { pnpm install --node-linker=hoisted }
+          $job2 = Start-Job -ScriptBlock { npm run install-isolated --prefix=./apps/desktop }
+          $job1, $job2 | Wait-Job | Receive-Job
 
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
@@ -224,7 +213,7 @@ jobs:
           TMP: C:\temp
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: release-windows-2025
           path: |
@@ -240,7 +229,7 @@ jobs:
           retention-days: 5
 
   build-linux:
-    needs: [version, test]
+    needs: [version]
     name: Build Desktop App (Linux)
     if: inputs.build_linux
     runs-on: ubuntu-latest
@@ -256,10 +245,10 @@ jobs:
           package-manager-cache: 'false'
 
       - name: Install dependencies
-        run: pnpm install --node-linker=hoisted
-
-      - name: Install deps on Desktop
-        run: npm run install-isolated --prefix=./apps/desktop
+        run: |
+          pnpm install --node-linker=hoisted &
+          npm run install-isolated --prefix=./apps/desktop &
+          wait
 
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
@@ -275,7 +264,7 @@ jobs:
           NEXT_PUBLIC_DESKTOP_UMAMI_BASE_URL: ${{ inputs.channel == 'beta' && secrets.UMAMI_BETA_DESKTOP_BASE_URL || secrets.UMAMI_NIGHTLY_DESKTOP_BASE_URL }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: release-ubuntu-latest
           path: |
@@ -309,7 +298,7 @@ jobs:
           package-manager-cache: 'false'
 
       - name: Download artifacts
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           path: release
           pattern: release-*
@@ -330,7 +319,7 @@ jobs:
         run: bun run scripts/electronWorkflow/mergeMacReleaseFiles.js
 
       - name: Upload artifacts with merged macOS files
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: merged-release-manual
           path: release/

@@ -74,7 +74,7 @@ export const dataSlice: StateCreator<
     });
 
     // Sync changes to external store (ChatStore)
-    get().onMessagesChange?.(newDbMessages);
+    get().onMessagesChange?.(newDbMessages, get().context);
   },
 
   replaceMessages: (messages) => {
@@ -84,7 +84,7 @@ export const dataSlice: StateCreator<
     set({ dbMessages: messages, displayMessages: flatList }, false, 'replaceMessages');
 
     // Sync changes to external store (ChatStore)
-    get().onMessagesChange?.(messages);
+    get().onMessagesChange?.(messages, get().context);
   },
 
   switchMessageBranch: async (messageId, branchIndex) => {
@@ -103,17 +103,19 @@ export const dataSlice: StateCreator<
   useFetchMessages: (context, skipFetch) => {
     // When skipFetch is true, SWR key is null - no fetch occurs
     // This is used when external messages are provided (e.g., creating new thread)
-    const shouldFetch = !skipFetch && !!context.agentId;
-
+    // Also skip fetch when topicId is null (new conversation state) - there's no server data,
+    // only local optimistic updates. Fetching would return empty array and overwrite local data.
+    const shouldFetch = !skipFetch && !!context.agentId && !!context.topicId;
     return useClientDataSWRWithSync<UIChatMessage[]>(
       shouldFetch ? ['CONVERSATION_FETCH_MESSAGES', context] : null,
 
       async () => {
-        return messageService.getMessages(context as any);
+        return messageService.getMessages(context);
       },
       {
         onData: (data) => {
           if (!data) return;
+          if (!context.topicId) return;
 
           // Parse messages using conversation-flow
           const { flatList } = parse(data);
@@ -124,8 +126,9 @@ export const dataSlice: StateCreator<
             messagesInit: true,
           });
 
-          // Call onMessagesChange callback if provided
-          get().onMessagesChange?.(data);
+          // Call onMessagesChange callback with the request context (not current context)
+          // This ensures data is stored to the correct topic even if user switched topics
+          get().onMessagesChange?.(data, context);
         },
       },
     );

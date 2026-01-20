@@ -4,7 +4,7 @@ import type {
   AiProviderRuntimeConfig,
   EnabledProvider,
 } from '@lobechat/types';
-import { AiProviderModelListItem, EnabledAiModel } from 'model-bank';
+import { AiProviderModelListItem, EnabledAiModel, ExtendParamsType } from 'model-bank';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -799,6 +799,46 @@ describe('AiInfraRepos', () => {
       expect(merged).toBeDefined();
       // 应该使用内置的 settings
       expect(merged?.settings).toEqual({ searchImpl: 'tool', searchProvider: 'google' });
+    });
+
+    it('should merge builtin settings with user-provided extend params', async () => {
+      const mockProviders = [
+        { enabled: true, id: 'openai', name: 'OpenAI', source: 'builtin' as const },
+      ];
+
+      const userModel: EnabledAiModel = {
+        abilities: {},
+        id: 'gpt-4',
+        providerId: 'openai',
+        enabled: true,
+        type: 'chat',
+        settings: { extendParams: ['reasoningEffort'] as ExtendParamsType[] },
+      };
+
+      const builtinModel = {
+        id: 'gpt-4',
+        enabled: true,
+        type: 'chat' as const,
+        settings: {
+          extendParams: ['thinking'] as ExtendParamsType[],
+          searchImpl: 'params',
+          searchProvider: 'builtin-provider',
+        },
+      };
+
+      vi.spyOn(repo, 'getAiProviderList').mockResolvedValue(mockProviders);
+      vi.spyOn(repo.aiModelModel, 'getAllModels').mockResolvedValue([userModel]);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue([builtinModel]);
+
+      const result = await repo.getEnabledModels();
+
+      const merged = result.find((m) => m.id === 'gpt-4');
+      expect(merged).toBeDefined();
+      expect(merged?.settings).toEqual({
+        extendParams: ['reasoningEffort'],
+        searchImpl: 'params',
+        searchProvider: 'builtin-provider',
+      });
     });
 
     it('should have no settings when both user and builtin have no settings', async () => {

@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 dayjs.extend(relativeTime);
 
 interface AutoSaveHintProps {
-  lastUpdatedTime?: Date | null;
+  lastUpdatedTime?: string | Date | null;
   saveStatus: 'idle' | 'saving' | 'saved';
   style?: CSSProperties;
 }

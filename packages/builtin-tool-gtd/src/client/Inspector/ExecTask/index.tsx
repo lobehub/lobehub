@@ -1,24 +1,13 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import { cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { highlightTextStyles, shinyTextStyles } from '@/styles';
+import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
 import type { ExecTaskParams, ExecTaskState } from '../../../types';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  root: css`
-    overflow: hidden;
-    display: -webkit-box;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 1;
-
-    color: ${cssVar.colorTextSecondary};
-  `,
-}));
 
 export const ExecTaskInspector = memo<BuiltinInspectorProps<ExecTaskParams, ExecTaskState>>(
   ({ args, partialArgs, isArgumentsStreaming, isLoading }) => {
@@ -30,13 +19,13 @@ export const ExecTaskInspector = memo<BuiltinInspectorProps<ExecTaskParams, Exec
     if (isArgumentsStreaming) {
       if (!description)
         return (
-          <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+          <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
             <span>{t('builtins.lobe-gtd.apiName.execTask')}</span>
           </div>
         );
 
       return (
-        <div className={cx(styles.root, shinyTextStyles.shinyText)}>
+        <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
           <span>{t('builtins.lobe-gtd.apiName.execTask.loading')}</span>
           <span className={highlightTextStyles.primary}>{description}</span>
         </div>
@@ -46,7 +35,7 @@ export const ExecTaskInspector = memo<BuiltinInspectorProps<ExecTaskParams, Exec
     // 有 description 时，根据 loading 状态显示不同文案
     if (description) {
       return (
-        <div className={cx(styles.root, isLoading && shinyTextStyles.shinyText)}>
+        <div className={cx(inspectorTextStyles.root, isLoading && shinyTextStyles.shinyText)}>
           <span>
             {isLoading
               ? t('builtins.lobe-gtd.apiName.execTask.loading')
@@ -59,7 +48,7 @@ export const ExecTaskInspector = memo<BuiltinInspectorProps<ExecTaskParams, Exec
 
     // fallback
     return (
-      <div className={styles.root}>
+      <div className={inspectorTextStyles.root}>
         <span>{t('builtins.lobe-gtd.apiName.execTask')}</span>
       </div>
     );

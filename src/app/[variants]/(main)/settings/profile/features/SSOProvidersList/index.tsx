@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { ActionIcon, Dropdown, Flexbox, type MenuProps, Text } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, type MenuProps, Text } from '@lobehub/ui';
 import { ArrowRight, Plus, Unlink } from 'lucide-react';
 import { type CSSProperties, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -120,13 +120,13 @@ export const SSOProvidersList = memo(() => {
 
       {/* Link Account Button - Only show for Better-Auth users with available providers */}
       {enableBetterAuthActions && availableProviders.length > 0 && (
-        <Dropdown menu={{ items: linkMenuItems, style: { maxWidth: '200px' } }} trigger={['click']}>
+        <DropdownMenu items={linkMenuItems} popupProps={{ style: { maxWidth: '200px' } }}>
           <Flexbox align={'center'} gap={6} horizontal style={{ cursor: 'pointer', fontSize: 12 }}>
             <Plus size={14} />
             <span>{t('profile.sso.link.button')}</span>
             <ArrowRight size={14} />
           </Flexbox>
-        </Dropdown>
+        </DropdownMenu>
       )}
     </Flexbox>
   );

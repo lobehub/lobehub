@@ -15,9 +15,9 @@ import { useHomeStore } from '@/store/home';
 
 import { useAgentModal } from '../../ModalProvider';
 import Actions from '../Item/Actions';
-import { useDropdownMenu } from '../Item/useDropdownMenu';
 import Avatar from './Avatar';
 import Editing from './Editing';
+import { useAgentDropdownMenu } from './useDropdownMenu';
 
 interface AgentItemProps {
   className?: string;
@@ -37,8 +37,8 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
     s.agentUpdatingId === id,
   ]);
 
-  // Separate loading state from chat store - only subscribe if this session is active
-  const isLoading = useChatStore(operationSelectors.isAgentRuntimeRunning);
+  // Separate loading state from chat store - only show loading for this specific agent
+  const isLoading = useChatStore(operationSelectors.isAgentRunning(id));
 
   // Get display title with fallback
   const displayTitle = title || t('untitledAgent');
@@ -96,13 +96,11 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
     return <Avatar avatar={typeof avatar === 'string' ? avatar : undefined} />;
   }, [isUpdating, avatar]);
 
-  const dropdownMenu = useDropdownMenu({
+  const dropdownMenu = useAgentDropdownMenu({
     group: undefined, // TODO: pass group from parent if needed
     id,
     openCreateGroupModal: handleOpenCreateGroupModal,
-    parentType: 'agent',
     pinned: pinned ?? false,
-    sessionType: 'agent',
     toggleEditing,
   });
 

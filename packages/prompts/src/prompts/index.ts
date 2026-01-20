@@ -2,6 +2,7 @@ export * from './agentBuilder';
 export * from './agentGroup';
 export * from './chatMessages';
 export * from './files';
+export * from './fileSystem';
 export * from './groupChat';
 export * from './gtd';
 export * from './knowledgeBaseQA';

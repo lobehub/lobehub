@@ -3,7 +3,7 @@ import { AgentRuntimeErrorType, type ILobeAgentRuntimeErrorType } from '@lobecha
 import { ChatErrorType, type ChatMessageError, type ErrorType } from '@lobechat/types';
 import { type IPluginErrorType } from '@lobehub/chat-plugin-sdk';
 import { type AlertProps, Block, Highlighter, Skeleton } from '@lobehub/ui';
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 

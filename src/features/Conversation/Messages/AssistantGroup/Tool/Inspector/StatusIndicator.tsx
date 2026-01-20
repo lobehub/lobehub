@@ -1,10 +1,11 @@
 import { type ToolIntervention } from '@lobechat/types';
 import { Block, Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { Ban, Check, HandIcon, Loader2Icon, PauseIcon, X } from 'lucide-react';
+import { Ban, Check, HandIcon, PauseIcon, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { LOADING_FLAT } from '@/const/message';
 
 interface StatusIndicatorProps {
@@ -43,7 +44,7 @@ const StatusIndicator = memo<StatusIndicatorProps>(({ intervention, result }) =>
   } else if (hasResult) {
     icon = <Icon color={cssVar.colorSuccess} icon={Check} />;
   } else {
-    icon = <Icon color={cssVar.colorTextDescription} icon={Loader2Icon} spin />;
+    icon = <NeuralNetworkLoading size={16} />;
   }
 
   return (

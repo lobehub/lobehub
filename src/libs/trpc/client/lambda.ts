@@ -77,15 +77,22 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
 const linkOptions = {
   // eslint-disable-next-line no-undef
   fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+    // Ensure credentials are included to send cookies (like mp_token)
+    // eslint-disable-next-line no-undef
+    const fetchOptions: RequestInit = {
+      ...init,
+      credentials: 'include',
+    };
+
     if (isDesktop) {
       // eslint-disable-next-line no-undef
-      const res = await fetch(input as string, init as RequestInit);
+      const res = await fetch(input as string, fetchOptions);
 
       if (res) return res;
     }
 
     // eslint-disable-next-line no-undef
-    return await fetch(input, init as RequestInit);
+    return await fetch(input, fetchOptions);
   },
   headers: async () => {
     // dynamic import to avoid circular dependency

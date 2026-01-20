@@ -26,9 +26,24 @@
   ],
   "npm.packageManager": "pnpm",
   "search.exclude": {
-    "**/node_modules": true
-    // useless to search this big folder
-    // "locales": true
+    "**/node_modules": true,
+    // useless to search this big folder, exclude all locales except en-US and zh-CN
+    "locales/ar/**": true,
+    "locales/bg-BG/**": true,
+    "locales/de-DE/**": true,
+    "locales/es-ES/**": true,
+    "locales/fa-IR/**": true,
+    "locales/fr-FR/**": true,
+    "locales/it-IT/**": true,
+    "locales/ja-JP/**": true,
+    "locales/ko-KR/**": true,
+    "locales/nl-NL/**": true,
+    "locales/pl-PL/**": true,
+    "locales/pt-BR/**": true,
+    "locales/ru-RU/**": true,
+    "locales/tr-TR/**": true,
+    "locales/vi-VN/**": true,
+    "locales/zh-TW/**": true
   },
   "stylelint.validate": [
     "css",

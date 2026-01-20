@@ -84,22 +84,23 @@ export const GTDManifest: BuiltinToolManifest = {
     {
       description: `Update todo items with batch operations. Each operation type requires specific fields:
 - "add": requires "text" (the todo text to add)
-- "update": requires "index", optional "newText" and/or "completed"
+- "update": requires "index", optional "newText" and/or "status"
 - "remove": requires "index" only
-- "complete": requires "index" only (marks item as completed)`,
+- "complete": requires "index" only (marks item as completed)
+- "processing": requires "index" only (marks item as in progress)`,
       name: GTDApiName.updateTodos,
       renderDisplayControl: 'expand',
       parameters: {
         properties: {
           operations: {
             description:
-              'Array of update operations. IMPORTANT: For "complete" and "remove" operations, only pass "type" and "index" - no other fields needed.',
+              'Array of update operations. IMPORTANT: For "complete", "processing" and "remove" operations, only pass "type" and "index" - no other fields needed.',
             items: {
               properties: {
                 type: {
                   description:
-                    'Operation type. "add" needs text, "update" needs index + optional newText/completed, "remove" and "complete" need index only.',
-                  enum: ['add', 'update', 'remove', 'complete'],
+                    'Operation type. "add" needs text, "update" needs index + optional newText/status, "remove", "complete" and "processing" need index only.',
+                  enum: ['add', 'update', 'remove', 'complete', 'processing'],
                   type: 'string',
                 },
                 text: {
@@ -108,16 +109,18 @@ export const GTDManifest: BuiltinToolManifest = {
                 },
                 index: {
                   description:
-                    'Required for "update", "remove", "complete": the item index (0-based).',
+                    'Required for "update", "remove", "complete", "processing": the item index (0-based).',
                   type: 'number',
                 },
                 newText: {
                   description: 'Optional for "update" only: the new text.',
                   type: 'string',
                 },
-                completed: {
-                  description: 'Optional for "update" only: set completed status.',
-                  type: 'boolean',
+                status: {
+                  description:
+                    'Optional for "update" only: set status (todo, processing, completed).',
+                  enum: ['todo', 'processing', 'completed'],
+                  type: 'string',
                 },
               },
               required: ['type'],
@@ -127,39 +130,6 @@ export const GTDManifest: BuiltinToolManifest = {
           },
         },
         required: ['operations'],
-        type: 'object',
-      },
-    },
-    {
-      description: 'Mark todo items as completed by their indices (0-based).',
-      name: GTDApiName.completeTodos,
-      renderDisplayControl: 'expand',
-      parameters: {
-        properties: {
-          indices: {
-            description: 'Array of item indices (0-based) to mark as completed.',
-            items: { type: 'number' },
-            type: 'array',
-          },
-        },
-        required: ['indices'],
-        type: 'object',
-      },
-    },
-    {
-      description: 'Remove todo items by their indices (0-based).',
-      name: GTDApiName.removeTodos,
-      humanIntervention: 'always',
-      renderDisplayControl: 'expand',
-      parameters: {
-        properties: {
-          indices: {
-            description: 'Array of item indices (0-based) to remove.',
-            items: { type: 'number' },
-            type: 'array',
-          },
-        },
-        required: ['indices'],
         type: 'object',
       },
     },

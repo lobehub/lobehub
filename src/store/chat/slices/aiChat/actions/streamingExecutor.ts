@@ -160,14 +160,16 @@ export const streamingExecutor: StateCreator<
     // - agentId is used for session ID (message storage location)
     const effectiveAgentId = paramSubAgentId || agentId;
 
-    // Get scope from operation context if available
+    // Get scope and groupId from operation context if available
     const operation = operationId ? get().operations[operationId] : undefined;
     const scope = operation?.context.scope;
+    const groupId = operation?.context.groupId;
 
     // Resolve agent config with builtin agent runtime config merged
     // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
     const { agentConfig: agentConfigData, plugins: pluginIds } = resolveAgentConfig({
       agentId: effectiveAgentId || '',
+      groupId, // Pass groupId for supervisor detection
       scope, // Pass scope from operation context
     });
 
@@ -341,6 +343,7 @@ export const streamingExecutor: StateCreator<
     // - max_tokens/reasoning_effort based on chatConfig settings
     const resolved = resolveAgentConfig({
       agentId: effectiveAgentId,
+      groupId, // Pass groupId for supervisor detection
       scope, // scope is already available from line 329
     });
     const finalAgentConfig = agentConfig || resolved.agentConfig;
@@ -592,9 +595,10 @@ export const streamingExecutor: StateCreator<
     // resolveAgentConfig handles:
     // - Builtin agent runtime config merging
     // - max_tokens/reasoning_effort based on chatConfig settings
-    const { agentConfig: agentConfigData, chatConfig } = resolveAgentConfig({
+    const { agentConfig: agentConfigData } = resolveAgentConfig({
       agentId: effectiveAgentId || '',
-      scope: context.scope, // Pass scope from context parameter (available at line 883)
+      groupId, // Pass groupId for supervisor detection
+      scope: context.scope, // Pass scope from context parameter
     });
 
     // Use agent config from agentId
@@ -862,23 +866,6 @@ export const streamingExecutor: StateCreator<
       } catch (error) {
         console.error('Desktop notification error:', error);
       }
-    }
-
-    // Summary history if context messages is larger than historyCount
-    const historyCount = chatConfig.historyCount ?? 0;
-
-    if (
-      chatConfig.enableHistoryCount &&
-      chatConfig.enableCompressHistory &&
-      messages.length > historyCount
-    ) {
-      // after generation: [u1,a1,u2,a2,u3,a3]
-      // but the `messages` is still: [u1,a1,u2,a2,u3]
-      // So if historyCount=2, we need to summary [u1,a1,u2,a2]
-      // because user find UI is [u1,a1,u2,a2 | u3,a3]
-      const historyMessages = messages.slice(0, -historyCount + 1);
-
-      await get().internal_summaryHistory(historyMessages);
     }
   },
 });

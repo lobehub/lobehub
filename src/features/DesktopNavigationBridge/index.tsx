@@ -4,8 +4,6 @@ import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { memo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { clearDesktopOnboardingCompleted } from '@/app/[variants]/(desktop)/desktop-onboarding/storage';
-
 const DesktopNavigationBridge = memo(() => {
   const navigate = useNavigate();
 
@@ -18,13 +16,6 @@ const DesktopNavigationBridge = memo(() => {
   );
 
   useWatchBroadcast('navigate', handleNavigate);
-
-  const handleAuthorizationRequired = useCallback(() => {
-    clearDesktopOnboardingCompleted();
-    navigate('/desktop-onboarding#5', { replace: true });
-  }, [navigate]);
-
-  useWatchBroadcast('authorizationRequired', handleAuthorizationRequired);
 
   return null;
 });

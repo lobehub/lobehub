@@ -5,6 +5,4 @@ export interface PortalImpl {
   Header?: FC;
   Title: FC;
   Wrapper?: FC<PropsWithChildren>;
-  onClose?: () => void;
-  useEnable: () => boolean;
 }
