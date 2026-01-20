@@ -61,6 +61,7 @@ const zhipuChatModels: AIChatModelCard[] = [
         },
       ],
     },
+    releasedAt: '2025-12-22',
     settings: {
       extendParams: ['enableReasoning'],
       searchImpl: 'params',
@@ -88,6 +89,7 @@ const zhipuChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
+    releasedAt: '2026-01-19',
     settings: {
       extendParams: ['enableReasoning'],
       searchImpl: 'params',
@@ -148,6 +150,7 @@ const zhipuChatModels: AIChatModelCard[] = [
         },
       ],
     },
+    releasedAt: '2025-12-08',
     settings: {
       extendParams: ['enableReasoning'],
       searchImpl: 'params',
@@ -208,6 +211,7 @@ const zhipuChatModels: AIChatModelCard[] = [
         },
       ],
     },
+    releasedAt: '2025-12-08',
     settings: {
       extendParams: ['enableReasoning'],
       searchImpl: 'params',
@@ -236,6 +240,7 @@ const zhipuChatModels: AIChatModelCard[] = [
         { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
+    releasedAt: '2025-12-08',
     settings: {
       extendParams: ['enableReasoning'],
       searchImpl: 'params',
@@ -298,6 +303,7 @@ const zhipuChatModels: AIChatModelCard[] = [
         },
       ],
     },
+    releasedAt: '2025-09-08',
     settings: {
       extendParams: ['enableReasoning'],
       searchImpl: 'params',
