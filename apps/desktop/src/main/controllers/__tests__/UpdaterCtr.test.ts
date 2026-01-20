@@ -11,6 +11,13 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
+// 模拟 store defaults
+vi.mock('@/const/store', () => ({
+  STORE_DEFAULTS: {
+    autoCheckUpdate: true,
+  },
+}));
+
 const { ipcMainHandleMock } = vi.hoisted(() => ({
   ipcMainHandleMock: vi.fn(),
 }));
@@ -26,13 +33,21 @@ const mockCheckForUpdates = vi.fn();
 const mockDownloadUpdate = vi.fn();
 const mockInstallNow = vi.fn();
 const mockInstallLater = vi.fn();
+const mockSetAutoCheckEnabled = vi.fn();
+const mockStoreGet = vi.fn();
+const mockStoreSet = vi.fn();
 
 const mockApp = {
+  storeManager: {
+    get: mockStoreGet,
+    set: mockStoreSet,
+  },
   updaterManager: {
     checkForUpdates: mockCheckForUpdates,
     downloadUpdate: mockDownloadUpdate,
-    installNow: mockInstallNow,
     installLater: mockInstallLater,
+    installNow: mockInstallNow,
+    setAutoCheckEnabled: mockSetAutoCheckEnabled,
   },
 } as unknown as App;
 
@@ -46,9 +61,9 @@ describe('UpdaterCtr', () => {
   });
 
   describe('checkForUpdates', () => {
-    it('should call updaterManager.checkForUpdates', async () => {
+    it('should call updaterManager.checkForUpdates with manual flag', async () => {
       await updaterCtr.checkForUpdates();
-      expect(mockCheckForUpdates).toHaveBeenCalled();
+      expect(mockCheckForUpdates).toHaveBeenCalledWith({ manual: true });
     });
   });
 
@@ -70,6 +85,35 @@ describe('UpdaterCtr', () => {
     it('should call updaterManager.installLater', () => {
       updaterCtr.installLater();
       expect(mockInstallLater).toHaveBeenCalled();
+    });
+  });
+
+  describe('getAutoCheckUpdate', () => {
+    it('should return the auto check update setting from store', () => {
+      mockStoreGet.mockReturnValue(true);
+      const result = updaterCtr.getAutoCheckUpdate();
+      expect(mockStoreGet).toHaveBeenCalledWith('autoCheckUpdate', true);
+      expect(result).toBe(true);
+    });
+
+    it('should return false when auto check update is disabled', () => {
+      mockStoreGet.mockReturnValue(false);
+      const result = updaterCtr.getAutoCheckUpdate();
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('setAutoCheckUpdate', () => {
+    it('should save the setting to store and update updater manager', () => {
+      updaterCtr.setAutoCheckUpdate(false);
+      expect(mockStoreSet).toHaveBeenCalledWith('autoCheckUpdate', false);
+      expect(mockSetAutoCheckEnabled).toHaveBeenCalledWith(false);
+    });
+
+    it('should enable auto check update', () => {
+      updaterCtr.setAutoCheckUpdate(true);
+      expect(mockStoreSet).toHaveBeenCalledWith('autoCheckUpdate', true);
+      expect(mockSetAutoCheckEnabled).toHaveBeenCalledWith(true);
     });
   });
 

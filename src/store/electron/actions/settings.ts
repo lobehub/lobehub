@@ -1,4 +1,7 @@
-import { type NetworkProxySettings, type ShortcutUpdateResult } from '@lobechat/electron-client-ipc';
+import {
+  type NetworkProxySettings,
+  type ShortcutUpdateResult,
+} from '@lobechat/electron-client-ipc';
 import isEqual from 'fast-deep-equal';
 import useSWR, { type SWRResponse } from 'swr';
 import type { StateCreator } from 'zustand/vanilla';
@@ -12,16 +15,20 @@ import type { ElectronStore } from '../store';
  * 设置操作
  */
 export interface ElectronSettingsAction {
+  refreshAutoCheckUpdate: () => Promise<void>;
   refreshDesktopHotkeys: () => Promise<void>;
   refreshProxySettings: () => Promise<void>;
+  setAutoCheckUpdate: (enabled: boolean) => Promise<void>;
   setProxySettings: (params: Partial<NetworkProxySettings>) => Promise<void>;
   updateDesktopHotkey: (id: string, accelerator: string) => Promise<ShortcutUpdateResult>;
+  useFetchAutoCheckUpdate: () => SWRResponse<boolean>;
   useFetchDesktopHotkeys: () => SWRResponse;
   useGetProxySettings: () => SWRResponse;
 }
 
 const ELECTRON_PROXY_SETTINGS_KEY = 'electron:getProxySettings';
 const ELECTRON_DESKTOP_HOTKEYS_KEY = 'electron:getDesktopHotkeys';
+const ELECTRON_AUTO_CHECK_UPDATE_KEY = 'electron:getAutoCheckUpdate';
 
 export const settingsSlice: StateCreator<
   ElectronStore,
@@ -29,12 +36,25 @@ export const settingsSlice: StateCreator<
   [],
   ElectronSettingsAction
 > = (set, get) => ({
+  refreshAutoCheckUpdate: async () => {
+    await mutate(ELECTRON_AUTO_CHECK_UPDATE_KEY);
+  },
+
   refreshDesktopHotkeys: async () => {
     await mutate(ELECTRON_DESKTOP_HOTKEYS_KEY);
   },
 
   refreshProxySettings: async () => {
     await mutate(ELECTRON_PROXY_SETTINGS_KEY);
+  },
+
+  setAutoCheckUpdate: async (enabled) => {
+    try {
+      await desktopSettingsService.setAutoCheckUpdate(enabled);
+      await get().refreshAutoCheckUpdate();
+    } catch (error) {
+      console.error('Auto check update setting update failed:', error);
+    }
   },
 
   setProxySettings: async (values) => {
@@ -68,6 +88,19 @@ export const settingsSlice: StateCreator<
       };
     }
   },
+
+  useFetchAutoCheckUpdate: () =>
+    useSWR<boolean>(
+      ELECTRON_AUTO_CHECK_UPDATE_KEY,
+      async () => desktopSettingsService.getAutoCheckUpdate(),
+      {
+        onSuccess: (data) => {
+          if (data !== get().autoCheckUpdate) {
+            set({ autoCheckUpdate: data });
+          }
+        },
+      },
+    ),
 
   useFetchDesktopHotkeys: () =>
     useSWR<Record<string, string>>(

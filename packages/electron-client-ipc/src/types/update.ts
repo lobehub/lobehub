@@ -21,3 +21,9 @@ export interface UpdateInfo {
   releaseNotes?: string | ReleaseNoteInfo[];
   version: string;
 }
+
+/**
+ * Default value for auto check update setting.
+ * Centralized here to ensure consistency between main process and renderer.
+ */
+export const DEFAULT_AUTO_CHECK_UPDATE = true;

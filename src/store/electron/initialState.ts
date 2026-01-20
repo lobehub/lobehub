@@ -1,4 +1,5 @@
 import {
+  DEFAULT_AUTO_CHECK_UPDATE,
   type DataSyncConfig,
   type ElectronAppState,
   type NetworkProxySettings,
@@ -22,6 +23,7 @@ export const defaultProxySettings: NetworkProxySettings = {
 
 export interface ElectronState extends NavigationHistoryState {
   appState: ElectronAppState;
+  autoCheckUpdate: boolean;
   dataSyncConfig: DataSyncConfig;
   desktopHotkeys: Record<string, string>;
   isAppStateInit?: boolean;
@@ -36,6 +38,7 @@ export interface ElectronState extends NavigationHistoryState {
 export const initialState: ElectronState = {
   ...navigationHistoryInitialState,
   appState: {},
+  autoCheckUpdate: DEFAULT_AUTO_CHECK_UPDATE,
   dataSyncConfig: { storageMode: 'cloud' },
   desktopHotkeys: {},
   isAppStateInit: false,

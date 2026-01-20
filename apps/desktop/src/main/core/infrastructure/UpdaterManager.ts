@@ -2,6 +2,7 @@ import log from 'electron-log';
 import { autoUpdater } from 'electron-updater';
 
 import { isDev, isWindows } from '@/const/env';
+import { STORE_DEFAULTS } from '@/const/store';
 import { getDesktopEnv } from '@/env';
 import {
   UPDATE_SERVER_URL,
@@ -27,6 +28,9 @@ export class UpdaterManager {
   private updateAvailable: boolean = false;
   private isManualCheck: boolean = false;
   private usingFallbackProvider: boolean = false;
+  private autoCheckEnabled: boolean = true;
+  private autoCheckIntervalId: ReturnType<typeof setInterval> | null = null;
+  private autoCheckTimeoutId: ReturnType<typeof setTimeout> | null = null;
 
   constructor(app: AppCore) {
     this.app = app;
@@ -78,13 +82,15 @@ export class UpdaterManager {
     // Register events
     this.registerEvents();
 
-    // If auto-check for updates is configured, set up periodic checks
-    if (updaterConfig.app.autoCheckUpdate) {
-      // Delay update check by 1 minute after startup to avoid network instability
-      setTimeout(() => this.checkForUpdates(), 60 * 1000);
+    // Read auto check update setting from store
+    this.autoCheckEnabled = this.app.storeManager.get(
+      'autoCheckUpdate',
+      STORE_DEFAULTS.autoCheckUpdate,
+    );
 
-      // Set up periodic checks
-      setInterval(() => this.checkForUpdates(), updaterConfig.app.checkUpdateInterval);
+    // If auto-check for updates is configured, set up periodic checks
+    if (updaterConfig.app.autoCheckUpdate && this.autoCheckEnabled) {
+      this.startAutoCheckSchedule();
     }
 
     // Log the channel and allowPrerelease values
@@ -92,7 +98,59 @@ export class UpdaterManager {
       `Initialized with channel: ${autoUpdater.channel}, allowPrerelease: ${autoUpdater.allowPrerelease}`,
     );
 
-    logger.info('UpdaterManager initialization completed');
+    logger.info(
+      `UpdaterManager initialization completed, autoCheckEnabled: ${this.autoCheckEnabled}`,
+    );
+  };
+
+  /**
+   * Start the auto check schedule
+   */
+  private startAutoCheckSchedule = () => {
+    // Clear existing timers if any
+    this.stopAutoCheckSchedule();
+
+    // Delay update check by 1 minute after startup to avoid network instability
+    this.autoCheckTimeoutId = setTimeout(() => this.checkForUpdates(), 60 * 1000);
+
+    // Set up periodic checks
+    this.autoCheckIntervalId = setInterval(
+      () => this.checkForUpdates(),
+      updaterConfig.app.checkUpdateInterval,
+    );
+
+    logger.info('Auto check schedule started');
+  };
+
+  /**
+   * Stop the auto check schedule
+   */
+  private stopAutoCheckSchedule = () => {
+    if (this.autoCheckTimeoutId) {
+      clearTimeout(this.autoCheckTimeoutId);
+      this.autoCheckTimeoutId = null;
+    }
+    if (this.autoCheckIntervalId) {
+      clearInterval(this.autoCheckIntervalId);
+      this.autoCheckIntervalId = null;
+    }
+    logger.info('Auto check schedule stopped');
+  };
+
+  /**
+   * Enable or disable auto check for updates
+   */
+  public setAutoCheckEnabled = (enabled: boolean) => {
+    if (this.autoCheckEnabled === enabled) return;
+
+    this.autoCheckEnabled = enabled;
+    logger.info(`Auto check for updates ${enabled ? 'enabled' : 'disabled'}`);
+
+    if (enabled && updaterConfig.app.autoCheckUpdate) {
+      this.startAutoCheckSchedule();
+    } else {
+      this.stopAutoCheckSchedule();
+    }
   };
 
   /**

@@ -1,4 +1,7 @@
-import { type NetworkProxySettings, type ShortcutUpdateResult } from '@lobechat/electron-client-ipc';
+import {
+  type NetworkProxySettings,
+  type ShortcutUpdateResult,
+} from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
@@ -43,6 +46,20 @@ class DesktopSettingsService {
    */
   testProxyConfig = async (config: NetworkProxySettings, testUrl?: string) => {
     return ensureElectronIpc().networkProxy.testProxyConfig({ config, testUrl });
+  };
+
+  /**
+   * Get auto check update setting
+   */
+  getAutoCheckUpdate = async (): Promise<boolean> => {
+    return ensureElectronIpc().autoUpdate.getAutoCheckUpdate();
+  };
+
+  /**
+   * Set auto check update setting
+   */
+  setAutoCheckUpdate = async (enabled: boolean): Promise<void> => {
+    return ensureElectronIpc().autoUpdate.setAutoCheckUpdate(enabled);
   };
 }
 
