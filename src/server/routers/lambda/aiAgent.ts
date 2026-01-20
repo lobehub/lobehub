@@ -247,10 +247,13 @@ export const aiAgentRouter = router({
 
       try {
         // 1. Create Thread for isolated task execution
+        const startedAt = new Date().toISOString();
         const thread = await ctx.threadModel.create({
           agentId,
           groupId,
+          metadata: { clientMode: true, startedAt },
           sourceMessageId: parentMessageId,
+          status: ThreadStatus.Processing,
           title,
           topicId,
           type: ThreadType.Isolation,
@@ -263,16 +266,9 @@ export const aiAgentRouter = router({
           });
         }
 
-        // 2. Update Thread status to processing with startedAt timestamp and clientMode flag
-        const startedAt = new Date().toISOString();
-        await ctx.threadModel.update(thread.id, {
-          metadata: { clientMode: true, startedAt },
-          status: ThreadStatus.Processing,
-        });
-
         log('createClientTaskThread: created thread %s', thread.id);
 
-        // 3. Create initial user message (persisted to database)
+        // 2. Create initial user message (persisted to database)
         const userMessage = await ctx.messageModel.create({
           agentId,
           content: instruction,
@@ -284,7 +280,7 @@ export const aiAgentRouter = router({
 
         log('createClientTaskThread: created user message %s', userMessage.id);
 
-        // 4. Query messages by full params (using existing query method)
+        // 3. Query messages by full params (using existing query method)
         const messages = await ctx.messageModel.query({
           agentId,
           threadId: thread.id,

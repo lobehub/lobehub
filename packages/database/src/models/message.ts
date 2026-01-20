@@ -431,6 +431,7 @@ export class MessageModel {
           return [
             t.sourceMessageId!,
             {
+              clientMode: metadata?.clientMode as boolean | undefined,
               duration: metadata?.duration as number | undefined,
               status: t.status as ThreadStatus,
               threadId: t.threadId,
