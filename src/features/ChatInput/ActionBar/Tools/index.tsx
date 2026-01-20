@@ -56,7 +56,7 @@ const Tools = memo(() => {
         showTooltip={false}
         title={t('tools.title')}
       />
-      <SkillStore onClose={() => setModalOpen(false)} open={modalOpen} />
+      <SkillStore open={modalOpen} setOpen={setModalOpen} />
     </Suspense>
   );
 });

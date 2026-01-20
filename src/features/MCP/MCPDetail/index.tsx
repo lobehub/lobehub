@@ -11,12 +11,12 @@ import Nav from '@/features/MCPPluginDetail/Nav';
 import Overview from '@/features/MCPPluginDetail/Overview';
 import Schema from '@/features/MCPPluginDetail/Schema';
 import Score from '@/features/MCPPluginDetail/Score';
-import DetailLoading from '@/features/PluginStore/McpList/Detail/Loading';
 import { useDiscoverStore } from '@/store/discover';
 import { useToolStore } from '@/store/tool';
 import { McpNavKey } from '@/types/discover';
 
-import Settings from './Settings';
+import Settings from '../MCPSettings';
+import Loading from './Loading';
 
 interface DetailProps {
   defaultTab?: McpNavKey;
@@ -40,7 +40,7 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, n
 
   // 如果有明确传入的 identifier，跳过 isMcpListInit 检查
   const shouldWaitForInit = !defaultIdentifier && !isMcpListInit;
-  if (shouldWaitForInit || isLoading) return <DetailLoading />;
+  if (shouldWaitForInit || isLoading) return <Loading />;
 
   if (!identifier)
     return (

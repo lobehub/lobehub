@@ -25,7 +25,7 @@ const Page = () => {
         title={t('tab.skill')}
       />
       <SkillList />
-      <SkillStore onClose={() => setOpen(false)} open={open} />
+      <SkillStore open={open} setOpen={setOpen} />
     </>
   );
 };

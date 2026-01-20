@@ -7,11 +7,11 @@ import { useTranslation } from 'react-i18next';
 import Content from './Content';
 
 interface SkillStoreProps {
-  onClose: () => void;
   open: boolean;
+  setOpen: (open: boolean) => void;
 }
 
-export const SkillStore = memo<SkillStoreProps>(({ onClose, open }) => {
+export const SkillStore = memo<SkillStoreProps>(({ open, setOpen }) => {
   const { t } = useTranslation('setting');
 
   return (
@@ -19,7 +19,7 @@ export const SkillStore = memo<SkillStoreProps>(({ onClose, open }) => {
       allowFullscreen
       destroyOnClose={false}
       footer={null}
-      onCancel={onClose}
+      onCancel={() => setOpen(false)}
       open={open}
       styles={{
         body: { overflow: 'hidden', padding: 0 },

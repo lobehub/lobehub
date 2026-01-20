@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import MCPInstallProgress from '@/features/MCP/MCPInstallProgress';
-import McpDetail from '@/features/PluginStore/McpList/Detail';
+import McpDetail from '@/features/MCP/MCPDetail';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';

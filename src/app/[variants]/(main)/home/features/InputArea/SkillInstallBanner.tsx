@@ -121,7 +121,7 @@ const SkillInstallBanner = memo(() => {
         </Flexbox>
         {avatarItems.length > 0 && <Avatar.Group items={avatarItems} shape="circle" size={24} />}
       </div>
-      <SkillStore onClose={() => setOpen(false)} open={open} />
+      <SkillStore open={open} setOpen={setOpen} />
     </>
   );
 });

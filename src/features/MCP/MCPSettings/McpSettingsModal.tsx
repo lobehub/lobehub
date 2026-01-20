@@ -4,7 +4,7 @@ import { Button, Flexbox, Modal } from '@lobehub/ui';
 import { memo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Settings, { type SettingsRef } from './Settings';
+import Settings, { type SettingsRef } from './index';
 
 interface McpSettingsModalProps {
   identifier: string;

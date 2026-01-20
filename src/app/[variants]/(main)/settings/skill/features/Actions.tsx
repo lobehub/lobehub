@@ -4,16 +4,15 @@ import { MoreVerticalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import McpSettingsModal from '@/features/MCP/MCPSettings/McpSettingsModal';
 import PluginDetailModal from '@/features/PluginDetailModal';
-import McpSettingsModal from '@/features/PluginStore/McpList/Detail/McpSettingsModal';
+import EditCustomPlugin from './EditCustomPlugin';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { pluginSelectors, pluginStoreSelectors } from '@/store/tool/selectors';
 import { type LobeToolType } from '@/types/tool/tool';
-
-import EditCustomPlugin from '../../EditCustomPlugin';
 
 interface ActionsProps {
   identifier: string;
