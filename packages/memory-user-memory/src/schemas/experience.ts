@@ -1,4 +1,3 @@
-import { LayersEnum } from '@lobechat/types';
 import { z } from 'zod';
 
 import { MemoryTypeSchema } from './common';
@@ -37,7 +36,6 @@ export const WithExperienceSchema = z.object({
 export const ExperienceMemoryItemSchema = z.object({
   details: z.string().describe('Optional detailed information'),
   memoryCategory: z.string().describe('Memory category'),
-  memoryLayer: z.literal(LayersEnum.Experience).describe('Memory layer'),
   memoryType: MemoryTypeSchema.describe('Memory type'),
   summary: z.string().describe('Concise overview of this specific memory'),
   tags: z.array(z.string()).describe('Model generated tags that summarize the experience facets'),
