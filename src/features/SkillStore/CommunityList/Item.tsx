@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Block, Dropdown, Flexbox, Icon, Modal, Text } from '@lobehub/ui';
+import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Modal, Text } from '@lobehub/ui';
 import { App, Button } from 'antd';
 import { createStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -96,36 +96,33 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
   const renderAction = () => {
     if (installed) {
       return (
-        <Dropdown
-          menu={{
-            items: [
-              {
-                danger: true,
-                icon: <Icon icon={Trash2} />,
-                key: 'uninstall',
-                label: t('store.actions.uninstall'),
-                onClick: () => {
-                  modal.confirm({
-                    centered: true,
-                    okButtonProps: { danger: true },
-                    onOk: async () => {
-                      if (isPluginEnabledInAgent) {
-                        await togglePlugin(identifier, false);
-                      }
-                      await unInstallPlugin(identifier);
-                    },
-                    title: t('store.actions.confirmUninstall'),
-                    type: 'error',
-                  });
-                },
+        <DropdownMenu
+          items={[
+            {
+              danger: true,
+              icon: <Icon icon={Trash2} />,
+              key: 'uninstall',
+              label: t('store.actions.uninstall'),
+              onClick: () => {
+                modal.confirm({
+                  centered: true,
+                  okButtonProps: { danger: true },
+                  onOk: async () => {
+                    if (isPluginEnabledInAgent) {
+                      await togglePlugin(identifier, false);
+                    }
+                    await unInstallPlugin(identifier);
+                  },
+                  title: t('store.actions.confirmUninstall'),
+                  type: 'error',
+                });
               },
-            ],
-          }}
+            },
+          ]}
           placement="bottomRight"
-          trigger={['click']}
         >
           <ActionIcon icon={MoreVerticalIcon} />
-        </Dropdown>
+        </DropdownMenu>
       );
     }
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { type KlavisServerType } from '@lobechat/const';
-import { ActionIcon, Dropdown, Flexbox, Icon, Image } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Icon, Image } from '@lobehub/ui';
 import { App, Button } from 'antd';
 import { createStyles, cssVar } from 'antd-style';
 import { Loader2, MoreVerticalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
@@ -292,22 +292,19 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
 
     if (server.status === KlavisServerStatus.CONNECTED) {
       return (
-        <Dropdown
-          menu={{
-            items: [
-              {
-                icon: <Icon icon={Unplug} />,
-                key: 'disconnect',
-                label: t('tools.klavis.disconnect', { defaultValue: 'Disconnect' }),
-                onClick: handleDisconnect,
-              },
-            ],
-          }}
+        <DropdownMenu
+          items={[
+            {
+              icon: <Icon icon={Unplug} />,
+              key: 'disconnect',
+              label: t('tools.klavis.disconnect', { defaultValue: 'Disconnect' }),
+              onClick: handleDisconnect,
+            },
+          ]}
           placement="bottomRight"
-          trigger={['click']}
         >
           <ActionIcon icon={MoreVerticalIcon} />
-        </Dropdown>
+        </DropdownMenu>
       );
     }
 

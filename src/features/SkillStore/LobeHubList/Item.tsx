@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Block, Dropdown, Flexbox, Icon, Image } from '@lobehub/ui';
+import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Image } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStyles, cssVar } from 'antd-style';
 import type { Klavis } from 'klavis';
@@ -104,22 +104,19 @@ const Item = memo<ItemProps>(
 
       if (isConnected) {
         return (
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  icon: <Icon icon={Unplug} />,
-                  key: 'disconnect',
-                  label: t('tools.lobehubSkill.disconnect'),
-                  onClick: confirmDisconnect,
-                },
-              ],
-            }}
+          <DropdownMenu
+            items={[
+              {
+                icon: <Icon icon={Unplug} />,
+                key: 'disconnect',
+                label: t('tools.lobehubSkill.disconnect'),
+                onClick: confirmDisconnect,
+              },
+            ]}
             placement="bottomRight"
-            trigger={['click']}
           >
             <ActionIcon icon={MoreVerticalIcon} />
-          </Dropdown>
+          </DropdownMenu>
         );
       }
 

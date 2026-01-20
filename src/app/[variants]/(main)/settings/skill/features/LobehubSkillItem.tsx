@@ -1,7 +1,7 @@
 'use client';
 
 import { type LobehubSkillProviderType } from '@lobechat/const';
-import { ActionIcon, Dropdown, Flexbox, Icon, Image } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Icon, Image } from '@lobehub/ui';
 import { App, Button } from 'antd';
 import { createStyles, cssVar } from 'antd-style';
 import { Loader2, MoreVerticalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
@@ -281,22 +281,19 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
     }
 
     return (
-      <Dropdown
-        menu={{
-          items: [
-            {
-              icon: <Icon icon={Unplug} />,
-              key: 'disconnect',
-              label: t('tools.lobehubSkill.disconnect', { defaultValue: 'Disconnect' }),
-              onClick: handleDisconnect,
-            },
-          ],
-        }}
+      <DropdownMenu
+        items={[
+          {
+            icon: <Icon icon={Unplug} />,
+            key: 'disconnect',
+            label: t('tools.lobehubSkill.disconnect', { defaultValue: 'Disconnect' }),
+            onClick: handleDisconnect,
+          },
+        ]}
         placement="bottomRight"
-        trigger={['click']}
       >
         <ActionIcon icon={MoreVerticalIcon} />
-      </Dropdown>
+      </DropdownMenu>
     );
   };
 

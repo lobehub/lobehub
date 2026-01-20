@@ -155,7 +155,7 @@ const DevModal = memo<DevModalProps>(
                       <Flexbox align={'center'} gap={4} horizontal justify={'center'}>
                         {t('dev.manifest.mode.claude')}
                         <div>
-                          <Tag color={'warning'} variant={'filled'}>
+                          <Tag variant={'filled'}>
                             {t('dev.manifest.mode.claudeWip')}
                           </Tag>
                         </div>
