@@ -15,6 +15,7 @@ const styles = createStaticStyles(({ css }) => ({
   lineRange: css`
     flex-shrink: 0;
     margin-inline-start: 4px;
+    font-size: 12px;
     opacity: 0.7;
   `,
 }));
