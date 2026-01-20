@@ -1,10 +1,10 @@
 import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { getTestDB } from '../../../core/getTestDB';
 import { agents, messages, sessions, threads, topics, users } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
-import { getTestDB } from '../../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -337,6 +337,90 @@ describe('MessageModel thread query', () => {
       expect(result.map((m) => m.id)).toEqual(['msg2', 'thread-msg1', 'thread-msg2']);
     });
 
+    it('should return only thread messages for Isolation type (no parent messages)', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(agents).values([{ id: 'agent1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', userId }]);
+
+        // Create thread with Isolation type
+        await trx.insert(threads).values([
+          {
+            id: 'thread1',
+            userId,
+            topicId: 'topic1',
+            sourceMessageId: 'msg2',
+            type: 'isolation',
+          },
+        ]);
+
+        // Create main conversation messages
+        await trx.insert(messages).values([
+          {
+            id: 'msg1',
+            userId,
+            agentId: 'agent1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'first message',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'msg2',
+            userId,
+            agentId: 'agent1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'assistant',
+            content: 'second message - source',
+            createdAt: new Date('2023-01-02'),
+          },
+          {
+            id: 'msg3',
+            userId,
+            agentId: 'agent1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'third message',
+            createdAt: new Date('2023-01-03'),
+          },
+          // Thread messages
+          {
+            id: 'thread-msg1',
+            userId,
+            agentId: 'agent1',
+            topicId: 'topic1',
+            threadId: 'thread1',
+            role: 'user',
+            content: 'thread message 1',
+            createdAt: new Date('2023-01-02T10:00:00'),
+          },
+          {
+            id: 'thread-msg2',
+            userId,
+            agentId: 'agent1',
+            topicId: 'topic1',
+            threadId: 'thread1',
+            role: 'assistant',
+            content: 'thread message 2',
+            createdAt: new Date('2023-01-02T11:00:00'),
+          },
+        ]);
+      });
+
+      const result = await messageModel.query({
+        agentId: 'agent1',
+        topicId: 'topic1',
+        threadId: 'thread1',
+      });
+
+      // For Isolation: should include ONLY thread messages, NO parent messages at all
+      // Should NOT include msg1, msg2 (source), or msg3
+      expect(result).toHaveLength(2);
+      expect(result.map((m) => m.id)).toEqual(['thread-msg1', 'thread-msg2']);
+    });
+
     it('should return only thread messages when thread has no sourceMessageId', async () => {
       await serverDB.transaction(async (trx) => {
         await trx.insert(sessions).values([{ id: 'session1', userId }]);
@@ -570,6 +654,55 @@ describe('MessageModel thread query', () => {
       // Standalone should only return the source message
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('msg2');
+    });
+
+    it('should return empty array for Isolation thread type', async () => {
+      await serverDB.transaction(async (trx) => {
+        await trx.insert(agents).values([{ id: 'agent1', userId }]);
+        await trx.insert(topics).values([{ id: 'topic1', userId }]);
+
+        await trx.insert(messages).values([
+          {
+            id: 'msg1',
+            userId,
+            agentId: 'agent1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'first',
+            createdAt: new Date('2023-01-01'),
+          },
+          {
+            id: 'msg2',
+            userId,
+            agentId: 'agent1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'assistant',
+            content: 'second - source',
+            createdAt: new Date('2023-01-02'),
+          },
+          {
+            id: 'msg3',
+            userId,
+            agentId: 'agent1',
+            topicId: 'topic1',
+            threadId: null,
+            role: 'user',
+            content: 'third',
+            createdAt: new Date('2023-01-03'),
+          },
+        ]);
+      });
+
+      const result = await messageModel.getThreadParentMessages({
+        sourceMessageId: 'msg2',
+        topicId: 'topic1',
+        threadType: 'isolation' as any,
+      });
+
+      // Isolation should return empty array (no parent messages)
+      expect(result).toHaveLength(0);
     });
 
     it('should return all messages up to source message for Continuation thread type', async () => {
