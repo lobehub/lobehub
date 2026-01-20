@@ -18,7 +18,7 @@ import KlavisServerItem from '@/features/ChatInput/ActionBar/Tools/KlavisServerI
 import LobehubSkillServerItem from '@/features/ChatInput/ActionBar/Tools/LobehubSkillServerItem';
 import ToolItem from '@/features/ChatInput/ActionBar/Tools/ToolItem';
 import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
-import PluginStore from '@/features/PluginStore';
+import SkillStore from '@/features/SkillStore';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useAgentStore } from '@/store/agent';
@@ -625,7 +625,7 @@ const AgentTool = memo<AgentToolProps>(
         </Flexbox>
 
         {/* PluginStore Modal - rendered outside Flexbox to avoid event interference */}
-        {modalOpen && <PluginStore open={modalOpen} setOpen={setModalOpen} />}
+        {modalOpen && <SkillStore open={modalOpen} setOpen={setModalOpen} />}
       </>
     );
   },
