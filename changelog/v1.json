@@ -1,6 +1,14 @@
 [
   {
     "children": {
+      "features": ["Update the sandbox preinstall libs in sys role."],
+      "fixes": ["Fix multi tasks no summary issue."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.333"
+  },
+  {
+    "children": {
       "fixes": ["Improve e2e server and complete i18n resources."]
     },
     "date": "2026-01-21",

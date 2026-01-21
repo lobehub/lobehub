@@ -2,6 +2,41 @@
 
 # Changelog
 
+## [Version 2.0.0-next.333](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.332...v2.0.0-next.333)
+
+<sup>Released on **2026-01-21**</sup>
+
+#### ✨ Features
+
+- **desktop**: Add legacy local database detection and migration guidance.
+- **misc**: Update the sandbox preinstall libs in sys role.
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix multi tasks no summary issue.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **desktop**: Add legacy local database detection and migration guidance, closes [#11682](https://github.com/lobehub/lobe-chat/issues/11682) ([5664b84](https://github.com/lobehub/lobe-chat/commit/5664b84))
+- **misc**: Update the sandbox preinstall libs in sys role, closes [#11688](https://github.com/lobehub/lobe-chat/issues/11688) ([404c577](https://github.com/lobehub/lobe-chat/commit/404c577))
+
+#### What's fixed
+
+- **misc**: Fix multi tasks no summary issue, closes [#11685](https://github.com/lobehub/lobe-chat/issues/11685) ([26ce317](https://github.com/lobehub/lobe-chat/commit/26ce317))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.332](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.331...v2.0.0-next.332)
 
 <sup>Released on **2026-01-21**</sup>
