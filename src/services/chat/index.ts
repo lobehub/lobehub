@@ -138,19 +138,11 @@ class ChatService {
 
     const targetAgentId = getTargetAgentId(agentId);
 
-    // Use pre-resolved config if provided, otherwise resolve here (backward compatibility)
-    // Note: Without resolvedAgentConfig, isSubTask filtering is not applied
     const {
       agentConfig,
       chatConfig,
       plugins: pluginIds,
-    } = resolvedAgentConfig ??
-      resolveAgentConfig({
-        agentId: targetAgentId,
-        groupId,
-        plugins: enabledPlugins,
-        scope,
-      });
+    } = resolvedAgentConfig;
 
     // Get search config with agentId for agent-specific settings
     const searchConfig = getSearchConfig(payload.model, payload.provider!, targetAgentId);
