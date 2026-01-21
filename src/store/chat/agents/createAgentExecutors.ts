@@ -22,6 +22,8 @@ import type { ChatToolPayload, ConversationContext, CreateMessageParams } from '
 import debug from 'debug';
 import pMap from 'p-map';
 
+import type { ResolvedAgentConfig } from '@/services/chat/mecha';
+
 import { LOADING_FLAT } from '@/const/message';
 import { aiAgentService } from '@/services/aiAgent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -49,6 +51,8 @@ const TOOL_PRICING: Record<string, number> = {
  * @param context.skipCreateFirstMessage - Skip first message creation
  */
 export const createAgentExecutors = (context: {
+  /** Pre-resolved agent config with isSubTask filtering applied */
+  agentConfig: ResolvedAgentConfig;
   get: () => ChatStore;
   messageKey: string;
   operationId: string;
@@ -1735,13 +1739,11 @@ export const createAgentExecutors = (context: {
         const { threadId, userMessageId, threadMessages, messages } = threadResult;
 
         // 3. Build sub-task ConversationContext (uses threadId for isolation)
-        // Set isSubTask to prevent nested sub-task creation (disables lobe-gtd tools)
         const subContext: ConversationContext = {
           agentId,
           topicId,
           threadId,
           scope: 'thread',
-          isSubTask: true,
         };
 
         // 4. Create a child operation for task execution (now with threadId)
@@ -1791,6 +1793,7 @@ export const createAgentExecutors = (context: {
           parentMessageType: 'user',
           operationId: taskOperationId,
           parentOperationId: state.operationId,
+          isSubTask: true, // Disable lobe-gtd tools to prevent nested sub-tasks
         });
 
         log('[%s][exec_client_task] Client-side AgentRuntime execution completed', taskLogId);
@@ -2066,13 +2069,11 @@ export const createAgentExecutors = (context: {
             );
 
             // 3. Build sub-task ConversationContext (uses threadId for isolation)
-            // Set isSubTask to prevent nested sub-task creation (disables lobe-gtd tools)
             const subContext: ConversationContext = {
               agentId,
               topicId,
               threadId,
               scope: 'thread',
-              isSubTask: true,
             };
 
             // 4. Create a child operation for task execution (now with threadId)
@@ -2116,6 +2117,7 @@ export const createAgentExecutors = (context: {
               parentMessageType: 'user',
               operationId: taskOperationId,
               parentOperationId: state.operationId,
+              isSubTask: true, // Disable lobe-gtd tools to prevent nested sub-tasks
             });
 
             log('[%s] Client-side AgentRuntime execution completed', taskLogId);

@@ -187,10 +187,4 @@ export interface ConversationContext {
    * When present, allows unauthenticated access to topic messages
    */
   topicShareId?: string;
-  /**
-   * Whether this is a sub-task execution context
-   * When true, certain tools (like lobe-gtd) will be disabled to prevent
-   * sub-tasks from creating nested sub-tasks
-   */
-  isSubTask?: boolean;
 }
