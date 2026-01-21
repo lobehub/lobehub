@@ -23,64 +23,19 @@ Open-source AI agent workspace. Deploy your own ChatGPT/Claude/Gemini/Ollama ins
 </div>
 
 <details>
-<summary><kbd>Table of contents</kbd></summary>
-
-#### TOC
-
-- [👋🏻 Getting Started](#-getting-started--join-our-community)
-- [✨ Features](#-features)
-  - [✨ MCP Plugin One-Click Installation](#-mcp-plugin-one-click-installation)
-  - [🏪 MCP Marketplace](#-mcp-marketplace)
-  - [🖥️ Desktop App](#️-desktop-app)
-  - [🌐 Smart Internet Search](#-smart-internet-search)
-  - [Chain of Thought](#chain-of-thought)
-  - [Branching Conversations](#branching-conversations)
-  - [Artifacts Support](#artifacts-support)
-  - [File Upload /Knowledge Base](#file-upload-knowledge-base)
-  - [Multi-Model Service Provider Support](#multi-model-service-provider-support)
-  - [Local Large Language Model (LLM) Support](#local-large-language-model-llm-support)
-  - [Model Visual Recognition](#model-visual-recognition)
-  - [TTS & STT Voice Conversation](#tts--stt-voice-conversation)
-  - [Text to Image Generation](#text-to-image-generation)
-  - [Plugin System (Function Calling)](#plugin-system-function-calling)
-  - [Agent Market (GPTs)](#agent-market-gpts)
-  - [Support Local / Remote Database](#support-local--remote-database)
-  - [Support Multi-User Management](#support-multi-user-management)
-  - [Progressive Web App (PWA)](#progressive-web-app-pwa)
-  - [Mobile Device Adaptation](#mobile-device-adaptation)
-  - [Custom Themes](#custom-themes)
-  - [`*` What's more](#-whats-more)
-- [⚡️ Performance](#️-performance)
-- [🛳 Self Hosting](#-self-hosting)
-  - [`A` Deploying with Vercel, Zeabur , Sealos or Alibaba Cloud](#a-deploying-with-vercel-zeabur--sealos-or-alibaba-cloud)
-  - [`B` Deploying with Docker](#b-deploying-with-docker)
-  - [Environment Variable](#environment-variable)
-- [📦 Ecosystem](#-ecosystem)
-- [🧩 Plugins](#-plugins)
-- [⌨️ Local Development](#️-local-development)
-- [🤝 Contributing](#-contributing)
-- [❤️ Sponsor](#️-sponsor)
-- [🔗 More Products](#-more-products)
-
-####
-
-<br/>
-
-</details>
-
-## 👋🏻 Getting Started
-
-You can try our [cloud version](vercel-link) now. No installation required.
-
-Or continue explore our features below, and [self-host](#-self-hosting) your own one.
-
-<details>
   <summary><kbd>Star History</kbd></summary>
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=lobehub%2Flobe-chat&theme=dark&type=Date">
     <img width="100%" src="https://api.star-history.com/svg?repos=lobehub%2Flobe-chat&type=Date">
   </picture>
 </details>
+
+## 👋🏻 Getting Started
+
+LobeHub brings the ultimate AI agent collaboration experience to supercharge organization or individuals. If you need a private version for your organization or business, contact us for details.
+
+- Try our [cloud version](vercel-link) now with free credits. Web/Desktop/Mobile apps available.
+- [Self-host](#-self-hosting) your own one.
 
 ## ✨ Features
 
@@ -320,23 +275,6 @@ Light/dark mode with custom color schemes. Auto-detects system preferences. Choo
 
 </div>
 
-## ⚡️ Performance
-
-> \[!NOTE]
->
-> The complete list of reports can be found in the [📘 Lighthouse Reports][docs-lighthouse]
-
-|                   Desktop                   |                   Mobile                   |
-| :-----------------------------------------: | :----------------------------------------: |
-|              ![][chat-desktop]              |              ![][chat-mobile]              |
-| [📑 Lighthouse Report][chat-desktop-report] | [📑 Lighthouse Report][chat-mobile-report] |
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
-
 ## 🛳 Self Hosting
 
 Deploy via Vercel, Alibaba Cloud, or [Docker][docker-release-link]. See [📘 Self-Hosting Guide][docs-self-hosting].
@@ -447,20 +385,14 @@ Extend LobeHub with [Function Calling][docs-function-call]. See [📘 Plugin Dev
 
 [![][codespaces-shield]][codespaces-link]
 
-```fish
-$ git clone https://github.com/lobehub/lobe-chat.git
-$ cd lobe-chat
+```bash
+$ git clone https://github.com/lobehub/lobehub.git
+$ cd lobehub
 $ pnpm install
 $ pnpm dev
 ```
 
 See [📘 Development Guide][docs-dev-guide].
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
 
 ## 🤝 Contributing
 
