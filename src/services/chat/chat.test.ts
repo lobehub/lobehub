@@ -15,6 +15,36 @@ import { aiModelSelectors } from '@/store/aiInfra';
 import { useToolStore } from '@/store/tool';
 
 import { chatService } from './index';
+import type { ResolvedAgentConfig } from './mecha';
+
+/**
+ * Default mock resolvedAgentConfig for tests
+ */
+const createMockResolvedConfig = (overrides?: {
+  agentConfig?: Partial<ResolvedAgentConfig['agentConfig']>;
+  chatConfig?: Partial<ResolvedAgentConfig['chatConfig']>;
+  plugins?: string[];
+  isBuiltinAgent?: boolean;
+}): ResolvedAgentConfig =>
+  ({
+    agentConfig: {
+      model: DEFAULT_AGENT_CONFIG.model,
+      provider: 'openai',
+      systemRole: '',
+      plugins: [],
+      chatConfig: {},
+      params: {},
+      tts: {},
+      ...overrides?.agentConfig,
+    },
+    chatConfig: {
+      searchMode: 'off',
+      autoCreateTopicThreshold: 2,
+      ...overrides?.chatConfig,
+    },
+    isBuiltinAgent: overrides?.isBuiltinAgent ?? false,
+    plugins: overrides?.plugins ?? [],
+  }) as ResolvedAgentConfig;
 
 // Mocking external dependencies
 vi.mock('i18next', () => ({
@@ -109,7 +139,11 @@ describe('ChatService', () => {
           ],
         });
       });
-      await chatService.createAssistantMessage({ messages, plugins: enabledPlugins });
+      await chatService.createAssistantMessage({
+        messages,
+        plugins: enabledPlugins,
+        resolvedAgentConfig: createMockResolvedConfig({ plugins: enabledPlugins }),
+      });
 
       expect(getChatCompletionSpy).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -136,21 +170,15 @@ describe('ChatService', () => {
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
         vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => ['enableReasoning']);
 
-        // Mock agent chat config with reasoning enabled
-        vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-          () =>
-            ({
-              enableReasoning: true,
-              reasoningBudgetToken: 2048,
-              searchMode: 'off',
-            }) as any,
-        );
-
         await chatService.createAssistantMessage({
           messages,
           model: 'deepseek-reasoner',
           provider: 'deepseek',
           plugins: [],
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'deepseek-reasoner', provider: 'deepseek' },
+            chatConfig: { enableReasoning: true, reasoningBudgetToken: 2048 },
+          }),
         });
 
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -172,20 +200,15 @@ describe('ChatService', () => {
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
         vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => ['enableReasoning']);
 
-        // Mock agent chat config with reasoning disabled
-        vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-          () =>
-            ({
-              enableReasoning: false,
-              searchMode: 'off',
-            }) as any,
-        );
-
         await chatService.createAssistantMessage({
           messages,
           model: 'deepseek-reasoner',
           provider: 'deepseek',
           plugins: [],
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'deepseek-reasoner', provider: 'deepseek' },
+            chatConfig: { enableReasoning: false },
+          }),
         });
 
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -207,21 +230,16 @@ describe('ChatService', () => {
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
         vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => ['enableReasoning']);
 
-        // Mock agent chat config with reasoning enabled but no custom budget
-        vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-          () =>
-            ({
-              enableReasoning: true,
-              // reasoningBudgetToken is undefined
-              searchMode: 'off',
-            }) as any,
-        );
-
         await chatService.createAssistantMessage({
           messages,
           model: 'deepseek-reasoner',
           provider: 'deepseek',
           plugins: [],
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'deepseek-reasoner', provider: 'deepseek' },
+            // enableReasoning is true, but reasoningBudgetToken is undefined
+            chatConfig: { enableReasoning: true },
+          }),
         });
 
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -243,20 +261,15 @@ describe('ChatService', () => {
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
         vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => ['reasoningEffort']);
 
-        // Mock agent chat config with reasoning effort set
-        vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-          () =>
-            ({
-              reasoningEffort: 'high',
-              searchMode: 'off',
-            }) as any,
-        );
-
         await chatService.createAssistantMessage({
           messages,
           model: 'test-model',
           provider: 'test-provider',
           plugins: [],
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'test-model', provider: 'test-provider' },
+            chatConfig: { reasoningEffort: 'high' },
+          }),
         });
 
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -275,20 +288,15 @@ describe('ChatService', () => {
         vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
         vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => ['thinkingBudget']);
 
-        // Mock agent chat config with thinking budget set
-        vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-          () =>
-            ({
-              thinkingBudget: 5000,
-              searchMode: 'off',
-            }) as any,
-        );
-
         await chatService.createAssistantMessage({
           messages,
           model: 'test-model',
           provider: 'test-provider',
           plugins: [],
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'test-model', provider: 'test-provider' },
+            chatConfig: { thinkingBudget: 5000 },
+          }),
         });
 
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -332,6 +340,9 @@ describe('ChatService', () => {
           plugins: [],
           model: 'gpt-4-vision-preview',
           provider: 'openai',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'gpt-4-vision-preview', provider: 'openai' },
+          }),
         });
 
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -378,7 +389,11 @@ describe('ChatService', () => {
         ] as UIChatMessage[];
 
         const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
-        await chatService.createAssistantMessage({ messages, plugins: [] });
+        await chatService.createAssistantMessage({
+          messages,
+          plugins: [],
+          resolvedAgentConfig: createMockResolvedConfig(),
+        });
 
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
           {
@@ -437,6 +452,9 @@ describe('ChatService', () => {
           messages,
           plugins: [],
           model: 'gpt-4-vision-preview',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'gpt-4-vision-preview' },
+          }),
         });
 
         // Verify the utility functions were called
@@ -527,6 +545,9 @@ describe('ChatService', () => {
           messages,
           plugins: [],
           model: 'gpt-4-vision-preview',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'gpt-4-vision-preview' },
+          }),
         });
 
         // Verify the utility functions were called
@@ -632,6 +653,9 @@ describe('ChatService', () => {
           messages,
           plugins: [],
           model: 'gpt-4-vision-preview',
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'gpt-4-vision-preview' },
+          }),
         });
 
         // Verify isDesktopLocalStaticServerUrl was called for each image
@@ -731,6 +755,10 @@ describe('ChatService', () => {
           model: 'gpt-3.5-turbo-1106',
           top_p: 1,
           plugins: ['seo'],
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'gpt-3.5-turbo-1106' },
+            plugins: ['seo'],
+          }),
         });
 
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -833,6 +861,10 @@ describe('ChatService', () => {
           model: 'gpt-3.5-turbo-1106',
           top_p: 1,
           plugins: ['seo'],
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'gpt-3.5-turbo-1106' },
+            plugins: ['seo'],
+          }),
         });
 
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -889,6 +921,10 @@ describe('ChatService', () => {
           model: 'gpt-3.5-turbo-1106',
           top_p: 1,
           plugins: ['ttt'],
+          resolvedAgentConfig: createMockResolvedConfig({
+            agentConfig: { model: 'gpt-3.5-turbo-1106' },
+            plugins: ['ttt'],
+          }),
         });
 
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -949,7 +985,11 @@ describe('ChatService', () => {
           mockToolsEngine as any,
         );
 
-        await chatService.createAssistantMessage({ messages, plugins: [] });
+        await chatService.createAssistantMessage({
+          messages,
+          plugins: [],
+          resolvedAgentConfig: createMockResolvedConfig(),
+        });
 
         // Verify tools were passed to getChatCompletion
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -1003,7 +1043,11 @@ describe('ChatService', () => {
           mockToolsEngine as any,
         );
 
-        await chatService.createAssistantMessage({ messages, plugins: [] });
+        await chatService.createAssistantMessage({
+          messages,
+          plugins: [],
+          resolvedAgentConfig: createMockResolvedConfig(),
+        });
 
         // Verify enabledSearch was set to true
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -1051,7 +1095,11 @@ describe('ChatService', () => {
           mockToolsEngine as any,
         );
 
-        await chatService.createAssistantMessage({ messages, plugins: [] });
+        await chatService.createAssistantMessage({
+          messages,
+          plugins: [],
+          resolvedAgentConfig: createMockResolvedConfig(),
+        });
 
         // Verify enabledSearch was not set
         expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -1342,20 +1390,15 @@ describe('ChatService private methods', () => {
         'disableContextCaching',
       ]);
 
-      // Mock agent chat config with context caching disabled
-      vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-        () =>
-          ({
-            disableContextCaching: true,
-            searchMode: 'off',
-          }) as any,
-      );
-
       await chatService.createAssistantMessage({
         messages,
         model: 'test-model',
         provider: 'test-provider',
         plugins: [],
+        resolvedAgentConfig: createMockResolvedConfig({
+          agentConfig: { model: 'test-model', provider: 'test-provider' },
+          chatConfig: { disableContextCaching: true },
+        }),
       });
 
       expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -1378,20 +1421,15 @@ describe('ChatService private methods', () => {
         'disableContextCaching',
       ]);
 
-      // Mock agent chat config with context caching enabled (default)
-      vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-        () =>
-          ({
-            disableContextCaching: false,
-            searchMode: 'off',
-          }) as any,
-      );
-
       await chatService.createAssistantMessage({
         messages,
         model: 'test-model',
         provider: 'test-provider',
         plugins: [],
+        resolvedAgentConfig: createMockResolvedConfig({
+          agentConfig: { model: 'test-model', provider: 'test-provider' },
+          chatConfig: { disableContextCaching: false },
+        }),
       });
 
       // enabledContextCaching should not be present in the call
@@ -1407,20 +1445,15 @@ describe('ChatService private methods', () => {
       vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
       vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => ['reasoningEffort']);
 
-      // Mock agent chat config with reasoning effort set
-      vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-        () =>
-          ({
-            reasoningEffort: 'high',
-            searchMode: 'off',
-          }) as any,
-      );
-
       await chatService.createAssistantMessage({
         messages,
         model: 'test-model',
         provider: 'test-provider',
         plugins: [],
+        resolvedAgentConfig: createMockResolvedConfig({
+          agentConfig: { model: 'test-model', provider: 'test-provider' },
+          chatConfig: { reasoningEffort: 'high' },
+        }),
       });
 
       expect(getChatCompletionSpy).toHaveBeenCalledWith(
@@ -1439,20 +1472,15 @@ describe('ChatService private methods', () => {
       vi.spyOn(aiModelSelectors, 'isModelHasExtendParams').mockReturnValue(() => true);
       vi.spyOn(aiModelSelectors, 'modelExtendParams').mockReturnValue(() => ['thinkingBudget']);
 
-      // Mock agent chat config with thinking budget set
-      vi.spyOn(chatConfigByIdSelectors, 'getChatConfigById').mockReturnValue(
-        () =>
-          ({
-            thinkingBudget: 5000,
-            searchMode: 'off',
-          }) as any,
-      );
-
       await chatService.createAssistantMessage({
         messages,
         model: 'test-model',
         provider: 'test-provider',
         plugins: [],
+        resolvedAgentConfig: createMockResolvedConfig({
+          agentConfig: { model: 'test-model', provider: 'test-provider' },
+          chatConfig: { thinkingBudget: 5000 },
+        }),
       });
 
       expect(getChatCompletionSpy).toHaveBeenCalledWith(
