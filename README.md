@@ -1,19 +1,10 @@
-> \[!NOTE]
->
-> **Version Information**
->
-> - **v1.x** (Stable): Available on the [`main`](https://github.com/lobehub/lobe-chat/tree/main) branch
-> - **v2.x** (In Development): Currently being actively developed on the [`next`](https://github.com/lobehub/lobe-chat/tree/next) branch 🔥
-
 <div align="center"><a name="readme-top"></a>
-
+  
 [![][image-banner]][vercel-link]
 
 # LobeHub
 
-Open-source AI agent framework.<br/>
-MCP support. Multi-modal. Extensible plugins.<br/>
-Deploy your own ChatGPT/Claude/Gemini/Ollama instance in one click.
+Open-source AI agent workspace. Deploy your own ChatGPT/Claude/Gemini/Ollama instance in one click.
 
 **English** · [简体中文](./README.zh-CN.md) · [Official Site][official-site] · [Changelog][changelog] · [Documents][docs] · [Blog][blog] · [Feedback][github-issues-link]
 
@@ -22,21 +13,12 @@ Deploy your own ChatGPT/Claude/Gemini/Ollama instance in one click.
 [![][github-release-shield]][github-release-link]
 [![][docker-release-shield]][docker-release-link]
 [![][vercel-shield]][vercel-link]
-[![][discord-shield]][discord-link]<br/>
+[![][discord-shield]][discord-link]
 [![][codecov-shield]][codecov-link]
-[![][github-action-test-shield]][github-action-test-link]
-[![][github-action-release-shield]][github-action-release-link]
-[![][github-releasedate-shield]][github-releasedate-link]<br/>
 [![][github-contributors-shield]][github-contributors-link]
-[![][github-forks-shield]][github-forks-link]
-[![][github-stars-shield]][github-stars-link]
-[![][github-issues-shield]][github-issues-link]
-[![][github-license-shield]][github-license-link]<br>
 [![][sponsor-shield]][sponsor-link]
 
 [![][github-trending-shield]][github-trending-url] <br /> <br /> <a href="https://vercel.com/oss"> <img alt="Vercel OSS Program" src="https://vercel.com/oss/program-badge.svg" /> </a>
-
-![][image-overview]
 
 </div>
 
@@ -88,8 +70,6 @@ Deploy your own ChatGPT/Claude/Gemini/Ollama instance in one click.
 
 ## 👋🏻 Getting Started
 
-LobeHub is under active development. [Report issues][issues-link] or contribute on GitHub.
-
 | [![][vercel-shield-badge]][vercel-link]   | Try it now. No installation required.                   |
 | :---------------------------------------- | :------------------------------------------------------ |
 | [![][discord-shield-badge]][discord-link] | Join our Discord for support and community discussions. |
@@ -105,6 +85,8 @@ LobeHub is under active development. [Report issues][issues-link] or contribute 
 </details>
 
 ## ✨ Features
+
+[![][image-overview]][vercel-link]
 
 ![][image-feat-mcp]
 
@@ -135,14 +117,6 @@ Native desktop application with better performance, resource management, and off
 ### 🌐 Smart Internet Search
 
 Real-time web search integration. Access current news, data, and information directly in your conversations.
-
-[![][back-to-top]](#readme-top)
-
-[![][image-feat-cot]][docs-feat-cot]
-
-### [Chain of Thought][docs-feat-cot]
-
-Visualize AI reasoning step-by-step. See how the model breaks down complex problems and reaches conclusions.
 
 [![][back-to-top]](#readme-top)
 
@@ -753,6 +727,7 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [pr-welcome-link]: https://github.com/lobehub/lobe-chat/pulls
 [pr-welcome-shield]: https://img.shields.io/badge/🤯_pr_welcome-%E2%86%92-ffcb47?labelColor=black&style=for-the-badge
 [profile-link]: https://github.com/lobehub
+[sponsor-link]: https://opencollective.com/lobehub 'Become ❤️ LobeHub Sponsor'
 [sponsor-shield]: https://img.shields.io/badge/-Sponsor%20LobeHub-f04f88?logo=opencollective&logoColor=white&style=flat-square
 [submit-agents-link]: https://github.com/lobehub/lobe-chat-agents
 [submit-agents-shield]: https://img.shields.io/badge/🤖/🏪_submit_agent-%E2%86%92-c4f042?labelColor=black&style=for-the-badge
