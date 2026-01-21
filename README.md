@@ -6,7 +6,7 @@
 
 Open-source AI agent workspace. Deploy your own ChatGPT/Claude/Gemini/Ollama instance in one click.
 
-**English** · [简体中文](./README.zh-CN.md) · [Official Site][official-site] · [Changelog][changelog] · [Documents][docs] · [Blog][blog] · [Feedback][github-issues-link]
+**English** · [简体中文](./README.zh-CN.md) · [Official Site][official-site] · [Changelog][changelog] · [Documents][docs] · [Blog][blog]
 
 <!-- SHIELD GROUP -->
 
