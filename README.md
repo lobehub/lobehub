@@ -27,7 +27,7 @@ Open-source AI agent workspace. Deploy your own ChatGPT/Claude/Gemini/Ollama ins
 
 #### TOC
 
-- [👋🏻 Getting Started & Join Our Community](#-getting-started--join-our-community)
+- [👋🏻 Getting Started](#-getting-started--join-our-community)
 - [✨ Features](#-features)
   - [✨ MCP Plugin One-Click Installation](#-mcp-plugin-one-click-installation)
   - [🏪 MCP Marketplace](#-mcp-marketplace)
@@ -70,11 +70,9 @@ Open-source AI agent workspace. Deploy your own ChatGPT/Claude/Gemini/Ollama ins
 
 ## 👋🏻 Getting Started
 
-| [![][vercel-shield-badge]][vercel-link]   | Try it now. No installation required.                   |
-| :---------------------------------------- | :------------------------------------------------------ |
-| [![][discord-shield-badge]][discord-link] | Join our Discord for support and community discussions. |
+You can try our [cloud version](vercel-link) now. No installation required.
 
-[![][image-star]][github-stars-link]
+Or continue explore our features below, and [self-host](#-self-hosting) your own one.
 
 <details>
   <summary><kbd>Star History</kbd></summary>
