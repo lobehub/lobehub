@@ -9,7 +9,6 @@ import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
 import Analytics from '@/components/Analytics';
 import { DEFAULT_LANG } from '@/const/locale';
 import { isDesktop } from '@/const/version';
-import PWAInstall from '@/features/PWAInstall';
 import AuthProvider from '@/layout/AuthProvider';
 import GlobalProvider from '@/layout/GlobalProvider';
 import { type Locales } from '@/locales/resources';
@@ -40,9 +39,6 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
         variants={variants}
       >
         <AuthProvider>{children}</AuthProvider>
-        <Suspense fallback={null}>
-          <PWAInstall />
-        </Suspense>
       </GlobalProvider>
     );
   };

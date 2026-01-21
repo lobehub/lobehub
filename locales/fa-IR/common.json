@@ -179,6 +179,7 @@
   "delete": "حذف",
   "document": "راهنمای کاربر",
   "download": "دانلود",
+  "downloadClient": "دانلود کلاینت",
   "duplicate": "تکراری",
   "edit": "ویرایش",
   "errors.invalidFileFormat": "فرمت فایل نامعتبر است",

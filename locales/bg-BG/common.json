@@ -179,6 +179,7 @@
   "delete": "Изтрий",
   "document": "Ръководство за потребителя",
   "download": "Изтегли",
+  "downloadClient": "Изтегли клиент",
   "duplicate": "Дублирай",
   "edit": "Редактирай",
   "errors.invalidFileFormat": "Невалиден файлов формат",

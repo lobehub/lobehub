@@ -1,5 +1,5 @@
-import { UTM_SOURCE , LOBE_CHAT_CLOUD } from '@lobechat/business-const';
-import { OFFICIAL_URL } from '@lobechat/const';
+import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
+import { DOWNLOAD_URL, OFFICIAL_URL } from '@lobechat/const';
 import {
   Book,
   CircleUserRound,
@@ -9,22 +9,29 @@ import {
   FileClockIcon,
   Settings2,
 } from 'lucide-react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { type CellProps } from '@/components/Cell';
 import { DOCUMENTS, FEEDBACK } from '@/const/index';
-import { usePWAInstall } from '@/hooks/usePWAInstall';
+import { usePlatform } from '@/hooks/usePlatform';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 export const useCategory = (onOpenChangelogModal: () => void) => {
   const navigate = useNavigate();
-  const { canInstall, install } = usePWAInstall();
   const { t } = useTranslation(['common', 'setting', 'auth']);
   const { showCloudPromotion, hideDocs } = useServerConfigStore(featureFlagsSelectors);
   const [isLoginWithAuth] = useUserStore((s) => [authSelectors.isLoginWithAuth(s)]);
+  const { isIOS, isAndroid } = usePlatform();
+
+  const downloadUrl = useMemo(() => {
+    if (isIOS) return DOWNLOAD_URL.ios;
+    if (isAndroid) return DOWNLOAD_URL.android;
+    return DOWNLOAD_URL.default;
+  }, [isIOS, isAndroid]);
 
   const profile: CellProps[] = [
     {
@@ -47,12 +54,12 @@ export const useCategory = (onOpenChangelogModal: () => void) => {
     },
   ];
 
-  const pwa: CellProps[] = [
+  const downloadClient: CellProps[] = [
     {
       icon: Download,
-      key: 'pwa',
-      label: t('installPWA'),
-      onClick: () => install(),
+      key: 'download-client',
+      label: t('downloadClient'),
+      onClick: () => window.open(downloadUrl, '__blank'),
     },
     {
       type: 'divider',
@@ -96,7 +103,7 @@ export const useCategory = (onOpenChangelogModal: () => void) => {
     /* ↓ cloud slot ↓ */
 
     /* ↑ cloud slot ↑ */
-    ...(canInstall ? pwa : []),
+    ...downloadClient,
     ...(!hideDocs ? helps : []),
   ].filter(Boolean) as CellProps[];
 

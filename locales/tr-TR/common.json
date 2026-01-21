@@ -179,6 +179,7 @@
   "delete": "Sil",
   "document": "Kullanıcı Kılavuzu",
   "download": "İndir",
+  "downloadClient": "İstemciyi indir",
   "duplicate": "Çoğalt",
   "edit": "Düzenle",
   "errors.invalidFileFormat": "Geçersiz dosya formatı",
