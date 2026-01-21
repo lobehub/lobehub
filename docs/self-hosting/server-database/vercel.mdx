@@ -50,9 +50,6 @@ This article will detail how to deploy the server database version of LobeChat o
       ```shell
       # Serverless Postgres DB Url
       DATABASE_URL=
-
-      # Specify service mode as server, otherwise it will not enter the server-side database
-      NEXT_PUBLIC_SERVICE_MODE=server
       ```
 
       An example of filling in Vercel is as follows:
@@ -69,9 +66,6 @@ This article will detail how to deploy the server database version of LobeChat o
 
       # Specify Postgres database driver as node
       DATABASE_DRIVER=node
-
-      # Specify service mode as server, otherwise it will not enter the server-side database
-      NEXT_PUBLIC_SERVICE_MODE=server
       ```
 
       An example of filling in Vercel is as follows:
@@ -279,9 +273,6 @@ For easy copying, here is a summary of the environment variables required to con
 
 ```shell
 APP_URL=https://your-project.com
-
-# Specify the service mode as server
-NEXT_PUBLIC_SERVICE_MODE=server
 
 # Postgres database URL
 DATABASE_URL=

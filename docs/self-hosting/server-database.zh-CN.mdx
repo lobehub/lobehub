@@ -45,23 +45,6 @@ LobeChat 默认使用客户端数据库（IndexedDB），同时也支持使用�
 同时，由于我们支持了文件对话 / 知识库对话的能力，因此我们需要为 Postgres 安装 `pgvector` 插件，该插件提供了向量搜索的能力，是 LobeChat 实现 RAG 的重要构件之一。
 
 <Steps>
-  ### `NEXT_PUBLIC_SERVICE_MODE`
-
-  LobeChat 同时支持了客户端数据库和服务端数据库，因此我们提供了一个环境变量用于切换模式，这个变量为 `NEXT_PUBLIC_SERVICE_MODE`，该值默认为 `client`。
-
-  针对服务端数据库部署场景，你需要将 `NEXT_PUBLIC_SERVICE_MODE` 设置为 `server`。
-
-  <Callout type={'info'}>
-    在官方的 `lobe-chat-database` Docker 镜像中，已经默认将该环境变量设为 `server`，因此如果你使用
-    Docker 镜像部署，则无需再配置该环境变量。
-  </Callout>
-
-  <Callout type={'tip'}>
-    由于 `NEXT_PUBLIC` 开头的环境变量是在前端代码中生效的，而因此无法通过容器运行时注入进行修改。 （`next.js`的参考文档 [Configuring: Environment Variables | Next.js (nextjs.org)](https://nextjs.org/docs/pages/building-your-application/configuring/environment-variables) ) 这也是为什么我们选择再打一个 DB 版镜像的原因。
-
-    如果你需要在 Docker 部署中修改 `NEXT_PUBLIC` 前缀的变量，你必须自行构建镜像，在 build 时就把自己的 `NEXT_PUBLIC` 开头的环境变量打进去。
-  </Callout>
-
   ### `DATABASE_URL`
 
   配置数据库，核心是添加 `DATABASE_URL` 环境变量，将你准备好的 Postgres 数据库连接 URL 填入其中。数据库连接 URL 的通常格式为 `postgres://username:password@host:port/database`。
