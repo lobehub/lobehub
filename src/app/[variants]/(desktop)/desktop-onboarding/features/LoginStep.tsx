@@ -11,14 +11,22 @@ import { cssVar } from 'antd-style';
 import { Cloud, Server, Undo2Icon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import urlJoin from 'url-join';
 
+import { OFFICIAL_SITE } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import UserInfo from '@/features/User/UserInfo';
 import { remoteServerService } from '@/services/electron/remoteServer';
+import { electronSystemService } from '@/services/electron/system';
 import { useElectronStore } from '@/store/electron';
 import { setDesktopAutoOidcFirstOpenHandled } from '@/utils/electron/autoOidc';
 
 import LobeMessage from '../components/LobeMessage';
+
+const LEGACY_LOCAL_DB_MIGRATION_GUIDE_URL = urlJoin(
+  OFFICIAL_SITE,
+  '/docs/usage/migrate-from-local-database',
+);
 
 // 登录方式类型
 type LoginMethod = 'cloud' | 'selfhost';
@@ -62,6 +70,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
   const [remoteError, setRemoteError] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [showEndpoint, setShowEndpoint] = useState(false);
+  const [hasLegacyLocalDb, setHasLegacyLocalDb] = useState(false);
 
   const [
     dataSyncConfig,
@@ -83,8 +92,23 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
     s.disconnectRemoteServer,
   ]);
 
-  // Ensure remote server config is loaded early (desktop only hook)
   useDataSyncConfig();
+
+  useEffect(() => {
+    if (!isDesktop) return;
+
+    let mounted = true;
+    electronSystemService
+      .hasLegacyLocalDb()
+      .then((value) => {
+        if (mounted) setHasLegacyLocalDb(value);
+      })
+      .catch(() => undefined);
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const isCloudAuthed = !!dataSyncConfig?.active && dataSyncConfig.storageMode === 'cloud';
   const isSelfHostAuthed = !!dataSyncConfig?.active && dataSyncConfig.storageMode === 'selfHost';
@@ -441,6 +465,19 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
 
       <Flexbox align={'flex-start'} gap={16} style={{ width: '100%' }} width={'100%'}>
         {renderCloudContent()}
+        <Flexbox horizontal justify={'center'} style={{ width: '100%' }}>
+          {hasLegacyLocalDb && (
+            <Button
+              onClick={() =>
+                electronSystemService.openExternalLink(LEGACY_LOCAL_DB_MIGRATION_GUIDE_URL)
+              }
+              style={{ padding: 0 }}
+              type={'link'}
+            >
+              {t('screen5.legacyLocalDb.link', 'Migrate legacy local database')}
+            </Button>
+          )}
+        </Flexbox>
         {!showEndpoint ? (
           <Center width={'100%'}>
             <Button
@@ -460,6 +497,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
                 OR
               </Text>
             </Divider>
+
             {/* Self-host 选项 */}
             {renderSelfhostContent()}
           </>

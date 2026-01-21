@@ -13,6 +13,7 @@ vi.mock('electron', () => ({
     setApplicationMenu: vi.fn(),
   },
   app: {
+    getAppPath: vi.fn(() => '/mock/app/path'),
     getName: vi.fn(() => 'LobeChat'),
     getPath: vi.fn((type: string) => {
       if (type === 'logs') return '/path/to/logs';
