@@ -81,7 +81,6 @@ const MetricsDisplay = memo<MetricsDisplayProps>(({ metrics, status }) => {
   const [elapsedTime, setElapsedTime] = useState(0);
 
   const isProcessing = status ? isProcessingStatus(status) : false;
-  const isCompleted = status === ThreadStatus.Completed;
 
   // Calculate initial elapsed time
   useEffect(() => {
