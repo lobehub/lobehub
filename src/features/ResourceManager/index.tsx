@@ -48,7 +48,7 @@ const useStyles = createStyles(({ css, token }) => {
   };
 });
 
-export type ResouceManagerMode = 'editor' | 'explorer' | 'page';
+export type ResourceManagerMode = 'editor' | 'explorer' | 'page';
 
 /**
  * Manage resources. Can be from a certian library.

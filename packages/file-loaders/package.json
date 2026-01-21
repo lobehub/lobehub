@@ -30,7 +30,7 @@
     "debug": "^4.4.3",
     "mammoth": "^1.11.0",
     "officeparser": "5.1.1",
-    "pdfjs-dist": "4.10.38",
+    "pdfjs-dist": "5.4.530",
     "word-extractor": "^1.0.4",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "yauzl": "^3.2.0"

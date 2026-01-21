@@ -17,16 +17,14 @@ interface CustomNextConfig {
 export function defineConfig(config: CustomNextConfig) {
   const isProd = process.env.NODE_ENV === 'production';
   const buildWithDocker = process.env.DOCKER === 'true';
-  const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP_APP === '1';
+
   const enableReactScan = !!process.env.REACT_SCAN_MONITOR_API_KEY;
   const shouldUseCSP = process.env.ENABLED_CSP === '1';
 
   const isTest =
     process.env.NODE_ENV === 'test' || process.env.TEST === '1' || process.env.E2E === '1';
 
-  // if you need to proxy the api endpoint to remote server
-
-  const isStandaloneMode = buildWithDocker || isDesktop;
+  const isStandaloneMode = buildWithDocker || process.env.NEXT_BUILD_STANDALONE === '1';
 
   const standaloneConfig: NextConfig = {
     output: 'standalone',
@@ -400,14 +398,13 @@ export function defineConfig(config: CustomNextConfig) {
 
   const withBundleAnalyzer = process.env.ANALYZE === 'true' ? analyzer() : noWrapper;
 
-  const withPWA =
-    isProd && !isDesktop
-      ? withSerwistInit({
-          register: false,
-          swDest: 'public/sw.js',
-          swSrc: 'src/app/sw.ts',
-        })
-      : noWrapper;
+  const withPWA = isProd
+    ? withSerwistInit({
+        register: false,
+        swDest: 'public/sw.js',
+        swSrc: 'src/app/sw.ts',
+      })
+    : noWrapper;
 
   return withBundleAnalyzer(withPWA(nextConfig as NextConfig));
 }

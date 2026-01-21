@@ -13,6 +13,7 @@ overrides:
   '@swagger-api/apidom-reference': 1.1.0
   jose: ^6.1.3
   stylelint-config-clean-order: 7.0.0
+  pdfjs-dist: 5.4.530
 
 patchedDependencies:
   '@swagger-api/apidom-reference': patches/@swagger-api__apidom-reference.patch

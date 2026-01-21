@@ -1,4 +1,4 @@
-import { type ResouceManagerMode } from '@/features/ResourceManager';
+import { type ResourceManagerMode } from '@/features/ResourceManager';
 import { FilesTabs, SortType } from '@/types/files';
 
 export type ViewMode = 'list' | 'masonry';
@@ -39,7 +39,7 @@ export interface State {
   /**
    * View mode for displaying resources
    */
-  mode: ResouceManagerMode;
+  mode: ResourceManagerMode;
   /**
    * ID of item currently being renamed (for inline editing)
    */

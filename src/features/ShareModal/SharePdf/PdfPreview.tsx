@@ -1,3 +1,5 @@
+'use client';
+
 import { LoadingOutlined } from '@ant-design/icons';
 import { Button, Flexbox } from '@lobehub/ui';
 import { Input, Modal, Spin } from 'antd';
@@ -11,8 +13,10 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 
 import { containerStyles } from '../style';
 
-// Set PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `https://registry.npmmirror.com/pdfjs-dist/${pdfjs.version}/files/build/pdf.worker.min.mjs`;
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/build/pdf.worker.min.mjs',
+  import.meta.url,
+).toString();
 
 const styles = createStaticStyles(({ css }) => ({
   containerWrapper: css`
