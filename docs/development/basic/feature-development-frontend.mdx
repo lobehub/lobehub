@@ -1,3 +1,7 @@
+---
+title: How to Develop a New Feature
+---
+
 # How to Develop a New Feature
 
 LobeChat is built on the Next.js framework and uses TypeScript as the primary development language. When developing a new feature, we need to follow a certain development process to ensure the quality and stability of the code. The general process can be divided into the following five steps:
@@ -76,7 +80,8 @@ const ChatPage = () => {
       renderItem={(message) => (
         <List.Item>
           <Typography.Text>{message.content}</Typography.Text>
-        </List.Item>
+       
+</List.Item>
       )}
     />
   );
@@ -86,6 +91,7 @@ export default ChatPage;
 ```
 
 > **Note on Feature Organization**: LobeChat uses two patterns for organizing features:
+>
 > - **Global features** (`src/features/`): Shared components like `ChatInput`, `Conversation` used across the app
 > - **Page-specific features** (`src/app/<page>/features/`): Components used only within a specific page route
 >
@@ -113,11 +119,13 @@ const ChatPage = () => {
         renderItem={(message) => (
           <List.Item>
             <Typography.Text>{message.content}</Typography.Text>
-          </List.Item>
+         
+</List.Item>
         )}
       />
       <Button onClick={handleSend}>Send</Button>
-    </>
+   
+</>
   );
 };
 

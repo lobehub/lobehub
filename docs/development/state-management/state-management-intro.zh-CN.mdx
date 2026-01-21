@@ -1,3 +1,7 @@
+---
+title: 状态管理最佳实践
+---
+
 # 状态管理最佳实践
 
 LobeChat 不同于传统 CRUD 的网页，存在大量的富交互能力，如何设计一个易于开发与易于维护的数据流架构非常重要。本篇文档将介绍 LobeChat 中的数据流管理最佳实践。
@@ -158,8 +162,6 @@ const createStore: StateCreator<SessionStore, [['zustand/devtools', never]]> = (
   ...createAgentSlice(...parameters),
   ...createSessionSlice(...parameters),
 });
-
-
 
 //  ===============  实装 useStore ============ //
 

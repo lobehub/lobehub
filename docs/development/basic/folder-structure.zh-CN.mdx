@@ -1,3 +1,7 @@
+---
+title: 目录架构
+---
+
 # 目录架构
 
 LobeChat 的文件夹目录架构如下：
@@ -73,17 +77,20 @@ app
 ### 架构说明
 
 **路由组：**
+
 - `(backend)` - 包含所有服务端 API 路由、中间件和后端服务
 - `[variants]` - 处理不同平台变体和主应用页面的动态路由组
 - `@modal` - 使用 Next.js 并行路由的模态框对话框并行路由
 
 **平台组织：**
+
 - 架构通过路由组织支持多个平台（Web、桌面端、移动端）
 - 桌面端专用路由位于 `desktop/` 目录中
 - 移动端专用路由组织在 `(main)/(mobile)/` 下
 - 共享布局和组件位于 `_layout/` 目录中
 
 **API 架构：**
+
 - `(backend)/api/` 和 `(backend)/webapi/` 中的 REST API
 - 按运行时环境组织的 tRPC 端点（edge、lambda、async、desktop）
 - 专用路由组中的身份验证和 OIDC 处理

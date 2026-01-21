@@ -1,3 +1,7 @@
+---
+title: Directory Structure
+---
+
 # Directory Structure
 
 The directory structure of LobeChat is as follows:
@@ -73,17 +77,20 @@ app
 ### Architecture Explanation
 
 **Route Groups:**
+
 - `(backend)` - Contains all server-side API routes, middleware, and backend services
 - `[variants]` - Dynamic route group handling different platform variants and main application pages
 - `@modal` - Parallel routes for modal dialogs using Next.js parallel routing
 
 **Platform Organization:**
+
 - The architecture supports multiple platforms (web, desktop, mobile) through route organization
 - Desktop-specific routes are in the `desktop/` directory
 - Mobile-specific routes are organized under `(main)/(mobile)/`
 - Shared layouts and components are in `_layout/` directories
 
 **API Architecture:**
+
 - REST APIs in `(backend)/api/` and `(backend)/webapi/`
 - tRPC endpoints organized by runtime environment (edge, lambda, async, desktop)
 - Authentication and OIDC handling in dedicated route groups

@@ -1,3 +1,7 @@
+---
+title: 如何开发一个新功能：前端实现
+---
+
 # 如何开发一个新功能：前端实现
 
 LobeChat 基于 Next.js 框架构建，使用 TypeScript 作为主要开发语言。在开发新功能时，我们需要遵循一定的开发流程，以确保代码的质量和稳定性。大致的流程分为以下五步：
@@ -76,7 +80,8 @@ const ChatPage = () => {
       renderItem={(message) => (
         <List.Item>
           <Typography.Text>{message.content}</Typography.Text>
-        </List.Item>
+       
+</List.Item>
       )}
     />
   );
@@ -86,6 +91,7 @@ export default ChatPage;
 ```
 
 > **关于功能组件组织方式的说明**：LobeChat 使用两种模式来组织功能组件：
+>
 > - **全局功能**（`src/features/`）：跨应用共享的组件，如 `ChatInput`、`Conversation` 等
 > - **页面专属功能**（`src/app/<page>/features/`）：仅在特定页面路由中使用的组件
 >
@@ -113,11 +119,13 @@ const ChatPage = () => {
         renderItem={(message) => (
           <List.Item>
             <Typography.Text>{message.content}</Typography.Text>
-          </List.Item>
+         
+</List.Item>
         )}
       />
       <Button onClick={handleSend}>Send</Button>
-    </>
+   
+</>
   );
 };
 

@@ -1,3 +1,7 @@
+---
+title: Work with Server-Side Database
+---
+
 # Work with Server-Side Database
 
 LobeChat provides a battery-included experience with its client-side database.
@@ -138,14 +142,13 @@ await fetch(uploadUrl, {
 });
 ```
 
-
 ### Service URLs
 
 When running with Docker Compose development setup:
 
 - **PostgreSQL**: `postgres://postgres@localhost:5432/lobechat`
 - **MinIO API**: `http://localhost:9000`
-- **MinIO Console**: `http://localhost:9001` (admin/CHANGE_THIS_PASSWORD_IN_PRODUCTION)
+- **MinIO Console**: `http://localhost:9001` (admin/CHANGE\_THIS\_PASSWORD\_IN\_PRODUCTION)
 - **Application**: `http://localhost:3010`
 
 ### Reset Services
@@ -163,7 +166,6 @@ docker-compose -f docker-compose.development.yml down -v
 docker-compose -f docker-compose.development.yml up -d
 pnpm db:migrate
 ```
-
 
 ### Troubleshooting
 

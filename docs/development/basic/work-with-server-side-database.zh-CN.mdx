@@ -1,3 +1,7 @@
+---
+title: 使用服务端数据库
+---
+
 # 使用服务端数据库
 
 LobeChat 提供了内置的客户端数据库体验。
@@ -138,14 +142,13 @@ await fetch(uploadUrl, {
 });
 ```
 
-
 ### 服务地址
 
 运行 Docker Compose 开发环境时：
 
 - **PostgreSQL**：`postgres://postgres@localhost:5432/lobechat`
 - **MinIO API**：`http://localhost:9000`
-- **MinIO 控制台**：`http://localhost:9001` (admin/CHANGE_THIS_PASSWORD_IN_PRODUCTION)
+- **MinIO 控制台**：`http://localhost:9001` (admin/CHANGE\_THIS\_PASSWORD\_IN\_PRODUCTION)
 - **应用程序**：`http://localhost:3010`
 
 ### 重置服务
@@ -163,7 +166,6 @@ docker-compose -f docker-compose.development.yml down -v
 docker-compose -f docker-compose.development.yml up -d
 pnpm db:migrate
 ```
-
 
 ### 故障排除
 
