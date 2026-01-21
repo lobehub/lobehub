@@ -28,6 +28,7 @@ vi.mock('zustand/traditional');
 vi.mock('@/services/topic', () => ({
   topicService: {
     removeTopics: vi.fn(),
+    removeTopicsByAgentId: vi.fn(),
     removeAllTopic: vi.fn(),
     removeTopic: vi.fn(),
     cloneTopic: vi.fn(),
@@ -570,7 +571,7 @@ describe('topic action', () => {
         await result.current.removeSessionTopics();
       });
 
-      expect(topicService.removeTopics).toHaveBeenCalledWith(activeAgentId);
+      expect(topicService.removeTopicsByAgentId).toHaveBeenCalledWith(activeAgentId);
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).toHaveBeenCalled();
     });

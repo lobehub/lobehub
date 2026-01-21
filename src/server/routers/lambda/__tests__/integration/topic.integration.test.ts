@@ -285,6 +285,80 @@ describe('Topic Router Integration Tests', () => {
     });
   });
 
+  describe('batchDeleteByAgentId', () => {
+    it('should batch delete topics by agentId (new data)', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+
+      // Create topics with agentId directly (new data structure)
+      const topicId1 = await caller.createTopic({
+        title: 'Agent Topic 1',
+        agentId: testAgentId,
+      });
+      const topicId2 = await caller.createTopic({
+        title: 'Agent Topic 2',
+        agentId: testAgentId,
+      });
+
+      // Batch delete by agentId
+      await caller.batchDeleteByAgentId({
+        agentId: testAgentId,
+      });
+
+      const remainingTopics = await serverDB.select().from(topics).where(eq(topics.userId, userId));
+
+      expect(remainingTopics).toHaveLength(0);
+    });
+
+    it('should batch delete topics by agentId (legacy sessionId data)', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+
+      // Create topics with sessionId (legacy data structure)
+      await caller.createTopic({
+        title: 'Legacy Topic 1',
+        sessionId: testSessionId,
+      });
+      await caller.createTopic({
+        title: 'Legacy Topic 2',
+        sessionId: testSessionId,
+      });
+
+      // Batch delete by agentId should also delete legacy topics via sessionId mapping
+      await caller.batchDeleteByAgentId({
+        agentId: testAgentId,
+      });
+
+      const remainingTopics = await serverDB
+        .select()
+        .from(topics)
+        .where(eq(topics.sessionId, testSessionId));
+
+      expect(remainingTopics).toHaveLength(0);
+    });
+
+    it('should batch delete topics by agentId (mixed data)', async () => {
+      const caller = topicRouter.createCaller(createTestContext(userId));
+
+      // Create both new (agentId) and legacy (sessionId) topics
+      await caller.createTopic({
+        title: 'New Agent Topic',
+        agentId: testAgentId,
+      });
+      await caller.createTopic({
+        title: 'Legacy Session Topic',
+        sessionId: testSessionId,
+      });
+
+      // Batch delete by agentId should delete both
+      await caller.batchDeleteByAgentId({
+        agentId: testAgentId,
+      });
+
+      const remainingTopics = await serverDB.select().from(topics).where(eq(topics.userId, userId));
+
+      expect(remainingTopics).toHaveLength(0);
+    });
+  });
+
   describe('searchTopics', () => {
     it('should search topics using agentId', async () => {
       const caller = topicRouter.createCaller(createTestContext(userId));
