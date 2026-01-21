@@ -1761,6 +1761,7 @@ export class DiscoverService {
         knowledgeCount: agent.knowledgeCount || 0,
         pluginCount: agent.pluginCount || 0,
         schemaVersion: 1,
+        status: agent.status,
         tags: agent.tags || [],
         title: agent.name || agent.identifier,
         tokenUsage: agent.tokenUsage || 0,
@@ -1780,6 +1781,7 @@ export class DiscoverService {
         isOfficial: group.isOfficial || false,
         memberCount: 0, // Will be populated from memberAgents in detail view
         schemaVersion: 1,
+        status: group.status,
         tags: group.tags || [],
         title: group.name || group.identifier,
         updatedAt: group.updatedAt,
@@ -1802,6 +1804,7 @@ export class DiscoverService {
           knowledgeCount: agent.knowledgeCount || 0,
           pluginCount: agent.pluginCount || 0,
           schemaVersion: 1,
+          status: agent.status,
           tags: agent.tags || [],
           title: agent.name || agent.identifier,
           tokenUsage: agent.tokenUsage || 0,
@@ -1824,6 +1827,7 @@ export class DiscoverService {
         isOfficial: group.isOfficial || false,
         memberCount: 0, // Will be populated from memberAgents in detail view
         schemaVersion: 1,
+        status: group.status,
         tags: group.tags || [],
         title: group.name || group.identifier,
         updatedAt: group.updatedAt,
