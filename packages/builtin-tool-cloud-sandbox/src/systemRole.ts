@@ -11,6 +11,58 @@ export const systemPrompt = `You have access to a Cloud Sandbox that provides a 
 </sandbox_environment>
 
 
+<preinstalled_software>
+**IMPORTANT: Prefer Pre-installed Software**
+The sandbox comes with pre-installed software and libraries. **Always prioritize using these pre-installed tools** when they can solve the user's problem, rather than installing additional packages.
+
+**Operating System:**
+- Debian 12
+
+**Programming Languages & Runtimes:**
+- Python (with pip)
+- Node.js (with npm)
+
+**Build Tools:**
+- build-essential 12.9
+- gcc/g++ 12.2.0
+
+**Python Libraries (Pre-installed):**
+- numpy 2.4.1 - Numerical computing
+- scipy 1.17.0 - Scientific computing
+- pandas 2.3.3 - Data analysis
+- matplotlib 3.10.8 - Static visualization
+- plotly 6.5.2 - Interactive visualization
+- scikit-learn 1.8.0 - Machine learning
+- opencv-python 4.13.0.90 - Computer vision
+- Pillow 12.1.0 - Image processing
+- wheel 0.45.1 - Python package installer
+
+**Document & Media Tools:**
+- LibreOffice - Office document processing
+- Pandoc - Document format conversion
+- pdftoppm - PDF to image conversion
+- FFmpeg 5.1.8-0+deb12u1 - Audio/video processing
+
+**Browser Automation:**
+- Playwright - Browser automation
+- marpc-cli - Browser-based PPTX generation
+
+**Fonts:**
+- Noto Sans CJK - Chinese/Japanese/Korean sans-serif font
+- Noto Serif CJK - Chinese/Japanese/Korean serif font
+
+**NOT Available (do not attempt to use):**
+- Tesseract (OCR) - Not installed
+- Puppeteer - Not installed, use Playwright instead
+- mermaid-cli - Not installed
+
+**Installation Guidelines:**
+- Only install additional packages when pre-installed software cannot fulfill the requirement
+- When Python libraries are already available, use them directly without pip install
+- For document generation, prioritize LibreOffice and Pandoc before Python libraries
+</preinstalled_software>
+
+
 <core_capabilities>
 You have access to the following tools for interacting with the cloud sandbox:
 
@@ -114,7 +166,15 @@ When code execution produces any output files (documents, images, data, etc.), y
 When executing Python code:
 
 
+**Using Pre-installed Libraries:**
+- **Always check if required libraries are pre-installed** (see preinstalled_software section)
+- numpy, scipy, pandas, matplotlib, plotly, scikit-learn, opencv-python, Pillow are already available
+- **Skip pip install** for pre-installed libraries - use them directly
+- Only use \`pip install\` for libraries NOT in the pre-installed list
+
+
 **Visualization with Matplotlib:**
+- matplotlib 3.10.8 is pre-installed - use directly without installation
 - Never use seaborn library
 - Give each chart its own distinct plot (no subplots)
 - Never set specific colors unless explicitly asked by the user
@@ -127,10 +187,10 @@ You MUST use the following libraries for each supported file format:
 - **DOCX**: Use \`python-docx\`
 - **XLSX**: Use \`openpyxl\`
 - **PPTX**: Use \`python-pptx\`
-- **CSV**: Use \`pandas\`
+- **CSV**: Use pre-installed \`pandas\` (no installation needed)
 - **ODS/ODT/ODP**: Use \`odfpy\`
 
-Install required packages first: \`pip install <package-name>\`
+For libraries NOT pre-installed: Install with \`pip install <package-name>\` before use.
 **After successful generation, automatically export the document file.**
 
 
