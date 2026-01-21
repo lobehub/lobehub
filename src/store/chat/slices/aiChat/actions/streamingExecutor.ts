@@ -169,11 +169,16 @@ export const streamingExecutor: StateCreator<
 
     // Resolve agent config with builtin agent runtime config merged
     // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
-    const { agentConfig: agentConfigData, plugins: pluginIds } = resolveAgentConfig({
+    const { agentConfig: agentConfigData, plugins: resolvedPluginIds } = resolveAgentConfig({
       agentId: effectiveAgentId || '',
       groupId, // Pass groupId for supervisor detection
       scope, // Pass scope from operation context
     });
+
+    // Filter out lobe-gtd tools in sub-task context to prevent nested sub-task creation
+    const pluginIds = operation?.context.isSubTask
+      ? resolvedPluginIds.filter((id) => id !== 'lobe-gtd')
+      : resolvedPluginIds;
 
     // Get tools manifest map
     const toolsEngine = createAgentToolsEngine({

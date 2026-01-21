@@ -1735,7 +1735,14 @@ export const createAgentExecutors = (context: {
         const { threadId, userMessageId, threadMessages, messages } = threadResult;
 
         // 3. Build sub-task ConversationContext (uses threadId for isolation)
-        const subContext: ConversationContext = { agentId, topicId, threadId, scope: 'thread' };
+        // Set isSubTask to prevent nested sub-task creation (disables lobe-gtd tools)
+        const subContext: ConversationContext = {
+          agentId,
+          topicId,
+          threadId,
+          scope: 'thread',
+          isSubTask: true,
+        };
 
         // 4. Create a child operation for task execution (now with threadId)
         const { operationId: taskOperationId } = context.get().startOperation({
@@ -2059,11 +2066,13 @@ export const createAgentExecutors = (context: {
             );
 
             // 3. Build sub-task ConversationContext (uses threadId for isolation)
+            // Set isSubTask to prevent nested sub-task creation (disables lobe-gtd tools)
             const subContext: ConversationContext = {
               agentId,
               topicId,
               threadId,
               scope: 'thread',
+              isSubTask: true,
             };
 
             // 4. Create a child operation for task execution (now with threadId)
