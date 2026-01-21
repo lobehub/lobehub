@@ -11,7 +11,9 @@ import { cssVar } from 'antd-style';
 import { Cloud, Server, Undo2Icon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import urlJoin from 'url-join';
 
+import { OFFICIAL_SITE } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import UserInfo from '@/features/User/UserInfo';
 import { remoteServerService } from '@/services/electron/remoteServer';
@@ -21,7 +23,10 @@ import { setDesktopAutoOidcFirstOpenHandled } from '@/utils/electron/autoOidc';
 
 import LobeMessage from '../components/LobeMessage';
 
-const LEGACY_LOCAL_DB_MIGRATION_GUIDE_URL = 'PLACEHOLDER_LEGACY_LOCAL_DB_MIGRATION_GUIDE_URL';
+const LEGACY_LOCAL_DB_MIGRATION_GUIDE_URL = urlJoin(
+  OFFICIAL_SITE,
+  '/docs/usage/migrate-from-local-database',
+);
 
 // 登录方式类型
 type LoginMethod = 'cloud' | 'selfhost';
