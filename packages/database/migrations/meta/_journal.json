@@ -490,6 +490,13 @@
       "when": 1768303764632,
       "tag": "0069_add_topic_shares_table",
       "breakpoints": true
+    },
+    {
+      "idx": 70,
+      "version": "7",
+      "when": 1768999498635,
+      "tag": "0070_add_user_memory_activities",
+      "breakpoints": true
     }
   ],
   "version": "6"
