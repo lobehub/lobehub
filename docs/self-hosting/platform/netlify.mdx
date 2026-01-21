@@ -59,11 +59,10 @@ If you want to deploy LobeChat on Netlify, you can follow these steps:
 
   Taking OpenAI as an example, the environment variables you need to add are as follows:
 
-  | Environment Variable | Type     | Description                                                                                                                                                                 | Example                                                               |
-  | -------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-  | `OPENAI_API_KEY`     | Required | This is the API key you applied for on the OpenAI account page                                                                                                              | `sk-xxxxxx...xxxxxx`                                                  |
-  | `ACCESS_CODE`        | Required | Add a password to access this service. You can set a long password to prevent brute force attacks. When this value is separated by commas, it becomes an array of passwords | `awCT74` or `e3@09!` or `code1,code2,code3`                           |
-  | `OPENAI_PROXY_URL`   | Optional | If you manually configure the OpenAI interface proxy, you can use this configuration to override the default OpenAI API request base URL                                    | `https://aihubmix.com/v1`, default value: `https://api.openai.com/v1` |
+  | Environment Variable | Type     | Description                                                                                                                              | Example                                                               |
+  | -------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+  | `OPENAI_API_KEY`     | Required | This is the API key you applied for on the OpenAI account page                                                                           | `sk-xxxxxx...xxxxxx`                                                  |
+  | `OPENAI_PROXY_URL`   | Optional | If you manually configure the OpenAI interface proxy, you can use this configuration to override the default OpenAI API request base URL | `https://aihubmix.com/v1`, default value: `https://api.openai.com/v1` |
 
   <Callout type={'tip'}>
     For a complete list of environment variables supported by LobeChat, please refer to the [📘
