@@ -76,6 +76,12 @@ export const topicRouter = router({
       return ctx.topicModel.batchDelete(input.ids);
     }),
 
+  batchDeleteByAgentId: topicProcedure
+    .input(z.object({ agentId: z.string() }))
+    .mutation(async ({ input, ctx }) => {
+      return ctx.topicModel.batchDeleteByAgentId(input.agentId);
+    }),
+
   batchDeleteBySessionId: topicProcedure
     .input(
       z.object({

@@ -567,7 +567,7 @@ export const chatTopic: StateCreator<
     const { switchTopic, activeAgentId, refreshTopic } = get();
     if (!activeAgentId) return;
 
-    await topicService.removeTopics(activeAgentId);
+    await topicService.removeTopicsByAgentId(activeAgentId);
     await refreshTopic();
 
     // switch to default topic
