@@ -73,7 +73,7 @@ export interface FavoritePluginItem {
   tags: string[];
 }
 
-class SocialService {
+export class SocialService {
   /**
    * @deprecated This method is no longer needed as authentication is now handled
    * automatically through tRPC middleware. Keeping for backward compatibility.
