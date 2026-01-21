@@ -32,9 +32,9 @@ Open-source AI agent workspace. Deploy your own ChatGPT/Claude/Gemini/Ollama ins
 
 ## 👋🏻 Getting Started
 
-LobeHub brings the ultimate AI agent collaboration experience to supercharge organization or individuals. If you need a private version for your organization or business, contact us for details.
+LobeHub brings the ultimate AI agent collaboration experience to supercharge your everyday works. If you need a private version for your organization or business, contact us for details.
 
-- Try our [cloud version](vercel-link) now with free credits. Web/Desktop/Mobile apps available.
+- Try our [cloud version](vercel-link) now with free credits. Web/Desktop/Mobile apps available. (Receommended) 
 - [Self-host](#-self-hosting) your own one.
 
 ## ✨ Features
