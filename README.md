@@ -86,52 +86,65 @@ Or continue explore our features below, and [self-host](#-self-hosting) your own
 
 [![][image-overview]][vercel-link]
 
+<table>
+<tr>
+<td width="50%" valign="top">
+
 ![][image-feat-mcp]
 
-### ✨ MCP Plugin One-Click Installation
+#### ✨ MCP Plugin One-Click Installation
 
 Connect your AI to external tools, databases, APIs, and services through the Model Context Protocol. Install MCP plugins with one click to extend LobeHub's capabilities.
 
-[![][back-to-top]](#readme-top)
+</td>
+<td width="50%" valign="top">
 
 ![][image-feat-mcp-market]
 
-### 🏪 MCP Marketplace
+#### 🏪 MCP Marketplace
 
 Browse and install MCP plugins from [lobehub.com/mcp](https://lobehub.com/mcp). Integrations for productivity tools, development environments, and third-party services.
 
-[![][back-to-top]](#readme-top)
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
 ![][image-feat-desktop]
 
-### 🖥️ Desktop App
+#### 🖥️ Desktop App
 
 Native desktop application with better performance, resource management, and offline capabilities. No browser required.
 
-[![][back-to-top]](#readme-top)
+</td>
+<td width="50%" valign="top">
 
 ![][image-feat-web-search]
 
-### 🌐 Smart Internet Search
+#### 🌐 Smart Internet Search
 
 Real-time web search integration. Access current news, data, and information directly in your conversations.
 
-[![][back-to-top]](#readme-top)
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
 [![][image-feat-branch]][docs-feat-branch]
 
-### [Branching Conversations][docs-feat-branch]
+#### [Branching Conversations][docs-feat-branch]
 
 Fork conversations from any message. Explore multiple directions while preserving context.
 
 - **Continuation Mode:** Extend discussions with full context
 - **Standalone Mode:** Start fresh from any message
 
-[![][back-to-top]](#readme-top)
+</td>
+<td width="50%" valign="top">
 
 [![][image-feat-artifacts]][docs-feat-artifacts]
 
-### [Artifacts Support][docs-feat-artifacts]
+#### [Artifacts Support][docs-feat-artifacts]
 
 Generate and render content in real-time:
 
@@ -139,209 +152,153 @@ Generate and render content in real-time:
 - Interactive HTML pages
 - Documents in multiple formats
 
-[![][back-to-top]](#readme-top)
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
 [![][image-feat-knowledgebase]][docs-feat-knowledgebase]
 
-### [File Upload /Knowledge Base][docs-feat-knowledgebase]
+#### [File Upload / Knowledge Base][docs-feat-knowledgebase]
 
 Upload documents, images, audio, and video. Create searchable knowledge bases and reference files directly in conversations.
 
-<https://github.com/user-attachments/assets/faa8cf67-e743-4590-8bf6-ebf6ccc34175>
+> Learn more on [📘 LobeChat Knowledge Base Launch](https://lobehub.com/blog/knowledge-base)
 
-> \[!TIP]
->
-> Learn more on [📘 LobeChat Knowledge Base Launch — From Now On, Every Step Counts](https://lobehub.com/blog/knowledge-base)
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
+</td>
+<td width="50%" valign="top">
 
 [![][image-feat-privoder]][docs-feat-provider]
 
-### [Multi-Model Service Provider Support][docs-feat-provider]
+#### [Multi-Model Provider Support][docs-feat-provider]
 
 Use multiple AI providers in one interface. Switch between models based on your needs.
 
-#### Supported Model Service Providers
-
 <!-- PROVIDER LIST -->
-
-<details><summary><kbd>See more providers (+-10)</kbd></summary>
-
-</details>
 
 > 📊 Total providers: [<kbd>**0**</kbd>](https://lobechat.com/discover/providers)
 
- <!-- PROVIDER LIST -->
+<!-- PROVIDER LIST -->
 
-More providers coming soon. Request support in our [community discussion](https://github.com/lobehub/lobe-chat/discussions/1284).
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
 [![][image-feat-local]][docs-feat-local]
 
-### [Local Large Language Model (LLM) Support][docs-feat-local]
+#### [Local LLM Support][docs-feat-local]
 
 Run local models via [Ollama](https://ollama.ai). Full privacy with on-device inference.
 
-> \[!TIP]
->
-> Learn more about [📘 Using Ollama in LobeChat][docs-usage-ollama] by checking it out.
+> Learn more about [📘 Using Ollama in LobeChat][docs-usage-ollama]
 
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
+</td>
+<td width="50%" valign="top">
 
 [![][image-feat-t2i]][docs-feat-t2i]
 
-### [Text to Image Generation][docs-feat-t2i]
+#### [Text to Image Generation][docs-feat-t2i]
 
 Generate images directly in chat using [`DALL-E 3`](https://openai.com/dall-e-3), [`MidJourney`](https://www.midjourney.com/), and [`Pollinations`](https://pollinations.ai/).
 
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
 [![][image-feat-plugin]][docs-feat-plugin]
 
-### [Plugin System (Function Calling)][docs-feat-plugin]
+#### [Plugin System (Function Calling)][docs-feat-plugin]
 
 Extend LobeHub with plugins for real-time data, web search, document search, image generation, and third-party service integrations.
 
-<video controls src="https://github.com/lobehub/lobe-chat/assets/28616219/f29475a3-f346-4196-a435-41a6373ab9e2" muted="false"></video>
-
-> \[!TIP]
->
-> Learn more about [📘 Plugin Usage][docs-usage-plugin] by checking it out.
-
 <!-- PLUGIN LIST -->
-
-| Recent Submits                                                                                                             | Description                                                                                                                                     |
-| -------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Shopping tools](https://lobechat.com/discover/plugin/ShoppingTools)<br/><sup>By **shoppingtools** on **2026-01-12**</sup> | Search for products on eBay & AliExpress, find eBay events & coupons. Get prompt examples.<br/>`shopping` `e-bay` `ali-express` `coupons`       |
-| [SEO Assistant](https://lobechat.com/discover/plugin/seo_assistant)<br/><sup>By **webfx** on **2026-01-12**</sup>          | The SEO Assistant can generate search engine keyword information in order to aid the creation of content.<br/>`seo` `keyword`                   |
-| [Video Captions](https://lobechat.com/discover/plugin/VideoCaptions)<br/><sup>By **maila** on **2025-12-13**</sup>         | Convert Youtube links into transcribed text, enable asking questions, create chapters, and summarize its content.<br/>`video-to-text` `youtube` |
-| [WeatherGPT](https://lobechat.com/discover/plugin/WeatherGPT)<br/><sup>By **steven-tey** on **2025-12-13**</sup>           | Get current weather information for a specific location.<br/>`weather`                                                                          |
 
 > 📊 Total plugins: [<kbd>**40**</kbd>](https://lobechat.com/discover/plugins)
 
- <!-- PLUGIN LIST -->
+<!-- PLUGIN LIST -->
 
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
+</td>
+<td width="50%" valign="top">
 
 [![][image-feat-agent]][docs-feat-agent]
 
-### [Agent Market][docs-feat-agent]
+#### [Agent Market][docs-feat-agent]
 
 Browse and use community-built agents. Create and share your own.
 
-> \[!TIP]
->
-> Submit agents via [🤖/🏪 Submit Agents][submit-agents-link]. Auto-translated to multiple languages.
+<!-- AGENT LIST -->
+
+> 📊 Total agents: [<kbd>**505**</kbd>](https://lobechat.com/discover/assistants)
 
 <!-- AGENT LIST -->
 
-| Recent Submits                                                                                                                                                                 | Description                                                                                                                                                                                                              |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| [Turtle Soup Host](https://lobechat.com/discover/assistant/lateral-thinking-puzzle)<br/><sup>By **[CSY2022](https://github.com/CSY2022)** on **2025-06-19**</sup>              | A turtle soup host needs to provide the scenario, the complete story (truth of the event), and the key point (the condition for guessing correctly).<br/>`turtle-soup` `reasoning` `interaction` `puzzle` `role-playing` |
-| [Academic Writing Assistant](https://lobechat.com/discover/assistant/academic-writing-assistant)<br/><sup>By **[swarfte](https://github.com/swarfte)** on **2025-06-17**</sup> | Expert in academic research paper writing and formal documentation<br/>`academic-writing` `research` `formal-style`                                                                                                      |
-| [Gourmet Reviewer🍟](https://lobechat.com/discover/assistant/food-reviewer)<br/><sup>By **[renhai-lab](https://github.com/renhai-lab)** on **2025-06-17**</sup>                | Food critique expert<br/>`gourmet` `review` `writing`                                                                                                                                                                    |
-| [Minecraft Senior Developer](https://lobechat.com/discover/assistant/java-development)<br/><sup>By **[iamyuuk](https://github.com/iamyuuk)** on **2025-06-17**</sup>           | Expert in advanced Java development and Minecraft mod and server plugin development<br/>`development` `programming` `minecraft` `java`                                                                                   |
-
-> 📊 Total agents: [<kbd>**505**</kbd> ](https://lobechat.com/discover/assistants)
-
- <!-- AGENT LIST -->
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
 [![][image-feat-database]][docs-feat-database]
 
-### [Support Local / Remote Database][docs-feat-database]
+#### [Local / Remote Database][docs-feat-database]
 
 Choose your data storage:
 
 - **Local database**: Browser-based with CRDT sync across devices
-- **Server-side database**: PostgreSQL for team deployments. See [Server Database Setup](https://lobehub.com/docs/self-hosting/advanced/server-database).
+- **Server-side database**: PostgreSQL for team deployments
 
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
+</td>
+<td width="50%" valign="top">
 
 [![][image-feat-auth]][docs-feat-auth]
 
-### [Support Multi-User Management][docs-feat-auth]
+#### [Multi-User Management][docs-feat-auth]
 
 Two authentication options:
 
-- **next-auth**: OAuth, email, credentials. Full-featured auth library.
-- [**Clerk**](https://go.clerk.com/exgqLG0): MFA, user profiles, activity monitoring. Enterprise-ready.
+- **next-auth**: OAuth, email, credentials
+- [**Clerk**](https://go.clerk.com/exgqLG0): MFA, user profiles, activity monitoring
 
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
 [![][image-feat-pwa]][docs-feat-pwa]
 
-### [Progressive Web App (PWA)][docs-feat-pwa]
+#### [Progressive Web App (PWA)][docs-feat-pwa]
 
 Install as a native app on desktop and mobile via [PWA](https://support.google.com/chrome/answer/9658361). Offline support, fast loading, native-like experience.
 
-> \[!NOTE]
->
-> Install via Chrome/Edge: Visit LobeHub → Click <kbd>Install</kbd> in address bar.
-
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
+</td>
+<td width="50%" valign="top">
 
 [![][image-feat-mobile]][docs-feat-mobile]
 
-### [Mobile Device Adaptation][docs-feat-mobile]
+#### [Mobile Device Adaptation][docs-feat-mobile]
 
 Responsive design optimized for mobile. Share feedback via [GitHub Issues][github-issues-link].
 
-<div align="right">
-
-[![][back-to-top]](#readme-top)
-
-</div>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
 [![][image-feat-theme]][docs-feat-theme]
 
-### [Custom Themes][docs-feat-theme]
+#### [Custom Themes][docs-feat-theme]
 
 Light/dark mode with custom color schemes. Auto-detects system preferences. Choose between chat bubble and document display modes.
 
-<div align="right">
+</td>
+<td width="50%" valign="top">
+
+</td>
+</tr>
+</table>
 
 [![][back-to-top]](#readme-top)
-
-</div>
 
 ### `*` What's more
 
