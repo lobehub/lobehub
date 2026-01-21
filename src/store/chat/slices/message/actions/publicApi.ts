@@ -300,10 +300,10 @@ export const messagePublicApi: StateCreator<
     const message = displayMessageSelectors.getDisplayMessageById(id)(get());
     if (!message) return;
 
-    // 如果没有传入 collapsed，则取反当前状态
+    // If collapsed is not provided, toggle the current state
     const nextCollapsed = collapsed ?? !message.metadata?.collapsed;
 
-    // 直接调用现有的 optimisticUpdateMessageMetadata
+    // Directly call the existing optimisticUpdateMessageMetadata
     await get().optimisticUpdateMessageMetadata(id, { collapsed: nextCollapsed }, context);
   },
 
@@ -311,10 +311,10 @@ export const messagePublicApi: StateCreator<
     const message = dbMessageSelectors.getDbMessageById(id)(get());
     if (!message) return;
 
-    // 如果没有传入 expanded，则取反当前状态
+    // If expanded is not provided, toggle the current state
     const nextExpanded = expanded ?? !message.metadata?.inspectExpanded;
 
-    // 直接调用现有的 optimisticUpdateMessageMetadata
+    // Directly call the existing optimisticUpdateMessageMetadata
     await get().optimisticUpdateMessageMetadata(id, { inspectExpanded: nextExpanded }, context);
   },
 });

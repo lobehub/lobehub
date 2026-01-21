@@ -67,7 +67,7 @@ export const codeInterpreterSlice: StateCreator<
     const context = { operationId: interpreterOpId };
 
     try {
-      // TODO: 应该只下载 AI 用到的文件
+      // TODO: Should only download files used by AI
       const files: File[] = [];
       for (const message of dbMessageSelectors.dbUserMessages(get())) {
         for (const file of message.fileList ?? []) {
@@ -131,7 +131,7 @@ export const codeInterpreterSlice: StateCreator<
 
       // For other errors, update message
       await get().optimisticUpdatePluginState(id, { error }, context);
-      // 如果调用过程中出现了错误，不要触发 AI 消息
+      // If an error occurs during execution, don't trigger AI message
       return;
     }
   },

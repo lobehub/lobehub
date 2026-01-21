@@ -21,10 +21,10 @@ export interface GenerationConfigState {
   imageNum: number;
 
   isAspectRatioLocked: boolean;
-  activeAspectRatio: string | null; // string - 虚拟比例; null - 原生比例
+  activeAspectRatio: string | null; // string - virtual aspect ratio; null - native aspect ratio
 
   /**
-   * 标记配置是否已初始化（包括从记忆中恢复）
+   * Flag indicating if configuration has been initialized (including restored from memory)
    */
   isInit: boolean;
 }

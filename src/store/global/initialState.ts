@@ -104,18 +104,18 @@ export interface SystemStatus {
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   /**
-   * 应用初始化时不启用 PGLite，只有当用户手动开启时才启用
+   * PGLite is not enabled at app initialization, only enabled when user manually turns it on
    */
   isEnablePglite?: boolean;
   isShowCredit?: boolean;
   knowledgeBaseModalViewMode?: 'list' | 'masonry';
   language?: LocaleMode;
   /**
-   * 记住用户最后选择的图像生成模型
+   * Remember the user's last selected image generation model
    */
   lastSelectedImageModel?: string;
   /**
-   * 记住用户最后选择的图像生成提供商
+   * Remember the user's last selected image generation provider
    */
   lastSelectedImageProvider?: string;
   latestChangelogId?: string;
@@ -123,11 +123,11 @@ export interface SystemStatus {
   mobileShowPortal?: boolean;
   mobileShowTopic?: boolean;
   /**
-   * ModelSwitchPanel 的分组模式
+   * ModelSwitchPanel group mode
    */
   modelSwitchPanelGroupMode?: 'byModel' | 'byProvider';
   /**
-   * ModelSwitchPanel 的宽度
+   * ModelSwitchPanel width
    */
   modelSwitchPanelWidth?: number;
   noWideScreen?: boolean;
@@ -155,7 +155,7 @@ export interface SystemStatus {
   showSystemRole?: boolean;
   systemRoleExpandedMap: Record<string, boolean>;
   /**
-   * 是否使用短格式显示 token
+   * Whether to display tokens in short format
    */
   tokenDisplayFormatShort?: boolean;
   /**
@@ -175,8 +175,8 @@ export interface GlobalState {
 
   initClientDBProcess?: { costTime?: number; phase: 'wasm' | 'dependencies'; progress: number };
   /**
-   * 客户端数据库初始化状态
-   * 启动时为 Idle，完成为 Ready，报错为 Error
+   * Client database initialization state
+   * Idle at startup, Ready when completed, Error on failure
    */
   initClientDBStage: DatabaseLoadingState;
   isMobile?: boolean;
