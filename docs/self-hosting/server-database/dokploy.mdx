@@ -43,13 +43,19 @@ S3_PUBLIC_DOMAIN=
 S3_ENABLE_PATH_STYLE=
 ```
 
+### Configure KEY_VAULTS_SECRET Environment Variable
+
+`KEY_VAULTS_SECRET` is used to encrypt sensitive information such as API keys stored by users. Click the button below to generate:
+
+<GenerateSecret envName="KEY_VAULTS_SECRET" />
+
 ### Configure authentication environment variables
 
 Prepare the following authentication environment variables (powered by [Better Auth](https://www.better-auth.com)):
 
 Click the button below to generate `AUTH_SECRET` (session encryption key):
 
-<GenerateAuthSecret />
+<GenerateSecret envName="AUTH_SECRET" />
 
 You also need to configure the `JWKS_KEY` environment variable for signing and verifying JWTs. Click the button below to generate:
 

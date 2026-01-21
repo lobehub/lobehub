@@ -83,7 +83,7 @@ tags:
 
   在完成数据库 `DATABASE_URL` 环境变量添加后，需要添加一个 `KEY_VAULTS_SECRET` 环境变量。该变量用于加密用户存储的 apikey 等敏感信息。点击下方按钮一键生成：
 
-  <GenerateKeyVaultsSecret />
+  <GenerateSecret envName="KEY_VAULTS_SECRET" />
 
   同样需要将其添加到 Vercel 环境变量中。
 
@@ -103,7 +103,7 @@ tags:
 
   点击下方按钮一键生成 `AUTH_SECRET`（会话加密密钥）：
 
-  <GenerateAuthSecret />
+  <GenerateSecret envName="AUTH_SECRET" />
 
   同时需要配置 `JWKS_KEY` 环境变量，用于签名和验证 JWT。点击下方按钮一键生成：
 

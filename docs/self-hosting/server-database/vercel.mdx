@@ -83,7 +83,7 @@ This article will detail how to deploy the server database version of LobeChat o
 
   After adding the `DATABASE_URL` environment variable for the database, you need to add a `KEY_VAULTS_SECRET` environment variable. This variable is used to encrypt sensitive information such as apikeys stored by users. Click the button below to generate:
 
-  <GenerateKeyVaultsSecret />
+  <GenerateSecret envName="KEY_VAULTS_SECRET" />
 
   Make sure to add this to the Vercel environment variables as well.
 
@@ -103,7 +103,7 @@ The server-side database needs to be paired with a user authentication service t
 
   Click the button below to generate `AUTH_SECRET` (session encryption key):
 
-  <GenerateAuthSecret />
+  <GenerateSecret envName="AUTH_SECRET" />
 
   You also need to configure the `JWKS_KEY` environment variable for signing and verifying JWTs. Click the button below to generate:
 

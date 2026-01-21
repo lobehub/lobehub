@@ -44,13 +44,19 @@ S3_PUBLIC_DOMAIN=
 S3_ENABLE_PATH_STYLE=
 ```
 
+### 配置 KEY_VAULTS_SECRET 环境变量
+
+`KEY_VAULTS_SECRET` 用于加密用户存储的 API Key 等敏感信息。点击下方按钮一键生成：
+
+<GenerateSecret envName="KEY_VAULTS_SECRET" />
+
 ### 配置身份验证环境变量
 
 准备以下身份验证环境变量（基于 [Better Auth](https://www.better-auth.com)）：
 
 点击下方按钮一键生成 `AUTH_SECRET`（会话加密密钥）：
 
-<GenerateAuthSecret />
+<GenerateSecret envName="AUTH_SECRET" />
 
 同时需要配置 `JWKS_KEY` 环境变量，用于签名和验证 JWT。点击下方按钮一键生成：
 
