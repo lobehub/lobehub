@@ -237,20 +237,6 @@ Responsive design optimized for mobile. Share feedback via [GitHub Issues][githu
 
 </td>
 </tr>
-<tr>
-<td width="50%" valign="top">
-
-[![][image-feat-theme]][docs-feat-theme]
-
-#### [Custom Themes][docs-feat-theme]
-
-Light/dark mode with custom color schemes. Auto-detects system preferences. Choose between chat bubble and document display modes.
-
-</td>
-<td width="50%" valign="top">
-
-</td>
-</tr>
 </table>
 
 [![][back-to-top]](#readme-top)
