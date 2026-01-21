@@ -214,10 +214,21 @@ const chatGroupInternalSlice: StateCreator<
             );
 
             // Sync group agents to agentStore for builtin agent resolution (e.g., supervisor slug)
+            // Use smart merge: only overwrite if server data is newer to prevent race conditions
             const agentStore = getAgentStoreState();
             for (const agent of groupDetail.agents) {
-              // AgentGroupMember extends AgentItem which shares fields with LobeAgentConfig
-              agentStore.internal_dispatchAgentMap(agent.id, agent as any);
+              const currentAgentInStore = agentStore.agentMap[agent.id];
+
+              // Only overwrite if:
+              // 1. Agent doesn't exist in store
+              // 2. Server data is newer than store data (based on updatedAt)
+              if (
+                !currentAgentInStore ||
+                new Date(agent.updatedAt) > new Date(currentAgentInStore.updatedAt || 0)
+              ) {
+                // AgentGroupMember extends AgentItem which shares fields with LobeAgentConfig
+                agentStore.internal_dispatchAgentMap(agent.id, agent as any);
+              }
             }
 
             // Set activeAgentId to supervisor for correct model resolution in sendMessage
