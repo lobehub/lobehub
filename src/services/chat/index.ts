@@ -58,10 +58,10 @@ import { createHeaderWithAuth } from '../_auth';
 import { API_ENDPOINTS } from '../_url';
 import { findDeploymentName, isEnableFetchOnClient, resolveRuntimeProvider } from './helper';
 import {
+  type ResolvedAgentConfig,
   contextEngineering,
   getTargetAgentId,
   initializeWithClientStore,
-  resolveAgentConfig,
   resolveModelExtendParams,
 } from './mecha';
 import { type FetchOptions } from './types';
@@ -70,6 +70,11 @@ interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'mess
   agentId?: string;
   groupId?: string;
   messages: UIChatMessage[];
+  /**
+   * Pre-resolved agent config from AgentRuntime layer.
+   * Required to ensure config consistency and proper isSubTask filtering.
+   */
+  resolvedAgentConfig: ResolvedAgentConfig;
   scope?: MessageMapScope;
   topicId?: string;
 }
@@ -113,6 +118,7 @@ class ChatService {
       groupId,
       scope,
       topicId,
+      resolvedAgentConfig,
       ...params
     }: GetChatCompletionPayload,
     options?: FetchOptions,
@@ -126,24 +132,25 @@ class ChatService {
       params,
     );
 
-    // =================== 1. resolve agent config =================== //
+    // =================== 1. use pre-resolved agent config =================== //
+    // Config is resolved in AgentRuntime layer (internal_createAgentState)
+    // which handles isSubTask filtering and other runtime modifications
 
     const targetAgentId = getTargetAgentId(agentId);
 
-    // Resolve agent config with builtin agent runtime config merged
-    // plugins is already merged (runtime plugins > agent config plugins)
+    // Use pre-resolved config if provided, otherwise resolve here (backward compatibility)
+    // Note: Without resolvedAgentConfig, isSubTask filtering is not applied
     const {
       agentConfig,
       chatConfig,
       plugins: pluginIds,
-    } = resolveAgentConfig({
-      agentId: targetAgentId,
-      groupId, // Pass groupId for supervisor detection
-      model: payload.model,
-      plugins: enabledPlugins,
-      provider: payload.provider,
-      scope, // Pass scope to preserve page-agent injection
-    });
+    } = resolvedAgentConfig ??
+      resolveAgentConfig({
+        agentId: targetAgentId,
+        groupId,
+        plugins: enabledPlugins,
+        scope,
+      });
 
     // Get search config with agentId for agent-specific settings
     const searchConfig = getSearchConfig(payload.model, payload.provider!, targetAgentId);

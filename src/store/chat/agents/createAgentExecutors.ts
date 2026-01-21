@@ -173,6 +173,7 @@ export const createAgentExecutors = (context: {
         model: llmPayload.model,
         provider: llmPayload.provider,
         operationId: context.operationId,
+        agentConfig: context.agentConfig, // Pass pre-resolved config
         // Pass runtime context for page editor injection
         initialContext: runtimeContext?.initialContext,
         stepContext: runtimeContext?.stepContext,
