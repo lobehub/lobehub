@@ -103,10 +103,9 @@ tags:
 
   在 Vercel 的部署环境变量中，添加以下环境变量以启用身份验证（基于 [Better Auth](https://www.better-auth.com)）：
 
-  ```shell
-  # 会话加密密钥（使用以下命令生成：openssl rand -base64 32）
-  AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
-  ```
+  点击下方按钮一键生成 `AUTH_SECRET`（会话加密密钥）：
+
+  <GenerateAuthSecret />
 
   同时需要配置 `JWKS_KEY` 环境变量，用于签名和验证 JWT。点击下方按钮一键生成：
 

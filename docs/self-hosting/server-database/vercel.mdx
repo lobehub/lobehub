@@ -103,10 +103,9 @@ The server-side database needs to be paired with a user authentication service t
 
   In Vercel's deployment environment variables, add the following environment variables to enable authentication (powered by [Better Auth](https://www.better-auth.com)):
 
-  ```shell
-  # Session encryption key (generate with: openssl rand -base64 32)
-  AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
-  ```
+  Click the button below to generate `AUTH_SECRET` (session encryption key):
+
+  <GenerateAuthSecret />
 
   You also need to configure the `JWKS_KEY` environment variable for signing and verifying JWTs. Click the button below to generate:
 
