@@ -48,6 +48,7 @@ const StarterList = memo(() => {
 
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.agentBuilder);
   useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.groupAgentBuilder);
+  useInitBuiltinAgent(BUILTIN_AGENT_SLUGS.pageAgent);
 
   const [inputActiveMode, setInputActiveMode] = useHomeStore((s) => [
     s.inputActiveMode,
@@ -91,12 +92,6 @@ const StarterList = memo(() => {
       // Special case: image mode navigates to /image page
       if (key === 'image') {
         navigate('/image');
-        return;
-      }
-
-      // Special case: write mode navigates to /page
-      if (key === 'write') {
-        navigate('/page');
         return;
       }
 

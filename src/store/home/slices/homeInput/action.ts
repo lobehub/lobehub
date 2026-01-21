@@ -8,6 +8,7 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import type { HomeStore } from '@/store/home/store';
+import { standardizeIdentifier } from '@/utils/identifier';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { StarterMode } from './initialState';
@@ -176,19 +177,35 @@ export const createHomeInputSlice: StateCreator<
     set({ homeInputLoading: true }, false, n('sendAsWrite/start'));
 
     try {
-      // 1. Create new Document
+      const agentState = getAgentStoreState();
+
+      // 1. Get model/provider config from inbox agent
+      const inboxAgentId = builtinAgentSelectors.inboxAgentId(agentState);
+      const inboxConfig = inboxAgentId
+        ? agentSelectors.getAgentConfigById(inboxAgentId)(agentState)
+        : null;
+      const model = inboxConfig?.model;
+      const provider = inboxConfig?.provider;
+
+      // 2. Create new Document
       const newDoc = await documentService.createDocument({
-        editorData: '',
+        editorData: '{}',
         title: message?.slice(0, 50) || 'Untitled',
       });
 
-      // 2. Navigate to Page
+      // 3. Navigate to Page
       const { navigate } = get();
       if (navigate) {
-        navigate(`/page/${newDoc.id}`);
+        navigate(`/page/${standardizeIdentifier(newDoc.id)}`);
       }
 
-      // 3. Send message with document scope context
+      // 4. Update pageAgent's model config and send message
+      const pageAgentId = builtinAgentSelectors.pageAgentId(agentState);
+      if (pageAgentId && model && provider) {
+        await agentState.updateAgentConfigById(pageAgentId, { model, provider });
+      }
+
+      // 5. Send message with document scope context
       const { sendMessage } = useChatStore.getState();
       await sendMessage({
         context: {
@@ -198,7 +215,7 @@ export const createHomeInputSlice: StateCreator<
         message,
       });
 
-      // 4. Clear mode
+      // 6. Clear mode
       set({ inputActiveMode: null }, false, n('sendAsWrite/clearMode'));
 
       return newDoc.id;

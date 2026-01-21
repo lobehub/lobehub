@@ -4,6 +4,7 @@ import { documentService } from '@/services/document';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import type { SessionStore } from '@/store/session/store';
+import { standardizeIdentifier } from '@/utils/identifier';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { StarterMode } from './initialState';
@@ -89,14 +90,14 @@ export const createHomeInputSlice: StateCreator<
     try {
       // 1. Create new Document
       const newDoc = await documentService.createDocument({
-        editorData: '',
+        editorData: '{}',
         title: message?.slice(0, 50) || 'Untitled',
       });
 
       // 2. Navigate to Page
       const navigate = useGlobalStore.getState().navigate;
       if (navigate) {
-        navigate(`/page/${newDoc.id}`);
+        navigate(`/page/${standardizeIdentifier(newDoc.id)}`);
       }
 
       // 3. Send message with document scope context
