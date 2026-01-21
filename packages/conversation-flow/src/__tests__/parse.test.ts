@@ -194,6 +194,31 @@ describe('parse', () => {
 
       expect(serializeParseResult(result)).toEqual(outputs.tasks.withSummary);
     });
+
+    it('should handle 10 parallel tasks with summary as task child', () => {
+      const result = parse(inputs.tasks.multiTasksWithSummary);
+
+      // The critical assertions:
+      // 1. flatList should have 4 items: user, assistantGroup(+tool), tasks(10 tasks), assistant-summary
+      expect(result.flatList).toHaveLength(4);
+      expect(result.flatList[0].role).toBe('user');
+      expect(result.flatList[1].role).toBe('assistantGroup');
+      expect(result.flatList[2].role).toBe('tasks');
+      expect(result.flatList[3].role).toBe('assistant');
+
+      // 2. tasks virtual message should have 10 task messages
+      expect((result.flatList[2] as any).tasks).toHaveLength(10);
+
+      // 3. Verify all tasks are completed
+      const tasks = (result.flatList[2] as any).tasks;
+      for (const task of tasks) {
+        expect(task.taskDetail.status).toBe('completed');
+      }
+
+      // 4. The summary message should be present and accessible
+      expect(result.flatList[3].id).toBe('msg-assistant-summary');
+      expect(result.flatList[3].content).toContain('All 10 tasks completed');
+    });
   });
 
   describe('Performance', () => {

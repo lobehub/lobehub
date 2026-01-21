@@ -113,6 +113,26 @@ export class FlatListBuilder {
               }
             }
           }
+
+          // Also check for children of task messages (e.g., summary as child of last task)
+          for (const taskChildId of taskChildren) {
+            const taskChildrenIds = this.childrenMap.get(taskChildId) ?? [];
+            for (const taskGrandchildId of taskChildrenIds) {
+              if (!processedIds.has(taskGrandchildId)) {
+                const taskGrandchild = this.messageMap.get(taskGrandchildId);
+                if (taskGrandchild && taskGrandchild.role !== 'task') {
+                  flatList.push(taskGrandchild);
+                  processedIds.add(taskGrandchildId);
+                  this.buildFlatListRecursive(
+                    taskGrandchildId,
+                    flatList,
+                    processedIds,
+                    allMessages,
+                  );
+                }
+              }
+            }
+          }
           return;
         }
       }
