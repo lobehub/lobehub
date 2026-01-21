@@ -73,6 +73,7 @@
   "screen5.badge": "登录",
   "screen5.description": "登录以在所有设备间同步代理、群组、设置和上下文。",
   "screen5.errors.desktopOnlyOidc": "OIDC 授权仅在桌面端运行时可用。",
+  "screen5.legacyLocalDb.link": "迁移旧版本地数据库",
   "screen5.methods.cloud.description": "使用您的 LobeHub 云账户登录，实现无缝同步",
   "screen5.methods.cloud.name": "LobeHub Cloud",
   "screen5.methods.selfhost.description": "连接到你自己的 LobeHub 服务实例",

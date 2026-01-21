@@ -1,7 +1,14 @@
 'use client';
 
-import { Form, type FormGroupItemType, Icon, ImageSelect } from '@lobehub/ui';
-import { Select, Skeleton } from '@lobehub/ui';
+import {
+  Flexbox,
+  Form,
+  type FormGroupItemType,
+  Icon,
+  ImageSelect,
+  LobeSelect as Select,
+  Skeleton,
+} from '@lobehub/ui';
 import { Segmented, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Ban, Gauge, Loader2Icon, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
@@ -76,11 +83,19 @@ const Common = memo(() => {
       },
       {
         children: (
-          <Select
-            defaultValue={language}
-            onChange={handleLangChange}
-            options={[{ label: t('settingCommon.lang.autoMode'), value: 'auto' }, ...localeOptions]}
-          />
+          <Flexbox horizontal justify={'flex-end'}>
+            <Select
+              defaultValue={language}
+              onChange={handleLangChange}
+              options={[
+                { label: t('settingCommon.lang.autoMode'), value: 'auto' },
+                ...localeOptions,
+              ]}
+              style={{
+                width: '50%',
+              }}
+            />
+          </Flexbox>
         ),
         label: t('settingCommon.lang.title'),
       },
@@ -136,13 +151,18 @@ const Common = memo(() => {
 
       {
         children: (
-          <Select
-            options={[
-              { label: t('settingCommon.responseLanguage.auto'), value: '' },
-              ...localeOptions,
-            ]}
-            placeholder={t('settingCommon.responseLanguage.placeholder')}
-          />
+          <Flexbox horizontal justify={'flex-end'}>
+            <Select
+              options={[
+                { label: t('settingCommon.responseLanguage.auto'), value: '' },
+                ...localeOptions,
+              ]}
+              placeholder={t('settingCommon.responseLanguage.placeholder')}
+              style={{
+                width: '50%',
+              }}
+            />
+          </Flexbox>
         ),
         desc: t('settingCommon.responseLanguage.desc'),
         label: t('settingCommon.responseLanguage.title'),

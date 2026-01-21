@@ -48,6 +48,10 @@ class ElectronSystemService {
     return this.ipc.system.openExternalLink(url);
   }
 
+  async hasLegacyLocalDb(): Promise<boolean> {
+    return this.ipc.system.hasLegacyLocalDb();
+  }
+
   showContextMenu = async (type: string, data?: any) => {
     return this.ipc.menu.showContextMenu({ data, type });
   };

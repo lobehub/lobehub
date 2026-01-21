@@ -23,6 +23,9 @@ export const userDataDir = app.getPath('userData');
 
 export const appStorageDir = join(userDataDir, 'lobehub-storage');
 
+// Legacy local database directory used in older desktop versions
+export const legacyLocalDbDir = join(appStorageDir, 'lobehub-local-db');
+
 // ------  Application storage directory ---- //
 
 // Local storage files (simulating S3)
