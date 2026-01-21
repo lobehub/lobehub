@@ -136,10 +136,6 @@ Enable magic-link login (depends on a working email provider above, off by defau
 
 Better Auth supports built-in providers (Google, GitHub, Microsoft, Apple, AWS Cognito) and Generic OIDC providers (Auth0, Authelia, Authentik, Casdoor, Cloudflare Zero Trust, Keycloak, Logto, Okta, ZITADEL, Generic OIDC, Feishu, WeChat).
 
-### I'm using NextAuth/Clerk, do I need to migrate?
-
-If your deployment is running fine, you can continue using your current authentication method. We are developing migration tools for users who want to switch to Better Auth. For progress updates, please follow [GitHub Issue #10456](https://github.com/lobehub/lobe-chat/issues/10456).
-
 ### How do I enable multiple SSO providers?
 
 Set the `AUTH_SSO_PROVIDERS` environment variable with a comma-separated list, e.g., `google,github,microsoft`. The order determines the display order on the login page.

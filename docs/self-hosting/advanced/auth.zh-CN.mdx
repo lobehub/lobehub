@@ -133,10 +133,6 @@ LobeChat 使用 [Better Auth](https://www.better-auth.com) 作为身份验证解
 
 Better Auth 支持内置提供商（Google、GitHub、Microsoft、Apple、AWS Cognito）和通用 OIDC 提供商（Auth0、Authelia、Authentik、Casdoor、Cloudflare Zero Trust、Keycloak、Logto、Okta、ZITADEL、Generic OIDC、飞书、微信）。
 
-### 我正在使用 NextAuth/Clerk，需要迁移吗？
-
-如果你的部署运行正常，可以继续使用现有的身份验证方案。我们正在为希望切换到 Better Auth 的用户开发迁移工具。相关进度请关注 [GitHub Issue #10456](https://github.com/lobehub/lobe-chat/issues/10456)。
-
 ### 如何启用多个 SSO 提供商？
 
 设置 `AUTH_SSO_PROVIDERS` 环境变量，使用逗号分隔多个提供商，例如 `google,github,microsoft`。顺序决定登录页面上的显示顺序。
