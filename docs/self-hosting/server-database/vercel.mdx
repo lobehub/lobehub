@@ -105,14 +105,11 @@ The server-side database needs to be paired with a user authentication service t
   In Vercel's deployment environment variables, add the following environment variables to enable authentication (powered by [Better Auth](https://www.better-auth.com)):
 
   ```shell
-  # Enable authentication
-  NEXT_PUBLIC_ENABLE_BETTER_AUTH=1
-
   # Session encryption key (generate with: openssl rand -base64 32)
   AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
   ```
 
-  With these two variables, users can register and login with email and password.
+  With this variable, users can register and login with email and password.
 
   <Callout type={'info'}>
     For advanced features like SSO providers, magic link login, and email verification, see [Authentication Service](/docs/self-hosting/advanced/auth).
@@ -279,7 +276,6 @@ DATABASE_URL=
 KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
 
 # Authentication
-NEXT_PUBLIC_ENABLE_BETTER_AUTH=1
 AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
 
 # S3 related configurations

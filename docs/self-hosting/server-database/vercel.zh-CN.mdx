@@ -105,14 +105,11 @@ tags:
   在 Vercel 的部署环境变量中，添加以下环境变量以启用身份验证（基于 [Better Auth](https://www.better-auth.com)）：
 
   ```shell
-  # 启用身份验证
-  NEXT_PUBLIC_ENABLE_BETTER_AUTH=1
-
   # 会话加密密钥（使用以下命令生成：openssl rand -base64 32）
   AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
   ```
 
-  配置这两个变量后，用户即可使用邮箱和密码注册登录。
+  配置此变量后，用户即可使用邮箱和密码注册登录。
 
   <Callout type={'info'}>
     如需 SSO 登录、魔法链接登录、邮箱验证等高级功能，请参阅 [身份验证服务](/zh/docs/self-hosting/advanced/auth)。
@@ -274,7 +271,6 @@ DATABASE_URL=
 KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
 
 # 身份验证
-NEXT_PUBLIC_ENABLE_BETTER_AUTH=1
 AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
 
 # S3 相关配置

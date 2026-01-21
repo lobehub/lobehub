@@ -30,11 +30,10 @@ LobeChat uses [Better Auth](https://www.better-auth.com) as its authentication s
 
 To enable Better Auth in LobeChat, set the following environment variables:
 
-| Environment Variable             | Type     | Description                                                                    |
-| -------------------------------- | -------- | ------------------------------------------------------------------------------ |
-| `NEXT_PUBLIC_ENABLE_BETTER_AUTH` | Required | Set to `1` to enable Better Auth service                                       |
-| `AUTH_SECRET`                    | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32`  |
-| `AUTH_SSO_PROVIDERS`             | Optional | Comma-separated list of enabled SSO providers, e.g., `google,github,microsoft` |
+| Environment Variable | Type     | Description                                                                    |
+| -------------------- | -------- | ------------------------------------------------------------------------------ |
+| `AUTH_SECRET`        | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32`  |
+| `AUTH_SSO_PROVIDERS` | Optional | Comma-separated list of enabled SSO providers, e.g., `google,github,microsoft` |
 
 ## Supported SSO Providers
 
