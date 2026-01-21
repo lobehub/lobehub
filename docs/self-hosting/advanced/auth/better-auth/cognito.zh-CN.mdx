@@ -1,0 +1,86 @@
+---
+title: 在 LobeChat 中配置 AWS Cognito 身份验证
+description: 学习如何在 LobeChat 中配置 AWS Cognito SSO，包括在 AWS Console 创建用户池和应用客户端。
+tags:
+  - AWS Cognito
+  - 身份验证
+  - LobeChat
+  - 单点登录
+---
+
+# 配置 AWS Cognito 身份验证
+
+<Steps>
+  ### 创建 Cognito 用户池
+
+  1. 前往 [AWS Cognito Console](https://console.aws.amazon.com/cognito/)
+  2. 点击 **Create user pool**
+  3. 配置登录体验：
+     - 选择 **Email** 作为登录选项
+     - 根据需要配置密码策略和 MFA 设置
+     - 配置用户账户恢复选项
+
+  ### 配置应用客户端
+
+  在 **App integration** 部分：
+
+  1. 点击 **Add an app client**
+  2. 选择 **Confidential client** 作为应用类型
+  3. 输入应用客户端名称
+  4. 在 **OAuth 2.0 grant types** 下，启用 **Authorization code grant**
+  5. 在 **OpenID Connect scopes** 下，选择 `email`、`openid` 和 `profile`
+
+  ### 配置回调 URL
+
+  在应用客户端设置中，添加回调 URL：
+
+  <Callout type={'info'}>
+    回调 URL 格式：
+
+    - 本地开发: `http://localhost:3210/api/auth/callback/cognito`
+    - 生产环境: `https://your-domain.com/api/auth/callback/cognito`
+  </Callout>
+
+  ### 配置域名
+
+  1. 前往 **App integration** > **Domain**
+  2. 配置 Cognito 域名（如 `your-app-name`）或自定义域名
+  3. 记录完整域名（如 `your-app-name.auth.us-east-1.amazoncognito.com`）
+
+  ### 获取配置值
+
+  收集以下信息：
+
+  - **Client ID**：来自应用客户端设置
+  - **Client Secret**：来自应用客户端设置（点击 "Show client secret"）
+  - **User Pool ID**：来自用户池概览（如 `us-east-1_XXXXXXXXX`）
+  - **Region**：AWS 区域（如 `us-east-1`）
+  - **Domain**：你的 Cognito 域名
+
+  ### 配置环境变量
+
+  | 环境变量                             | 类型 | 描述                                                        |
+  | -------------------------------- | -- | --------------------------------------------------------- |
+  | `NEXT_PUBLIC_ENABLE_BETTER_AUTH` | 必选 | 设置为 `1` 以启用 Better Auth                                   |
+  | `AUTH_SECRET`                    | 必选 | 会话加密密钥，使用 `openssl rand -base64 32` 生成                    |
+  | `AUTH_SSO_PROVIDERS`             | 必选 | 填写 `cognito`                                              |
+  | `AUTH_COGNITO_ID`                | 必选 | 应用客户端 ID                                                  |
+  | `AUTH_COGNITO_SECRET`            | 必选 | 应用客户端 Secret                                              |
+  | `AUTH_COGNITO_DOMAIN`            | 必选 | Cognito 域名（如 `your-app.auth.us-east-1.amazoncognito.com`） |
+  | `AUTH_COGNITO_REGION`            | 必选 | AWS 区域（如 `us-east-1`）                                     |
+  | `AUTH_COGNITO_USERPOOL_ID`       | 必选 | 用户池 ID（如 `us-east-1_XXXXXXXXX`）                           |
+
+  <Callout type={'tip'}>
+    前往 [📘 环境变量](/zh/docs/self-hosting/environment-variables/auth#cognito)
+    可查阅相关变量详情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功后，用户将可以通过 AWS Cognito 身份认证并使用 LobeChat。
+</Callout>
+
+## 相关资源
+
+- [AWS Cognito Console](https://console.aws.amazon.com/cognito/)
+- [Amazon Cognito 文档](https://docs.aws.amazon.com/cognito/)
