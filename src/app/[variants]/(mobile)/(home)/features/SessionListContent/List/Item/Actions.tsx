@@ -1,4 +1,4 @@
-import { ActionIcon, Dropdown, Icon } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { type ItemType } from 'antd/es/menu/interface';
@@ -66,7 +66,6 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
   const { modal, message } = App.useApp();
 
   const isDefault = group === SessionDefaultGroup.Default;
-  // const hasDivider = !isDefault || Object.keys(sessionByGroup).length > 0;
 
   const items = useMemo(
     () =>
@@ -183,17 +182,7 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
   );
 
   return (
-    <Dropdown
-      arrow={false}
-      menu={{
-        items,
-        onClick: ({ domEvent }) => {
-          domEvent.stopPropagation();
-        },
-      }}
-      onOpenChange={setOpen}
-      trigger={['click']}
-    >
+    <DropdownMenu items={items} onOpenChange={setOpen}>
       <ActionIcon
         icon={MoreVertical}
         size={{
@@ -201,7 +190,7 @@ const Actions = memo<ActionProps>(({ group, id, openCreateGroupModal, parentType
           size: 16,
         }}
       />
-    </Dropdown>
+    </DropdownMenu>
   );
 });
 

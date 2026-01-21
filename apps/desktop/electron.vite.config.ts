@@ -21,11 +21,9 @@ export default defineConfig({
       },
       sourcemap: isDev ? 'inline' : false,
     },
-    // 这里是关键：在构建时进行文本替换
     define: {
-      'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV),
-      'process.env.OFFICIAL_CLOUD_SERVER': JSON.stringify(process.env.OFFICIAL_CLOUD_SERVER),
       'process.env.UPDATE_CHANNEL': JSON.stringify(process.env.UPDATE_CHANNEL),
+      'process.env.UPDATE_SERVER_URL': JSON.stringify(process.env.UPDATE_SERVER_URL),
     },
 
     resolve: {

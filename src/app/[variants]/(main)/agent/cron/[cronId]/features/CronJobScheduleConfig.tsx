@@ -187,7 +187,6 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
               style={{ maxWidth: 300, minWidth: 200 }}
               value={timezone}
             />
-
           </Flexbox>
 
           {/* Max Executions */}

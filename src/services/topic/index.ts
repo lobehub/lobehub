@@ -109,6 +109,10 @@ export class TopicService {
     return lambdaClient.topic.batchDeleteBySessionId.mutate({ id: this.toDbSessionId(sessionId) });
   };
 
+  removeTopicsByAgentId = (agentId: string) => {
+    return lambdaClient.topic.batchDeleteByAgentId.mutate({ agentId });
+  };
+
   batchRemoveTopics = (topics: string[]) => {
     return lambdaClient.topic.batchDelete.mutate({ ids: topics });
   };

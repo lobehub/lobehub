@@ -5,14 +5,13 @@ import {
   type ReactNode,
   type SetStateAction,
   createContext,
+  useCallback,
   useContext,
-  useEffect,
+  useMemo,
   useState,
 } from 'react';
 
-import { useMounted } from '@/hooks/useMounted';
-
-import { type MenuContext, type PageType } from './types';
+import { type MenuContext, type PageType, type SelectedAgent } from './types';
 import { detectContext } from './utils/context';
 import type { ValidSearchType } from './utils/queryParser';
 
@@ -23,8 +22,10 @@ interface CommandMenuContextValue {
   pages: PageType[];
   pathname: string | null;
   search: string;
+  selectedAgent: SelectedAgent | undefined;
   setPages: Dispatch<SetStateAction<PageType[]>>;
   setSearch: (search: string) => void;
+  setSelectedAgent: (agent: SelectedAgent | undefined) => void;
   setTypeFilter: (typeFilter: ValidSearchType | undefined) => void;
   setViewMode: (viewMode: MenuViewMode) => void;
   typeFilter: ValidSearchType | undefined;
@@ -41,44 +42,65 @@ interface CommandMenuProviderProps {
 }
 
 export const CommandMenuProvider = ({ children, pathname }: CommandMenuProviderProps) => {
-  const menuContext = detectContext(pathname ?? '/');
-  const [viewMode, setViewMode] = useState<MenuViewMode>('default');
   const [pages, setPages] = useState<PageType[]>([]);
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState<ValidSearchType | undefined>(undefined);
-  const mounted = useMounted();
+  const [search, setSearchState] = useState('');
+  const [typeFilter, setTypeFilterState] = useState<ValidSearchType | undefined>(undefined);
+  const [selectedAgent, setSelectedAgentState] = useState<SelectedAgent | undefined>(undefined);
 
-  // Derived values
+  // Memoize derived values
+  const menuContext = useMemo(() => detectContext(pathname ?? '/'), [pathname]);
   const page = pages.at(-1);
+  const viewMode: MenuViewMode = search.trim().length > 0 ? 'search' : 'default';
 
-  useEffect(() => {
-    if (search.trim().length > 0) {
-      setViewMode('search');
-    } else {
-      setViewMode('default');
-    }
-  }, [search]);
-
-  return (
-    <CommandMenuContext.Provider
-      value={{
-        menuContext,
-        mounted,
-        page,
-        pages,
-        pathname,
-        search,
-        setPages,
-        setSearch,
-        setTypeFilter,
-        setViewMode,
-        typeFilter,
-        viewMode,
-      }}
-    >
-      {children}
-    </CommandMenuContext.Provider>
+  // Memoize setters to maintain stable references
+  const setSearch = useCallback((value: string) => setSearchState(value), []);
+  const setTypeFilter = useCallback(
+    (value: ValidSearchType | undefined) => setTypeFilterState(value),
+    [],
   );
+  const setSelectedAgent = useCallback(
+    (value: SelectedAgent | undefined) => setSelectedAgentState(value),
+    [],
+  );
+  const setViewMode = useCallback(() => {
+    // viewMode is now derived from search, this is a no-op for backwards compatibility
+  }, []);
+
+  // Memoize the context value to prevent unnecessary re-renders
+  const contextValue = useMemo<CommandMenuContextValue>(
+    () => ({
+      menuContext,
+      mounted: true, // Always true after initial render since provider only mounts on client
+      page,
+      pages,
+      pathname,
+      search,
+      selectedAgent,
+      setPages,
+      setSearch,
+      setSelectedAgent,
+      setTypeFilter,
+      setViewMode,
+      typeFilter,
+      viewMode,
+    }),
+    [
+      menuContext,
+      page,
+      pages,
+      pathname,
+      search,
+      selectedAgent,
+      setSearch,
+      setSelectedAgent,
+      setTypeFilter,
+      setViewMode,
+      typeFilter,
+      viewMode,
+    ],
+  );
+
+  return <CommandMenuContext.Provider value={contextValue}>{children}</CommandMenuContext.Provider>;
 };
 
 export const useCommandMenuContext = () => {

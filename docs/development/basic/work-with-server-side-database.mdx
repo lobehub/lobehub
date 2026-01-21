@@ -1,3 +1,7 @@
+---
+title: Work with Server-Side Database
+---
+
 # Work with Server-Side Database
 
 LobeChat provides a battery-included experience with its client-side database.
@@ -19,7 +23,6 @@ cp docker-compose/local/.env.example docker-compose/local/.env
 
 Edit `docker-compose/local/.env` as needed for your development setup. This file contains all necessary environment variables for the Docker services and configures:
 
-- **Service Mode**: `NEXT_PUBLIC_SERVICE_MODE=server`
 - **Database**: PostgreSQL with connection string
 - **Authentication**: NextAuth with Casdoor SSO
 - **Storage**: MinIO S3-compatible storage
@@ -80,7 +83,6 @@ The image generation feature requires:
 
 - **PostgreSQL**: Stores metadata about generated images
 - **MinIO/S3**: Stores the actual image files
-- **Server Mode**: Required for file handling (`NEXT_PUBLIC_SERVICE_MODE=server`)
 
 ### Storage Configuration
 
@@ -138,14 +140,13 @@ await fetch(uploadUrl, {
 });
 ```
 
-
 ### Service URLs
 
 When running with Docker Compose development setup:
 
 - **PostgreSQL**: `postgres://postgres@localhost:5432/lobechat`
 - **MinIO API**: `http://localhost:9000`
-- **MinIO Console**: `http://localhost:9001` (admin/CHANGE_THIS_PASSWORD_IN_PRODUCTION)
+- **MinIO Console**: `http://localhost:9001` (admin/CHANGE\_THIS\_PASSWORD\_IN\_PRODUCTION)
 - **Application**: `http://localhost:3010`
 
 ### Reset Services
@@ -163,7 +164,6 @@ docker-compose -f docker-compose.development.yml down -v
 docker-compose -f docker-compose.development.yml up -d
 pnpm db:migrate
 ```
-
 
 ### Troubleshooting
 

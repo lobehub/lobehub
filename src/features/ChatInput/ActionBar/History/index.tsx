@@ -55,7 +55,7 @@ const History = memo(() => {
       popover={{
         content: <Controls setUpdating={setUpdating} updating={updating} />,
         minWidth: 240,
-        trigger: isMobile ? ['click'] : ['hover'],
+        trigger: isMobile ? 'click' : 'hover',
       }}
       showTooltip={false}
       title={title}

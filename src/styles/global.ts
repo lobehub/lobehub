@@ -55,8 +55,14 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
     -webkit-app-region: no-drag;
   }
 
-  .${CLASSNAMES.ContextTrigger}[data-popup-open],
-    .${CLASSNAMES.DropdownMenuTrigger}[data-popup-open] {
+  .${CLASSNAMES.ContextTrigger}[data-popup-open]:not([data-no-highlight]),
+  .${CLASSNAMES.DropdownMenuTrigger}[data-popup-open]:not([data-no-highlight]) {
     background: ${token.colorFillTertiary};
+  }
+
+  .ant-form-item-control:has([role='combobox'][aria-controls^='base-ui-']),
+  .ant-form-item-control:has([role='combobox'][aria-haspopup='listbox']) {
+    width: min(70%, 800px);
+    min-width: min(70%, 800px) !important;
   }
 `;

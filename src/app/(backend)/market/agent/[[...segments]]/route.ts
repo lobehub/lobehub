@@ -1,24 +1,11 @@
-import { MarketSDK } from '@lobehub/market-sdk';
 import { type NextRequest, NextResponse } from 'next/server';
 
-import { getTrustedClientTokenForSession } from '@/libs/trusted-client';
+import { MarketService } from '@/server/services/market';
 
 type RouteContext = {
   params: Promise<{
     segments?: string[];
   }>;
-};
-
-const MARKET_BASE_URL = process.env.NEXT_PUBLIC_MARKET_BASE_URL || 'https://market.lobehub.com';
-
-const extractAccessToken = (req: NextRequest) => {
-  const authorization = req.headers.get('authorization');
-  if (!authorization) return undefined;
-
-  const [scheme, token] = authorization.split(' ');
-  if (scheme?.toLowerCase() !== 'bearer' || !token) return undefined;
-
-  return token;
 };
 
 const methodNotAllowed = (methods: string[]) =>
@@ -55,14 +42,8 @@ const notFound = (reason: string) =>
   );
 
 const handleAgent = async (req: NextRequest, segments: string[]) => {
-  const accessToken = extractAccessToken(req);
-  const trustedClientToken = await getTrustedClientTokenForSession();
-
-  const market = new MarketSDK({
-    accessToken,
-    baseURL: MARKET_BASE_URL,
-    trustedClientToken,
-  });
+  const marketService = await MarketService.createFromRequest(req);
+  const market = marketService.market;
 
   if (segments.length === 0) {
     return notFound('Missing agent action.');
@@ -93,17 +74,6 @@ const handleAgent = async (req: NextRequest, segments: string[]) => {
   // Get own agents (requires authentication)
   if (action === 'own') {
     if (req.method !== 'GET') return methodNotAllowed(['GET']);
-
-    if (!accessToken) {
-      return NextResponse.json(
-        {
-          error: 'unauthorized',
-          message: 'Authentication required to get own agents',
-          status: 'error',
-        },
-        { status: 401 },
-      );
-    }
 
     try {
       // Parse query parameters from the request URL

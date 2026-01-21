@@ -32,7 +32,7 @@ export class ThreadModel {
     // @ts-ignore
     const [result] = await this.db
       .insert(threads)
-      .values({ ...params, status: ThreadStatus.Active, userId: this.userId })
+      .values({ status: ThreadStatus.Active, ...params, userId: this.userId })
       .onConflictDoNothing()
       .returning();
 

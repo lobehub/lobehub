@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, CopyButton, Flexbox, Markdown, ScrollShadow } from '@lobehub/ui';
+import { ActionIcon, CopyButton, Flexbox, Markdown, ScrollShadow, TooltipGroup } from '@lobehub/ui';
 import { Button } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Maximize2, Minimize2, NotebookText, PencilLine } from 'lucide-react';
@@ -85,19 +85,21 @@ const DocumentCard = memo<DocumentCardProps>(({ document }) => {
         <Flexbox flex={1}>
           <div className={styles.title}>{document.title}</div>
         </Flexbox>
-        <Flexbox gap={4} horizontal>
-          <CopyButton
-            content={document.content}
-            size={'small'}
-            title={t('builtins.lobe-notebook.actions.copy')}
-          />
-          <ActionIcon
-            icon={PencilLine}
-            onClick={handleToggle}
-            size={'small'}
-            title={t('builtins.lobe-notebook.actions.edit')}
-          />
-        </Flexbox>
+        <TooltipGroup>
+          <Flexbox gap={4} horizontal>
+            <CopyButton
+              content={document.content}
+              size={'small'}
+              title={t('builtins.lobe-notebook.actions.copy')}
+            />
+            <ActionIcon
+              icon={PencilLine}
+              onClick={handleToggle}
+              size={'small'}
+              title={t('builtins.lobe-notebook.actions.edit')}
+            />
+          </Flexbox>
+        </TooltipGroup>
       </Flexbox>
       {/* Content */}
       <ScrollShadow className={styles.content} offset={12} size={12} style={{ maxHeight: 400 }}>

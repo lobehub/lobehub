@@ -1,3 +1,7 @@
+---
+title: LobeChat 功能开发完全指南
+---
+
 # LobeChat 功能开发完全指南
 
 本文档旨在指导开发者了解如何在 LobeChat 中开发一块完整的功能需求。
@@ -362,7 +366,8 @@ const OpeningQuestions = memo(() => {
         {isRepeat && (
           <p className={styles.repeatError}>{t('settingOpening.openingQuestions.repeat')}</p>
         )}
-      </Flexbox>
+     
+</Flexbox>
 
       <div className={styles.questionsList}>
         {openingQuestions.length > 0 ? (
@@ -378,7 +383,8 @@ const OpeningQuestions = memo(() => {
                   onClick={() => removeQuestion(item.content)}
                   type="text"
                 />
-              </SortableList.Item>
+             
+</SortableList.Item>
             )}
           />
         ) : (
@@ -387,8 +393,10 @@ const OpeningQuestions = memo(() => {
             description={t('settingOpening.openingQuestions.empty')}
           />
         )}
-      </div>
-    </Flexbox>
+     
+</div>
+   
+</Flexbox>
   );
 });
 
@@ -440,7 +448,8 @@ const WelcomeMessage = () => {
       {chatItem}
       {/* 渲染引导性问题 */}
       <OpeningQuestions mobile={mobile} questions={openingQuestions} />
-    </Flexbox>
+   
+</Flexbox>
   ) : (
     chatItem
   );

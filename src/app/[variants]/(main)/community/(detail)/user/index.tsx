@@ -46,6 +46,9 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
         // Call the original onSuccess callback if provided
         onSuccess?.(profile);
 
+        // Refresh page data to show updated profile
+        mutate();
+
         // Navigate to new URL if userName changed
         const newUserName = profile.userName || profile.namespace;
         if (newUserName && newUserName !== currentUserName) {
@@ -53,16 +56,20 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
         }
       });
     },
-    [data?.user?.userName, data?.user?.namespace, openProfileSetup, navigate],
+    [data?.user?.userName, data?.user?.namespace, openProfileSetup, navigate, mutate],
   );
 
   const contextConfig = useMemo(() => {
     if (!data || !data.user) return null;
-    const { user, agents } = data;
+    const { user, agents, agentGroups, forkedAgents, forkedAgentGroups } = data;
     const totalInstalls = agents.reduce((sum, agent) => sum + (agent.installCount || 0), 0);
     return {
       agentCount: agents.length,
+      agentGroups: agentGroups || [],
       agents,
+      forkedAgentGroups: forkedAgentGroups || [],
+      forkedAgents: forkedAgents || [],
+      groupCount: agentGroups?.length || 0,
       isOwner,
       mobile,
       onEditProfile: handleEditProfile,

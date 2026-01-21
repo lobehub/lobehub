@@ -315,11 +315,10 @@ export const createLobehubSkillStoreSlice: StateCreator<
         const response = await toolsClient.market.connectListConnections.query();
 
         // Debug logging
-        console.log('[useFetchLobehubSkillConnections] raw response:', response);
 
         return response.connections.map((conn: any) => {
           // Debug logging for each connection
-          console.log('[useFetchLobehubSkillConnections] connection:', conn);
+
           // Get provider config from local definition for correct display name
           const providerConfig = getLobehubSkillProviderById(conn.providerId);
           return {

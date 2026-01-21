@@ -15,6 +15,4 @@ const AuthLayout: FC<PropsWithChildren> = ({ children }) => {
   );
 };
 
-AuthLayout.displayName = 'AuthLayout';
-
 export default AuthLayout;

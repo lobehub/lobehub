@@ -142,7 +142,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
     const link = qs.stringifyUrl(
       {
         query: { source: 'new' },
-        url: urlJoin('/community/assistant', identifier),
+        url: urlJoin('/community/agent', identifier),
       },
       { skipNull: true },
     );
@@ -150,7 +150,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
     const isPublished = status === 'published';
 
     const handleViewDetail = useCallback(() => {
-      window.open(urlJoin('/community/assistant', identifier), '_blank');
+      window.open(urlJoin('/community/agent', identifier), '_blank');
     }, [identifier]);
 
     const handleEdit = useCallback(async () => {

@@ -6,6 +6,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useHomeStore } from '@/store/home';
 
+import HomeAgentIdSync from './HomeAgentIdSync';
 import RecentHydration from './RecentHydration';
 import Sidebar from './Sidebar';
 import { styles } from './style';
@@ -56,12 +57,11 @@ const Layout: FC<LayoutProps> = ({ children }) => {
           {content}
         </Flexbox>
 
+        <HomeAgentIdSync />
         <RecentHydration />
       </Flexbox>
     </Activity>
   );
 };
-
-Layout.displayName = 'DesktopHomeLayout';
 
 export default Layout;

@@ -64,6 +64,8 @@ interface UIMessageBranch {
  * Retrieved from the associated Thread via sourceMessageId
  */
 export interface TaskDetail {
+  /** Whether this task runs in client mode (local execution) */
+  clientMode?: boolean;
   /** Task completion time (ISO string) */
   completedAt?: string;
   /** Execution duration in milliseconds */

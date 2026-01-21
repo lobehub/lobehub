@@ -145,13 +145,7 @@ export interface RouteConfig {
  */
 export function renderRoutes(routes: RouteConfig[]): ReactElement[] {
   return routes.map((route, index) => {
-    const { path, element, children, index: isIndex, loader } = route;
-
-    // Handle redirect loaders (convert to Navigate element)
-    if (loader && !element && isIndex) {
-      // Check if loader is a redirect by inspecting it
-      // For now, we'll handle this case in the config itself
-    }
+    const { path, element, children, index: isIndex } = route;
 
     const childRoutes = children ? renderRoutes(children) : undefined;
 

@@ -170,6 +170,20 @@ export const agentRouter = router({
     }),
 
   /**
+   * Get an agent by forkedFromIdentifier stored in params
+   * @returns agent id if exists, null otherwise
+   */
+  getAgentByForkedFromIdentifier: agentProcedure
+    .input(
+      z.object({
+        forkedFromIdentifier: z.string(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      return ctx.agentModel.getAgentByForkedFromIdentifier(input.forkedFromIdentifier);
+    }),
+
+  /**
    * Get an agent by marketIdentifier
    * @returns agent id if exists, null otherwise
    */

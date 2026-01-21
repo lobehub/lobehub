@@ -74,7 +74,7 @@ export const dataSlice: StateCreator<
     });
 
     // Sync changes to external store (ChatStore)
-    get().onMessagesChange?.(newDbMessages);
+    get().onMessagesChange?.(newDbMessages, get().context);
   },
 
   replaceMessages: (messages) => {
@@ -84,7 +84,7 @@ export const dataSlice: StateCreator<
     set({ dbMessages: messages, displayMessages: flatList }, false, 'replaceMessages');
 
     // Sync changes to external store (ChatStore)
-    get().onMessagesChange?.(messages);
+    get().onMessagesChange?.(messages, get().context);
   },
 
   switchMessageBranch: async (messageId, branchIndex) => {
@@ -110,12 +110,11 @@ export const dataSlice: StateCreator<
     return useClientDataSWRWithSync<UIChatMessage[]>(
       shouldFetch ? ['CONVERSATION_FETCH_MESSAGES', context] : null,
 
-      async () => {
-        return messageService.getMessages(context);
-      },
+      () => messageService.getMessages(context),
       {
         onData: (data) => {
           if (!data) return;
+          if (!context.topicId) return;
 
           // Parse messages using conversation-flow
           const { flatList } = parse(data);
@@ -126,8 +125,9 @@ export const dataSlice: StateCreator<
             messagesInit: true,
           });
 
-          // Call onMessagesChange callback if provided
-          get().onMessagesChange?.(data);
+          // Call onMessagesChange callback with the request context (not current context)
+          // This ensures data is stored to the correct topic even if user switched topics
+          get().onMessagesChange?.(data, context);
         },
       },
     );

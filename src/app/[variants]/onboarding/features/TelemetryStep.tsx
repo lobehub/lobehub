@@ -19,7 +19,8 @@ interface TelemetryStepProps {
 }
 
 const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
-  const { t } = useTranslation('onboarding');
+  const { t, i18n } = useTranslation('onboarding');
+  const locale = i18n.language;
   const [check, setCheck] = useState(true);
   const [isNavigating, setIsNavigating] = useState(false);
   const isNavigatingRef = useRef(false);
@@ -63,6 +64,7 @@ const TelemetryStep = memo<TelemetryStepProps>(({ onNext }) => {
             deletePauseDuration={1000}
             deletingSpeed={32}
             hideCursorWhileTyping={'afterTyping'}
+            key={locale}
             pauseDuration={16_000}
             sentences={[
               t('telemetry.title', { name: 'Lobe AI' }),

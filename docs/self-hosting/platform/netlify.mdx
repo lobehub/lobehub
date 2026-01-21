@@ -1,12 +1,12 @@
 ---
 title: Deploy LobeChat with Netlify - Step-by-Step Guide
 description: >-
-  Learn how to deploy LobeChat on Netlify with detailed instructions on forking the repository, preparing your OpenAI API Key, importing to Netlify workspace, configuring site name and environment variables, and monitoring deployment progress.
-
+  Learn how to deploy LobeChat on Netlify with detailed instructions on forking
+  the repository, importing to Netlify workspace, configuring site name and
+  environment variables, and monitoring deployment progress.
 tags:
   - Deploy LobeChat
   - Netlify Deployment
-  - OpenAI API Key
   - Environment Variables
   - Custom Domain Setup
 ---
@@ -21,10 +21,6 @@ If you want to deploy LobeChat on Netlify, you can follow these steps:
   ### Fork the LobeChat Repository
 
   Click the Fork button to fork the LobeChat repository to your GitHub account.
-
-  ### Prepare your OpenAI API Key
-
-  Go to [OpenAI API Key](https://platform.openai.com/account/api-keys) to obtain your OpenAI API Key.
 
   ### Import to Netlify Workspace
 
@@ -51,24 +47,16 @@ If you want to deploy LobeChat on Netlify, you can follow these steps:
 
   <Image alt={'Configure LobeChat site name'} height={712} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/f3885537-6d43-422f-b1b8-e70732401025'} />
 
-  Click the "Add environment variables" button to add site environment variables:
+  Click the "Add environment variables" button to add site environment variables if needed:
 
   <Image alt={'Add LobeChat site environment variables'} height={537} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/3b607482-4d99-455a-bc10-3090dd4fe3c5'} />
-
-  Taking OpenAI as an example, the environment variables you need to add are as follows:
-
-  | Environment Variable | Type     | Description                                                                                                                                                                 | Example                                                               |
-  | -------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-  | `OPENAI_API_KEY`     | Required | This is the API key you applied for on the OpenAI account page                                                                                                              | `sk-xxxxxx...xxxxxx`                                                  |
-  | `ACCESS_CODE`        | Required | Add a password to access this service. You can set a long password to prevent brute force attacks. When this value is separated by commas, it becomes an array of passwords | `awCT74` or `e3@09!` or `code1,code2,code3`                           |
-  | `OPENAI_PROXY_URL`   | Optional | If you manually configure the OpenAI interface proxy, you can use this configuration to override the default OpenAI API request base URL                                    | `https://aihubmix.com/v1`, default value: `https://api.openai.com/v1` |
 
   <Callout type={'tip'}>
     For a complete list of environment variables supported by LobeChat, please refer to the [📘
     Environment Variables](/docs/self-hosting/environment-variables)
   </Callout>
 
-  Afteradding the variables, finally click "Deploy lobe-chat" to enter the deployment phase
+  Finally click "Deploy lobe-chat" to enter the deployment phase
 
   <Image alt={'Environment variables added'} height={600} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/c9f74ec4-ce63-4ce9-b9e2-34bda6fda10b'} />
 

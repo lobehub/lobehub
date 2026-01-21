@@ -88,10 +88,22 @@ export class GeneralChatAgent implements Agent {
       }
 
       // Priority 0: CRITICAL - Check security blacklist FIRST
-      // This overrides ALL other settings, including auto-run mode
       const securityCheck = InterventionChecker.checkSecurityBlacklist(securityBlacklist, toolArgs);
+
+      // Priority 0.5: Headless mode - fully automated for async tasks
+      // In headless mode: blacklisted tools are skipped, all other tools execute directly
+      if (approvalMode === 'headless') {
+        if (securityCheck.blocked) {
+          // Skip blacklisted tools entirely (don't execute, don't wait for approval)
+          continue;
+        }
+        // All other tools execute directly
+        toolsToExecute.push(toolCalling);
+        continue;
+      }
+
+      // For non-headless modes: security blacklist requires intervention
       if (securityCheck.blocked) {
-        // Security blacklist always requires intervention
         toolsNeedingIntervention.push(toolCalling);
         continue;
       }
@@ -345,6 +357,30 @@ export class GeneralChatAgent implements Agent {
             return {
               payload: { parentMessageId: execParentId, tasks },
               type: 'exec_tasks',
+            };
+          }
+
+          // GTD client-side async task (single, desktop only)
+          if (stateType === 'execClientTask') {
+            const { parentMessageId: execParentId, task } = data.state as {
+              parentMessageId: string;
+              task: any;
+            };
+            return {
+              payload: { parentMessageId: execParentId, task },
+              type: 'exec_client_task',
+            };
+          }
+
+          // GTD client-side async tasks (multiple, desktop only)
+          if (stateType === 'execClientTasks') {
+            const { parentMessageId: execParentId, tasks } = data.state as {
+              parentMessageId: string;
+              tasks: any[];
+            };
+            return {
+              payload: { parentMessageId: execParentId, tasks },
+              type: 'exec_client_tasks',
             };
           }
         }

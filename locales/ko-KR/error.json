@@ -12,6 +12,11 @@
   "import.importConfigFile.title": "가져오기 중 문제가 발생했습니다",
   "import.incompatible.description": "이 파일은 더 높은 버전에서 내보낸 것입니다. 최신 버전으로 업그레이드한 후 다시 가져오세요",
   "import.incompatible.title": "버전 호환되지 않음",
+  "inviteCode.currentEmail": "현재 계정: {{email}}",
+  "inviteCode.desc": "LobeHub에 접속하려면 초대 코드가 필요합니다. 계속하려면 유효한 초대 코드를 입력하세요.",
+  "inviteCode.friends": "친구",
+  "inviteCode.getCodeHint": "초대 코드를 받으려면 다음을 확인하세요:",
+  "inviteCode.title": "초대 코드 필요",
   "loginRequired.desc": "로그인 페이지로 리디렉션합니다. 로그인 후 계속하세요",
   "loginRequired.title": "로그인이 필요합니다",
   "notFound.backHome": "홈으로 돌아가기",
@@ -144,5 +149,9 @@
   "upload.networkError": "네트워크 이상 또는 CORS 설정이 올바르지 않습니다. 파일 스토리지 서비스의 CORS 설정을 확인한 후 다시 시도하세요",
   "upload.title": "업로드를 완료할 수 없습니다",
   "upload.unknownError": "원인: {{reason}}",
-  "upload.uploadFailed": "업로드를 완료할 수 없습니다"
+  "upload.uploadFailed": "업로드를 완료할 수 없습니다",
+  "waitlist.currentEmail": "현재 계정: {{email}}",
+  "waitlist.desc": "귀하의 계정은 화이트리스트에 등록되어 있지 않습니다. 접근 권한을 요청하려면 관리자에게 문의하세요.",
+  "waitlist.switchAccount": "계정 전환",
+  "waitlist.title": "접근 제한됨"
 }

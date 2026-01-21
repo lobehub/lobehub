@@ -44,17 +44,4 @@ describe('getAuthConfig fallbacks', () => {
 
     expect(config.AUTH_SECRET).toBe('nextauth-secret');
   });
-
-  it('should fall back to NEXTAUTH_URL origin when NEXT_PUBLIC_AUTH_URL is empty string', () => {
-    process.env.NEXT_PUBLIC_AUTH_URL = '';
-    process.env.NEXTAUTH_URL = 'https://example.com/api/auth';
-
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-expect-error - allow overriding for test
-    globalThis.window = undefined;
-
-    const config = getAuthConfig();
-
-    expect(config.NEXT_PUBLIC_AUTH_URL).toBe('https://example.com');
-  });
 });

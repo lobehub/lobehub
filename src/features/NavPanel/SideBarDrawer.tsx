@@ -23,6 +23,7 @@ interface SideBarDrawerProps {
 
 const SideBarDrawer = memo<SideBarDrawerProps>(
   ({ subHeader, open, onClose, children, title, action }) => {
+    const size = 280;
     return (
       <Drawer
         closable={false}
@@ -33,9 +34,13 @@ const SideBarDrawer = memo<SideBarDrawerProps>(
         open={open}
         placement="left"
         rootStyle={{
+          bottom: 0,
+          overflow: 'hidden',
           position: 'absolute',
+          top: 0,
+          width: `${size}px`,
         }}
-        size={280}
+        size={size}
         styles={{
           body: {
             background: cssVar.colorBgLayout,
@@ -58,7 +63,12 @@ const SideBarDrawer = memo<SideBarDrawerProps>(
             <SideBarHeaderLayout
               left={
                 typeof title === 'string' ? (
-                  <Text ellipsis fontSize={14} style={{ paddingLeft: 4 }} weight={400}>
+                  <Text
+                    ellipsis
+                    fontSize={14}
+                    style={{ fontWeight: 600, paddingLeft: 8 }}
+                    weight={400}
+                  >
                     {title}
                   </Text>
                 ) : (

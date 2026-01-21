@@ -7,9 +7,6 @@ import {
 import { createAuthClient } from 'better-auth/react';
 
 import type { auth } from '@/auth';
-import { getAuthConfig } from '@/envs/auth';
-
-const { NEXT_PUBLIC_AUTH_URL } = getAuthConfig();
 
 export const {
   linkSocial,
@@ -24,12 +21,6 @@ export const {
   unlinkAccount,
   useSession,
 } = createAuthClient({
-  /** The base URL of the server (optional if you're using the same domain) */
-  ...(NEXT_PUBLIC_AUTH_URL
-    ? {
-        baseURL: NEXT_PUBLIC_AUTH_URL,
-      }
-    : {}),
   plugins: [
     adminClient(),
     inferAdditionalFields<typeof auth>(),

@@ -1,6 +1,5 @@
-import type { PluginEnableChecker } from '@lobechat/context-engine';
+import type { LobeToolManifest, PluginEnableChecker } from '@lobechat/context-engine';
 import type { LobeTool } from '@lobechat/types';
-import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 
 /**
  * Installed plugin with manifest
@@ -22,7 +21,7 @@ export interface ServerAgentToolsContext {
  */
 export interface ServerAgentToolsEngineConfig {
   /** Additional manifests to include (e.g., Klavis tools) */
-  additionalManifests?: LobeChatPluginManifest[];
+  additionalManifests?: LobeToolManifest[];
   /** Default tool IDs that will always be added */
   defaultToolIds?: string[];
   /** Custom enable checker for plugins */
@@ -33,6 +32,8 @@ export interface ServerAgentToolsEngineConfig {
  * Parameters for createServerAgentToolsEngine
  */
 export interface ServerCreateAgentToolsEngineParams {
+  /** Additional manifests to include (e.g., LobeHub Skills) */
+  additionalManifests?: LobeToolManifest[];
   /** Agent configuration containing plugins array */
   agentConfig: {
     /** Optional agent chat config with searchMode */

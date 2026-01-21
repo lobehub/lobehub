@@ -1,9 +1,9 @@
 import { Flexbox } from '@lobehub/ui';
-import { BrainCircuit, LibraryBigIcon, Settings } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
+import { getRouteById } from '@/config/routes';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useActiveTabKey } from '@/hooks/useActiveTabKey';
 import { SidebarTabKey } from '@/store/global/initialState';
@@ -25,19 +25,19 @@ const BottomMenu = memo(() => {
     () =>
       [
         {
-          icon: Settings,
+          icon: getRouteById('settings')!.icon,
           key: SidebarTabKey.Setting,
           title: t('tab.setting'),
           url: '/settings',
         },
         {
-          icon: LibraryBigIcon,
+          icon: getRouteById('resource')!.icon,
           key: SidebarTabKey.Resource,
           title: t('tab.resource'),
           url: '/resource',
         },
         {
-          icon: BrainCircuit,
+          icon: getRouteById('memory')!.icon,
           key: SidebarTabKey.Memory,
           title: t('tab.memory'),
           url: '/memory',

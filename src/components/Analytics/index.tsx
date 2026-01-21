@@ -1,4 +1,4 @@
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 
 import { isDesktop } from '@/const/version';
 import { analyticsEnv } from '@/envs/analytics';

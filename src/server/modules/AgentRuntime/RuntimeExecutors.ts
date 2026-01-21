@@ -36,6 +36,7 @@ export interface RuntimeExecutorContext {
   stepIndex: number;
   streamManager: IStreamEventManager;
   toolExecutionService: ToolExecutionService;
+  topicId?: string;
   userId?: string;
 }
 
@@ -55,6 +56,8 @@ export const createRuntimeExecutors = (
     // Fallback to state's modelRuntimeConfig if not in payload
     const model = llmPayload.model || state.modelRuntimeConfig?.model;
     const provider = llmPayload.provider || state.modelRuntimeConfig?.provider;
+    // Fallback to state's tools if not in payload
+    const tools = llmPayload.tools || state.tools;
 
     if (!model || !provider) {
       throw new Error('Model and provider are required for call_llm instruction');
@@ -128,14 +131,14 @@ export const createRuntimeExecutors = (
       const chatPayload = {
         messages: llmPayload.messages,
         model,
-        tools: llmPayload.tools,
+        tools,
       };
 
       log(
         `${stagePrefix} calling model-runtime chat (model: %s, messages: %d, tools: %d)`,
         model,
         llmPayload.messages.length,
-        llmPayload.tools?.length ?? 0,
+        tools?.length ?? 0,
       );
 
       // Buffer: accumulate text and reasoning, send every 50ms
@@ -261,7 +264,12 @@ export const createRuntimeExecutors = (
             }
           },
           onToolsCalling: async ({ toolsCalling: raw }) => {
-            const payload = new ToolNameResolver().resolve(raw, state.toolManifestMap);
+            const resolved = new ToolNameResolver().resolve(raw, state.toolManifestMap);
+            // Add source field from toolSourceMap for routing tool execution
+            const payload = resolved.map((p) => ({
+              ...p,
+              source: state.toolSourceMap?.[p.identifier],
+            }));
             // log(`[${operationLogId}][toolsCalling]`, payload);
             toolsCalling = payload;
             tool_calls = raw;
@@ -466,7 +474,9 @@ export const createRuntimeExecutors = (
       // Execute tool using ToolExecutionService
       log(`[${operationLogId}] Executing tool ${toolName} ...`);
       const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
+        serverDB: ctx.serverDB,
         toolManifestMap: state.toolManifestMap,
+        topicId: ctx.topicId,
         userId: ctx.userId,
       });
 

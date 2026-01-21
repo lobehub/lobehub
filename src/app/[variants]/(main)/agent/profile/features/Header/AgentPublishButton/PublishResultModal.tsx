@@ -19,7 +19,7 @@ const PublishResultModal = memo<PublishResultModalProps>(({ identifier, onCancel
 
   const handleGoToMarket = () => {
     if (identifier) {
-      navigate(`/community/assistant/${identifier}`);
+      navigate(`/community/agent/${identifier}`);
     }
     onCancel();
   };

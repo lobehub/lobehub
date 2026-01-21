@@ -9,7 +9,7 @@ import { LobeInternLMAI, params } from './index';
 testProvider({
   Runtime: LobeInternLMAI,
   provider: ModelProvider.InternLM,
-  defaultBaseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+  defaultBaseURL: 'https://chat.intern-ai.org.cn/api/v1',
   chatDebugEnv: 'DEBUG_INTERNLM_CHAT_COMPLETION',
   chatModel: 'internlm2_5-7b-chat',
   test: {
@@ -30,7 +30,7 @@ describe('LobeInternLMAI - custom features', () => {
 
   describe('params object', () => {
     it('should export params with correct baseURL', () => {
-      expect(params.baseURL).toBe('https://internlm-chat.intern-ai.org.cn/puyu/api/v1');
+      expect(params.baseURL).toBe('https://chat.intern-ai.org.cn/api/v1');
     });
 
     it('should have correct provider', () => {
@@ -116,7 +116,7 @@ describe('LobeInternLMAI - custom features', () => {
   describe('models', () => {
     it('should fetch and process models', async () => {
       const mockClient = {
-        baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
         apiKey: 'test',
         models: {
           list: vi.fn().mockResolvedValue({
@@ -137,7 +137,7 @@ describe('LobeInternLMAI - custom features', () => {
 
     it('should detect function call capability from model name', async () => {
       const mockClient = {
-        baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
         apiKey: 'test',
         models: {
           list: vi.fn().mockResolvedValue({
@@ -156,7 +156,7 @@ describe('LobeInternLMAI - custom features', () => {
 
     it('should detect vision capability from model name', async () => {
       const mockClient = {
-        baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
         apiKey: 'test',
         models: {
           list: vi.fn().mockResolvedValue({
@@ -175,7 +175,7 @@ describe('LobeInternLMAI - custom features', () => {
 
     it('should handle case-insensitive keyword matching', async () => {
       const mockClient = {
-        baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
         apiKey: 'test',
         models: {
           list: vi.fn().mockResolvedValue({
@@ -194,7 +194,7 @@ describe('LobeInternLMAI - custom features', () => {
 
     it('should merge with known model data from model-bank', async () => {
       const mockClient = {
-        baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
         apiKey: 'test',
         models: {
           list: vi.fn().mockResolvedValue({
@@ -215,7 +215,7 @@ describe('LobeInternLMAI - custom features', () => {
 
     it('should handle models not in model-bank', async () => {
       const mockClient = {
-        baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
         apiKey: 'test',
         models: {
           list: vi.fn().mockResolvedValue({
@@ -238,7 +238,7 @@ describe('LobeInternLMAI - custom features', () => {
 
     it('should set enabled flag from known model', async () => {
       const mockClient = {
-        baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
         apiKey: 'test',
         models: {
           list: vi.fn().mockResolvedValue({
@@ -255,7 +255,7 @@ describe('LobeInternLMAI - custom features', () => {
 
     it('should inherit abilities from known model', async () => {
       const mockClient = {
-        baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
         apiKey: 'test',
         models: {
           list: vi.fn().mockResolvedValue({
@@ -291,7 +291,7 @@ describe('LobeInternLMAI - custom features', () => {
 
     it('should handle empty model list', async () => {
       const mockClient = {
-        baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
         apiKey: 'test',
         models: {
           list: vi.fn().mockResolvedValue({
@@ -306,7 +306,7 @@ describe('LobeInternLMAI - custom features', () => {
 
     it('should filter out null/undefined models', async () => {
       const mockClient = {
-        baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
         apiKey: 'test',
         models: {
           list: vi.fn().mockResolvedValue({
@@ -322,7 +322,7 @@ describe('LobeInternLMAI - custom features', () => {
 
     it('should set contextWindowTokens from known model', async () => {
       const mockClient = {
-        baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
         apiKey: 'test',
         models: {
           list: vi.fn().mockResolvedValue({
@@ -340,7 +340,7 @@ describe('LobeInternLMAI - custom features', () => {
 
     it('should set displayName from known model', async () => {
       const mockClient = {
-        baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
         apiKey: 'test',
         models: {
           list: vi.fn().mockResolvedValue({
@@ -358,7 +358,7 @@ describe('LobeInternLMAI - custom features', () => {
 
     it('should combine keyword detection with known model abilities', async () => {
       const mockClient = {
-        baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+        baseURL: 'https://chat.intern-ai.org.cn/api/v1',
         apiKey: 'test',
         models: {
           list: vi.fn().mockResolvedValue({

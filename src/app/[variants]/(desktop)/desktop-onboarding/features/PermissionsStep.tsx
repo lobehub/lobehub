@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 import LobeMessage from '../components/LobeMessage';
+import OnboardingFooterActions from '../components/OnboardingFooterActions';
 
 type PermissionMeta = {
   descriptionKey: string;
@@ -154,7 +155,7 @@ const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
   };
 
   return (
-    <Flexbox gap={16}>
+    <Flexbox gap={16} style={{ height: '100%', minHeight: '100%' }}>
       <Flexbox>
         <LobeMessage sentences={[t('screen3.title'), t('screen3.title2'), t('screen3.title3')]} />
         <Text as={'p'}>{t('screen3.description')}</Text>
@@ -207,19 +208,23 @@ const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
           </Block>
         ))}
       </Block>
-      <Flexbox horizontal justify={'space-between'} style={{ marginTop: 32 }}>
-        <Button
-          icon={Undo2Icon}
-          onClick={onBack}
-          style={{ color: cssVar.colorTextDescription }}
-          type={'text'}
-        >
-          {t('back')}
-        </Button>
-        <Button onClick={onNext} type={'primary'}>
-          {t('next')}
-        </Button>
-      </Flexbox>
+      <OnboardingFooterActions
+        left={
+          <Button
+            icon={Undo2Icon}
+            onClick={onBack}
+            style={{ color: cssVar.colorTextDescription }}
+            type={'text'}
+          >
+            {t('back')}
+          </Button>
+        }
+        right={
+          <Button onClick={onNext} type={'primary'}>
+            {t('next')}
+          </Button>
+        }
+      />
     </Flexbox>
   );
 });

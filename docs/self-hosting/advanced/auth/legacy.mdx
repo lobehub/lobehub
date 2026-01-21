@@ -1,0 +1,106 @@
+---
+title: Legacy Authentication (NextAuth & Clerk)
+description: >-
+  Documentation for legacy authentication methods including NextAuth and Clerk.
+  For new deployments, we recommend using Better Auth.
+tags:
+  - Authentication Service
+  - Next Auth
+  - Clerk
+  - Legacy
+---
+
+# Legacy Authentication
+
+<Callout type={'warning'}>
+  **Legacy Notice**: NextAuth and Clerk are legacy authentication methods. For new deployments, we strongly recommend using [Better Auth](/docs/self-hosting/advanced/auth) for its simplicity and flexibility.
+</Callout>
+
+This page documents the legacy authentication methods (NextAuth and Clerk) for users who are still using these services.
+
+## Clerk
+
+Clerk is a comprehensive identity verification solution that provides a simple yet powerful API and services to handle user authentication and session management.
+
+LobeChat has deeply integrated with Clerk to provide users with a secure and convenient login and registration experience.
+
+By setting the environment variables `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in LobeChat's environment, you can enable and use Clerk.
+
+<Callout type={'info'}>
+  For detailed Clerk configuration, see [Clerk Configuration Guide](/docs/self-hosting/advanced/auth/clerk).
+</Callout>
+
+## Next Auth
+
+Before using NextAuth, please set the following variables in LobeChat's environment variables:
+
+| Environment Variable             | Type     | Description                                                                                                                                                                                                                                |
+| -------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `NEXT_PUBLIC_ENABLE_NEXT_AUTH`   | Required | This is used to enable the NextAuth service. Set it to `1` to enable it; changing this setting requires recompiling the application. Users deploying with the `lobehub/lobe-chat-database` image have this configuration added by default. |
+| `AUTH_SECRET`                    | Required | The key used to encrypt Auth.js session tokens. You can use the following command: `openssl rand -base64 32`, or visit `https://generate-secret.vercel.app/32` to generate the key.                                                        |
+| `AUTH_URL`                       | Required | This URL specifies the callback address for Auth.js when performing OAuth verification. Set this only if the default generated redirect address is incorrect. `https://example.com/api/auth`                                               |
+| `NEXT_AUTH_SSO_PROVIDERS`        | Optional | This environment variable is used to enable multiple identity verification sources simultaneously, separated by commas, for example, `auth0,microsoft-entra-id,authentik`.                                                                 |
+| `NEXT_AUTH_SSO_SESSION_STRATEGY` | Optional | The session strategy for Auth.js. Options are `jwt` or `database`. Default is `jwt`.                                                                                                                                                       |
+
+Currently supported identity verification services include:
+
+<Cards>
+  <Card href={'/docs/self-hosting/advanced/auth/next-auth/auth0'} title={'Auth0'} />
+
+  <Card href={'/docs/self-hosting/advanced/auth/next-auth/microsoft-entra-id'} title={'Microsoft Entra ID'} />
+
+  <Card href={'/docs/self-hosting/advanced/auth/next-auth/authentik'} title={'Authentik'} />
+
+  <Card href={'/docs/self-hosting/advanced/auth/next-auth/github'} title={'Github'} />
+
+  <Card href={'/docs/self-hosting/advanced/auth/next-auth/zitadel'} title={'ZITADEL'} />
+
+  <Card href={'/docs/self-hosting/advanced/auth/next-auth/cloudflare-zero-trust'} title={'Cloudflare Zero Trust'} />
+
+  <Card href={'/docs/self-hosting/advanced/auth/next-auth/authelia'} title={'Authelia'} />
+
+  <Card href={'/docs/self-hosting/advanced/auth/next-auth/logto'} title={'Logto'} />
+
+  <Card href={'/docs/self-hosting/advanced/auth/next-auth/keycloak'} title={'Keycloak'} />
+
+  <Card href={'/docs/self-hosting/advanced/auth/next-auth/google'} title={'Google'} />
+
+  <Card href={'/docs/self-hosting/advanced/auth/next-auth/okta'} title={'Okta'} />
+</Cards>
+
+Click on the links to view the corresponding platform's configuration documentation.
+
+## Advanced Configuration
+
+To simultaneously enable multiple identity verification sources, please set the `NEXT_AUTH_SSO_PROVIDERS` environment variable, separating them with commas, for example, `auth0,microsoft-entra-id,authentik`.
+
+The order corresponds to the display order of the SSO providers.
+
+| SSO Provider          | Value                   | Additional Features |
+| --------------------- | ----------------------- | ------------------- |
+| Auth0                 | `auth0`                 |                     |
+| Authenlia             | `authenlia`             |                     |
+| Authentik             | `authentik`             |                     |
+| Casdoor               | `casdoor`               | `Webhook`           |
+| Cloudflare Zero Trust | `cloudflare-zero-trust` |                     |
+| Github                | `github`                |                     |
+| Logto                 | `logto`                 | `Webhook`           |
+| Microsoft Entra ID    | `microsoft-entra-id`    |                     |
+| ZITADEL               | `zitadel`               |                     |
+| Keycloak              | `keycloak`              |                     |
+| Google                | `google`                |                     |
+| Okta                  | `okta`                  |                     |
+
+## Additional Features
+
+### Webhook Support
+
+Allow LobeChat to receive notifications when user information is updated in the identity provider. Supported providers include Casdoor and Logto. Please refer to the specific provider documentation for configuration details.
+
+### Database Session
+
+Allow the session store in database, see also the [Auth.js Session Documentation](https://authjs.dev/concepts/session-strategies#database-session).
+
+## Other SSO Providers
+
+Please refer to the [Auth.js](https://authjs.dev/getting-started/authentication/oauth) documentation and feel free to submit a Pull Request.

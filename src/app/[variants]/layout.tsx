@@ -9,7 +9,6 @@ import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
 import Analytics from '@/components/Analytics';
 import { DEFAULT_LANG } from '@/const/locale';
 import { isDesktop } from '@/const/version';
-import PWAInstall from '@/features/PWAInstall';
 import AuthProvider from '@/layout/AuthProvider';
 import GlobalProvider from '@/layout/GlobalProvider';
 import { type Locales } from '@/locales/resources';
@@ -40,9 +39,6 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
         variants={variants}
       >
         <AuthProvider>{children}</AuthProvider>
-        <Suspense fallback={null}>
-          <PWAInstall />
-        </Suspense>
       </GlobalProvider>
     );
   };
@@ -52,8 +48,6 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
       <head>
         {/* eslint-disable-next-line @typescript-eslint/no-use-before-define */}
         <script dangerouslySetInnerHTML={{ __html: `(${outdateBrowserScript.toString()})();` }} />
-
-        {/* <script dangerouslySetInnerHTML={{ __html: 'setTimeout(() => {debugger}, 16)' }} /> */}
         {process.env.DEBUG_REACT_SCAN === '1' && (
           <Script
             crossOrigin={'anonymous'}

@@ -17,7 +17,8 @@ interface WelcomeStepProps {
 }
 
 const WelcomeStep = memo<WelcomeStepProps>(({ onNext }) => {
-  const { t } = useTranslation('onboarding');
+  const { t, i18n } = useTranslation('onboarding');
+  const locale = i18n.language;
   const updateGeneralConfig = useUserStore((s) => s.updateGeneralConfig);
 
   const handleNext = () => {
@@ -53,6 +54,7 @@ const WelcomeStep = memo<WelcomeStepProps>(({ onNext }) => {
             deletePauseDuration={1000}
             deletingSpeed={32}
             hideCursorWhileTyping={'afterTyping'}
+            key={locale}
             pauseDuration={16_000}
             sentences={[
               t('telemetry.title', { name: 'Lobe AI' }),

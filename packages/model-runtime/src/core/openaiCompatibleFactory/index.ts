@@ -19,7 +19,6 @@ import {
   EmbeddingsPayload,
   GenerateObjectOptions,
   GenerateObjectPayload,
-  TextToImagePayload,
   TextToSpeechOptions,
   TextToSpeechPayload,
 } from '../../types';
@@ -731,19 +730,6 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
         log('received %d embeddings', res.data.length);
         return res.data.map((item) => item.embedding);
-      } catch (error) {
-        throw this.handleError(error);
-      }
-    }
-
-    async textToImage(payload: TextToImagePayload) {
-      const log = debug(`${this.logPrefix}:textToImage`);
-      log('textToImage called with prompt length: %d', payload.prompt?.length || 0);
-
-      try {
-        const res = await this.client.images.generate(payload);
-        log('generated %d images', res.data?.length || 0);
-        return (res.data || []).map((o) => o.url) as string[];
       } catch (error) {
         throw this.handleError(error);
       }

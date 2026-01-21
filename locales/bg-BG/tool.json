@@ -15,6 +15,8 @@
   "agentGroupManagement.executeTask.thread": "Идентификатор на нишка",
   "agentGroupManagement.executeTask.timeout": "Времето за изпълнение изтече",
   "agentGroupManagement.executeTask.tokens": "Използвани токени",
+  "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "Подробни инструкции за агента за изпълнение на задачата...",
+  "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "Заглавие на задачата...",
   "codeInterpreter-legacy.error": "Грешка при изпълнение",
   "codeInterpreter-legacy.executing": "Изпълнение...",
   "codeInterpreter-legacy.files": "Файлове:",

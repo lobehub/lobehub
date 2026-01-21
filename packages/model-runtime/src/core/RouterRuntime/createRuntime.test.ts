@@ -17,13 +17,14 @@ describe('createRouterRuntime', () => {
       const runtime = new Runtime();
 
       // 现在错误在使用时才抛出，因为是延迟创建
-      await expect(runtime.getRuntimeByModel('test-model')).rejects.toThrow('empty providers');
+      await expect(
+        runtime.chat({ model: 'test-model', messages: [], temperature: 0.7 }),
+      ).rejects.toThrow('empty providers');
     });
 
     it('should create UniformRuntime class with valid routers', () => {
       class MockRuntime implements LobeRuntimeAI {
         chat = vi.fn();
-        textToImage = vi.fn();
         models = vi.fn();
         embeddings = vi.fn();
         textToSpeech = vi.fn();
@@ -53,7 +54,6 @@ describe('createRouterRuntime', () => {
           mockConstructor(options);
         }
         chat = vi.fn();
-        textToImage = vi.fn();
         models = vi.fn();
         embeddings = vi.fn();
         textToSpeech = vi.fn();
@@ -74,7 +74,7 @@ describe('createRouterRuntime', () => {
       const runtime = new Runtime({ apiKey: 'constructor-key' });
 
       // 触发 runtime 创建
-      await runtime.getRuntimeByModel('test-model');
+      await runtime.chat({ model: 'test-model', messages: [], temperature: 0.7 });
 
       expect(mockConstructor).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -83,169 +83,6 @@ describe('createRouterRuntime', () => {
           id: 'test-runtime',
         }),
       );
-    });
-  });
-
-  describe('model matching', () => {
-    it('should return correct runtime for matching model', async () => {
-      const mockRuntime = {
-        chat: vi.fn(),
-        textToImage: vi.fn(),
-        models: vi.fn(),
-        embeddings: vi.fn(),
-        textToSpeech: vi.fn(),
-      } as unknown as LobeRuntimeAI;
-
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: mockRuntime.constructor as any,
-            models: ['model-1', 'model-2'],
-          },
-        ],
-      });
-
-      const runtime = new Runtime();
-      const selectedRuntime = await runtime.getRuntimeByModel('model-1');
-
-      expect(selectedRuntime).toBeDefined();
-    });
-
-    it('should support dynamic routers with asynchronous model fetching', async () => {
-      const mockRuntime = {
-        chat: vi.fn(),
-        textToImage: vi.fn(),
-        models: vi.fn(),
-        embeddings: vi.fn(),
-        textToSpeech: vi.fn(),
-      } as unknown as LobeRuntimeAI;
-
-      const mockModelsFunction = vi.fn().mockResolvedValue(['async-model-1', 'async-model-2']);
-
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: async () => {
-          // 异步获取模型列表
-          const models = await mockModelsFunction();
-          return [
-            {
-              apiType: 'openai',
-              options: {},
-              runtime: mockRuntime.constructor as any,
-              models, // 静态数组
-            },
-          ];
-        },
-      });
-
-      const runtime = new Runtime();
-
-      // 触发 routers 函数调用
-      const selectedRuntime = await runtime.getRuntimeByModel('async-model-1');
-
-      expect(selectedRuntime).toBeDefined();
-      expect(mockModelsFunction).toHaveBeenCalled();
-    });
-
-    it('should return fallback runtime when model not found', async () => {
-      const mockRuntime = {
-        chat: vi.fn(),
-        textToImage: vi.fn(),
-        models: vi.fn(),
-        embeddings: vi.fn(),
-        textToSpeech: vi.fn(),
-      } as unknown as LobeRuntimeAI;
-
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: mockRuntime.constructor as any,
-            models: ['known-model'],
-          },
-        ],
-      });
-
-      const runtime = new Runtime();
-      const selectedRuntime = await runtime.getRuntimeByModel('unknown-model');
-
-      expect(selectedRuntime).toBeDefined();
-    });
-  });
-
-  describe('getRuntimeByModel', () => {
-    it('should return runtime that supports the model', async () => {
-      class MockRuntime1 implements LobeRuntimeAI {
-        chat = vi.fn();
-      }
-
-      class MockRuntime2 implements LobeRuntimeAI {
-        chat = vi.fn();
-      }
-
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: MockRuntime1 as any,
-            models: ['gpt-4'],
-          },
-          {
-            apiType: 'anthropic',
-            options: {},
-            runtime: MockRuntime2 as any,
-            models: ['claude-3'],
-          },
-        ],
-      });
-
-      const runtime = new Runtime();
-
-      const result1 = await runtime.getRuntimeByModel('gpt-4');
-      expect(result1).toBeInstanceOf(MockRuntime1);
-
-      const result2 = await runtime.getRuntimeByModel('claude-3');
-      expect(result2).toBeInstanceOf(MockRuntime2);
-    });
-
-    it('should return last runtime when no model matches', async () => {
-      class MockRuntime1 implements LobeRuntimeAI {
-        chat = vi.fn();
-      }
-
-      class MockRuntime2 implements LobeRuntimeAI {
-        chat = vi.fn();
-      }
-
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: MockRuntime1 as any,
-            models: ['gpt-4'],
-          },
-          {
-            apiType: 'anthropic',
-            options: {},
-            runtime: MockRuntime2 as any,
-            models: ['claude-3'],
-          },
-        ],
-      });
-
-      const runtime = new Runtime();
-      const result = await runtime.getRuntimeByModel('unknown-model');
-
-      expect(result).toBeInstanceOf(MockRuntime2);
     });
   });
 
@@ -349,35 +186,6 @@ describe('createRouterRuntime', () => {
     });
   });
 
-  describe('textToImage method', () => {
-    it('should call textToImage on the correct runtime based on model', async () => {
-      const mockTextToImage = vi.fn().mockResolvedValue('image-response');
-
-      class MockRuntime implements LobeRuntimeAI {
-        textToImage = mockTextToImage;
-      }
-
-      const Runtime = createRouterRuntime({
-        id: 'test-runtime',
-        routers: [
-          {
-            apiType: 'openai',
-            options: {},
-            runtime: MockRuntime as any,
-            models: ['dall-e-3'],
-          },
-        ],
-      });
-
-      const runtime = new Runtime();
-      const payload = { model: 'dall-e-3', prompt: 'test prompt' };
-
-      const result = await runtime.textToImage(payload);
-      expect(result).toBe('image-response');
-      expect(mockTextToImage).toHaveBeenCalledWith(payload);
-    });
-  });
-
   describe('models method', () => {
     it('should call models method on first runtime', async () => {
       const mockModels = vi.fn().mockResolvedValue(['model-1', 'model-2']);
@@ -468,8 +276,7 @@ describe('createRouterRuntime', () => {
   describe('dynamic routers configuration', () => {
     it('should support function-based routers configuration', async () => {
       class MockRuntime implements LobeRuntimeAI {
-        chat = vi.fn();
-        textToImage = vi.fn();
+        chat = vi.fn().mockResolvedValue('chat-response');
         models = vi.fn();
         embeddings = vi.fn();
         textToSpeech = vi.fn();
@@ -509,7 +316,7 @@ describe('createRouterRuntime', () => {
       expect(runtime).toBeDefined();
 
       // 测试动态 routers 是否能正确工作
-      const result = await runtime.getRuntimeByModel('gpt-4');
+      const result = await runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 });
       expect(result).toBeDefined();
 
       // 验证动态函数被调用时传入了正确的参数
@@ -532,7 +339,325 @@ describe('createRouterRuntime', () => {
       const runtime = new Runtime();
 
       // 现在错误在使用时才抛出，因为是延迟创建
-      await expect(runtime.getRuntimeByModel('test-model')).rejects.toThrow('empty providers');
+      await expect(
+        runtime.chat({ model: 'test-model', messages: [], temperature: 0.7 }),
+      ).rejects.toThrow('empty providers');
+    });
+
+    it('should support async function-based routers configuration', async () => {
+      const mockChat = vi.fn().mockResolvedValue('async-chat-response');
+
+      class MockRuntime implements LobeRuntimeAI {
+        chat = mockChat;
+      }
+
+      const asyncRoutersFunction = vi.fn(async () => [
+        {
+          apiType: 'openai' as const,
+          options: { apiKey: 'async-key' },
+          runtime: MockRuntime as any,
+          models: ['gpt-4'],
+        },
+      ]);
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: asyncRoutersFunction,
+      });
+
+      const runtime = new Runtime();
+      const result = await runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 });
+
+      expect(result).toBe('async-chat-response');
+      expect(asyncRoutersFunction).toHaveBeenCalled();
+    });
+  });
+
+  describe('fallback mechanism', () => {
+    it('should fallback to next option when first option fails', async () => {
+      // Test that errors are caught and re-thrown when all options fail
+      const mockChatAlwaysFail = vi.fn().mockRejectedValue(new Error('All failed'));
+
+      class AlwaysFailRuntime implements LobeRuntimeAI {
+        chat = mockChatAlwaysFail;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: [{ apiKey: 'key-1' }, { apiKey: 'key-2' }],
+            runtime: AlwaysFailRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await expect(
+        runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 }),
+      ).rejects.toThrow('All failed');
+
+      // Verify chat was called twice (once per option)
+      expect(mockChatAlwaysFail).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw error when options array is empty', async () => {
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: [] as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await expect(
+        runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 }),
+      ).rejects.toThrow('empty provider options');
+    });
+
+    it('should use apiType from option item when specified for fallback', async () => {
+      const constructorCalls: any[] = [];
+
+      class MockRuntime implements LobeRuntimeAI {
+        constructor(options: any) {
+          constructorCalls.push(options);
+        }
+        chat = vi.fn().mockResolvedValue('response');
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: [{ apiKey: 'openai-key' }, { apiKey: 'anthropic-key', apiType: 'anthropic' }],
+            runtime: MockRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 });
+
+      // First option should be tried
+      expect(constructorCalls.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('router matching', () => {
+    it('should fallback to last router when model does not match any', async () => {
+      const mockChatFirst = vi.fn().mockResolvedValue('first-response');
+      const mockChatLast = vi.fn().mockResolvedValue('last-response');
+
+      class FirstRuntime implements LobeRuntimeAI {
+        chat = mockChatFirst;
+      }
+
+      class LastRuntime implements LobeRuntimeAI {
+        chat = mockChatLast;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: { apiKey: 'first-key' },
+            runtime: FirstRuntime as any,
+            models: ['gpt-4'],
+          },
+          {
+            apiType: 'anthropic',
+            options: { apiKey: 'last-key' },
+            runtime: LastRuntime as any,
+            models: ['claude-3'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      // Use a model that doesn't match any router
+      const result = await runtime.chat({
+        model: 'unknown-model',
+        messages: [],
+        temperature: 0.7,
+      });
+
+      expect(result).toBe('last-response');
+      expect(mockChatLast).toHaveBeenCalled();
+      expect(mockChatFirst).not.toHaveBeenCalled();
+    });
+
+    it('should match router with empty models array as fallback', async () => {
+      const mockChatSpecific = vi.fn().mockResolvedValue('specific-response');
+      const mockChatFallback = vi.fn().mockResolvedValue('fallback-response');
+
+      class SpecificRuntime implements LobeRuntimeAI {
+        chat = mockChatSpecific;
+      }
+
+      class FallbackRuntime implements LobeRuntimeAI {
+        chat = mockChatFallback;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: { apiKey: 'specific-key' },
+            runtime: SpecificRuntime as any,
+            models: ['gpt-4'],
+          },
+          {
+            apiType: 'openai',
+            options: { apiKey: 'fallback-key' },
+            runtime: FallbackRuntime as any,
+            models: [], // Empty models array acts as catch-all
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      const result = await runtime.chat({
+        model: 'any-model',
+        messages: [],
+        temperature: 0.7,
+      });
+
+      expect(result).toBe('fallback-response');
+    });
+  });
+
+  describe('createImage method', () => {
+    it('should call createImage on the correct runtime', async () => {
+      const mockCreateImage = vi
+        .fn()
+        .mockResolvedValue({ imageUrl: 'https://example.com/image.png' });
+
+      class MockRuntime implements LobeRuntimeAI {
+        createImage = mockCreateImage;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: {},
+            runtime: MockRuntime as any,
+            models: ['gpt-image-1'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      const payload = { model: 'gpt-image-1', params: { prompt: 'a cat' } };
+
+      const result = await runtime.createImage(payload);
+      expect(result).toEqual({ imageUrl: 'https://example.com/image.png' });
+      expect(mockCreateImage).toHaveBeenCalledWith(payload);
+    });
+  });
+
+  describe('generateObject method', () => {
+    it('should call generateObject on the correct runtime', async () => {
+      const mockGenerateObject = vi.fn().mockResolvedValue({ name: 'test' });
+
+      class MockRuntime implements LobeRuntimeAI {
+        generateObject = mockGenerateObject;
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: {},
+            runtime: MockRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      const payload = { model: 'gpt-4', messages: [{ role: 'user' as const, content: 'test' }] };
+      const options = { user: 'test-user' };
+
+      const result = await runtime.generateObject(payload, options);
+      expect(result).toEqual({ name: 'test' });
+      expect(mockGenerateObject).toHaveBeenCalledWith(payload, options);
+    });
+  });
+
+  describe('constructor options handling', () => {
+    it('should trim apiKey and baseURL', async () => {
+      const constructorOptions: any[] = [];
+
+      class MockRuntime implements LobeRuntimeAI {
+        constructor(options: any) {
+          constructorOptions.push(options);
+        }
+        chat = vi.fn().mockResolvedValue('response');
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        routers: [
+          {
+            apiType: 'openai',
+            options: {},
+            runtime: MockRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime({
+        apiKey: '  trimmed-key  ',
+        baseURL: '  https://api.example.com  ',
+      });
+
+      await runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 });
+
+      expect(constructorOptions[0].apiKey).toBe('trimmed-key');
+      expect(constructorOptions[0].baseURL).toBe('https://api.example.com');
+    });
+
+    it('should use default apiKey when not provided', async () => {
+      const constructorOptions: any[] = [];
+
+      class MockRuntime implements LobeRuntimeAI {
+        constructor(options: any) {
+          constructorOptions.push(options);
+        }
+        chat = vi.fn().mockResolvedValue('response');
+      }
+
+      const Runtime = createRouterRuntime({
+        id: 'test-runtime',
+        apiKey: 'default-api-key',
+        routers: [
+          {
+            apiType: 'openai',
+            options: {},
+            runtime: MockRuntime as any,
+            models: ['gpt-4'],
+          },
+        ],
+      });
+
+      const runtime = new Runtime();
+      await runtime.chat({ model: 'gpt-4', messages: [], temperature: 0.7 });
+
+      expect(constructorOptions[0].apiKey).toBe('default-api-key');
     });
   });
 });

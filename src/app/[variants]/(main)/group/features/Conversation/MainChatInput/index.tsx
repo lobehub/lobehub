@@ -11,10 +11,10 @@ import { useSendMenuItems } from './useSendMenuItems';
 const leftActions: ActionKeys[] = [
   'model',
   'search',
-  'typo',
   'fileUpload',
+  'tools',
   '---',
-  ['tools', 'params', 'clear'],
+  ['typo', 'params', 'clear'],
   'mainToken',
 ];
 

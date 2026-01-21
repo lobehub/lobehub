@@ -2,9 +2,10 @@ import { Icon } from '@lobehub/ui';
 import { TabBar, type TabBarProps } from '@lobehub/ui/mobile';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Bot, MessageSquare, User } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useRouter } from '@/libs/router/navigation';
 
 import { SidebarTabKey } from '@/store/global/initialState';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';

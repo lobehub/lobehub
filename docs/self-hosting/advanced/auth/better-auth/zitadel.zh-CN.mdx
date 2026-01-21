@@ -1,0 +1,69 @@
+---
+title: 在 LobeChat 中配置 ZITADEL 身份验证
+description: 学习如何在 LobeChat 中配置 ZITADEL SSO，包括创建应用和设置环境变量。
+tags:
+  - ZITADEL
+  - 身份验证
+  - LobeChat
+  - 单点登录
+  - OIDC
+---
+
+# 配置 ZITADEL 身份验证
+
+[ZITADEL](https://zitadel.com/) 是一个开源的身份基础设施，内置多租户支持。
+
+<Steps>
+  ### 在 ZITADEL 中创建应用
+
+  1. 登录 ZITADEL 控制台
+  2. 前往你的项目（或创建新项目）
+  3. 点击 **New** 创建新应用
+  4. 选择 **Web** 作为应用类型
+  5. 配置：
+     - Name: `LobeChat`
+     - Authentication Method: `CODE`（用于机密客户端）
+  6. 添加重定向 URI：
+
+  <Callout type={'info'}>
+    **回调 URL 格式**: `https://your-domain.com/api/auth/callback/zitadel`
+  </Callout>
+
+  7. 创建后，记下 **Client ID** 并生成 **Client Secret**
+
+  ### 获取 Issuer URL
+
+  Issuer URL 是 ZITADEL 实例 URL，通常为：
+
+  - 云版：`https://your-instance.zitadel.cloud`
+  - 自托管：`https://your-zitadel-domain`
+
+  ### 配置环境变量
+
+  在部署 LobeChat 时，你需要配置以下环境变量：
+
+  | 环境变量                             | 类型 | 描述                                                           |
+  | -------------------------------- | -- | ------------------------------------------------------------ |
+  | `AUTH_SECRET`                    | 必选 | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`               |
+  | `AUTH_SSO_PROVIDERS`             | 必选 | SSO 提供商。使用 ZITADEL 请填写 `zitadel`                             |
+  | `AUTH_ZITADEL_ID`                | 必选 | ZITADEL 应用的 Client ID                                        |
+  | `AUTH_ZITADEL_SECRET`            | 必选 | ZITADEL 应用的 Client Secret                                    |
+  | `AUTH_ZITADEL_ISSUER`            | 必选 | ZITADEL Issuer URL（例如 `https://your-instance.zitadel.cloud`） |
+
+  <Callout type={'info'}>
+    **兼容的环境变量**：为了向后兼容，以下别名也支持：
+
+    - `ZITADEL_CLIENT_ID` / `ZITADEL_CLIENT_SECRET` / `ZITADEL_ISSUER`
+  </Callout>
+
+  <Callout type={'tip'}>
+    前往 [📘 环境变量](/zh/docs/self-hosting/environment-variables/auth#zitadel) 可查阅相关变量详情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>部署成功后，用户将可以通过 ZITADEL 身份认证并使用 LobeChat。</Callout>
+
+## 相关资源
+
+- [ZITADEL 文档](https://zitadel.com/docs)
+- [ZITADEL 应用设置](https://zitadel.com/docs/guides/integrate/login-users)

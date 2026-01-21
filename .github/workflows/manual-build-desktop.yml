@@ -73,7 +73,17 @@ jobs:
             echo "📦 Using provided version: ${version} (base: ${base_version})"
           else
             ci_build_number="${{ github.run_number }}"
-            version="0.0.0-${CHANNEL}.manual.${ci_build_number}"
+            if [ "$CHANNEL" = "beta" ]; then
+              channel_suffix="next"
+            else
+              channel_suffix="$CHANNEL"
+            fi
+
+            if [[ "$base_version" == *"-${channel_suffix}"* ]]; then
+              version="${base_version}.manual.${ci_build_number}"
+            else
+              version="${base_version}-${channel_suffix}.manual.${ci_build_number}"
+            fi
             echo "📦 Generated version: ${version} (base: ${base_version})"
           fi
 

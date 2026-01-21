@@ -77,11 +77,8 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
         opacity,
         width 0.2s ${cssVar.motionEaseOut};
     }
-
     #${BACK_BUTTON_ID} {
-      width: 0 !important;
-      opacity: 0;
-      transition: all 0.2s ${cssVar.motionEaseOut};
+      width: 24px !important;
     }
 
     &:hover {
@@ -93,13 +90,6 @@ const draggableStyles = createStaticStyles(({ css, cssVar }) => ({
       #${USER_DROPDOWN_ICON_ID} {
         width: 14px !important;
         opacity: 1;
-      }
-
-      &:hover {
-        #${BACK_BUTTON_ID} {
-          width: 24px !important;
-          opacity: 1;
-        }
       }
     }
   `,

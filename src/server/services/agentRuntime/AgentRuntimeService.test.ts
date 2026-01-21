@@ -1,7 +1,17 @@
+/**
+ * @vitest-environment node
+ */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentRuntimeService } from './AgentRuntimeService';
 import type { AgentExecutionParams, OperationCreationParams, StartExecutionParams } from './types';
+
+// Mock trusted client to avoid server-side env access
+vi.mock('@/libs/trusted-client', () => ({
+  generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
+  getTrustedClientTokenForSession: vi.fn().mockResolvedValue(undefined),
+  isTrustedClientEnabled: vi.fn().mockReturnValue(false),
+}));
 
 // Mock database and models
 vi.mock('@/database/models/message', () => ({
@@ -33,6 +43,9 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
 
 // Mock search service to avoid server-side env access
 vi.mock('@/server/services/search', () => ({
+  SearchService: vi.fn().mockImplementation(() => ({
+    search: vi.fn(),
+  })),
   searchService: {
     search: vi.fn(),
   },
@@ -156,7 +169,7 @@ describe('AgentRuntimeService', () => {
     it('should initialize with default base URL', () => {
       delete process.env.AGENT_RUNTIME_BASE_URL;
       const newService = new AgentRuntimeService(mockDb, mockUserId);
-      expect((newService as any).baseURL).toBe('http://localhost:3010/api/agent');
+      expect((newService as any).baseURL).toBe('http://localhost:3210/api/agent');
     });
 
     it('should initialize with custom base URL from environment', () => {

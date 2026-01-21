@@ -1,4 +1,8 @@
 import {
+  AgentBuilderManifest,
+  AgentBuilderStreamings,
+} from '@lobechat/builtin-tool-agent-builder/client';
+import {
   CloudSandboxManifest,
   CloudSandboxStreamings,
 } from '@lobechat/builtin-tool-cloud-sandbox/client';
@@ -15,6 +19,7 @@ import {
   LocalSystemManifest,
   LocalSystemStreamings,
 } from '@lobechat/builtin-tool-local-system/client';
+import { MemoryManifest, MemoryStreamings } from '@lobechat/builtin-tool-memory/client';
 import { NotebookManifest, NotebookStreamings } from '@lobechat/builtin-tool-notebook/client';
 import { type BuiltinStreaming } from '@lobechat/types';
 
@@ -27,6 +32,7 @@ import { type BuiltinStreaming } from '@lobechat/types';
  * The component should fetch streaming content from store internally.
  */
 const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = {
+  [AgentBuilderManifest.identifier]: AgentBuilderStreamings as Record<string, BuiltinStreaming>,
   [CloudSandboxManifest.identifier]: CloudSandboxStreamings as Record<string, BuiltinStreaming>,
   [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderStreamings as Record<
     string,
@@ -38,6 +44,7 @@ const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = 
   >,
   [GTDManifest.identifier]: GTDStreamings as Record<string, BuiltinStreaming>,
   [LocalSystemManifest.identifier]: LocalSystemStreamings as Record<string, BuiltinStreaming>,
+  [MemoryManifest.identifier]: MemoryStreamings as Record<string, BuiltinStreaming>,
   [NotebookManifest.identifier]: NotebookStreamings as Record<string, BuiltinStreaming>,
 };
 

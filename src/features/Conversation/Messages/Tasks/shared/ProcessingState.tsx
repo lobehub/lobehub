@@ -28,9 +28,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     display: flex;
     gap: 8px;
     align-items: center;
-
     padding-block: 8px;
-    padding-inline: 16px;
   `,
   footer: css`
     padding-block-start: 8px;

@@ -2,7 +2,9 @@
 
 import { Markdown, ScrollShadow } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { type RefObject, memo, useEffect } from 'react';
+
+import { useAutoScroll } from '@/hooks/useAutoScroll';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -19,51 +21,16 @@ interface StreamingMarkdownProps {
 }
 
 const StreamingMarkdown = memo<StreamingMarkdownProps>(({ children, maxHeight = 400 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [userHasScrolled, setUserHasScrolled] = useState(false);
-  const isAutoScrollingRef = useRef(false);
+  const { ref, handleScroll, resetScrollLock } = useAutoScroll<HTMLDivElement>({
+    deps: [children],
+  });
 
-  // Handle user scroll detection
-  const handleScroll = useCallback(() => {
-    // Ignore scroll events triggered by auto-scroll
-    if (isAutoScrollingRef.current) return;
-
-    const container = containerRef.current;
-    if (!container) return;
-
-    // Check if user scrolled away from bottom
-    const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    const isAtBottom = distanceToBottom < 20;
-
-    // If user scrolled up, stop auto-scrolling
-    if (!isAtBottom) {
-      setUserHasScrolled(true);
-    }
-  }, []);
-
-  // Auto scroll to bottom when content changes (unless user has scrolled)
-  useEffect(() => {
-    if (userHasScrolled) return;
-
-    const container = containerRef.current;
-    if (!container) return;
-
-    isAutoScrollingRef.current = true;
-    requestAnimationFrame(() => {
-      container.scrollTop = container.scrollHeight;
-      // Reset the flag after scroll completes
-      requestAnimationFrame(() => {
-        isAutoScrollingRef.current = false;
-      });
-    });
-  }, [children, userHasScrolled]);
-
-  // Reset userHasScrolled when content is cleared (new stream starts)
+  // Reset scroll lock when content is cleared (new stream starts)
   useEffect(() => {
     if (!children) {
-      setUserHasScrolled(false);
+      resetScrollLock();
     }
-  }, [children]);
+  }, [children, resetScrollLock]);
 
   if (!children) return null;
 
@@ -72,7 +39,7 @@ const StreamingMarkdown = memo<StreamingMarkdownProps>(({ children, maxHeight = 
       className={styles.container}
       offset={12}
       onScroll={handleScroll}
-      ref={containerRef}
+      ref={ref as RefObject<HTMLDivElement>}
       size={12}
       style={{ maxHeight }}
     >

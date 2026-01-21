@@ -20,6 +20,4 @@ const DesktopPagesLayout: FC = () => {
   );
 };
 
-DesktopPagesLayout.displayName = 'DesktopPagesLayout';
-
 export default DesktopPagesLayout;

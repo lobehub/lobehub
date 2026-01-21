@@ -21,7 +21,9 @@ async function generateJwks() {
     console.error('正在生成 RSA 密钥对...');
 
     // 生成 RS256 密钥对
-    const { privateKey } = await generateKeyPair('RS256');
+    const { privateKey } = await generateKeyPair('RS256', {
+      extractable: true,
+    });
 
     // 导出为 JWK 格式
     const jwk = await exportJWK(privateKey);

@@ -1,3 +1,5 @@
+import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
+
 import type { BrowserWindowOpts } from './core/browser/Browser';
 
 export const BrowsersIdentifiers = {
@@ -11,7 +13,8 @@ export const appBrowsers = {
     height: 800,
     identifier: 'app',
     keepAlive: true,
-    minWidth: 400,
+    minHeight: APP_WINDOW_MIN_SIZE.height,
+    minWidth: APP_WINDOW_MIN_SIZE.width,
     path: '/',
     showOnInit: true,
     titleBarStyle: 'hidden',

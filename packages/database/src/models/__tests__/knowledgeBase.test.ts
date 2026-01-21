@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { sleep } from '@/utils/sleep';
 
+import { getTestDB } from '../../core/getTestDB';
 import {
   NewKnowledgeBase,
   documents,
@@ -15,7 +16,6 @@ import {
 } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { KnowledgeBaseModel } from '../knowledgeBase';
-import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 

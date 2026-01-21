@@ -4,7 +4,9 @@ import {
   AgentRuntime,
   type AgentRuntimeContext,
   type AgentState,
+  type Cost,
   GeneralChatAgent,
+  type Usage,
   computeStepContext,
 } from '@lobechat/agent-runtime';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
@@ -130,7 +132,7 @@ export interface StreamingExecutorAction {
      */
     parentOperationId?: string;
     skipCreateFirstMessage?: boolean;
-  }) => Promise<void>;
+  }) => Promise<{ cost?: Cost; usage?: Usage } | void>;
 }
 
 export const streamingExecutor: StateCreator<
@@ -160,14 +162,16 @@ export const streamingExecutor: StateCreator<
     // - agentId is used for session ID (message storage location)
     const effectiveAgentId = paramSubAgentId || agentId;
 
-    // Get scope from operation context if available
+    // Get scope and groupId from operation context if available
     const operation = operationId ? get().operations[operationId] : undefined;
     const scope = operation?.context.scope;
+    const groupId = operation?.context.groupId;
 
     // Resolve agent config with builtin agent runtime config merged
     // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
     const { agentConfig: agentConfigData, plugins: pluginIds } = resolveAgentConfig({
       agentId: effectiveAgentId || '',
+      groupId, // Pass groupId for supervisor detection
       scope, // Pass scope from operation context
     });
 
@@ -341,6 +345,7 @@ export const streamingExecutor: StateCreator<
     // - max_tokens/reasoning_effort based on chatConfig settings
     const resolved = resolveAgentConfig({
       agentId: effectiveAgentId,
+      groupId, // Pass groupId for supervisor detection
       scope, // scope is already available from line 329
     });
     const finalAgentConfig = agentConfig || resolved.agentConfig;
@@ -592,9 +597,10 @@ export const streamingExecutor: StateCreator<
     // resolveAgentConfig handles:
     // - Builtin agent runtime config merging
     // - max_tokens/reasoning_effort based on chatConfig settings
-    const { agentConfig: agentConfigData, chatConfig } = resolveAgentConfig({
+    const { agentConfig: agentConfigData } = resolveAgentConfig({
       agentId: effectiveAgentId || '',
-      scope: context.scope, // Pass scope from context parameter (available at line 883)
+      groupId, // Pass groupId for supervisor detection
+      scope: context.scope, // Pass scope from context parameter
     });
 
     // Use agent config from agentId
@@ -726,6 +732,19 @@ export const streamingExecutor: StateCreator<
         result.events.length,
         result.newState.status,
       );
+
+      // After parallel tool batch completes, refresh messages to ensure all tool results are synced
+      // This fixes the race condition where each tool's replaceMessages may overwrite others
+      // REMEMBER: There is no test for it (too hard to add), if you want to change it , ask @arvinxx first
+      if (
+        result.nextContext?.phase &&
+        ['tasks_batch_result', 'tools_batch_result'].includes(result.nextContext?.phase)
+      ) {
+        log(
+          `[internal_execAgentRuntime] ${result.nextContext?.phase} completed, refreshing messages to sync state`,
+        );
+        await get().refreshMessages(context);
+      }
 
       // Handle completion and error events
       for (const event of result.events) {
@@ -864,21 +883,7 @@ export const streamingExecutor: StateCreator<
       }
     }
 
-    // Summary history if context messages is larger than historyCount
-    const historyCount = chatConfig.historyCount ?? 0;
-
-    if (
-      chatConfig.enableHistoryCount &&
-      chatConfig.enableCompressHistory &&
-      messages.length > historyCount
-    ) {
-      // after generation: [u1,a1,u2,a2,u3,a3]
-      // but the `messages` is still: [u1,a1,u2,a2,u3]
-      // So if historyCount=2, we need to summary [u1,a1,u2,a2]
-      // because user find UI is [u1,a1,u2,a2 | u3,a3]
-      const historyMessages = messages.slice(0, -historyCount + 1);
-
-      await get().internal_summaryHistory(historyMessages);
-    }
+    // Return usage and cost data for caller to use
+    return { cost: state.cost, usage: state.usage };
   },
 });

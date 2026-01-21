@@ -51,8 +51,8 @@ exports[`settingsSelectors > currentSettings > should merge DEFAULT_SETTINGS and
 exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AGENT_CONFIG and s.settings.systemAgent correctly 1`] = `
 {
   "agentMeta": {
-    "model": "gpt-5-mini",
-    "provider": "openai",
+    "model": "claude-sonnet-4-5-20250929",
+    "provider": "anthropic",
   },
   "enableAutoReply": true,
   "generationTopic": {
@@ -60,8 +60,8 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
     "provider": "openai",
   },
   "historyCompress": {
-    "model": "gpt-5-mini",
-    "provider": "openai",
+    "model": "claude-sonnet-4-5-20250929",
+    "provider": "anthropic",
   },
   "queryRewrite": {
     "enabled": true,
@@ -70,8 +70,8 @@ exports[`settingsSelectors > currentSystemAgent > should merge DEFAULT_SYSTEM_AG
   },
   "replyMessage": "Custom auto reply",
   "thread": {
-    "model": "gpt-5-mini",
-    "provider": "openai",
+    "model": "claude-sonnet-4-5-20250929",
+    "provider": "anthropic",
   },
   "topic": {
     "model": "gpt-5-mini",
@@ -108,8 +108,8 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
       "historyCount": 20,
       "reasoningBudgetToken": 1024,
       "searchFCModel": {
-        "model": "gpt-5-mini",
-        "provider": "openai",
+        "model": "claude-sonnet-4-5-20250929",
+        "provider": "anthropic",
       },
       "searchMode": "off",
     },
@@ -122,7 +122,7 @@ exports[`settingsSelectors > defaultAgent > should merge DEFAULT_AGENT and s.set
       "top_p": 1,
     },
     "plugins": [],
-    "provider": "openai",
+    "provider": "anthropic",
     "systemRole": "user",
     "tts": {
       "showAllLocaleVoice": false,
@@ -152,8 +152,8 @@ exports[`settingsSelectors > defaultAgentConfig > should merge DEFAULT_AGENT_CON
     "historyCount": 20,
     "reasoningBudgetToken": 1024,
     "searchFCModel": {
-      "model": "gpt-5-mini",
-      "provider": "openai",
+      "model": "claude-sonnet-4-5-20250929",
+      "provider": "anthropic",
     },
     "searchMode": "off",
   },
@@ -166,7 +166,7 @@ exports[`settingsSelectors > defaultAgentConfig > should merge DEFAULT_AGENT_CON
     "top_p": 1,
   },
   "plugins": [],
-  "provider": "openai",
+  "provider": "anthropic",
   "systemRole": "custom role",
   "tts": {
     "showAllLocaleVoice": false,

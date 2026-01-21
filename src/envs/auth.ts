@@ -2,43 +2,6 @@
 import { createEnv } from '@t3-oss/env-nextjs';
 import { z } from 'zod';
 
-/**
- * Resolve public auth URL with compatibility fallbacks for NextAuth and Vercel deployments.
- */
-const resolvePublicAuthUrl = () => {
-  if (process.env.NEXT_PUBLIC_AUTH_URL) return process.env.NEXT_PUBLIC_AUTH_URL;
-
-  if (process.env.NEXTAUTH_URL) {
-    try {
-      return new URL(process.env.NEXTAUTH_URL).origin;
-    } catch {
-      // ignore invalid NEXTAUTH_URL
-    }
-  }
-
-  if (process.env.APP_URL) {
-    try {
-      return new URL(process.env.APP_URL).origin;
-    } catch {
-      // ignore invalid APP_URL
-    }
-  }
-
-  if (process.env.VERCEL_URL) {
-    try {
-      const normalizedVercelUrl = process.env.VERCEL_URL.startsWith('http')
-        ? process.env.VERCEL_URL
-        : `https://${process.env.VERCEL_URL}`;
-
-      return new URL(normalizedVercelUrl).origin;
-    } catch {
-      // ignore invalid Vercel URL
-    }
-  }
-
-  return undefined;
-};
-
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace NodeJS {
@@ -50,7 +13,6 @@ declare global {
 
       // ===== Auth (shared by Better Auth / Next Auth) ===== //
       AUTH_SECRET?: string;
-      NEXT_PUBLIC_AUTH_URL?: string;
       AUTH_EMAIL_VERIFICATION?: string;
       ENABLE_MAGIC_LINK?: string;
       AUTH_SSO_PROVIDERS?: string;
@@ -180,7 +142,6 @@ export const getAuthConfig = () => {
 
       // ---------------------------------- better auth ----------------------------------
       NEXT_PUBLIC_ENABLE_BETTER_AUTH: z.boolean().optional(),
-      NEXT_PUBLIC_AUTH_URL: z.string().optional(),
 
       // ---------------------------------- next auth ----------------------------------
       NEXT_PUBLIC_ENABLE_NEXT_AUTH: z.boolean().optional(),
@@ -310,8 +271,6 @@ export const getAuthConfig = () => {
 
       // ---------------------------------- better auth ----------------------------------
       NEXT_PUBLIC_ENABLE_BETTER_AUTH: process.env.NEXT_PUBLIC_ENABLE_BETTER_AUTH === '1',
-      // Fallback to NEXTAUTH_URL origin or Vercel deployment domain for seamless migration from next-auth
-      NEXT_PUBLIC_AUTH_URL: resolvePublicAuthUrl(),
       // Fallback to NEXT_PUBLIC_* for seamless migration
       AUTH_EMAIL_VERIFICATION:
         process.env.AUTH_EMAIL_VERIFICATION === '1' ||

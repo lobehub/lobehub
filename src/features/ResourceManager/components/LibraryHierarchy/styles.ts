@@ -6,11 +6,12 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     opacity: 0.5;
   `,
   fileItemDragOver: css`
-    color: ${cssVar.colorBgElevated} !important;
-    background-color: ${cssVar.colorText} !important;
+    outline: 1px dashed ${cssVar.colorPrimaryBorder};
+    outline-offset: -2px;
 
-    * {
-      color: ${cssVar.colorBgElevated} !important;
+    &,
+    &:hover {
+      background: ${cssVar.colorPrimaryBg};
     }
   `,
   treeItem: css`

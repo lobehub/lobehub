@@ -42,71 +42,57 @@ export const chatPortalSlice: StateCreator<
   [],
   ChatPortalAction
 > = (set, get) => ({
-
-
   clearPortalStack: () => {
     set({ portalStack: [], showPortal: false }, false, 'clearPortalStack');
   },
 
-
-closeArtifact: () => {
+  closeArtifact: () => {
     const { portalStack } = get();
     if (getCurrentViewType(portalStack) === PortalViewType.Artifact) {
       get().popPortalView();
     }
   },
 
-
-closeDocument: () => {
+  closeDocument: () => {
     const { portalStack } = get();
     if (getCurrentViewType(portalStack) === PortalViewType.Document) {
       get().popPortalView();
     }
   },
 
-
-closeFilePreview: () => {
+  closeFilePreview: () => {
     const { portalStack } = get();
     if (getCurrentViewType(portalStack) === PortalViewType.FilePreview) {
       get().popPortalView();
     }
   },
 
-
-closeMessageDetail: () => {
+  closeMessageDetail: () => {
     const { portalStack } = get();
     if (getCurrentViewType(portalStack) === PortalViewType.MessageDetail) {
       get().popPortalView();
     }
   },
 
-
-closeNotebook: () => {
+  closeNotebook: () => {
     const { portalStack } = get();
     if (getCurrentViewType(portalStack) === PortalViewType.Notebook) {
       get().popPortalView();
     }
   },
 
-
-
-
-closeToolUI: () => {
+  closeToolUI: () => {
     const { portalStack } = get();
     if (getCurrentViewType(portalStack) === PortalViewType.ToolUI) {
       get().popPortalView();
     }
   },
 
-
-
-goBack: () => {
+  goBack: () => {
     get().popPortalView();
   },
 
-
-
-goHome: () => {
+  goHome: () => {
     set(
       {
         portalStack: [{ type: PortalViewType.Home }],
@@ -117,45 +103,32 @@ goHome: () => {
     );
   },
 
-
-
-// ============== Convenience Methods (using stack operations) ==============
-openArtifact: (artifact) => {
+  // ============== Convenience Methods (using stack operations) ==============
+  openArtifact: (artifact) => {
     get().pushPortalView({ artifact, type: PortalViewType.Artifact });
   },
 
-
-
-
-openDocument: (documentId) => {
+  openDocument: (documentId) => {
     get().pushPortalView({ documentId, type: PortalViewType.Document });
   },
 
-
-
-
-openFilePreview: (file) => {
+  openFilePreview: (file) => {
     get().pushPortalView({ file, type: PortalViewType.FilePreview });
   },
 
-
-
-openMessageDetail: (messageId) => {
+  openMessageDetail: (messageId) => {
     get().pushPortalView({ messageId, type: PortalViewType.MessageDetail });
   },
 
-
-openNotebook: () => {
+  openNotebook: () => {
     get().pushPortalView({ type: PortalViewType.Notebook });
   },
 
-
-openToolUI: (messageId, identifier) => {
+  openToolUI: (messageId, identifier) => {
     get().pushPortalView({ identifier, messageId, type: PortalViewType.ToolUI });
   },
 
-
-popPortalView: () => {
+  popPortalView: () => {
     const { portalStack } = get();
 
     if (portalStack.length <= 1) {
@@ -167,7 +140,7 @@ popPortalView: () => {
   },
 
   // ============== Core Stack Operations ==============
-pushPortalView: (view) => {
+  pushPortalView: (view) => {
     const { portalStack } = get();
     const top = portalStack.at(-1);
 

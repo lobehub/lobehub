@@ -4,7 +4,7 @@ description: 本文详细介绍如何在 Vercel 中部署服务端数据库版 L
 tags:
   - 服务端数据库
   - Postgres
-  - Clerk
+  - Better Auth
   - S3存储服务
   - Vercel部署
   - 数据库配置
@@ -20,7 +20,6 @@ tags:
   进行后续操作前，请务必确认以下事项：
 
   - 导出所有数据，部署服务端数据库后，原有用户数据无法自动迁移，只能提前备份后进行手动导入！
-  - 环境变量中的`ACCESS_CODE`未设置或已清除！
   - 配置服务端数据库所需要的环境变量时，需全部填入后再进行部署，否则可能遭遇数据库迁移问题！
 </Callout>
 
@@ -51,9 +50,6 @@ tags:
       ```shell
       # Serverless Postgres DB Url
       DATABASE_URL=
-
-      # 指定 service mode 为 server，否则不会进入服务端数据库
-      NEXT_PUBLIC_SERVICE_MODE=server
       ```
 
       在 Vercel 中填写的示例如下：
@@ -70,9 +66,6 @@ tags:
 
       # 指定 Postgres database driver 为 node
       DATABASE_DRIVER=node
-
-      # 指定 service mode 为 server，否则不会进入服务端数据库
-      NEXT_PUBLIC_SERVICE_MODE=server
       ```
 
       在 Vercel 中填写的示例如下：
@@ -88,11 +81,9 @@ tags:
 
   ### 添加 `KEY_VAULTS_SECRET` 环境变量
 
-  在完成数据库 `DATABASE_URL` 环境变量添加后，需要添加一个 `KEY_VAULTS_SECRET` 环境变量。该变量用于加密用户存储的 apikey 等敏感信息。你可以使用 `openssl rand -base64 32` 生成一个随机的 32 位字符串作为密钥。
+  在完成数据库 `DATABASE_URL` 环境变量添加后，需要添加一个 `KEY_VAULTS_SECRET` 环境变量。该变量用于加密用户存储的 apikey 等敏感信息。点击下方按钮一键生成：
 
-  ```shell
-  KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
-  ```
+  <GenerateSecret envName="KEY_VAULTS_SECRET" />
 
   同样需要将其添加到 Vercel 环境变量中。
 
@@ -106,64 +97,26 @@ tags:
 服务端数据库需要搭配用户身份验证服务才可以正常使用。因此需要配置对应的身份验证服务。
 
 <Steps>
-  ### 准备 Clerk 身份验证服务
+  ### 添加身份验证环境变量
 
-  前往 [Clerk](https://clerk.com?utm_source=lobehub\&utm_medium=docs) 注册并创建应用，获取相应的 Public Key 和 Secret Key。
+  在 Vercel 的部署环境变量中，添加以下环境变量以启用身份验证（基于 [Better Auth](https://www.better-auth.com)）：
+
+  点击下方按钮一键生成 `AUTH_SECRET`（会话加密密钥）：
+
+  <GenerateSecret envName="AUTH_SECRET" />
+
+  同时需要配置 `JWKS_KEY` 环境变量，用于签名和验证 JWT。点击下方按钮一键生成：
+
+  <GenerateJWKSKey />
+
+  配置这些变量后，用户即可使用邮箱和密码注册登录。
 
   <Callout type={'info'}>
-    如果对 Clerk 不太了解，可以查阅 [身份验证服务 -
-    Clerk](/zh/docs/self-hosting/advanced/authentication#clerk) 了解 Clerk 的使用详情。
+    如需 SSO 登录、魔法链接登录、邮箱验证等高级功能，请参阅 [身份验证服务](/zh/docs/self-hosting/advanced/auth)。
   </Callout>
-
-  ### 在 Vercel 中添加公、私钥环境变量
-
-  在 Vercel 的部署环境变量中，添加 `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` 和 `CLERK_SECRET_KEY` 环境变量。你可以在菜单中点击「API Keys」，然后复制对应的值填入 Vercel 的环境变量中。
-
-  <Image alt={'在 Clerk 中找到对应的公私钥环境变量'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/89883703-7a1a-4a11-b944-5d804544e57c'} />
-
-  此步骤所需的环境变量如下：
-
-  ```shell
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxx
-  CLERK_SECRET_KEY=sk_live_xxxxxxxxxxxxxxxxxxxxxx
-  ```
-
-  添加上述变量到 Vercel 中：
-
-  <Image alt={'在 Vercel 中添加 Clerk 公私钥环境变量'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/2bfa13df-6e20-4768-97c0-4dad06c85a2f'} />
-
-  ### 在 Clerk 中创建并配置 Webhook
-
-  由于我们让 Clerk 完全接管用户鉴权与管理，因此我们需要在 Clerk 用户生命周期变更时（创建、更新、删除）中通知我们的应用并存储落库。我们通过 Clerk 提供的 Webhook 来实现这一诉求。
-
-  我们需要在 Clerk 的 Webhooks 中添加一个端点（Endpoint），告诉 Clerk 当用户发生变更时，向这个端点发送通知。
-
-  <Image alt={'Clerk 添加 Webhooks 端点'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/f50f47fb-5e8e-4930-bf4e-8cf6f5b8afb9'} />
-
-  在 endpoint 中填写你的 Vercel 项目的 URL，如 `https://your-project.vercel.app/api/webhooks/clerk`。然后在订阅事件（Subscribe to events）中，勾选 user 的三个事件（`user.created` 、`user.deleted`、`user.updated`），然后点击创建。
-
-  <Callout type={'warning'}>URL 的`https://`不可缺失，须保持 URL 的完整性</Callout>
-
-  <Image alt={'添加 Clerk Webhooks 时，配置 URL 和用户事件'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/0249ea56-ab17-4aa9-a56c-9ebd556c2645'} />
-
-  ### 将 Webhook 秘钥添加到 Vercel 环境变量
-
-  创建完毕后，可以在右下角找到该 Webhook 的秘钥：
-
-  <Image alt={'查看 Clerk Webhooks 秘钥'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/fab4abb2-584b-49de-9340-813382951635'} />
-
-  这个秘钥所对应的环境变量名为 `CLERK_WEBHOOK_SECRET`：
-
-  ```shell
-  CLERK_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxx
-  ```
-
-  将其添加到 Vercel 的环境变量中：
-
-  <Image alt={'在 Vercel 中 添加 Clerk Webhooks 秘钥'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/5fdc9479-007f-46ab-9d6e-a9603e949116'} />
 </Steps>
 
-这样，你已经成功配置了 Clerk 身份验证服务。接下来我们将配置 S3 存储服务。
+这样，你已经成功配置了身份验证服务。接下来我们将配置 S3 存储服务。
 
 ## 三、 配置 S3 存储服务
 
@@ -313,17 +266,13 @@ tags:
 ```shell
 APP_URL=https://your-project.com
 
-# 指定服务模式为 server
-NEXT_PUBLIC_SERVICE_MODE=server
-
 # Postgres 数据库 URL
 DATABASE_URL=
 KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
 
-# Clerk 相关配置
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxx
-CLERK_SECRET_KEY=sk_live_xxxxxxxxxxxxxxxxxxxxxx
-CLERK_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxx
+# 身份验证
+AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+JWKS_KEY='{"keys":[...]}'
 
 # S3 相关配置
 # S3 秘钥

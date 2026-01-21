@@ -2,11 +2,12 @@
 
 import { Button, Flexbox, Popover, copyToClipboard, usePopoverContext } from '@lobehub/ui';
 import { App, Divider, Select, Skeleton, Typography } from 'antd';
-import { CopyIcon, ExternalLinkIcon, LinkIcon, LockIcon } from 'lucide-react';
+import { ExternalLinkIcon, LinkIcon, LockIcon } from 'lucide-react';
 import { type ReactNode, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
+import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
@@ -26,6 +27,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
   const [updating, setUpdating] = useState(false);
   const { close } = usePopoverContext();
   const containerRef = useRef<HTMLDivElement>(null);
+  const appOrigin = useAppOrigin();
 
   const activeTopicId = useChatStore((s) => s.activeTopicId);
 
@@ -46,7 +48,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
     }
   }, [isLoading, shareInfo, activeTopicId, mutate]);
 
-  const shareUrl = shareInfo?.id ? `${window.location.origin}/share/t/${shareInfo.id}` : '';
+  const shareUrl = shareInfo?.id ? `${appOrigin}/share/t/${shareInfo.id}` : '';
   const currentVisibility = (shareInfo?.visibility as Visibility) || 'private';
 
   const updateVisibility = useCallback(
@@ -178,7 +180,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
         >
           {t('shareModal.popover.moreOptions')}
         </Button>
-        <Button icon={CopyIcon} onClick={handleCopyLink} size="small" type="primary">
+        <Button icon={LinkIcon} onClick={handleCopyLink} size="small" type="primary">
           {t('shareModal.copyLink')}
         </Button>
       </Flexbox>

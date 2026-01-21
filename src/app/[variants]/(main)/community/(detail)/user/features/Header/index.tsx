@@ -4,7 +4,7 @@ import { SiGithub, SiX } from '@icons-pack/react-simple-icons';
 import { ActionIcon, Avatar, Button, Flexbox, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Globe } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUserDetailContext } from '../DetailProvider';
@@ -19,12 +19,31 @@ const UserHeader = memo(() => {
   const displayName = user.displayName || user.userName || user.namespace;
   const username = user.userName || user.namespace;
 
+  // Normalize avatar URL - convert relative paths to absolute URLs
+  const avatarUrl = useMemo(() => {
+    if (!user.avatarUrl) return undefined;
+    // If it's a relative path (starts with /), prepend the origin
+    if (user.avatarUrl.startsWith('/')) {
+      return `${window.location.origin}${user.avatarUrl}`;
+    }
+    return user.avatarUrl;
+  }, [user.avatarUrl]);
+
+  const bannerUrl = useMemo(() => {
+    if (!user.bannerUrl) return null;
+    // If it's a relative path (starts with /), prepend the origin
+    if (user.bannerUrl.startsWith('/')) {
+      return `${window.location.origin}${user.bannerUrl}`;
+    }
+    return user.bannerUrl;
+  }, [user.bannerUrl]);
+
   return (
     <>
-      <Banner avatar={user?.avatarUrl} bannerUrl={user?.bannerUrl} />
+      <Banner avatar={avatarUrl} bannerUrl={bannerUrl} />
       <Flexbox gap={16}>
         <Avatar
-          avatar={user.avatarUrl || undefined}
+          avatar={avatarUrl}
           shape={'square'}
           size={64}
           style={{ boxShadow: `0 0 0 4px ${cssVar.colorBgContainer}`, flexShrink: 0 }}

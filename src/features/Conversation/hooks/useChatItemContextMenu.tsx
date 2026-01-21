@@ -18,8 +18,10 @@ import { sessionSelectors } from '@/store/session/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
-import ShareMessageModal from '../components/ShareMessageModal';
+import ShareMessageModal, { type ShareModalProps } from '../components/ShareMessageModal';
 import {
+  Provider,
+  createStore,
   dataSelectors,
   messageStateSelectors,
   useConversationStore,
@@ -187,13 +189,26 @@ export const useChatItemContextMenu = ({
     if (!item || item.role !== 'assistant') return;
 
     createRawModal(
-      ShareMessageModal,
+      (props: ShareModalProps) => (
+        <Provider
+          createStore={() => {
+            const state = storeApi.getState();
+            return createStore({
+              context: state.context,
+              hooks: state.hooks,
+              skipFetch: state.skipFetch,
+            });
+          }}
+        >
+          <ShareMessageModal {...props} />
+        </Provider>
+      ),
       {
         message: item,
       },
       { onCloseKey: 'onCancel', openKey: 'open' },
     );
-  }, [getMessage]);
+  }, [getMessage, storeApi]);
 
   const handleAction = useCallback(
     async (action: ContextMenuEvent) => {

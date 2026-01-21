@@ -101,7 +101,7 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'communityAgent': {
-          navigate(`/community/assistant/${result.identifier}`);
+          navigate(`/community/agent/${result.identifier}`);
           break;
         }
       }

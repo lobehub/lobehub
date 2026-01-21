@@ -18,7 +18,7 @@ export enum AssistantCategory {
   Marketing = 'marketing',
   Office = 'office',
   Programming = 'programming',
-  Translation = 'translation'
+  Translation = 'translation',
 }
 
 export enum AssistantSorts {
@@ -29,7 +29,7 @@ export enum AssistantSorts {
   PluginCount = 'pluginCount',
   Recommended = 'recommended',
   Title = 'title',
-  TokenUsage = 'tokenUsage'
+  TokenUsage = 'tokenUsage',
 }
 
 export enum AssistantNavKey {
@@ -42,10 +42,21 @@ export enum AssistantNavKey {
 
 export type AgentStatus = 'published' | 'unpublished' | 'archived' | 'deprecated';
 
+export type AgentType = 'agent' | 'agent-group';
+
 export interface DiscoverAssistantItem extends Omit<LobeAgentSettings, 'meta'>, MetaData {
   author: string;
   category?: AssistantCategory;
   createdAt: string;
+  /**
+   * Fork count - number of times this agent has been forked
+   */
+  forkCount?: number;
+  /**
+   * Forked from agent ID - ID of the source agent if this is a fork
+   * null means this is an original agent
+   */
+  forkedFromAgentId?: number | null;
   homepage: string;
   identifier: string;
   installCount?: number;
@@ -53,6 +64,7 @@ export interface DiscoverAssistantItem extends Omit<LobeAgentSettings, 'meta'>, 
   pluginCount: number;
   status?: AgentStatus;
   tokenUsage: number;
+  type?: AgentType;
   userName?: string;
 }
 
@@ -60,6 +72,7 @@ export type AssistantMarketSource = 'legacy' | 'new';
 
 export interface AssistantQueryParams {
   category?: string;
+  includeAgentGroup?: boolean;
   locale?: string;
   order?: 'asc' | 'desc';
   ownerId?: string;

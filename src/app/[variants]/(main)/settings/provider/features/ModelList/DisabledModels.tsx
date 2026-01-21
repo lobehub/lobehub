@@ -1,4 +1,4 @@
-import { ActionIcon, Dropdown, Flexbox, Icon, Text, TooltipGroup } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox, Icon, Text, TooltipGroup } from '@lobehub/ui';
 import type { ItemType } from 'antd/es/menu/interface';
 import isEqual from 'fast-deep-equal';
 import { ArrowDownUpIcon, LucideCheck } from 'lucide-react';
@@ -240,9 +240,9 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
             {t('providerModels.list.disabled')}
           </Text>
           {sourceDisabledModels.length > 1 && (
-            <Dropdown
-              menu={{
-                items: [
+            <DropdownMenu
+              items={
+                [
                   {
                     icon: sortType === SortType.Default ? <Icon icon={LucideCheck} /> : <div />,
                     key: 'default',
@@ -286,16 +286,15 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
                     label: t('providerModels.list.disabledActions.sortReleasedAtDesc'),
                     onClick: () => updateSortType(SortType.ReleasedAtDesc),
                   },
-                ] as ItemType[],
-              }}
-              trigger={['click']}
+                ] as ItemType[]
+              }
             >
               <ActionIcon
                 icon={ArrowDownUpIcon}
                 size={'small'}
                 title={t('providerModels.list.disabledActions.sort')}
               />
-            </Dropdown>
+            </DropdownMenu>
           )}
         </Flexbox>
         <TooltipGroup>

@@ -267,7 +267,7 @@ export function defineConfig(config: CustomNextConfig) {
         source: '/manifest.json',
       },
       {
-        destination: '/community/assistant',
+        destination: '/community/agent',
         permanent: true,
         source: '/community/assistants',
       },
@@ -307,6 +307,11 @@ export function defineConfig(config: CustomNextConfig) {
         destination: '/files',
         permanent: false,
         source: '/repos',
+      },
+      {
+        destination: '/',
+        permanent: true,
+        source: '/chat',
       },
       ...(config.redirects ?? []),
     ],

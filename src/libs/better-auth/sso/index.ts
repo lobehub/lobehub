@@ -1,6 +1,7 @@
 import type { GenericOAuthConfig } from 'better-auth/plugins';
 import type { SocialProviders } from 'better-auth/social-providers';
 
+import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { BUILTIN_BETTER_AUTH_PROVIDERS } from '@/libs/better-auth/constants';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
@@ -106,7 +107,7 @@ export const initBetterAuthSSOProviders = () => {
     if (config) {
       // the generic oidc callback url is /api/auth/oauth2/callback/{providerId}
       // different from builtin providers' /api/auth/callback/{providerId}
-      config.redirectURI = `${authEnv.NEXT_PUBLIC_AUTH_URL || ''}/api/auth/callback/${definition.id}`;
+      config.redirectURI = `${appEnv.APP_URL}/api/auth/callback/${definition.id}`;
       genericOAuthProviders.push(config);
     }
   }

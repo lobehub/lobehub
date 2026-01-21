@@ -13,7 +13,6 @@ import {
   GenerateObjectPayload,
   ModelRequestOptions,
   PullModelParams,
-  TextToImagePayload,
   TextToSpeechPayload,
 } from '../types';
 import { AgentRuntimeErrorType } from '../types/error';
@@ -77,10 +76,6 @@ export class ModelRuntime {
 
   async generateObject(payload: GenerateObjectPayload) {
     return this._runtime.generateObject!(payload);
-  }
-
-  async textToImage(payload: TextToImagePayload) {
-    return this._runtime.textToImage?.(payload);
   }
 
   async createImage(payload: CreateImagePayload) {

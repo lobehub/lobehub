@@ -3,7 +3,7 @@ import type { IconType } from '@lobehub/icons';
 import { Flexbox, type FlexboxProps } from '@lobehub/ui';
 import type { LobeChatProps } from '@lobehub/ui/brand';
 import { createStaticStyles, cssVar } from 'antd-style';
-import Image, { type ImageProps } from 'next/image';
+import Image, { type ImageProps } from '@/libs/next/Image';
 import { type ReactNode, forwardRef, memo } from 'react';
 
 const styles = createStaticStyles(({ css }) => {

@@ -10,19 +10,47 @@ dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const packageJSON = JSON.parse(
-  await fs.readFile(path.join(__dirname, 'package.json'), 'utf8')
-);
+const packageJSON = JSON.parse(await fs.readFile(path.join(__dirname, 'package.json'), 'utf8'));
 
 const channel = process.env.UPDATE_CHANNEL;
 const arch = os.arch();
 const hasAppleCertificate = Boolean(process.env.CSC_LINK);
+
+// 自定义更新服务器 URL (用于 stable 频道)
+const updateServerUrl = process.env.UPDATE_SERVER_URL;
 
 console.log(`🚄 Build Version ${packageJSON.version}, Channel: ${channel}`);
 console.log(`🏗️ Building for architecture: ${arch}`);
 
 const isNightly = channel === 'nightly';
 const isBeta = packageJSON.name.includes('beta');
+const isStable = !isNightly && !isBeta;
+
+// 根据 channel 配置不同的 publish provider
+// - Stable + UPDATE_SERVER_URL: 使用 generic (自定义 HTTP 服务器)
+// - Beta/Nightly: 仅使用 GitHub
+const getPublishConfig = () => {
+  const githubProvider = {
+    owner: 'lobehub',
+    provider: 'github',
+    repo: 'lobe-chat',
+  };
+
+  // Stable channel: 使用自定义服务器 (generic provider)
+  if (isStable && updateServerUrl) {
+    console.log(`📦 Stable channel: Using generic provider (${updateServerUrl})`);
+    const genericProvider = {
+      provider: 'generic',
+      url: updateServerUrl,
+    };
+    // 同时发布到自定义服务器和 GitHub (GitHub 作为备用/镜像)
+    return [genericProvider, githubProvider];
+  }
+
+  // Beta/Nightly channel: 仅使用 GitHub
+  console.log(`📦 ${channel || 'default'} channel: Using GitHub provider`);
+  return [githubProvider];
+};
 
 // Keep only these Electron Framework localization folders (*.lproj)
 // (aligned with previous Electron Forge build config)
@@ -221,13 +249,15 @@ const config = {
       schemes: [protocolScheme],
     },
   ],
-  publish: [
-    {
-      owner: 'lobehub',
-      provider: 'github',
-      repo: 'lobe-chat',
-    },
-  ],
+  publish: getPublishConfig(),
+
+  // Release notes 配置
+  // 可以通过环境变量 RELEASE_NOTES 传入，或从文件读取
+  // 这会被写入 latest-mac.yml / latest.yml 中，供 generic provider 使用
+  releaseInfo: {
+    releaseNotes: process.env.RELEASE_NOTES || undefined,
+  },
+
   win: {
     executableName: 'LobeHub',
   },

@@ -16,7 +16,12 @@ import { after } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 
-import { getIsInWaitList, getReferralStatus, getSubscriptionPlan } from '@/business/server/user';
+import {
+  getIsInviteCodeRequired,
+  getIsInWaitList,
+  getReferralStatus,
+  getSubscriptionPlan,
+} from '@/business/server/user';
 import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
 import { UserModel, UserNotFoundError } from '@/database/models/user';
@@ -129,15 +134,23 @@ export const userRouter = router({
     };
 
     // Run user state fetch and count queries in parallel
-    const [state, messageCount, hasExtraSession, referralStatus, subscriptionPlan, isInWaitList] =
-      await Promise.all([
-        getOrCreateUserState(),
-        ctx.messageModel.countUpTo(5),
-        ctx.sessionModel.hasMoreThanN(1),
-        getReferralStatus(ctx.userId),
-        getSubscriptionPlan(ctx.userId),
-        getIsInWaitList(ctx.userId),
-      ]);
+    const [
+      state,
+      messageCount,
+      hasExtraSession,
+      referralStatus,
+      subscriptionPlan,
+      isInWaitList,
+      isInviteCodeRequired,
+    ] = await Promise.all([
+      getOrCreateUserState(),
+      ctx.messageModel.countUpTo(5),
+      ctx.sessionModel.hasMoreThanN(1),
+      getReferralStatus(ctx.userId),
+      getSubscriptionPlan(ctx.userId),
+      getIsInWaitList(ctx.userId),
+      getIsInviteCodeRequired(ctx.userId),
+    ]);
 
     const hasMoreThan4Messages = messageCount > 4;
     const hasAnyMessages = messageCount > 0;
@@ -168,6 +181,7 @@ export const userRouter = router({
       referralStatus,
       subscriptionPlan,
       isInWaitList,
+      isInviteCodeRequired,
       isFreePlan: !subscriptionPlan || subscriptionPlan === Plans.Free,
     } satisfies UserInitializationState;
     /* eslint-enable sort-keys-fix/sort-keys-fix */

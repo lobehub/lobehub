@@ -168,11 +168,11 @@ const CronJobDetailPage = memo(() => {
         (current) =>
           current
             ? {
-              ...current,
-              ...payload,
-              executionConditions: payload.executionConditions ?? null,
-              ...(updatedAt ? { updatedAt } : null),
-            }
+                ...current,
+                ...payload,
+                executionConditions: payload.executionConditions ?? null,
+                ...(updatedAt ? { updatedAt } : null),
+              }
             : current,
         false,
       );

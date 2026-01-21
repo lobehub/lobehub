@@ -1,4 +1,9 @@
-import { type TaskCurrentActivity, ThreadStatus } from '@/types/index';
+import {
+  type AssistantContentBlock,
+  type ModelUsage,
+  type TaskCurrentActivity,
+  ThreadStatus,
+} from '@lobechat/types';
 
 /**
  * Format duration in milliseconds to human-readable string
@@ -67,4 +72,20 @@ export const isProcessingStatus = (status?: ThreadStatus): boolean => {
     status === ThreadStatus.Active ||
     status === ThreadStatus.Todo
   );
+};
+
+/**
+ * Accumulate usage from all blocks
+ */
+export const accumulateUsage = (blocks: AssistantContentBlock[]): ModelUsage => {
+  return blocks.reduce((acc, block) => {
+    const usage = block.usage;
+    if (!usage) return acc;
+    return {
+      cost: (acc.cost || 0) + (usage.cost || 0),
+      totalInputTokens: (acc.totalInputTokens || 0) + (usage.totalInputTokens || 0),
+      totalOutputTokens: (acc.totalOutputTokens || 0) + (usage.totalOutputTokens || 0),
+      totalTokens: (acc.totalTokens || 0) + (usage.totalTokens || 0),
+    };
+  }, {} as ModelUsage);
 };

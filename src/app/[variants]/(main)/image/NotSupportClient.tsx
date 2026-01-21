@@ -4,7 +4,6 @@ import { UTM_SOURCE } from '@lobechat/business-const';
 import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Database, FileImage, Network, Sparkles } from 'lucide-react';
-import Link from 'next/link';
 import { Trans, useTranslation } from 'react-i18next';
 
 import FeatureList from '@/components/FeatureList';
@@ -131,11 +130,13 @@ const NotSupportClient = () => {
           <Trans
             components={[
               <span key="0" />,
-              <Link href={DATABASE_SELF_HOSTING_URL} key="1" />,
+              <a href={DATABASE_SELF_HOSTING_URL} key="1" rel="noreferrer" target="_blank" />,
               <span key="2" />,
-              <Link
+              <a
                 href={`${OFFICIAL_URL}?utm_source=${UTM_SOURCE}&utm_medium=client_not_support_image`}
                 key="3"
+                rel="noreferrer"
+                target="_blank"
               />,
             ]}
             i18nKey={'notSupportGuide.desc'}

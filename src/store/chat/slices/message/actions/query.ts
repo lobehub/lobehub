@@ -1,9 +1,11 @@
 import { parse } from '@lobechat/conversation-flow';
 import { type ConversationContext, type UIChatMessage } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
+import { type SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
 
-import { mutate } from '@/libs/swr';
+import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
+import { messageService } from '@/services/message';
 import { type ChatStore } from '@/store/chat/store';
 
 import { type MessageMapKeyInput, messageMapKey } from '../../../utils/messageMapKey';
@@ -39,6 +41,18 @@ export interface MessageQueryAction {
       operationId?: string;
     },
   ) => void;
+
+  /**
+   * Fetch messages for a specific context using SWR
+   * Used for fetching thread messages or messages for a specific context
+   *
+   * @param context - Conversation context with agentId, topicId, threadId, etc.
+   * @param skipFetch - When true, SWR key is null and no fetch occurs
+   */
+  useFetchMessages: (
+    context: ConversationContext,
+    skipFetch?: boolean,
+  ) => SWRResponse<UIChatMessage[]>;
 }
 
 export const messageQuery: StateCreator<
@@ -109,6 +123,24 @@ export const messageQuery: StateCreator<
       },
       false,
       params?.action ?? 'replaceMessages',
+    );
+  },
+
+  useFetchMessages: (context, skipFetch) => {
+    // Skip fetch when skipFetch is true or required fields are missing
+    const shouldFetch = !skipFetch && !!context.agentId && !!context.topicId;
+
+    return useClientDataSWRWithSync<UIChatMessage[]>(
+      shouldFetch ? ['CHAT_STORE_FETCH_MESSAGES', context] : null,
+      () => messageService.getMessages(context),
+      {
+        onData: (data) => {
+          if (!data || !context.topicId) return;
+
+          // Use replaceMessages to store the fetched messages
+          get().replaceMessages(data, { action: 'useFetchMessages', context });
+        },
+      },
     );
   },
 });

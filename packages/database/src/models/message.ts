@@ -431,6 +431,7 @@ export class MessageModel {
           return [
             t.sourceMessageId!,
             {
+              clientMode: metadata?.clientMode as boolean | undefined,
               duration: metadata?.duration as number | undefined,
               status: t.status as ThreadStatus,
               threadId: t.threadId,
@@ -678,10 +679,11 @@ export class MessageModel {
    * @param params - Parameters for getting parent messages
    * @param params.sourceMessageId - The ID of the source message that started the thread
    * @param params.topicId - The topic ID the thread belongs to
-   * @param params.threadType - The type of thread (Continuation or Standalone)
+   * @param params.threadType - The type of thread (Continuation, Standalone, or Isolation)
    * @returns Parent messages based on thread type:
    *   - Continuation: All messages from the topic up to and including the source message
    *   - Standalone: Only the source message itself
+   *   - Isolation: No parent messages (completely isolated thread)
    */
   getThreadParentMessages = async (params: {
     sourceMessageId: string;
@@ -689,6 +691,11 @@ export class MessageModel {
     topicId: string;
   }): Promise<DBMessageItem[]> => {
     const { sourceMessageId, topicId, threadType } = params;
+
+    // For Isolation type, return empty array (no parent messages)
+    if (threadType === ThreadType.Isolation) {
+      return [];
+    }
 
     // For Standalone type, only return the source message
     if (threadType === ThreadType.Standalone) {

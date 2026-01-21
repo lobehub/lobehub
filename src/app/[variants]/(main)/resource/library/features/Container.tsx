@@ -21,6 +21,4 @@ const Container: FC<PropsWithChildren> = ({ children }) => {
   );
 };
 
-Container.displayName = 'Container';
-
 export default Container;

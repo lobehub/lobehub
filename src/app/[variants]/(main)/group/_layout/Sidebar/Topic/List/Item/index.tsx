@@ -3,7 +3,6 @@ import { cssVar } from 'antd-style';
 import { MessageSquareDashed, Star } from 'lucide-react';
 import { Suspense, memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import urlJoin from 'url-join';
 
 import { isDesktop } from '@/const/version';
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -35,7 +34,7 @@ const TopicItem = memo<TopicItemProps>(({ id, title, fav, active, threadId }) =>
   // Construct href for cmd+click support
   const href = useMemo(() => {
     if (!activeGroupId || !id) return undefined;
-    return urlJoin('/group', activeGroupId, `?topic=${id}`);
+    return `/group/${activeGroupId}?topic=${id}`;
   }, [activeGroupId, id]);
 
   const [editing, isLoading] = useChatStore((s) => [

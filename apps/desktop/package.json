@@ -36,7 +36,8 @@
     "stylelint": "stylelint \"src/**/*.{js,jsx,ts,tsx}\" --fix",
     "test": "vitest --run",
     "type-check": "tsgo --noEmit -p tsconfig.json",
-    "typecheck": "tsgo --noEmit -p tsconfig.json"
+    "typecheck": "tsgo --noEmit -p tsconfig.json",
+    "update-server": "sh scripts/update-test/run-test.sh"
   },
   "dependencies": {
     "electron-updater": "^6.6.2",

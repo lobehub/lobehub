@@ -1,5 +1,5 @@
 import type { API } from '@lobechat/prompts';
-import type { DropdownMenuItemType } from '@lobehub/ui';
+import type { DropdownItem } from '@lobehub/ui';
 
 export type MentionEntityType = 'collection' | 'api';
 
@@ -14,7 +14,9 @@ export interface MentionMetadata {
   type?: MentionEntityType;
 }
 
-export type MentionListOption = DropdownMenuItemType & {
+type MentionMenuItem = Extract<DropdownItem, { type?: 'item' }>;
+
+export type MentionListOption = MentionMenuItem & {
   description?: string;
   metadata?: MentionMetadata;
 };

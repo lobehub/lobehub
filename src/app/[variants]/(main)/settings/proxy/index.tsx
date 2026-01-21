@@ -14,6 +14,4 @@ const Page = () => {
   );
 };
 
-Page.displayName = 'ProxySetting';
-
 export default Page;

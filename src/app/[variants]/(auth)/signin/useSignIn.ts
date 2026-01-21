@@ -1,6 +1,6 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Form } from 'antd';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from '@/libs/next/navigation';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -143,7 +143,8 @@ export const contextEngineering = async ({
         currentAgentRole,
         groupTitle: groupDetail.title || undefined,
         members,
-        systemPrompt: groupDetail.config?.systemPrompt || undefined,
+        // Use group.content as the group description (shared prompt/content)
+        systemPrompt: groupDetail.content || undefined,
       };
       log('agentGroup built: %o', agentGroup);
     }

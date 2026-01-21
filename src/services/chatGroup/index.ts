@@ -20,7 +20,27 @@ export interface GroupMemberConfig {
   title?: string;
 }
 
+export interface SupervisorConfig {
+  avatar?: string;
+  backgroundColor?: string;
+  description?: string;
+  model?: string;
+  params?: any;
+  provider?: string;
+  systemRole?: string;
+  tags?: string[];
+  title?: string;
+}
+
 class ChatGroupService {
+  /**
+   * Get a group by forkedFromIdentifier stored in config
+   * @returns group id if exists, null otherwise
+   */
+  getGroupByForkedFromIdentifier = async (forkedFromIdentifier: string): Promise<string | null> => {
+    return lambdaClient.group.getGroupByForkedFromIdentifier.query({ forkedFromIdentifier });
+  };
+
   /**
    * Create a group with a supervisor agent.
    * The supervisor agent is automatically created as a virtual agent.
@@ -42,6 +62,7 @@ class ChatGroupService {
   createGroupWithMembers = (
     groupConfig: Omit<NewChatGroup, 'userId'>,
     members: GroupMemberConfig[],
+    supervisorConfig?: SupervisorConfig,
   ): Promise<{ agentIds: string[]; groupId: string; supervisorAgentId: string }> => {
     return lambdaClient.group.createGroupWithMembers.mutate({
       groupConfig: {
@@ -49,6 +70,7 @@ class ChatGroupService {
         config: groupConfig.config as any,
       },
       members: members as Partial<AgentItem>[],
+      supervisorConfig,
     });
   };
 

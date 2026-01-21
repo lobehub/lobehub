@@ -54,6 +54,8 @@
   "funds.packages.expiresIn": "Изтича след {{days}} дни",
   "funds.packages.expiresToday": "Изтича днес",
   "funds.packages.expiringSoon": "Скоро изтича",
+  "funds.packages.gift": "Подарък",
+  "funds.packages.giftedOn": "Подарен на {{date}}",
   "funds.packages.noPackages": "Няма налични пакети с кредити",
   "funds.packages.purchaseFirst": "Закупете първия си пакет с кредити",
   "funds.packages.purchasedOn": "Закупен на {{date}}",

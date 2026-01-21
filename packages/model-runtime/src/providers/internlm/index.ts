@@ -11,7 +11,7 @@ export interface InternLMModelCard {
 }
 
 export const params = {
-  baseURL: 'https://internlm-chat.intern-ai.org.cn/puyu/api/v1',
+  baseURL: 'https://chat.intern-ai.org.cn/api/v1',
   chatCompletion: {
     handlePayload: (payload) => {
       return {

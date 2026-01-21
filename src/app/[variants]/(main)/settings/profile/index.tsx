@@ -1,8 +1,8 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { FormGroup, Skeleton, Text } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Flexbox, FormGroup, Text } from '@lobehub/ui';
+import { Skeleton as AntSkeleton, Divider } from 'antd';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,9 +19,32 @@ import FullNameRow from './features/FullNameRow';
 import InterestsRow from './features/InterestsRow';
 import KlavisAuthorizationList from './features/KlavisAuthorizationList';
 import PasswordRow from './features/PasswordRow';
-import ProfileRow from './features/ProfileRow';
+import ProfileRow, { labelStyle, rowStyle } from './features/ProfileRow';
 import SSOProvidersList from './features/SSOProvidersList';
 import UsernameRow from './features/UsernameRow';
+
+const SkeletonRow = ({ mobile }: { mobile?: boolean }) => {
+  if (mobile) {
+    return (
+      <Flexbox gap={12} style={rowStyle}>
+        <Flexbox align="center" horizontal justify="space-between">
+          <AntSkeleton.Input active size="small" style={{ height: 22, width: 60 }} />
+          <AntSkeleton.Input active size="small" style={{ height: 22, width: 80 }} />
+        </Flexbox>
+        <AntSkeleton.Input active size="small" style={{ height: 22, width: 120 }} />
+      </Flexbox>
+    );
+  }
+  return (
+    <Flexbox align="center" gap={24} horizontal justify="space-between" style={rowStyle}>
+      <Flexbox align="center" gap={24} horizontal style={{ flex: 1 }}>
+        <AntSkeleton.Input active size="small" style={{ ...labelStyle, height: 22 }} />
+        <AntSkeleton.Input active size="small" style={{ height: 22, minWidth: 120, width: 160 }} />
+      </Flexbox>
+      <AntSkeleton.Input active size="small" style={{ height: 22, width: 100 }} />
+    </Flexbox>
+  );
+};
 
 interface ProfileSettingProps {
   mobile?: boolean;
@@ -63,75 +86,76 @@ const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
 
   const { t } = useTranslation('auth');
 
-  if (isLoading)
-    return (
-      <Skeleton
-        active
-        paragraph={{ rows: 6 }}
-        style={{ padding: mobile ? 16 : undefined }}
-        title={false}
-      />
-    );
-
   return (
     <>
       <SettingHeader title={t('profile.title')} />
       <FormGroup collapsible={false} gap={16} title={t('profile.account')} variant={'filled'}>
-        {/* Avatar Row - Editable */}
-        <AvatarRow mobile={mobile} />
+        <Flexbox style={{ display: isLoading ? 'flex' : 'none' }}>
+          <SkeletonRow mobile={mobile} />
+          <Divider style={{ margin: 0 }} />
+          <SkeletonRow mobile={mobile} />
+          <Divider style={{ margin: 0 }} />
+          <SkeletonRow mobile={mobile} />
+          <Divider style={{ margin: 0 }} />
+          <SkeletonRow mobile={mobile} />
+        </Flexbox>
+        <Flexbox style={{ display: isLoading ? 'none' : 'flex' }}>
+          {/* Avatar Row - Editable */}
+          <AvatarRow mobile={mobile} />
 
-        <Divider style={{ margin: 0 }} />
+          <Divider style={{ margin: 0 }} />
 
-        {/* Full Name Row - Editable */}
-        <FullNameRow mobile={mobile} />
+          {/* Full Name Row - Editable */}
+          <FullNameRow mobile={mobile} />
 
-        <Divider style={{ margin: 0 }} />
+          <Divider style={{ margin: 0 }} />
 
-        {/* Username Row - Editable */}
-        <UsernameRow mobile={mobile} />
+          {/* Username Row - Editable */}
+          <UsernameRow mobile={mobile} />
 
-        <Divider style={{ margin: 0 }} />
+          <Divider style={{ margin: 0 }} />
 
-        {/* Interests Row - Editable */}
-        <InterestsRow mobile={mobile} />
+          {/* Interests Row - Editable */}
+          <InterestsRow mobile={mobile} />
 
-        {/* Password Row - For Better Auth users to change or set password */}
-        {!isDesktop && isLoginWithBetterAuth && (
-          <>
-            <Divider style={{ margin: 0 }} />
-            <PasswordRow mobile={mobile} />
-          </>
-        )}
+          {/* Password Row - For Better Auth users to change or set password */}
+          {!isDesktop && isLoginWithBetterAuth && (
+            <>
+              <Divider style={{ margin: 0 }} />
+              <PasswordRow mobile={mobile} />
+            </>
+          )}
 
-        {/* Email Row - Read Only */}
-        {isLoginWithAuth && userProfile?.email && (
-          <>
-            <Divider style={{ margin: 0 }} />
-            <ProfileRow label={t('profile.email')} mobile={mobile}>
-              <Text>{userProfile.email}</Text>
-            </ProfileRow>
-          </>
-        )}
+          {/* Email Row - Read Only */}
+          {isLoginWithAuth && userProfile?.email && (
+            <>
+              <Divider style={{ margin: 0 }} />
+              <ProfileRow label={t('profile.email')} mobile={mobile}>
+                <Text>{userProfile.email}</Text>
+              </ProfileRow>
+            </>
+          )}
 
-        {/* SSO Providers Row */}
-        {isLoginWithAuth && (
-          <>
-            <Divider style={{ margin: 0 }} />
-            <ProfileRow label={t('profile.sso.providers')} mobile={mobile}>
-              <SSOProvidersList />
-            </ProfileRow>
-          </>
-        )}
+          {/* SSO Providers Row */}
+          {isLoginWithAuth && (
+            <>
+              <Divider style={{ margin: 0 }} />
+              <ProfileRow label={t('profile.sso.providers')} mobile={mobile}>
+                <SSOProvidersList />
+              </ProfileRow>
+            </>
+          )}
 
-        {/* Klavis Authorizations Row */}
-        {enableKlavis && connectedServers.length > 0 && (
-          <>
-            <Divider style={{ margin: 0 }} />
-            <ProfileRow label={t('profile.authorizations.title')} mobile={mobile}>
-              <KlavisAuthorizationList servers={connectedServers} />
-            </ProfileRow>
-          </>
-        )}
+          {/* Klavis Authorizations Row */}
+          {enableKlavis && connectedServers.length > 0 && (
+            <>
+              <Divider style={{ margin: 0 }} />
+              <ProfileRow label={t('profile.authorizations.title')} mobile={mobile}>
+                <KlavisAuthorizationList servers={connectedServers} />
+              </ProfileRow>
+            </>
+          )}
+        </Flexbox>
       </FormGroup>
     </>
   );

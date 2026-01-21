@@ -12,6 +12,11 @@
   "import.importConfigFile.title": "وارد کردن ناموفق بود",
   "import.incompatible.description": "این فایل از نسخه‌ای بالاتر صادر شده است. لطفاً برنامه را به آخرین نسخه به‌روزرسانی کرده و دوباره وارد کنید.",
   "import.incompatible.title": "برنامه فعلی از وارد کردن این فایل پشتیبانی نمی‌کند",
+  "inviteCode.currentEmail": "حساب فعلی: {{email}}",
+  "inviteCode.desc": "برای دسترسی به LobeHub نیاز به کد دعوت دارید. لطفاً یک کد دعوت معتبر وارد کنید تا ادامه دهید.",
+  "inviteCode.friends": "دوستان",
+  "inviteCode.getCodeHint": "کد دعوت را از اینجا دریافت کنید:",
+  "inviteCode.title": "نیاز به کد دعوت",
   "loginRequired.desc": "به‌زودی به صفحه ورود هدایت خواهید شد",
   "loginRequired.title": "لطفاً برای استفاده از این قابلیت وارد شوید",
   "notFound.backHome": "بازگشت به خانه",
@@ -144,5 +149,9 @@
   "upload.networkError": "لطفاً اتصال شبکه خود را بررسی کرده و مطمئن شوید پیکربندی CORS سرویس ذخیره‌سازی فایل صحیح است.",
   "upload.title": "بارگذاری فایل ناموفق بود. لطفاً اتصال شبکه را بررسی کرده یا بعداً تلاش کنید.",
   "upload.unknownError": "دلیل خطا: {{reason}}",
-  "upload.uploadFailed": "بارگذاری فایل ناموفق بود."
+  "upload.uploadFailed": "بارگذاری فایل ناموفق بود.",
+  "waitlist.currentEmail": "حساب فعلی: {{email}}",
+  "waitlist.desc": "حساب شما در لیست مجاز نیست. لطفاً برای درخواست دسترسی با مدیر تماس بگیرید.",
+  "waitlist.switchAccount": "تغییر حساب",
+  "waitlist.title": "دسترسی محدود شده است"
 }

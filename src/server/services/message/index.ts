@@ -1,5 +1,9 @@
 import { type LobeChatDatabase } from '@lobechat/database';
-import { type CreateMessageParams, type UIChatMessage, type UpdateMessageParams } from '@lobechat/types';
+import {
+  type CreateMessageParams,
+  type UIChatMessage,
+  type UpdateMessageParams,
+} from '@lobechat/types';
 
 import { MessageModel } from '@/database/models/message';
 
@@ -95,6 +99,7 @@ export class MessageService {
         current: 0,
         groupId: params.groupId,
         pageSize: 9999,
+        threadId: params.threadId,
         topicId: params.topicId,
       },
       {

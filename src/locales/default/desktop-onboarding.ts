@@ -73,6 +73,7 @@ export default {
   'screen4.title2': 'Your choice helps us improve',
   'screen4.title3': 'You can change this anytime in settings',
 
+  'screen5.actions.cancel': 'Cancel',
   'screen5.actions.connectToServer': 'Connect to Server',
   'screen5.actions.connecting': 'Connecting...',
   'screen5.actions.signInCloud': 'Sign in to LobeHub Cloud',
@@ -80,11 +81,16 @@ export default {
   'screen5.actions.signingIn': 'Signing in...',
   'screen5.actions.signingOut': 'Signing out...',
   'screen5.actions.tryAgain': 'Try Again',
+  'screen5.auth.phase.browserOpened': 'Browser opened, please sign in...',
+  'screen5.auth.phase.verifying': 'Verifying credentials...',
+  'screen5.auth.phase.waitingForAuth': 'Waiting for authorization...',
+  'screen5.auth.remaining': 'Remaining: {{time}}s',
   'screen5.badge': 'Sign in',
   'screen5.description':
     'Sign in to sync Agents, Groups, settings, and Context across all devices.',
   'screen5.errors.desktopOnlyOidc':
     'OIDC authorization is only available in the desktop app runtime.',
+  'screen5.legacyLocalDb.link': 'Migrate legacy local database',
   'screen5.methods.cloud.description':
     'Sign in with your LobeHub Cloud account to sync everything seamlessly',
   'screen5.methods.cloud.name': 'LobeHub Cloud',

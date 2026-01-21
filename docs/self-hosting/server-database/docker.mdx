@@ -1,8 +1,8 @@
 ---
 title: Deploying LobeChat Database with Docker
 description: >-
-  Learn how to deploy the LobeChat server database version using Docker on Linux and local machines.
-
+  Learn how to deploy the LobeChat server database version using Docker on Linux
+  and local machines.
 tags:
   - LobeChat
   - Docker
@@ -28,11 +28,6 @@ tags:
   Database](/docs/self-hosting/server-database) first.
 </Callout>
 
-<Callout type="warning">
-  Due to the inability to expose `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` using Docker environment variables, you cannot use Clerk as an authentication service when deploying LobeChat using Docker / Docker Compose.
-
-  If you do need Clerk as an authentication service, you might consider deploying using Vercel or building your own image.
-</Callout>
 
 ## Deploying on a Linux Server
 
@@ -74,13 +69,11 @@ Here is the process for deploying the LobeChat server database version on a Linu
   # Format: postgres://username:password@host:port/dbname; if your pg instance is a Docker container, use the container name
   DATABASE_URL=postgres://postgres:mysecretpassword@my-postgres:5432/postgres
 
-  # NEXT_AUTH related, can use auth0, Azure AD, GitHub, Authentik, zitadel, etc. If you have other access requirements, feel free to submit a PR
-  NEXT_AUTH_SECRET=3904039cd41ea1bdf6c93db0db96e250
-  NEXT_AUTH_SSO_PROVIDERS=auth0
-  NEXTAUTH_URL=https://your-prod-domain.com/api/auth
-  AUTH_AUTH0_ID=xxxxxx
-  AUTH_AUTH0_SECRET=cSX_xxxxx
-  AUTH_AUTH0_ISSUER=https://lobe-chat-demo.us.auth0.com
+  # Authentication (Better Auth)
+  # Session encryption key (generate with: openssl rand -base64 32)
+  AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+  # JWKS key for signing and verifying JWTs (generate at: https://lobehub.com/docs/self-hosting/environment-variables/auth#jwks_key)
+  JWKS_KEY='{"keys":[...]}'
 
   # S3 related
   S3_ACCESS_KEY_ID=xxxxxxxxxx
@@ -89,10 +82,6 @@ Here is the process for deploying the LobeChat server database version on a Linu
   S3_BUCKET=lobechat
   S3_PUBLIC_DOMAIN=https://s3-for-lobechat.your-domain.com
 
-  # Other environment variables, as needed. You can refer to the environment variables configuration for the client version, making sure not to have ACCESS_CODE.
-  # OPENAI_API_KEY=sk-xxxx
-  # OPENAI_PROXY_URL=https://api.openai.com/v1
-  # OPENAI_MODEL_LIST=...
   ```
 
   ### Start the lobe-chat-database Docker image
@@ -141,13 +130,9 @@ The script command you need to execute is:
 $ docker run -it -d --name lobe-chat-database -p 3210:3210 \
   -e DATABASE_URL=postgres://postgres:mysecretpassword@host.docker.internal:5432/postgres \
   -e KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
-  -e NEXT_AUTH_SECRET=3904039cd41ea1bdf6c93db0db96e250 \
-  -e NEXT_AUTH_SSO_PROVIDERS=auth0 \
-  -e AUTH_AUTH0_ID=xxxxxx \
-  -e AUTH_AUTH0_SECRET=cSX_xxxxx \
-  -e AUTH_AUTH0_ISSUER=https://lobe-chat-demo.us.auth0.com \
+  -e AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
+  -e JWKS_KEY='{"keys":[...]}' \
   -e APP_URL=http://localhost:3210 \
-  -e NEXTAUTH_URL=http://localhost:3210/api/auth \
   -e S3_ACCESS_KEY_ID=xxxxxxxxxx \
   -e S3_SECRET_ACCESS_KEY=xxxxxxxxxx \
   -e S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com \

@@ -12,7 +12,6 @@ import { getAntdLocale } from '@/utils/locale';
 import Editor from './Editor';
 
 const updateDayjs = async (lang: string) => {
-  // load default lang
   let dayJSLocale;
   try {
     // dayjs locale is using `en` instead of `en-US`
@@ -38,21 +37,10 @@ const Locale = memo<LocaleLayoutProps>(({ children, defaultLang, antdLocale }) =
   const [lang, setLang] = useState(defaultLang);
   const [locale, setLocale] = useState(antdLocale);
 
-  // if run on server side, init i18n instance everytime
   if (isOnServerSide) {
-    // use sync mode to init instantly
     i18n.init({ initAsync: false });
-
-    // load the dayjs locale
-    // if (lang) {
-    //   const dayJSLocale = require(`dayjs/locale/${lang!.toLowerCase()}.js`);
-    //
-    //   dayjs.locale(dayJSLocale);
-    // }
   } else {
-    // if on browser side, init i18n instance only once
     if (!i18n.instance.isInitialized)
-      // console.debug('locale', lang);
       i18n.init().then(async () => {
         if (!lang) return;
 

@@ -1,15 +1,15 @@
-import { MarketSDK } from '@lobehub/market-sdk';
 import { type NextRequest, NextResponse } from 'next/server';
 
 import { getTrustedClientTokenForSession } from '@/libs/trusted-client';
+import { MarketService } from '@/server/services/market';
+
+const MARKET_BASE_URL = process.env.NEXT_PUBLIC_MARKET_BASE_URL || 'https://market.lobehub.com';
 
 type RouteContext = {
   params: Promise<{
     segments?: string[];
   }>;
 };
-
-const MARKET_BASE_URL = process.env.NEXT_PUBLIC_MARKET_BASE_URL || 'https://market.lobehub.com';
 const ALLOWED_ENDPOINTS = new Set(['handoff', 'token', 'userinfo']);
 
 const ensureEndpoint = (segments?: string[]) => {
@@ -44,9 +44,8 @@ const methodNotAllowed = (allowed: string[]) =>
   );
 
 const handleProxy = async (req: NextRequest, context: RouteContext) => {
-  const market = new MarketSDK({
-    baseURL: MARKET_BASE_URL,
-  });
+  const marketService = new MarketService();
+  const market = marketService.market;
 
   const { segments } = await context.params;
   const endpointResult = ensureEndpoint(segments);

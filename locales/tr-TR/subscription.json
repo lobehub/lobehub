@@ -54,6 +54,8 @@
   "funds.packages.expiresIn": "{{days}} gün içinde sona eriyor",
   "funds.packages.expiresToday": "Bugün sona eriyor",
   "funds.packages.expiringSoon": "Yakında sona eriyor",
+  "funds.packages.gift": "Hediye",
+  "funds.packages.giftedOn": "{{date}} tarihinde hediye edildi",
   "funds.packages.noPackages": "Kredi paketi yok",
   "funds.packages.purchaseFirst": "İlk kredi paketinizi satın alın",
   "funds.packages.purchasedOn": "{{date}} tarihinde satın alındı",

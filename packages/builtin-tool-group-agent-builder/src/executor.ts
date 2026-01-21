@@ -16,6 +16,7 @@ import { GroupAgentBuilderExecutionRuntime } from './ExecutionRuntime';
 import {
   type BatchCreateAgentsParams,
   type CreateAgentParams,
+  type GetAgentInfoParams,
   GroupAgentBuilderApiName,
   GroupAgentBuilderIdentifier,
   type InviteAgentParams,
@@ -33,6 +34,23 @@ const groupAgentBuilderRuntime = new GroupAgentBuilderExecutionRuntime();
 class GroupAgentBuilderExecutor extends BaseExecutor<typeof GroupAgentBuilderApiName> {
   readonly identifier = GroupAgentBuilderIdentifier;
   protected readonly apiEnum = GroupAgentBuilderApiName;
+
+  // ==================== Agent Info ====================
+
+  getAgentInfo = async (
+    params: GetAgentInfoParams,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    const result = await groupAgentBuilderRuntime.getAgentInfo(ctx.groupId, params);
+    return {
+      content: result.content,
+      error: result.error
+        ? { body: result.error, message: String(result.error), type: 'RuntimeError' }
+        : undefined,
+      state: result.state,
+      success: result.success,
+    };
+  };
 
   // ==================== Group Member Management ====================
 

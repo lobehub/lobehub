@@ -170,26 +170,6 @@ const ImportPreviewModal = ({
               size="small"
             />
           </div>
-
-          {/*<Flexbox>*/}
-          {/*  重复数据处理方式：*/}
-          {/*  <div className={styles.duplicateOptions}>*/}
-          {/*    <Radio.Group*/}
-          {/*      onChange={(e) => setDuplicateAction(e.target.value)}*/}
-          {/*      value={duplicateAction}*/}
-          {/*    >*/}
-          {/*      <Space>*/}
-          {/*        <Radio value="skip">跳过</Radio>*/}
-          {/*        <Radio value="overwrite">覆盖</Radio>*/}
-          {/*      </Space>*/}
-          {/*    </Radio.Group>*/}
-          {/*  </div>*/}
-          {/*  <div className={styles.duplicateDescription}>*/}
-          {/*    {duplicateAction === 'skip'*/}
-          {/*      ? '选择跳过将仅导入不重复的数据，保留现有数据不变。'*/}
-          {/*      : '选择覆盖将使用导入数据替换系统中具有相同 ID 的现有记录。'}*/}
-          {/*  </div>*/}
-          {/*</Flexbox>*/}
         </Flexbox>
       </div>
     </Modal>

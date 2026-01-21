@@ -1,0 +1,62 @@
+---
+title: Configuring Casdoor Authentication for LobeChat
+description: >-
+  Learn how to configure Casdoor SSO for LobeChat, including creating an
+  application and setting up environment variables.
+tags:
+  - Casdoor
+  - Authentication
+  - LobeChat
+  - Single Sign-On
+  - OIDC
+---
+
+# Configuring Casdoor Authentication
+
+[Casdoor](https://casdoor.org/) is an open-source Identity Access Management (IAM) platform with web UI for SSO.
+
+<Steps>
+  ### Create Application in Casdoor
+
+  1. Log in to your Casdoor admin console
+  2. Go to **Applications** and click **Add**
+  3. Configure the application:
+     - Name: `LobeChat`
+     - Organization: Select your organization
+     - Redirect URLs: Add your callback URL
+
+  <Callout type={'info'}>
+    **Callback URL Format**: `https://your-domain.com/api/auth/callback/casdoor`
+  </Callout>
+
+  4. Save and note down the **Client ID** and **Client Secret**
+
+  ### Get Issuer URL
+
+  The issuer URL is your Casdoor server URL, typically: `https://your-casdoor-domain`
+
+  ### Configure Environment Variables
+
+  When deploying LobeChat, you need to configure the following environment variables:
+
+  | Environment Variable             | Type     | Description                                                                   |
+  | -------------------------------- | -------- | ----------------------------------------------------------------------------- |
+  | `AUTH_SECRET`                    | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS`             | Required | SSO provider for LobeChat. Use `casdoor` for Casdoor                          |
+  | `AUTH_CASDOOR_ID`                | Required | Client ID from Casdoor application                                            |
+  | `AUTH_CASDOOR_SECRET`            | Required | Client Secret from Casdoor application                                        |
+  | `AUTH_CASDOOR_ISSUER`            | Required | Casdoor server URL (e.g., `https://your-casdoor-domain`)                      |
+
+  <Callout type={'tip'}>
+    Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#casdoor) for detailed information on these variables.
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  After successful deployment, users will be able to authenticate with Casdoor and use LobeChat.
+</Callout>
+
+## Related Resources
+
+- [Casdoor Documentation](https://casdoor.org/docs/overview)
+- [Casdoor Application Configuration](https://casdoor.org/docs/application/config)

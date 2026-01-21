@@ -1,125 +1,62 @@
+import {
+  formatEditResult,
+  formatFileContent,
+  formatFileList,
+  formatFileSearchResults,
+  formatGlobResults,
+  formatMoveResults,
+  formatRenameResult,
+  formatWriteResult,
+} from '@lobechat/prompts';
 import { type BuiltinServerRuntimeOutput } from '@lobechat/types';
 
-import { codeInterpreterService } from '@/services/codeInterpreter';
-
 import {
+  type EditLocalFileParams,
   type EditLocalFileState,
+  type ExecuteCodeParams,
   type ExecuteCodeState,
+  type ExportFileParams,
   type ExportFileState,
+  type GetCommandOutputParams,
   type GetCommandOutputState,
   type GlobFilesState,
+  type GlobLocalFilesParams,
+  type GrepContentParams,
   type GrepContentState,
+  type ISandboxService,
+  type KillCommandParams,
   type KillCommandState,
+  type ListLocalFilesParams,
   type ListLocalFilesState,
+  type MoveLocalFilesParams,
   type MoveLocalFilesState,
+  type ReadLocalFileParams,
   type ReadLocalFileState,
+  type RenameLocalFileParams,
   type RenameLocalFileState,
+  type RunCommandParams,
   type RunCommandState,
+  type SearchLocalFilesParams,
   type SearchLocalFilesState,
+  type WriteLocalFileParams,
   type WriteLocalFileState,
 } from '../types';
 
 /**
  * Cloud Sandbox Execution Runtime
  *
- * This runtime executes tools via the LobeHub Market SDK's runBuildInTool API,
- * which connects to AWS Bedrock AgentCore sandbox.
+ * This runtime executes tools via the injected ISandboxService.
+ * The service handles context (topicId, userId) internally - Runtime doesn't need to know about it.
  *
- * Session Management:
- * - Sessions are automatically created per userId + topicId combination
- * - Sessions are recreated automatically if expired
- * - The sessionExpiredAndRecreated flag indicates if recreation occurred
+ * Dependency Injection:
+ * - Client: Inject codeInterpreterService (uses tRPC client)
+ * - Server: Inject ServerSandboxService (uses MarketSDK directly)
  */
-
-interface ExecutionContext {
-  topicId: string;
-  userId: string;
-}
-
-// Types for tool parameters matching market-sdk
-interface ListLocalFilesParams {
-  directoryPath: string;
-}
-
-interface ReadLocalFileParams {
-  endLine?: number;
-  path: string;
-  startLine?: number;
-}
-
-interface WriteLocalFileParams {
-  content: string;
-  createDirectories?: boolean;
-  path: string;
-}
-
-interface EditLocalFileParams {
-  all?: boolean;
-  path: string;
-  replace: string;
-  search: string;
-}
-
-interface SearchLocalFilesParams {
-  directory: string;
-  fileType?: string;
-  keyword?: string;
-  modifiedAfter?: string;
-  modifiedBefore?: string;
-}
-
-interface MoveLocalFilesParams {
-  operations: Array<{
-    destination: string;
-    source: string;
-  }>;
-}
-
-interface RenameLocalFileParams {
-  newName: string;
-  oldPath: string;
-}
-
-interface RunCommandParams {
-  background?: boolean;
-  command: string;
-  timeout?: number;
-}
-
-interface GetCommandOutputParams {
-  commandId: string;
-}
-
-interface KillCommandParams {
-  commandId: string;
-}
-
-interface GrepContentParams {
-  directory: string;
-  filePattern?: string;
-  pattern: string;
-  recursive?: boolean;
-}
-
-interface GlobLocalFilesParams {
-  directory?: string;
-  pattern: string;
-}
-
-interface ExportFileParams {
-  path: string;
-}
-
-interface ExecuteCodeParams {
-  code: string;
-  language?: 'javascript' | 'python' | 'typescript';
-}
-
 export class CloudSandboxExecutionRuntime {
-  private context: ExecutionContext;
+  private sandboxService: ISandboxService;
 
-  constructor(context: ExecutionContext) {
-    this.context = context;
+  constructor(sandboxService: ISandboxService) {
+    this.sandboxService = sandboxService;
   }
 
   // ==================== File Operations ====================
@@ -128,12 +65,19 @@ export class CloudSandboxExecutionRuntime {
     try {
       const result = await this.callTool('listLocalFiles', args);
 
-      const state: ListLocalFilesState = {
-        files: result.result?.files || [],
-      };
+      const files = result.result?.files || [];
+      const state: ListLocalFilesState = { files };
+
+      const content = formatFileList(
+        files.map((f: { isDirectory: boolean; name: string }) => ({
+          isDirectory: f.isDirectory,
+          name: f.name,
+        })),
+        args.directoryPath,
+      );
 
       return {
-        content: JSON.stringify(result.result),
+        content,
         state,
         success: true,
       };
@@ -154,8 +98,19 @@ export class CloudSandboxExecutionRuntime {
         totalLines: result.result?.totalLines,
       };
 
+      const lineRange: [number, number] | undefined =
+        args.startLine !== undefined && args.endLine !== undefined
+          ? [args.startLine, args.endLine]
+          : undefined;
+
+      const content = formatFileContent({
+        content: result.result?.content || '',
+        lineRange,
+        path: args.path,
+      });
+
       return {
-        content: JSON.stringify(result.result),
+        content,
         state,
         success: true,
       };
@@ -174,11 +129,13 @@ export class CloudSandboxExecutionRuntime {
         success: result.success,
       };
 
+      const content = formatWriteResult({
+        path: args.path,
+        success: true,
+      });
+
       return {
-        content: JSON.stringify({
-          message: `Successfully wrote to ${args.path}`,
-          success: true,
-        }),
+        content,
         state,
         success: true,
       };
@@ -199,13 +156,15 @@ export class CloudSandboxExecutionRuntime {
         replacements: result.result?.replacements || 0,
       };
 
-      const statsText =
-        state.linesAdded || state.linesDeleted
-          ? ` (+${state.linesAdded || 0} -${state.linesDeleted || 0})`
-          : '';
+      const content = formatEditResult({
+        filePath: args.path,
+        linesAdded: state.linesAdded,
+        linesDeleted: state.linesDeleted,
+        replacements: state.replacements,
+      });
 
       return {
-        content: `Successfully replaced ${state.replacements} occurrence(s) in ${args.path}${statsText}`,
+        content,
         state,
         success: true,
       };
@@ -218,13 +177,18 @@ export class CloudSandboxExecutionRuntime {
     try {
       const result = await this.callTool('searchLocalFiles', args);
 
+      const results = result.result?.results || [];
       const state: SearchLocalFilesState = {
-        results: result.result?.results || [],
+        results,
         totalCount: result.result?.totalCount || 0,
       };
 
+      const content = formatFileSearchResults(
+        results.map((r: { path: string }) => ({ path: r.path })),
+      );
+
       return {
-        content: JSON.stringify(result.result),
+        content,
         state,
         success: true,
       };
@@ -237,17 +201,17 @@ export class CloudSandboxExecutionRuntime {
     try {
       const result = await this.callTool('moveLocalFiles', args);
 
+      const results = result.result?.results || [];
       const state: MoveLocalFilesState = {
-        results: result.result?.results || [],
+        results,
         successCount: result.result?.successCount || 0,
         totalCount: args.operations.length,
       };
 
+      const content = formatMoveResults(results);
+
       return {
-        content: JSON.stringify({
-          message: `Moved ${state.successCount}/${state.totalCount} items`,
-          results: state.results,
-        }),
+        content,
         state,
         success: true,
       };
@@ -267,11 +231,15 @@ export class CloudSandboxExecutionRuntime {
         success: result.success,
       };
 
+      const content = formatRenameResult({
+        error: result.result?.error,
+        newName: args.newName,
+        oldPath: args.oldPath,
+        success: result.success,
+      });
+
       return {
-        content: JSON.stringify({
-          message: `Successfully renamed ${args.oldPath} to ${args.newName}`,
-          success: true,
-        }),
+        content,
         state,
         success: result.success,
       };
@@ -405,14 +373,22 @@ export class CloudSandboxExecutionRuntime {
     try {
       const result = await this.callTool('globLocalFiles', args);
 
+      const files = result.result?.files || [];
+      const totalCount = result.result?.totalCount || 0;
+
       const state: GlobFilesState = {
-        files: result.result?.files || [],
+        files,
         pattern: args.pattern,
-        totalCount: result.result?.totalCount || 0,
+        totalCount,
       };
 
+      const content = formatGlobResults({
+        files,
+        totalFiles: totalCount,
+      });
+
       return {
-        content: JSON.stringify(result.result),
+        content,
         state,
         success: true,
       };
@@ -425,7 +401,7 @@ export class CloudSandboxExecutionRuntime {
 
   /**
    * Export a file from the sandbox to cloud storage
-   * Uses a single tRPC call that handles:
+   * Uses a single call that handles:
    * 1. Generate pre-signed upload URL
    * 2. Call sandbox to upload file
    * 3. Create persistent file record
@@ -437,11 +413,7 @@ export class CloudSandboxExecutionRuntime {
       const filename = args.path.split('/').pop() || 'exported_file';
 
       // Single call that handles everything: upload URL generation, sandbox upload, and file record creation
-      const result = await codeInterpreterService.exportAndUploadFile(
-        args.path,
-        filename,
-        this.context.topicId,
-      );
+      const result = await this.sandboxService.exportAndUploadFile(args.path, filename);
 
       const state: ExportFileState = {
         downloadUrl: result.success && result.url ? result.url : '',
@@ -478,17 +450,16 @@ export class CloudSandboxExecutionRuntime {
   // ==================== Helper Methods ====================
 
   /**
-   * Call a tool via the market SDK through tRPC
-   * Routes through: ExecutionRuntime -> codeInterpreterService -> tRPC -> codeInterpreterRouter -> MarketSDK
+   * Call a tool via the injected sandbox service
    */
   private async callTool(
     toolName: string,
     params: Record<string, any>,
   ): Promise<{ result: any; sessionExpiredAndRecreated?: boolean; success: boolean }> {
-    const result = await codeInterpreterService.callTool(toolName, params, this.context);
+    const result = await this.sandboxService.callTool(toolName, params);
 
     if (!result.success) {
-      throw new Error((result as any).error?.message || `Cloud Sandbox tool ${toolName} failed`);
+      throw new Error(result.error?.message || `Cloud Sandbox tool ${toolName} failed`);
     }
 
     return result;

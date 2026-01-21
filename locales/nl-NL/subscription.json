@@ -54,6 +54,8 @@
   "funds.packages.expiresIn": "Verloopt over {{days}} dagen",
   "funds.packages.expiresToday": "Verloopt vandaag",
   "funds.packages.expiringSoon": "Verloopt binnenkort",
+  "funds.packages.gift": "Cadeau",
+  "funds.packages.giftedOn": "Geschonken op {{date}}",
   "funds.packages.noPackages": "Geen tegoedpakketten",
   "funds.packages.purchaseFirst": "Koop je eerste tegoedpakket",
   "funds.packages.purchasedOn": "Gekocht op {{date}}",

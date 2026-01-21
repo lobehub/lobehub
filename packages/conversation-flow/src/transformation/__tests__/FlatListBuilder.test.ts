@@ -517,5 +517,45 @@ describe('FlatListBuilder', () => {
       // User message should not have branch info since we're in optimistic update mode
       expect((result[0] as any).siblingCount).toBeUndefined();
     });
+
+    it('should handle orphan messages where all have parentId (thread mode)', () => {
+      // Scenario: Thread messages where the parent (source message) is not in the query result
+      // All messages have parentId pointing to a message not in the array
+      const messages: Message[] = [
+        {
+          content: 'Thread user message',
+          createdAt: 0,
+          id: 'msg-1',
+          parentId: 'source-msg-not-in-array',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          content: 'Thread assistant reply',
+          createdAt: 0,
+          id: 'msg-2',
+          parentId: 'msg-1',
+          role: 'assistant',
+          updatedAt: 0,
+        },
+        {
+          content: 'Thread user follow-up',
+          createdAt: 0,
+          id: 'msg-3',
+          parentId: 'msg-2',
+          role: 'user',
+          updatedAt: 0,
+        },
+      ];
+
+      const builder = createBuilder(messages);
+      const result = builder.flatten(messages);
+
+      // Should flatten all messages correctly using first message's parentId as virtual root
+      expect(result).toHaveLength(3);
+      expect(result[0].id).toBe('msg-1');
+      expect(result[1].id).toBe('msg-2');
+      expect(result[2].id).toBe('msg-3');
+    });
   });
 });

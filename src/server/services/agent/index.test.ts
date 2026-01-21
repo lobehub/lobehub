@@ -216,6 +216,161 @@ describe('AgentService', () => {
     });
   });
 
+  describe('getAgentConfig', () => {
+    it('should return null if agent does not exist', async () => {
+      const mockAgentModel = {
+        getAgentConfig: vi.fn().mockResolvedValue(null),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+
+      const newService = new AgentService(mockDb, mockUserId);
+      const result = await newService.getAgentConfig('non-existent');
+
+      expect(result).toBeNull();
+    });
+
+    it('should support lookup by agent id', async () => {
+      const mockAgent = {
+        id: 'agent-123',
+        model: 'gpt-4',
+        systemRole: 'Test role',
+      };
+
+      const mockAgentModel = {
+        getAgentConfig: vi.fn().mockResolvedValue(mockAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+
+      const newService = new AgentService(mockDb, mockUserId);
+      const result = await newService.getAgentConfig('agent-123');
+
+      expect(mockAgentModel.getAgentConfig).toHaveBeenCalledWith('agent-123');
+      expect(result?.id).toBe('agent-123');
+      expect(result?.model).toBe('gpt-4');
+    });
+
+    it('should support lookup by slug', async () => {
+      const mockAgent = {
+        id: 'agent-123',
+        model: 'claude-3',
+        slug: 'my-agent',
+      };
+
+      const mockAgentModel = {
+        getAgentConfig: vi.fn().mockResolvedValue(mockAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+
+      const newService = new AgentService(mockDb, mockUserId);
+      const result = await newService.getAgentConfig('my-agent');
+
+      expect(mockAgentModel.getAgentConfig).toHaveBeenCalledWith('my-agent');
+      expect(result?.id).toBe('agent-123');
+    });
+
+    it('should merge DEFAULT_AGENT_CONFIG and serverDefaultAgentConfig with agent config', async () => {
+      const mockAgent = {
+        id: 'agent-1',
+        systemRole: 'Custom system role',
+      };
+      const serverDefaultConfig = { model: 'gpt-4', params: { temperature: 0.7 } };
+
+      const mockAgentModel = {
+        getAgentConfig: vi.fn().mockResolvedValue(mockAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue(serverDefaultConfig);
+
+      const newService = new AgentService(mockDb, mockUserId);
+      const result = await newService.getAgentConfig('agent-1');
+
+      expect(result).toMatchObject({
+        chatConfig: DEFAULT_AGENT_CONFIG.chatConfig,
+        plugins: DEFAULT_AGENT_CONFIG.plugins,
+        tts: DEFAULT_AGENT_CONFIG.tts,
+        model: 'gpt-4',
+        params: { temperature: 0.7 },
+        id: 'agent-1',
+        systemRole: 'Custom system role',
+      });
+    });
+
+    it('should use default model/provider when agent has none', async () => {
+      const mockAgent = {
+        id: 'agent-1',
+        systemRole: 'Test',
+        // No model or provider set
+      };
+
+      const mockAgentModel = {
+        getAgentConfig: vi.fn().mockResolvedValue(mockAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+
+      const newService = new AgentService(mockDb, mockUserId);
+      const result = await newService.getAgentConfig('agent-1');
+
+      // Should have default model/provider from DEFAULT_AGENT_CONFIG
+      expect(result?.model).toBe(DEFAULT_AGENT_CONFIG.model);
+      expect(result?.provider).toBe(DEFAULT_AGENT_CONFIG.provider);
+    });
+
+    it('should prioritize agent model/provider over defaults', async () => {
+      const mockAgent = {
+        id: 'agent-1',
+        model: 'claude-3-opus',
+        provider: 'anthropic',
+      };
+      const serverDefaultConfig = { model: 'gpt-4', provider: 'openai' };
+
+      const mockAgentModel = {
+        getAgentConfig: vi.fn().mockResolvedValue(mockAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue(serverDefaultConfig);
+
+      const newService = new AgentService(mockDb, mockUserId);
+      const result = await newService.getAgentConfig('agent-1');
+
+      // Agent config should override server default
+      expect(result?.model).toBe('claude-3-opus');
+      expect(result?.provider).toBe('anthropic');
+    });
+
+    it('should merge user default agent config', async () => {
+      const mockAgent = {
+        id: 'agent-1',
+      };
+      const userDefaultConfig = { model: 'user-preferred-model', provider: 'user-provider' };
+
+      const mockAgentModel = {
+        getAgentConfig: vi.fn().mockResolvedValue(mockAgent),
+      };
+
+      (AgentModel as any).mockImplementation(() => mockAgentModel);
+      (parseAgentConfig as any).mockReturnValue({});
+      // Use mockResolvedValueOnce to avoid affecting subsequent tests
+      mockUserModel.getUserSettingsDefaultAgentConfig.mockResolvedValueOnce({ config: userDefaultConfig });
+
+      const newService = new AgentService(mockDb, mockUserId);
+      const result = await newService.getAgentConfig('agent-1');
+
+      // User default config should be applied
+      expect(result?.model).toBe('user-preferred-model');
+      expect(result?.provider).toBe('user-provider');
+    });
+  });
+
   describe('getAgentConfigById', () => {
     it('should return null if agent does not exist', async () => {
       const mockAgentModel = {

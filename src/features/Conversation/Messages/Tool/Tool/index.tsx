@@ -1,8 +1,9 @@
 import { Accordion, AccordionItem, Flexbox, Skeleton } from '@lobehub/ui';
-import dynamic from 'next/dynamic';
 import { type CSSProperties, memo, useState } from 'react';
 
 import Actions from '@/features/Conversation/Messages/AssistantGroup/Tool/Actions';
+import dynamic from '@/libs/next/dynamic';
+import { getBuiltinRender } from '@/tools/renders';
 
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../../store';
 import Inspectors from '../../AssistantGroup/Tool/Inspector';
@@ -12,7 +13,7 @@ const Debug = dynamic(() => import('../../AssistantGroup/Tool/Debug'), {
   ssr: false,
 });
 
-const Render = dynamic(() => import('../../AssistantGroup/Tool/Render'), {
+const Detail = dynamic(() => import('../../AssistantGroup/Tool/Detail'), {
   loading: () => <Skeleton.Block active height={120} width={'100%'} />,
   ssr: false,
 });
@@ -33,9 +34,18 @@ export interface InspectorProps {
  * Tool message component - adapts Tool message data to use AssistantGroup/Tool components
  */
 const Tool = memo<InspectorProps>(
-  ({ arguments: requestArgs, apiName, disableEditing, messageId, toolCallId, index, identifier, type }) => {
+  ({
+    arguments: requestArgs,
+    apiName,
+    disableEditing,
+    messageId,
+    toolCallId,
+    index,
+    identifier,
+    type,
+  }) => {
     const [showDebug, setShowDebug] = useState(false);
-    const [showPluginRender, setShowPluginRender] = useState(false);
+    const [showCustomToolRender, setShowCustomToolRender] = useState(true);
     const [expand, setExpand] = useState(true);
 
     // Fetch tool message from store
@@ -59,6 +69,8 @@ const Tool = memo<InspectorProps>(
     // Don't render if still loading and no message yet
     if (loading && !toolMessage) return null;
 
+    const hasCustomRender = !!getBuiltinRender(identifier, apiName);
+
     return (
       <Accordion
         expandedKeys={expand ? ['tool'] : []}
@@ -70,13 +82,12 @@ const Tool = memo<InspectorProps>(
             !disableEditing && (
               <Actions
                 assistantMessageId={messageId}
-                handleExpand={(expand) => setExpand(!!expand)}
+                canToggleCustomToolRender={hasCustomRender}
                 identifier={identifier}
+                setShowCustomToolRender={setShowCustomToolRender}
                 setShowDebug={setShowDebug}
-                setShowPluginRender={setShowPluginRender}
-                showCustomPluginRender={false}
+                showCustomToolRender={showCustomToolRender}
                 showDebug={showDebug}
-                showPluginRender={showPluginRender}
               />
             )
           }
@@ -96,15 +107,14 @@ const Tool = memo<InspectorProps>(
                 type={type}
               />
             )}
-            <Render
+            <Detail
               apiName={apiName}
               arguments={requestArgs}
               disableEditing={disableEditing}
               identifier={identifier}
               messageId={messageId}
               result={result}
-              setShowPluginRender={setShowPluginRender}
-              showPluginRender={showPluginRender}
+              showCustomToolRender={showCustomToolRender}
               toolCallId={toolCallId}
               type={type}
             />

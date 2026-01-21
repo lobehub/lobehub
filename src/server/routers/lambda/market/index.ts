@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DiscoverService } from '@/server/services/discover';
+import { MarketService } from '@/server/services/market';
 import {
   AssistantSorts,
   McpConnectionType,
@@ -17,6 +18,7 @@ import {
 } from '@/types/discover';
 
 import { agentRouter } from './agent';
+import { agentGroupRouter } from './agentGroup';
 import { oidcRouter } from './oidc';
 import { socialRouter } from './social';
 import { userRouter } from './user';
@@ -36,6 +38,10 @@ const marketProcedure = publicProcedure
           accessToken: ctx.marketAccessToken,
           userInfo: ctx.marketUserInfo,
         }),
+        marketService: new MarketService({
+          accessToken: ctx.marketAccessToken,
+          userInfo: ctx.marketUserInfo,
+        }),
       },
     });
   });
@@ -43,6 +49,9 @@ const marketProcedure = publicProcedure
 export const marketRouter = router({
   // ============================== Agent Management (authenticated) ==============================
   agent: agentRouter,
+
+  // ============================== Agent Group Management (authenticated) ==============================
+  agentGroup: agentGroupRouter,
 
   // ============================== Assistant Market ==============================
   getAssistantCategories: marketProcedure
@@ -120,6 +129,7 @@ export const marketRouter = router({
         .object({
           category: z.string().optional(),
           connectionType: z.nativeEnum(McpConnectionType).optional(),
+          includeAgentGroup: z.boolean().optional(),
           locale: z.string().optional(),
           order: z.enum(['asc', 'desc']).optional(),
           ownerId: z.string().optional(),
@@ -141,6 +151,95 @@ export const marketRouter = router({
         throw new TRPCError({
           code: 'INTERNAL_SERVER_ERROR',
           message: 'Failed to fetch assistant list',
+        });
+      }
+    }),
+
+  // ============================== Group Agent Market (Discovery) ==============================
+  getGroupAgentCategories: marketProcedure
+    .input(
+      z
+        .object({
+          locale: z.string().optional(),
+          q: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input, ctx }) => {
+      log('getGroupAgentCategories input: %O', input);
+
+      try {
+        return await ctx.discoverService.getGroupAgentCategories(input);
+      } catch (error) {
+        log('Error fetching group agent categories: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch group agent categories',
+        });
+      }
+    }),
+
+  getGroupAgentDetail: marketProcedure
+    .input(
+      z.object({
+        identifier: z.string(),
+        locale: z.string().optional(),
+        version: z.string().optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      log('getGroupAgentDetail input: %O', input);
+
+      try {
+        return await ctx.discoverService.getGroupAgentDetail(input);
+      } catch (error) {
+        log('Error fetching group agent detail: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch group agent detail',
+        });
+      }
+    }),
+
+  getGroupAgentIdentifiers: marketProcedure.query(async ({ ctx }) => {
+    log('getGroupAgentIdentifiers called');
+
+    try {
+      return await ctx.discoverService.getGroupAgentIdentifiers();
+    } catch (error) {
+      log('Error fetching group agent identifiers: %O', error);
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to fetch group agent identifiers',
+      });
+    }
+  }),
+
+  getGroupAgentList: marketProcedure
+    .input(
+      z
+        .object({
+          category: z.string().optional(),
+          locale: z.string().optional(),
+          order: z.enum(['asc', 'desc']).optional(),
+          ownerId: z.string().optional(),
+          page: z.number().optional(),
+          pageSize: z.number().optional(),
+          q: z.string().optional(),
+          sort: z.enum(['createdAt', 'updatedAt', 'name', 'recommended']).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input, ctx }) => {
+      log('getGroupAgentList input: %O', input);
+
+      try {
+        return await ctx.discoverService.getGroupAgentList(input);
+      } catch (error) {
+        log('Error fetching group agent list: %O', error);
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to fetch group agent list',
         });
       }
     }),
@@ -167,7 +266,7 @@ export const marketRouter = router({
     }),
 
   // ============================== MCP Market ==============================
-getMcpCategories: marketProcedure
+  getMcpCategories: marketProcedure
     .input(
       z
         .object({
@@ -351,7 +450,7 @@ getMcpCategories: marketProcedure
     }),
 
   // ============================== Plugin Market ==============================
-getPluginCategories: marketProcedure
+  getPluginCategories: marketProcedure
     .input(
       z
         .object({
@@ -439,7 +538,7 @@ getPluginCategories: marketProcedure
     }),
 
   // ============================== Providers ==============================
-getProviderDetail: marketProcedure
+  getProviderDetail: marketProcedure
     .input(
       z.object({
         identifier: z.string(),
@@ -503,7 +602,7 @@ getProviderDetail: marketProcedure
     }),
 
   // ============================== User Profile ==============================
-getUserInfo: marketProcedure
+  getUserInfo: marketProcedure
     .input(
       z.object({
         locale: z.string().optional(),
@@ -675,6 +774,42 @@ getUserInfo: marketProcedure
       }
     }),
 
+  reportGroupAgentEvent: marketProcedure
+    .input(
+      z.object({
+        event: z.enum(['add', 'chat', 'click']),
+        identifier: z.string(),
+        source: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      log('reportGroupAgentEvent input: %O', input);
+
+      try {
+        await ctx.discoverService.createGroupAgentEvent(input);
+        return { success: true };
+      } catch (error) {
+        console.error('Error reporting Group Agent event: %O', error);
+        return { success: false };
+      }
+    }),
+
+  reportGroupAgentInstall: marketProcedure
+    .input(
+      z.object({
+        identifier: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      log('reportGroupAgentInstall input: %O', input);
+      try {
+        await ctx.discoverService.increaseGroupAgentInstallCount(input.identifier);
+        return { success: true };
+      } catch (error) {
+        log('Error reporting group agent installation: %O', error);
+        return { success: false };
+      }
+    }),
 
   reportMcpEvent: marketProcedure
     .input(

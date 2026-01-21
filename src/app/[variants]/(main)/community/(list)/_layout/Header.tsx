@@ -13,7 +13,6 @@ import { styles } from './Header/style';
 
 const Header = memo(() => {
   const location = useLocation();
-  // const { activeKey } = useNav();
   const isHome = location.pathname === '/';
 
   const cssVariables: Record<string, string> = {
@@ -27,7 +26,6 @@ const Header = memo(() => {
       right={
         !isHome && (
           <>
-            {/*{activeKey === DiscoverTab.Assistants && <MarketSourceSwitch />}*/}
             <SortButton />
             <UserAvatar />
           </>

@@ -5,6 +5,23 @@ import { GroupAgentBuilderApiName, GroupAgentBuilderIdentifier } from './types';
 
 export const GroupAgentBuilderManifest: BuiltinToolManifest = {
   api: [
+    // ==================== Agent Info ====================
+    {
+      description:
+        'Get detailed information about a specific agent, including their capabilities, available tools, and configuration. Use this to check if an agent has tools before deciding between speak vs executeAgentTask.',
+      name: GroupAgentBuilderApiName.getAgentInfo,
+      parameters: {
+        properties: {
+          agentId: {
+            description: 'The ID of the agent to get information about.',
+            type: 'string',
+          },
+        },
+        required: ['agentId'],
+        type: 'object',
+      },
+    },
+
     // ==================== Group Member Management ====================
     {
       description:

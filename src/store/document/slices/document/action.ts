@@ -191,6 +191,14 @@ export const createDocumentSlice: StateCreator<
             // Both documentId and editor are guaranteed to be defined when this callback is called
             if (!document || !documentId || !editor) return;
 
+            // Check if this response is still for the current active document
+            // This prevents race conditions when quickly switching between documents
+            const currentActiveId = get().activeDocumentId;
+            if (currentActiveId && currentActiveId !== documentId) {
+              // User has already switched to another document, discard this stale response
+              return;
+            }
+
             // Initialize document with editor
             get().initDocumentWithEditor({
               autoSave,

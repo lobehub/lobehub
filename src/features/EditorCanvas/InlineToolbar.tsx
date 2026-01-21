@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  HotkeyEnum,
-  INSERT_HEADING_COMMAND,
-  getHotkeyById,
-  type IEditor,
-} from '@lobehub/editor';
+import { HotkeyEnum, type IEditor, INSERT_HEADING_COMMAND, getHotkeyById } from '@lobehub/editor';
 import {
   ChatInputActions,
   type ChatInputActionsProps,

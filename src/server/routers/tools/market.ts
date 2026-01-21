@@ -1,4 +1,4 @@
-import { type CodeInterpreterToolName, MarketSDK } from '@lobehub/market-sdk';
+import { type CodeInterpreterToolName } from '@lobehub/market-sdk';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
@@ -8,10 +8,11 @@ import { type ToolCallContent } from '@/libs/mcp';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
 import { marketSDK, requireMarketAuth } from '@/libs/trpc/lambda/middleware/marketSDK';
-import { generateTrustedClientToken, isTrustedClientEnabled } from '@/libs/trusted-client';
+import { isTrustedClientEnabled } from '@/libs/trusted-client';
 import { FileS3 } from '@/server/modules/S3';
 import { DiscoverService } from '@/server/services/discover';
 import { FileService } from '@/server/services/file';
+import { MarketService } from '@/server/services/market';
 import {
   contentBlocksToString,
   processContentBlocks,
@@ -37,6 +38,10 @@ const marketToolProcedure = authedProcedure
           userInfo: ctx.marketUserInfo,
         }),
         fileService: new FileService(ctx.serverDB, ctx.userId),
+        marketService: new MarketService({
+          accessToken: ctx.marketAccessToken,
+          userInfo: ctx.marketUserInfo,
+        }),
         userModel,
       },
     });
@@ -79,7 +84,6 @@ const metaSchema = z
 
 // Schema for code interpreter tool call request
 const callCodeInterpreterToolSchema = z.object({
-  marketAccessToken: z.string().optional(),
   params: z.record(z.any()),
   toolName: z.string(),
   topicId: z.string(),
@@ -224,27 +228,17 @@ export const marketRouter = router({
   callCodeInterpreterTool: marketToolProcedure
     .input(callCodeInterpreterToolSchema)
     .mutation(async ({ input, ctx }) => {
-      const { toolName, params, userId, topicId, marketAccessToken } = input;
+      const { toolName, params, userId, topicId } = input;
 
       log('Calling cloud code interpreter tool: %s with params: %O', toolName, {
         params,
         topicId,
         userId,
       });
-      log('Market access token available: %s', marketAccessToken ? 'yes' : 'no');
-
-      // Generate trusted client token if user info is available
-      const trustedClientToken = ctx.marketUserInfo
-        ? generateTrustedClientToken(ctx.marketUserInfo)
-        : undefined;
 
       try {
-        // Initialize MarketSDK with market access token and trusted client token
-        const market = new MarketSDK({
-          accessToken: marketAccessToken,
-          baseURL: process.env.NEXT_PUBLIC_MARKET_BASE_URL,
-          trustedClientToken,
-        });
+        // Use marketService from ctx
+        const market = ctx.marketService.market;
 
         // Call market-sdk's runBuildInTool
         const response = await market.plugins.runBuildInTool(
@@ -555,34 +549,8 @@ export const marketRouter = router({
         const uploadUrl = await s3.createPreSignedUrl(key);
         log('Generated upload URL for key: %s', key);
 
-        // Step 2: Generate trusted client token if user info is available
-        const trustedClientToken = ctx.marketUserInfo
-          ? generateTrustedClientToken(ctx.marketUserInfo)
-          : undefined;
-
-        // Only require user accessToken if trusted client is not available
-        let userAccessToken: string | undefined;
-        if (!trustedClientToken) {
-          const userState = await ctx.userModel.getUserState(async () => ({}));
-          userAccessToken = userState.settings?.market?.accessToken;
-
-          if (!userAccessToken) {
-            return {
-              error: { message: 'User access token not found. Please sign in to Market first.' },
-              filename,
-              success: false,
-            } as ExportAndUploadFileResult;
-          }
-        } else {
-          log('Using trusted client authentication for exportAndUploadFile');
-        }
-
-        // Initialize MarketSDK
-        const market = new MarketSDK({
-          accessToken: userAccessToken,
-          baseURL: process.env.NEXT_PUBLIC_MARKET_BASE_URL,
-          trustedClientToken,
-        });
+        // Step 2: Use MarketService from ctx
+        const market = ctx.marketService.market;
 
         // Step 3: Call sandbox's exportFile tool with the upload URL
         const response = await market.plugins.runBuildInTool(

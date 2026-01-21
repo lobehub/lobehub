@@ -1,5 +1,10 @@
 import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
-import { type TaskCurrentActivity, type TaskStatusResult, ThreadStatus } from '@lobechat/types';
+import {
+  type TaskCurrentActivity,
+  type TaskStatusResult,
+  ThreadStatus,
+  ThreadType,
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import pMap from 'p-map';
@@ -155,6 +160,49 @@ const ExecSubAgentTaskSchema = z.object({
 });
 
 /**
+ * Schema for createClientTaskThread - create Thread for client-side task execution
+ * This is used when runInClient=true on desktop client
+ */
+const CreateClientTaskThreadSchema = z.object({
+  /** The Agent ID to execute the task */
+  agentId: z.string(),
+  /** The Group ID (optional, only for Group mode) */
+  groupId: z.string().optional(),
+  /** Initial user message content (task instruction) */
+  instruction: z.string(),
+  /** The parent message ID (task message) */
+  parentMessageId: z.string(),
+  /** Task title (shown in UI, used as thread title) */
+  title: z.string().optional(),
+  /** The Topic ID */
+  topicId: z.string(),
+});
+
+/**
+ * Schema for updateClientTaskThreadStatus - update Thread status after client-side execution
+ */
+const UpdateClientTaskThreadStatusSchema = z.object({
+  /** Completion reason */
+  completionReason: z.enum(['done', 'error', 'interrupted']),
+  /** Error message if failed */
+  error: z.string().optional(),
+  /** Thread metadata to update */
+  metadata: z
+    .object({
+      totalCost: z.number().optional(),
+      totalMessages: z.number().optional(),
+      totalSteps: z.number().optional(),
+      totalTokens: z.number().optional(),
+      totalToolCalls: z.number().optional(),
+    })
+    .optional(),
+  /** Result content (last assistant message) */
+  resultContent: z.string().optional(),
+  /** The Thread ID */
+  threadId: z.string(),
+});
+
+/**
  * Schema for interruptTask - interrupt a running task
  */
 const InterruptTaskSchema = z
@@ -184,6 +232,100 @@ const aiAgentProcedure = authedProcedure.use(serverDatabase).use(async (opts) =>
 });
 
 export const aiAgentRouter = router({
+  /**
+   * Create Thread for client-side task execution
+   *
+   * This endpoint is called by desktop client when runInClient=true.
+   * It creates the Thread but does NOT execute the task - execution happens on client side.
+   */
+  createClientTaskThread: aiAgentProcedure
+    .input(CreateClientTaskThreadSchema)
+    .mutation(async ({ input, ctx }) => {
+      const { agentId, groupId, instruction, parentMessageId, title, topicId } = input;
+
+      log('createClientTaskThread: agentId=%s, groupId=%s', agentId, groupId);
+
+      try {
+        // 1. Create Thread for isolated task execution
+        const startedAt = new Date().toISOString();
+        const thread = await ctx.threadModel.create({
+          agentId,
+          groupId,
+          metadata: { clientMode: true, startedAt },
+          sourceMessageId: parentMessageId,
+          status: ThreadStatus.Processing,
+          title,
+          topicId,
+          type: ThreadType.Isolation,
+        });
+
+        if (!thread) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to create thread for task execution',
+          });
+        }
+
+        log('createClientTaskThread: created thread %s', thread.id);
+
+        // 2. Create initial user message (persisted to database)
+        const userMessage = await ctx.messageModel.create({
+          agentId,
+          content: instruction,
+          parentId: parentMessageId,
+          role: 'user',
+          threadId: thread.id,
+          topicId,
+        });
+
+        log('createClientTaskThread: created user message %s', userMessage.id);
+
+        // 3. Query thread messages and main chat messages in parallel
+        const [threadMessages, messages] = await Promise.all([
+          // Thread messages (messages within this thread)
+          ctx.messageModel.query({
+            agentId,
+            threadId: thread.id,
+            topicId,
+          }),
+          // Main chat messages (messages without threadId, includes updated taskDetail)
+          ctx.messageModel.query({
+            agentId,
+            topicId,
+            // No threadId - matchThread will filter for threadId IS NULL (main chat)
+          }),
+        ]);
+
+        log(
+          'createClientTaskThread: queried %d thread messages, %d main messages',
+          threadMessages.length,
+          messages.length,
+        );
+
+        // 4. Return Thread, userMessageId, threadMessages and messages
+        return {
+          messages,
+          startedAt,
+          success: true,
+          threadId: thread.id,
+          threadMessages,
+          userMessageId: userMessage.id,
+        };
+      } catch (error: any) {
+        log('createClientTaskThread failed: %O', error);
+
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to create client task thread: ${error.message}`,
+        });
+      }
+    }),
+
   createOperation: aiAgentProcedure
     .input(CreateAgentOperationSchema)
     .mutation(async ({ input, ctx }) => {
@@ -642,6 +784,16 @@ export const aiAgentRouter = router({
       const updatedStatus = updatedThread?.status ?? thread.status;
       const updatedTaskStatus = threadStatusToTaskStatus[updatedStatus] || 'processing';
 
+      // DEBUG: Log metadata for failed tasks
+      if (updatedTaskStatus === 'failed') {
+        console.log('[DEBUG] getSubAgentTaskStatus - failed task metadata:', {
+          threadId,
+          updatedMetadata,
+          'updatedMetadata?.error': updatedMetadata?.error,
+          updatedStatus,
+        });
+      }
+
       // 6. Query thread messages for result content or current activity
       const threadMessages = await ctx.messageModel.query({ threadId });
       const sortedMessages = threadMessages.sort(
@@ -836,4 +988,100 @@ export const aiAgentRouter = router({
       timestamp: new Date().toISOString(),
     };
   }),
+
+  /**
+   * Update Thread status after client-side task execution completes
+   *
+   * This endpoint is called by desktop client after task execution finishes.
+   * It updates the Thread status and metadata similar to server-side completion.
+   */
+  updateClientTaskThreadStatus: aiAgentProcedure
+    .input(UpdateClientTaskThreadStatusSchema)
+    .mutation(async ({ input, ctx }) => {
+      const { threadId, completionReason, error, resultContent, metadata } = input;
+
+      log('updateClientTaskThreadStatus: threadId=%s, reason=%s', threadId, completionReason);
+
+      try {
+        // Find thread
+        const thread = await ctx.threadModel.findById(threadId);
+        if (!thread) {
+          throw new TRPCError({
+            code: 'NOT_FOUND',
+            message: 'Thread not found',
+          });
+        }
+
+        const completedAt = new Date().toISOString();
+        const startedAt = thread.metadata?.startedAt;
+        const duration = startedAt ? Date.now() - new Date(startedAt).getTime() : undefined;
+
+        // Determine thread status based on completion reason
+        let status: ThreadStatus;
+        switch (completionReason) {
+          case 'done': {
+            status = ThreadStatus.Completed;
+            break;
+          }
+          case 'error': {
+            status = ThreadStatus.Failed;
+            break;
+          }
+          case 'interrupted': {
+            status = ThreadStatus.Cancel;
+            break;
+          }
+          default: {
+            status = ThreadStatus.Completed;
+          }
+        }
+
+        // Update Thread metadata and status
+        await ctx.threadModel.update(threadId, {
+          metadata: {
+            ...thread.metadata,
+            completedAt,
+            duration,
+            error: error || undefined,
+            totalCost: metadata?.totalCost,
+            totalMessages: metadata?.totalMessages,
+            totalSteps: metadata?.totalSteps,
+            totalTokens: metadata?.totalTokens,
+            totalToolCalls: metadata?.totalToolCalls,
+          },
+          status,
+        });
+
+        // Update task message (sourceMessageId) with result content if provided
+        if (resultContent && thread.sourceMessageId) {
+          await ctx.messageModel.update(thread.sourceMessageId, {
+            content: resultContent,
+          });
+          log(
+            'updateClientTaskThreadStatus: updated task message %s with result',
+            thread.sourceMessageId,
+          );
+        }
+
+        log('updateClientTaskThreadStatus: thread %s completed with status %s', threadId, status);
+
+        return {
+          status,
+          success: true,
+          threadId,
+        };
+      } catch (error: any) {
+        log('updateClientTaskThreadStatus failed: %O', error);
+
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to update client task thread status: ${error.message}`,
+        });
+      }
+    }),
 });

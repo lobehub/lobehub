@@ -1,9 +1,9 @@
 ---
 title: LobeChat Authentication Service Environment Variables
 description: >-
-  Explore the essential environment variables for configuring authentication services in LobeChat, including Better Auth, OAuth SSO, NextAuth settings, and provider-specific details.
-
-
+  Explore the essential environment variables for configuring authentication
+  services in LobeChat, including Better Auth, OAuth SSO, NextAuth settings, and
+  provider-specific details.
 tags:
   - Authentication Service
   - Better Auth
@@ -20,26 +20,12 @@ LobeChat provides a complete authentication service capability when deployed. Th
 
 ### General Settings
 
-#### `NEXT_PUBLIC_ENABLE_BETTER_AUTH`
-
-- Type: Required
-- Description: Set to `1` to enable Better Auth service. When enabled, Better Auth will be used for authentication instead of Next Auth or Clerk.
-- Default: `-`
-- Example: `1`
-
 #### `AUTH_SECRET`
 
 - Type: Required
 - Description: Key used to encrypt session tokens. Shared between Better Auth and Next Auth. You can generate the key using the command: `openssl rand -base64 32`.
 - Default: `-`
 - Example: `Tfhi2t2pelSMEA8eaV61KaqPNEndFFdMIxDaJnS1CUI=`
-
-#### `NEXT_PUBLIC_AUTH_URL`
-
-- Type: Optional
-- Description: The URL accessible from the browser for Better Auth callbacks. Only set this if the default generated URL is incorrect.
-- Default: `-`
-- Example: `https://example.com`
 
 #### `NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION`
 
@@ -58,10 +44,10 @@ LobeChat provides a complete authentication service capability when deployed. Th
 #### `JWKS_KEY`
 
 - Type: Required
-- Description: Generic JWKS (JSON Web Key Set) key for signing and verifying JWTs. Used for internal service authentication and other cryptographic operations. Must be a JWKS JSON string containing an RS256 RSA key pair. Falls back to `OIDC_JWKS_KEY` if not set (for backward compatibility).
+- Description: JWKS (JSON Web Key Set) key for signing and verifying JWTs. Used for OIDC JWT token signing and internal service call authentication tokens. Must be a JWKS JSON string containing an RS256 RSA key pair.
 - Default: `-`
 
-<OIDCJWKs />
+<GenerateJWKSKey />
 
 #### `INTERNAL_JWT_EXPIRATION`
 

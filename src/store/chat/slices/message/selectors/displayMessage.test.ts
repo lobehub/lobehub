@@ -323,6 +323,40 @@ describe('displayMessageSelectors', () => {
       const result = displayMessageSelectors.currentDisplayChatKey(state as ChatStore);
       expect(result).toBe(messageMapKey({ agentId: '', topicId: undefined }));
     });
+
+    it('should generate correct key with activeGroupId for group conversations', () => {
+      const state: Partial<ChatStore> = {
+        activeAgentId: 'testId',
+        activeGroupId: 'groupId',
+        activeTopicId: undefined,
+      };
+      const result = displayMessageSelectors.currentDisplayChatKey(state as ChatStore);
+      expect(result).toBe(
+        messageMapKey({ agentId: 'testId', groupId: 'groupId', topicId: undefined }),
+      );
+    });
+
+    it('should generate correct key with activeGroupId and activeTopicId', () => {
+      const state: Partial<ChatStore> = {
+        activeAgentId: 'testId',
+        activeGroupId: 'groupId',
+        activeTopicId: 'topicId',
+      };
+      const result = displayMessageSelectors.currentDisplayChatKey(state as ChatStore);
+      expect(result).toBe(
+        messageMapKey({ agentId: 'testId', groupId: 'groupId', topicId: 'topicId' }),
+      );
+    });
+
+    it('should generate correct key with activeThreadId for thread conversations', () => {
+      const state: Partial<ChatStore> = {
+        activeAgentId: 'testId',
+        activeThreadId: 'threadId',
+        activeTopicId: 'topicId',
+      };
+      const result = displayMessageSelectors.currentDisplayChatKey(state as ChatStore);
+      expect(result).toBe('thread_testId_topicId_threadId');
+    });
   });
 
   describe('activeDisplayMessages with group chat messages', () => {

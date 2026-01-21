@@ -39,6 +39,14 @@ export interface EditorCanvasProps {
   };
 
   /**
+   * Entity ID (e.g., agentId, groupId) to track which entity is being edited.
+   * When entityId changes, editor content will be reloaded.
+   * When entityId stays the same, editorData changes won't trigger reload.
+   * This prevents focus loss during auto-save and optimistic updates.
+   */
+  entityId?: string;
+
+  /**
    * Extra plugins to prepend to BASE_PLUGINS (e.g., ReactLiteXmlPlugin)
    */
   extraPlugins?: EditorPlugins;
@@ -113,7 +121,7 @@ export interface EditorCanvasWithEditorProps extends EditorCanvasProps {
  * - AutoSave hint display (documentId mode)
  */
 export const EditorCanvas = memo<EditorCanvasWithEditorProps>(
-  ({ editor, documentId, editorData, ...props }) => {
+  ({ editor, documentId, editorData, entityId, ...props }) => {
     // documentId mode - fetch and render with loading/error states
     if (documentId) {
       return (
@@ -127,7 +135,7 @@ export const EditorCanvas = memo<EditorCanvasWithEditorProps>(
     if (editorData) {
       return (
         <EditorErrorBoundary>
-          <EditorDataMode editor={editor} editorData={editorData} {...props} />
+          <EditorDataMode editor={editor} editorData={editorData} entityId={entityId} {...props} />
         </EditorErrorBoundary>
       );
     }

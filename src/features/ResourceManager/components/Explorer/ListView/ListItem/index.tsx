@@ -48,11 +48,12 @@ const styles = createStaticStyles(({ css }) => {
     `,
 
     dragOver: css`
-      color: ${cssVar.colorBgElevated} !important;
-      background-color: ${cssVar.colorText} !important;
+      outline: 1px dashed ${cssVar.colorPrimaryBorder};
+      outline-offset: -2px;
 
-      * {
-        color: ${cssVar.colorBgElevated} !important;
+      &,
+      &:hover {
+        background: ${cssVar.colorPrimaryBg};
       }
     `,
 
@@ -510,6 +511,7 @@ const FileListItem = memo<FileListItemProps>(
                 e.stopPropagation();
               }}
               onPointerDown={(e) => e.stopPropagation()}
+              paddingInline={8}
             >
               {!isFolder &&
                 !isPage &&

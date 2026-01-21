@@ -37,8 +37,8 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
     s.agentUpdatingId === id,
   ]);
 
-  // Separate loading state from chat store - only subscribe if this session is active
-  const isLoading = useChatStore(operationSelectors.isAgentRuntimeRunning);
+  // Separate loading state from chat store - only show loading for this specific agent
+  const isLoading = useChatStore(operationSelectors.isAgentRunning(id));
 
   // Get display title with fallback
   const displayTitle = title || t('untitledAgent');

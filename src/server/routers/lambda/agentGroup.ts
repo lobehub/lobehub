@@ -129,6 +129,19 @@ export const agentGroupRouter = router({
             })
             .partial(),
         ),
+        supervisorConfig: z
+          .object({
+            avatar: z.string().nullish(),
+            backgroundColor: z.string().nullish(),
+            description: z.string().nullish(),
+            model: z.string().nullish(),
+            params: z.any().nullish(),
+            provider: z.string().nullish(),
+            systemRole: z.string().nullish(),
+            tags: z.array(z.string()).nullish(),
+            title: z.string().nullish(),
+          })
+          .optional(),
       }),
     )
     .mutation(async ({ input, ctx }) => {
@@ -144,14 +157,25 @@ export const agentGroupRouter = router({
       const memberAgentIds = createdAgents.map((agent) => agent.id);
 
       // 2. Create group with supervisor and member agents
+      // Filter out null/undefined values from supervisorConfig
+      const supervisorConfig = input.supervisorConfig
+        ? Object.fromEntries(
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars, eqeqeq
+            Object.entries(input.supervisorConfig).filter(([_, v]) => v != null),
+          )
+        : undefined;
+
+      const normalizedConfig = ctx.agentGroupService.normalizeGroupConfig(
+        input.groupConfig.config as ChatGroupConfig | null,
+      );
+
       const { group, supervisorAgentId } = await ctx.agentGroupRepo.createGroupWithSupervisor(
         {
           ...input.groupConfig,
-          config: ctx.agentGroupService.normalizeGroupConfig(
-            input.groupConfig.config as ChatGroupConfig | null,
-          ),
+          config: normalizedConfig,
         },
         memberAgentIds,
+        supervisorConfig as any,
       );
 
       return { agentIds: memberAgentIds, groupId: group.id, supervisorAgentId };
@@ -189,6 +213,20 @@ export const agentGroupRouter = router({
     .input(z.object({ groupId: z.string() }))
     .query(async ({ input, ctx }) => {
       return ctx.chatGroupModel.getGroupAgents(input.groupId);
+    }),
+
+  /**
+   * Get a group by forkedFromIdentifier stored in config
+   * @returns group id if exists, null otherwise
+   */
+  getGroupByForkedFromIdentifier: agentGroupProcedure
+    .input(
+      z.object({
+        forkedFromIdentifier: z.string(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      return ctx.chatGroupModel.getGroupByForkedFromIdentifier(input.forkedFromIdentifier);
     }),
 
   getGroupDetail: agentGroupProcedure

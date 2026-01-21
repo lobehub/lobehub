@@ -1,4 +1,4 @@
-import { ActionIcon, type ActionIconProps, Dropdown } from '@lobehub/ui';
+import { ActionIcon, type ActionIconProps, DropdownMenu } from '@lobehub/ui';
 import { App } from 'antd';
 import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react';
 import { type KeyboardEvent, type MouseEvent, memo } from 'react';
@@ -47,19 +47,21 @@ const IdentityDropdown = memo<IdentityDropdownProps>(({ id, size = 'small' }) =>
       icon: <Pencil size={14} />,
       key: 'edit',
       label: t('edit', { ns: 'common' }),
+      onClick: handleMenuClick,
     },
     {
       danger: true,
       icon: <Trash2 size={14} />,
       key: 'delete',
       label: t('delete', { ns: 'common' }),
+      onClick: handleMenuClick,
     },
   ];
 
   return (
-    <Dropdown menu={{ items: menuItems, onClick: handleMenuClick }} trigger={['click']}>
+    <DropdownMenu items={menuItems}>
       <ActionIcon icon={MoreHorizontal} size={size} />
-    </Dropdown>
+    </DropdownMenu>
   );
 });
 

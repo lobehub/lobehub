@@ -1,9 +1,9 @@
 'use client';
 
-import { ActionIcon, Checkbox, Flexbox, SortableList } from '@lobehub/ui';
+import { ActionIcon, Checkbox, Flexbox, Icon, SortableList } from '@lobehub/ui';
 import { Input, InputRef } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Trash2 } from 'lucide-react';
+import { CircleArrowRight, Trash2 } from 'lucide-react';
 import { ChangeEvent, KeyboardEvent, memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -34,9 +34,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       }
     }
   `,
-  textChecked: css`
+  textCompleted: css`
     color: ${cssVar.colorTextQuaternary};
     text-decoration: line-through;
+  `,
+  textProcessing: css`
+    color: ${cssVar.colorWarningText};
   `,
 }));
 
@@ -53,7 +56,9 @@ const TodoItemRow = memo<TodoItemRowProps>(({ id, placeholder }) => {
   // Find item by stable id
   const item = useTodoListStore((s) => s.items.find((item) => item.id === id));
   const text = item?.text ?? '';
-  const completed = item?.completed ?? false;
+  const status = item?.status ?? 'todo';
+  const isCompleted = status === 'completed';
+  const isProcessing = status === 'processing';
 
   const focusedId = useTodoListStore((s) => s.focusedId);
   const cursorPosition = useTodoListStore((s) => s.cursorPosition);
@@ -123,15 +128,24 @@ const TodoItemRow = memo<TodoItemRowProps>(({ id, placeholder }) => {
   return (
     <Flexbox align="center" className={styles.itemRow} gap={4} horizontal width="100%">
       <SortableList.DragHandle className={cx(styles.dragHandle, 'drag-handle')} size="small" />
-      <Checkbox
-        backgroundColor={cssVar.colorSuccess}
-        checked={completed}
-        onChange={handleToggle}
-        shape={'circle'}
-        style={{ borderWidth: 1.5 }}
-      />
+      {isProcessing ? (
+        <Icon
+          icon={CircleArrowRight}
+          onClick={handleToggle}
+          size={16}
+          style={{ color: cssVar.colorInfo, cursor: 'pointer', flexShrink: 0 }}
+        />
+      ) : (
+        <Checkbox
+          backgroundColor={cssVar.colorSuccess}
+          checked={isCompleted}
+          onChange={handleToggle}
+          shape={'circle'}
+          style={{ borderWidth: 1.5 }}
+        />
+      )}
       <Input
-        className={cx(completed && styles.textChecked)}
+        className={cx(isCompleted && styles.textCompleted, isProcessing && styles.textProcessing)}
         onChange={handleChange}
         onFocus={handleFocus}
         onKeyDown={handleKeyDown}

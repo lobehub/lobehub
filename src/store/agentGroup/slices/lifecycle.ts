@@ -5,7 +5,7 @@ import { type StateCreator } from 'zustand/vanilla';
 import { chatGroupService } from '@/services/chatGroup';
 import { type ChatGroupStore } from '@/store/agentGroup/store';
 import { useChatStore } from '@/store/chat';
-import { getSessionStoreState } from '@/store/session';
+import { getHomeStoreState } from '@/store/home';
 
 export interface ChatGroupLifecycleAction {
   createGroup: (
@@ -14,7 +14,6 @@ export interface ChatGroupLifecycleAction {
     silent?: boolean,
   ) => Promise<string>;
   /**
-   * @deprecated Use switchTopic(undefined) instead
    * Switch to a new topic in the group
    * Clears activeTopicId and navigates to group root
    */
@@ -32,11 +31,8 @@ export const chatGroupLifecycleSlice: StateCreator<
   [],
   ChatGroupLifecycleAction
 > = (_, get) => ({
-  /**
-   * @param silent - if true, do not switch to the new group session
-   */
   createGroup: async (newGroup, agentIds, silent = false) => {
-    const { switchSession } = getSessionStoreState();
+    const { switchToGroup, refreshAgentList } = getHomeStoreState();
 
     const { group } = await chatGroupService.createGroup(newGroup);
 
@@ -52,11 +48,13 @@ export const chatGroupLifecycleSlice: StateCreator<
 
     get().internal_dispatchChatGroup({ payload: group, type: 'addGroup' });
 
-    await get().loadGroups();
-    await getSessionStoreState().refreshSessions();
+    // Fetch full group detail to get supervisorAgentId and agents for tools injection
+    await get().internal_fetchGroupDetail(group.id);
+
+    refreshAgentList();
 
     if (!silent) {
-      switchSession(group.id);
+      switchToGroup(group.id);
     }
 
     return group.id;

@@ -203,7 +203,6 @@ describe('chatDockSlice', () => {
     });
   });
 
-
   describe('closeToolUI', () => {
     it('should pop ToolUI view from stack', () => {
       const { result } = renderHook(() => useChatStore());
@@ -267,5 +266,4 @@ describe('chatDockSlice', () => {
       expect(result.current.showPortal).toBe(true);
     });
   });
-
 });

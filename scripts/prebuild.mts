@@ -51,10 +51,10 @@ const printEnvInfo = () => {
 
   // Auth-related env vars
   console.log('\n  Auth Environment Variables:');
-  console.log(`    NEXT_PUBLIC_AUTH_URL: ${process.env.NEXT_PUBLIC_AUTH_URL ?? '(not set)'}`);
-  console.log(`    NEXTAUTH_URL: ${process.env.NEXTAUTH_URL ?? '(not set)'}`);
   console.log(`    APP_URL: ${process.env.APP_URL ?? '(not set)'}`);
   console.log(`    VERCEL_URL: ${process.env.VERCEL_URL ?? '(not set)'}`);
+  console.log(`    VERCEL_BRANCH_URL: ${process.env.VERCEL_BRANCH_URL ?? '(not set)'}`);
+  console.log(`    VERCEL_PROJECT_PRODUCTION_URL: ${process.env.VERCEL_PROJECT_PRODUCTION_URL ?? '(not set)'}`);
   console.log(`    AUTH_EMAIL_VERIFICATION: ${process.env.AUTH_EMAIL_VERIFICATION ?? '(not set)'}`);
   console.log(`    ENABLE_MAGIC_LINK: ${process.env.ENABLE_MAGIC_LINK ?? '(not set)'}`);
   console.log(`    AUTH_SECRET: ${process.env.AUTH_SECRET ? '✓ set' : '✗ not set'}`);

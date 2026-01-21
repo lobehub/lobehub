@@ -1,7 +1,7 @@
 import { type ModelProviderCard } from '@/types/llm';
 
 // ref: https://platform.stepfun.com/docs/llm/text
-// 根据文档，阶级星辰大模型的上下文长度，其 k 的含义均为 1000
+// According to the documentation, for Stepfun models, the 'k' in context length refers to 1000
 const Stepfun: ModelProviderCard = {
   chatModels: [],
   checkModel: 'step-2-mini',

@@ -14,9 +14,7 @@ import TodoListRender from './TodoList';
 export const GTDRenders = {
   // All todo operations render the same TodoList UI
   [GTDApiName.clearTodos]: TodoListRender,
-  [GTDApiName.completeTodos]: TodoListRender,
   [GTDApiName.createTodos]: TodoListRender,
-  [GTDApiName.removeTodos]: TodoListRender,
   [GTDApiName.updateTodos]: TodoListRender,
 
   // Plan operations render the PlanCard UI

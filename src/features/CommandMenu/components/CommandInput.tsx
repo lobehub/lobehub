@@ -1,4 +1,4 @@
-import { Tag } from '@lobehub/ui';
+import { Avatar, Tag } from '@lobehub/ui';
 import { Command } from 'cmdk';
 import { ArrowLeft, X } from 'lucide-react';
 import { memo } from 'react';
@@ -13,10 +13,20 @@ const CommandInput = memo(() => {
   const { t } = useTranslation('common');
 
   const { handleBack } = useCommandMenu();
-  const { menuContext, pages, page, search, setSearch, typeFilter, setTypeFilter } =
-    useCommandMenuContext();
+  const {
+    menuContext,
+    pages,
+    page,
+    search,
+    setSearch,
+    typeFilter,
+    setTypeFilter,
+    selectedAgent,
+    setSelectedAgent,
+  } = useCommandMenuContext();
 
   const hasPages = pages.length > 0;
+  const hasSelectedAgent = !!selectedAgent;
 
   // Get localized context name
   const contextName = t(`cmdk.context.${menuContext}`, { defaultValue: menuContext });
@@ -25,9 +35,19 @@ const CommandInput = memo(() => {
     return t(`cmdk.search.${type}`);
   };
 
+  const getPlaceholder = () => {
+    if (hasSelectedAgent) {
+      return t('cmdk.askAgentPlaceholder', { agent: selectedAgent.title });
+    }
+    if (page === 'ask-ai') {
+      return t('cmdk.aiModePlaceholder');
+    }
+    return t('cmdk.searchPlaceholder');
+  };
+
   return (
     <>
-      {(menuContext !== 'general' || typeFilter) && !hasPages && (
+      {(menuContext !== 'general' || typeFilter) && !hasPages && !hasSelectedAgent && (
         <div className={styles.contextWrapper}>
           {menuContext !== 'general' && <Tag className={styles.contextTag}>{contextName}</Tag>}
           {typeFilter && (
@@ -42,18 +62,32 @@ const CommandInput = memo(() => {
         </div>
       )}
       <div className={styles.inputWrapper}>
-        {hasPages && (
+        {hasPages && !hasSelectedAgent && (
           <Tag className={styles.backTag} icon={<ArrowLeft size={12} />} onClick={handleBack} />
+        )}
+        {hasSelectedAgent && (
+          <Tag
+            closable
+            icon={
+              <Avatar
+                avatar={selectedAgent.avatar}
+                emojiScaleWithBackground
+                shape="square"
+                size={14}
+              />
+            }
+            onClose={() => setSelectedAgent(undefined)}
+          >
+            {selectedAgent.title}
+          </Tag>
         )}
         <Command.Input
           autoFocus
           onValueChange={setSearch}
-          placeholder={
-            page === 'ask-ai' ? t('cmdk.aiModePlaceholder') : t('cmdk.searchPlaceholder')
-          }
+          placeholder={getPlaceholder()}
           value={search}
         />
-        {page !== 'ask-ai' && search.trim() ? (
+        {page !== 'ask-ai' && !hasSelectedAgent && search.trim() ? (
           <>
             <span style={{ fontSize: '14px', opacity: 0.6 }}>{t('cmdk.askAI')}</span>
             <Tag>{t('cmdk.keyboard.Tab')}</Tag>

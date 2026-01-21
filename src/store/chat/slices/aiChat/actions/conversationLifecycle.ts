@@ -197,13 +197,16 @@ export const conversationLifecycle: StateCreator<
         // if there is topicId，then add topicId to message
         topicId: operationContext.topicId ?? undefined,
         threadId: operationContext.threadId ?? undefined,
+        // Pass isSupervisor metadata for group orchestration (consistent with server)
+        metadata: operationContext.isSupervisor ? { isSupervisor: true } : undefined,
       },
       { operationId, tempMessageId: tempAssistantId },
     );
     get().internal_toggleMessageLoading(true, tempId);
 
-    // Associate temp message with operation
+    // Associate temp messages with operation
     get().associateMessageWithOperation(tempId, operationId);
+    get().associateMessageWithOperation(tempAssistantId, operationId);
 
     // Store editor state in operation metadata for cancel restoration
     const jsonState = mainInputEditor?.getJSONState();
@@ -396,9 +399,6 @@ export const conversationLifecycle: StateCreator<
         skipCreateFirstMessage: true,
       });
 
-      //
-      // // if there is relative files, then add files to agent
-      // // only available in server mode
       const userFiles = dbMessageSelectors
         .dbUserFiles(get())
         .map((f) => f?.id)

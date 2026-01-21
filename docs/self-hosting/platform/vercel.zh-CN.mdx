@@ -1,11 +1,10 @@
 ---
 title: 在 Vercel 上部署 LobeChat
-description: 学习如何在 Vercel 上一键部署 LobeChat，准备 OpenAI API Key，点击按钮进行部署，绑定自定义域名，自动同步更新等。
+description: 学习如何在 Vercel 上一键部署 LobeChat，点击按钮进行部署，绑定自定义域名，自动同步更新等。
 tags:
   - Vercel
   - 部署指引
   - LobeChat
-  - OpenAI API Key
   - 自定义域名
   - 自动同步更新
 ---
@@ -17,15 +16,11 @@ tags:
 ## Vercel 部署流程
 
 <Steps>
-  ### 准备好你的 OpenAI API Key
-
-  前往 [OpenAI API Key](https://platform.openai.com/account/api-keys) 获取你的 OpenAI API Key
-
   ### 点击下方按钮进行部署
 
   [![][deploy-button-image]][deploy-link]
 
-  直接使用 GitHub 账号登录即可，记得在环境变量页填入 `OPENAI_API_KEY` （必填） and `ACCESS_CODE`（推荐）；
+  直接使用 GitHub 账号登录即可完成部署。
 
   ### 部署完毕后，即可开始使用
 
@@ -44,4 +39,4 @@ tags:
 </Callout>
 
 [deploy-button-image]: https://vercel.com/button
-[deploy-link]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobe-chat&env=OPENAI_API_KEY,ACCESS_CODE&envDescription=Find%20your%20OpenAI%20API%20Key%20by%20click%20the%20right%20Learn%20More%20button.%20%7C%20Access%20Code%20can%20protect%20your%20website&envLink=https%3A%2F%2Fplatform.openai.com%2Faccount%2Fapi-keys&project-name=lobe-chat&repository-name=lobe-chat
+[deploy-link]: https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobe-chat&project-name=lobe-chat&repository-name=lobe-chat

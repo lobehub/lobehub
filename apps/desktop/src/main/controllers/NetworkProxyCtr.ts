@@ -16,13 +16,13 @@ import { ControllerModule, IpcMethod } from './index';
 const logger = createLogger('controllers:NetworkProxyCtr');
 
 /**
- * 网络代理控制器
- * 处理桌面应用的网络代理相关功能
+ * Network proxy controller
+ * Handle desktop application network proxy related functions
  */
 export default class NetworkProxyCtr extends ControllerModule {
   static override readonly groupName = 'networkProxy';
   /**
-   * 获取代理设置
+   * Get proxy settings
    */
   @IpcMethod()
   async getDesktopSettings(): Promise<NetworkProxySettings> {
@@ -43,18 +43,18 @@ export default class NetworkProxyCtr extends ControllerModule {
   }
 
   /**
-   * 设置代理配置
+   * Set proxy configuration
    */
   @IpcMethod()
   async setProxySettings(config: Partial<NetworkProxySettings>): Promise<void> {
     try {
-      // 获取当前配置
+      // Get current configuration
       const currentConfig = this.app.storeManager.get(
         'networkProxy',
         defaultProxySettings,
       ) as NetworkProxySettings;
 
-      // 合并配置并验证
+      // Merge configuration and validate
       const newConfig = merge({}, currentConfig, config);
 
       const validation = ProxyConfigValidator.validate(newConfig);
@@ -69,10 +69,10 @@ export default class NetworkProxyCtr extends ControllerModule {
         return;
       }
 
-      // 应用代理设置
+      // Apply proxy settings
       await ProxyDispatcherManager.applyProxySettings(newConfig);
 
-      // 保存到存储
+      // Save to storage
       this.app.storeManager.set('networkProxy', newConfig);
 
       logger.info('Proxy settings updated successfully', {
@@ -149,7 +149,7 @@ export default class NetworkProxyCtr extends ControllerModule {
         return;
       }
 
-      // 应用代理设置
+      // Apply proxy settings
       await ProxyDispatcherManager.applyProxySettings(networkProxy);
 
       logger.info('Initial proxy settings applied successfully', {

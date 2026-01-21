@@ -1,5 +1,323 @@
 [
   {
+    "children": {
+      "features": ["Add platform-aware download client menu option."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.334"
+  },
+  {
+    "children": {
+      "features": ["Update the sandbox preinstall libs in sys role."],
+      "fixes": ["Fix multi tasks no summary issue."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.333"
+  },
+  {
+    "children": {
+      "fixes": ["Improve e2e server and complete i18n resources."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.332"
+  },
+  {
+    "children": {
+      "fixes": ["Slove the agent group editor not focus in editdata area."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.331"
+  },
+  {
+    "children": {
+      "fixes": ["Fix multi agent tasks issue."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.330"
+  },
+  {
+    "children": {
+      "fixes": ["Sloved the old removeSessionTopics not work."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.329"
+  },
+  {
+    "children": {
+      "features": ["Support client tasks mode."]
+    },
+    "date": "2026-01-20",
+    "version": "2.0.0-next.328"
+  },
+  {
+    "children": {},
+    "date": "2026-01-20",
+    "version": "2.0.0-next.327"
+  },
+  {
+    "children": {},
+    "date": "2026-01-20",
+    "version": "2.0.0-next.326"
+  },
+  {
+    "children": {},
+    "date": "2026-01-20",
+    "version": "2.0.0-next.325"
+  },
+  {
+    "children": {
+      "fixes": ["TypewriterEffect not refreshing on language change."]
+    },
+    "date": "2026-01-20",
+    "version": "2.0.0-next.324"
+  },
+  {
+    "children": {
+      "improvements": ["Optimize profile settings skeleton screen."],
+      "features": ["Add the agents and agents group fork feature."],
+      "fixes": [
+        "Fix Topic component causing stack overflow and freezing the app, simplify updater config logic, slove the nuqs error in commnuity agent group page."
+      ]
+    },
+    "date": "2026-01-20",
+    "version": "2.0.0-next.323"
+  },
+  {
+    "children": {},
+    "date": "2026-01-20",
+    "version": "2.0.0-next.322"
+  },
+  {
+    "children": {},
+    "date": "2026-01-20",
+    "version": "2.0.0-next.321"
+  },
+  {
+    "children": {},
+    "date": "2026-01-20",
+    "version": "2.0.0-next.320"
+  },
+  {
+    "children": {
+      "fixes": ["Slove commnuity user avatarUrl is wrong, should update others in profile."]
+    },
+    "date": "2026-01-20",
+    "version": "2.0.0-next.319"
+  },
+  {
+    "children": {
+      "fixes": ["Fix parallel tools calling race issue."]
+    },
+    "date": "2026-01-20",
+    "version": "2.0.0-next.318"
+  },
+  {
+    "children": {},
+    "date": "2026-01-19",
+    "version": "2.0.0-next.317"
+  },
+  {
+    "children": {
+      "fixes": ["When use trpc client should include the credentials cookies."]
+    },
+    "date": "2026-01-19",
+    "version": "2.0.0-next.316"
+  },
+  {
+    "children": {
+      "features": ["Add the cloudEndpoint & Klavis Tools Call in Excuation Task."]
+    },
+    "date": "2026-01-19",
+    "version": "2.0.0-next.315"
+  },
+  {
+    "children": {
+      "features": ["Improve desktop onboarding window management and footer actions."]
+    },
+    "date": "2026-01-19",
+    "version": "2.0.0-next.314"
+  },
+  {
+    "children": {
+      "fixes": ["Fix server agent task run with headless, internlm provider base url and homepage."]
+    },
+    "date": "2026-01-19",
+    "version": "2.0.0-next.313"
+  },
+  {
+    "children": {
+      "improvements": ["Change the /community/assistant to /agent routes."],
+      "features": ["Improve the agentbuilder systemRole."]
+    },
+    "date": "2026-01-19",
+    "version": "2.0.0-next.312"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor market sdk into market servers."]
+    },
+    "date": "2026-01-19",
+    "version": "2.0.0-next.311"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-19",
+    "version": "2.0.0-next.310"
+  },
+  {
+    "children": {
+      "fixes": ["Fix group sub task execution."]
+    },
+    "date": "2026-01-18",
+    "version": "2.0.0-next.309"
+  },
+  {
+    "children": {
+      "fixes": ["Fix group subagent task issue."],
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-18",
+    "version": "2.0.0-next.308"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Fixed the createGroupWithSupervisor function test, slove when use copy & install group from market, the member system Role is lost."
+      ]
+    },
+    "date": "2026-01-18",
+    "version": "2.0.0-next.307"
+  },
+  {
+    "children": {
+      "fixes": ["Fix supervisor id issue."]
+    },
+    "date": "2026-01-18",
+    "version": "2.0.0-next.306"
+  },
+  {
+    "children": {},
+    "date": "2026-01-18",
+    "version": "2.0.0-next.305"
+  },
+  {
+    "children": {
+      "improvements": ["Improve auto scroll and loading hint."]
+    },
+    "date": "2026-01-18",
+    "version": "2.0.0-next.304"
+  },
+  {
+    "children": {
+      "improvements": ["Improve operation hint and fix scroll issue."]
+    },
+    "date": "2026-01-18",
+    "version": "2.0.0-next.303"
+  },
+  {
+    "children": {
+      "fixes": ["Try to fix group supervisor id not sync successful."],
+      "improvements": ["Fix left panel on group page."]
+    },
+    "date": "2026-01-17",
+    "version": "2.0.0-next.302"
+  },
+  {
+    "children": {},
+    "date": "2026-01-17",
+    "version": "2.0.0-next.301"
+  },
+  {
+    "children": {
+      "fixes": ["Fix supervisor group prompt."]
+    },
+    "date": "2026-01-17",
+    "version": "2.0.0-next.300"
+  },
+  {
+    "children": {
+      "fixes": ["Fix topic messages display error when switch topic quickly."]
+    },
+    "date": "2026-01-17",
+    "version": "2.0.0-next.299"
+  },
+  {
+    "children": {
+      "fixes": ["Fix switch skill in home."]
+    },
+    "date": "2026-01-16",
+    "version": "2.0.0-next.298"
+  },
+  {
+    "children": {
+      "features": ["Add agent group publish into market & use market group agents in lobehub."]
+    },
+    "date": "2026-01-16",
+    "version": "2.0.0-next.297"
+  },
+  {
+    "children": {
+      "improvements": ["Improve todo list."]
+    },
+    "date": "2026-01-16",
+    "version": "2.0.0-next.296"
+  },
+  {
+    "children": {
+      "improvements": ["Migrate Next.js navigation APIs to React Router for SPA."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.295"
+  },
+  {
+    "children": {},
+    "date": "2026-01-15",
+    "version": "2.0.0-next.294"
+  },
+  {
+    "children": {},
+    "date": "2026-01-15",
+    "version": "2.0.0-next.293"
+  },
+  {
+    "children": {
+      "improvements": ["Use fallbackData to prevent useActionSWR auto-fetch."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.292"
+  },
+  {
+    "children": {
+      "fixes": ["Click lobe ai topic trigger create new agent."],
+      "improvements": ["Improve agent loading state."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.291"
+  },
+  {
+    "children": {
+      "fixes": ["Fix internal editor onTextChange issue and add test case."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.290"
+  },
+  {
+    "children": {
+      "fixes": ["Fix page content mismatch when switch quickly."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.289"
+  },
+  {
+    "children": {
+      "features": ["Improve group prompt context engine and fix group supervisor response issue."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.288"
+  },
+  {
     "children": {},
     "date": "2026-01-14",
     "version": "2.0.0-next.287"

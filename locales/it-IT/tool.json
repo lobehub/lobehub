@@ -15,6 +15,8 @@
   "agentGroupManagement.executeTask.thread": "ID Thread",
   "agentGroupManagement.executeTask.timeout": "Tempo di Esecuzione Scaduto",
   "agentGroupManagement.executeTask.tokens": "Utilizzo Token",
+  "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "Istruzioni dettagliate per l'agente per eseguire questo compito...",
+  "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "Titolo del compito...",
   "codeInterpreter-legacy.error": "Errore di Esecuzione",
   "codeInterpreter-legacy.executing": "Esecuzione in corso...",
   "codeInterpreter-legacy.files": "File:",

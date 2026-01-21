@@ -328,7 +328,7 @@ export default {
   'referral.rules.backfill.expiredTip':
     'Backfill period has expired. Cannot backfill after 3 days of registration',
   'referral.rules.backfill.link': 'Backfill Invite Code',
-  'referral.rules.backfill.placeholder': 'Enter invite code',
+  'referral.rules.backfill.placeholder': 'Enter invite code or link',
   'referral.rules.backfill.submit': 'Confirm Binding',
   'referral.rules.backfill.success': 'Invite code bound successfully',
   'referral.rules.backfill.title': 'Backfill Invite Code',

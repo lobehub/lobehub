@@ -1,3 +1,4 @@
+import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { getRedisConfig } from '@/envs/redis';
 import { initializeRedis, isRedisEnabled } from '@/libs/redis';
@@ -48,8 +49,7 @@ export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
   }
 
   const defaults = [
-    authEnv.NEXT_PUBLIC_AUTH_URL,
-    normalizeOrigin(process.env.APP_URL),
+    normalizeOrigin(appEnv.APP_URL),
     normalizeOrigin(process.env.VERCEL_BRANCH_URL),
     normalizeOrigin(process.env.VERCEL_URL),
     MOBILE_APP_SCHEME,

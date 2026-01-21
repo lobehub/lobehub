@@ -33,6 +33,4 @@ const Page = () => {
   );
 };
 
-Page.displayName = 'SystemAgent';
-
 export default Page;

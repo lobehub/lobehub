@@ -120,15 +120,9 @@ exports[`promptUserMemory > identities only > should format identities grouped b
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="3">
-  <personal count="1">
-    <identity role="Father">User is a father of two children</identity>
-  </personal>
-  <professional count="1">
-    <identity role="Software Engineer">User is a senior software engineer</identity>
-  </professional>
-  <demographic count="1">
-    <identity>User is based in Shanghai</identity>
-  </demographic>
+  <identity type="personal" role="Father" id="id-1">User is a father of two children</identity>
+  <identity type="professional" role="Software Engineer" id="id-2">User is a senior software engineer</identity>
+  <identity type="demographic" id="id-3">User is based in Shanghai</identity>
 </identities>
 </user_memory>"
 `;
@@ -137,10 +131,8 @@ exports[`promptUserMemory > identities only > should format single type identiti
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="2">
-  <demographic count="2">
-    <identity>User is 35 years old</identity>
-    <identity>User speaks Mandarin and English</identity>
-  </demographic>
+  <identity type="demographic" id="id-1">User is 35 years old</identity>
+  <identity type="demographic" id="id-2">User speaks Mandarin and English</identity>
 </identities>
 </user_memory>"
 `;
@@ -149,10 +141,8 @@ exports[`promptUserMemory > identities only > should format single type identiti
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="2">
-  <personal count="2">
-    <identity>User is married</identity>
-    <identity>User has a pet dog</identity>
-  </personal>
+  <identity type="personal" id="id-1">User is married</identity>
+  <identity type="personal" id="id-2">User has a pet dog</identity>
 </identities>
 </user_memory>"
 `;
@@ -161,9 +151,7 @@ exports[`promptUserMemory > identities only > should format single type identiti
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="1">
-  <professional count="1">
-    <identity role="CTO">User works at a tech startup</identity>
-  </professional>
+  <identity type="professional" role="CTO" id="id-1">User works at a tech startup</identity>
 </identities>
 </user_memory>"
 `;
@@ -172,9 +160,7 @@ exports[`promptUserMemory > identities only > should handle identity with null v
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="1">
-  <personal count="1">
-    <identity></identity>
-  </personal>
+  <identity type="personal" id="id-1"></identity>
 </identities>
 </user_memory>"
 `;
@@ -183,9 +169,7 @@ exports[`promptUserMemory > identities only > should handle identity without rol
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="1">
-  <personal count="1">
-    <identity>User enjoys hiking</identity>
-  </personal>
+  <identity type="personal" id="id-1">User enjoys hiking</identity>
 </identities>
 </user_memory>"
 `;
@@ -194,9 +178,7 @@ exports[`promptUserMemory > mixed memory types > should format all memory types 
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="1">
-  <professional count="1">
-    <identity role="Tech Lead">User is a tech lead at a startup</identity>
-  </professional>
+  <identity type="professional" role="Tech Lead" id="id-1">User is a tech lead at a startup</identity>
 </identities>
 <contexts count="1">
   <context id="ctx-1" title="Experience Level">Senior developer with 10 years experience</context>
@@ -217,15 +199,9 @@ exports[`promptUserMemory > mixed memory types > should format all memory types 
 "<user_memory>
 <instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>
 <identities count="3">
-  <personal count="1">
-    <identity role="Father">User is a father</identity>
-  </personal>
-  <professional count="1">
-    <identity role="Senior Engineer">User is a senior engineer</identity>
-  </professional>
-  <demographic count="1">
-    <identity>User lives in Beijing</identity>
-  </demographic>
+  <identity type="personal" role="Father" id="id-1">User is a father</identity>
+  <identity type="professional" role="Senior Engineer" id="id-2">User is a senior engineer</identity>
+  <identity type="demographic" id="id-3">User lives in Beijing</identity>
 </identities>
 <contexts count="1">
   <context id="ctx-1" title="Current Work">Working on AI products</context>

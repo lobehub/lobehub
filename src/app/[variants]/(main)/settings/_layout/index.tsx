@@ -25,6 +25,4 @@ const Layout: FC = () => {
   );
 };
 
-Layout.displayName = 'DesktopSettingsWrapper';
-
 export default Layout;

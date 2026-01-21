@@ -138,6 +138,7 @@ class ChatService {
       plugins: pluginIds,
     } = resolveAgentConfig({
       agentId: targetAgentId,
+      groupId, // Pass groupId for supervisor detection
       model: payload.model,
       plugins: enabledPlugins,
       provider: payload.provider,

@@ -98,29 +98,10 @@ const isValidIdentityItem = (item: UserMemoryIdentityItem): boolean => {
  * Formats a single identity memory item
  */
 const formatIdentityItem = (item: UserMemoryIdentityItem): string => {
+  const typeAttr = item.type ? ` type="${item.type}"` : '';
   const roleAttr = item.role ? ` role="${item.role}"` : '';
-  return `    <identity${roleAttr}>${item.description || ''}</identity>`;
-};
-
-/**
- * Format identities grouped by type as XML
- * Types: personal (角色), professional (职业), demographic (属性)
- */
-const formatIdentitiesSection = (identities: UserMemoryIdentityItem[]): string => {
-  const personal = identities.filter((i) => i.type === 'personal');
-  const professional = identities.filter((i) => i.type === 'professional');
-  const demographic = identities.filter((i) => i.type === 'demographic');
-
-  return [
-    personal.length > 0 &&
-      `  <personal count="${personal.length}">\n${personal.map(formatIdentityItem).join('\n')}\n  </personal>`,
-    professional.length > 0 &&
-      `  <professional count="${professional.length}">\n${professional.map(formatIdentityItem).join('\n')}\n  </professional>`,
-    demographic.length > 0 &&
-      `  <demographic count="${demographic.length}">\n${demographic.map(formatIdentityItem).join('\n')}\n  </demographic>`,
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const idAttr = item.id ? ` id="${item.id}"` : '';
+  return `  <identity${typeAttr}${roleAttr}${idAttr}>${item.description || ''}</identity>`;
 };
 
 /**
@@ -156,9 +137,9 @@ export const promptUserMemory = ({ memories }: PromptUserMemoryOptions): string 
     '<instruction>The following are memories about this user retrieved from previous conversations. Use this information to personalize your responses and maintain continuity.</instruction>',
   );
 
-  // Add identities section (user's identity information, grouped by type)
+  // Add identities section (user's identity information)
   if (hasIdentities) {
-    const identitiesXml = formatIdentitiesSection(identities);
+    const identitiesXml = identities.map((item) => formatIdentityItem(item)).join('\n');
     contentParts.push(`<identities count="${identities.length}">
 ${identitiesXml}
 </identities>`);

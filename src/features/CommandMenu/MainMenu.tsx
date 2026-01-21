@@ -3,21 +3,18 @@ import { DiscordIcon } from '@lobehub/ui/icons';
 import { Command } from 'cmdk';
 import {
   Bot,
-  BrainCircuit,
   FilePen,
   Github,
-  Image,
   LibraryBig,
   MailIcon,
   MessageSquarePlusIcon,
   Monitor,
-  Settings,
-  Shapes,
   Star,
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { getNavigableRoutes, getRouteById } from '@/config/routes';
 import { FEEDBACK } from '@/const/url';
 import { useFeedbackModal } from '@/hooks/useFeedbackModal';
 
@@ -88,16 +85,20 @@ const MainMenu = memo(() => {
           {t('cmdk.newLibrary')}
         </CommandItem>
 
-        {menuContext !== 'settings' && (
-          <CommandItem
-            icon={<Settings />}
-            keywords={['settings', 'preferences', 'configuration', 'options']}
-            onSelect={() => handleNavigate('/settings')}
-            value="settings"
-          >
-            {t('cmdk.settings')}
-          </CommandItem>
-        )}
+        {menuContext !== 'settings' && (() => {
+          const settingsRoute = getRouteById('settings');
+          const SettingsIcon = settingsRoute?.icon;
+          return (
+            <CommandItem
+              icon={SettingsIcon && <SettingsIcon />}
+              keywords={settingsRoute?.keywords}
+              onSelect={() => handleNavigate(settingsRoute?.path || '/settings')}
+              value="settings"
+            >
+              {t('cmdk.settings')}
+            </CommandItem>
+          );
+        })()}
 
         <CommandItem
           icon={<Monitor />}
@@ -109,47 +110,22 @@ const MainMenu = memo(() => {
       </Command.Group>
 
       <Command.Group heading={t('cmdk.navigate')}>
-        {!pathname?.startsWith('/community') && (
-          <CommandItem
-            icon={<Shapes />}
-            onSelect={() => handleNavigate('/community')}
-            value="community"
-          >
-            {t('cmdk.community')}
-          </CommandItem>
-        )}
-        {!pathname?.startsWith('/image') && (
-          <CommandItem icon={<Image />} onSelect={() => handleNavigate('/image')} value="painting">
-            {t('cmdk.painting')}
-          </CommandItem>
-        )}
-        {!pathname?.startsWith('/knowledge') && (
-          <CommandItem
-            icon={<LibraryBig />}
-            onSelect={() => handleNavigate('/resource')}
-            value="resource"
-          >
-            {t('cmdk.resource')}
-          </CommandItem>
-        )}
-        {!pathname?.startsWith('/page') && (
-          <CommandItem
-            icon={<FilePen />}
-            onSelect={() => handleNavigate('/page')}
-            value="page documents write"
-          >
-            {t('cmdk.pages')}
-          </CommandItem>
-        )}
-        {!pathname?.startsWith('/memory') && (
-          <CommandItem
-            icon={<BrainCircuit />}
-            onSelect={() => handleNavigate('/memory')}
-            value="memory"
-          >
-            {t('cmdk.memory')}
-          </CommandItem>
-        )}
+        {getNavigableRoutes().map((route) => {
+          const RouteIcon = route.icon;
+          return (
+            !pathname?.startsWith(route.pathPrefix) && (
+              <CommandItem
+                icon={<RouteIcon />}
+                key={route.id}
+                keywords={route.keywords}
+                onSelect={() => handleNavigate(route.path)}
+                value={route.id}
+              >
+                {t(route.cmdkKey as any)}
+              </CommandItem>
+            )
+          );
+        })}
       </Command.Group>
 
       <Command.Group heading={t('cmdk.about')}>

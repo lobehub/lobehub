@@ -32,7 +32,9 @@ const ThreadHydration = memo(() => {
   // should open portal automatically when portalThread is set
   useEffect(() => {
     if (!!portalThread && !useChatStore.getState().showPortal) {
-      useChatStore.getState().pushPortalView({ threadId: portalThread, type: PortalViewType.Thread });
+      useChatStore
+        .getState()
+        .pushPortalView({ threadId: portalThread, type: PortalViewType.Thread });
     }
   }, [portalThread]);
 

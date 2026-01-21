@@ -54,6 +54,8 @@
   "funds.packages.expiresIn": "Hết hạn sau {{days}} ngày",
   "funds.packages.expiresToday": "Hết hạn hôm nay",
   "funds.packages.expiringSoon": "Sắp hết hạn",
+  "funds.packages.gift": "Quà tặng",
+  "funds.packages.giftedOn": "Được tặng vào ngày {{date}}",
   "funds.packages.noPackages": "Không có gói tín dụng",
   "funds.packages.purchaseFirst": "Mua gói tín dụng đầu tiên của bạn",
   "funds.packages.purchasedOn": "Đã mua vào {{date}}",

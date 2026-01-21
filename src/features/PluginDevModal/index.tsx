@@ -1,3 +1,4 @@
+import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Alert, Button, Drawer, Flexbox, Icon, Segmented, Tag } from '@lobehub/ui';
 import { App, Form, Popconfirm } from 'antd';
 import { useResponsive } from 'antd-style';
@@ -7,7 +8,6 @@ import { Trans, useTranslation } from 'react-i18next';
 
 import { WIKI_PLUGIN_GUIDE } from '@/const/url';
 import { isDesktop } from '@/const/version';
-import { TITLE_BAR_HEIGHT } from '@/features/ElectronTitlebar';
 import { type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
 import MCPManifestForm from './MCPManifestForm';

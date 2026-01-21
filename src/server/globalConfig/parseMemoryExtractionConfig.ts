@@ -1,4 +1,5 @@
-import { DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM } from '@lobechat/const';
+import { DEFAULT_MINI_PROVIDER } from '@lobechat/business-const';
+import { DEFAULT_MINI_MODEL, DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM } from '@lobechat/const';
 
 import {
   type GlobalMemoryExtractionConfig,
@@ -8,8 +9,6 @@ import {
 } from '@/types/serverConfig';
 
 const MEMORY_LAYERS: GlobalMemoryLayer[] = ['context', 'experience', 'identity', 'preference'];
-const DEFAULT_GATE_MODEL = 'gpt-5-mini';
-const DEFAULT_PROVIDER = 'openai';
 
 const parseTokenLimitEnv = (value?: string) => {
   if (value === undefined) return undefined;
@@ -32,12 +31,18 @@ export type MemoryLayerExtractorConfig = MemoryLayerExtractorPublicConfig &
 
 export interface MemoryExtractionPrivateConfig {
   agentGateKeeper: MemoryAgentConfig;
+  agentGateKeeperPreferredModels?: string[];
+  agentGateKeeperPreferredProviders?: string[];
   agentLayerExtractor: MemoryLayerExtractorConfig;
+  agentLayerExtractorPreferredModels?: string[];
+  agentLayerExtractorPreferredProviders?: string[];
   concurrency?: number;
   embedding: MemoryAgentConfig;
+  embeddingPreferredModels?: string[];
+  embeddingPreferredProviders?: string[];
   featureFlags: {
     enableBenchmarkLoCoMo: boolean;
-  },
+  };
   observabilityS3?: {
     accessKeyId?: string;
     bucketName?: string;
@@ -56,8 +61,8 @@ export interface MemoryExtractionPrivateConfig {
 const parseGateKeeperAgent = (): MemoryAgentConfig => {
   const apiKey = process.env.MEMORY_USER_MEMORY_GATEKEEPER_API_KEY;
   const baseURL = process.env.MEMORY_USER_MEMORY_GATEKEEPER_BASE_URL;
-  const model = process.env.MEMORY_USER_MEMORY_GATEKEEPER_MODEL || DEFAULT_GATE_MODEL;
-  const provider = process.env.MEMORY_USER_MEMORY_GATEKEEPER_PROVIDER || DEFAULT_PROVIDER;
+  const model = process.env.MEMORY_USER_MEMORY_GATEKEEPER_MODEL || DEFAULT_MINI_MODEL;
+  const provider = process.env.MEMORY_USER_MEMORY_GATEKEEPER_PROVIDER || DEFAULT_MINI_PROVIDER;
   const language = process.env.MEMORY_USER_MEMORY_GATEKEEPER_LANGUAGE || 'English';
 
   return {
@@ -73,7 +78,7 @@ const parseLayerExtractorAgent = (fallbackModel: string): MemoryLayerExtractorCo
   const apiKey = process.env.MEMORY_USER_MEMORY_LAYER_EXTRACTOR_API_KEY;
   const baseURL = process.env.MEMORY_USER_MEMORY_LAYER_EXTRACTOR_BASE_URL;
   const model = process.env.MEMORY_USER_MEMORY_LAYER_EXTRACTOR_MODEL || fallbackModel;
-  const provider = process.env.MEMORY_USER_MEMORY_LAYER_EXTRACTOR_PROVIDER || DEFAULT_PROVIDER;
+  const provider = process.env.MEMORY_USER_MEMORY_LAYER_EXTRACTOR_PROVIDER || DEFAULT_MINI_PROVIDER;
   const contextLimit = parseTokenLimitEnv(
     process.env.MEMORY_USER_MEMORY_LAYER_EXTRACTOR_CONTEXT_LIMIT,
   );
@@ -111,7 +116,7 @@ const parseEmbeddingAgent = (
     process.env.MEMORY_USER_MEMORY_EMBEDDING_PROVIDER ||
     fallbackProvider ||
     defaultProvider ||
-    DEFAULT_PROVIDER;
+    DEFAULT_MINI_PROVIDER;
 
   return {
     apiKey: process.env.MEMORY_USER_MEMORY_EMBEDDING_API_KEY ?? fallbackApiKey,
@@ -157,18 +162,24 @@ const sanitizeAgent = (agent?: MemoryAgentConfig): MemoryAgentPublicConfig | und
   return sanitized as MemoryAgentPublicConfig;
 };
 
+const parsePreferredList = (value?: string) =>
+  value
+    ?.split(',')
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+
 export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => {
   const agentGateKeeper = parseGateKeeperAgent();
   const agentLayerExtractor = parseLayerExtractorAgent(agentGateKeeper.model);
   const embedding = parseEmbeddingAgent(
     agentLayerExtractor.model,
-    agentLayerExtractor.provider || DEFAULT_PROVIDER,
+    agentLayerExtractor.provider || DEFAULT_MINI_PROVIDER,
     agentGateKeeper.apiKey || agentLayerExtractor.apiKey,
   );
   const extractorObservabilityS3 = parseExtractorAgentObservabilityS3();
   const featureFlags = {
-    enableBenchmarkLoCoMo: process.env.MEMORY_USER_MEMORY_FEATURE_FLAG_BENCHMARK_LOCOMO === 'true'
-  }
+    enableBenchmarkLoCoMo: process.env.MEMORY_USER_MEMORY_FEATURE_FLAG_BENCHMARK_LOCOMO === 'true',
+  };
   const concurrencyRaw = process.env.MEMORY_USER_MEMORY_CONCURRENCY;
   const concurrency =
     concurrencyRaw !== undefined
@@ -191,7 +202,9 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
       return acc;
     }, {});
 
-  const upstashWorkflowExtraHeaders = process.env.MEMORY_USER_MEMORY_WORKFLOW_EXTRA_HEADERS?.split(',')
+  const upstashWorkflowExtraHeaders = process.env.MEMORY_USER_MEMORY_WORKFLOW_EXTRA_HEADERS?.split(
+    ',',
+  )
     .filter(Boolean)
     .reduce<Record<string, string>>((acc, pair) => {
       const [key, value] = pair.split('=').map((s) => s.trim());
@@ -201,11 +214,36 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
       return acc;
     }, {});
 
+  const agentGateKeeperPreferredProviders = parsePreferredList(
+    process.env.MEMORY_USER_MEMORY_GATEKEEPER_PREFERRED_PROVIDERS,
+  );
+  const agentGateKeeperPreferredModels = parsePreferredList(
+    process.env.MEMORY_USER_MEMORY_GATEKEEPER_PREFERRED_MODELS,
+  );
+  const embeddingPreferredProviders = parsePreferredList(
+    process.env.MEMORY_USER_MEMORY_EMBEDDING_PREFERRED_PROVIDERS,
+  );
+  const embeddingPreferredModels = parsePreferredList(
+    process.env.MEMORY_USER_MEMORY_EMBEDDING_PREFERRED_MODELS,
+  );
+  const agentLayerExtractorPreferredProviders = parsePreferredList(
+    process.env.MEMORY_USER_MEMORY_LAYER_EXTRACTOR_PREFERRED_PROVIDERS,
+  );
+  const agentLayerExtractorPreferredModels = parsePreferredList(
+    process.env.MEMORY_USER_MEMORY_LAYER_EXTRACTOR_PREFERRED_MODELS,
+  );
+
   return {
     agentGateKeeper,
+    agentGateKeeperPreferredModels,
+    agentGateKeeperPreferredProviders,
     agentLayerExtractor,
+    agentLayerExtractorPreferredModels,
+    agentLayerExtractorPreferredProviders,
     concurrency,
     embedding,
+    embeddingPreferredModels,
+    embeddingPreferredProviders,
     featureFlags,
     observabilityS3: extractorObservabilityS3,
     upstashWorkflowExtraHeaders,

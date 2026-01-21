@@ -1,6 +1,6 @@
 import { getAgentPersistConfig } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import { and, desc, eq, ilike, inArray, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
 import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
@@ -375,6 +375,23 @@ export class AgentModel {
       columns: { id: true },
       orderBy: (agents, { desc }) => [desc(agents.updatedAt)],
       where: and(eq(agents.marketIdentifier, marketIdentifier), eq(agents.userId, this.userId)),
+    });
+    return result?.id ?? null;
+  };
+
+  /**
+   * Get an agent by the forkedFromIdentifier stored in params
+   * @param forkedFromIdentifier - The source agent's market identifier
+   * @returns agent id if exists, null otherwise
+   */
+  getAgentByForkedFromIdentifier = async (forkedFromIdentifier: string): Promise<string | null> => {
+    const result = await this.db.query.agents.findFirst({
+      columns: { id: true },
+      orderBy: (agents, { desc }) => [desc(agents.updatedAt)],
+      where: and(
+        eq(agents.userId, this.userId),
+        sql`${agents.params}->>'forkedFromIdentifier' = ${forkedFromIdentifier}`,
+      ),
     });
     return result?.id ?? null;
   };

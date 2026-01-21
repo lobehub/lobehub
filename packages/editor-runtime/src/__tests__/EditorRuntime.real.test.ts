@@ -21,7 +21,7 @@ describe('EditorRuntime - Real Cases', () => {
   let mockTitleGetter: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    editor = new Kernel();
+    editor = new Kernel() as unknown as IEditor;
     editor.registerPlugins([CommonPlugin, MarkdownPlugin, ListPlugin, LitexmlPlugin]);
     editor.initNodeEditor();
 

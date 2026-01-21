@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import {
   ChatGroupAgentItem,
@@ -33,6 +33,23 @@ export class ChatGroupModel {
       orderBy: [desc(chatGroups.updatedAt)],
       where: eq(chatGroups.userId, this.userId),
     });
+  }
+
+  /**
+   * Get a chat group by the forkedFromIdentifier stored in config
+   * @param forkedFromIdentifier - The source group's market identifier
+   * @returns group id if exists, null otherwise
+   */
+  async getGroupByForkedFromIdentifier(forkedFromIdentifier: string): Promise<string | null> {
+    const result = await this.db.query.chatGroups.findFirst({
+      columns: { id: true },
+      orderBy: [desc(chatGroups.updatedAt)],
+      where: and(
+        eq(chatGroups.userId, this.userId),
+        sql`${chatGroups.config}->>'forkedFromIdentifier' = ${forkedFromIdentifier}`,
+      ),
+    });
+    return result?.id ?? null;
   }
 
   async queryWithMemberDetails(): Promise<any[]> {

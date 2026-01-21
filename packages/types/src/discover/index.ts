@@ -1,6 +1,9 @@
 import { DiscoverAssistantItem } from './assistants';
+import { DiscoverGroupAgentItem } from './groupAgents';
 
 export * from './assistants';
+export * from './fork';
+export * from './groupAgents';
 export * from './mcp';
 export * from './models';
 export * from './plugins';
@@ -8,6 +11,7 @@ export * from './providers';
 
 export enum DiscoverTab {
   Assistants = 'assistant',
+  GroupAgents = 'group_agent',
   Home = 'home',
   Mcp = 'mcp',
   Models = 'model',
@@ -58,9 +62,18 @@ export interface DiscoverUserInfo {
 }
 
 /**
- * User profile with their published agents
+ * User profile with their published agents and groups
  */
 export interface DiscoverUserProfile {
+  agentGroups?: DiscoverGroupAgentItem[];
   agents: DiscoverAssistantItem[];
+  /**
+   * Agent groups forked by the user
+   */
+  forkedAgentGroups?: DiscoverGroupAgentItem[];
+  /**
+   * Agents forked by the user
+   */
+  forkedAgents?: DiscoverAssistantItem[];
   user: DiscoverUserInfo;
 }

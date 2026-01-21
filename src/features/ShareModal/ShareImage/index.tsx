@@ -56,14 +56,6 @@ const ShareImage = memo<{ mobile?: boolean }>(() => {
       name: 'withSystemRole',
       valuePropName: 'checked',
     },
-    // {
-    //   children: <Switch />,
-    //   label: t('shareModal.withBackground'),
-    //   layout: 'horizontal',
-    //   minWidth: undefined,
-    //   name: 'withBackground',
-    //   valuePropName: 'checked',
-    // },
     {
       children: <Switch />,
       label: t('shareModal.withFooter'),

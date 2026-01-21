@@ -4,7 +4,7 @@ description: 本文详细介绍如何在 Dokploy 中部署服务端数据库版 
 tags:
   - 服务端数据库
   - Postgres
-  - Clerk
+  - Better Auth
   - Dokploy部署
   - 数据库配置
   - 身份验证服务
@@ -44,15 +44,27 @@ S3_PUBLIC_DOMAIN=
 S3_ENABLE_PATH_STYLE=
 ```
 
-### 配置 Clerk 身份验证服务
+### 配置 KEY_VAULTS_SECRET 环境变量
 
-获取 `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` 、`CLERK_SECRET_KEY` 、`CLERK_WEBHOOK_SECRET` 这三个环境变量，Clerk 的详细配置流程请参考 使用 Vercel 部署中 [配置身份验证服务](https://lobehub.com/zh/docs/self-hosting/server-database/vercel#二、-配置身份验证服务)
+`KEY_VAULTS_SECRET` 用于加密用户存储的 API Key 等敏感信息。点击下方按钮一键生成：
 
-```shell
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxx
-CLERK_SECRET_KEY=sk_live_xxxxxxxxxxxxxxxxxxxxxx
-CLERK_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxx
-```
+<GenerateSecret envName="KEY_VAULTS_SECRET" />
+
+### 配置身份验证环境变量
+
+准备以下身份验证环境变量（基于 [Better Auth](https://www.better-auth.com)）：
+
+点击下方按钮一键生成 `AUTH_SECRET`（会话加密密钥）：
+
+<GenerateSecret envName="AUTH_SECRET" />
+
+同时需要配置 `JWKS_KEY` 环境变量，用于签名和验证 JWT。点击下方按钮一键生成：
+
+<GenerateJWKSKey />
+
+<Callout type={'info'}>
+  如需 SSO 登录、魔法链接登录、邮箱验证等高级功能，请参阅 [身份验证服务](/zh/docs/self-hosting/advanced/auth)。
+</Callout>
 
 ## 二、在 Dokploy 上部署数据库
 
@@ -93,20 +105,14 @@ NIXPACKS_START_CMD="pnpm start"
 
 APP_URL=
 
-# 指定服务模式为 server
-NEXT_PUBLIC_SERVICE_MODE=server
-
 # Postgres 数据库相关配置
 DATABASE_DRIVER=node
 DATABASE_URL=
 
-# 你可以使用 openssl rand -base64 32 生成一个随机的 32 位字符串作为密钥。
+# 使用上方生成的值
 KEY_VAULTS_SECRET=
-
-# Clerk 相关配置
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-CLERK_SECRET_KEY=
-CLERK_WEBHOOK_SECRET=
+AUTH_SECRET=
+JWKS_KEY=
 
 # S3 相关配置
 S3_ACCESS_KEY_ID=
@@ -116,10 +122,6 @@ S3_BUCKET=
 S3_PUBLIC_DOMAIN=
 S3_ENABLE_PATH_STYLE=
 
-# OpenAI 相关配置
-OPENAI_API_KEY=
-OPENAI_MODEL_LIST=
-OPENAI_PROXY_URL=
 ```
 
 添加完环境变量并保存后，点击 Deploy 进行部署，你可以在 Deployments 处查看部署进程及日志信息

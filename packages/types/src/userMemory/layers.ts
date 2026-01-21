@@ -10,19 +10,33 @@ export enum UserMemoryContextObjectType {
   Knowledge = 'knowledge',
   Other = 'other',
   Person = 'person',
-  Place = 'place'
+  Place = 'place',
 }
+export const CONTEXT_OBJECT_TYPES = Object.values(UserMemoryContextObjectType);
 
 export enum UserMemoryContextSubjectType {
   Item = 'item',
   Other = 'other',
   Person = 'person',
-  Pet = 'pet'
+  Pet = 'pet',
 }
+export const CONTEXT_SUBJECT_TYPES = Object.values(UserMemoryContextSubjectType);
 
 export interface UserMemoryContext extends UserMemoryTimestamps {
-  associatedObjects: { extra?: Record<string, unknown> | null, name?: string, type?: UserMemoryContextObjectType }[] | null;
-  associatedSubjects: { extra?: Record<string, unknown> | null, name?: string, type?: UserMemoryContextSubjectType }[] | null;
+  associatedObjects:
+    | {
+        extra?: Record<string, unknown> | null;
+        name?: string;
+        type?: UserMemoryContextObjectType;
+      }[]
+    | null;
+  associatedSubjects:
+    | {
+        extra?: Record<string, unknown> | null;
+        name?: string;
+        type?: UserMemoryContextSubjectType;
+      }[]
+    | null;
   currentStatus: string | null;
   description: string | null;
   descriptionVector: number[] | null;
@@ -97,7 +111,4 @@ export type UserMemoryPreferenceWithoutVectors = Omit<
   'conclusionDirectivesVector'
 >;
 
-export type UserMemoryPreferencesListItem = Omit<
-  UserMemoryPreferenceWithoutVectors,
-  'suggestions'
->;
+export type UserMemoryPreferencesListItem = Omit<UserMemoryPreferenceWithoutVectors, 'suggestions'>;

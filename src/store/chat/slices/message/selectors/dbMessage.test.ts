@@ -5,7 +5,7 @@ import { selectTodosFromMessages } from './dbMessage';
 
 describe('selectTodosFromMessages', () => {
   const createGTDToolMessage = (todos: {
-    items: Array<{ text: string; completed: boolean }>;
+    items: Array<{ text: string; status: 'todo' | 'processing' | 'completed' }>;
     updatedAt: string;
   }): UIChatMessage =>
     ({
@@ -30,7 +30,7 @@ describe('selectTodosFromMessages', () => {
         content: 'Create a todo list',
       } as UIChatMessage,
       createGTDToolMessage({
-        items: [{ text: 'Buy milk', completed: false }],
+        items: [{ text: 'Buy milk', status: 'todo' }],
         updatedAt: '2024-06-01T00:00:00.000Z',
       }),
     ];
@@ -40,13 +40,13 @@ describe('selectTodosFromMessages', () => {
     expect(result).toBeDefined();
     expect(result?.items).toHaveLength(1);
     expect(result?.items[0].text).toBe('Buy milk');
-    expect(result?.items[0].completed).toBe(false);
+    expect(result?.items[0].status).toBe('todo');
   });
 
   it('should return the most recent todos when multiple GTD messages exist', () => {
     const messages: UIChatMessage[] = [
       createGTDToolMessage({
-        items: [{ text: 'Old task', completed: false }],
+        items: [{ text: 'Old task', status: 'todo' }],
         updatedAt: '2024-01-01T00:00:00.000Z',
       }),
       {
@@ -56,8 +56,8 @@ describe('selectTodosFromMessages', () => {
       } as UIChatMessage,
       createGTDToolMessage({
         items: [
-          { text: 'Old task', completed: true },
-          { text: 'New task', completed: false },
+          { text: 'Old task', status: 'completed' },
+          { text: 'New task', status: 'todo' },
         ],
         updatedAt: '2024-06-01T00:00:00.000Z',
       }),
@@ -69,7 +69,7 @@ describe('selectTodosFromMessages', () => {
     expect(result?.items).toHaveLength(2);
     // Should be from the latest message
     expect(result?.items[0].text).toBe('Old task');
-    expect(result?.items[0].completed).toBe(true);
+    expect(result?.items[0].status).toBe('completed');
     expect(result?.items[1].text).toBe('New task');
   });
 
@@ -155,7 +155,7 @@ describe('selectTodosFromMessages', () => {
         },
         pluginState: {
           todos: {
-            items: [{ text: 'Task', completed: false }],
+            items: [{ text: 'Task', status: 'todo' }],
             // No updatedAt
           },
         },
@@ -184,8 +184,8 @@ describe('selectTodosFromMessages', () => {
         pluginState: {
           // Legacy format: direct array
           todos: [
-            { text: 'Task 1', completed: false },
-            { text: 'Task 2', completed: true },
+            { text: 'Task 1', status: 'todo' },
+            { text: 'Task 2', status: 'completed' },
           ],
         },
       } as unknown as UIChatMessage,
@@ -196,6 +196,6 @@ describe('selectTodosFromMessages', () => {
     expect(result).toBeDefined();
     expect(result?.items).toHaveLength(2);
     expect(result?.items[0].text).toBe('Task 1');
-    expect(result?.items[1].completed).toBe(true);
+    expect(result?.items[1].status).toBe('completed');
   });
 });

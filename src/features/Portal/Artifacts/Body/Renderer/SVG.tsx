@@ -1,6 +1,6 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { copyImageToClipboard, sanitizeSVGContent } from '@lobechat/utils/client';
-import { Button, Center, Dropdown, Flexbox, Tooltip } from '@lobehub/ui';
+import { Button, Center, DropdownMenu, Flexbox, Tooltip } from '@lobehub/ui';
 import { snapdom } from '@zumer/snapdom';
 import { App, Space } from 'antd';
 import { css, cx } from 'antd-style';
@@ -98,19 +98,22 @@ const SVGRenderer = ({ content }: SVGRendererProps) => {
       />
       <Flexbox className={cx(actions)}>
         <Space.Compact>
-          <Dropdown
-            menu={{
-              items: [
-                { key: 'png', label: t('artifacts.svg.download.png') },
-                { key: 'svg', label: t('artifacts.svg.download.svg') },
-              ],
-              onClick: ({ key }) => {
-                downloadImage(key);
+          <DropdownMenu
+            items={[
+              {
+                key: 'png',
+                label: t('artifacts.svg.download.png'),
+                onClick: () => downloadImage('png'),
               },
-            }}
+              {
+                key: 'svg',
+                label: t('artifacts.svg.download.svg'),
+                onClick: () => downloadImage('svg'),
+              },
+            ]}
           >
             <Button icon={DownloadIcon} />
-          </Dropdown>
+          </DropdownMenu>
           <Tooltip title={t('artifacts.svg.copyAsImage')}>
             <Button
               icon={CopyIcon}

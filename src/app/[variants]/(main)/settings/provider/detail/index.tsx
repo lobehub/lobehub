@@ -1,4 +1,4 @@
-import dynamic from 'next/dynamic';
+import dynamic from '@/libs/next/dynamic';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 

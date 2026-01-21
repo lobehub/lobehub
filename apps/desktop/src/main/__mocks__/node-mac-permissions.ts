@@ -2,7 +2,6 @@
  * Mock for node-mac-permissions native module
  * Used in tests since the native module only works on macOS
  */
-
 import { vi } from 'vitest';
 
 export const askForAccessibilityAccess = vi.fn(() => undefined);

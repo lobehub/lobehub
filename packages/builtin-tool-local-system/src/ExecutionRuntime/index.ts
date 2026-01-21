@@ -71,8 +71,14 @@ export class LocalSystemExecutionRuntime {
 
       const state: LocalFileListState = { listResults: result };
 
+      const fileList = result.map((f) => `  ${f.isDirectory ? '[D]' : '[F]'} ${f.name}`).join('\n');
+      const content =
+        result.length > 0
+          ? `Found ${result.length} item(s) in ${args.path}:\n${fileList}`
+          : `Directory ${args.path} is empty`;
+
       return {
-        content: JSON.stringify(result),
+        content,
         state,
         success: true,
       };
@@ -91,8 +97,11 @@ export class LocalSystemExecutionRuntime {
 
       const state: LocalReadFileState = { fileContent: result };
 
+      const lineInfo = args.loc ? ` (lines ${args.loc[0]}-${args.loc[1]})` : '';
+      const content = `File: ${args.path}${lineInfo}\n\n${result.content}`;
+
       return {
-        content: JSON.stringify(result),
+        content,
         state,
         success: true,
       };
@@ -111,8 +120,11 @@ export class LocalSystemExecutionRuntime {
 
       const state: LocalReadFilesState = { filesContent: results };
 
+      const fileContents = results.map((r) => `=== ${r.filename} ===\n${r.content}`).join('\n\n');
+      const content = `Read ${results.length} file(s):\n\n${fileContents}`;
+
       return {
-        content: JSON.stringify(results),
+        content,
         state,
         success: true,
       };
@@ -131,8 +143,12 @@ export class LocalSystemExecutionRuntime {
 
       const state: LocalFileSearchState = { searchResults: result };
 
+      const fileList = result.map((f) => `  ${f.path}`).join('\n');
+      const content =
+        result.length > 0 ? `Found ${result.length} file(s):\n${fileList}` : 'No files found';
+
       return {
-        content: JSON.stringify(result),
+        content,
         state,
         success: true,
       };
@@ -154,14 +170,14 @@ export class LocalSystemExecutionRuntime {
       const successCount = results.filter((r) => r.success).length;
       const failedCount = results.length - successCount;
 
-      let message = '';
+      let content = '';
 
       if (allSucceeded) {
-        message = `Successfully moved ${results.length} item(s).`;
+        content = `Successfully moved ${results.length} item(s).`;
       } else if (someFailed) {
-        message = `Moved ${successCount} item(s) successfully. Failed to move ${failedCount} item(s).`;
+        content = `Moved ${successCount} item(s) successfully. Failed to move ${failedCount} item(s).`;
       } else {
-        message = `Failed to move all ${results.length} item(s).`;
+        content = `Failed to move all ${results.length} item(s).`;
       }
 
       const state: LocalMoveFilesState = {
@@ -171,7 +187,7 @@ export class LocalSystemExecutionRuntime {
       };
 
       return {
-        content: JSON.stringify({ message, results }),
+        content,
         state,
         success: true,
       };
@@ -197,7 +213,7 @@ export class LocalSystemExecutionRuntime {
         };
 
         return {
-          content: JSON.stringify({ message: result.error, success: false }),
+          content: `Failed to rename file: ${result.error}`,
           state,
           success: false,
         };
@@ -210,10 +226,7 @@ export class LocalSystemExecutionRuntime {
       };
 
       return {
-        content: JSON.stringify({
-          message: `Successfully renamed file ${args.path} to ${args.newName}.`,
-          success: true,
-        }),
+        content: `Successfully renamed file ${args.path} to ${args.newName}`,
         state,
         success: true,
       };
@@ -232,20 +245,14 @@ export class LocalSystemExecutionRuntime {
 
       if (!result.success) {
         return {
-          content: JSON.stringify({
-            message: result.error || '写入文件失败',
-            success: false,
-          }),
+          content: `Failed to write file: ${result.error || 'Unknown error'}`,
           error: result.error,
           success: false,
         };
       }
 
       return {
-        content: JSON.stringify({
-          message: `成功写入文件 ${args.path}`,
-          success: true,
-        }),
+        content: `Successfully wrote to ${args.path}`,
         success: true,
       };
     } catch (error) {
@@ -301,22 +308,28 @@ export class LocalSystemExecutionRuntime {
     try {
       const result: RunCommandResult = await this.localFileService.runCommand(args);
 
-      let message: string;
+      const parts: string[] = [];
 
       if (result.success) {
         if (result.shell_id) {
-          message = `Command started in background with shell_id: ${result.shell_id}`;
+          parts.push(`Command started in background with shell_id: ${result.shell_id}`);
         } else {
-          message = `Command completed successfully.`;
+          parts.push('Command completed successfully.');
         }
       } else {
-        message = `Command failed: ${result.error}`;
+        parts.push(`Command failed: ${result.error}`);
       }
 
+      if (result.stdout) parts.push(`Output:\n${result.stdout}`);
+      if (result.stderr) parts.push(`Stderr:\n${result.stderr}`);
+      if (result.exit_code !== undefined) parts.push(`Exit code: ${result.exit_code}`);
+
+      const message = parts[0];
+      const content = parts.join('\n\n');
       const state: RunCommandState = { message, result };
 
       return {
-        content: JSON.stringify(result),
+        content,
         state,
         success: result.success,
       };
@@ -337,10 +350,14 @@ export class LocalSystemExecutionRuntime {
         ? `Output retrieved. Running: ${result.running}`
         : `Failed: ${result.error}`;
 
+      const parts: string[] = [message];
+      if (result.output) parts.push(`Output:\n${result.output}`);
+      if (result.error) parts.push(`Error: ${result.error}`);
+
       const state: GetCommandOutputState = { message, result };
 
       return {
-        content: JSON.stringify(result),
+        content: parts.join('\n\n'),
         state,
         success: result.success,
       };
@@ -364,7 +381,7 @@ export class LocalSystemExecutionRuntime {
       const state: KillCommandState = { message, result };
 
       return {
-        content: JSON.stringify(result),
+        content: message,
         state,
         success: result.success,
       };
@@ -389,8 +406,19 @@ export class LocalSystemExecutionRuntime {
 
       const state: GrepContentState = { message, result };
 
+      let content = message;
+      if (result.success && result.matches.length > 0) {
+        const matchList = result.matches
+          .slice(0, 20)
+          .map((m) => `  ${m}`)
+          .join('\n');
+        const moreInfo =
+          result.matches.length > 20 ? `\n  ... and ${result.matches.length - 20} more` : '';
+        content = `${message}:\n${matchList}${moreInfo}`;
+      }
+
       return {
-        content: JSON.stringify(result),
+        content,
         state,
         success: result.success,
       };
@@ -411,8 +439,19 @@ export class LocalSystemExecutionRuntime {
 
       const state: GlobFilesState = { message, result };
 
+      let content = message;
+      if (result.success && result.files.length > 0) {
+        const fileList = result.files
+          .slice(0, 50)
+          .map((f) => `  ${f}`)
+          .join('\n');
+        const moreInfo =
+          result.files.length > 50 ? `\n  ... and ${result.files.length - 50} more` : '';
+        content = `${message}:\n${fileList}${moreInfo}`;
+      }
+
       return {
-        content: JSON.stringify(result),
+        content,
         state,
         success: result.success,
       };

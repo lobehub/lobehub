@@ -14,7 +14,7 @@ import {
   ReactToolbarPlugin,
 } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { EditorCanvasProps } from './EditorCanvas';
@@ -102,6 +102,40 @@ const InternalEditor = memo<InternalEditorProps>(
       };
     }, [editor]);
 
+    // Use refs for stable references across re-renders
+    const previousContentRef = useRef<string | undefined>(undefined);
+    const onContentChangeRef = useRef(onContentChange);
+    onContentChangeRef.current = onContentChange;
+
+    // Listen to Lexical updates directly to trigger content change
+    // This bypasses @lobehub/editor's onTextChange which has issues with previousContent reset
+    useEffect(() => {
+      if (!editor) return;
+
+      const lexicalEditor = editor.getLexicalEditor?.();
+      if (!lexicalEditor) return;
+
+      // Initialize previousContent with current content before registering listener
+      previousContentRef.current = JSON.stringify(editor.getDocument('text'));
+
+      const unregister = lexicalEditor.registerUpdateListener(({ dirtyElements, dirtyLeaves }) => {
+        // Only process when there are actual content changes
+        if (dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
+
+        const currentContent = JSON.stringify(editor.getDocument('text'));
+
+        if (currentContent !== previousContentRef.current) {
+          // Content actually changed
+          previousContentRef.current = currentContent;
+          onContentChangeRef.current?.();
+        }
+      });
+
+      return () => {
+        unregister();
+      };
+    }, [editor]); // Only depend on editor, use ref for onContentChange
+
     return (
       <div
         onClick={(e) => {
@@ -114,7 +148,6 @@ const InternalEditor = memo<InternalEditorProps>(
           editor={editor}
           lineEmptyPlaceholder={finalPlaceholder}
           onInit={onInit}
-          onTextChange={onContentChange}
           placeholder={finalPlaceholder}
           plugins={plugins}
           slashOption={slashItems ? { items: slashItems } : undefined}

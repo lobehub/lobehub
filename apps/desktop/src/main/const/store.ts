@@ -1,5 +1,5 @@
 /**
- * 应用设置存储相关常量
+ * Application settings storage related constants
  */
 import { NetworkProxySettings } from '@lobechat/electron-client-ipc';
 
@@ -8,7 +8,7 @@ import { DEFAULT_SHORTCUTS_CONFIG } from '@/shortcuts';
 import { ElectronMainStore } from '@/types/store';
 
 /**
- * 存储名称
+ * Storage name
  */
 export const STORE_NAME = 'lobehub-settings';
 
@@ -22,7 +22,7 @@ export const defaultProxySettings: NetworkProxySettings = {
 };
 
 /**
- * 存储默认值
+ * Storage default values
  */
 export const STORE_DEFAULTS: ElectronMainStore = {
   dataSyncConfig: { storageMode: 'cloud' },

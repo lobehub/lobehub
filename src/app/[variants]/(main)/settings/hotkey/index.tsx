@@ -19,6 +19,4 @@ const Page = () => {
   );
 };
 
-Page.displayName = 'HotkeySetting';
-
 export default Page;

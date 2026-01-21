@@ -1,3 +1,7 @@
+---
+title: LobeChat Feature Development Complete Guide
+---
+
 # LobeChat Feature Development Complete Guide
 
 This document aims to guide developers on how to develop a complete feature in LobeChat.
@@ -362,7 +366,8 @@ const OpeningQuestions = memo(() => {
         {isRepeat && (
           <p className={styles.repeatError}>{t('settingOpening.openingQuestions.repeat')}</p>
         )}
-      </Flexbox>
+     
+</Flexbox>
 
       <div className={styles.questionsList}>
         {openingQuestions.length > 0 ? (
@@ -378,7 +383,8 @@ const OpeningQuestions = memo(() => {
                   onClick={() => removeQuestion(item.content)}
                   type="text"
                 />
-              </SortableList.Item>
+             
+</SortableList.Item>
             )}
           />
         ) : (
@@ -387,8 +393,10 @@ const OpeningQuestions = memo(() => {
             description={t('settingOpening.openingQuestions.empty')}
           />
         )}
-      </div>
-    </Flexbox>
+     
+</div>
+   
+</Flexbox>
   );
 });
 
@@ -440,7 +448,8 @@ const WelcomeMessage = () => {
       {chatItem}
       {/* Render guiding questions */}
       <OpeningQuestions mobile={mobile} questions={openingQuestions} />
-    </Flexbox>
+   
+</Flexbox>
   ) : (
     chatItem
   );

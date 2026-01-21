@@ -14,6 +14,9 @@ export const GroupAgentBuilderApiName = {
   batchCreateAgents: 'batchCreateAgents',
   createAgent: 'createAgent',
 
+  // Agent info
+  getAgentInfo: 'getAgentInfo',
+
   // Read operations (inherited from AgentBuilder)
   getAvailableModels: 'getAvailableModels',
 
@@ -39,6 +42,13 @@ export type GroupAgentBuilderApiNameType =
   (typeof GroupAgentBuilderApiName)[keyof typeof GroupAgentBuilderApiName];
 
 // ============== Group-specific Parameter Types ==============
+
+export interface GetAgentInfoParams {
+  /**
+   * The ID of the agent to get information about
+   */
+  agentId: string;
+}
 
 export interface SearchAgentParams {
   /**

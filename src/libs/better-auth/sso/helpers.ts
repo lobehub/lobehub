@@ -55,7 +55,6 @@ export const buildOidcConfig = ({
     pkce,
     providerId,
     scopes,
-    // ...fallbackEndpoints,
     ...overrides,
   } satisfies GenericOAuthConfig;
 };

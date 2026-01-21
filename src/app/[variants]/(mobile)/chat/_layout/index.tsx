@@ -23,6 +23,4 @@ const Layout: FC = () => {
   );
 };
 
-Layout.displayName = 'MobileChatLayout';
-
 export default Layout;

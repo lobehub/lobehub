@@ -146,12 +146,12 @@ export class LLMMockManager {
       return;
     }
 
-    // Intercept OpenAI chat API requests
-    await page.route('**/webapi/chat/openai**', async (route) => {
+    // Intercept all LLM chat API requests (openai, anthropic, etc.)
+    await page.route('**/webapi/chat/**', async (route) => {
       await this.handleChatRequest(route);
     });
 
-    console.log('   ✓ LLM mocks registered (openai)');
+    console.log('   ✓ LLM mocks registered (all providers)');
   }
 
   /**

@@ -2,12 +2,12 @@
 
 import { ActionIcon } from '@lobehub/ui';
 import { Share2 } from 'lucide-react';
-import dynamic from 'next/dynamic';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SIZE, MOBILE_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { useWorkspaceModal } from '@/hooks/useWorkspaceModal';
+import dynamic from '@/libs/next/dynamic';
 import { useChatStore } from '@/store/chat';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';

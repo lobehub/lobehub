@@ -1,8 +1,9 @@
 ---
 title: LobeChat Upstream Sync and Docker Deployment Guide
 description: >-
-  Learn how to enable automatic updates for LobeChat Vercel deployments and upgrade Docker deployment versions easily. Follow step-by-step instructions for a seamless deployment process.
-
+  Learn how to enable automatic updates for LobeChat Vercel deployments and
+  upgrade Docker deployment versions easily. Follow step-by-step instructions
+  for a seamless deployment process.
 tags:
   - Upstream Sync
   - Vercel Deployment
@@ -69,7 +70,6 @@ Upgrading the Docker deployment version is very simple, you just need to redeplo
   docker run -d -p 3210:3210 \
     -e OPENAI_API_KEY=sk-xxxx \
     -e OPENAI_PROXY_URL=https://api-proxy.com/v1 \
-    -e ACCESS_CODE=lobe66 \
     --name lobe-chat \
     lobehub/lobe-chat
   ```
@@ -93,7 +93,6 @@ If you wish to automate the above steps, you can follow the method below and use
   ```env
   OPENAI_API_KEY=sk-xxxx
   OPENAI_PROXY_URL=https://api-proxy.com/v1
-  ACCESS_CODE=arthals2333
   OPENAI_MODEL_LIST=-gpt-4,-gpt-4-32k,-gpt-3.5-turbo-16k,gpt-3.5-turbo-1106=gpt-3.5-turbo-16k,gpt-4-0125-preview=gpt-4-turbo,gpt-4-vision-preview=gpt-4-vision
   ```
 

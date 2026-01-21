@@ -15,6 +15,8 @@
   "agentGroupManagement.executeTask.thread": "Thread ID",
   "agentGroupManagement.executeTask.timeout": "執行逾時",
   "agentGroupManagement.executeTask.tokens": "Token 消耗",
+  "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "請輸入代理執行此任務的詳細指示……",
+  "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "任務標題……",
   "codeInterpreter-legacy.error": "執行錯誤",
   "codeInterpreter-legacy.executing": "執行中...",
   "codeInterpreter-legacy.files": "檔案：",

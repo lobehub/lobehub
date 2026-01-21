@@ -5,12 +5,15 @@ import {
   type LobeAgentConfig,
   type MessageMapScope,
 } from '@lobechat/types';
+import debug from 'debug';
 import { produce } from 'immer';
 
 import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
-import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { agentGroupByIdSelectors, agentGroupSelectors } from '@/store/agentGroup/selectors';
+
+const log = debug('mecha:agentConfigResolver');
 
 /**
  * Applies params adjustments based on chatConfig settings.
@@ -49,8 +52,14 @@ export interface AgentConfigResolverContext {
   agentId: string;
 
   // Builtin agent specific context
-/** Document content for page-agent */
+  /** Document content for page-agent */
   documentContent?: string;
+
+  /**
+   * Group ID for supervisor detection.
+   * When provided, used for direct lookup instead of iterating all groups.
+   */
+  groupId?: string;
 
   /** Current model being used (for template variables) */
   model?: string;
@@ -99,6 +108,8 @@ export interface ResolvedAgentConfig {
 export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAgentConfig => {
   const { agentId, model, documentContent, plugins, targetAgentConfig } = ctx;
 
+  log('resolveAgentConfig called with agentId: %s, scope: %s', agentId, ctx.scope);
+
   const agentStoreState = getAgentStoreState();
 
   // Get base config from store
@@ -109,9 +120,42 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   const basePlugins = agentConfig.plugins ?? [];
 
   // Check if this is a builtin agent
-  const slug = agentSelectors.getAgentSlugById(agentId)(agentStoreState);
+  // First check agent store, then check if this is a supervisor agent via groupId
+  let slug = agentSelectors.getAgentSlugById(agentId)(agentStoreState);
+  log('slug from agentStore: %s (agentId: %s)', slug, agentId);
+
+  // If not found in agent store, check if this is a supervisor agent using groupId
+  // This is more reliable than iterating all groups to find a match
+  if (!slug && ctx.groupId) {
+    const groupStoreState = getChatGroupStoreState();
+    const group = agentGroupByIdSelectors.groupById(ctx.groupId)(groupStoreState);
+
+    log(
+      'checking supervisor via groupId %s: group=%o',
+      ctx.groupId,
+      group
+        ? {
+            groupId: group.id,
+            supervisorAgentId: group.supervisorAgentId,
+            title: group.title,
+          }
+        : null,
+    );
+
+    // Check if this agent is the supervisor of the specified group
+    if (group?.supervisorAgentId === agentId) {
+      slug = BUILTIN_AGENT_SLUGS.groupSupervisor;
+      log(
+        'agentId %s identified as group supervisor for group %s, assigned slug: %s',
+        agentId,
+        ctx.groupId,
+        slug,
+      );
+    }
+  }
 
   if (!slug) {
+    log('agentId %s is not a builtin agent (no slug found)', agentId);
     // Regular agent - use provided plugins if available, fallback to agent's plugins
     const finalPlugins = plugins && plugins.length > 0 ? plugins : basePlugins;
 
@@ -169,20 +213,49 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   }
 
   // Build groupSupervisorContext if this is a group-supervisor agent
+  // Use groupId for direct lookup instead of reverse lookup by supervisorAgentId
   let groupSupervisorContext;
-  if (slug === BUILTIN_AGENT_SLUGS.groupSupervisor) {
+  if (slug === BUILTIN_AGENT_SLUGS.groupSupervisor && ctx.groupId) {
+    log('building groupSupervisorContext for agentId: %s, groupId: %s', agentId, ctx.groupId);
     const groupStoreState = getChatGroupStoreState();
-    // Find the group by supervisor agent ID
-    const group = agentGroupSelectors.getGroupBySupervisorAgentId(agentId)(groupStoreState);
+    // Direct lookup using groupId
+    const group = agentGroupByIdSelectors.groupById(ctx.groupId)(groupStoreState);
+
+    log(
+      'groupById result for %s: %o',
+      ctx.groupId,
+      group
+        ? {
+            agentsCount: group.agents?.length,
+            groupId: group.id,
+            supervisorAgentId: group.supervisorAgentId,
+            title: group.title,
+          }
+        : null,
+    );
 
     if (group) {
       const groupMembers = agentGroupSelectors.getGroupMembers(group.id)(groupStoreState);
+      log(
+        'groupMembers for groupId %s: %o',
+        group.id,
+        groupMembers.map((m) => ({ id: m.id, isSupervisor: m.isSupervisor, title: m.title })),
+      );
+
       groupSupervisorContext = {
         availableAgents: groupMembers.map((agent) => ({ id: agent.id, title: agent.title })),
         groupId: group.id,
         groupTitle: group.title || 'Group Chat',
-        systemPrompt: group.config?.systemPrompt,
+        systemPrompt: agentConfig.systemRole,
       };
+      log('groupSupervisorContext built: %o', {
+        availableAgentsCount: groupSupervisorContext.availableAgents.length,
+        groupId: groupSupervisorContext.groupId,
+        groupTitle: groupSupervisorContext.groupTitle,
+        hasSystemPrompt: !!groupSupervisorContext.systemPrompt,
+      });
+    } else {
+      log('WARNING: group not found for groupId: %s', ctx.groupId);
     }
   }
 
@@ -245,6 +318,12 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
 
   // Apply params adjustments based on chatConfig
   const finalAgentConfig = applyParamsFromChatConfig(resolvedAgentConfig, resolvedChatConfig);
+
+  log('resolveAgentConfig completed for agentId: %s, result: %o', agentId, {
+    isBuiltinAgent: true,
+    pluginsCount: finalPlugins.length,
+    slug,
+  });
 
   return {
     agentConfig: finalAgentConfig,

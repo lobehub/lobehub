@@ -1,5 +1,6 @@
 'use client';
 
+import { COPYRIGHT_FULL } from '@lobechat/business-const';
 import { Center, Flexbox, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cx } from 'antd-style';
@@ -41,14 +42,12 @@ const AuthContainer: FC<PropsWithChildren> = ({ children }) => {
         </Center>
         <Center padding={24}>
           <Text align={'center'} type={'secondary'}>
-            © 2025 LobeHub. All rights reserved.
+            {COPYRIGHT_FULL}
           </Text>
         </Center>
       </Flexbox>
     </Flexbox>
   );
 };
-
-AuthContainer.displayName = 'AuthContainer';
 
 export default AuthContainer;

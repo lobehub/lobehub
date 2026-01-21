@@ -22,5 +22,9 @@ export type MainBroadcastParams<T extends MainBroadcastEventKey> = Parameters<
   MainBroadcastEvents[T]
 >[0];
 
-export type { MarketAuthorizationParams } from './remoteServer';
+export type {
+  AuthorizationPhase,
+  AuthorizationProgress,
+  MarketAuthorizationParams,
+} from './remoteServer';
 export type { OpenSettingsWindowOptions } from './windows';

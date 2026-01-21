@@ -1,13 +1,13 @@
 ---
 title: Deploy LobeChat with database on Dokploy
 description: >-
-  Learn how to deploy LobeChat with database on Dokploy with ease, including: database, authentication and S3 storage service.
-
+  Learn how to deploy LobeChat with database on Dokploy with ease, including:
+  database, authentication and S3 storage service.
 tags:
   - Deploy LobeChat
-  - Vercel Deployment
-  - OpenAI API Key
-  - Custom Domain Binding
+  - Dokploy Deployment
+  - Better Auth
+  - S3 Storage
 ---
 
 # Deploying Server Database Version on Dokploy.
@@ -43,15 +43,27 @@ S3_PUBLIC_DOMAIN=
 S3_ENABLE_PATH_STYLE=
 ```
 
-### Configure the Clerk authentication service.
+### Configure KEY_VAULTS_SECRET Environment Variable
 
-Obtain the three environment variables: `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`, and `CLERK_WEBHOOK_SECRET`. For detailed configuration steps for Clerk, please refer to the section [Configure Authentication Service](https://lobehub.com/docs/self-hosting/server-database/vercel#2-configure-authentication-service) in the Vercel deployment guide.
+`KEY_VAULTS_SECRET` is used to encrypt sensitive information such as API keys stored by users. Click the button below to generate:
 
-```shell
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxx
-CLERK_SECRET_KEY=sk_live_xxxxxxxxxxxxxxxxxxxxxx
-CLERK_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxx
-```
+<GenerateSecret envName="KEY_VAULTS_SECRET" />
+
+### Configure authentication environment variables
+
+Prepare the following authentication environment variables (powered by [Better Auth](https://www.better-auth.com)):
+
+Click the button below to generate `AUTH_SECRET` (session encryption key):
+
+<GenerateSecret envName="AUTH_SECRET" />
+
+You also need to configure the `JWKS_KEY` environment variable for signing and verifying JWTs. Click the button below to generate:
+
+<GenerateJWKSKey />
+
+<Callout type={'info'}>
+  For advanced features like SSO providers, magic link login, and email verification, see [Authentication Service](/docs/self-hosting/advanced/auth).
+</Callout>
 
 ## 2. Deploying the database on Dokploy
 
@@ -92,20 +104,14 @@ NIXPACKS_START_CMD="pnpm start"
 
 APP_URL=
 
-# Set the service mode to server
-NEXT_PUBLIC_SERVICE_MODE=server
-
 # Configuration related to Postgres database
 DATABASE_DRIVER=node
 DATABASE_URL=
 
-# You can use openssl rand -base64 32 to generate a random 32-character string as a key.
+# Use the values generated above
 KEY_VAULTS_SECRET=
-
-# Clerk related configuration
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
-CLERK_SECRET_KEY=
-CLERK_WEBHOOK_SECRET=
+AUTH_SECRET=
+JWKS_KEY=
 
 # S3 related configuration
 S3_ACCESS_KEY_ID=
@@ -115,10 +121,6 @@ S3_BUCKET=
 S3_PUBLIC_DOMAIN=
 S3_ENABLE_PATH_STYLE=
 
-# OpenAI related configuration
-OPENAI_API_KEY=
-OPENAI_MODEL_LIST=
-OPENAI_PROXY_URL=
 ```
 
 After adding the environment variables and saving, click Deploy to initiate the deployment. You can check the deployment progress and log information under Deployments.

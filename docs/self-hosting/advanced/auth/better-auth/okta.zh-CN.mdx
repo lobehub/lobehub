@@ -1,0 +1,63 @@
+---
+title: 在 LobeChat 中配置 Okta 身份验证
+description: 学习如何在 LobeChat 中配置 Okta SSO，包括创建应用和设置环境变量。
+tags:
+  - Okta
+  - 身份验证
+  - LobeChat
+  - 单点登录
+  - OIDC
+---
+
+# 配置 Okta 身份验证
+
+[Okta](https://www.okta.com/) 是领先的身份和访问管理平台。
+
+<Steps>
+  ### 在 Okta 中创建应用
+
+  1. 登录 Okta 管理控制台
+  2. 前往 **Applications** > **Applications**
+  3. 点击 **Create App Integration**
+  4. 选择：
+     - Sign-in method: **OIDC - OpenID Connect**
+     - Application type: **Web Application**
+  5. 配置应用：
+     - App integration name: `LobeChat`
+     - Sign-in redirect URIs: 添加回调 URL
+
+  <Callout type={'info'}>
+    **回调 URL 格式**: `https://your-domain.com/api/auth/callback/okta`
+  </Callout>
+
+  6. 创建后，记下 **Client ID** 和 **Client Secret**
+
+  ### 获取 Issuer URL
+
+  Issuer URL 通常为：`https://your-okta-domain.okta.com`
+
+  对于自定义授权服务器：`https://your-okta-domain.okta.com/oauth2/default`
+
+  ### 配置环境变量
+
+  在部署 LobeChat 时，你需要配置以下环境变量：
+
+  | 环境变量                             | 类型 | 描述                                                      |
+  | -------------------------------- | -- | ------------------------------------------------------- |
+  | `AUTH_SECRET`                    | 必选 | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`          |
+  | `AUTH_SSO_PROVIDERS`             | 必选 | SSO 提供商。使用 Okta 请填写 `okta`                              |
+  | `AUTH_OKTA_ID`                   | 必选 | Okta 应用的 Client ID                                      |
+  | `AUTH_OKTA_SECRET`               | 必选 | Okta 应用的 Client Secret                                  |
+  | `AUTH_OKTA_ISSUER`               | 必选 | Okta Issuer URL（例如 `https://your-okta-domain.okta.com`） |
+
+  <Callout type={'tip'}>
+    前往 [📘 环境变量](/zh/docs/self-hosting/environment-variables/auth#okta) 可查阅相关变量详情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>部署成功后，用户将可以通过 Okta 身份认证并使用 LobeChat。</Callout>
+
+## 相关资源
+
+- [Okta 开发者文档](https://developer.okta.com/docs/)
+- [创建 OIDC 应用集成](https://developer.okta.com/docs/guides/implement-grant-type/authcode/main/)

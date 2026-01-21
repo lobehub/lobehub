@@ -54,6 +54,8 @@
   "funds.packages.expiresIn": "تنتهي خلال {{days}} يومًا",
   "funds.packages.expiresToday": "تنتهي اليوم",
   "funds.packages.expiringSoon": "ستنتهي قريبًا",
+  "funds.packages.gift": "هدية",
+  "funds.packages.giftedOn": "تم الإهداء في {{date}}",
   "funds.packages.noPackages": "لا توجد حزم أرصدة",
   "funds.packages.purchaseFirst": "اشترِ أول حزمة أرصدة لك",
   "funds.packages.purchasedOn": "تم الشراء في {{date}}",

@@ -149,17 +149,6 @@ export class I18nManager {
    */
   private notifyRendererProcess(lng: string) {
     logger.debug(`Notifying renderer process of language change: ${lng}`);
-
-    // Send language change event to all windows
-    // const windows = this.app.browserManager.windows;
-    //
-    // if (windows && windows.length > 0) {
-    //   windows.forEach((window) => {
-    //     if (window?.webContents) {
-    //       window.webContents.send('language-changed', lng);
-    //     }
-    //   });
-    // }
   }
 
   private async loadLocale(language: string) {

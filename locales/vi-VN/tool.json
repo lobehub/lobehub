@@ -15,6 +15,8 @@
   "agentGroupManagement.executeTask.thread": "ID chuỗi",
   "agentGroupManagement.executeTask.timeout": "Hết thời gian thực thi",
   "agentGroupManagement.executeTask.tokens": "Sử dụng token",
+  "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "Hướng dẫn chi tiết để tác nhân thực hiện nhiệm vụ này...",
+  "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "Tiêu đề nhiệm vụ...",
   "codeInterpreter-legacy.error": "Lỗi thực thi",
   "codeInterpreter-legacy.executing": "Đang thực thi...",
   "codeInterpreter-legacy.files": "Tệp:",

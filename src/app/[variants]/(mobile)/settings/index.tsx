@@ -19,6 +19,4 @@ const Layout = () => {
   );
 };
 
-Layout.displayName = 'MobileSettingsLayout';
-
 export default Layout;

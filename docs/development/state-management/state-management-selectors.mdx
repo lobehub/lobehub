@@ -1,3 +1,7 @@
+---
+title: Data Store Selector
+---
+
 # Data Store Selector
 
 Selectors are data retrieval modules under the LobeChat data flow development framework. Their role is to extract data from the store using specific business logic for consumption by components.
@@ -51,7 +55,8 @@ import { pluginSelectors } from '@/store/plugin/selectors';
 const Render = ({ plugins }) => {
   const list = usePluginStore(pluginSelectors.displayPluginList);
 
-  return <> ... </>;
+  return <> ...
+</>;
 };
 ```
 

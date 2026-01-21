@@ -2,22 +2,26 @@
 import { createEnv } from '@t3-oss/env-nextjs';
 import { z } from 'zod';
 
-declare global {
-  // eslint-disable-next-line @typescript-eslint/no-namespace
-  namespace NodeJS {
-    interface ProcessEnv {
-      ACCESS_CODE?: string;
-    }
-  }
-}
 const isInVercel = process.env.VERCEL === '1';
 
-const vercelUrl = `https://${process.env.VERCEL_URL}`;
+// Vercel URL fallback order (by stability):
+// 1. VERCEL_PROJECT_PRODUCTION_URL - project level, most stable
+// 2. VERCEL_BRANCH_URL - branch level, stable across deployments on same branch
+// 3. VERCEL_URL - deployment level, changes every deployment
+const getVercelUrl = () => {
+  if (process.env.VERCEL_ENV === 'production' && process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
+  }
+  if (process.env.VERCEL_BRANCH_URL) {
+    return `https://${process.env.VERCEL_BRANCH_URL}`;
+  }
+  return `https://${process.env.VERCEL_URL}`;
+};
 
 const APP_URL = process.env.APP_URL
   ? process.env.APP_URL
   : isInVercel
-    ? vercelUrl
+    ? getVercelUrl()
     : process.env.NODE_ENV === 'development'
       ? 'http://localhost:3010'
       : 'http://localhost:3210';
@@ -31,14 +35,11 @@ const ASSISTANT_INDEX_URL = 'https://registry.npmmirror.com/@lobehub/agents-inde
 const PLUGINS_INDEX_URL = 'https://registry.npmmirror.com/@lobehub/plugins-index/v1/files/public';
 
 export const getAppConfig = () => {
-  const ACCESS_CODES = process.env.ACCESS_CODE?.split(',').filter(Boolean) || [];
-
   return createEnv({
     client: {
       NEXT_PUBLIC_ENABLE_SENTRY: z.boolean(),
     },
     server: {
-      ACCESS_CODES: z.any(z.string()).optional(),
       AGENTS_INDEX_URL: z.string().url(),
 
       DEFAULT_AGENT_CONFIG: z.string(),
@@ -87,8 +88,6 @@ export const getAppConfig = () => {
     runtimeEnv: {
       // Sentry
       NEXT_PUBLIC_ENABLE_SENTRY: !!process.env.NEXT_PUBLIC_SENTRY_DSN,
-
-      ACCESS_CODES: ACCESS_CODES as any,
 
       AGENTS_INDEX_URL: !!process.env.AGENTS_INDEX_URL
         ? process.env.AGENTS_INDEX_URL

@@ -1,0 +1,69 @@
+---
+title: 在 LobeChat 中配置飞书身份验证
+description: 学习如何在 LobeChat 中配置飞书 SSO，包括创建应用和设置环境变量。
+tags:
+  - 飞书
+  - 身份验证
+  - LobeChat
+  - 单点登录
+---
+
+# 配置飞书身份验证
+
+[飞书](https://www.feishu.cn/) 是字节跳动推出的企业协作平台。
+
+<Steps>
+  ### 在飞书开放平台创建应用
+
+  1. 前往 [飞书开放平台](https://open.feishu.cn/)
+  2. 点击 **创建应用** > **企业自建应用**
+  3. 填写应用名称和描述
+  4. 创建后，前往 **凭证与基础信息** 获取：
+     - **App ID**
+     - **App Secret**
+
+  ### 配置 OAuth 权限
+
+  1. 在应用设置中，前往 **安全设置**
+  2. 添加重定向 URI
+
+  <Callout type={'info'}>
+    回调 URL 格式：
+
+    - 本地开发: `http://localhost:3210/api/auth/callback/feishu`
+    - 生产环境: `https://your-domain.com/api/auth/callback/feishu`
+  </Callout>
+
+  3. 前往 **权限管理** 添加：
+     - `contact:user.email:readonly`（读取用户邮箱）
+     - `contact:user.base:readonly`（读取用户基本信息）
+
+  ### 发布应用
+
+  1. 前往 **版本管理与发布**
+  2. 创建新版本并提交审核
+  3. 审核通过后，发布应用
+
+  ### 配置环境变量
+
+  | 环境变量                             | 类型 | 描述                                     |
+  | -------------------------------- | -- | -------------------------------------- |
+  | `AUTH_SECRET`                    | 必选 | 会话加密密钥，使用 `openssl rand -base64 32` 生成 |
+  | `AUTH_SSO_PROVIDERS`             | 必选 | 填写 `feishu`                            |
+  | `AUTH_FEISHU_APP_ID`             | 必选 | 飞书开放平台的 App ID                         |
+  | `AUTH_FEISHU_APP_SECRET`         | 必选 | 飞书开放平台的 App Secret                     |
+
+  <Callout type={'tip'}>
+    前往 [📘 环境变量](/zh/docs/self-hosting/environment-variables/auth#feishu)
+    可查阅相关变量详情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功后，用户将可以通过飞书身份认证并使用 LobeChat。
+</Callout>
+
+## 相关资源
+
+- [飞书开放平台](https://open.feishu.cn/)
+- [飞书 OAuth 2.0 指南](https://open.feishu.cn/document/common-capabilities/sso/web-application-sso/web-app-overview)

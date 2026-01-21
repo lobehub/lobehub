@@ -3,7 +3,7 @@
 import { Button, Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { PlayIcon } from 'lucide-react';
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
@@ -14,6 +14,7 @@ import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
 import AutoSaveHint from '../Header/AutoSaveHint';
+import GroupPublishButton from '../Header/GroupPublishButton';
 import GroupHeader from './GroupHeader';
 
 const GroupProfile = memo(() => {
@@ -41,6 +42,15 @@ const GroupProfile = memo(() => {
   const onContentChange = useCallback(() => {
     handleContentChange(saveContent);
   }, [handleContentChange, saveContent]);
+
+  // Stabilize editorData object reference to prevent unnecessary re-renders
+  const editorData = useMemo(
+    () => ({
+      content: currentGroup?.content ?? undefined,
+      editorData: currentGroup?.editorData,
+    }),
+    [currentGroup?.content, currentGroup?.editorData],
+  );
 
   return (
     <>
@@ -75,17 +85,15 @@ const GroupProfile = memo(() => {
           >
             {t('startConversation')}
           </Button>
+          <GroupPublishButton />
         </Flexbox>
       </Flexbox>
       <Divider />
       {/* Group Content Editor */}
       <EditorCanvas
         editor={editor}
-        editorData={{
-          content: currentGroup?.content ?? undefined,
-          editorData: currentGroup?.editorData,
-        }}
-        key={groupId}
+        editorData={editorData}
+        entityId={groupId}
         onContentChange={onContentChange}
         placeholder={t('group.profile.contentPlaceholder', { ns: 'chat' })}
       />

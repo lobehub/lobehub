@@ -1,8 +1,8 @@
 ---
 title: LobeChat Environment Variables - Customizing Guide
 description: >-
-  Learn how to customize LobeChat configuration using environment variables for additional features and options.
-
+  Learn how to customize LobeChat configuration using environment variables for
+  additional features and options.
 tags:
   - LobeChat
   - Environment Variables
@@ -83,7 +83,6 @@ jobs:
           # List all variables you need to overwrite
           build-args: |
             NEXT_PUBLIC_BASE_PATH=${{ secrets.NEXT_PUBLIC_BASE_PATH }}
-            NEXT_PUBLIC_SERVICE_MODE=${{ secrets.NEXT_PUBLIC_SERVICE_MODE }}
 ```
 
 4. In your GitHub Repository settings > Secrets and variables > Actions > Repository secrets, add any `NEXT_PUBLIC` variables you want to override

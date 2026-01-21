@@ -12,6 +12,11 @@
   "import.importConfigFile.title": "Échec de l'importation",
   "import.incompatible.description": "Ce fichier a été exporté depuis une version plus récente. Veuillez mettre à jour vers la dernière version, puis réimporter.",
   "import.incompatible.title": "L'application actuelle ne prend pas en charge l'importation de ce fichier",
+  "inviteCode.currentEmail": "Compte actuel : {{email}}",
+  "inviteCode.desc": "Un code d'invitation est requis pour accéder à LobeHub. Veuillez saisir un code d'invitation valide pour continuer.",
+  "inviteCode.friends": "Amis",
+  "inviteCode.getCodeHint": "Obtenez un code d'invitation auprès de :",
+  "inviteCode.title": "Code d'invitation requis",
   "loginRequired.desc": "Vous allez être redirigé vers la page de connexion",
   "loginRequired.title": "Veuillez vous connecter pour utiliser cette fonctionnalité",
   "notFound.backHome": "Retour à l'accueil",
@@ -144,5 +149,9 @@
   "upload.networkError": "Veuillez vérifier votre connexion réseau et la configuration CORS du service de stockage.",
   "upload.title": "Échec du téléversement. Veuillez vérifier votre connexion ou réessayer plus tard.",
   "upload.unknownError": "Raison de l'erreur : {{reason}}",
-  "upload.uploadFailed": "Échec du téléversement du fichier."
+  "upload.uploadFailed": "Échec du téléversement du fichier.",
+  "waitlist.currentEmail": "Compte actuel : {{email}}",
+  "waitlist.desc": "Votre compte ne figure pas sur la liste blanche. Veuillez contacter l'administrateur pour demander l'accès.",
+  "waitlist.switchAccount": "Changer de compte",
+  "waitlist.title": "Accès restreint"
 }

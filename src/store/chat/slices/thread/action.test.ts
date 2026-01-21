@@ -150,7 +150,10 @@ describe('thread action', () => {
       expect(result.current.threadStartMessageId).toBe('message-id');
       expect(result.current.portalThreadId).toBeUndefined();
       expect(result.current.startToForkThread).toBe(true);
-      expect(pushPortalViewSpy).toHaveBeenCalledWith({ type: 'thread', startMessageId: 'message-id' });
+      expect(pushPortalViewSpy).toHaveBeenCalledWith({
+        type: 'thread',
+        startMessageId: 'message-id',
+      });
     });
   });
 

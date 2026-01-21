@@ -4,7 +4,9 @@ import path from 'node:path';
 import YAML from 'yaml';
 
 // 配置
-const FILE_NAME = 'latest-mac.yml';
+// Support both stable-mac.yml (stable channel) and latest-mac.yml (fallback)
+const STABLE_outputFileName = 'stable-mac.yml';
+const LATEST_outputFileName = 'latest-mac.yml';
 const RELEASE_DIR = path.resolve('release');
 
 /**
@@ -85,11 +87,23 @@ async function main() {
     const releaseFiles = fs.readdirSync(RELEASE_DIR);
     console.log(`📂 Files in release directory: ${releaseFiles.join(', ')}`);
 
-    // 2. 查找所有 latest-mac*.yml 文件
-    const macYmlFiles = releaseFiles.filter(
+    // 2. 查找所有 stable-mac*.yml 和 latest-mac*.yml 文件
+    // Prioritize stable-mac*.yml, fallback to latest-mac*.yml
+    const stableMacYmlFiles = releaseFiles.filter(
+      (f) => f.startsWith('stable-mac') && f.endsWith('.yml'),
+    );
+    const latestMacYmlFiles = releaseFiles.filter(
       (f) => f.startsWith('latest-mac') && f.endsWith('.yml'),
     );
-    console.log(`🔍 Found macOS YAML files: ${macYmlFiles.join(', ')}`);
+
+    // Use stable files if available, otherwise use latest
+    const macYmlFiles = stableMacYmlFiles.length > 0 ? stableMacYmlFiles : latestMacYmlFiles;
+    const outputFileName =
+      stableMacYmlFiles.length > 0 ? STABLE_outputFileName : LATEST_outputFileName;
+
+    console.log(`🔍 Found stable macOS YAML files: ${stableMacYmlFiles.join(', ') || 'none'}`);
+    console.log(`🔍 Found latest macOS YAML files: ${latestMacYmlFiles.join(', ') || 'none'}`);
+    console.log(`🔍 Using files: ${macYmlFiles.join(', ')} -> ${outputFileName}`);
 
     if (macYmlFiles.length === 0) {
       console.log('⚠️  No macOS YAML files found, skipping merge');
@@ -115,7 +129,7 @@ async function main() {
         } else if (platform === 'both') {
           console.log(`✅ Found already merged file: ${fileName}`);
           // 如果已经是合并后的文件，直接复制为最终文件
-          writeLocalFile(path.join(RELEASE_DIR, FILE_NAME), content);
+          writeLocalFile(path.join(RELEASE_DIR, outputFileName), content);
           return;
         } else {
           console.log(`⚠️  Unknown platform type: ${platform} in ${fileName}`);
@@ -136,13 +150,13 @@ async function main() {
 
     if (x64Files.length === 0) {
       console.log('⚠️  No x64 files found, using ARM64 only');
-      writeLocalFile(path.join(RELEASE_DIR, FILE_NAME), arm64Files[0].content);
+      writeLocalFile(path.join(RELEASE_DIR, outputFileName), arm64Files[0].content);
       return;
     }
 
     if (arm64Files.length === 0) {
       console.log('⚠️  No ARM64 files found, using x64 only');
-      writeLocalFile(path.join(RELEASE_DIR, FILE_NAME), x64Files[0].content);
+      writeLocalFile(path.join(RELEASE_DIR, outputFileName), x64Files[0].content);
       return;
     }
 
@@ -154,7 +168,7 @@ async function main() {
     const mergedContent = mergeYamlFiles(x64File.yaml, arm64File.yaml);
 
     // 6. 保存合并后的文件
-    const mergedFilePath = path.join(RELEASE_DIR, FILE_NAME);
+    const mergedFilePath = path.join(RELEASE_DIR, outputFileName);
     writeLocalFile(mergedFilePath, mergedContent);
 
     // 7. 验证合并结果

@@ -1,3 +1,35 @@
+import { isDesktop } from './const';
+
+const runInClientSection = `
+<run_in_client>
+**IMPORTANT: When to use \`runInClient: true\` for async tasks**
+
+The \`runInClient\` parameter controls WHERE the async task executes:
+- \`runInClient: false\` (default): Task runs on the **server** - suitable for web searches, API calls, general research
+- \`runInClient: true\`: Task runs on the **desktop client** - required for local system access
+
+**MUST set \`runInClient: true\` when the task involves:**
+- Reading or writing local files (via \`local-system\` tool)
+- Executing shell commands on the user's machine
+- Accessing local directories or file system
+- Any operation that requires desktop-only local tools
+
+**Keep \`runInClient: false\` (or omit) when:**
+- Task only needs web searches or API calls
+- Task processes data that doesn't require local file access
+- Task can be fully completed with server-side capabilities
+
+**Note:** \`runInClient\` only has effect on the **desktop app**. On web platform, tasks always run on the server regardless of this setting.
+
+**Examples:**
+- "Research Python best practices" → \`runInClient: false\` (web search only)
+- "Organize files in my Downloads folder" → \`runInClient: true\` (local file access required)
+- "Read the project README and summarize it" → \`runInClient: true\` (local file read required)
+- "Find trending tech news" → \`runInClient: false\` (web search only)
+- "Create a new directory structure for my project" → \`runInClient: true\` (local shell/file required)
+</run_in_client>
+`;
+
 export const systemPrompt = `You have GTD (Getting Things Done) tools to help manage plans, todos and tasks effectively. These tools support three levels of task management:
 
 - **Plan**: A high-level strategic document describing goals, context, and overall direction. Plans do NOT contain actionable steps - they define the "what" and "why". **Plans should be stable once created** - they represent the overarching objective that rarely changes.
@@ -11,10 +43,10 @@ export const systemPrompt = `You have GTD (Getting Things Done) tools to help ma
 
 **Todo Tools** - For actionable execution items:
 - \`createTodos\`: Create new todo items from text array
-- \`updateTodos\`: Batch update todos (add, update, remove, complete operations)
-- \`completeTodos\`: Mark items as done by indices
-- \`removeTodos\`: Remove items by indices
+- \`updateTodos\`: Batch update todos (add, update, remove, complete, processing operations)
 - \`clearTodos\`: Clear completed or all items
+
+**Todo Status Workflow:** todo → processing → completed (use "processing" when actively working on an item)
 
 **Async Task Tools** - For long-running background tasks:
 - \`execTask\`: Execute a single async task in isolated context
@@ -85,7 +117,7 @@ Use \`execTask\` for a single task, \`execTasks\` for multiple parallel tasks.
 - User asks a factual question you know → Just answer directly
 - User wants multiple independent analyses → execTasks (parallel execution)
 </when_to_use>
-
+${isDesktop ? runInClientSection : ''}
 <best_practices>
 - **Plan first, then todos**: Always start with a plan unless explicitly told otherwise
 - **Separate concerns**: Plans describe goals; Todos list actions
@@ -98,23 +130,29 @@ Use \`execTask\` for a single task, \`execTasks\` for multiple parallel tasks.
 <updateTodos_usage>
 When using \`updateTodos\`, each operation type requires specific fields:
 
+**Todo Status:**
+- \`todo\`: Not started yet
+- \`processing\`: Currently in progress
+- \`completed\`: Done
+
 **Minimal required fields per operation type:**
 - \`{ "type": "add", "text": "todo text" }\` - only type + text
-- \`{ "type": "complete", "index": 0 }\` - only type + index
+- \`{ "type": "complete", "index": 0 }\` - only type + index (marks as completed)
+- \`{ "type": "processing", "index": 0 }\` - only type + index (marks as in progress)
 - \`{ "type": "remove", "index": 0 }\` - only type + index
-- \`{ "type": "update", "index": 0, "newText": "..." }\` - type + index + optional newText/completed
+- \`{ "type": "update", "index": 0, "newText": "..." }\` - type + index + optional newText/status
 
-**Example - mark items 0 and 1 as complete:**
+**Example - mark item 0 as processing, item 1 as complete:**
 \`\`\`json
 {
   "operations": [
-    { "type": "complete", "index": 0 },
+    { "type": "processing", "index": 0 },
     { "type": "complete", "index": 1 }
   ]
 }
 \`\`\`
 
-**DO NOT** add extra fields like \`"completed": true\` for complete operations - they are ignored.
+**DO NOT** add extra fields like \`"status": "completed"\` for complete/processing operations - they are ignored.
 </updateTodos_usage>
 
 <todo_granularity>

@@ -12,6 +12,11 @@
   "import.importConfigFile.title": "导入遇到了问题",
   "import.incompatible.description": "该文件由更高版本导出。请升级到最新版后再导入",
   "import.incompatible.title": "版本不兼容",
+  "inviteCode.currentEmail": "当前账号：{{email}}",
+  "inviteCode.desc": "需要邀请码才能访问 LobeHub。请输入有效的邀请码以继续。",
+  "inviteCode.friends": "好友",
+  "inviteCode.getCodeHint": "获取邀请码：",
+  "inviteCode.title": "需要邀请码",
   "loginRequired.desc": "将为你跳转到登录页。登录后即可继续",
   "loginRequired.title": "需要登录后继续",
   "notFound.backHome": "返回首页",
@@ -144,5 +149,9 @@
   "upload.networkError": "网络异常或跨域配置不正确。请检查文件存储服务的 CORS 设置后重试",
   "upload.title": "上传未能完成",
   "upload.unknownError": "原因：{{reason}}",
-  "upload.uploadFailed": "上传未能完成"
+  "upload.uploadFailed": "上传未能完成",
+  "waitlist.currentEmail": "当前账号：{{email}}",
+  "waitlist.desc": "你的账号不在白名单中。请联系管理员申请访问权限。",
+  "waitlist.switchAccount": "切换账号",
+  "waitlist.title": "访问受限"
 }

@@ -18,6 +18,4 @@ const DesktopMemoryLayout: FC = () => {
   );
 };
 
-DesktopMemoryLayout.displayName = 'DesktopMemoryLayout';
-
 export default DesktopMemoryLayout;

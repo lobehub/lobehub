@@ -111,9 +111,7 @@ describe('chatDockSelectors', () => {
 
     it('should return the messageId when ToolUI view is on stack', () => {
       const state = createState({
-        portalStack: [
-          { type: PortalViewType.ToolUI, messageId: 'test-id', identifier: 'test' },
-        ],
+        portalStack: [{ type: PortalViewType.ToolUI, messageId: 'test-id', identifier: 'test' }],
       });
       expect(chatPortalSelectors.toolMessageId(state)).toBe('test-id');
     });
@@ -122,9 +120,7 @@ describe('chatDockSelectors', () => {
   describe('isMessageToolUIOpen', () => {
     it('should return false when id does not match or showDock is false', () => {
       const state = createState({
-        portalStack: [
-          { type: PortalViewType.ToolUI, messageId: 'test-id', identifier: 'test' },
-        ],
+        portalStack: [{ type: PortalViewType.ToolUI, messageId: 'test-id', identifier: 'test' }],
         showPortal: false,
       });
       expect(chatPortalSelectors.isPluginUIOpen('test-id')(state)).toBe(false);
@@ -133,9 +129,7 @@ describe('chatDockSelectors', () => {
 
     it('should return true when id matches and showDock is true', () => {
       const state = createState({
-        portalStack: [
-          { type: PortalViewType.ToolUI, messageId: 'test-id', identifier: 'test' },
-        ],
+        portalStack: [{ type: PortalViewType.ToolUI, messageId: 'test-id', identifier: 'test' }],
         showPortal: true,
       });
       expect(chatPortalSelectors.isPluginUIOpen('test-id')(state)).toBe(true);
@@ -149,9 +143,7 @@ describe('chatDockSelectors', () => {
 
     it('should return true when ToolUI view is on stack', () => {
       const state = createState({
-        portalStack: [
-          { type: PortalViewType.ToolUI, messageId: 'test-id', identifier: 'test' },
-        ],
+        portalStack: [{ type: PortalViewType.ToolUI, messageId: 'test-id', identifier: 'test' }],
       });
       expect(chatPortalSelectors.showPluginUI(state)).toBe(true);
     });
@@ -164,9 +156,7 @@ describe('chatDockSelectors', () => {
 
     it('should return the identifier when ToolUI view is on stack', () => {
       const state = createState({
-        portalStack: [
-          { type: PortalViewType.ToolUI, messageId: 'test-id', identifier: 'test' },
-        ],
+        portalStack: [{ type: PortalViewType.ToolUI, messageId: 'test-id', identifier: 'test' }],
       });
       expect(chatPortalSelectors.toolUIIdentifier(state)).toBe('test');
     });

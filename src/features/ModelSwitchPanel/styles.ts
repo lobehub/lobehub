@@ -5,10 +5,27 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow: hidden;
     padding: 0 !important;
   `,
+  dropdownMenu: css`
+    [role='menuitem'] {
+      margin-block: 1px;
+      margin-inline: 4px;
+      padding-block: 8px;
+      padding-inline: 8px;
+      border-radius: ${cssVar.borderRadiusSM};
+    }
+
+    [role='menuitem'] .settings-icon {
+      opacity: 0;
+    }
+
+    [role='menuitem']:hover .settings-icon {
+      opacity: 1;
+    }
+  `,
+
   footer: css`
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
-
   groupHeader: css`
     width: 100%;
     color: ${cssVar.colorTextSecondary};
@@ -51,6 +68,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
         opacity: 1;
       }
     }
+  `,
+  menuItemActive: css`
+    background: ${cssVar.colorFillTertiary};
   `,
   toolbar: css`
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
