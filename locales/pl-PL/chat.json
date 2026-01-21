@@ -288,7 +288,11 @@
   "shareModal.pdfReady": "PDF gotowy",
   "shareModal.popover.moreOptions": "Więcej opcji udostępniania",
   "shareModal.popover.privacyWarning.confirm": "Rozumiem, kontynuuj",
+<<<<<<< HEAD
   "shareModal.popover.privacyWarning.content": "Upewnij się, że Twoja rozmowa nie zawiera danych osobowych ani poufnych informacji. Jesteś odpowiedzialny za treści, które udostępniasz, oraz za ich konsekwencje.",
+=======
+  "shareModal.popover.privacyWarning.content": "Upewnij się, że rozmowa nie zawiera prywatnych ani wrażliwych informacji przed jej udostępnieniem. LobeHub nie ponosi odpowiedzialności za ewentualne problemy z bezpieczeństwem wynikające z udostępnienia.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.popover.privacyWarning.title": "Informacja o prywatności",
   "shareModal.popover.title": "Udostępnij temat",
   "shareModal.popover.visibility": "Widoczność",
@@ -307,11 +311,19 @@
   "sharePage.error.forbidden.subtitle": "To udostępnienie jest prywatne i niedostępne.",
   "sharePage.error.forbidden.title": "Brak dostępu",
   "sharePage.error.notFound.subtitle": "Ten temat nie istnieje lub został usunięty.",
+<<<<<<< HEAD
   "sharePage.error.notFound.title": "Temat nie znaleziony",
   "sharePage.error.unauthorized.action": "Zaloguj się",
   "sharePage.error.unauthorized.subtitle": "Zaloguj się, aby zobaczyć ten udostępniony temat.",
   "sharePage.error.unauthorized.title": "Wymagane logowanie",
   "sharePageDisclaimer": "Ta treść została udostępniona przez użytkownika i nie odzwierciedla poglądów LobeHub. LobeHub nie ponosi odpowiedzialności za jakiekolwiek konsekwencje wynikające z udostępnionej treści.",
+=======
+  "sharePage.error.notFound.title": "Nie znaleziono tematu",
+  "sharePage.error.unauthorized.action": "Zaloguj się",
+  "sharePage.error.unauthorized.subtitle": "Zaloguj się, aby zobaczyć ten udostępniony temat.",
+  "sharePage.error.unauthorized.title": "Wymagane logowanie",
+  "sharePageDisclaimer": "Ta treść została udostępniona przez użytkownika i nie odzwierciedla poglądów LobeHub. LobeHub nie ponosi odpowiedzialności za jakiekolwiek konsekwencje wynikające z udostępnienia tej treści.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "stt.action": "Wprowadzanie głosowe",
   "stt.loading": "Rozpoznawanie...",
   "stt.prettifying": "Dopracowywanie...",

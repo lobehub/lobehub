@@ -274,7 +274,11 @@
   "shareModal.includeUser": "Incluir mensagens do Usuário",
   "shareModal.link": "Link",
   "shareModal.link.linkHint": "Qualquer pessoa com o link pode visualizar este tópico",
+<<<<<<< HEAD
   "shareModal.link.noTopic": "Inicie uma conversa primeiro para compartilhar",
+=======
+  "shareModal.link.noTopic": "Inicie uma conversa antes de compartilhar",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.link.permissionLink": "Qualquer pessoa com o link",
   "shareModal.link.permissionPrivate": "Privado",
   "shareModal.link.privateHint": "Apenas você pode acessar este link",
@@ -288,7 +292,11 @@
   "shareModal.pdfReady": "PDF pronto",
   "shareModal.popover.moreOptions": "Mais opções de compartilhamento",
   "shareModal.popover.privacyWarning.confirm": "Entendi, continuar",
+<<<<<<< HEAD
   "shareModal.popover.privacyWarning.content": "Certifique-se de que sua conversa não contenha informações pessoais ou sensíveis. Você é responsável por qualquer conteúdo que decidir compartilhar e pelas consequências disso.",
+=======
+  "shareModal.popover.privacyWarning.content": "Certifique-se de que a conversa não contenha informações privadas ou sensíveis antes de compartilhar. O LobeHub não se responsabiliza por quaisquer problemas de segurança decorrentes do compartilhamento.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.popover.privacyWarning.title": "Aviso de Privacidade",
   "shareModal.popover.title": "Compartilhar Tópico",
   "shareModal.popover.visibility": "Visibilidade",
@@ -311,7 +319,11 @@
   "sharePage.error.unauthorized.action": "Entrar",
   "sharePage.error.unauthorized.subtitle": "Faça login para visualizar este tópico compartilhado.",
   "sharePage.error.unauthorized.title": "Login Necessário",
+<<<<<<< HEAD
   "sharePageDisclaimer": "Este conteúdo foi compartilhado por um usuário e não representa a opinião da LobeHub. A LobeHub não se responsabiliza por quaisquer consequências decorrentes deste conteúdo compartilhado.",
+=======
+  "sharePageDisclaimer": "Este conteúdo foi compartilhado por um usuário e não representa a opinião do LobeHub. O LobeHub não se responsabiliza por quaisquer consequências decorrentes deste conteúdo compartilhado.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "stt.action": "Entrada por Voz",
   "stt.loading": "Reconhecendo...",
   "stt.prettifying": "Ajustando...",

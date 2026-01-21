@@ -255,7 +255,11 @@
   "sessionGroup.sorting": "در حال به‌روزرسانی ترتیب گروه...",
   "sessionGroup.tooLong": "طول نام گروه باید بین ۱ تا ۲۰ کاراکتر باشد",
   "shareModal.copy": "کپی",
+<<<<<<< HEAD
   "shareModal.copyLink": "کپی کردن لینک",
+=======
+  "shareModal.copyLink": "کپی لینک",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.copyLinkSuccess": "لینک کپی شد",
   "shareModal.download": "دانلود اسکرین‌شات",
   "shareModal.downloadError": "دانلود ناموفق بود",
@@ -279,7 +283,11 @@
   "shareModal.link.permissionPrivate": "خصوصی",
   "shareModal.link.privateHint": "فقط شما می‌توانید به این لینک دسترسی داشته باشید",
   "shareModal.link.updateError": "به‌روزرسانی تنظیمات اشتراک‌گذاری ناموفق بود",
+<<<<<<< HEAD
   "shareModal.link.visibilityUpdated": "قابلیت مشاهده به‌روزرسانی شد",
+=======
+  "shareModal.link.visibilityUpdated": "وضعیت نمایش به‌روزرسانی شد",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.loadingPdf": "در حال بارگذاری PDF...",
   "shareModal.noPdfData": "داده‌ای برای PDF موجود نیست",
   "shareModal.pdf": "PDF",
@@ -288,10 +296,17 @@
   "shareModal.pdfReady": "PDF آماده است",
   "shareModal.popover.moreOptions": "گزینه‌های بیشتر برای اشتراک‌گذاری",
   "shareModal.popover.privacyWarning.confirm": "متوجه شدم، ادامه بده",
+<<<<<<< HEAD
   "shareModal.popover.privacyWarning.content": "لطفاً مطمئن شوید که گفتگوی شما حاوی اطلاعات شخصی یا حساس نیست. شما مسئول محتوایی هستید که برای اشتراک‌گذاری انتخاب می‌کنید و پیامدهای آن.",
   "shareModal.popover.privacyWarning.title": "هشدار حریم خصوصی",
   "shareModal.popover.title": "اشتراک‌گذاری موضوع",
   "shareModal.popover.visibility": "قابلیت مشاهده",
+=======
+  "shareModal.popover.privacyWarning.content": "لطفاً قبل از اشتراک‌گذاری مطمئن شوید که گفتگو حاوی اطلاعات خصوصی یا حساس نیست. LobeHub مسئولیتی در قبال مشکلات امنیتی ناشی از اشتراک‌گذاری ندارد.",
+  "shareModal.popover.privacyWarning.title": "هشدار حریم خصوصی",
+  "shareModal.popover.title": "اشتراک‌گذاری موضوع",
+  "shareModal.popover.visibility": "وضعیت نمایش",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.regeneratePdf": "تولید مجدد PDF",
   "shareModal.screenshot": "اسکرین‌شات",
   "shareModal.settings": "تنظیمات خروجی",
@@ -309,9 +324,15 @@
   "sharePage.error.notFound.subtitle": "این موضوع وجود ندارد یا حذف شده است.",
   "sharePage.error.notFound.title": "موضوع پیدا نشد",
   "sharePage.error.unauthorized.action": "ورود",
+<<<<<<< HEAD
   "sharePage.error.unauthorized.subtitle": "لطفاً برای مشاهده این موضوع اشتراک‌گذاری‌شده وارد شوید.",
   "sharePage.error.unauthorized.title": "ورود لازم است",
   "sharePageDisclaimer": "این محتوا توسط یک کاربر به اشتراک گذاشته شده و دیدگاه‌های LobeHub را نمایندگی نمی‌کند. LobeHub مسئولیتی در قبال پیامدهای ناشی از این محتوای اشتراک‌گذاری‌شده ندارد.",
+=======
+  "sharePage.error.unauthorized.subtitle": "لطفاً برای مشاهده این موضوع به اشتراک گذاشته شده وارد شوید.",
+  "sharePage.error.unauthorized.title": "ورود لازم است",
+  "sharePageDisclaimer": "این محتوا توسط یک کاربر به اشتراک گذاشته شده و بیانگر دیدگاه‌های LobeHub نیست. LobeHub هیچ مسئولیتی در قبال پیامدهای ناشی از این محتوای به اشتراک گذاشته شده ندارد.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "stt.action": "ورودی صوتی",
   "stt.loading": "در حال شناسایی...",
   "stt.prettifying": "در حال ویرایش...",

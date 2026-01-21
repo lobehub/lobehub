@@ -1,10 +1,11 @@
-import { ActionIcon, Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { ActionIcon, Button, Dropdown, Flexbox, Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { InfoIcon, MoreVerticalIcon, PackageSearch, Settings, Trash2 } from 'lucide-react';
+import { MoreVerticalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginDetailModal from '@/features/PluginDetailModal';
+import McpSettingsModal from '@/features/PluginStore/McpList/Detail/McpSettingsModal';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
@@ -34,81 +35,85 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
 
   const isCustomPlugin = type === 'customPlugin';
   const { t } = useTranslation('plugin');
-  const [open, setOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const plugin = useToolStore(pluginSelectors.getToolManifestById(identifier));
   const [togglePlugin, isPluginEnabledInAgent] = useAgentStore((s) => [
     s.togglePlugin,
     agentSelectors.currentAgentPlugins(s).includes(identifier),
   ]);
   const { modal } = App.useApp();
-  const [tab, setTab] = useState('info');
   const hasSettings = pluginHelpers.isSettingSchemaNonEmpty(plugin?.settings);
 
   const [showModal, setModal] = useState(false);
+  const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
+
+  // 自定义插件（包括自定义 MCP）使用 EditCustomPlugin
+  // 社区 MCP 使用 McpSettingsModal
+  // 传统插件使用 PluginDetailModal
+  const isCommunityMCP = !isCustomPlugin && isMCP;
+  const showConfigureButton = isCustomPlugin || isMCP || hasSettings;
+
+  const configureButton = (
+    <Button
+      onClick={() => {
+        if (isCustomPlugin) {
+          setModal(true);
+        } else if (isCommunityMCP) {
+          setMcpSettingsOpen(true);
+        } else {
+          setSettingsOpen(true);
+        }
+      }}
+      type="default"
+    >
+      {t('store.actions.configure')}
+    </Button>
+  );
 
   return (
     <>
-      <Flexbox align={'center'} horizontal>
+      <Flexbox align={'center'} gap={8} horizontal onClick={(e) => e.stopPropagation()}>
         {installed ? (
           <>
-            {isCustomPlugin && (
-              <EditCustomPlugin identifier={identifier} onOpenChange={setModal} open={showModal}>
-                <ActionIcon
-                  icon={PackageSearch}
-                  onClick={() => {
-                    setModal(true);
-                  }}
-                  title={t('store.actions.manifest')}
-                />
-              </EditCustomPlugin>
-            )}
-            {hasSettings && (
-              <ActionIcon
-                icon={Settings}
-                onClick={() => {
-                  setOpen(true);
-                  setTab('settings');
-                }}
-                title={t('store.actions.settings')}
-              />
-            )}
-            <DropdownMenu
-              items={[
-                {
-                  icon: <Icon icon={InfoIcon} />,
-                  key: 'detail',
-                  label: t('store.actions.detail'),
-                  onClick: () => {
-                    setOpen(true);
-                    setTab('info');
+            {showConfigureButton &&
+              (isCustomPlugin ? (
+                <EditCustomPlugin identifier={identifier} onOpenChange={setModal} open={showModal}>
+                  {configureButton}
+                </EditCustomPlugin>
+              ) : (
+                configureButton
+              ))}
+            <Dropdown
+              menu={{
+                items: [
+                  {
+                    danger: true,
+                    icon: <Icon icon={Trash2} />,
+                    key: 'uninstall',
+                    label: t('store.actions.uninstall'),
+                    onClick: () => {
+                      modal.confirm({
+                        centered: true,
+                        okButtonProps: { danger: true },
+                        onOk: async () => {
+                          // If plugin is enabled in current agent, disable it first
+                          if (isPluginEnabledInAgent) {
+                            await togglePlugin(identifier, false);
+                          }
+                          await unInstallPlugin(identifier);
+                        },
+                        title: t('store.actions.confirmUninstall'),
+                        type: 'error',
+                      });
+                    },
                   },
-                },
-                {
-                  danger: true,
-                  icon: <Icon icon={Trash2} />,
-                  key: 'uninstall',
-                  label: t('store.actions.uninstall'),
-                  onClick: () => {
-                    modal.confirm({
-                      centered: true,
-                      okButtonProps: { danger: true },
-                      onOk: async () => {
-                        // If plugin is enabled in current agent, disable it first
-                        if (isPluginEnabledInAgent) {
-                          await togglePlugin(identifier, false);
-                        }
-                        await unInstallPlugin(identifier);
-                      },
-                      title: t('store.actions.confirmUninstall'),
-                      type: 'error',
-                    });
-                  },
-                },
-              ]}
+                ],
+              }}
               placement="bottomRight"
+              trigger={['click']}
             >
               <ActionIcon icon={MoreVerticalIcon} loading={installing} />
-            </DropdownMenu>
+            </Dropdown>
           </>
         ) : (
           <Button
@@ -131,12 +136,16 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
       <PluginDetailModal
         id={identifier}
         onClose={() => {
-          setOpen(false);
+          setSettingsOpen(false);
         }}
-        onTabChange={setTab}
-        open={open}
+        open={settingsOpen}
         schema={plugin?.settings}
-        tab={tab}
+        tab="settings"
+      />
+      <McpSettingsModal
+        identifier={identifier}
+        onClose={() => setMcpSettingsOpen(false)}
+        open={mcpSettingsOpen}
       />
     </>
   );

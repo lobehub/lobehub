@@ -275,7 +275,11 @@
   "shareModal.link": "リンク",
   "shareModal.link.linkHint": "このリンクを知っている人は誰でもこのトピックを閲覧できます",
   "shareModal.link.noTopic": "共有するには、まず会話を開始してください",
+<<<<<<< HEAD
   "shareModal.link.permissionLink": "リンクを知っている人全員",
+=======
+  "shareModal.link.permissionLink": "リンクを知っている全員",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.link.permissionPrivate": "非公開",
   "shareModal.link.privateHint": "このリンクにアクセスできるのはあなただけです",
   "shareModal.link.updateError": "共有設定の更新に失敗しました",
@@ -288,7 +292,11 @@
   "shareModal.pdfReady": "PDF の準備ができました",
   "shareModal.popover.moreOptions": "その他の共有オプション",
   "shareModal.popover.privacyWarning.confirm": "理解しました。続行します",
+<<<<<<< HEAD
   "shareModal.popover.privacyWarning.content": "会話に個人情報や機密情報が含まれていないことをご確認ください。共有する内容およびその結果については、あなた自身が責任を負うものとします。",
+=======
+  "shareModal.popover.privacyWarning.content": "共有する前に、会話に個人情報や機密情報が含まれていないことをご確認ください。LobeHub は、共有によって生じるセキュリティ上の問題について責任を負いません。",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.popover.privacyWarning.title": "プライバシーに関する注意",
   "shareModal.popover.title": "トピックを共有",
   "shareModal.popover.visibility": "公開範囲",

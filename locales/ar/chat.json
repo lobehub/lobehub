@@ -288,7 +288,11 @@
   "shareModal.pdfReady": "PDF جاهز",
   "shareModal.popover.moreOptions": "خيارات مشاركة إضافية",
   "shareModal.popover.privacyWarning.confirm": "أفهم، المتابعة",
+<<<<<<< HEAD
   "shareModal.popover.privacyWarning.content": "يرجى التأكد من أن محادثتك لا تحتوي على أي معلومات شخصية أو حساسة. أنت المسؤول عن أي محتوى تختار مشاركته وما يترتب عليه من نتائج.",
+=======
+  "shareModal.popover.privacyWarning.content": "يرجى التأكد من أن المحادثة لا تحتوي على أي معلومات خاصة أو حساسة قبل المشاركة. لا تتحمل LobeHub أي مسؤولية عن أي مشكلات أمنية قد تنشأ نتيجة المشاركة.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.popover.privacyWarning.title": "تنبيه الخصوصية",
   "shareModal.popover.title": "مشاركة الموضوع",
   "shareModal.popover.visibility": "مستوى الرؤية",
@@ -304,14 +308,22 @@
   "shareModal.withPluginInfo": "تضمين معلومات المهارة",
   "shareModal.withRole": "تضمين دور الرسالة",
   "shareModal.withSystemRole": "تضمين ملف الوكيل",
+<<<<<<< HEAD
   "sharePage.error.forbidden.subtitle": "هذه المشاركة خاصة ولا يمكن الوصول إليها.",
+=======
+  "sharePage.error.forbidden.subtitle": "هذه المشاركة خاصة وغير متاحة.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "sharePage.error.forbidden.title": "تم رفض الوصول",
   "sharePage.error.notFound.subtitle": "هذا الموضوع غير موجود أو تم حذفه.",
   "sharePage.error.notFound.title": "الموضوع غير موجود",
   "sharePage.error.unauthorized.action": "تسجيل الدخول",
   "sharePage.error.unauthorized.subtitle": "يرجى تسجيل الدخول لعرض هذا الموضوع المشترك.",
   "sharePage.error.unauthorized.title": "مطلوب تسجيل الدخول",
+<<<<<<< HEAD
   "sharePageDisclaimer": "تمت مشاركة هذا المحتوى من قبل مستخدم ولا يعبر عن آراء LobeHub. لا تتحمل LobeHub أي مسؤولية عن أي نتائج ناتجة عن هذا المحتوى المشترك.",
+=======
+  "sharePageDisclaimer": "تمت مشاركة هذا المحتوى من قبل مستخدم ولا يعبر عن آراء LobeHub. لا تتحمل LobeHub أي مسؤولية عن أي تبعات ناتجة عن هذا المحتوى المشترك.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "stt.action": "إدخال صوتي",
   "stt.loading": "جارٍ التعرف...",
   "stt.prettifying": "جارٍ التجميل...",

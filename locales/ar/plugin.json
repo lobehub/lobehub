@@ -64,15 +64,22 @@
   "builtins.lobe-group-management.apiName.broadcast": "تحدث الجميع",
   "builtins.lobe-group-management.apiName.createWorkflow": "تخطيط سير العمل",
   "builtins.lobe-group-management.apiName.executeAgentTask": "تنفيذ مهمة الوكيل",
+<<<<<<< HEAD
   "builtins.lobe-group-management.apiName.executeAgentTasks": "تنفيذ مهام الوكلاء المتوازية",
+=======
+  "builtins.lobe-group-management.apiName.executeAgentTasks": "تنفيذ مهام الوكلاء بالتوازي",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "builtins.lobe-group-management.apiName.getAgentInfo": "الحصول على معلومات العضو",
   "builtins.lobe-group-management.apiName.interrupt": "مقاطعة المهمة",
   "builtins.lobe-group-management.apiName.speak": "تحديد المتحدث",
   "builtins.lobe-group-management.apiName.summarize": "تلخيص المحادثة",
   "builtins.lobe-group-management.apiName.vote": "بدء التصويت",
   "builtins.lobe-group-management.inspector.broadcast.title": "الوكلاء المتحدثون:",
+<<<<<<< HEAD
   "builtins.lobe-group-management.inspector.executeAgentTask.assignTo": "تعيين",
   "builtins.lobe-group-management.inspector.executeAgentTask.task": "المهمة:",
+=======
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "builtins.lobe-group-management.inspector.executeAgentTasks.title": "تعيين المهام إلى:",
   "builtins.lobe-group-management.inspector.speak.title": "المتحدث المحدد:",
   "builtins.lobe-group-management.title": "منسق المجموعة",
@@ -319,6 +326,9 @@
   "dev.tabs.meta": "معلومات التعريف",
   "dev.title.create": "إضافة مهارة مخصصة",
   "dev.title.edit": "تعديل مهارة مخصصة",
+  "dev.title.editCommunity": "تعديل مهارة المجتمع",
+  "dev.title.skillDetails": "تفاصيل المهارة",
+  "dev.title.skillSettings": "إعدادات المهارة",
   "dev.type.lobe": "مهارة {{appName}}",
   "dev.type.openai": "مهارة OpenAI",
   "dev.update": "تحديث",
@@ -341,6 +351,11 @@
   "inspector.delete": "حذف الاستدعاء",
   "inspector.orphanedToolCall": "تم اكتشاف استدعاء مهارة يتيم، قد يؤثر على تنفيذ الوكيل. قم بإزالته.",
   "inspector.pluginRender": "عرض واجهة المهارة",
+  "integrationDetail.author": "المؤلف",
+  "integrationDetail.details": "التفاصيل",
+  "integrationDetail.developedBy": "تم التطوير بواسطة",
+  "integrationDetail.tools": "الأدوات",
+  "integrationDetail.trustWarning": "استخدم الموصلات فقط من المطورين الذين تثق بهم. لا تتحكم LobeHub في الأدوات التي يتيحها المطورون ولا يمكنها التحقق من أنها ستعمل كما هو متوقع أو أنها لن تتغير.",
   "list.item.deprecated.title": "تم الحذف",
   "list.item.local.config": "الإعداد",
   "list.item.local.title": "مخصص",
@@ -481,6 +496,7 @@
   "settings.title": "إعدادات مجتمع المهارات",
   "showInPortal": "عرض التفاصيل في مساحة العمل",
   "store.actions.cancel": "إلغاء",
+  "store.actions.configure": "تهيئة",
   "store.actions.confirmUninstall": "سيؤدي إلغاء التثبيت إلى مسح إعدادات المهارة. هل ترغب في المتابعة؟",
   "store.actions.detail": "تفاصيل",
   "store.actions.install": "تثبيت",

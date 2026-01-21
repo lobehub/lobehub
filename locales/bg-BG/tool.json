@@ -15,7 +15,11 @@
   "agentGroupManagement.executeTask.thread": "Идентификатор на нишка",
   "agentGroupManagement.executeTask.timeout": "Времето за изпълнение изтече",
   "agentGroupManagement.executeTask.tokens": "Използвани токени",
+<<<<<<< HEAD
   "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "Подробни инструкции за агента за изпълнение на задачата...",
+=======
+  "agentGroupManagement.executeTasks.intervention.instructionPlaceholder": "Подробни инструкции за агента за изпълнение на тази задача...",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "agentGroupManagement.executeTasks.intervention.titlePlaceholder": "Заглавие на задачата...",
   "codeInterpreter-legacy.error": "Грешка при изпълнение",
   "codeInterpreter-legacy.executing": "Изпълнение...",

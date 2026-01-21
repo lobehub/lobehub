@@ -19,10 +19,12 @@ import { McpNavKey } from '@/types/discover';
 import Settings from './Settings';
 
 interface DetailProps {
+  defaultTab?: McpNavKey;
   identifier?: string;
+  noSettings?: boolean;
 }
-const Detail = memo<DetailProps>(({ identifier: defaultIdentifier }) => {
-  const [activeTab, setActiveTab] = useState(McpNavKey.Overview);
+const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, noSettings }) => {
+  const [activeTab, setActiveTab] = useState(defaultTab ?? McpNavKey.Overview);
   const { t } = useTranslation('plugin');
 
   const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
@@ -36,7 +38,9 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier }) => {
   const useMcpDetail = useDiscoverStore((s) => s.useFetchMcpDetail);
   const { data, isLoading } = useMcpDetail({ identifier });
 
-  if (!isMcpListInit || isLoading) return <DetailLoading />;
+  // 如果有明确传入的 identifier，跳过 isMcpListInit 检查
+  const shouldWaitForInit = !defaultIdentifier && !isMcpListInit;
+  if (shouldWaitForInit || isLoading) return <DetailLoading />;
 
   if (!identifier)
     return (
@@ -60,7 +64,12 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier }) => {
     <DetailProvider config={data}>
       <Flexbox gap={16}>
         <Header inModal />
-        <Nav activeTab={activeTab as McpNavKey} inModal setActiveTab={setActiveTab} />
+        <Nav
+          activeTab={activeTab as McpNavKey}
+          inModal
+          noSettings={noSettings}
+          setActiveTab={setActiveTab}
+        />
         <Flexbox gap={24}>
           {activeTab === McpNavKey.Settings && <Settings identifier={identifier} />}
           {activeTab === McpNavKey.Overview && <Overview inModal />}

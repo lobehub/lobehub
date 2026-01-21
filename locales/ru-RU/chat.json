@@ -288,7 +288,11 @@
   "shareModal.pdfReady": "PDF готов",
   "shareModal.popover.moreOptions": "Дополнительные параметры доступа",
   "shareModal.popover.privacyWarning.confirm": "Понимаю, продолжить",
+<<<<<<< HEAD
   "shareModal.popover.privacyWarning.content": "Пожалуйста, убедитесь, что ваш разговор не содержит личной или конфиденциальной информации. Вы несёте ответственность за любой контент, которым решите поделиться, и за последствия этого.",
+=======
+  "shareModal.popover.privacyWarning.content": "Перед тем как делиться, убедитесь, что разговор не содержит личной или конфиденциальной информации. LobeHub не несёт ответственности за возможные проблемы с безопасностью, возникшие в результате публикации.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.popover.privacyWarning.title": "Уведомление о конфиденциальности",
   "shareModal.popover.title": "Поделиться темой",
   "shareModal.popover.visibility": "Видимость",
@@ -311,7 +315,11 @@
   "sharePage.error.unauthorized.action": "Войти",
   "sharePage.error.unauthorized.subtitle": "Пожалуйста, войдите в систему, чтобы просмотреть эту тему.",
   "sharePage.error.unauthorized.title": "Требуется вход",
+<<<<<<< HEAD
   "sharePageDisclaimer": "Этот контент был опубликован пользователем и не отражает точку зрения LobeHub. LobeHub не несёт ответственности за последствия, вызванные этим контентом.",
+=======
+  "sharePageDisclaimer": "Этот контент опубликован пользователем и не отражает точку зрения LobeHub. LobeHub не несёт ответственности за последствия, вызванные публикацией данного контента.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "stt.action": "Голосовой ввод",
   "stt.loading": "Распознавание...",
   "stt.prettifying": "Обработка...",

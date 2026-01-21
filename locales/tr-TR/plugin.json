@@ -63,7 +63,11 @@
   "builtins.lobe-group-agent-builder.title": "Grup Oluşturma Uzmanı",
   "builtins.lobe-group-management.apiName.broadcast": "Herkes konuşsun",
   "builtins.lobe-group-management.apiName.createWorkflow": "İş akışı planla",
+<<<<<<< HEAD
   "builtins.lobe-group-management.apiName.executeAgentTask": "Aracı görevini yürüt",
+=======
+  "builtins.lobe-group-management.apiName.executeAgentTask": "Aracı görevi yürüt",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "builtins.lobe-group-management.apiName.executeAgentTasks": "Paralel aracı görevlerini yürüt",
   "builtins.lobe-group-management.apiName.getAgentInfo": "Üye bilgilerini al",
   "builtins.lobe-group-management.apiName.interrupt": "Görevi durdur",
@@ -71,8 +75,11 @@
   "builtins.lobe-group-management.apiName.summarize": "Konuşmayı özetle",
   "builtins.lobe-group-management.apiName.vote": "Oylama başlat",
   "builtins.lobe-group-management.inspector.broadcast.title": "Aşağıdaki Ajanlar konuşuyor:",
+<<<<<<< HEAD
   "builtins.lobe-group-management.inspector.executeAgentTask.assignTo": "Ata",
   "builtins.lobe-group-management.inspector.executeAgentTask.task": "görev:",
+=======
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "builtins.lobe-group-management.inspector.executeAgentTasks.title": "Görev atananlar:",
   "builtins.lobe-group-management.inspector.speak.title": "Belirlenen Ajan konuşuyor:",
   "builtins.lobe-group-management.title": "Grup Koordinatörü",
@@ -317,8 +324,11 @@
   "dev.saveSuccess": "Ayarlar kaydedildi",
   "dev.tabs.manifest": "Manifest",
   "dev.tabs.meta": "Meta bilgi",
-  "dev.title.create": "Özel Yetenek ekle",
-  "dev.title.edit": "Özel Yeteneği düzenle",
+  "dev.title.create": "Özel Yetenek Ekle",
+  "dev.title.edit": "Özel Yeteneği Düzenle",
+  "dev.title.editCommunity": "Topluluk Yeteneğini Düzenle",
+  "dev.title.skillDetails": "Yetenek Detayları",
+  "dev.title.skillSettings": "Yetenek Ayarları",
   "dev.type.lobe": "{{appName}} Yeteneği",
   "dev.type.openai": "OpenAI Yeteneği",
   "dev.update": "Güncelle",
@@ -341,6 +351,11 @@
   "inspector.delete": "Çağrıyı sil",
   "inspector.orphanedToolCall": "Bağımsız Yetenek çağrısı tespit edildi, bu durum Ajan çalışmasını etkileyebilir. Kaldırın.",
   "inspector.pluginRender": "Yetenek arayüzünü görüntüle",
+  "integrationDetail.author": "Yazar",
+  "integrationDetail.details": "Ayrıntılar",
+  "integrationDetail.developedBy": "Geliştiren",
+  "integrationDetail.tools": "Araçlar",
+  "integrationDetail.trustWarning": "Yalnızca güvendiğiniz geliştiricilerin bağlayıcılarını kullanın. LobeHub, geliştiricilerin hangi araçları sunduğunu kontrol etmez ve bu araçların beklendiği gibi çalışacağını ya da değişmeyeceğini garanti edemez.",
   "list.item.deprecated.title": "Silindi",
   "list.item.local.config": "Yapılandırma",
   "list.item.local.title": "Özel",
@@ -481,6 +496,7 @@
   "settings.title": "Skill topluluğu ayarları",
   "showInPortal": "Workspace'te ayrıntıları görüntüle",
   "store.actions.cancel": "İptal",
+  "store.actions.configure": "Yapılandır",
   "store.actions.confirmUninstall": "Skill yapılandırması silinecek. Devam edilsin mi?",
   "store.actions.detail": "Ayrıntılar",
   "store.actions.install": "Yükle",

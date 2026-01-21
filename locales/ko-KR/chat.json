@@ -287,8 +287,13 @@
   "shareModal.pdfGenerationError": "PDF 생성 실패",
   "shareModal.pdfReady": "PDF 준비 완료",
   "shareModal.popover.moreOptions": "추가 공유 옵션",
+<<<<<<< HEAD
   "shareModal.popover.privacyWarning.confirm": "이해했습니다. 계속하기",
   "shareModal.popover.privacyWarning.content": "대화에 개인 정보나 민감한 정보가 포함되어 있지 않은지 확인하세요. 공유한 콘텐츠와 그로 인한 결과에 대한 책임은 사용자 본인에게 있습니다.",
+=======
+  "shareModal.popover.privacyWarning.confirm": "이해했으며 계속합니다",
+  "shareModal.popover.privacyWarning.content": "공유 전에 대화에 개인 정보나 민감한 정보가 포함되어 있지 않은지 확인해 주세요. LobeHub은 공유로 인해 발생할 수 있는 보안 문제에 대해 책임지지 않습니다.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.popover.privacyWarning.title": "개인정보 보호 안내",
   "shareModal.popover.title": "주제 공유",
   "shareModal.popover.visibility": "공개 범위",
@@ -309,9 +314,15 @@
   "sharePage.error.notFound.subtitle": "이 주제는 존재하지 않거나 삭제되었습니다.",
   "sharePage.error.notFound.title": "주제를 찾을 수 없음",
   "sharePage.error.unauthorized.action": "로그인",
+<<<<<<< HEAD
   "sharePage.error.unauthorized.subtitle": "공유된 주제를 보려면 로그인하세요.",
   "sharePage.error.unauthorized.title": "로그인이 필요합니다",
   "sharePageDisclaimer": "이 콘텐츠는 사용자가 공유한 것으로, LobeHub의 입장을 대변하지 않습니다. LobeHub는 이 공유 콘텐츠로 인해 발생하는 결과에 대해 책임지지 않습니다.",
+=======
+  "sharePage.error.unauthorized.subtitle": "공유된 주제를 보려면 로그인해 주세요.",
+  "sharePage.error.unauthorized.title": "로그인이 필요합니다",
+  "sharePageDisclaimer": "이 콘텐츠는 사용자가 공유한 것으로, LobeHub의 입장을 대변하지 않습니다. LobeHub은 이 공유 콘텐츠로 인해 발생하는 결과에 대해 책임지지 않습니다.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "stt.action": "음성 입력",
   "stt.loading": "인식 중…",
   "stt.prettifying": "다듬는 중…",

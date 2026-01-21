@@ -288,7 +288,11 @@
   "shareModal.pdfReady": "PDF is klaar",
   "shareModal.popover.moreOptions": "Meer deelopties",
   "shareModal.popover.privacyWarning.confirm": "Ik begrijp het, ga verder",
+<<<<<<< HEAD
   "shareModal.popover.privacyWarning.content": "Zorg ervoor dat je gesprek geen persoonlijke of gevoelige informatie bevat. Je bent zelf verantwoordelijk voor de inhoud die je deelt en de gevolgen daarvan.",
+=======
+  "shareModal.popover.privacyWarning.content": "Zorg ervoor dat het gesprek geen privé- of gevoelige informatie bevat voordat je het deelt. LobeHub is niet verantwoordelijk voor eventuele beveiligingsproblemen die kunnen ontstaan door het delen.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.popover.privacyWarning.title": "Privacyverklaring",
   "shareModal.popover.title": "Onderwerp delen",
   "shareModal.popover.visibility": "Zichtbaarheid",
@@ -311,7 +315,11 @@
   "sharePage.error.unauthorized.action": "Inloggen",
   "sharePage.error.unauthorized.subtitle": "Log in om dit gedeelde onderwerp te bekijken.",
   "sharePage.error.unauthorized.title": "Inloggen vereist",
+<<<<<<< HEAD
   "sharePageDisclaimer": "Deze inhoud is gedeeld door een gebruiker en vertegenwoordigt niet de standpunten van LobeHub. LobeHub is niet verantwoordelijk voor eventuele gevolgen van deze gedeelde inhoud.",
+=======
+  "sharePageDisclaimer": "Deze inhoud is gedeeld door een gebruiker en vertegenwoordigt niet de standpunten van LobeHub. LobeHub is niet verantwoordelijk voor eventuele gevolgen die voortvloeien uit deze gedeelde inhoud.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "stt.action": "Spraakopname",
   "stt.loading": "Herkennen...",
   "stt.prettifying": "Verfraaien...",

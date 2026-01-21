@@ -64,15 +64,22 @@
   "builtins.lobe-group-management.apiName.broadcast": "همه صحبت کنند",
   "builtins.lobe-group-management.apiName.createWorkflow": "برنامه‌ریزی جریان کار",
   "builtins.lobe-group-management.apiName.executeAgentTask": "اجرای وظیفه نماینده",
+<<<<<<< HEAD
   "builtins.lobe-group-management.apiName.executeAgentTasks": "اجرای هم‌زمان وظایف نمایندگان",
+=======
+  "builtins.lobe-group-management.apiName.executeAgentTasks": "اجرای موازی وظایف نمایندگان",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "builtins.lobe-group-management.apiName.getAgentInfo": "دریافت اطلاعات عضو",
   "builtins.lobe-group-management.apiName.interrupt": "وقفه در وظیفه",
   "builtins.lobe-group-management.apiName.speak": "عضو مشخص صحبت کند",
   "builtins.lobe-group-management.apiName.summarize": "خلاصه‌سازی گفتگو",
   "builtins.lobe-group-management.apiName.vote": "شروع رأی‌گیری",
   "builtins.lobe-group-management.inspector.broadcast.title": "عوامل زیر صحبت می‌کنند:",
+<<<<<<< HEAD
   "builtins.lobe-group-management.inspector.executeAgentTask.assignTo": "اختصاص دادن",
   "builtins.lobe-group-management.inspector.executeAgentTask.task": "وظیفه:",
+=======
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "builtins.lobe-group-management.inspector.executeAgentTasks.title": "اختصاص وظایف به:",
   "builtins.lobe-group-management.inspector.speak.title": "عامل مشخص صحبت می‌کند:",
   "builtins.lobe-group-management.title": "هماهنگ‌کننده گروه",
@@ -319,6 +326,9 @@
   "dev.tabs.meta": "اطلاعات متا",
   "dev.title.create": "افزودن مهارت سفارشی",
   "dev.title.edit": "ویرایش مهارت سفارشی",
+  "dev.title.editCommunity": "ویرایش مهارت جامعه",
+  "dev.title.skillDetails": "جزئیات مهارت",
+  "dev.title.skillSettings": "تنظیمات مهارت",
   "dev.type.lobe": "مهارت {{appName}}",
   "dev.type.openai": "مهارت OpenAI",
   "dev.update": "به‌روزرسانی",
@@ -341,6 +351,11 @@
   "inspector.delete": "حذف فراخوانی",
   "inspector.orphanedToolCall": "فراخوانی مهارت بدون وابستگی شناسایی شد، ممکن است بر اجرای عامل تأثیر بگذارد. آن را حذف کنید.",
   "inspector.pluginRender": "مشاهده رابط کاربری مهارت",
+  "integrationDetail.author": "نویسنده",
+  "integrationDetail.details": "جزئیات",
+  "integrationDetail.developedBy": "توسعه‌دهنده",
+  "integrationDetail.tools": "ابزارها",
+  "integrationDetail.trustWarning": "فقط از کانکتورهایی استفاده کنید که توسط توسعه‌دهندگانی که به آن‌ها اعتماد دارید ساخته شده‌اند. LobeHub کنترلی بر ابزارهایی که توسعه‌دهندگان ارائه می‌دهند ندارد و نمی‌تواند تضمین کند که این ابزارها طبق انتظار عمل می‌کنند یا تغییر نخواهند کرد.",
   "list.item.deprecated.title": "حذف شده",
   "list.item.local.config": "پیکربندی",
   "list.item.local.title": "سفارشی",
@@ -481,6 +496,7 @@
   "settings.title": "تنظیمات جامعه مهارت",
   "showInPortal": "مشاهده جزئیات در Workspace",
   "store.actions.cancel": "لغو",
+  "store.actions.configure": "پیکربندی",
   "store.actions.confirmUninstall": "حذف مهارت باعث پاک شدن پیکربندی آن می‌شود. ادامه می‌دهید؟",
   "store.actions.detail": "جزئیات",
   "store.actions.install": "نصب",

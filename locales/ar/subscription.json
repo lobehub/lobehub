@@ -55,7 +55,11 @@
   "funds.packages.expiresToday": "تنتهي اليوم",
   "funds.packages.expiringSoon": "ستنتهي قريبًا",
   "funds.packages.gift": "هدية",
+<<<<<<< HEAD
   "funds.packages.giftedOn": "تم الإهداء في {{date}}",
+=======
+  "funds.packages.giftedOn": "أُهديت في {{date}}",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "funds.packages.noPackages": "لا توجد حزم أرصدة",
   "funds.packages.purchaseFirst": "اشترِ أول حزمة أرصدة لك",
   "funds.packages.purchasedOn": "تم الشراء في {{date}}",

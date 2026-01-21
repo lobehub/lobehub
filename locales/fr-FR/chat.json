@@ -288,7 +288,11 @@
   "shareModal.pdfReady": "Le PDF est prêt",
   "shareModal.popover.moreOptions": "Plus d’options de partage",
   "shareModal.popover.privacyWarning.confirm": "Je comprends, continuer",
+<<<<<<< HEAD
   "shareModal.popover.privacyWarning.content": "Veuillez vous assurer que votre conversation ne contient aucune information personnelle ou sensible. Vous êtes responsable du contenu que vous choisissez de partager et des conséquences qui en découlent.",
+=======
+  "shareModal.popover.privacyWarning.content": "Veuillez vous assurer que la conversation ne contient aucune information privée ou sensible avant de la partager. LobeHub n’est pas responsable des problèmes de sécurité pouvant découler du partage.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.popover.privacyWarning.title": "Avis de confidentialité",
   "shareModal.popover.title": "Partager le sujet",
   "shareModal.popover.visibility": "Visibilité",

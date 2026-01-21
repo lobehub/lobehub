@@ -273,10 +273,17 @@
   "shareModal.includeTool": "Включи съобщения от умения",
   "shareModal.includeUser": "Включи съобщения от потребителя",
   "shareModal.link": "Връзка",
+<<<<<<< HEAD
   "shareModal.link.linkHint": "Всеки с връзката може да види тази тема",
   "shareModal.link.noTopic": "Започнете разговор, за да споделите",
   "shareModal.link.permissionLink": "Всеки с връзката",
   "shareModal.link.permissionPrivate": "Поверително",
+=======
+  "shareModal.link.linkHint": "Всеки с тази връзка може да види темата",
+  "shareModal.link.noTopic": "Започнете разговор, за да споделите",
+  "shareModal.link.permissionLink": "Всеки с връзката",
+  "shareModal.link.permissionPrivate": "Частно",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.link.privateHint": "Само вие имате достъп до тази връзка",
   "shareModal.link.updateError": "Неуспешно обновяване на настройките за споделяне",
   "shareModal.link.visibilityUpdated": "Видимостта е обновена",
@@ -288,7 +295,11 @@
   "shareModal.pdfReady": "PDF е готов",
   "shareModal.popover.moreOptions": "Още опции за споделяне",
   "shareModal.popover.privacyWarning.confirm": "Разбирам, продължи",
+<<<<<<< HEAD
   "shareModal.popover.privacyWarning.content": "Моля, уверете се, че разговорът ви не съдържа лична или чувствителна информация. Вие носите отговорност за съдържанието, което решите да споделите, и за последствията от това.",
+=======
+  "shareModal.popover.privacyWarning.content": "Моля, уверете се, че разговорът не съдържа лична или чувствителна информация преди да го споделите. LobeHub не носи отговорност за евентуални проблеми със сигурността, произтичащи от споделянето.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.popover.privacyWarning.title": "Уведомление за поверителност",
   "shareModal.popover.title": "Сподели тема",
   "shareModal.popover.visibility": "Видимост",
@@ -304,9 +315,15 @@
   "shareModal.withPluginInfo": "Включи информация за уменията",
   "shareModal.withRole": "Включи роля на съобщението",
   "shareModal.withSystemRole": "Включи профил на агента",
+<<<<<<< HEAD
   "sharePage.error.forbidden.subtitle": "Това споделяне е поверително и не е достъпно.",
   "sharePage.error.forbidden.title": "Достъпът е отказан",
   "sharePage.error.notFound.subtitle": "Тази тема не съществува или е била премахната.",
+=======
+  "sharePage.error.forbidden.subtitle": "Това споделяне е частно и не е достъпно.",
+  "sharePage.error.forbidden.title": "Достъпът е отказан",
+  "sharePage.error.notFound.subtitle": "Темата не съществува или е била премахната.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "sharePage.error.notFound.title": "Темата не е намерена",
   "sharePage.error.unauthorized.action": "Вход",
   "sharePage.error.unauthorized.subtitle": "Моля, влезте в профила си, за да видите споделената тема.",

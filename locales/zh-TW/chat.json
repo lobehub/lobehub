@@ -274,11 +274,19 @@
   "shareModal.includeUser": "包含使用者訊息",
   "shareModal.link": "連結",
   "shareModal.link.linkHint": "擁有此連結的任何人都可以查看此主題",
+<<<<<<< HEAD
   "shareModal.link.noTopic": "請先開始對話以便分享",
   "shareModal.link.permissionLink": "擁有連結的任何人",
   "shareModal.link.permissionPrivate": "私人",
   "shareModal.link.privateHint": "只有你可以存取此連結",
   "shareModal.link.updateError": "更新分享設定失敗",
+=======
+  "shareModal.link.noTopic": "請先開始一段對話以便分享",
+  "shareModal.link.permissionLink": "擁有連結的任何人",
+  "shareModal.link.permissionPrivate": "私人",
+  "shareModal.link.privateHint": "只有你可以存取此連結",
+  "shareModal.link.updateError": "無法更新分享設定",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.link.visibilityUpdated": "可見性已更新",
   "shareModal.loadingPdf": "載入 PDF...",
   "shareModal.noPdfData": "暫無 PDF 資料",
@@ -288,7 +296,11 @@
   "shareModal.pdfReady": "PDF 已準備就緒",
   "shareModal.popover.moreOptions": "更多分享選項",
   "shareModal.popover.privacyWarning.confirm": "我了解，繼續",
+<<<<<<< HEAD
   "shareModal.popover.privacyWarning.content": "請確認你的對話中不包含任何個人或敏感資訊。你需自行承擔所分享內容及其後果的責任。",
+=======
+  "shareModal.popover.privacyWarning.content": "在分享前，請確認對話中不包含任何私人或敏感資訊。LobeHub 對因分享而產生的任何安全問題不負責任。",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.popover.privacyWarning.title": "隱私提醒",
   "shareModal.popover.title": "分享主題",
   "shareModal.popover.visibility": "可見性",
@@ -309,7 +321,11 @@
   "sharePage.error.notFound.subtitle": "此主題不存在或已被移除。",
   "sharePage.error.notFound.title": "找不到主題",
   "sharePage.error.unauthorized.action": "登入",
+<<<<<<< HEAD
   "sharePage.error.unauthorized.subtitle": "請登入以查看此分享主題。",
+=======
+  "sharePage.error.unauthorized.subtitle": "請登入以查看此分享的主題。",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "sharePage.error.unauthorized.title": "需要登入",
   "sharePageDisclaimer": "此內容由使用者分享，並不代表 LobeHub 的立場。LobeHub 對此分享內容所引發的任何後果不負責任。",
   "stt.action": "語音輸入",

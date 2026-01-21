@@ -288,7 +288,11 @@
   "shareModal.pdfReady": "PDF hazır",
   "shareModal.popover.moreOptions": "Diğer paylaşım seçenekleri",
   "shareModal.popover.privacyWarning.confirm": "Anladım, devam et",
+<<<<<<< HEAD
   "shareModal.popover.privacyWarning.content": "Lütfen konuşmanızın kişisel veya hassas bilgiler içermediğinden emin olun. Paylaşmayı seçtiğiniz içerikten ve sonuçlarından siz sorumlusunuz.",
+=======
+  "shareModal.popover.privacyWarning.content": "Lütfen paylaşmadan önce konuşmanın herhangi bir özel veya hassas bilgi içermediğinden emin olun. LobeHub, paylaşım sonucu oluşabilecek güvenlik sorunlarından sorumlu değildir.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.popover.privacyWarning.title": "Gizlilik Uyarısı",
   "shareModal.popover.title": "Konuyu Paylaş",
   "shareModal.popover.visibility": "Görünürlük",
@@ -309,7 +313,11 @@
   "sharePage.error.notFound.subtitle": "Bu konu mevcut değil veya kaldırılmış.",
   "sharePage.error.notFound.title": "Konu Bulunamadı",
   "sharePage.error.unauthorized.action": "Giriş Yap",
+<<<<<<< HEAD
   "sharePage.error.unauthorized.subtitle": "Paylaşılan bu konuyu görüntülemek için lütfen giriş yapın.",
+=======
+  "sharePage.error.unauthorized.subtitle": "Bu paylaşılan konuyu görüntülemek için lütfen giriş yapın.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "sharePage.error.unauthorized.title": "Giriş Gerekli",
   "sharePageDisclaimer": "Bu içerik bir kullanıcı tarafından paylaşılmıştır ve LobeHub'un görüşlerini yansıtmaz. LobeHub, bu paylaşılan içerikten doğabilecek sonuçlardan sorumlu değildir.",
   "stt.action": "Sesli Giriş",

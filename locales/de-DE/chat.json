@@ -277,7 +277,11 @@
   "shareModal.link.noTopic": "Beginne zuerst ein Gespräch, um es zu teilen",
   "shareModal.link.permissionLink": "Jede Person mit dem Link",
   "shareModal.link.permissionPrivate": "Privat",
+<<<<<<< HEAD
   "shareModal.link.privateHint": "Nur du hast Zugriff auf diesen Link",
+=======
+  "shareModal.link.privateHint": "Nur du kannst auf diesen Link zugreifen",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.link.updateError": "Freigabeeinstellungen konnten nicht aktualisiert werden",
   "shareModal.link.visibilityUpdated": "Sichtbarkeit aktualisiert",
   "shareModal.loadingPdf": "PDF wird geladen...",
@@ -288,7 +292,11 @@
   "shareModal.pdfReady": "PDF ist bereit",
   "shareModal.popover.moreOptions": "Weitere Freigabeoptionen",
   "shareModal.popover.privacyWarning.confirm": "Ich verstehe, weiter",
+<<<<<<< HEAD
   "shareModal.popover.privacyWarning.content": "Bitte stelle sicher, dass dein Gespräch keine persönlichen oder sensiblen Informationen enthält. Du bist für alle Inhalte, die du teilst, und deren Folgen verantwortlich.",
+=======
+  "shareModal.popover.privacyWarning.content": "Bitte stelle sicher, dass das Gespräch keine privaten oder sensiblen Informationen enthält, bevor du es teilst. LobeHub übernimmt keine Verantwortung für Sicherheitsprobleme, die durch das Teilen entstehen können.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "shareModal.popover.privacyWarning.title": "Datenschutzhinweis",
   "shareModal.popover.title": "Thema teilen",
   "shareModal.popover.visibility": "Sichtbarkeit",
@@ -311,7 +319,11 @@
   "sharePage.error.unauthorized.action": "Anmelden",
   "sharePage.error.unauthorized.subtitle": "Bitte melde dich an, um dieses geteilte Thema anzusehen.",
   "sharePage.error.unauthorized.title": "Anmeldung erforderlich",
+<<<<<<< HEAD
   "sharePageDisclaimer": "Dieser Inhalt wurde von einem Nutzer geteilt und spiegelt nicht die Ansichten von LobeHub wider. LobeHub übernimmt keine Verantwortung für etwaige Folgen, die sich aus diesem geteilten Inhalt ergeben.",
+=======
+  "sharePageDisclaimer": "Dieser Inhalt wurde von einem Nutzer geteilt und spiegelt nicht die Ansichten von LobeHub wider. LobeHub übernimmt keine Verantwortung für Folgen, die sich aus diesem geteilten Inhalt ergeben.",
+>>>>>>> 2cb1aecad (chore: update i18n files)
   "stt.action": "Spracheingabe",
   "stt.loading": "Erkennung läuft...",
   "stt.prettifying": "Wird überarbeitet...",
