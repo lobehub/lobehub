@@ -65,7 +65,6 @@ Docker 部署版本的升级非常简单，只需要重新部署 LobeChat 的最
   docker run -d -p 3210:3210 \
     -e OPENAI_API_KEY=sk-xxxx \
     -e OPENAI_PROXY_URL=https://api-proxy.com/v1 \
-    -e ACCESS_CODE=lobe66 \
     --name lobe-chat \
     lobehub/lobe-chat
   ```
@@ -89,7 +88,6 @@ Docker 部署版本的升级非常简单，只需要重新部署 LobeChat 的最
   ```env
   OPENAI_API_KEY=sk-xxxx
   OPENAI_PROXY_URL=https://api-proxy.com/v1
-  ACCESS_CODE=arthals2333
   OPENAI_MODEL_LIST=-gpt-4,-gpt-4-32k,-gpt-3.5-turbo-16k,gpt-3.5-turbo-1106=gpt-3.5-turbo-16k,gpt-4-0125-preview=gpt-4-turbo,gpt-4-vision-preview=gpt-4-vision
   ```
 

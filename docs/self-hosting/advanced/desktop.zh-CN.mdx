@@ -42,11 +42,17 @@ LobeChat 桌面端可以与您自托管的 LobeChat 实例连接，以便您可�
 
 #### OIDC 环境变量配置
 
-您需要在自托管实例中添加以下`ENABLE_OIDC` 和 `JWKS_KEY` 这两个环境变量，你可以点击下方按钮一键生成：
+您需要在自托管实例中添加以下`ENABLE_OIDC` 和 `JWKS_KEY` 这两个环境变量：
 
-<OIDCJWKs />
+```bash
+ENABLE_OIDC=1
+```
 
-将生成的 JWK 密钥添加到您的环境变量中。
+点击下方按钮一键生成 `JWKS_KEY`：
+
+<GenerateJWKSKey />
+
+将生成的环境变量添加到您的部署配置中。
 
 <Callout>如果您之前已配置 `OIDC_JWKS_KEY`，无需修改。系统会自动回退使用 `OIDC_JWKS_KEY`（向后兼容）。</Callout>
 

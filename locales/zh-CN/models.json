@@ -745,6 +745,7 @@
   "irag-1.0.description": "ERNIE iRAG 是一款图像检索增强生成模型，支持图像搜索、图文检索与内容生成任务。",
   "jamba-large.description": "我们最强大、最先进的模型，专为复杂企业任务设计，性能卓越。",
   "jamba-mini.description": "同类中效率最高的模型，在速度与质量之间实现平衡，占用资源更少。",
+  "jina-deepsearch-v1.description": "DeepSearch 结合了网页搜索、阅读与推理，适用于深入研究任务。它就像一个智能代理，接收你的研究任务后，进行多轮广泛搜索，最终才生成答案。整个过程包含持续的信息检索、逻辑推理和多角度问题解决，区别于仅依赖预训练数据的传统大模型或一次性检索的RAG系统。",
   "meta/Llama-3.2-90B-Vision-Instruct.description": "适用于视觉理解代理应用的高级图像推理模型。",
   "meta/Llama-3.3-70B-Instruct.description": "Llama 3.3 是最先进的多语言开源 Llama 模型，在极低成本下实现接近 405B 的性能。该模型基于 Transformer 架构，并通过 SFT 和 RLHF 提升实用性与安全性。其指令微调版本专为多语言对话优化，在行业基准测试中超越众多开源与闭源聊天模型。知识截止时间：2023 年 12 月。",
   "meta/Meta-Llama-3-70B-Instruct.description": "一款功能强大的 700 亿参数模型，擅长推理、编程和广泛的语言任务。",

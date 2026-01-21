@@ -16,6 +16,8 @@ export type {
   IBuiltinToolExecutor,
   TriggerBroadcastParams,
   TriggerDelegateParams,
+  TriggerExecuteTaskItem,
+  TriggerExecuteTasksParams,
   TriggerSpeakParams,
 } from '@lobechat/types';
 

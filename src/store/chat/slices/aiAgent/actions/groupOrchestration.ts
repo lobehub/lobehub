@@ -74,6 +74,12 @@ export interface GroupOrchestrationAction {
   triggerExecuteTask: GroupOrchestrationCallbacks['triggerExecuteTask'];
 
   /**
+   * Trigger execute tasks - called by executeTasks tool when supervisor decides to execute multiple async tasks in parallel
+   * This starts the group orchestration loop with supervisor_decided result
+   */
+  triggerExecuteTasks: GroupOrchestrationCallbacks['triggerExecuteTasks'];
+
+  /**
    * Enable polling for task status
    * Used by ProcessingState component to poll for real-time task updates
    *
@@ -241,6 +247,42 @@ export const groupOrchestrationSlice: StateCreator<
   },
 
   /**
+   * Trigger execute tasks - Entry point when supervisor calls executeTasks tool
+   * Creates a supervisor_decided result with decision='execute_tasks' and starts orchestration
+   */
+  triggerExecuteTasks: async (params) => {
+    const { supervisorAgentId, tasks, toolMessageId, skipCallSupervisor } = params;
+    log(
+      '[triggerExecuteTasks] Starting orchestration with execute_tasks: supervisorAgentId=%s, tasks=%d, toolMessageId=%s, skipCallSupervisor=%s',
+      supervisorAgentId,
+      tasks.length,
+      toolMessageId,
+      skipCallSupervisor,
+    );
+
+    const groupId = get().activeGroupId;
+    if (!groupId) {
+      log('[triggerExecuteTasks] No active group, skipping');
+      return;
+    }
+
+    // Start orchestration loop with supervisor_decided result (decision=execute_tasks)
+    await get().internal_execGroupOrchestration({
+      groupId,
+      supervisorAgentId,
+      topicId: get().activeTopicId,
+      initialResult: {
+        type: 'supervisor_decided',
+        payload: {
+          decision: 'execute_tasks',
+          params: { tasks, toolMessageId },
+          skipCallSupervisor: skipCallSupervisor ?? false,
+        },
+      },
+    });
+  },
+
+  /**
    * Get group orchestration callbacks
    * These are the action methods that tools can call to trigger orchestration
    */
@@ -250,6 +292,7 @@ export const groupOrchestrationSlice: StateCreator<
       triggerBroadcast: get().triggerBroadcast,
       triggerDelegate: get().triggerDelegate,
       triggerExecuteTask: get().triggerExecuteTask,
+      triggerExecuteTasks: get().triggerExecuteTasks,
     };
   },
 

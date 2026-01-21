@@ -44,11 +44,17 @@ Before connecting the desktop to your self-hosted instance, ensure that your sel
 
 #### OIDC Environment Variable Configuration
 
-You need to add the following two environment variables, `ENABLE_OIDC` and `JWKS_KEY`, to your self-hosted instance. You can click the button below to generate them with one click:
+You need to add the following two environment variables, `ENABLE_OIDC` and `JWKS_KEY`, to your self-hosted instance:
 
-<OIDCJWKs />
+```bash
+ENABLE_OIDC=1
+```
 
-Add the generated JWK key to your environment variables.
+Click the button below to generate `JWKS_KEY`:
+
+<GenerateJWKSKey />
+
+Add the generated environment variables to your deployment configuration.
 
 <Callout>If you have already configured `OIDC_JWKS_KEY`, no changes are needed. The system will automatically fall back to `OIDC_JWKS_KEY` for backward compatibility.</Callout>
 

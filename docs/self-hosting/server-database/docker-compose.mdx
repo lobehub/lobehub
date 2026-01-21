@@ -1,8 +1,8 @@
 ---
 title: Deploying LobeChat with Docker Compose
 description: >-
-  Learn how to deploy the LobeChat service using Docker Compose, including configuration tutorials for various services.
-
+  Learn how to deploy the LobeChat service using Docker Compose, including
+  configuration tutorials for various services.
 tags:
   - Docker Compose
   - LobeChat
@@ -19,15 +19,6 @@ tags:
 
   [![][docker-pulls-shield]][docker-pulls-link]
 </div>
-
-<Callout type="warning">
-  **Note on Docker Deployment Limitations**
-  The Docker and Docker Compose deployment options do not support injecting the `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` through environment variables, which prevents enabling the Clerk authentication service. Recommended alternatives include:
-
-  - Hosting deployment via Vercel
-
-  - Running a local image build process
-</Callout>
 
 ## Quick Start
 
@@ -246,15 +237,15 @@ The script supports the following deployment modes; please choose the appropriat
   - Choose the access protocol: `http` or `https`
   - Regenerate secure keys: We highly recommend regenerating the secure keys; if you lack the key generation library required by the script, we suggest referring to the [Custom Deployment](#custom-deployment) section for key modifications.
 
-    <Callout type="warning">
-      The following issues may impede access to your service:
+  <Callout type="warning">
+    The following issues may impede access to your service:
 
-      - The domain configuration here must match the reverse proxy configuration in step `1`.
+    - The domain configuration here must match the reverse proxy configuration in step `1`.
 
-      - If you are using Cloudflare for domain resolution and have activated `full proxy`, please use the `https` protocol.
+    - If you are using Cloudflare for domain resolution and have activated `full proxy`, please use the `https` protocol.
 
-      - If you have used the HTTPS protocol, ensure that your domain certificate is correctly configured; one-click deployment does not support self-signed certificates by default.
-    </Callout>
+    - If you have used the HTTPS protocol, ensure that your domain certificate is correctly configured; one-click deployment does not support self-signed certificates by default.
+  </Callout>
 
   ### Check Configuration Generation Report
 
@@ -701,12 +692,14 @@ environment:
 ```
 
 **How it works:**
+
 - `APP_URL`: Used for browser/client access, OAuth callbacks, webhooks, etc. (goes through CDN/proxy)
 - `INTERNAL_APP_URL`: Used for internal server-to-server communication (bypasses CDN/proxy)
 
 If `INTERNAL_APP_URL` is not set, it defaults to `APP_URL`.
 
 **Configuration options:**
+
 - `http://localhost:3210` - If using Docker with host network mode
 - `http://lobe:3210` - If using Docker network with service name
 - `http://127.0.0.1:3210` - Alternative localhost address
@@ -726,7 +719,7 @@ For convenience, here is a summary of example configuration files required for t
 # HTTP_PROXY=http://localhost:7890
 # HTTPS_PROXY=http://localhost:7890
 
-# Other environment variables, as needed. You can refer to the environment variables configuration for the client version, making sure not to have ACCESS_CODE.
+# Other environment variables, as needed. You can refer to the environment variables configuration for the client version.
 # OPENAI_API_KEY=sk-xxxx
 # OPENAI_PROXY_URL=https://api.openai.com/v1
 # OPENAI_MODEL_LIST=...
@@ -807,7 +800,6 @@ services:
     restart: always
     command: >
       server /etc/minio/data --address ":${MINIO_PORT}" --console-address ":9001"
-
 
   casdoor:
     image: casbin/casdoor

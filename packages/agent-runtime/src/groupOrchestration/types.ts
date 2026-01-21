@@ -118,10 +118,11 @@ export interface ExecutorResultSupervisorDecided {
      * - 'speak': Call a single agent
      * - 'broadcast': Call multiple agents in parallel
      * - 'delegate': Delegate to another agent
-     * - 'execute_task': Execute an async task
+     * - 'execute_task': Execute a single async task
+     * - 'execute_tasks': Execute multiple async tasks in parallel
      * - 'finish': End the orchestration
      */
-    decision: 'speak' | 'broadcast' | 'delegate' | 'execute_task' | 'finish';
+    decision: 'speak' | 'broadcast' | 'delegate' | 'execute_task' | 'execute_tasks' | 'finish';
     /**
      * Parameters for the decision
      */

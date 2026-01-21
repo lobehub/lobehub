@@ -1,13 +1,11 @@
 ---
 title: 在 Netlify 上部署 LobeChat
 description: >-
-  学习如何在 Netlify 上部署 LobeChat，包括 Fork 仓库、准备 OpenAI API Key、导入到 Netlify 工作台、配置站点名称与环境变量等步骤。
-
+  学习如何在 Netlify 上部署 LobeChat，包括 Fork 仓库、导入到 Netlify 工作台、配置站点名称与环境变量等步骤。
 tags:
   - Netlify
   - LobeChat
   - 部署教程
-  - OpenAI API Key
   - 环境配置
 ---
 
@@ -21,10 +19,6 @@ tags:
   ### Fork LobeChat 仓库
 
   点击 Fork 按钮，将 LobeChat 仓库 Fork 到你的 GitHub 账号下。
-
-  ### 准备好你的 OpenAI API Key
-
-  前往 [OpenAI API Key](https://platform.openai.com/account/api-keys) 获取你的 OpenAI API Key
 
   ### 在 Netlify 工作台导入
 
@@ -48,24 +42,16 @@ tags:
 
   <Image alt={'配置 LobeChat 站点名称'} height={712} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/f3885537-6d43-422f-b1b8-e70732401025'} />
 
-  点击 「Add environment variables」按钮，添加站点环境变量：
+  如需要，点击 「Add environment variables」按钮添加站点环境变量：
 
   <Image alt={'添加 LobeChat 站点环境变量'} height={537} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/3b607482-4d99-455a-bc10-3090dd4fe3c5'} />
-
-  以配置 OpenAI 为例，你需要添加的环境变量如下：
-
-  | 环境变量               | 类型 | 描述                                                      | 示例                                                         |
-  | ------------------ | -- | ------------------------------------------------------- | ---------------------------------------------------------- |
-  | `OPENAI_API_KEY`   | 必选 | 这是你在 OpenAI 账户页面申请的 API 密钥                              | `sk-xxxxxx...xxxxxx`                                       |
-  | `ACCESS_CODE`      | 必选 | 添加访问此服务的密码，你可以设置一个长密码以防被爆破，该值用逗号分隔时为密码数组                | `awCT74` 或 `e3@09!` or `code1,code2,code3`                 |
-  | `OPENAI_PROXY_URL` | 可选 | 如果你手动配置了 OpenAI 接口代理，可以使用此配置项来覆盖默认的 OpenAI API 请求基础 URL | `https://aihubmix.com/v1` ，默认值：`https://api.openai.com/v1` |
 
   <Callout type={'tip'}>
     LobeChat 支持的完整环境变量列表请参考 [📘 环境变量](/zh/docs/self-hosting/environment-variables)
     部分
   </Callout>
 
-  添加完成后，最后点击「Deploy lobe-chat」 进入部署阶段。
+  最后点击「Deploy lobe-chat」进入部署阶段。
 
   <Image alt={'环境变量添加完成'} height={600} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/c9f74ec4-ce63-4ce9-b9e2-34bda6fda10b'} />
 

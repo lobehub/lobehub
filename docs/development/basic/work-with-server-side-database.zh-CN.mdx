@@ -1,3 +1,7 @@
+---
+title: 使用服务端数据库
+---
+
 # 使用服务端数据库
 
 LobeChat 提供了内置的客户端数据库体验。
@@ -19,7 +23,6 @@ cp docker-compose/local/.env.example docker-compose/local/.env
 
 根据需要编辑 `docker-compose/local/.env` 文件以适应你的开发设置。此文件包含 Docker 服务所需的所有环境变量，配置了：
 
-- **服务模式**: `NEXT_PUBLIC_SERVICE_MODE=server`
 - **数据库**: 带连接字符串的 PostgreSQL
 - **身份验证**: 带 Casdoor SSO 的 NextAuth
 - **存储**: MinIO S3 兼容存储
@@ -80,7 +83,6 @@ docker-compose -f docker-compose.development.yml ps
 
 - **PostgreSQL**：存储生成图像的元数据
 - **MinIO/S3**：存储实际的图像文件
-- **服务器模式**：文件处理所需（`NEXT_PUBLIC_SERVICE_MODE=server`）
 
 ### 存储配置
 
@@ -138,14 +140,13 @@ await fetch(uploadUrl, {
 });
 ```
 
-
 ### 服务地址
 
 运行 Docker Compose 开发环境时：
 
 - **PostgreSQL**：`postgres://postgres@localhost:5432/lobechat`
 - **MinIO API**：`http://localhost:9000`
-- **MinIO 控制台**：`http://localhost:9001` (admin/CHANGE_THIS_PASSWORD_IN_PRODUCTION)
+- **MinIO 控制台**：`http://localhost:9001` (admin/CHANGE\_THIS\_PASSWORD\_IN\_PRODUCTION)
 - **应用程序**：`http://localhost:3010`
 
 ### 重置服务
@@ -163,7 +164,6 @@ docker-compose -f docker-compose.development.yml down -v
 docker-compose -f docker-compose.development.yml up -d
 pnpm db:migrate
 ```
-
 
 ### 故障排除
 

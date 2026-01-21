@@ -50,7 +50,6 @@ tags:
   ```fish
   $ docker run -d -p 3210:3210 \
     -e OPENAI_API_KEY=sk-xxxx \
-    -e ACCESS_CODE=lobe66 \
     --name lobe-chat \
     lobehub/lobe-chat
   ```
@@ -70,11 +69,6 @@ tags:
     镜像构建大约需要半小时左右，如果在更新部署后会出现「存在更新」的提示，可以等待镜像构建完成后再次部署。
   </Callout>
 
-  <Callout type="warning">
-    官方 Docker 镜像中未设定密码，强烈建议添加密码以提升安全性，否则你可能会遇到 [My API Key was
-    stolen!!!](https://github.com/lobehub/lobe-chat/issues/1123) 这样的情况
-  </Callout>
-
   <Callout type="important">
     注意，当**部署架构与镜像的不一致时**，需要对 **Sharp** 进行交叉编译，详见 [Sharp
     交叉编译](https://sharp.pixelplumbing.com/install#cross-platform)
@@ -88,7 +82,6 @@ tags:
   $ docker run -d -p 3210:3210 \
     -e OPENAI_API_KEY=sk-xxxx \
     -e OPENAI_PROXY_URL=https://api-proxy.com/v1 \
-    -e ACCESS_CODE=lobe66 \
     --name lobe-chat \
     lobehub/lobe-chat
   ```
@@ -102,7 +95,6 @@ tags:
   ```env
   OPENAI_API_KEY=sk-xxxx
   OPENAI_PROXY_URL=https://api-proxy.com/v1
-  ACCESS_CODE=arthals2333
   OPENAI_MODEL_LIST=-gpt-4,-gpt-4-32k,-gpt-3.5-turbo-16k,gpt-3.5-turbo-1106=gpt-3.5-turbo-16k,gpt-4-0125-preview=gpt-4-turbo,gpt-4-vision-preview=gpt-4-vision
   ```
 

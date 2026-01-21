@@ -11,6 +11,7 @@ import {
   CreateWorkflowParams,
   DelegateParams,
   ExecuteTaskParams,
+  ExecuteTasksParams,
   GroupManagementApiName,
   GroupManagementIdentifier,
   InterruptParams,
@@ -147,6 +148,38 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
         task: params.task,
         timeout: params.timeout,
         type: 'executeAgentTask',
+      },
+      stop: true,
+      success: true,
+    };
+  };
+
+  executeAgentTasks = async (
+    params: ExecuteTasksParams,
+    ctx: BuiltinToolContext,
+  ): Promise<BuiltinToolResult> => {
+    // Register afterCompletion callback to trigger parallel task execution after AgentRuntime completes
+    // This follows the same pattern as executeAgentTask - trigger mode, not blocking
+    if (ctx.groupOrchestration && ctx.agentId && ctx.registerAfterCompletion) {
+      ctx.registerAfterCompletion(() =>
+        ctx.groupOrchestration!.triggerExecuteTasks({
+          skipCallSupervisor: params.skipCallSupervisor,
+          supervisorAgentId: ctx.agentId!,
+          tasks: params.tasks,
+          toolMessageId: ctx.messageId,
+        }),
+      );
+    }
+
+    const agentIds = params.tasks.map((t) => t.agentId).join(', ');
+
+    // Returns stop: true to indicate the supervisor should stop and let the tasks execute
+    return {
+      content: `Triggered ${params.tasks.length} parallel tasks for agents: ${agentIds}.`,
+      state: {
+        skipCallSupervisor: params.skipCallSupervisor,
+        tasks: params.tasks,
+        type: 'executeAgentTasks',
       },
       stop: true,
       success: true,

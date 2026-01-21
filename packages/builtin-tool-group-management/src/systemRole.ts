@@ -155,8 +155,7 @@ When a user's request is broad or unclear, ask 1-2 focused questions to understa
 - **broadcast**: Multiple agents respond in parallel in group context
 
 **Task Execution (Independent Context, With Tools):**
-- **executeAgentTask**: Assign a single task to one agent in isolated context
-- **executeAgentTasks**: Assign multiple tasks to different agents in parallel (each with isolated context)
+- **executeAgentTask**: Assign a task to one agent in isolated context
 - **interrupt**: Stop a running task
 
 **Flow Control:**
@@ -176,19 +175,17 @@ Analysis: Opinion-based, no tools needed
 Action: broadcast to [Architect, DevOps, Backend] - share perspectives
 \`\`\`
 
-### Pattern 2: Independent Research (Parallel Tasks)
-When multiple agents need to research/work independently using their tools.
+### Pattern 2: Independent Research (Task)
+When an agent needs to research/work independently using their tools.
 
 \`\`\`
-User: "Research the pros and cons of React vs Vue vs Svelte"
-Analysis: Requires web search, agents work independently
-Action: executeAgentTasks with parallel assignments
-executeAgentTasks({
-  tasks: [
-    { agentId: "frontend-expert", title: "Research React", instruction: "Research React ecosystem, performance benchmarks, community size, and typical use cases. Provide pros and cons." },
-    { agentId: "ui-specialist", title: "Research Vue", instruction: "Research Vue ecosystem, performance benchmarks, community size, and typical use cases. Provide pros and cons." },
-    { agentId: "tech-analyst", title: "Research Svelte", instruction: "Research Svelte ecosystem, performance benchmarks, community size, and typical use cases. Provide pros and cons." }
-  ]
+User: "Research the pros and cons of React"
+Analysis: Requires web search, agent works independently
+Action: executeAgentTask to frontend expert
+executeAgentTask({
+  agentId: "frontend-expert",
+  title: "Research React",
+  task: "Research React ecosystem, performance benchmarks, community size, and typical use cases. Provide pros and cons."
 })
 \`\`\`
 
@@ -211,28 +208,25 @@ When you need facts first, then discussion.
 User: "Should we migrate to Kubernetes? Research and discuss."
 Analysis: First gather facts (tools), then discuss (no tools)
 Action:
-1. executeAgentTasks({
-     tasks: [
-       { agentId: "devops", title: "K8s Adoption Research", instruction: "Research Kubernetes adoption best practices for our scale. Include migration complexity, resource requirements, and operational overhead." },
-       { agentId: "security", title: "K8s Security Analysis", instruction: "Research Kubernetes security considerations including network policies, RBAC, secrets management, and common vulnerabilities." }
-     ]
+1. executeAgentTask({
+     agentId: "devops",
+     title: "K8s Adoption Research",
+     task: "Research Kubernetes adoption best practices for our scale. Include migration complexity, resource requirements, operational overhead, and security considerations."
    })
 2. [Wait for results]
 3. broadcast: "Based on the research, share your recommendations"
 \`\`\`
 
-### Pattern 5: Collaborative Implementation (Parallel Tasks)
-When multiple agents create deliverables using their tools.
+### Pattern 5: Implementation Task
+When an agent needs to create deliverables using their tools.
 
 \`\`\`
-User: "Create a landing page - need copy, design specs, and code"
-Analysis: Each agent produces artifacts using their tools
-Action: executeAgentTasks({
-  tasks: [
-    { agentId: "copywriter", title: "Write Copy", instruction: "Write compelling landing page copy for [product]. Include headline, subheadline, feature descriptions, and CTA text." },
-    { agentId: "designer", title: "Design Specs", instruction: "Create design specifications including color palette, typography, layout grid, and component list with visual hierarchy." },
-    { agentId: "frontend-dev", title: "Implement Page", instruction: "Implement the landing page using React. Include responsive design, animations, and SEO-friendly markup." }
-  ]
+User: "Write the landing page copy"
+Analysis: Agent produces artifacts using their tools
+Action: executeAgentTask({
+  agentId: "copywriter",
+  title: "Write Copy",
+  task: "Write compelling landing page copy for [product]. Include headline, subheadline, feature descriptions, and CTA text."
 })
 \`\`\`
 </workflow_patterns>
@@ -243,8 +237,7 @@ Action: executeAgentTasks({
 - broadcast: \`agentIds\` (array), \`instruction\` (optional shared guidance)
 
 **Task Execution:**
-- executeAgentTask: \`agentId\`, \`task\` (clear deliverable description), \`timeout\` (optional, default 30min)
-- executeAgentTasks: \`tasks\` (array of {agentId, title, instruction, timeout?}) - **Use this for parallel task execution across multiple agents**
+- executeAgentTask: \`agentId\`, \`title\`, \`task\` (clear deliverable description), \`timeout\` (optional, default 30min)
 - interrupt: \`taskId\`
 
 **Flow Control:**

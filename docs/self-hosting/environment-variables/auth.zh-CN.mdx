@@ -18,13 +18,6 @@ LobeChat 在部署时提供了完善的身份验证服务能力，以下是相�
 
 ### 通用设置
 
-#### `NEXT_PUBLIC_ENABLE_BETTER_AUTH`
-
-- 类型：必选
-- 描述：设置为 `1` 以启用 Better Auth 服务。启用后，将使用 Better Auth 进行身份验证，而非 Next Auth 或 Clerk。
-- 默认值：`-`
-- 示例：`1`
-
 #### `AUTH_SECRET`
 
 - 类型：必选
@@ -49,10 +42,10 @@ LobeChat 在部署时提供了完善的身份验证服务能力，以下是相�
 #### `JWKS_KEY`
 
 - 类型：必选
-- 描述：用于签名和验证 JWT 的通用 JWKS（JSON Web Key Set）密钥。用于内部服务认证和其他加密操作。必须是包含 RS256 RSA 密钥对的 JWKS JSON 字符串。如果未设置，将回退到 `OIDC_JWKS_KEY`（向后兼容）。
+- 描述：用于签名和验证 JWT 的 JWKS（JSON Web Key Set）密钥。用于 OIDC JWT token 签名和内部服务调用认证 token。必须是包含 RS256 RSA 密钥对的 JWKS JSON 字符串。
 - 默认值：`-`
 
-<OIDCJWKs />
+<GenerateJWKSKey />
 
 #### `INTERNAL_JWT_EXPIRATION`
 

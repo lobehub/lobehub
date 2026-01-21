@@ -47,24 +47,6 @@ Before deployment, make sure you have a Postgres database instance ready. You ca
 Since we support file-based conversations/knowledge base conversations, we need to install the `pgvector` plugin for Postgres. This plugin provides vector search capabilities and is a key component for LobeChat to implement RAG.
 
 <Steps>
-  ### `NEXT_PUBLIC_SERVICE_MODE`
-
-  LobeChat supports both client-side and server-side databases, so we provide an environment variable for switching modes, which is `NEXT_PUBLIC_SERVICE_MODE`, with a default value of `client`.
-
-  For server-side database deployment scenarios, you need to set `NEXT_PUBLIC_SERVICE_MODE` to `server`.
-
-  <Callout type={'info'}>
-    In the official `lobe-chat-database` Docker image, this environment variable is already set to
-    `server` by default. Therefore, if you deploy using the Docker image, you do not need to configure
-    this environment variable again.
-  </Callout>
-
-  <Callout type={'tip'}>
-    Since environment variables starting with `NEXT_PUBLIC` take effect in the front-end code, they cannot be modified through container runtime injection. (Refer to the `next.js` documentation [Configuring: Environment Variables | Next.js (nextjs.org)](https://nextjs.org/docs/pages/building-your-application/configuring/environment-variables)). This is why we chose to create a separate DB version image.
-
-    If you need to modify variables with the `NEXT_PUBLIC` prefix in a Docker deployment, you must build the image yourself and inject your own `NEXT_PUBLIC` prefixed environment variables during the build.
-  </Callout>
-
   ### `DATABASE_URL`
 
   The core of configuring the database is to add the `DATABASE_URL` environment variable and fill in the Postgres database connection URL you have prepared. The typical format of the database connection URL is `postgres://username:password@host:port/database`.
@@ -95,7 +77,7 @@ Since we support file-based conversations/knowledge base conversations, we need 
 
   <Callout type={'info'}>
     You can generate a random 32-character string as the value of `KEY_VAULTS_SECRET` using `openssl
-                                                      rand -base64 32`.
+                                                              rand -base64 32`.
   </Callout>
 </Steps>
 

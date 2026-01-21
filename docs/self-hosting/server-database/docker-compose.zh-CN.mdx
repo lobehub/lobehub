@@ -18,16 +18,6 @@ tags:
   [![][docker-pulls-shield]][docker-pulls-link]
 </div>
 
-<Callout type="warning">
-  **Docker 部署限制说明**
-  Docker 及 Docker Compose 部署方案不支持通过环境变量注入 `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`，
-  因此无法启用 Clerk 身份验证服务。建议替代方案：
-
-  - 采用 Vercel 托管部署
-
-  - 执行本地镜像构建流程
-</Callout>
-
 ## 快速启动
 
 <Callout type="info">
@@ -234,15 +224,15 @@ bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_CN
   - 选择访问协议：`http` 或 `https`
   - 安全密钥重新生成：我们强烈建议你重新生成安全密钥，如果你缺少脚本所需的密钥生成库，我们建议你参考 [自定义部署](#自定义部署) 章节对密钥进行修改。
 
-    <Callout type="warning">
-      以下问题可能导致你的服务无法正常访问：
+  <Callout type="warning">
+    以下问题可能导致你的服务无法正常访问：
 
-      - 此处的域名配置需要与步骤`1`中的反向代理配置保持一致。
+    - 此处的域名配置需要与步骤`1`中的反向代理配置保持一致。
 
-      - 如果你使用 Cloudflare 的域名解析服务并开启了 `全程代理`，请使用 `https` 协议。
+    - 如果你使用 Cloudflare 的域名解析服务并开启了 `全程代理`，请使用 `https` 协议。
 
-      - 如果你使用了 HTTPS 协议，请确保你的域名证书已经正确配置，一键部署默认不支持自签发证书。
-    </Callout>
+    - 如果你使用了 HTTPS 协议，请确保你的域名证书已经正确配置，一键部署默认不支持自签发证书。
+  </Callout>
 
   ### 查看配置生成报告
 
@@ -665,7 +655,7 @@ docker compose up -d # 重新启动
 #### 使用 `INTERNAL_APP_URL` 配置内部服务器通信
 
 <Callout type="info">
-  如果你在 CDN（如 Cloudflare）或反向代理后部署 LobeChat，你可以配置内部服务器到服务器通信以绕过 CDN/代理层，以获得更好的性能。
+  如果你在 CDN（如 Cloudflare）或反向代理后部署 LobeChat，你可以配置内部服务器到服务器通信以绕过 CDN / 代理层，以获得更好的性能。
 </Callout>
 
 你可以配置 `INTERNAL_APP_URL` 环境变量：
@@ -677,12 +667,14 @@ environment:
 ```
 
 **工作原理：**
-- `APP_URL`：用于浏览器/客户端访问、OAuth 回调、webhook 等（通过 CDN/代理）
-- `INTERNAL_APP_URL`：用于内部服务器到服务器通信（绕过 CDN/代理）
+
+- `APP_URL`：用于浏览器 / 客户端访问、OAuth 回调、webhook 等（通过 CDN / 代理）
+- `INTERNAL_APP_URL`：用于内部服务器到服务器通信（绕过 CDN / 代理）
 
 如果未设置 `INTERNAL_APP_URL`，它将默认为 `APP_URL`。
 
 **配置选项：**
+
 - `http://localhost:3210` - 如果使用 Docker 主机网络模式
 - `http://lobe:3210` - 如果使用 Docker 网络与服务名称
 - `http://127.0.0.1:3210` - 备用本地主机地址
@@ -702,7 +694,7 @@ environment:
 # HTTP_PROXY=http://localhost:7890
 # HTTPS_PROXY=http://localhost:7890
 
-# Other environment variables, as needed. You can refer to the environment variables configuration for the client version, making sure not to have ACCESS_CODE.
+# Other environment variables, as needed. You can refer to the environment variables configuration for the client version.
 # OPENAI_API_KEY=sk-xxxx
 # OPENAI_PROXY_URL=https://api.openai.com/v1
 # OPENAI_MODEL_LIST=...
@@ -783,7 +775,6 @@ services:
     restart: always
     command: >
       server /etc/minio/data --address ":${MINIO_PORT}" --console-address ":9001"
-
 
   casdoor:
     image: casbin/casdoor

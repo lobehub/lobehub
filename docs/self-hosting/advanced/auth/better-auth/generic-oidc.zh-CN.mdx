@@ -1,0 +1,83 @@
+---
+title: 在 LobeChat 中配置 Generic OIDC 身份验证
+description: 学习如何使用 Generic OIDC 集成将 LobeChat 与任何 OpenID Connect 提供商对接。
+tags:
+  - Generic OIDC
+  - OpenID Connect
+  - 身份验证
+  - LobeChat
+  - 单点登录
+---
+
+# 配置 Generic OIDC 身份验证
+
+使用 Generic OIDC 可以将 LobeChat 与任何符合 OpenID Connect 标准的身份提供商集成，适用于不在我们支持列表中的提供商。
+
+<Steps>
+  ### 配置你的 OIDC 提供商
+
+  在身份提供商的管理控制台中：
+
+  1. 创建新的 OIDC/OAuth2 应用
+  2. 设置应用类型为 **Web Application** 或 **Confidential Client**
+  3. 启用必需的 scopes：`openid`、`profile`、`email`
+  4. 记下 **Client ID** 和 **Client Secret**
+
+  ### 配置重定向 URI
+
+  在 OIDC 提供商中添加回调 URL：
+
+  <Callout type={'info'}>
+    回调 URL 格式：
+
+    - 本地开发: `http://localhost:3210/api/auth/callback/generic-oidc`
+    - 生产环境: `https://your-domain.com/api/auth/callback/generic-oidc`
+  </Callout>
+
+  ### 查找 Issuer URL
+
+  Issuer URL 通常在提供商的 OIDC 发现文档中：
+
+  ```
+  https://your-provider/.well-known/openid-configuration
+  ```
+
+  在 JSON 响应中查找 `issuer` 字段。
+
+  ### 配置环境变量
+
+  | 环境变量                             | 类型 | 描述                                             |
+  | -------------------------------- | -- | ---------------------------------------------- |
+  | `AUTH_SECRET`                    | 必选 | 会话加密密钥，使用 `openssl rand -base64 32` 生成         |
+  | `AUTH_SSO_PROVIDERS`             | 必选 | 填写 `generic-oidc`                              |
+  | `AUTH_GENERIC_OIDC_ID`           | 必选 | Client ID                                      |
+  | `AUTH_GENERIC_OIDC_SECRET`       | 必选 | Client Secret                                  |
+  | `AUTH_GENERIC_OIDC_ISSUER`       | 必选 | OIDC Issuer URL（如 `https://your-provider.com`） |
+
+  <Callout type={'tip'}>
+    前往 [📘 环境变量](/zh/docs/self-hosting/environment-variables/auth#generic-oidc)
+    可查阅相关变量详情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功后，用户将可以通过你的 OIDC 提供商身份认证并使用 LobeChat。
+</Callout>
+
+## 故障排除
+
+### 常见问题
+
+1. **无效的重定向 URI**：确保回调 URL 与提供商中配置的完全匹配
+2. **缺少 scopes**：确保 `openid`、`profile` 和 `email` scopes 已启用
+3. **无效的 issuer**：Issuer URL 必须与 OIDC 发现文档中的完全匹配
+
+### 测试 OIDC 配置
+
+通过访问以下地址验证 OIDC 配置：
+
+```
+https://your-provider/.well-known/openid-configuration
+```
+
+这应该返回包含所有必需端点的 JSON 文档。

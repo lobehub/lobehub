@@ -26,12 +26,6 @@ tags:
   存储服务](/zh/docs/self-hosting/advanced/s3/tencent-cloud)。
 </Callout>
 
-<Callout type="warning">
-  由于无法使用 Docker 环境变量暴露 `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`，使用 Docker / Docker Compose
-  部署 LobeChat 时，你不能使用 Clerk 作为登录鉴权服务。
-
-  如果你确实需要 Clerk 作为登录鉴权服务，你可以考虑使用 Vercel 部署或者自行构建镜像。
-</Callout>
 
 ## 在 Linux 服务器上部署
 
@@ -72,13 +66,11 @@ tags:
   # 格式：postgres://username:password@host:port/dbname，如果你的 pg 实例为 Docker 容器，请使用容器名
   DATABASE_URL=postgres://postgres:mysecretpassword@my-postgres:5432/postgres
 
-  # NEXT_AUTH 相关，可以使用 auth0、Azure AD、GitHub、Authentik、zitadel 等，如有其他接入诉求欢迎提 PR
-  NEXT_AUTH_SECRET=3904039cd41ea1bdf6c93db0db96e250
-  NEXT_AUTH_SSO_PROVIDERS=auth0
-  NEXTAUTH_URL=https://your-prod-domain.com/api/auth
-  AUTH_AUTH0_ID=xxxxxx
-  AUTH_AUTH0_SECRET=cSX_xxxxx
-  AUTH_AUTH0_ISSUER=https://lobe-chat-demo.us.auth0.com
+  # 身份验证（Better Auth）
+  # 会话加密密钥（使用以下命令生成：openssl rand -base64 32）
+  AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+  # JWKS 密钥，用于签名和验证 JWT（在此生成：https://lobehub.com/zh/docs/self-hosting/environment-variables/auth#jwks_key）
+  JWKS_KEY='{"keys":[...]}'
 
   # S3 相关
   S3_ACCESS_KEY_ID=xxxxxxxxxx
@@ -90,11 +82,6 @@ tags:
   S3_PUBLIC_DOMAIN=https://s3-for-lobechat.your-domain.com
   # S3_REGION=ap-chengdu # 如果需要指定地域
 
-  # 其他环境变量，视需求而定
-  # OPENAI_API_KEY=sk-xxxx
-  # OPENAI_PROXY_URL=https://api.openai.com/v1
-  # OPENAI_MODEL_LIST=...
-  # ...
   ```
 
   ### 启动 lobe-chat-database docker 镜像
@@ -143,13 +130,9 @@ LobeChat 的 DB 版也支持直接在本地的 Mac/Windows 本地使用。
 $ docker run -it -d --name lobe-chat-database -p 3210:3210 \
   -e DATABASE_URL=postgres://postgres:mysecretpassword@host.docker.internal:5432/postgres \
   -e KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
-  -e NEXT_AUTH_SECRET=3904039cd41ea1bdf6c93db0db96e250 \
-  -e NEXT_AUTH_SSO_PROVIDERS=auth0 \
-  -e AUTH_AUTH0_ID=xxxxxx \
-  -e AUTH_AUTH0_SECRET=cSX_xxxxx \
-  -e AUTH_AUTH0_ISSUER=https://lobe-chat-demo.us.auth0.com \
+  -e AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
+  -e JWKS_KEY='{"keys":[...]}' \
   -e APP_URL=http://localhost:3210 \
-  -e NEXTAUTH_URL=http://localhost:3210/api/auth \
   -e S3_ACCESS_KEY_ID=xxxxxxxxxx \
   -e S3_SECRET_ACCESS_KEY=xxxxxxxxxx \
   -e S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com \

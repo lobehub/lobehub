@@ -1,6 +1,27 @@
 [
   {
     "children": {
+      "fixes": ["Improve e2e server and complete i18n resources."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.332"
+  },
+  {
+    "children": {
+      "fixes": ["Slove the agent group editor not focus in editdata area."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.331"
+  },
+  {
+    "children": {
+      "fixes": ["Fix multi agent tasks issue."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.330"
+  },
+  {
+    "children": {
       "fixes": ["Sloved the old removeSessionTopics not work."]
     },
     "date": "2026-01-21",

@@ -34,8 +34,8 @@ const MemberProfile = memo(() => {
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
 
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
-  const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup);
-  const currentGroupAgents = useAgentGroupStore(agentGroupSelectors.currentGroupAgents);
+  const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup, isEqual);
+  const currentGroupAgents = useAgentGroupStore(agentGroupSelectors.currentGroupAgents, isEqual);
   const router = useQueryRoute();
 
   // Check if the current agent is the supervisor
@@ -46,6 +46,15 @@ const MemberProfile = memo(() => {
     const agent = currentGroupAgents.find((a) => a.id === agentId);
     return agent ? !agent.isSupervisor && !agent.virtual : false;
   }, [currentGroupAgents, agentId]);
+
+  // Stabilize editorData object reference to prevent unnecessary re-renders
+  const editorData = useMemo(
+    () => ({
+      content: config?.systemRole,
+      editorData: config?.editorData,
+    }),
+    [config?.systemRole, config?.editorData],
+  );
 
   // Wrap updateAgentConfigById for saving editor content
   const updateContent = useCallback(
@@ -136,11 +145,8 @@ const MemberProfile = memo(() => {
       {/* Main Content: Prompt Editor */}
       <EditorCanvas
         editor={editor}
-        editorData={{
-          content: config?.systemRole,
-          editorData: config?.editorData,
-        }}
-        key={agentId}
+        editorData={editorData}
+        entityId={agentId}
         onContentChange={onContentChange}
         placeholder={
           isSupervisor

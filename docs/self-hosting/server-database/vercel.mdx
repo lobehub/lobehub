@@ -1,13 +1,13 @@
 ---
 title: Deploy LobeChat with database on Vercel
 description: >-
-  Learn how to deploy LobeChat with database on Vercel with ease, including: database, authentication and S3 storage service.
-
+  Learn how to deploy LobeChat with database on Vercel with ease, including:
+  database, authentication and S3 storage service.
 tags:
   - Deploy LobeChat
   - Vercel Deployment
-  - OpenAI API Key
-  - Custom Domain Binding
+  - Better Auth
+  - S3 Storage
 ---
 
 # Deploying Server Database Version on Vercel
@@ -18,7 +18,6 @@ This article will detail how to deploy the server database version of LobeChat o
   Before proceeding, please make sure of the following:
 
   - Export all data, as after deploying the server-side database, existing user data cannot be automatically migrated and can only be manually imported after backup!
-  - The `ACCESS_CODE` in the environment variables is either unset or cleared!
   - When configuring the environment variables required for the server-side database, make sure to fill in all of them before deployment, otherwise you may encounter database migration issues!
 </Callout>
 
@@ -50,9 +49,6 @@ This article will detail how to deploy the server database version of LobeChat o
       ```shell
       # Serverless Postgres DB Url
       DATABASE_URL=
-
-      # Specify service mode as server, otherwise it will not enter the server-side database
-      NEXT_PUBLIC_SERVICE_MODE=server
       ```
 
       An example of filling in Vercel is as follows:
@@ -69,9 +65,6 @@ This article will detail how to deploy the server database version of LobeChat o
 
       # Specify Postgres database driver as node
       DATABASE_DRIVER=node
-
-      # Specify service mode as server, otherwise it will not enter the server-side database
-      NEXT_PUBLIC_SERVICE_MODE=server
       ```
 
       An example of filling in Vercel is as follows:
@@ -88,11 +81,9 @@ This article will detail how to deploy the server database version of LobeChat o
 
   ### Add the `KEY_VAULTS_SECRET` Environment Variable
 
-  After adding the `DATABASE_URL` environment variable for the database, you need to add a `KEY_VAULTS_SECRET` environment variable. This variable is used to encrypt sensitive information such as apikeys stored by users. You can generate a random 32-character string as the key using `openssl rand -base64 32`.
+  After adding the `DATABASE_URL` environment variable for the database, you need to add a `KEY_VAULTS_SECRET` environment variable. This variable is used to encrypt sensitive information such as apikeys stored by users. Click the button below to generate:
 
-  ```shell
-  KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
-  ```
+  <GenerateSecret envName="KEY_VAULTS_SECRET" />
 
   Make sure to add this to the Vercel environment variables as well.
 
@@ -106,66 +97,26 @@ This article will detail how to deploy the server database version of LobeChat o
 The server-side database needs to be paired with a user authentication service to function properly. Therefore, the corresponding authentication service needs to be configured.
 
 <Steps>
-  ### Prepare Clerk Authentication Service
+  ### Add Authentication Environment Variables
 
-  Go to [Clerk](https://clerk.com?utm_source=lobehub\&utm_medium=docs) to register and create an application to obtain the corresponding Public Key and Secret Key.
+  In Vercel's deployment environment variables, add the following environment variables to enable authentication (powered by [Better Auth](https://www.better-auth.com)):
+
+  Click the button below to generate `AUTH_SECRET` (session encryption key):
+
+  <GenerateSecret envName="AUTH_SECRET" />
+
+  You also need to configure the `JWKS_KEY` environment variable for signing and verifying JWTs. Click the button below to generate:
+
+  <GenerateJWKSKey />
+
+  With these variables, users can register and login with email and password.
 
   <Callout type={'info'}>
-    If you are not familiar with Clerk, you can refer to [Authentication
-    Service-Clerk](/en/docs/self-hosting/advanced/authentication#clerk) for details on using Clerk.
+    For advanced features like SSO providers, magic link login, and email verification, see [Authentication Service](/docs/self-hosting/advanced/auth).
   </Callout>
-
-  ### Add Public and Private Key Environment Variables in Vercel
-
-  In Vercel's deployment environment variables, add the `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` environment variables. You can click on "API Keys" in the menu, then copy the corresponding values and paste them into Vercel's environment variables.
-
-  <Image alt={'Find the corresponding public and private key environment variables in Clerk'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/89883703-7a1a-4a11-b944-5d804544e57c'} />
-
-  The environment variables required for this step are as follows:
-
-  ```shell
-  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxx
-  CLERK_SECRET_KEY=sk_live_xxxxxxxxxxxxxxxxxxxxxx
-  ```
-
-  Add the above variables to Vercel:
-
-  <Image alt={'Add Clerk public and private key environment variables in Vercel'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/2bfa13df-6e20-4768-97c0-4dad06c85a2f'} />
-
-  ### Create and Configure Webhook in Clerk
-
-  Since we let Clerk fully handle user authentication and management, we need Clerk to notify our application and store data in the database when there are changes in the user's lifecycle (create, update, delete). We achieve this requirement through the Webhook provided by Clerk.
-
-  We need to add an endpoint in Clerk's Webhooks to inform Clerk to send notifications to this endpoint when a user's information changes.
-
-  <Image alt={'Add Webhooks endpoint in Clerk'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/f50f47fb-5e8e-4930-bf4e-8cf6f5b8afb9'} />
-
-  Fill in the endpoint with the URL of your Vercel project, such as `https://your-project.vercel.app/api/webhooks/clerk`. Then, subscribe to events by checking the three user events (`user.created`, `user.deleted`, `user.updated`), and click create.
-
-  <Callout type={'warning'}>
-    The `https://` in the URL is essential to maintain the integrity of the URL.
-  </Callout>
-
-  <Image alt={'Configure URL and user events when adding Clerk Webhooks'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/0249ea56-ab17-4aa9-a56c-9ebd556c2645'} />
-
-  ### Add Webhook Secret to Vercel Environment Variables
-
-  After creation, you can find the secret of this Webhook in the bottom right corner:
-
-  <Image alt={'View Clerk Webhooks secret'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/fab4abb2-584b-49de-9340-813382951635'} />
-
-  The environment variable corresponding to this secret is `CLERK_WEBHOOK_SECRET`:
-
-  ```shell
-  CLERK_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxx
-  ```
-
-  Add it to Vercel's environment variables:
-
-  <Image alt={'Add Clerk Webhooks secret in Vercel'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/5fdc9479-007f-46ab-9d6e-a9603e949116'} />
 </Steps>
 
-By completing these steps, you have successfully configured the Clerk authentication service. Next, we will configure the S3 storage service.
+By completing these steps, you have successfully configured the authentication service. Next, we will configure the S3 storage service.
 
 ## 3. Configure S3 Storage Service
 
@@ -320,17 +271,13 @@ For easy copying, here is a summary of the environment variables required to con
 ```shell
 APP_URL=https://your-project.com
 
-# Specify the service mode as server
-NEXT_PUBLIC_SERVICE_MODE=server
-
 # Postgres database URL
 DATABASE_URL=
 KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
 
-# Clerk related configurations
-NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxx
-CLERK_SECRET_KEY=sk_live_xxxxxxxxxxxxxxxxxxxxxx
-CLERK_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxx
+# Authentication
+AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+JWKS_KEY='{"keys":[...]}'
 
 # S3 related configurations
 # S3 keys

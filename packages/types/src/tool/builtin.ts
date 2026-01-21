@@ -453,6 +453,47 @@ export interface TriggerExecuteTaskParams extends GroupOrchestrationBaseParams {
 }
 
 /**
+ * Task item for triggerExecuteTasks callback
+ */
+export interface TriggerExecuteTaskItem {
+  /**
+   * The agent ID to execute this task
+   */
+  agentId: string;
+  /**
+   * Detailed instruction/prompt for the task execution
+   */
+  instruction: string;
+  /**
+   * Optional timeout in milliseconds for this specific task
+   */
+  timeout?: number;
+  /**
+   * Brief title describing what this task does (shown in UI)
+   */
+  title: string;
+}
+
+/**
+ * Params for triggerExecuteTasks callback (multiple tasks)
+ */
+export interface TriggerExecuteTasksParams extends GroupOrchestrationBaseParams {
+  /**
+   * If true, the orchestration will end after all tasks complete,
+   * without calling the supervisor again.
+   */
+  skipCallSupervisor?: boolean;
+  /**
+   * Array of tasks to execute, each assigned to a specific agent
+   */
+  tasks: TriggerExecuteTaskItem[];
+  /**
+   * The tool message ID that triggered the tasks
+   */
+  toolMessageId: string;
+}
+
+/**
  * Group Orchestration callbacks for group management tools
  * These callbacks are used to trigger the next phase in multi-agent orchestration
  */
@@ -471,6 +512,11 @@ export interface GroupOrchestrationCallbacks {
    * Trigger async task execution for an agent
    */
   triggerExecuteTask: (params: TriggerExecuteTaskParams) => Promise<void>;
+
+  /**
+   * Trigger async execution of multiple tasks in parallel
+   */
+  triggerExecuteTasks: (params: TriggerExecuteTasksParams) => Promise<void>;
 
   /**
    * Trigger speak to a specific agent

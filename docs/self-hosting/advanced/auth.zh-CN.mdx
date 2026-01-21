@@ -1,31 +1,21 @@
 ---
 title: LobeChat 身份验证服务配置
-description: 了解如何使用 Better Auth、Clerk 或 Next Auth 配置外部身份验证服务，以统一管理用户授权。支持的身份验证服务包括 Auth0、 Azure ID 等。
+description: 了解如何配置 Better Auth 以统一管理用户授权。支持的 SSO 提供商包括 Google、GitHub、Microsoft 等。
 tags:
   - 身份验证服务
   - Better Auth
-  - LobeChat
   - SSO
-  - Clerk
 ---
 
 # 身份验证服务
 
-LobeChat 支持使用 Better Auth、Clerk 或者 Next Auth 配置外部身份验证服务，供企业 / 组织内部使用，统一管理用户授权。
+LobeChat 使用 [Better Auth](https://www.better-auth.com) 作为身份验证解决方案，为自托管部署提供全面、安全、灵活的身份验证服务。
 
-## Clerk
+<Callout type={'info'}>
+  需要使用旧版身份验证方案？请参阅 [旧版身份验证](/zh/docs/self-hosting/advanced/auth/legacy) 了解 NextAuth 和 Clerk 的文档。
+</Callout>
 
-Clerk 是一个近期流行起来的全面的身份验证解决方案，它提供了简单而强大的 API 和服务来处理用户认证和会话管理。Clerk 的设计哲学是提供一套简洁、现代的认证解决方案，使得开发者可以轻松集成和使用。
-
-LobeChat 与 Clerk 做了深度集成，能够为用户提供一个更加安全、便捷的登录和注册体验，同时也为开发者减轻了管理身份验证逻辑的负担。Clerk 的简洁和现代的设计理念与 LobeChat 的目标非常契合，使得整个平台的用户管理更加高效和可靠。
-
-在 LobeChat 的环境变量中设置 `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` 和 `CLERK_SECRET_KEY`，即可开启和使用 Clerk。
-
-## Better Auth
-
-[Better Auth](https://www.better-auth.com) 是一个现代化、框架无关的身份验证库，旨在提供全面、安全、灵活的身份验证解决方案。它支持多种认证方式，包括邮箱 / 密码登录、魔法链接登录以及多种 OAuth/SSO 提供商。
-
-### 主要特性
+## 主要特性
 
 - **邮箱 / 密码认证**：内置支持传统的邮箱和密码登录，采用安全的密码哈希算法
 - **邮箱验证**：可选的邮箱验证流程，支持自定义邮件模板
@@ -33,157 +23,116 @@ LobeChat 与 Clerk 做了深度集成，能够为用户提供一个更加安全�
 - **OAuth/SSO 支持**：集成 Google、GitHub、Microsoft、AWS Cognito 等主流身份提供商
 - **通用 OIDC/OAuth**：支持任何符合 OpenID Connect 或 OAuth 2.0 标准的提供商
 
-### 快速开始
+## 快速开始
 
 要在 LobeChat 中启用 Better Auth，请设置以下环境变量：
 
-| 环境变量                             | 类型 | 描述                                                          |
-| -------------------------------- | -- | ----------------------------------------------------------- |
-| `NEXT_PUBLIC_ENABLE_BETTER_AUTH` | 必选 | 设置为 `1` 以启用 Better Auth 服务                                   |
-| `AUTH_SECRET`                    | 必选 | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`              |
-| `AUTH_SSO_PROVIDERS`             | 可选 | 启用的 SSO 提供商列表，以逗号分隔，例如 `google,github,microsoft`             |
+| 环境变量                 | 类型 | 描述                                               |
+| -------------------- | -- | ------------------------------------------------ |
+| `AUTH_SECRET`        | 必选 | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`   |
+| `AUTH_SSO_PROVIDERS` | 可选 | 启用的 SSO 提供商列表，以逗号分隔，例如 `google,github,microsoft` |
 
-<Callout type={'error'}>
-  **重要提示**：Better Auth 目前仅适用于**全新部署**的场景。如果你已经使用 NextAuth 或 Clerk 并且数据库中存在用户数据，**请暂时不要切换到 Better Auth**，否则现有用户将无法登录。
+## 支持的 SSO 提供商
 
-  我们正在开发从 NextAuth/Clerk 到 Better Auth 的用户数据迁移工具，迁移方案完成后会更新文档。相关进度请关注 [GitHub Issue #10456](https://github.com/lobehub/lobe-chat/issues/10456)。
-</Callout>
+| 提供商                   | 值                       | 环境变量                                                                                                               |
+| --------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Google                | `google`                | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`                                                                             |
+| GitHub                | `github`                | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`                                                                             |
+| Microsoft             | `microsoft`             | `AUTH_MICROSOFT_ID`, `AUTH_MICROSOFT_SECRET`                                                                       |
+| Apple                 | `apple`                 | `AUTH_APPLE_CLIENT_ID`, `AUTH_APPLE_CLIENT_SECRET`                                                                 |
+| AWS Cognito           | `cognito`               | `AUTH_COGNITO_ID`, `AUTH_COGNITO_SECRET`, `AUTH_COGNITO_DOMAIN`, `AUTH_COGNITO_REGION`, `AUTH_COGNITO_USERPOOL_ID` |
+| Auth0                 | `auth0`                 | `AUTH_AUTH0_ID`, `AUTH_AUTH0_SECRET`, `AUTH_AUTH0_ISSUER`                                                          |
+| Authelia              | `authelia`              | `AUTH_AUTHELIA_ID`, `AUTH_AUTHELIA_SECRET`, `AUTH_AUTHELIA_ISSUER`                                                 |
+| Authentik             | `authentik`             | `AUTH_AUTHENTIK_ID`, `AUTH_AUTHENTIK_SECRET`, `AUTH_AUTHENTIK_ISSUER`                                              |
+| Casdoor               | `casdoor`               | `AUTH_CASDOOR_ID`, `AUTH_CASDOOR_SECRET`, `AUTH_CASDOOR_ISSUER`                                                    |
+| Cloudflare Zero Trust | `cloudflare-zero-trust` | `AUTH_CLOUDFLARE_ZERO_TRUST_ID`, `AUTH_CLOUDFLARE_ZERO_TRUST_SECRET`, `AUTH_CLOUDFLARE_ZERO_TRUST_ISSUER`          |
+| Keycloak              | `keycloak`              | `AUTH_KEYCLOAK_ID`, `AUTH_KEYCLOAK_SECRET`, `AUTH_KEYCLOAK_ISSUER`                                                 |
+| Logto                 | `logto`                 | `AUTH_LOGTO_ID`, `AUTH_LOGTO_SECRET`, `AUTH_LOGTO_ISSUER`                                                          |
+| Okta                  | `okta`                  | `AUTH_OKTA_ID`, `AUTH_OKTA_SECRET`, `AUTH_OKTA_ISSUER`                                                             |
+| ZITADEL               | `zitadel`               | `AUTH_ZITADEL_ID`, `AUTH_ZITADEL_SECRET`, `AUTH_ZITADEL_ISSUER`                                                    |
+| Generic OIDC          | `generic-oidc`          | `AUTH_GENERIC_OIDC_ID`, `AUTH_GENERIC_OIDC_SECRET`, `AUTH_GENERIC_OIDC_ISSUER`                                     |
+| 飞书                    | `feishu`                | `AUTH_FEISHU_APP_ID`, `AUTH_FEISHU_APP_SECRET`                                                                     |
+| 微信                    | `wechat`                | `AUTH_WECHAT_ID`, `AUTH_WECHAT_SECRET`                                                                             |
 
-<Callout type={'warning'}>
-  若使用官方 Docker 镜像构建 / 部署，默认是 **开启 NextAuth、关闭 Better Auth**
-  （`NEXT_PUBLIC_ENABLE_NEXT_AUTH=1`、`NEXT_PUBLIC_ENABLE_BETTER_AUTH=0`），以避免意外跳转到新版登录页。
-  如果要切换到 Better Auth，请同时显式设置构建参数和运行时环境变量：
-  `NEXT_PUBLIC_ENABLE_BETTER_AUTH=1`、`NEXT_PUBLIC_ENABLE_NEXT_AUTH=0`，并重新构建镜像。
-</Callout>
+点击下方提供商查看详细配置指南：
 
-### 支持的 SSO 提供商
+<Cards>
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/github'} title={'GitHub'} />
 
-| 提供商                   | 值                       | 环境变量                                                                                                      |
-| --------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------- |
-| Google                | `google`                | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`                                                                    |
-| GitHub                | `github`                | `AUTH_GITHUB_ID`, `AUTH_GITHUB_SECRET`                                                                    |
-| Microsoft             | `microsoft`             | `AUTH_MICROSOFT_ID`, `AUTH_MICROSOFT_SECRET`                                                              |
-| AWS Cognito           | `cognito`               | `AUTH_COGNITO_ID`, `AUTH_COGNITO_SECRET`, `AUTH_COGNITO_ISSUER`                                           |
-| Auth0                 | `auth0`                 | `AUTH_AUTH0_ID`, `AUTH_AUTH0_SECRET`, `AUTH_AUTH0_ISSUER`                                                 |
-| Authelia              | `authelia`              | `AUTH_AUTHELIA_ID`, `AUTH_AUTHELIA_SECRET`, `AUTH_AUTHELIA_ISSUER`                                        |
-| Authentik             | `authentik`             | `AUTH_AUTHENTIK_ID`, `AUTH_AUTHENTIK_SECRET`, `AUTH_AUTHENTIK_ISSUER`                                     |
-| Casdoor               | `casdoor`               | `AUTH_CASDOOR_ID`, `AUTH_CASDOOR_SECRET`, `AUTH_CASDOOR_ISSUER`                                           |
-| Cloudflare Zero Trust | `cloudflare-zero-trust` | `AUTH_CLOUDFLARE_ZERO_TRUST_ID`, `AUTH_CLOUDFLARE_ZERO_TRUST_SECRET`, `AUTH_CLOUDFLARE_ZERO_TRUST_ISSUER` |
-| Keycloak              | `keycloak`              | `AUTH_KEYCLOAK_ID`, `AUTH_KEYCLOAK_SECRET`, `AUTH_KEYCLOAK_ISSUER`                                        |
-| Logto                 | `logto`                 | `AUTH_LOGTO_ID`, `AUTH_LOGTO_SECRET`, `AUTH_LOGTO_ISSUER`                                                 |
-| Okta                  | `okta`                  | `AUTH_OKTA_ID`, `AUTH_OKTA_SECRET`, `AUTH_OKTA_ISSUER`                                                    |
-| ZITADEL               | `zitadel`               | `AUTH_ZITADEL_ID`, `AUTH_ZITADEL_SECRET`, `AUTH_ZITADEL_ISSUER`                                           |
-| Generic OIDC          | `generic-oidc`          | `AUTH_GENERIC_OIDC_ID`, `AUTH_GENERIC_OIDC_SECRET`, `AUTH_GENERIC_OIDC_ISSUER`                            |
-| 飞书                    | `feishu`                | `AUTH_FEISHU_APP_ID`, `AUTH_FEISHU_APP_SECRET`                                                            |
-| 微信                    | `wechat`                | `AUTH_WECHAT_ID`, `AUTH_WECHAT_SECRET`                                                                    |
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/google'} title={'Google'} />
 
-### 回调 URL 格式
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/microsoft'} title={'Microsoft'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/apple'} title={'Apple'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/cognito'} title={'AWS Cognito'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/auth0'} title={'Auth0'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/authelia'} title={'Authelia'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/authentik'} title={'Authentik'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/casdoor'} title={'Casdoor'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/cloudflare-zero-trust'} title={'Cloudflare Zero Trust'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/keycloak'} title={'Keycloak'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/logto'} title={'Logto'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/okta'} title={'Okta'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/zitadel'} title={'ZITADEL'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/generic-oidc'} title={'Generic OIDC'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/feishu'} title={'飞书'} />
+
+  <Card href={'/zh/docs/self-hosting/advanced/auth/better-auth/wechat'} title={'微信'} />
+</Cards>
+
+## 回调 URL 格式
 
 配置 OAuth 提供商时，请使用以下回调 URL 格式：
 
 - **开发环境**：`http://localhost:3210/api/auth/callback/{provider}`
 - **生产环境**：`https://yourdomain.com/api/auth/callback/{provider}`
 
-### 邮件服务配置
+## 邮件服务配置
 
 用于邮箱验证、密码重置和魔法链接发送。先选择邮件服务，再填对应变量：
 
-| 环境变量                                  | 类型 | 描述                                                                                        |
-| ------------------------------------- | -- | ----------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION` | 可选 | 设置为 `1` 以要求用户在登录前验证邮箱                                                                     |
-| `EMAIL_SERVICE_PROVIDER`              | 可选 | 邮件服务选择：`nodemailer`（默认，SMTP）或 `resend`                                                    |
-| `SMTP_HOST`                           | 必选 | SMTP 服务器主机名（如 `smtp.gmail.com`），仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要                |
-| `SMTP_PORT`                           | 必选 | SMTP 服务器端口（TLS 通常为 `587`，SSL 为 `465`），仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要          |
-| `SMTP_SECURE`                         | 可选 | SSL 设置为 `true`（端口 465），TLS 设置为 `false`（端口 587），仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要 |
-| `SMTP_USER`                           | 必选 | SMTP 认证用户名，仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要                                     |
-| `SMTP_PASS`                           | 必选 | SMTP 认证密码，仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要                                      |
-| `RESEND_API_KEY`                      | 必选 | Resend API Key，`EMAIL_SERVICE_PROVIDER=resend` 时必填                                        |
-| `RESEND_FROM`                         | 推荐 | 默认发件人地址（如 `noreply@已验证域名`），需为 Resend 已验证域名下的邮箱，`EMAIL_SERVICE_PROVIDER=resend` 时使用        |
+| 环境变量                      | 类型 | 描述                                                                                        |
+| ------------------------- | -- | ----------------------------------------------------------------------------------------- |
+| `AUTH_EMAIL_VERIFICATION` | 可选 | 设置为 `1` 以要求用户在登录前验证邮箱（默认关闭）                                                               |
+| `EMAIL_SERVICE_PROVIDER`  | 可选 | 邮件服务选择：`nodemailer`（默认，SMTP）或 `resend`                                                    |
+| `SMTP_HOST`               | 必选 | SMTP 服务器主机名（如 `smtp.gmail.com`），仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要                |
+| `SMTP_PORT`               | 必选 | SMTP 服务器端口（TLS 通常为 `587`，SSL 为 `465`），仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要          |
+| `SMTP_SECURE`             | 可选 | SSL 设置为 `true`（端口 465），TLS 设置为 `false`（端口 587），仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要 |
+| `SMTP_USER`               | 必选 | SMTP 认证用户名，仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要                                     |
+| `SMTP_PASS`               | 必选 | SMTP 认证密码，仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要                                      |
+| `RESEND_API_KEY`          | 必选 | Resend API Key，`EMAIL_SERVICE_PROVIDER=resend` 时必填                                        |
+| `RESEND_FROM`             | 推荐 | 默认发件人地址（如 `noreply@已验证域名`），需为 Resend 已验证域名下的邮箱，`EMAIL_SERVICE_PROVIDER=resend` 时使用        |
 
-### 魔法链接（免密）登录
+## 魔法链接（免密）登录
 
-启用 BetterAuth 魔法链接登录（依赖上方已配置好的邮件服务）：
+启用魔法链接登录（依赖上方已配置好的邮件服务，默认关闭）：
 
-| 环境变量                            | 类型 | 描述                |
-| ------------------------------- | -- | ----------------- |
-| `NEXT_PUBLIC_ENABLE_MAGIC_LINK` | 可选 | 设置为 `1` 以启用魔法链接登录 |
-
-<Callout type={'tip'}>
-  详细的提供商配置可参考 [Next Auth 提供商文档](/zh/docs/self-hosting/advanced/auth/next-auth)（大部分配置兼容），或访问官方 [Better Auth 文档](https://www.better-auth.com/docs/introduction)。
-</Callout>
+| 环境变量                | 类型 | 描述                      |
+| ------------------- | -- | ----------------------- |
+| `ENABLE_MAGIC_LINK` | 可选 | 设置为 `1` 以启用魔法链接登录（默认关闭） |
 
 <Callout type={'tip'}>
-  前往 [📘 环境变量](/zh/docs/self-hosting/environment-variables/auth#better-auth) 可查阅所有 Better Auth 相关变量详情。
+  前往 [环境变量](/zh/docs/self-hosting/environment-variables/auth#better-auth) 可查阅所有 Better Auth 相关变量详情。
 </Callout>
 
-## Next Auth
+## 常见问题
 
-在使用 NextAuth 之前，请先在 LobeChat 的环境变量中设置以下变量：
+### Better Auth 支持哪些 SSO 提供商？
 
-| 环境变量                             | 类型 | 描述                                                                                                           |
-| -------------------------------- | -- | ------------------------------------------------------------------------------------------------------------ |
-| `NEXT_PUBLIC_ENABLE_NEXT_AUTH`   | 必选 | 用于启用 NextAuth 服务，设置为 `1` 以启用，更改此项需要重新编译应用。使用 `lobehub/lobe-chat-database` 镜像部署的用户已经默认添加了该项配置。                |
-| `NEXT_AUTH_SECRET`               | 必选 | 用于加密 Auth.js 会话令牌的密钥。您可以使用以下命令： `openssl rand -base64 32`，或者访问 `https://generate-secret.vercel.app/32` 生成秘钥。 |
-| `AUTH_URL`                       | 必选 | 该 URL 用于指定 Auth.js 在执行 OAuth 验证时的回调地址，当默认生成的重定向地址发生不正确时才需要设置。`https://example.com/api/auth`                  |
-| `NEXT_AUTH_SSO_PROVIDERS`        | 可选 | 该环境变量用于同时启用多个身份验证源，以逗号 `,` 分割，例如 `auth0,microsoft-entra-id,authentik`。                                       |
-| `NEXT_AUTH_SSO_SESSION_STRATEGY` | 可选 | Auth.js 的会话策略。选项为 `jwt` 或 `database`。默认值为 `jwt`。                                                             |
+Better Auth 支持内置提供商（Google、GitHub、Microsoft、Apple、AWS Cognito）和通用 OIDC 提供商（Auth0、Authelia、Authentik、Casdoor、Cloudflare Zero Trust、Keycloak、Logto、Okta、ZITADEL、Generic OIDC、飞书、微信）。
 
-目前支持的身份验证服务有：
+### 如何启用多个 SSO 提供商？
 
-<Cards>
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/auth0'} title={'Auth0'} />
-
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/microsoft-entra-id'} title={'Microsoft Entra ID'} />
-
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/authentik'} title={'Authentik'} />
-
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/github'} title={'Github'} />
-
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/zitadel'} title={'ZITADEL'} />
-
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/cloudflare-zero-trust'} title={'Cloudflare Zero Trust'} />
-
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/authelia'} title={'Authelia'} />
-
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/logto'} title={'Logto'} />
-
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/keycloak'} title={'Keycloak'} />
-
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/okta'} title={'Okta'} />
-</Cards>
-
-点击即可查看对应平台的配置文档。
-
-## 进阶配置
-
-同时启用多个身份验证源请设置 `NEXT_AUTH_SSO_PROVIDERS` 环境变量，以逗号 `,` 分割，例如 `auth0,microsoft-entra-id,authentik`。
-
-顺序为 SSO 提供商的显示顺序。
-
-| SSO 提供商               | 值                       | 额外功能      |
-| --------------------- | ----------------------- | --------- |
-| Auth0                 | `auth0`                 |           |
-| Authenlia             | `authenlia`             |           |
-| Authentik             | `authentik`             |           |
-| Casdoor               | `casdoor`               | `Webhook` |
-| Cloudflare Zero Trust | `cloudflare-zero-trust` |           |
-| Github                | `github`                |           |
-| Logto                 | `logto`                 | `Webhook` |
-| Microsoft Entra ID    | `microsoft-entra-id`    |           |
-| ZITADEL               | `zitadel`               |           |
-| Keycloak              | `keycloak`              |           |
-| Okta                  | `okta`                  |           |
-
-## 额外功能
-
-### Webhook 支持
-
-允许 LobeChat 在身份提供商中用户信息更新时接收通知。支持的提供商包括 Casdoor 和 Logto。请参考具体提供商文档进行配置。
-
-### 数据库会话
-
-允许会话存储在数据库中，详情请参阅 [Auth.js 会话文档](https://authjs.dev/concepts/session-strategies#database-session)。
-
-## 其他 SSO 提供商
-
-请参考 [NextAuth.js](https://next-auth.js.org/providers) 文档，欢迎提交 Pull Request。
+设置 `AUTH_SSO_PROVIDERS` 环境变量，使用逗号分隔多个提供商，例如 `google,github,microsoft`。顺序决定登录页面上的显示顺序。

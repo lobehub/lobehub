@@ -1,0 +1,59 @@
+---
+title: Configuring Cloudflare Zero Trust Authentication for LobeChat
+description: >-
+  Learn how to configure Cloudflare Zero Trust SSO for LobeChat, including
+  creating an Access application.
+tags:
+  - Cloudflare Zero Trust
+  - Authentication
+  - LobeChat
+  - Single Sign-On
+  - OIDC
+---
+
+# Configuring Cloudflare Zero Trust Authentication
+
+[Cloudflare Zero Trust](https://www.cloudflare.com/zero-trust/) provides secure access to your applications without a VPN.
+
+<Steps>
+  ### Create Access Application
+
+  1. Log in to [Cloudflare Zero Trust Dashboard](https://one.dash.cloudflare.com/)
+  2. Go to **Access** > **Applications**
+  3. Click **Add an application** and select **SaaS**
+  4. Configure the application:
+     - Application name: `LobeChat`
+     - Select OIDC as the authentication protocol
+     - Add the callback URL in redirect URIs
+
+  <Callout type={'info'}>
+    **Callback URL Format**: `https://your-domain.com/api/auth/callback/cloudflare-zero-trust`
+  </Callout>
+
+  5. Note down the **Client ID**, **Client Secret**, and **Issuer URL**
+
+  ### Configure Environment Variables
+
+  When deploying LobeChat, you need to configure the following environment variables:
+
+  | Environment Variable                | Type     | Description                                                                   |
+  | ----------------------------------- | -------- | ----------------------------------------------------------------------------- |
+  | `AUTH_SECRET`                       | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS`                | Required | SSO provider for LobeChat. Use `cloudflare-zero-trust`                        |
+  | `AUTH_CLOUDFLARE_ZERO_TRUST_ID`     | Required | Client ID from Cloudflare Access                                              |
+  | `AUTH_CLOUDFLARE_ZERO_TRUST_SECRET` | Required | Client Secret from Cloudflare Access                                          |
+  | `AUTH_CLOUDFLARE_ZERO_TRUST_ISSUER` | Required | Issuer URL (e.g., `https://your-team.cloudflareaccess.com`)                   |
+
+  <Callout type={'tip'}>
+    Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#cloudflare-zero-trust) for detailed information on these variables.
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  After successful deployment, users will be able to authenticate with Cloudflare Zero Trust and use LobeChat.
+</Callout>
+
+## Related Resources
+
+- [Cloudflare Zero Trust Documentation](https://developers.cloudflare.com/cloudflare-one/)
+- [Configure OIDC Application](https://developers.cloudflare.com/cloudflare-one/identity/idp-integration/generic-oidc/)

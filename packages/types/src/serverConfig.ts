@@ -56,7 +56,6 @@ export interface GlobalServerConfig {
   enableMagicLink?: boolean;
   enableMarketTrustedClient?: boolean;
   enableUploadFileToServer?: boolean;
-  enabledAccessCode?: boolean;
   /**
    * @deprecated
    */
