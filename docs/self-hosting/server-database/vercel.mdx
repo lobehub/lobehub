@@ -81,11 +81,9 @@ This article will detail how to deploy the server database version of LobeChat o
 
   ### Add the `KEY_VAULTS_SECRET` Environment Variable
 
-  After adding the `DATABASE_URL` environment variable for the database, you need to add a `KEY_VAULTS_SECRET` environment variable. This variable is used to encrypt sensitive information such as apikeys stored by users. You can generate a random 32-character string as the key using `openssl rand -base64 32`.
+  After adding the `DATABASE_URL` environment variable for the database, you need to add a `KEY_VAULTS_SECRET` environment variable. This variable is used to encrypt sensitive information such as apikeys stored by users. Click the button below to generate:
 
-  ```shell
-  KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
-  ```
+  <GenerateKeyVaultsSecret />
 
   Make sure to add this to the Vercel environment variables as well.
 

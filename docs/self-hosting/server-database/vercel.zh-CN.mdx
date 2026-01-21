@@ -81,11 +81,9 @@ tags:
 
   ### 添加 `KEY_VAULTS_SECRET` 环境变量
 
-  在完成数据库 `DATABASE_URL` 环境变量添加后，需要添加一个 `KEY_VAULTS_SECRET` 环境变量。该变量用于加密用户存储的 apikey 等敏感信息。你可以使用 `openssl rand -base64 32` 生成一个随机的 32 位字符串作为密钥。
+  在完成数据库 `DATABASE_URL` 环境变量添加后，需要添加一个 `KEY_VAULTS_SECRET` 环境变量。该变量用于加密用户存储的 apikey 等敏感信息。点击下方按钮一键生成：
 
-  ```shell
-  KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
-  ```
+  <GenerateKeyVaultsSecret />
 
   同样需要将其添加到 Vercel 环境变量中。
 
