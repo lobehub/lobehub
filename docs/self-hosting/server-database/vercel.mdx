@@ -6,8 +6,8 @@ description: >-
 tags:
   - Deploy LobeChat
   - Vercel Deployment
-  - OpenAI API Key
-  - Custom Domain Binding
+  - Better Auth
+  - S3 Storage
 ---
 
 # Deploying Server Database Version on Vercel
@@ -108,7 +108,11 @@ The server-side database needs to be paired with a user authentication service t
   AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
   ```
 
-  With this variable, users can register and login with email and password.
+  You also need to configure the `JWKS_KEY` environment variable for signing and verifying JWTs. Click the button below to generate:
+
+  <GenerateJWKSKey />
+
+  With these variables, users can register and login with email and password.
 
   <Callout type={'info'}>
     For advanced features like SSO providers, magic link login, and email verification, see [Authentication Service](/docs/self-hosting/advanced/auth).
@@ -276,6 +280,7 @@ KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
 
 # Authentication
 AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+JWKS_KEY='{"keys":[...]}'
 
 # S3 related configurations
 # S3 keys

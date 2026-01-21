@@ -4,7 +4,7 @@ description: 本文详细介绍如何在 Vercel 中部署服务端数据库版 L
 tags:
   - 服务端数据库
   - Postgres
-  - Clerk
+  - Better Auth
   - S3存储服务
   - Vercel部署
   - 数据库配置
@@ -108,7 +108,11 @@ tags:
   AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
   ```
 
-  配置此变量后，用户即可使用邮箱和密码注册登录。
+  同时需要配置 `JWKS_KEY` 环境变量，用于签名和验证 JWT。点击下方按钮一键生成：
+
+  <GenerateJWKSKey />
+
+  配置这些变量后，用户即可使用邮箱和密码注册登录。
 
   <Callout type={'info'}>
     如需 SSO 登录、魔法链接登录、邮箱验证等高级功能，请参阅 [身份验证服务](/zh/docs/self-hosting/advanced/auth)。
@@ -271,6 +275,7 @@ KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
 
 # 身份验证
 AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+JWKS_KEY='{"keys":[...]}'
 
 # S3 相关配置
 # S3 秘钥
