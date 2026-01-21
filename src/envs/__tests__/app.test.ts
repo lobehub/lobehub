@@ -141,25 +141,25 @@ describe('APP_URL fallback', () => {
 
   describe('local environment', () => {
     it('should use localhost:3010 in development', async () => {
-      const originalNodeEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'development';
+      
+      vi.stubEnv('NODE_ENV', 'development');
 
       const { getAppConfig } = await import('../app');
       const config = getAppConfig();
       expect(config.APP_URL).toBe('http://localhost:3010');
 
-      process.env.NODE_ENV = originalNodeEnv;
+      
     });
 
     it('should use localhost:3210 in non-development', async () => {
-      const originalNodeEnv = process.env.NODE_ENV;
-      process.env.NODE_ENV = 'test';
+      
+      vi.stubEnv('NODE_ENV', 'test');
 
       const { getAppConfig } = await import('../app');
       const config = getAppConfig();
       expect(config.APP_URL).toBe('http://localhost:3210');
 
-      process.env.NODE_ENV = originalNodeEnv;
+      
     });
   });
 });
