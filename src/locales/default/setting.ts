@@ -622,6 +622,7 @@ export default {
   'systemAgent.translation.title': 'Message Translation Agent',
   'tab.about': 'About',
   'tab.agent': 'Agent Service',
+  'tab.all': 'All',
   'tab.apikey': 'API Key Management',
   'tab.chatAppearance': 'Chat Appearance',
   'tab.common': 'Appearance',
