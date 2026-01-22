@@ -633,6 +633,7 @@ export const streamingExecutor: StateCreator<
       messages,
       parentMessageId: params.parentMessageId,
       agentId,
+      disableTools,
       topicId,
       threadId: threadId ?? undefined,
       initialState: params.initialState,
