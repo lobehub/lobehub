@@ -2392,6 +2392,30 @@ const qwenImageModels: AIImageModelCard[] = [
     type: 'image',
   },
   {
+    description: 'Wanxiang 2.5 I2I Preview supports single-image editing and multi-image fusion.',
+    displayName: 'Wanxiang2.5 I2I Preview',
+    enabled: true,
+    id: 'wan2.5-i2i-preview',
+    organization: 'Qwen',
+    parameters: {
+      height: { default: 1280, max: 1280, min: 768, step: 1 },
+      imageUrl: {
+        default: '',
+      },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 1280, max: 1280, min: 768, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2025-09-23',
+    type: 'image',
+  },
+  {
     description:
       'Wanxiang 2.5 T2I supports flexible selection of image dimensions within total pixel area and aspect ratio constraints.',
     displayName: 'Wanxiang2.5 T2I Preview',
