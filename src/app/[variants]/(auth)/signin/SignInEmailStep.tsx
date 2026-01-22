@@ -2,6 +2,7 @@ import { BRANDING_NAME } from '@lobechat/business-const';
 import { Alert, Button, Flexbox, Icon, Input, Skeleton, Text } from '@lobehub/ui';
 import { Divider, Form } from 'antd';
 import type { FormInstance, InputRef } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import { ChevronRight, Mail } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
@@ -10,6 +11,14 @@ import AuthIcons from '@/components/NextAuth/AuthIcons';
 import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 
 import AuthCard from '../../../../features/AuthCard';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  setPasswordLink: css`
+    cursor: pointer;
+    color: ${cssVar.colorPrimary};
+    text-decoration: underline;
+  `,
+}));
 
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const USERNAME_REGEX = /^\w+$/;
@@ -181,10 +190,7 @@ export const SignInEmailStep = ({
           description={
             <>
               {t('betterAuth.signin.socialOnlyHint')}{' '}
-              <a
-                onClick={onSetPassword}
-                style={{ color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
-              >
+              <a className={styles.setPasswordLink} onClick={onSetPassword}>
                 {t('betterAuth.signin.setPassword')}
               </a>
             </>

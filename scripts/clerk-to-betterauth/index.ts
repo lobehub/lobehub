@@ -271,6 +271,24 @@ async function main() {
 
   if (mode === 'prod' && !IS_DRY_RUN) {
     console.log('⚠️  WARNING: Running in PRODUCTION mode. Data will be modified!');
+    console.log('   Type "yes" to continue or press Ctrl+C to abort.');
+    console.log('');
+
+    const readline = await import('node:readline');
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await new Promise<string>((resolve) => {
+      rl.question('   Confirm (yes/no): ', (ans) => {
+        resolve(ans);
+      });
+    });
+    rl.close();
+
+    if (answer.toLowerCase() !== 'yes') {
+      console.log('❌ Aborted by user.');
+      process.exitCode = 0;
+      await pool.end();
+      return;
+    }
     console.log('');
   }
 
