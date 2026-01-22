@@ -311,6 +311,7 @@ export interface QueryIdentityRolesResult {
 }
 
 export type QueryUserMemoriesSort =
+  | 'capturedAt' // all layers
   | 'scoreConfidence' // user_memories_experiences
   | 'scoreImpact' // user_memories_contexts
   | 'scorePriority' // user_memories_preferences
@@ -668,7 +669,10 @@ export class UserMemoryModel {
     const { page = 1, size = 10 } = params;
     const offset = (page - 1) * size;
 
-    const identityConditions = [eq(userMemoriesIdentities.userId, this.userId)];
+    const identityConditions = [
+      eq(userMemoriesIdentities.userId, this.userId),
+      eq(userMemoriesIdentities.relationship, RelationshipEnum.Self),
+    ];
 
     const identityTags = this.db.$with('identity_tags').as(
       this.db
@@ -792,7 +796,9 @@ export class UserMemoryModel {
         const scoreColumn =
           sort === 'scoreUrgency'
             ? userMemoriesContexts.scoreUrgency
-            : userMemoriesContexts.scoreImpact;
+            : sort === 'scoreImpact'
+              ? userMemoriesContexts.scoreImpact
+              : userMemoriesContexts.capturedAt;
 
         const orderByClauses = buildOrderBy(
           scoreColumn,
@@ -880,8 +886,13 @@ export class UserMemoryModel {
         };
       }
       case LayersEnum.Experience: {
+        const scoreColumn =
+          sort === 'scoreConfidence'
+            ? userMemoriesExperiences.scoreConfidence
+            : userMemoriesExperiences.capturedAt;
+
         const orderByClauses = buildOrderBy(
-          userMemoriesExperiences.scoreConfidence,
+          scoreColumn,
           userMemoriesExperiences.updatedAt,
           userMemoriesExperiences.createdAt,
         );
@@ -956,7 +967,7 @@ export class UserMemoryModel {
       case LayersEnum.Identity: {
         const orderByClauses = buildOrderBy(
           undefined,
-          userMemoriesIdentities.updatedAt,
+          userMemoriesIdentities.capturedAt,
           userMemoriesIdentities.createdAt,
         );
         const joinCondition = and(
@@ -986,6 +997,7 @@ export class UserMemoryModel {
             .select({
               identity: {
                 accessedAt: userMemoriesIdentities.accessedAt,
+                capturedAt: userMemoriesIdentities.capturedAt,
                 createdAt: userMemoriesIdentities.createdAt,
                 description: userMemoriesIdentities.description,
                 episodicDate: userMemoriesIdentities.episodicDate,
@@ -994,6 +1006,7 @@ export class UserMemoryModel {
                 relationship: userMemoriesIdentities.relationship,
                 role: userMemoriesIdentities.role,
                 tags: userMemoriesIdentities.tags,
+                title: userMemories.title,
                 type: userMemoriesIdentities.type,
                 updatedAt: userMemoriesIdentities.updatedAt,
                 userId: userMemoriesIdentities.userId,
@@ -1028,8 +1041,13 @@ export class UserMemoryModel {
         };
       }
       case LayersEnum.Preference: {
+        const scoreColumn =
+          sort === 'scorePriority'
+            ? userMemoriesPreferences.scorePriority
+            : userMemoriesPreferences.capturedAt;
+
         const orderByClauses = buildOrderBy(
-          userMemoriesPreferences.scorePriority,
+          scoreColumn,
           userMemoriesPreferences.updatedAt,
           userMemoriesPreferences.createdAt,
         );
@@ -1226,6 +1244,7 @@ export class UserMemoryModel {
         const [identity] = await this.db
           .select({
             accessedAt: userMemoriesIdentities.accessedAt,
+            capturedAt: userMemoriesIdentities.capturedAt,
             createdAt: userMemoriesIdentities.createdAt,
             description: userMemoriesIdentities.description,
             episodicDate: userMemoriesIdentities.episodicDate,
@@ -1933,7 +1952,7 @@ export class UserMemoryModel {
       .select(selectNonVectorColumns(userMemoriesIdentities))
       .from(userMemoriesIdentities)
       .where(eq(userMemoriesIdentities.userId, this.userId))
-      .orderBy(desc(userMemoriesIdentities.createdAt));
+      .orderBy(desc(userMemoriesIdentities.capturedAt));
 
     return res;
   };
@@ -1947,7 +1966,7 @@ export class UserMemoryModel {
       .from(userMemoriesIdentities)
       .innerJoin(userMemories, eq(userMemories.id, userMemoriesIdentities.userMemoryId))
       .where(eq(userMemoriesIdentities.userId, this.userId))
-      .orderBy(desc(userMemoriesIdentities.createdAt));
+      .orderBy(desc(userMemoriesIdentities.capturedAt));
 
     return res as Array<{
       identity: typeof userMemoriesIdentities.$inferSelect;
@@ -1962,7 +1981,7 @@ export class UserMemoryModel {
       .where(
         and(eq(userMemoriesIdentities.userId, this.userId), eq(userMemoriesIdentities.type, type)),
       )
-      .orderBy(desc(userMemoriesIdentities.createdAt));
+      .orderBy(desc(userMemoriesIdentities.capturedAt));
 
     return res;
   };

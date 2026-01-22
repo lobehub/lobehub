@@ -1,12 +1,12 @@
 import { ActionIcon, Block } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { MaximizeIcon, MinimizeIcon } from 'lucide-react';
-import dynamic from '@/libs/next/dynamic';
 import { memo, useEffect, useState } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
 import { type QueryTagsResult } from '@/database/models/userMemory';
+import dynamic from '@/libs/next/dynamic';
 
 const TagCloudCanvas = dynamic(() => import('./TagCloudCanvas'), {
   loading: () => <Loading debugId={'TagCloud'} />,
@@ -36,7 +36,7 @@ const styles = createStaticStyles(({ css }) => ({
     position: relative;
     overflow: hidden;
     width: 100%;
-    height: 480px;
+    height: 400px;
 
     .fullscreen-icon {
       opacity: 0;

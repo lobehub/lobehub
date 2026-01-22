@@ -21,6 +21,7 @@ import { z } from 'zod';
 import {
   type IdentityEntryBasePayload,
   type IdentityEntryPayload,
+  UserMemoryExperienceModel,
   UserMemoryIdentityModel,
   UserMemoryModel,
 } from '@/database/models/userMemory';
@@ -220,6 +221,35 @@ export const userMemoriesRouter = router({
       }
     }),
 
+  queryExperiences: authedProcedure
+    .use(serverDatabase)
+    .input(
+      z
+        .object({
+          order: z.enum(['asc', 'desc']).optional(),
+          page: z.coerce.number().int().min(1).optional(),
+          pageSize: z.coerce.number().int().min(1).max(100).optional(),
+          q: z.string().optional(),
+          sort: z.enum(['capturedAt', 'scoreConfidence']).optional(),
+          tags: z.array(z.string()).optional(),
+          types: z.array(z.string()).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const params = input ?? {};
+      const fallbackPage = params.page ?? 1;
+      const fallbackPageSize = params.pageSize ?? 20;
+
+      try {
+        const experienceModel = new UserMemoryExperienceModel(ctx.serverDB, ctx.userId);
+        return await experienceModel.queryList(params);
+      } catch (error) {
+        console.error('Failed to query experiences:', error);
+        return { items: [], page: fallbackPage, pageSize: fallbackPageSize, total: 0 };
+      }
+    }),
+
   queryIdentitiesForInjection: authedProcedure
     .use(serverDatabase)
     .input(z.object({ limit: z.coerce.number().int().min(1).max(100).optional() }).optional())
@@ -262,7 +292,7 @@ export const userMemoriesRouter = router({
           pageSize: z.coerce.number().int().min(1).max(100).optional(),
           q: z.string().optional(),
           sort: z
-            .enum(['scoreConfidence', 'scoreImpact', 'scorePriority', 'scoreUrgency'])
+            .enum(['capturedAt', 'scoreConfidence', 'scoreImpact', 'scorePriority', 'scoreUrgency'])
             .optional(),
           tags: z.array(z.string()).optional(),
           types: z.array(z.string()).optional(),

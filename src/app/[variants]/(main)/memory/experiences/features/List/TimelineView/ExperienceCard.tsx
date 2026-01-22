@@ -1,13 +1,13 @@
+import type { ExperienceListItem } from '@lobechat/types';
 import { memo } from 'react';
 
 import TimeLineCard from '@/app/[variants]/(main)/memory/features/TimeLineView/TimeLineCard';
-import { type DisplayExperienceMemory } from '@/database/repositories/userMemory';
 
 import ExperienceDropdown from '../../ExperienceDropdown';
 
 interface ExperienceCardProps {
-  experience: DisplayExperienceMemory;
-  onClick: (experience: DisplayExperienceMemory) => void;
+  experience: ExperienceListItem;
+  onClick: (experience: ExperienceListItem) => void;
 }
 
 const ExperienceCard = memo<ExperienceCardProps>(({ experience, onClick }) => {

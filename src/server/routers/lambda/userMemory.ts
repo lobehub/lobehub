@@ -11,6 +11,8 @@ import {
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
+import { MOCK_PERSONA } from './mockPersona';
+
 const userMemoryProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
@@ -26,9 +28,9 @@ const userMemoryProcedure = authedProcedure.use(serverDatabase).use(async (opts)
 });
 
 export const userMemoryRouter = router({
+  
   // ============ Identity CRUD ============
-
-  createIdentity: userMemoryProcedure
+createIdentity: userMemoryProcedure
     .input(CreateUserMemoryIdentitySchema)
     .mutation(async ({ ctx, input }) => {
       return ctx.userMemoryModel.addIdentityEntry({
@@ -44,43 +46,60 @@ export const userMemoryRouter = router({
       });
     }),
 
-  // ============ Context CRUD ============
-  deleteContext: userMemoryProcedure
+  
+
+  
+// ============ Context CRUD ============
+deleteContext: userMemoryProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.contextModel.delete(input.id);
     }),
 
-  // ============ Experience CRUD ============
-  deleteExperience: userMemoryProcedure
+  
+  
+// ============ Experience CRUD ============
+deleteExperience: userMemoryProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.experienceModel.delete(input.id);
     }),
 
-  deleteIdentity: userMemoryProcedure
+  
+  
+deleteIdentity: userMemoryProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.userMemoryModel.removeIdentityEntry(input.id);
     }),
 
-  // ============ Preference CRUD ============
-  deletePreference: userMemoryProcedure
+  
+// ============ Preference CRUD ============
+deletePreference: userMemoryProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.preferenceModel.delete(input.id);
     }),
 
-  getContexts: userMemoryProcedure.query(async ({ ctx }) => {
+  
+  
+getContexts: userMemoryProcedure.query(async ({ ctx }) => {
     return ctx.userMemoryModel.searchContexts({});
   }),
 
-  getExperiences: userMemoryProcedure.query(async ({ ctx }) => {
+  
+getExperiences: userMemoryProcedure.query(async ({ ctx }) => {
     return ctx.userMemoryModel.searchExperiences({});
   }),
 
-  getIdentities: userMemoryProcedure.query(async ({ ctx }) => {
+  
+getIdentities: userMemoryProcedure.query(async ({ ctx }) => {
     return ctx.userMemoryModel.getAllIdentities();
+  }),
+
+  // ============ Persona ============
+getPersona: userMemoryProcedure.query(async () => {
+    return MOCK_PERSONA;
   }),
 
   getPreferences: userMemoryProcedure.query(async ({ ctx }) => {

@@ -60,7 +60,7 @@ export class UserMemoryIdentityModel {
   query = async (limit = 50) => {
     return this.db.query.userMemoriesIdentities.findMany({
       limit,
-      orderBy: [desc(userMemoriesIdentities.createdAt)],
+      orderBy: [desc(userMemoriesIdentities.capturedAt)],
       where: eq(userMemoriesIdentities.userId, this.userId),
     });
   };
