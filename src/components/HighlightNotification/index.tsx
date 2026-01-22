@@ -4,9 +4,12 @@ import { HeartFilled } from '@ant-design/icons';
 import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
+import Link from 'next/link';
 import { type ReactNode, memo } from 'react';
 
 export interface HighlightNotificationProps {
+  actionHref?: string;
+  actionLabel?: ReactNode;
   description?: ReactNode;
   image?: string;
   onClose?: () => void;
@@ -17,6 +20,8 @@ export interface HighlightNotificationProps {
 const styles = createStaticStyles(({ css }) => ({
   action: css`
     margin-top: 8px;
+    display: block;
+    width: 100%;
   `,
   card: css`
     position: fixed;
@@ -58,7 +63,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const HighlightNotification = memo<HighlightNotificationProps>(
-  ({ open, onClose, image, title, description }) => {
+  ({ open, onClose, image, title, description, actionLabel, actionHref }) => {
     if (!open) return null;
 
     return (
@@ -69,9 +74,18 @@ const HighlightNotification = memo<HighlightNotificationProps>(
           <Flexbox gap={4} padding={12}>
             {title && <div className={styles.title}>{title}</div>}
             {description && <div className={styles.description}>{description}</div>}
-            <Button className={styles.action} icon={HeartFilled} size="small" type="primary">
-              Support us
-            </Button>
+            {actionLabel && (
+              <Link
+                className={styles.action}
+                href={actionHref || '/'}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                <Button block icon={HeartFilled} size="small" type="primary">
+                  {actionLabel}
+                </Button>
+              </Link>
+            )}
           </Flexbox>
         </Flexbox>
       </Flexbox>

@@ -120,6 +120,7 @@ export interface SystemStatus {
   lastSelectedImageProvider?: string;
   latestChangelogId?: string;
   leftPanelWidth: number;
+  readNotificationSlugs?: string[];
   mobileShowPortal?: boolean;
   mobileShowTopic?: boolean;
   /**
@@ -222,6 +223,7 @@ export const INITIAL_STATUS = {
   pageAgentPanelWidth: 360,
   pagePageSize: 20,
   portalWidth: 400,
+  readNotificationSlugs: [],
   resourceManagerColumnWidths: {
     date: 160,
     name: 574,
