@@ -1,9 +1,7 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
-import { CalculatorApiName } from './types';
-
-export const CalculatorIdentifier = 'lobe-calculator';
+import { CalculatorApiName, CalculatorIdentifier } from './types';
 
 export const CalculatorManifest: BuiltinToolManifest = {
   api: [

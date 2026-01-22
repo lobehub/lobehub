@@ -1,10 +1,10 @@
 import { BaseExecutor, type BuiltinToolResult, type IBuiltinToolExecutor } from '@lobechat/types';
 import { all, create } from 'mathjs';
 
-import { CalculatorIdentifier } from '../manifest';
 import {
   type CalculateParams,
   CalculatorApiName,
+  CalculatorIdentifier,
   type ConvertBaseParams,
   type EvaluateExpressionParams,
 } from '../types';
