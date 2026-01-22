@@ -165,8 +165,9 @@ export const streamingExecutor: StateCreator<
     isSubTask,
   }) => {
     // Use provided agentId/topicId or fallback to global state
+    // Note: Use || instead of ?? to also fallback when paramAgentId is empty string
     const { activeAgentId, activeTopicId } = get();
-    const agentId = paramAgentId ?? activeAgentId;
+    const agentId = paramAgentId || activeAgentId;
     const topicId = paramTopicId !== undefined ? paramTopicId : activeTopicId;
 
     // For group orchestration scenarios:
