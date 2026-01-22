@@ -224,6 +224,8 @@ export const fileRouter = router({
       limit: limit + 1,
     });
 
+    console.log('getKnow', knowledgeItems);
+
     // Check if there are more items
     const hasMore = knowledgeItems.length > limit;
 
