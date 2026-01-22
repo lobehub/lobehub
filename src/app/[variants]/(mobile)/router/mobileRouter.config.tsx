@@ -7,6 +7,7 @@ import MobileChatLayout from '@/app/[variants]/(mobile)/chat/_layout';
 import MobileMeHomeLayout from '@/app/[variants]/(mobile)/me/(home)/layout';
 import MobileMeProfileLayout from '@/app/[variants]/(mobile)/me/profile/layout';
 import MobileMeSettingsLayout from '@/app/[variants]/(mobile)/me/settings/layout';
+import MobileSettingsProviderLayout from '@/app/[variants]/(mobile)/settings/provider/_layout';
 import {
   BusinessMobileRoutesWithMainLayout,
   BusinessMobileRoutesWithoutMainLayout,
@@ -189,10 +190,7 @@ export const mobileRoutes: RouteConfig[] = [
                 path: ':providerId',
               },
             ],
-            element: dynamicElement(
-              () => import('../../(main)/settings/provider').then((m) => m.ProviderLayout),
-              'Mobile > Settings > Provider > Layout',
-            ),
+            element: <MobileSettingsProviderLayout />,
             path: 'provider',
           },
           // Other settings tabs (common, agent, memory, tts, about, etc.)
