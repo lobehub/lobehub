@@ -73,6 +73,7 @@
   "screen5.badge": "로그인",
   "screen5.description": "에이전트, 그룹, 설정, 컨텍스트를 모든 기기에서 동기화하려면 로그인하세요.",
   "screen5.errors.desktopOnlyOidc": "OIDC 인증은 데스크톱 앱에서만 사용할 수 있습니다.",
+  "screen5.legacyLocalDb.link": "이전 로컬 데이터베이스 마이그레이션",
   "screen5.methods.cloud.description": "LobeHub 클라우드 계정으로 로그인하여 모든 것을 원활하게 동기화하세요",
   "screen5.methods.cloud.name": "LobeHub 클라우드",
   "screen5.methods.selfhost.description": "자체 LobeHub 서버 인스턴스에 연결",

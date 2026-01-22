@@ -1,18 +1,19 @@
-import { ActionIcon, Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { App } from 'antd';
-import { MoreVerticalIcon, Trash2 } from 'lucide-react';
+import { Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { App, Space } from 'antd';
+import { MoreHorizontalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import McpSettingsModal from '@/features/MCP/MCPSettings/McpSettingsModal';
 import PluginDetailModal from '@/features/PluginDetailModal';
-import EditCustomPlugin from './EditCustomPlugin';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { pluginHelpers, useToolStore } from '@/store/tool';
 import { pluginSelectors, pluginStoreSelectors } from '@/store/tool/selectors';
 import { type LobeToolType } from '@/types/tool/tool';
+
+import EditCustomPlugin from './EditCustomPlugin';
 
 interface ActionsProps {
   identifier: string;
@@ -73,7 +74,7 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
     <>
       <Flexbox align={'center'} gap={8} horizontal onClick={(e) => e.stopPropagation()}>
         {installed ? (
-          <>
+          <Space.Compact>
             {showConfigureButton &&
               (isCustomPlugin ? (
                 <EditCustomPlugin identifier={identifier} onOpenChange={setModal} open={showModal}>
@@ -108,9 +109,9 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
               ]}
               placement="bottomRight"
             >
-              <ActionIcon icon={MoreVerticalIcon} loading={installing} />
+              <Button icon={MoreHorizontalIcon} loading={installing} />
             </DropdownMenu>
-          </>
+          </Space.Compact>
         ) : (
           <Button
             loading={installing}

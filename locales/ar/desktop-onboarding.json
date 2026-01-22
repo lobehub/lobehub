@@ -73,6 +73,7 @@
   "screen5.badge": "تسجيل الدخول",
   "screen5.description": "سجّل الدخول لمزامنة الوكلاء والمجموعات والإعدادات والسياق عبر جميع الأجهزة.",
   "screen5.errors.desktopOnlyOidc": "تفويض OIDC متاح فقط في تطبيق سطح المكتب.",
+  "screen5.legacyLocalDb.link": "ترحيل قاعدة البيانات المحلية القديمة",
   "screen5.methods.cloud.description": "سجّل الدخول باستخدام حساب LobeHub Cloud الخاص بك لمزامنة كل شيء بسلاسة",
   "screen5.methods.cloud.name": "LobeHub Cloud",
   "screen5.methods.selfhost.description": "اتصل بنسختك الخاصة من خادم LobeHub",

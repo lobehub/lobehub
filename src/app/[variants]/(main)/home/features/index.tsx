@@ -8,7 +8,6 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import CommunityAgents from './CommunityAgents';
-import FeaturedPlugins from './FeaturedPlugins';
 import InputArea from './InputArea';
 import RecentPage from './RecentPage';
 import RecentResource from './RecentResource';
@@ -32,7 +31,7 @@ const Home = memo(() => {
         </>
       )}
       <CommunityAgents />
-      <FeaturedPlugins />
+      {/*<FeaturedPlugins />*/}
       {isLogin && <RecentResource />}
     </Flexbox>
   );

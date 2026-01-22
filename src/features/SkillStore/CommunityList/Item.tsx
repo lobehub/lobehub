@@ -8,8 +8,8 @@ import React, { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
-import MCPInstallProgress from '@/features/MCP/MCPInstallProgress';
 import McpDetail from '@/features/MCP/MCPDetail';
+import MCPInstallProgress from '@/features/MCP/MCPInstallProgress';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -117,13 +117,14 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
       <Flexbox className={styles.container} gap={0}>
         <Block
           align={'center'}
+          clickable
           gap={12}
           horizontal
           onClick={() => setDetailOpen(true)}
           paddingBlock={12}
           paddingInline={12}
           style={{ cursor: 'pointer' }}
-          variant={'filled'}
+          variant={'outlined'}
         >
           <PluginAvatar avatar={icon} size={40} />
           <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>

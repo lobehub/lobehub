@@ -1,18 +1,19 @@
 'use client';
 
-import { Flexbox, Modal } from '@lobehub/ui';
+import { Block, Flexbox, Modal } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import PluginTag from '@/components/Plugins/PluginTag';
-import PluginDetailModal from '@/features/PluginDetailModal';
-import Actions from './Actions';
 import McpDetail from '@/features/MCP/MCPDetail';
+import PluginDetailModal from '@/features/PluginDetailModal';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
 import { type LobeToolType } from '@/types/tool/tool';
+
+import Actions from './Actions';
 
 const useStyles = createStyles(({ css, token }) => ({
   container: css`
@@ -25,11 +26,8 @@ const useStyles = createStyles(({ css, token }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 48px;
-    height: 48px;
-    border-radius: 12px;
-
-    background: ${token.colorFillTertiary};
+    width: 40px;
+    height: 40px;
   `,
   title: css`
     cursor: pointer;
@@ -72,10 +70,10 @@ const McpSkillItem = memo<McpSkillItemProps>(
           horizontal
           justify="space-between"
         >
-          <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
-            <div className={styles.icon}>
+          <Flexbox align="center" gap={12} horizontal style={{ flex: 1, overflow: 'hidden' }}>
+            <Block className={styles.icon} variant={'outlined'}>
               <PluginAvatar avatar={avatar} size={32} />
-            </div>
+            </Block>
             <Flexbox align="center" gap={8} horizontal style={{ overflow: 'hidden' }}>
               <span className={styles.title} onClick={() => setDetailOpen(true)}>
                 {title}

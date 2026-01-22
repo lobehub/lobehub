@@ -1,8 +1,8 @@
 {
   "changelog.description": "Bleiben Sie über neue Funktionen und Verbesserungen von {{appName}} auf dem Laufenden",
   "changelog.title": "Änderungsprotokoll",
-  "chat.description": "{{appName}} bietet Ihnen das beste UI-Erlebnis für ChatGPT, Claude, Gemini und OLLaMA.",
-  "chat.title": "{{appName}} · Für kollaborative Agenten",
+  "chat.description": "{{appName}} ist ein Arbeits- und Lifestyle-Raum, in dem du Agententeams finden, aufbauen und mit ihnen zusammenarbeiten kannst – Teams, die mit dir wachsen.",
+  "chat.title": "{{appName}} · Agententeams, die mit dir wachsen",
   "discover.assistants.description": "Inhalte, Fragen & Antworten, Bilder, Videos, Sprache, Workflows – durchstöbern und fügen Sie Agenten aus der Community hinzu.",
   "discover.assistants.title": "Agenten-Community",
   "discover.description": "Entdecken Sie Agenten, Skills, Anbieter, Modelle und MCP-Server.",

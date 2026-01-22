@@ -201,7 +201,7 @@ export default {
   'profile.usernameRule': 'Username can only contain letters, numbers, or underscores',
   'profile.usernameUpdateFailed': 'Failed to update username, please try again later',
   'signin.subtitle': 'Sign up or log in to your {{appName}} account',
-  'signin.title': 'Where Agents Collaborate',
+  'signin.title': 'Agent teams that grow with you',
   'signout': 'Log Out',
   'signup': 'Sign Up',
   'stats.aiheatmaps': 'Activity Index',

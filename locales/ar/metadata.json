@@ -1,8 +1,8 @@
 {
   "changelog.description": "ابقَ على اطلاع بأحدث الميزات والتحسينات في {{appName}}",
   "changelog.title": "سجل التغييرات",
-  "chat.description": "{{appName}} يقدم لك أفضل تجربة واجهة مستخدم لـ ChatGPT وClaude وGemini وOLLaMA.",
-  "chat.title": "{{appName}} · للوكلاء التعاونيين",
+  "chat.description": "{{appName}} هو مساحة للعمل ونمط الحياة للعثور على فرق الوكلاء، وبنائها، والتعاون معها لتنمو معك.",
+  "chat.title": "{{appName}} · فرق وكلاء تنمو معك",
   "discover.assistants.description": "محتوى، أسئلة وأجوبة، صور، فيديو، صوت، سير عمل—تصفح وأضف وكلاء من المجتمع.",
   "discover.assistants.title": "مجتمع الوكلاء",
   "discover.description": "استكشف الوكلاء، المهارات، المزودين، النماذج، وخوادم MCP.",

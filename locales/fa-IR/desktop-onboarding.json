@@ -73,6 +73,7 @@
   "screen5.badge": "ورود",
   "screen5.description": "برای همگام‌سازی عوامل، گروه‌ها، تنظیمات و زمینه‌ها در تمام دستگاه‌ها وارد شوید.",
   "screen5.errors.desktopOnlyOidc": "احراز هویت OIDC فقط در نسخه دسکتاپ در دسترس است.",
+  "screen5.legacyLocalDb.link": "انتقال پایگاه داده محلی قدیمی",
   "screen5.methods.cloud.description": "با حساب LobeHub Cloud خود وارد شوید تا همه چیز به‌صورت یکپارچه همگام‌سازی شود",
   "screen5.methods.cloud.name": "LobeHub Cloud",
   "screen5.methods.selfhost.description": "به نمونه سرور LobeHub خود متصل شوید",
