@@ -1,7 +1,6 @@
 'use client';
 
 import { memo, useCallback, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversation';
 import { useChatStore } from '@/store/chat';
@@ -15,7 +14,6 @@ interface SharedMessageListProps {
 }
 
 const SharedMessageList = memo<SharedMessageListProps>(({ agentId, groupId, shareId, topicId }) => {
-  const { t } = useTranslation('chat');
   const context = useMemo(
     () => ({
       agentId: agentId ?? '',

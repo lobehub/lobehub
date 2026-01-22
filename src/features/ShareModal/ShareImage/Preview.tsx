@@ -2,7 +2,6 @@ import { ModelTag } from '@lobehub/icons';
 import { Avatar, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
 import PluginTag from '@/features/PluginTag';
@@ -18,18 +17,15 @@ import { type FieldType } from './type';
 
 const Preview = memo<FieldType & { title?: string }>(
   ({ title, withSystemRole, withBackground, withFooter, widthMode }) => {
-    const [model, plugins, systemRole, isInbox, description, avatar, backgroundColor] =
-      useAgentStore((s) => [
-        agentSelectors.currentAgentModel(s),
-        agentSelectors.displayableAgentPlugins(s),
-        agentSelectors.currentAgentSystemRole(s),
-        builtinAgentSelectors.isInboxAgent(s),
-        agentSelectors.currentAgentDescription(s),
-        agentSelectors.currentAgentAvatar(s),
-        agentSelectors.currentAgentBackgroundColor(s),
-      ]);
-
-    const { t } = useTranslation('chat');
+    const [model, plugins, systemRole, isInbox, avatar, backgroundColor] = useAgentStore((s) => [
+      agentSelectors.currentAgentModel(s),
+      agentSelectors.displayableAgentPlugins(s),
+      agentSelectors.currentAgentSystemRole(s),
+      builtinAgentSelectors.isInboxAgent(s),
+      agentSelectors.currentAgentDescription(s),
+      agentSelectors.currentAgentAvatar(s),
+      agentSelectors.currentAgentBackgroundColor(s),
+    ]);
 
     const displayTitle = isInbox ? 'Lobe AI' : title;
 
