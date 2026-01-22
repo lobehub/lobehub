@@ -20,7 +20,7 @@ interface QwenImageTaskResponse {
 }
 
 // Interface for qwen-image-edit multimodal-generation response
-interface QwenImageEditResponse {
+interface QwenMultimodalGenerationResponse {
   output: {
     choices: Array<{
       message: {
@@ -34,31 +34,51 @@ interface QwenImageEditResponse {
 }
 
 /**
- * Create an image generation task with Qwen API for text-to-image models
+ * Create an image generation task with Qwen API
+ * Supports both text-to-image and image-to-image workflows
  */
-async function createImageTask(payload: CreateImagePayload, apiKey: string): Promise<string> {
+async function createQwenImageTask(
+  payload: CreateImagePayload,
+  apiKey: string,
+  endpoint: 'text2image' | 'image2image',
+): Promise<string> {
   const { model, params } = payload;
-  // I can only say that the design of Alibaba Cloud's API is really bad; each model has a different endpoint path.
-  const endpoint = `https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis`;
-  log('Creating image task with model: %s, endpoint: %s', model, endpoint);
+  const url = `https://dashscope.aliyuncs.com/api/v1/services/aigc/${endpoint}/image-synthesis`;
+  log('Creating %s task with model: %s, endpoint: %s', endpoint, model, url);
 
-  const response = await fetch(endpoint, {
+  const input: Record<string, any> = {
+    prompt: params.prompt,
+  };
+
+  const parameters: Record<string, any> = {
+    n: 1,
+    ...(typeof params.seed === 'number' ? { seed: params.seed } : {}),
+    ...(params.width && params.height
+      ? { size: `${params.width}*${params.height}` }
+      : params.size
+        ? { size: params.size.replaceAll('x', '*') }
+        : { size: '1024*1024' }),
+  };
+
+  if (endpoint === 'image2image') {
+    let images = params.imageUrls;
+    if (!images && params.imageUrl) {
+      images = [params.imageUrl];
+      log('Converting imageUrl to images array: using image %s', params.imageUrl);
+    }
+
+    if (!images || images.length === 0) {
+      throw new Error('imageUrls or imageUrl is required for image-to-image models');
+    }
+
+    input.images = images;
+  }
+
+  const response = await fetch(url, {
     body: JSON.stringify({
-      input: {
-        prompt: params.prompt,
-        // negativePrompt is not part of standard parameters
-        // but can be supported by extending the params type if needed
-      },
+      input,
       model,
-      parameters: {
-        n: 1,
-        ...(typeof params.seed === 'number' ? { seed: params.seed } : {}),
-        ...(params.width && params.height
-          ? { size: `${params.width}*${params.height}` }
-          : params.size
-            ? { size: params.size.replaceAll('x', '*') }
-            : { size: '1024*1024' }),
-      },
+      parameters,
     }),
     headers: {
       'Authorization': `Bearer ${apiKey}`,
@@ -76,7 +96,7 @@ async function createImageTask(payload: CreateImagePayload, apiKey: string): Pro
       // Failed to parse JSON error response
     }
     throw new Error(
-      `Failed to create image task (${response.status}): ${errorData?.message || response.statusText}`,
+      `Failed to create ${endpoint} task (${response.status}): ${errorData?.message || response.statusText}`,
     );
   }
 
@@ -87,10 +107,10 @@ async function createImageTask(payload: CreateImagePayload, apiKey: string): Pro
 }
 
 /**
- * Create image with Qwen image-edit API for image-to-image models
+ * Create image with Qwen multimodal-generation API for image-to-image models
  * This is a synchronous API that returns the result directly
  */
-async function createImageEdit(
+async function createMultimodalGeneration(
   payload: CreateImagePayload,
   apiKey: string,
 ): Promise<CreateImageResponse> {
@@ -143,7 +163,7 @@ async function createImageEdit(
     );
   }
 
-  const data: QwenImageEditResponse = await response.json();
+  const data: QwenMultimodalGenerationResponse = await response.json();
 
   if (!data.output.choices || data.output.choices.length === 0) {
     throw new Error('No image choices returned from qwen-image-edit API');
@@ -196,7 +216,10 @@ async function queryTaskStatus(taskId: string, apiKey: string): Promise<QwenImag
 
 /**
  * Create image using Qwen API
- * Supports both text-to-image (async with polling) and image-to-image (sync) workflows
+ * Supports three types:
+ * - text2image (async with polling)
+ * - image2image (async with polling)
+ * - multimodal-generation (sync for qwen-image-edit model)
  */
 export async function createQwenImage(
   payload: CreateImagePayload,
@@ -206,17 +229,17 @@ export async function createQwenImage(
   const { model } = payload;
 
   try {
-    // Check if this is qwen-image-edit model for image-to-image
+    // Check if this is qwen-image-edit model for image-to-image (synchronous)
     if (model === 'qwen-image-edit') {
       log('Using multimodal-generation API for qwen-image-edit model');
-      return await createImageEdit(payload, apiKey);
+      return await createMultimodalGeneration(payload, apiKey);
     }
 
-    // Default to text-to-image workflow for other qwen models
-    log('Using text2image API for model: %s', model);
+    const endpoint = model.includes('i2i') ? 'image2image' : 'text2image';
+    log('Using %s API for model: %s', endpoint, model);
 
     // 1. Create image generation task
-    const taskId = await createImageTask(payload, apiKey);
+    const taskId = await createQwenImageTask(payload, apiKey, endpoint);
 
     // 2. Poll task status until completion using asyncifyPolling
     const result = await asyncifyPolling<QwenImageTaskResponse, CreateImageResponse>({
