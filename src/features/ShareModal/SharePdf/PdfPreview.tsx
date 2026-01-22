@@ -7,16 +7,12 @@ import { createStaticStyles, cx } from 'antd-style';
 import { ChevronLeft, ChevronRight, Expand, FileText } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Document, Page, pdfjs } from 'react-pdf';
+import { Document, Page } from 'react-pdf';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
+import '@/libs/pdfjs/worker';
 
 import { containerStyles } from '../style';
-
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  'pdfjs-dist/build/pdf.worker.min.mjs',
-  import.meta.url,
-).toString();
 
 const styles = createStaticStyles(({ css }) => ({
   containerWrapper: css`
