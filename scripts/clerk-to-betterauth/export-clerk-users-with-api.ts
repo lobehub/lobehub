@@ -2,7 +2,7 @@
 import { type User, createClerkClient } from '@clerk/backend';
 import { writeFile } from 'node:fs/promises';
 
-import { getClerkSecret, resolveDataPaths } from './_internal/config';
+import { getClerkSecret, getMigrationMode, resolveDataPaths } from './_internal/config';
 import './_internal/env';
 import { ClerkUser } from './_internal/types';
 
@@ -181,21 +181,31 @@ async function fetchAllClerkUsers(secretKey: string): Promise<ClerkUser[]> {
 
 async function main() {
   const startedAt = Date.now();
+  const mode = getMigrationMode();
   const secretKey = getClerkSecret();
   const outputPath = process.argv[2] ?? DEFAULT_OUTPUT_PATH;
 
-  console.log(`🚀 [clerk-export] Start exporting Clerk users to ${outputPath}`);
+  console.log('');
+  console.log('╔════════════════════════════════════════════════════════════╗');
+  console.log('║           Clerk Users Export Script (via API)              ║');
+  console.log('╠════════════════════════════════════════════════════════════╣');
+  console.log(`║  Mode:     ${mode.padEnd(48)}║`);
+  console.log(`║  Output:   ${outputPath.padEnd(48)}║`);
+  console.log('╚════════════════════════════════════════════════════════════╝');
+  console.log('');
 
   const clerkUsers = await fetchAllClerkUsers(secretKey);
 
   await writeFile(outputPath, JSON.stringify(clerkUsers, null, 2), 'utf8');
 
+  console.log('');
   console.log(
-    `✅ [clerk-export] Export finished in ${formatDuration(Date.now() - startedAt)}. Saved ${clerkUsers.length} users to ${outputPath}`,
+    `✅ Export success! Saved ${clerkUsers.length} users to ${outputPath} (${formatDuration(Date.now() - startedAt)})`,
   );
 }
 
 void main().catch((error) => {
-  console.error('[clerk-export] Export failed:', error);
+  console.log('');
+  console.error('❌ Export failed:', error);
   process.exit(1);
 });

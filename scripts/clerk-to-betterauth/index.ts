@@ -257,11 +257,30 @@ async function migrateFromClerk() {
 }
 async function main() {
   const startedAt = Date.now();
+  const mode = getMigrationMode();
+
+  console.log('');
+  console.log('╔════════════════════════════════════════════════════════════╗');
+  console.log('║           Clerk to Better Auth Migration Script            ║');
+  console.log('╠════════════════════════════════════════════════════════════╣');
+  console.log(`║  Mode:     ${mode.padEnd(48)}║`);
+  console.log(`║  Dry Run:  ${(IS_DRY_RUN ? 'YES (no changes will be made)' : 'NO').padEnd(48)}║`);
+  console.log(`║  Batch:    ${String(BATCH_SIZE).padEnd(48)}║`);
+  console.log('╚════════════════════════════════════════════════════════════╝');
+  console.log('');
+
+  if (mode === 'prod' && !IS_DRY_RUN) {
+    console.log('⚠️  WARNING: Running in PRODUCTION mode. Data will be modified!');
+    console.log('');
+  }
+
   try {
     await migrateFromClerk();
-    console.log(`Migration completed in ${formatDuration(Date.now() - startedAt)}`);
+    console.log('');
+    console.log(`✅ Migration success! (${formatDuration(Date.now() - startedAt)})`);
   } catch (error) {
-    console.error(`Migration failed after ${formatDuration(Date.now() - startedAt)}:`, error);
+    console.log('');
+    console.error(`❌ Migration failed (${formatDuration(Date.now() - startedAt)}):`, error);
     process.exitCode = 1;
   } finally {
     await pool.end();

@@ -118,8 +118,15 @@ async function main() {
   const mode = getMigrationMode();
   const { clerkCsvPath, clerkUsersPath } = resolveDataPaths(mode);
 
-  console.log(`🚀 [verify] Start (mode=${mode})`);
-  console.log(`📂 [verify] Sources: csv=${clerkCsvPath}, json=${clerkUsersPath}`);
+  console.log('');
+  console.log('╔════════════════════════════════════════════════════════════╗');
+  console.log('║           Migration Verification Script                    ║');
+  console.log('╠════════════════════════════════════════════════════════════╣');
+  console.log(`║  Mode:     ${mode.padEnd(48)}║`);
+  console.log(`║  CSV:      ${clerkCsvPath.padEnd(48)}║`);
+  console.log(`║  JSON:     ${clerkUsersPath.padEnd(48)}║`);
+  console.log('╚════════════════════════════════════════════════════════════╝');
+  console.log('');
 
   const [csvUsers, clerkUsers] = await Promise.all([
     loadCSVData(clerkCsvPath),
@@ -253,12 +260,14 @@ async function main() {
     `⚠️ [verify] Non-credential missing scope=${missingScopeNonCredential} sample=${sampleMissingScope.join(', ') || 'n/a'}, missing account_id=${missingAccountIdNonCredential} sample=${sampleMissingAccountId.join(', ') || 'n/a'}`,
   );
 
-  console.log(`⏱️ [verify] Done in ${formatDuration(Date.now() - startedAt)}`);
+  console.log('');
+  console.log(`✅ Verification success! (${formatDuration(Date.now() - startedAt)})`);
 }
 
 void main()
   .catch((error) => {
-    console.error('[verify] Failed:', error);
+    console.log('');
+    console.error('❌ Verification failed:', error);
     process.exitCode = 1;
   })
   .finally(async () => {
