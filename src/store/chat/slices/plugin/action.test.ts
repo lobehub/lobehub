@@ -1060,6 +1060,77 @@ describe('ChatPluginAction', () => {
 
       expect(transformed[0].apiName).toBe(longApiName);
     });
+
+    it('should repair malformed JSON arguments with escaped string issue', () => {
+      // This is the malformed data from haiku-4.5 model
+      // The entire JSON got stuffed into the "description" field with escaped quotes
+      const malformedArguments = JSON.stringify({
+        description:
+          'Synthesize all 10 batch analyses into 10 most important themes for product builders", "instruction": "You have access to 10 batch analysis files", "runInClient": true, "timeout": 120000}',
+      });
+
+      const toolCalls: MessageToolCall[] = [
+        {
+          id: 'tool1',
+          function: {
+            name: ['lobe-gtd', 'execTask', 'default'].join(PLUGIN_SCHEMA_SEPARATOR),
+            arguments: malformedArguments,
+          },
+          type: 'function',
+        },
+      ];
+
+      // Setup builtin tool manifest with schema that has required fields
+      act(() => {
+        useToolStore.setState({
+          builtinTools: [
+            {
+              type: 'builtin',
+              identifier: 'lobe-gtd',
+              manifest: {
+                identifier: 'lobe-gtd',
+                api: [
+                  {
+                    name: 'execTask',
+                    description: 'Execute async task',
+                    parameters: {
+                      type: 'object',
+                      required: ['description', 'instruction'],
+                      properties: {
+                        description: { type: 'string' },
+                        instruction: { type: 'string' },
+                        runInClient: { type: 'boolean' },
+                        timeout: { type: 'number' },
+                      },
+                    },
+                  },
+                ],
+                type: 'builtin',
+              } as any,
+            },
+          ],
+        });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+
+      const transformed = result.current.internal_transformToolCalls(toolCalls);
+
+      // Parse the transformed arguments
+      const repairedArgs = JSON.parse(transformed[0].arguments);
+
+      // Verify all fields are correctly extracted
+      expect(repairedArgs).toHaveProperty('description');
+      expect(repairedArgs).toHaveProperty('instruction');
+      expect(repairedArgs).toHaveProperty('runInClient', true);
+      expect(repairedArgs).toHaveProperty('timeout', 120000);
+
+      // Verify description is the correct short value, not the entire malformed string
+      expect(repairedArgs.description).toBe(
+        'Synthesize all 10 batch analyses into 10 most important themes for product builders',
+      );
+      expect(repairedArgs.instruction).toBe('You have access to 10 batch analysis files');
+    });
   });
 
   describe('internal_updatePluginError', () => {

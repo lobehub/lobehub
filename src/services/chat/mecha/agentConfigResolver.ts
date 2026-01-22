@@ -61,6 +61,12 @@ export interface AgentConfigResolverContext {
    */
   groupId?: string;
 
+  /**
+   * Whether this is a sub-task execution.
+   * When true, filters out lobe-gtd tools to prevent nested sub-task creation.
+   */
+  isSubTask?: boolean;
+
   /** Current model being used (for template variables) */
   model?: string;
   /** Plugins enabled for the agent */
@@ -106,9 +112,13 @@ export interface ResolvedAgentConfig {
  * For regular agents, this simply returns the config from the store.
  */
 export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAgentConfig => {
-  const { agentId, model, documentContent, plugins, targetAgentConfig } = ctx;
+  const { agentId, model, documentContent, plugins, targetAgentConfig, isSubTask } = ctx;
 
-  log('resolveAgentConfig called with agentId: %s, scope: %s', agentId, ctx.scope);
+  log('resolveAgentConfig called with agentId: %s, scope: %s, isSubTask: %s', agentId, ctx.scope, isSubTask);
+
+  // Helper to filter out lobe-gtd in sub-task context to prevent nested sub-task creation
+  const applySubTaskFilter = (pluginIds: string[]) =>
+    isSubTask ? pluginIds.filter((id) => id !== 'lobe-gtd') : pluginIds;
 
   const agentStoreState = getAgentStoreState();
 
@@ -199,7 +209,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
         agentConfig: finalAgentConfig,
         chatConfig: finalChatConfig,
         isBuiltinAgent: false,
-        plugins: pageAgentPlugins,
+        plugins: applySubTaskFilter(pageAgentPlugins),
       };
     }
 
@@ -208,7 +218,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       agentConfig: finalAgentConfig,
       chatConfig: finalChatConfig,
       isBuiltinAgent: false,
-      plugins: finalPlugins,
+      plugins: applySubTaskFilter(finalPlugins),
     };
   }
 
@@ -329,7 +339,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
     agentConfig: finalAgentConfig,
     chatConfig: resolvedChatConfig,
     isBuiltinAgent: true,
-    plugins: finalPlugins,
+    plugins: applySubTaskFilter(finalPlugins),
     slug,
   };
 };

@@ -1235,6 +1235,40 @@ table user_memories {
   }
 }
 
+table user_memories_activities {
+  id varchar(255) [pk, not null]
+  user_id text
+  user_memory_id varchar(255)
+  metadata jsonb
+  tags text[]
+  type varchar(255) [not null]
+  status varchar(255) [not null, default: 'pending']
+  timezone varchar(255)
+  starts_at "timestamp with time zone"
+  ends_at "timestamp with time zone"
+  associated_objects jsonb
+  associated_subjects jsonb
+  associated_locations jsonb
+  notes text
+  narrative text
+  narrative_vector vector(1024)
+  feedback text
+  feedback_vector vector(1024)
+  captured_at "timestamp with time zone" [not null, default: `now()`]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    narrative_vector [name: 'user_memories_activities_narrative_vector_index']
+    feedback_vector [name: 'user_memories_activities_feedback_vector_index']
+    type [name: 'user_memories_activities_type_index']
+    user_id [name: 'user_memories_activities_user_id_index']
+    user_memory_id [name: 'user_memories_activities_user_memory_id_index']
+    status [name: 'user_memories_activities_status_index']
+  }
+}
+
 table user_memories_contexts {
   id varchar(255) [pk, not null]
   user_id text

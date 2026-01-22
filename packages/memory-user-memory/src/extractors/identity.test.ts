@@ -46,7 +46,6 @@ describe('IdentityExtractor', () => {
         {
           details: null,
           memoryCategory: 'personal',
-          memoryLayer: 'identity',
           memoryType: 'fact',
           summary: 'New identity summary',
           tags: ['tag'],

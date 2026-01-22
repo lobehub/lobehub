@@ -86,7 +86,7 @@ export interface BaseCreateUserMemoryParams {
   details: string;
   detailsEmbedding?: number[];
   memoryCategory: string;
-  memoryLayer: LayersEnum;
+  memoryLayer?: LayersEnum;
   memoryType: TypesEnum;
   summary: string;
   summaryEmbedding?: number[];

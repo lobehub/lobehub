@@ -78,6 +78,7 @@ const styles = createStaticStyles(({ css, cssVar }) => {
     `,
     moreButton: css`
       position: absolute;
+      z-index: 10;
       inset-block-start: 12px;
       inset-inline-end: 12px;
 
@@ -259,14 +260,13 @@ const UserAgentCard = memo<UserAgentCardProps>(
         width={'100%'}
       >
         {isOwner && (
-          <DropdownMenu items={menuItems}>
-            <div
-              className={cx('more-button', styles.moreButton)}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <Icon icon={MoreVerticalIcon} size={16} style={{ cursor: 'pointer' }} />
-            </div>
-          </DropdownMenu>
+          <div onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu items={menuItems as any}>
+              <div className={cx('more-button', styles.moreButton)}>
+                <Icon icon={MoreVerticalIcon} size={16} style={{ cursor: 'pointer' }} />
+              </div>
+            </DropdownMenu>
+          </div>
         )}
         <Flexbox
           align={'flex-start'}

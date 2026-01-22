@@ -1,4 +1,4 @@
-import { LayersEnum, MergeStrategyEnum } from '@lobechat/types';
+import { MergeStrategyEnum } from '@lobechat/types';
 import { z } from 'zod';
 
 import { MemoryTypeSchema } from './common';
@@ -43,7 +43,6 @@ export const AddIdentityActionSchema = z
   .object({
     details: z.union([z.string(), z.null()]).describe('Optional detailed information'),
     memoryCategory: z.string().describe('Memory category'),
-    memoryLayer: z.literal(LayersEnum.Identity).describe('Memory layer'),
     memoryType: MemoryTypeSchema.describe('Memory type'),
     summary: z.string().describe('Concise overview of this specific memory'),
     tags: z.array(z.string()).describe('Model generated tags that summarize the identity facets'),

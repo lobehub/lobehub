@@ -87,10 +87,6 @@ export interface ChatStreamPayload {
    */
   n?: number;
   /**
-   * List of enabled plugins
-   */
-  plugins?: string[];
-  /**
    * @title Penalty coefficient in generated text to reduce topic changes
    * @default 0
    */

@@ -6,6 +6,7 @@ import {
   RemoveIdentityActionSchema,
   UpdateIdentityActionSchema,
 } from '@lobechat/memory-user-memory';
+import { LayersEnum } from '@lobechat/types';
 
 import {
   type IdentityEntryBasePayload,
@@ -51,7 +52,7 @@ export const toolsRouter = router({
           details: input.details || '',
           detailsEmbedding,
           memoryCategory: input.memoryCategory,
-          memoryLayer: input.memoryLayer,
+          memoryLayer: LayersEnum.Context,
           memoryType: input.memoryType,
           summary: input.summary,
           summaryEmbedding,
@@ -107,7 +108,7 @@ export const toolsRouter = router({
             type: input.memoryType,
           },
           memoryCategory: input.memoryCategory,
-          memoryLayer: input.memoryLayer,
+          memoryLayer: LayersEnum.Experience,
           memoryType: input.memoryType,
           summary: input.summary,
           summaryEmbedding,
@@ -162,7 +163,7 @@ export const toolsRouter = router({
             details: input.details,
             detailsVector1024: detailsEmbedding ?? null,
             memoryCategory: input.memoryCategory,
-            memoryLayer: input.memoryLayer,
+            memoryLayer: LayersEnum.Identity,
             memoryType: input.memoryType,
             metadata: Object.keys(identityMetadata).length > 0 ? identityMetadata : undefined,
             summary: input.summary,
@@ -226,7 +227,7 @@ export const toolsRouter = router({
           details: input.details || '',
           detailsEmbedding,
           memoryCategory: input.memoryCategory,
-          memoryLayer: input.memoryLayer,
+          memoryLayer: LayersEnum.Preference,
           memoryType: input.memoryType,
           preference: {
             conclusionDirectives: input.withPreference.conclusionDirectives || '',

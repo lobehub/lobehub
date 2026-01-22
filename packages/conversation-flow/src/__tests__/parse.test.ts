@@ -219,6 +219,28 @@ describe('parse', () => {
       expect(result.flatList[3].id).toBe('msg-assistant-summary');
       expect(result.flatList[3].content).toContain('All 10 tasks completed');
     });
+
+    it('should merge assistant with tools after task into AssistantGroup', () => {
+      const result = parse(inputs.tasks.withAssistantGroup);
+
+      // The critical assertions:
+      // 1. flatList should have 4 items: user, assistantGroup(+tool), tasks(3 tasks), assistantGroup(with tool chain)
+      expect(result.flatList).toHaveLength(4);
+      expect(result.flatList[0].role).toBe('user');
+      expect(result.flatList[1].role).toBe('assistantGroup');
+      expect(result.flatList[2].role).toBe('tasks');
+      expect(result.flatList[3].role).toBe('assistantGroup');
+
+      // 2. The last assistantGroup should contain the full chain:
+      //    - msg-assistant-after-task (with tool)
+      //    - msg-assistant-final (without tool)
+      const lastGroup = result.flatList[3] as any;
+      expect(lastGroup.children).toHaveLength(2);
+      expect(lastGroup.children[0].id).toBe('msg-assistant-after-task');
+      expect(lastGroup.children[0].tools).toBeDefined();
+      expect(lastGroup.children[0].tools[0].result_msg_id).toBe('msg-tool-list-files');
+      expect(lastGroup.children[1].id).toBe('msg-assistant-final');
+    });
   });
 
   describe('Performance', () => {

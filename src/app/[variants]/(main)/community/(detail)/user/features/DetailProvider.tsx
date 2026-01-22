@@ -19,7 +19,11 @@ export interface UserDetailContextConfig {
   isOwner: boolean;
   mobile?: boolean;
   onEditProfile?: (onSuccess?: (profile: MarketUserProfile) => void) => void;
-  onStatusChange?: (identifier: string, action: 'publish' | 'unpublish' | 'deprecate') => void;
+  onStatusChange?: (
+    identifier: string,
+    action: 'publish' | 'unpublish' | 'deprecate',
+    type?: 'agent' | 'group',
+  ) => void;
   totalInstalls: number;
   user: DiscoverUserInfo;
 }

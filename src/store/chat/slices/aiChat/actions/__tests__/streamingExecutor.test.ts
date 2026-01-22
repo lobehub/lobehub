@@ -13,6 +13,7 @@ import {
   createMockAgentConfig,
   createMockChatConfig,
   createMockMessage,
+  createMockResolvedAgentConfig,
 } from './fixtures';
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
 
@@ -57,6 +58,7 @@ describe('StreamingExecutor actions', () => {
           messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
           model: 'gpt-4o-mini',
           provider: 'openai',
+          agentConfig: createMockResolvedAgentConfig(),
         });
         expect(response.isFunctionCall).toEqual(false);
         expect(response.content).toEqual(TEST_CONTENT.AI_RESPONSE);
@@ -83,6 +85,7 @@ describe('StreamingExecutor actions', () => {
           provider: 'openai',
           messages,
           messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          agentConfig: createMockResolvedAgentConfig(),
         });
       });
 
@@ -127,6 +130,7 @@ describe('StreamingExecutor actions', () => {
           messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
           model: 'gpt-4o-mini',
           provider: 'openai',
+          agentConfig: createMockResolvedAgentConfig(),
         });
         expect(response.isFunctionCall).toEqual(true);
       });
@@ -165,6 +169,7 @@ describe('StreamingExecutor actions', () => {
           model: 'gpt-4o-mini',
           provider: 'openai',
           operationId,
+          agentConfig: createMockResolvedAgentConfig(),
         });
       });
 
@@ -213,6 +218,7 @@ describe('StreamingExecutor actions', () => {
           model: 'gpt-4o-mini',
           provider: 'openai',
           operationId,
+          agentConfig: createMockResolvedAgentConfig(),
         });
       });
 
@@ -251,6 +257,7 @@ describe('StreamingExecutor actions', () => {
           messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
           model: 'gpt-4o-mini',
           provider: 'openai',
+          agentConfig: createMockResolvedAgentConfig(),
         });
       });
 
@@ -300,6 +307,7 @@ describe('StreamingExecutor actions', () => {
           model: 'gpt-4o-mini',
           provider: 'openai',
           operationId,
+          agentConfig: createMockResolvedAgentConfig(),
         });
       });
 
@@ -355,6 +363,7 @@ describe('StreamingExecutor actions', () => {
           model: 'gpt-4o-mini',
           provider: 'openai',
           operationId,
+          agentConfig: createMockResolvedAgentConfig(),
         });
       });
 
@@ -394,6 +403,7 @@ describe('StreamingExecutor actions', () => {
           messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
           model: 'gpt-4o-mini',
           provider: 'openai',
+          agentConfig: createMockResolvedAgentConfig(),
         });
         expect(response.isFunctionCall).toEqual(true);
       });
@@ -419,6 +429,7 @@ describe('StreamingExecutor actions', () => {
           messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
           model: 'gpt-4o-mini',
           provider: 'openai',
+          agentConfig: createMockResolvedAgentConfig(),
         });
       });
 
@@ -435,7 +446,7 @@ describe('StreamingExecutor actions', () => {
     });
 
     describe('effectiveAgentId for group orchestration', () => {
-      it('should pass effectiveAgentId (subAgentId) to chatService when subAgentId is set in operation context', async () => {
+      it('should pass pre-resolved config for sub-agent when subAgentId is set in operation context', async () => {
         const { result } = renderHook(() => useChatStore());
         const messages = [createMockMessage({ role: 'user' })];
         const supervisorAgentId = 'supervisor-agent-id';
@@ -453,6 +464,9 @@ describe('StreamingExecutor actions', () => {
           label: 'Test Group Orchestration',
         });
 
+        // Pre-resolved config for the sub-agent (in real usage, resolved by internal_createAgentState)
+        const subAgentConfig = createMockResolvedAgentConfig();
+
         const streamSpy = vi
           .spyOn(chatService, 'createAssistantMessageStream')
           .mockImplementation(async ({ onFinish }) => {
@@ -466,14 +480,18 @@ describe('StreamingExecutor actions', () => {
             model: 'gpt-4o-mini',
             provider: 'openai',
             operationId,
+            agentConfig: subAgentConfig,
           });
         });
 
-        // Verify chatService was called with subAgentId (effectiveAgentId), not supervisorAgentId
+        // With the new architecture:
+        // - agentId param is for context/tracing (supervisor ID)
+        // - resolvedAgentConfig contains the sub-agent's config (passed in by caller)
         expect(streamSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             params: expect.objectContaining({
-              agentId: subAgentId, // Should be subAgentId, not supervisorAgentId
+              agentId: supervisorAgentId, // For context/tracing purposes
+              resolvedAgentConfig: subAgentConfig, // Pre-resolved sub-agent config
             }),
           }),
         );
@@ -511,6 +529,7 @@ describe('StreamingExecutor actions', () => {
             model: 'gpt-4o-mini',
             provider: 'openai',
             operationId,
+            agentConfig: createMockResolvedAgentConfig(),
           });
         });
 
@@ -526,7 +545,7 @@ describe('StreamingExecutor actions', () => {
         streamSpy.mockRestore();
       });
 
-      it('should use subAgentId for agent config resolution when present', async () => {
+      it('should pass resolvedAgentConfig through chatService when subAgentId is present', async () => {
         const { result } = renderHook(() => useChatStore());
         const messages = [createMockMessage({ role: 'user' })];
         const supervisorAgentId = 'supervisor-agent-id';
@@ -547,6 +566,9 @@ describe('StreamingExecutor actions', () => {
           label: 'Test Speak Executor',
         });
 
+        // Create a mock resolved config that represents the speaking agent's config
+        const speakingAgentConfig = createMockResolvedAgentConfig();
+
         const streamSpy = vi
           .spyOn(chatService, 'createAssistantMessageStream')
           .mockImplementation(async ({ onFinish }) => {
@@ -560,15 +582,23 @@ describe('StreamingExecutor actions', () => {
             model: 'gpt-4o-mini',
             provider: 'openai',
             operationId,
+            // Pass pre-resolved config for the speaking agent
+            // In real usage, this is resolved in internal_createAgentState using subAgentId
+            agentConfig: speakingAgentConfig,
           });
         });
 
-        // The key assertion: chatService should receive subAgentId for agent config resolution
-        // This ensures the speaking agent's system role and tools are used, not the supervisor's
+        // With the new architecture, config is pre-resolved and passed via resolvedAgentConfig.
+        // The agentId param is for context/tracing only.
+        // The speaking agent's config is ensured by the caller (internal_createAgentState)
+        // resolving config with subAgentId and passing it as agentConfig param.
         expect(streamSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             params: expect.objectContaining({
-              agentId: subAgentId,
+              // agentId is supervisor for context purposes
+              agentId: supervisorAgentId,
+              // resolvedAgentConfig contains the speaking agent's config
+              resolvedAgentConfig: speakingAgentConfig,
             }),
           }),
         );
@@ -902,6 +932,7 @@ describe('StreamingExecutor actions', () => {
           model: 'gpt-4o-mini',
           provider: 'openai',
           operationId,
+          agentConfig: createMockResolvedAgentConfig(),
         });
       });
 
@@ -943,6 +974,7 @@ describe('StreamingExecutor actions', () => {
           messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
           model: 'gpt-4o-mini',
           provider: 'openai',
+          agentConfig: createMockResolvedAgentConfig(),
         });
       });
 
@@ -1040,6 +1072,7 @@ describe('StreamingExecutor actions', () => {
             stepCount: 0,
           },
         },
+        agentConfig: createMockResolvedAgentConfig(),
       });
 
       // Execute internal_execAgentRuntime with the pre-created operationId
@@ -1135,6 +1168,7 @@ describe('StreamingExecutor actions', () => {
             stepCount: 0,
           },
         },
+        agentConfig: createMockResolvedAgentConfig(),
       });
 
       // Suppress console.error for this test
@@ -1235,6 +1269,7 @@ describe('StreamingExecutor actions', () => {
             stepCount: 0,
           },
         },
+        agentConfig: createMockResolvedAgentConfig(),
       });
 
       // Should not throw
@@ -1489,6 +1524,7 @@ describe('StreamingExecutor actions', () => {
             stepCount: 1,
           },
         },
+        agentConfig: createMockResolvedAgentConfig(),
       });
 
       await act(async () => {
@@ -1583,6 +1619,7 @@ describe('StreamingExecutor actions', () => {
             stepCount: 1,
           },
         },
+        agentConfig: createMockResolvedAgentConfig(),
       });
 
       await act(async () => {
@@ -1600,6 +1637,93 @@ describe('StreamingExecutor actions', () => {
 
       // Operation should be failed
       expect(result.current.operations[operationId!].status).toBe('failed');
+    });
+  });
+
+  describe('isSubTask filtering', () => {
+    it('should filter out lobe-gtd tools when isSubTask is true', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const messages = [createMockMessage({ role: 'user' })];
+
+      // Mock resolveAgentConfig to return plugins including lobe-gtd
+      const resolveAgentConfigSpy = vi
+        .spyOn(agentConfigResolver, 'resolveAgentConfig')
+        .mockReturnValue({
+          agentConfig: createMockAgentConfig(),
+          chatConfig: createMockChatConfig(),
+          isBuiltinAgent: false,
+          plugins: ['lobe-gtd', 'lobe-local-system', 'other-plugin'],
+        });
+
+      // Create operation
+      let operationId: string;
+      act(() => {
+        const res = result.current.startOperation({
+          type: 'execClientTask',
+          context: {
+            agentId: TEST_IDS.SESSION_ID,
+            topicId: TEST_IDS.TOPIC_ID,
+          },
+        });
+        operationId = res.operationId;
+      });
+
+      // Call internal_createAgentState with isSubTask: true
+      act(() => {
+        result.current.internal_createAgentState({
+          messages,
+          parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+          operationId,
+          isSubTask: true,
+        });
+      });
+
+      // Verify that resolveAgentConfig was called
+      expect(resolveAgentConfigSpy).toHaveBeenCalled();
+
+      resolveAgentConfigSpy.mockRestore();
+    });
+
+    it('should NOT filter out lobe-gtd tools when isSubTask is false or undefined', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const messages = [createMockMessage({ role: 'user' })];
+
+      // Mock resolveAgentConfig to return plugins including lobe-gtd
+      const resolveAgentConfigSpy = vi
+        .spyOn(agentConfigResolver, 'resolveAgentConfig')
+        .mockReturnValue({
+          agentConfig: createMockAgentConfig(),
+          chatConfig: createMockChatConfig(),
+          isBuiltinAgent: false,
+          plugins: ['lobe-gtd', 'lobe-local-system', 'other-plugin'],
+        });
+
+      // Create operation without isSubTask (normal conversation)
+      let operationId: string;
+      act(() => {
+        const res = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: {
+            agentId: TEST_IDS.SESSION_ID,
+            topicId: TEST_IDS.TOPIC_ID,
+          },
+        });
+        operationId = res.operationId;
+      });
+
+      // Call internal_createAgentState without isSubTask
+      act(() => {
+        result.current.internal_createAgentState({
+          messages,
+          parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+          operationId,
+        });
+      });
+
+      // Verify that resolveAgentConfig was called
+      expect(resolveAgentConfigSpy).toHaveBeenCalled();
+
+      resolveAgentConfigSpy.mockRestore();
     });
   });
 });
