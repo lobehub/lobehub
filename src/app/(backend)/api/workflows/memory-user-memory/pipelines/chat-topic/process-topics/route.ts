@@ -82,6 +82,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
                 `memory:user-memory:extract:users:${userId}:topics:${topicId}:cep:${index}`,
                 () =>
                   executor.extractTopic({
+                    asyncTaskId: payload.asyncTaskId,
                     forceAll: payload.forceAll,
                     forceTopics: payload.forceTopics,
                     from: payload.from,
@@ -90,6 +91,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
                     to: payload.to,
                     topicId,
                     userId,
+                    userInitiated: false,
                   }),
               ),
             ),
@@ -101,6 +103,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
               `memory:user-memory:extract:users:${userId}:topics:${topicId}:identity:${index}`,
               () =>
                 executor.extractTopic({
+                  asyncTaskId: payload.asyncTaskId,
                   forceAll: payload.forceAll,
                   forceTopics: payload.forceTopics,
                   from: payload.from,
@@ -109,6 +112,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
                   to: payload.to,
                   topicId,
                   userId,
+                  userInitiated: payload.userInitiated,
                 }),
             );
           }

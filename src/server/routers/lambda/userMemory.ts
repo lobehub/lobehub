@@ -1,6 +1,17 @@
-import { CreateUserMemoryIdentitySchema, UpdateUserMemoryIdentitySchema } from '@lobechat/types';
+import {
+  AsyncTaskError,
+  AsyncTaskErrorType,
+  AsyncTaskStatus,
+  AsyncTaskType,
+  CreateUserMemoryIdentitySchema,
+  MemorySourceType,
+  UpdateUserMemoryIdentitySchema,
+} from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
+import { AsyncTaskModel, initUserMemoryExtractionMetadata } from '@/database/models/asyncTask';
+import { TopicModel } from '@/database/models/topic';
 import { UserMemoryModel } from '@/database/models/userMemory';
 import {
   UserMemoryContextModel,
@@ -10,22 +21,136 @@ import {
 } from '@/database/models/userMemory/index';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { appEnv } from '@/envs/app';
+import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import {
+  MemoryExtractionWorkflowService,
+  buildWorkflowPayloadInput,
+  normalizeMemoryExtractionPayload,
+} from '@/server/services/memory/userMemory/extract';
 
 const userMemoryProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
 
   return opts.next({
     ctx: {
+      asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
       contextModel: new UserMemoryContextModel(ctx.serverDB, ctx.userId),
       experienceModel: new UserMemoryExperienceModel(ctx.serverDB, ctx.userId),
       identityModel: new UserMemoryIdentityModel(ctx.serverDB, ctx.userId),
       preferenceModel: new UserMemoryPreferenceModel(ctx.serverDB, ctx.userId),
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId),
       userMemoryModel: new UserMemoryModel(ctx.serverDB, ctx.userId),
     },
   });
 });
 
+const userMemoryExtractionInputSchema = z.object({
+  fromDate: z.coerce.date().optional(),
+  toDate: z.coerce.date().optional(),
+});
+
 export const userMemoryRouter = router({
+  requestMemoryFromChatTopic: userMemoryProcedure
+    .input(userMemoryExtractionInputSchema)
+    .mutation(async ({ ctx, input }) => {
+      if (input.fromDate && input.toDate && input.fromDate > input.toDate) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: '`fromDate` cannot be later than `toDate`',
+        });
+      }
+
+      const existingTask = await ctx.asyncTaskModel.findActiveByType(
+        AsyncTaskType.UserMemoryExtractionWithChatTopic,
+      );
+      if (existingTask) {
+        return {
+          deduped: true,
+          id: existingTask.id,
+          metadata: existingTask.metadata,
+          status: existingTask.status,
+        };
+      }
+
+      const totalTopics = await ctx.topicModel.countTopicsForMemoryExtractor({
+        endDate: input.toDate,
+        ignoreExtracted: false,
+        startDate: input.fromDate,
+      });
+      const metadata = initUserMemoryExtractionMetadata({
+        progress: {
+          completedTopics: 0,
+          totalTopics,
+        },
+        range: {
+          from: input.fromDate?.toISOString(),
+          to: input.toDate?.toISOString(),
+        },
+        source: 'chat_topic',
+      });
+
+      const initialStatus =
+        totalTopics === 0 ? AsyncTaskStatus.Success : AsyncTaskStatus.Pending;
+      const taskId = await ctx.asyncTaskModel.create({
+        metadata,
+        status: initialStatus,
+        type: AsyncTaskType.UserMemoryExtractionWithChatTopic,
+      });
+
+      if (totalTopics === 0) {
+        return {
+          deduped: false,
+          id: taskId,
+          metadata,
+          status: initialStatus,
+        };
+      }
+
+      const baseUrl = appEnv.INTERNAL_APP_URL || appEnv.APP_URL;
+      const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
+
+      try {
+        await MemoryExtractionWorkflowService.triggerProcessUsers(
+          buildWorkflowPayloadInput(
+            normalizeMemoryExtractionPayload({
+              asyncTaskId: taskId,
+              baseUrl,
+              forceAll: false,
+              forceTopics: false,
+              fromDate: input.fromDate,
+              mode: 'workflow',
+              sources: [MemorySourceType.ChatTopic],
+              toDate: input.toDate,
+              userIds: [ctx.userId],
+              userInitiated: true,
+            }),
+          ),
+          { extraHeaders: upstashWorkflowExtraHeaders },
+        );
+      } catch (error) {
+        await ctx.asyncTaskModel.update(taskId, {
+          error: new AsyncTaskError(
+            AsyncTaskErrorType.TaskTriggerError,
+            'Failed to schedule memory extraction workflow',
+          ),
+          status: AsyncTaskStatus.Error,
+        });
+        throw new TRPCError({
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to trigger user memory extraction',
+          cause: error,
+        });
+      }
+
+      return {
+        deduped: false,
+        id: taskId,
+        metadata,
+        status: AsyncTaskStatus.Pending,
+      };
+    }),
+
   // ============ Identity CRUD ============
   createIdentity: userMemoryProcedure
     .input(CreateUserMemoryIdentitySchema)

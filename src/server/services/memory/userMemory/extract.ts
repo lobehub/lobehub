@@ -54,6 +54,7 @@ import type { ListTopicsForMemoryExtractorCursor } from '@/database/models/topic
 import { TopicModel } from '@/database/models/topic';
 import type { ListUsersForMemoryExtractorCursor } from '@/database/models/user';
 import { UserModel } from '@/database/models/user';
+import { AsyncTaskModel, initUserMemoryExtractionMetadata } from '@/database/models/asyncTask';
 import { UserMemoryModel } from '@/database/models/userMemory';
 import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemory/sources/benchmarkLoCoMo';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
@@ -67,12 +68,13 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { S3 } from '@/server/modules/S3';
 import type { GlobalMemoryLayer } from '@/types/serverConfig';
 import type { ProviderConfig } from '@/types/user/settings';
+import { LayersEnum, MemorySourceType, type MergeStrategyEnum, TypesEnum } from '@/types/userMemory';
 import {
-  LayersEnum,
-  MemorySourceType,
-  type MergeStrategyEnum,
-  TypesEnum,
-} from '@/types/userMemory';
+  AsyncTaskError,
+  AsyncTaskErrorType,
+  AsyncTaskStatus,
+  type UserMemoryExtractionMetadata,
+} from '@/types/asyncTask';
 import { encodeAsync } from '@/utils/tokenizer';
 
 const SOURCE_ALIAS_MAP: Record<string, MemorySourceType> = {
@@ -110,6 +112,7 @@ export interface MemoryExtractionNormalizedPayload {
   baseUrl: string;
   forceAll: boolean;
   forceTopics: boolean;
+  asyncTaskId?: string;
   from?: Date;
   identityCursor: number;
   layers: LayersEnum[];
@@ -126,9 +129,11 @@ export interface MemoryExtractionNormalizedPayload {
   userCursor?: MemoryExtractionWorkflowCursor;
   userId?: string;
   userIds: string[];
+  userInitiated?: boolean;
 }
 
 export const memoryExtractionPayloadSchema = z.object({
+  asyncTaskId: z.string().uuid().optional(),
   baseUrl: z.string().url().optional(),
   forceAll: z.boolean().optional(),
   forceTopics: z.boolean().optional(),
@@ -155,6 +160,7 @@ export const memoryExtractionPayloadSchema = z.object({
     .optional(),
   userId: z.string().optional(),
   userIds: z.array(z.string()).optional(),
+  userInitiated: z.boolean().optional(),
 });
 
 export type MemoryExtractionPayloadInput = z.infer<typeof memoryExtractionPayloadSchema>;
@@ -188,6 +194,7 @@ export const normalizeMemoryExtractionPayload = (
   if (!baseUrl) throw new Error('Missing baseUrl for workflow trigger');
 
   return {
+    asyncTaskId: parsed.asyncTaskId,
     baseUrl,
     forceAll: parsed.forceAll ?? false,
     forceTopics: parsed.forceTopics ?? false,
@@ -205,6 +212,7 @@ export const normalizeMemoryExtractionPayload = (
     userIds: Array.from(
       new Set([...(parsed.userIds || []), ...(parsed.userId ? [parsed.userId] : [])]),
     ).filter(Boolean),
+    userInitiated: parsed.userInitiated ?? false,
   };
 };
 
@@ -223,6 +231,7 @@ type ProviderKeyVaultMap = Record<
 export const buildWorkflowPayloadInput = (
   payload: MemoryExtractionNormalizedPayload,
 ): MemoryExtractionPayloadInput => ({
+  asyncTaskId: payload.asyncTaskId,
   baseUrl: payload.baseUrl,
   forceAll: payload.forceAll,
   forceTopics: payload.forceTopics,
@@ -238,6 +247,7 @@ export const buildWorkflowPayloadInput = (
   userCursor: payload.userCursor,
   userId: payload.userId ?? payload.userIds[0],
   userIds: payload.userIds,
+  userInitiated: payload.userInitiated,
 });
 
 const normalizeProvider = (provider: string) => provider.toLowerCase();
@@ -344,6 +354,7 @@ type RuntimeBundle = {
 };
 
 export interface TopicExtractionJob {
+  asyncTaskId?: string;
   forceAll: boolean;
   forceTopics: boolean;
   from?: Date;
@@ -352,6 +363,7 @@ export interface TopicExtractionJob {
   to?: Date;
   topicId: string;
   userId: string;
+  userInitiated?: boolean;
 }
 
 export interface TopicPaginationJob {
@@ -1024,6 +1036,18 @@ export class MemoryExtractionExecutor {
     return res.map((item) => ({ ...item, layer: LayersEnum.Identity }));
   }
 
+  private async reportUserInitiatedProgress(job: TopicExtractionJob) {
+    if (!job.asyncTaskId || !job.userInitiated) return;
+
+    try {
+      const db = await this.db;
+      const asyncTaskModel = new AsyncTaskModel(db, job.userId);
+      await asyncTaskModel.incrementUserMemoryExtractionProgress(job.asyncTaskId);
+    } catch (error) {
+      console.error('[memory-extraction] failed to update async task progress', error);
+    }
+  }
+
   async extractTopic(job: TopicExtractionJob) {
     const attributes = {
       source: job.source,
@@ -1050,6 +1074,8 @@ export class MemoryExtractionExecutor {
       'Memory User Memory: Extract Chat Topic',
       { attributes },
       async (span) => {
+        const shouldReportProgress = job.userInitiated && !!job.asyncTaskId;
+        let topicProcessed = false;
         const startTime = Date.now();
         let extractionJob: MemoryExtractionJob | null = null;
         let extraction: MemoryExtractionResult | null = null;
@@ -1072,6 +1098,7 @@ export class MemoryExtractionExecutor {
               `[memory-extraction] topic ${job.topicId} not found for user ${job.userId}`,
             );
             span.setStatus({ code: SpanStatusCode.OK, message: 'topic_not_found' });
+            topicProcessed = true;
             return {
               extracted: false,
               layers: {},
@@ -1081,6 +1108,7 @@ export class MemoryExtractionExecutor {
           }
           if ((job.from && topic.createdAt < job.from) || (job.to && topic.createdAt > job.to)) {
             span.setStatus({ code: SpanStatusCode.OK, message: 'topic_out_of_range' });
+            topicProcessed = true;
             return {
               extracted: false,
               layers: {},
@@ -1090,6 +1118,7 @@ export class MemoryExtractionExecutor {
           }
           if (!job.forceAll && !job.forceTopics && isTopicExtracted(topic.metadata)) {
             span.setStatus({ code: SpanStatusCode.OK, message: 'already_extracted' });
+            topicProcessed = true;
             return {
               extracted: false,
               layers: {},
@@ -1292,6 +1321,7 @@ export class MemoryExtractionExecutor {
           if (!extraction) {
             this.recordJobMetrics(extractionJob, 'completed', Date.now() - startTime);
             span.setStatus({ code: SpanStatusCode.OK, message: 'no_extraction' });
+            topicProcessed = true;
             return {
               extracted: false,
               layers: {},
@@ -1318,6 +1348,7 @@ export class MemoryExtractionExecutor {
           span.setStatus({ code: SpanStatusCode.OK });
           span.setAttribute('memory.processed_memory_count', persistedRes.createdIds.length);
 
+          topicProcessed = true;
           return {
             extracted: true,
             layers: persistedRes.layers,
@@ -1340,8 +1371,26 @@ export class MemoryExtractionExecutor {
           if (tracePayload) {
             tracePayload.error = serializeError(error);
           }
+          if (job.asyncTaskId && job.userInitiated) {
+            try {
+              const asyncTaskModel = new AsyncTaskModel(await this.db, job.userId);
+              await asyncTaskModel.update(job.asyncTaskId, {
+                error: new AsyncTaskError(
+                  AsyncTaskErrorType.ServerError,
+                  error instanceof Error ? error.message : 'Extraction failed',
+                ),
+                status: AsyncTaskStatus.Error,
+              });
+            } catch (taskError) {
+              console.error('[memory-extraction] failed to update async task status', taskError);
+            }
+          }
           throw error;
         } finally {
+          if (shouldReportProgress && topicProcessed) {
+            await this.reportUserInitiatedProgress(job);
+          }
+
           if (observabilityS3 && tracePayload) {
             try {
               await this.uploadExtractionTrace(
@@ -1428,6 +1477,7 @@ export class MemoryExtractionExecutor {
         const topicIds = await this.filterTopicIdsForUser(userId, payload.topicIds);
         for (const topicId of topicIds) {
           const extracted = await this.extractTopic({
+            asyncTaskId: payload.asyncTaskId,
             forceAll: payload.forceAll,
             forceTopics: payload.forceTopics,
             from: payload.from,
@@ -1436,6 +1486,7 @@ export class MemoryExtractionExecutor {
             to: payload.to,
             topicId,
             userId,
+            userInitiated: payload.userInitiated,
           });
 
           results.push({ ...extracted, topicId, userId });

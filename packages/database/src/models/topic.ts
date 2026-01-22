@@ -746,6 +746,31 @@ export class TopicModel {
     });
   };
 
+  countTopicsForMemoryExtractor = async (options: {
+    endDate?: Date;
+    ignoreExtracted?: boolean;
+    startDate?: Date;
+  } = {}) => {
+    const result = await this.db
+      .select({ total: count(topics.id) })
+      .from(topics)
+      .where(
+        and(
+          eq(topics.userId, this.userId),
+          options.startDate ? gte(topics.createdAt, options.startDate) : undefined,
+          options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
+          options.ignoreExtracted
+            ? undefined
+            : or(
+                isNull(topics.metadata),
+                sql`(${topics.metadata}->'memory_user_memory_extract'->>'extract_status') IS DISTINCT FROM 'completed'`,
+              ),
+        ),
+      );
+
+    return result[0]?.total ?? 0;
+  };
+
   /**
    * Get cron topics grouped by cronJob for a specific agent
    * Returns topics where trigger='cron' and metadata contains cronJobId
