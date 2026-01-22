@@ -1,11 +1,11 @@
 /* eslint-disable unicorn/prefer-top-level-await */
 import { sql } from 'drizzle-orm';
 
-import { getMigrationMode } from './config';
-import { db, pool, schema } from './db';
-import { loadCSVData, loadClerkUsersFromFile } from './load-data-from-files';
-import { ClerkExternalAccount } from './types';
-import { generateBackupCodes, safeDateConversion } from './utils';
+import { getMigrationMode } from './_internal/config';
+import { db, pool, schema } from './_internal/db';
+import { loadCSVData, loadClerkUsersFromFile } from './_internal/load-data-from-files';
+import { ClerkExternalAccount } from './_internal/types';
+import { generateBackupCodes, safeDateConversion } from './_internal/utils';
 
 const BATCH_SIZE = Number(process.env.CLERK_TO_BETTERAUTH_BATCH_SIZE) || 300;
 const PROGRESS_TABLE = sql.identifier('clerk_migration_progress');

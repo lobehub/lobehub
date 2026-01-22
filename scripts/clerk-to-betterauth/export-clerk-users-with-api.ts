@@ -2,9 +2,9 @@
 import { type User, createClerkClient } from '@clerk/backend';
 import { writeFile } from 'node:fs/promises';
 
-import { getClerkSecret, resolveDataPaths } from './config';
-import './env';
-import { ClerkUser } from './types';
+import { getClerkSecret, resolveDataPaths } from './_internal/config';
+import './_internal/env';
+import { ClerkUser } from './_internal/types';
 
 /**
  * Fetch all Clerk users via REST API and persist them into a local JSON file.

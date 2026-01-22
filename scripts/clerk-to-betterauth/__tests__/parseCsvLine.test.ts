@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseCsvLine } from '../load-data-from-files';
+import { parseCsvLine } from '../_internal/load-data-from-files';
 
 describe('parseCsvLine', () => {
   it('parses simple comma separated values', () => {

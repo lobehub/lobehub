@@ -1,8 +1,8 @@
 /* eslint-disable unicorn/prefer-top-level-await */
-import { getMigrationMode, resolveDataPaths } from './config';
-import { db, pool, schema } from './db';
-import { loadCSVData, loadClerkUsersFromFile } from './load-data-from-files';
-import { ClerkExternalAccount, ClerkUser } from './types';
+import { getMigrationMode, resolveDataPaths } from './_internal/config';
+import { db, pool, schema } from './_internal/db';
+import { loadCSVData, loadClerkUsersFromFile } from './_internal/load-data-from-files';
+import { ClerkExternalAccount, ClerkUser } from './_internal/types';
 
 type ExpectedAccount = {
   accountId?: string;

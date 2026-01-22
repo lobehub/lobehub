@@ -5,7 +5,7 @@ import { Pool as NodePool } from 'pg';
 import ws from 'ws';
 
 // schema is the only dependency on project code, required for type-safe migrations
-import * as schemaModule from '../../packages/database/src/schemas';
+import * as schemaModule from '../../../packages/database/src/schemas';
 import { getDatabaseDriver, getDatabaseUrl } from './config';
 
 function createDatabase() {
@@ -29,4 +29,4 @@ function createDatabase() {
 const { db, pool } = createDatabase();
 
 export { db, pool };
-export * as schema from '../../packages/database/src/schemas';
+export * as schema from '../../../packages/database/src/schemas';
