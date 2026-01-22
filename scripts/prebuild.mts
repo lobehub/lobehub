@@ -1,10 +1,15 @@
 import { execSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// Use createRequire for CommonJS module compatibility
+const require = createRequire(import.meta.url);
+const { checkDeprecatedClerkEnv } = require('./_shared/checkDeprecatedClerkEnv.js');
 
 const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP_APP === '1';
 const isBundleAnalyzer = process.env.ANALYZE === 'true' && process.env.CI === 'true';
@@ -28,36 +33,6 @@ const getCommandVersion = (command: string): string | null => {
       .split('\n')[0];
   } catch {
     return null;
-  }
-};
-
-const CLERK_MIGRATION_DOC_URL = 'https://lobehub.com/docs/self-hosting/advanced/auth/clerk-to-betterauth';
-
-/**
- * Check for deprecated Clerk environment variables and fail build if found
- */
-const checkDeprecatedClerkEnv = () => {
-  const clerkEnvVars = [
-    'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-    'CLERK_SECRET_KEY',
-    'CLERK_WEBHOOK_SECRET',
-  ];
-
-  const foundClerkEnvVars = clerkEnvVars.filter((envVar) => process.env[envVar]);
-
-  if (foundClerkEnvVars.length > 0) {
-    console.error('\n' + '═'.repeat(70));
-    console.error('❌ ERROR: Clerk authentication is no longer supported!');
-    console.error('═'.repeat(70));
-    console.error('\nDetected deprecated Clerk environment variables:');
-    for (const envVar of foundClerkEnvVars) {
-      console.error(`  • ${envVar}`);
-    }
-    console.error('\nClerk has been removed from LobeChat. Please migrate to Better Auth.');
-    console.error(`\n📖 Migration guide: ${CLERK_MIGRATION_DOC_URL}`);
-    console.error('\nAfter migration, remove the Clerk environment variables and redeploy.');
-    console.error('═'.repeat(70) + '\n');
-    process.exit(1);
   }
 };
 

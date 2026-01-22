@@ -103,7 +103,7 @@ export const createAuthSlice: StateCreator<
     }
   },
   openLogin: async () => {
-    // Skip if already on a login page
+    // Skip if already on a Better Auth login page (/signin, /signup)
     const pathname = location.pathname;
     if (pathname.startsWith('/signin') || pathname.startsWith('/signup')) {
       return;

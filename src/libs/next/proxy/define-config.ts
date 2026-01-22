@@ -15,25 +15,21 @@ import { RouteVariants } from '@/utils/server/routeVariants';
 
 /**
  * Creates a route matcher function that checks if a request path matches any of the given patterns
- * @param patterns Array of route patterns (supports wildcards with .*)
+ * @param patterns Array of route patterns - supports `(.*)` as wildcard
  * @returns Function that returns true if the request matches any pattern
  */
 function createRouteMatcher(patterns: string[]) {
   const regexPatterns = patterns.map((pattern) => {
-    // Convert route pattern to regex: escape special chars, convert (.*) to regex
+    // Escape special regex chars, then restore (.*) to regex wildcard
     const regexStr = pattern
-      .replaceAll('(', '\\(')
-      .replaceAll(')', '\\)')
-      .replaceAll('.', '\\.')
+      .replaceAll(/[$+.?[\\\]^{|}]/g, '\\$&')
       .replaceAll('\\(\\.\\*\\)', '.*')
-      .replaceAll('\\*', '.*');
+      .replaceAll('(', '\\(')
+      .replaceAll(')', '\\)');
     return new RegExp(`^${regexStr}$`);
   });
 
-  return (req: NextRequest) => {
-    const pathname = req.nextUrl.pathname;
-    return regexPatterns.some((regex) => regex.test(pathname));
-  };
+  return (req: NextRequest) => regexPatterns.some((regex) => regex.test(req.nextUrl.pathname));
 }
 
 // Create debug logger instances
