@@ -480,7 +480,6 @@ export const streamingExecutor: StateCreator<
         // Pass pre-resolved config to avoid duplicate resolveAgentConfig calls
         // This ensures isSubTask filtering and other runtime modifications are preserved
         resolvedAgentConfig: agentConfig,
-        scope, // Pass scope to chat service for page-agent injection
         topicId: topicId ?? undefined, // Pass topicId for GTD context injection
         ...agentConfigData.params,
       },
