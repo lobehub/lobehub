@@ -174,6 +174,35 @@ export const mobileRoutes: RouteConfig[] = [
             element: dynamicElement(() => import('../settings'), 'Mobile > Settings'),
             index: true,
           },
+          // Provider routes with nested structure
+          {
+            children: [
+              {
+                element: redirectElement('/settings/provider/all'),
+                index: true,
+              },
+              {
+                element: dynamicElement(
+                  () => import('../../(main)/settings/provider').then((m) => m.ProviderDetailPage),
+                  'Mobile > Settings > Provider > Detail',
+                ),
+                path: ':providerId',
+              },
+            ],
+            element: dynamicElement(
+              () => import('../../(main)/settings/provider').then((m) => m.ProviderLayout),
+              'Mobile > Settings > Provider > Layout',
+            ),
+            path: 'provider',
+          },
+          // Other settings tabs (common, agent, memory, tts, about, etc.)
+          {
+            element: dynamicElement(
+              () => import('../../(main)/settings'),
+              'Mobile > Settings > Tab',
+            ),
+            path: ':tab',
+          },
         ],
         element: <MobileSettingsLayout />,
         errorElement: <ErrorBoundary resetPath="/settings" />,
