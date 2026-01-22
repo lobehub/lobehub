@@ -1,5 +1,5 @@
 import type { ExperienceListParams, ExperienceListResult } from '@lobechat/types';
-import { type SQL, and, asc, desc, eq, ilike, or, sql } from 'drizzle-orm';
+import { type SQL, and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
 
 import {
   NewUserMemoryExperience,
@@ -89,7 +89,7 @@ export class UserMemoryExperienceModel {
             ilike(userMemoriesExperiences.action, `%${normalizedQuery}%`),
           )
         : undefined,
-      types && types.length > 0 ? sql`${userMemoriesExperiences.type} = ANY(${types})` : undefined,
+      types && types.length > 0 ? inArray(userMemoriesExperiences.type, types) : undefined,
       tags && tags.length > 0
         ? or(...tags.map((tag) => sql<boolean>`${tag} = ANY(${userMemoriesExperiences.tags})`))
         : undefined,

@@ -13,6 +13,8 @@ import {
   type AddPreferenceMemoryResult,
   type ExperienceListParams,
   type ExperienceListResult,
+  type IdentityListParams,
+  type IdentityListResult,
   type LayersEnum,
   type RemoveIdentityMemoryResult,
   type SearchMemoryParams,
@@ -69,6 +71,14 @@ class UserMemoryService {
    */
   queryExperiences = async (params?: ExperienceListParams): Promise<ExperienceListResult> => {
     return lambdaClient.userMemories.queryExperiences.query(params);
+  };
+
+  /**
+   * Query identities with pagination, search, and sorting
+   * Returns flat structure optimized for frontend display
+   */
+  queryIdentities = async (params?: IdentityListParams): Promise<IdentityListResult> => {
+    return lambdaClient.userMemories.queryIdentities.query(params);
   };
 
   retrieveMemory = async (params: SearchMemoryParams): Promise<SearchMemoryResult> => {

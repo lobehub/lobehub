@@ -94,10 +94,10 @@ export const createExperienceSlice: StateCreator<
           set(
             produce((draft) => {
               draft.experiencesSearchLoading = false;
+              draft.experiencesTotal = data.total;
 
               if (!draft.experiencesInit) {
                 draft.experiencesInit = true;
-                draft.experiencesTotal = data.total;
               }
 
               // Backend now returns flat structure directly, no transformation needed
