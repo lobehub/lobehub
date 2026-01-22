@@ -21,7 +21,7 @@ export const params = {
       const filteredMessages = messages.map((message: any) => {
         let normalizedMessage = message;
 
-        // 为 assistant 空消息添加一个空格 (#8418)
+        // Add a space for empty assistant messages (#8418)
         if (message.role === 'assistant' && (!message.content || message.content === '')) {
           normalizedMessage = { ...normalizedMessage, content: ' ' };
         }
