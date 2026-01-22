@@ -27,7 +27,7 @@ import { ModelProvider } from 'model-bank';
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { enableAuth } from '@/envs/auth';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
-import { createAgentToolsEngine, createToolsEngine } from '@/helpers/toolEngineering';
+import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { getAgentStoreState } from '@/store/agent';
 import {
   agentByIdSelectors,
@@ -488,26 +488,14 @@ class ChatService {
     onLoadingChange?.(true);
 
     try {
-      // Use simple tools engine without complex search logic
-      const toolsEngine = createToolsEngine();
-      const { tools, enabledManifests } = toolsEngine.generateToolsDetailed({
-        model: params.model!,
-        provider: params.provider!,
-        toolIds: params.plugins,
-      });
-
       const llmMessages = await contextEngineering({
-        manifests: enabledManifests,
         messages: params.messages as any,
         model: params.model!,
         provider: params.provider!,
-        tools: params.plugins,
       });
 
-      // remove plugins
-      delete params.plugins;
       await this.getChatCompletion(
-        { ...params, messages: llmMessages, tools },
+        { ...params, messages: llmMessages },
         {
           onErrorHandle: (error) => {
             errorHandle(new Error(error.message), error);

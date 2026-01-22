@@ -31,7 +31,6 @@ const createMockResolvedConfig = (overrides?: {
       model: DEFAULT_AGENT_CONFIG.model,
       provider: 'openai',
       systemRole: '',
-      plugins: [],
       chatConfig: {},
       params: {},
       tts: {},
@@ -141,7 +140,6 @@ describe('ChatService', () => {
       });
       await chatService.createAssistantMessage({
         messages,
-        plugins: enabledPlugins,
         resolvedAgentConfig: createMockResolvedConfig({ plugins: enabledPlugins }),
       });
 
@@ -174,7 +172,6 @@ describe('ChatService', () => {
           messages,
           model: 'deepseek-reasoner',
           provider: 'deepseek',
-          plugins: [],
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'deepseek-reasoner', provider: 'deepseek' },
             chatConfig: { enableReasoning: true, reasoningBudgetToken: 2048 },
@@ -204,7 +201,6 @@ describe('ChatService', () => {
           messages,
           model: 'deepseek-reasoner',
           provider: 'deepseek',
-          plugins: [],
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'deepseek-reasoner', provider: 'deepseek' },
             chatConfig: { enableReasoning: false },
@@ -234,7 +230,6 @@ describe('ChatService', () => {
           messages,
           model: 'deepseek-reasoner',
           provider: 'deepseek',
-          plugins: [],
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'deepseek-reasoner', provider: 'deepseek' },
             // enableReasoning is true, but reasoningBudgetToken is undefined
@@ -265,7 +260,6 @@ describe('ChatService', () => {
           messages,
           model: 'test-model',
           provider: 'test-provider',
-          plugins: [],
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'test-model', provider: 'test-provider' },
             chatConfig: { reasoningEffort: 'high' },
@@ -292,7 +286,6 @@ describe('ChatService', () => {
           messages,
           model: 'test-model',
           provider: 'test-provider',
-          plugins: [],
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'test-model', provider: 'test-provider' },
             chatConfig: { thinkingBudget: 5000 },
@@ -337,7 +330,6 @@ describe('ChatService', () => {
         const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
         await chatService.createAssistantMessage({
           messages,
-          plugins: [],
           model: 'gpt-4-vision-preview',
           provider: 'openai',
           resolvedAgentConfig: createMockResolvedConfig({
@@ -391,7 +383,6 @@ describe('ChatService', () => {
         const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
         await chatService.createAssistantMessage({
           messages,
-          plugins: [],
           resolvedAgentConfig: createMockResolvedConfig(),
         });
 
@@ -450,7 +441,6 @@ describe('ChatService', () => {
 
         await chatService.createAssistantMessage({
           messages,
-          plugins: [],
           model: 'gpt-4-vision-preview',
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'gpt-4-vision-preview' },
@@ -543,7 +533,6 @@ describe('ChatService', () => {
 
         await chatService.createAssistantMessage({
           messages,
-          plugins: [],
           model: 'gpt-4-vision-preview',
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'gpt-4-vision-preview' },
@@ -651,7 +640,6 @@ describe('ChatService', () => {
 
         await chatService.createAssistantMessage({
           messages,
-          plugins: [],
           model: 'gpt-4-vision-preview',
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'gpt-4-vision-preview' },
@@ -754,7 +742,6 @@ describe('ChatService', () => {
           messages,
           model: 'gpt-3.5-turbo-1106',
           top_p: 1,
-          plugins: ['seo'],
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'gpt-3.5-turbo-1106' },
             plugins: ['seo'],
@@ -860,7 +847,6 @@ describe('ChatService', () => {
           messages,
           model: 'gpt-3.5-turbo-1106',
           top_p: 1,
-          plugins: ['seo'],
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'gpt-3.5-turbo-1106' },
             plugins: ['seo'],
@@ -920,10 +906,8 @@ describe('ChatService', () => {
           messages,
           model: 'gpt-3.5-turbo-1106',
           top_p: 1,
-          plugins: ['ttt'],
           resolvedAgentConfig: createMockResolvedConfig({
             agentConfig: { model: 'gpt-3.5-turbo-1106' },
-            plugins: ['ttt'],
           }),
         });
 
@@ -987,7 +971,6 @@ describe('ChatService', () => {
 
         await chatService.createAssistantMessage({
           messages,
-          plugins: [],
           resolvedAgentConfig: createMockResolvedConfig(),
         });
 
@@ -1045,7 +1028,6 @@ describe('ChatService', () => {
 
         await chatService.createAssistantMessage({
           messages,
-          plugins: [],
           resolvedAgentConfig: createMockResolvedConfig(),
         });
 
@@ -1097,7 +1079,6 @@ describe('ChatService', () => {
 
         await chatService.createAssistantMessage({
           messages,
-          plugins: [],
           resolvedAgentConfig: createMockResolvedConfig(),
         });
 
@@ -1394,7 +1375,6 @@ describe('ChatService private methods', () => {
         messages,
         model: 'test-model',
         provider: 'test-provider',
-        plugins: [],
         resolvedAgentConfig: createMockResolvedConfig({
           agentConfig: { model: 'test-model', provider: 'test-provider' },
           chatConfig: { disableContextCaching: true },
@@ -1425,7 +1405,6 @@ describe('ChatService private methods', () => {
         messages,
         model: 'test-model',
         provider: 'test-provider',
-        plugins: [],
         resolvedAgentConfig: createMockResolvedConfig({
           agentConfig: { model: 'test-model', provider: 'test-provider' },
           chatConfig: { disableContextCaching: false },
@@ -1449,7 +1428,6 @@ describe('ChatService private methods', () => {
         messages,
         model: 'test-model',
         provider: 'test-provider',
-        plugins: [],
         resolvedAgentConfig: createMockResolvedConfig({
           agentConfig: { model: 'test-model', provider: 'test-provider' },
           chatConfig: { reasoningEffort: 'high' },
@@ -1476,7 +1454,6 @@ describe('ChatService private methods', () => {
         messages,
         model: 'test-model',
         provider: 'test-provider',
-        plugins: [],
         resolvedAgentConfig: createMockResolvedConfig({
           agentConfig: { model: 'test-model', provider: 'test-provider' },
           chatConfig: { thinkingBudget: 5000 },

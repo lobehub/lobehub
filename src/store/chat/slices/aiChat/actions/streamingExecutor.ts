@@ -352,8 +352,8 @@ export const streamingExecutor: StateCreator<
 
     // Use pre-resolved agent config (from internal_createAgentState)
     // This ensures isSubTask filtering and other runtime modifications are preserved
-    const { agentConfig: agentConfigData, chatConfig, plugins } = agentConfig;
-    log('[internal_fetchAIChatMessage] using pre-resolved config, plugins=%o', plugins);
+    const { agentConfig: agentConfigData, chatConfig, plugins: pluginIds } = agentConfig;
+    log('[internal_fetchAIChatMessage] using pre-resolved config, plugins=%o', pluginIds);
 
     let finalUsage: ModelUsage | undefined;
     let finalToolCalls: MessageToolCall[] | undefined;
@@ -453,7 +453,6 @@ export const streamingExecutor: StateCreator<
         scope, // Pass scope to chat service for page-agent injection
         topicId: topicId ?? undefined, // Pass topicId for GTD context injection
         ...agentConfigData.params,
-        plugins,
       },
       historySummary: historySummary?.content,
       // Pass page editor context from agent runtime
@@ -608,19 +607,22 @@ export const streamingExecutor: StateCreator<
     // Step 1: Create Agent State (resolves config once)
     // ===========================================
     // agentConfig contains isSubTask filtering and is passed to callLLM executor
-    const { state: initialAgentState, context: initialAgentContext, agentConfig } =
-      get().internal_createAgentState({
-        messages,
-        parentMessageId: params.parentMessageId,
-        agentId,
-        topicId,
-        threadId: threadId ?? undefined,
-        initialState: params.initialState,
-        initialContext: params.initialContext,
-        operationId,
-        subAgentId, // Pass subAgentId for agent config retrieval
-        isSubTask, // Pass isSubTask to filter out lobe-gtd tools in sub-task context
-      });
+    const {
+      state: initialAgentState,
+      context: initialAgentContext,
+      agentConfig,
+    } = get().internal_createAgentState({
+      messages,
+      parentMessageId: params.parentMessageId,
+      agentId,
+      topicId,
+      threadId: threadId ?? undefined,
+      initialState: params.initialState,
+      initialContext: params.initialContext,
+      operationId,
+      subAgentId, // Pass subAgentId for agent config retrieval
+      isSubTask, // Pass isSubTask to filter out lobe-gtd tools in sub-task context
+    });
 
     // Use model/provider from resolved agentConfig
     const { agentConfig: agentConfigData } = agentConfig;
