@@ -33,7 +33,7 @@ const Search = memo<StoreSearchBarProps>(() => {
   const { q } = useQuery() as { q?: string };
   const router = useQueryRoute();
   const [word, setWord] = useState<string>(q || '');
-  const activeTab = pathname.split('/')[2] || 'assistant';
+  const activeTab = pathname.split('/')[2] || 'agent';
   const handleSearch = (value: string) => {
     router.push(urlJoin('/community', activeTab), {
       query: value ? { q: value } : {},

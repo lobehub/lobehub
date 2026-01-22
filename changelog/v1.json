@@ -1,6 +1,13 @@
 [
   {
     "children": {
+      "fixes": ["Updata cron job ui & fixed commnuity pagenation goto error."]
+    },
+    "date": "2026-01-22",
+    "version": "2.0.0-next.338"
+  },
+  {
+    "children": {
       "fixes": [
         "Fix memory schema, update the agentbuilder tools not always use humanIntervention."
       ]

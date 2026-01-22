@@ -2,6 +2,31 @@
 
 # Changelog
 
+## [Version 2.0.0-next.338](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.337...v2.0.0-next.338)
+
+<sup>Released on **2026-01-22**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Updata cron job ui & fixed commnuity pagenation goto error.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Updata cron job ui & fixed commnuity pagenation goto error, closes [#11700](https://github.com/lobehub/lobe-chat/issues/11700) ([42ad2a0](https://github.com/lobehub/lobe-chat/commit/42ad2a0))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.337](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.336...v2.0.0-next.337)
 
 <sup>Released on **2026-01-22**</sup>
