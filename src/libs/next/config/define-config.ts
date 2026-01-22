@@ -313,6 +313,12 @@ export function defineConfig(config: CustomNextConfig) {
         permanent: true,
         source: '/chat',
       },
+      // Redirect old Clerk login route to Better Auth signin
+      {
+        destination: '/signin',
+        permanent: true,
+        source: '/login',
+      },
       ...(config.redirects ?? []),
     ],
 
