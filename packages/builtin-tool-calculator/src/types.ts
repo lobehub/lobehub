@@ -37,7 +37,7 @@ export interface EvaluateExpressionState {
 // Base Conversion API
 export interface ConvertBaseParams {
   fromBase: number;
-  number: string;
+  number: string | number;
   toBase: number;
 }
 

@@ -91,8 +91,8 @@ class CalculatorExecutor
   /**
    * Clean and validate input number
    */
-  private cleanInputNumber(number: string, sourceBase: number): string {
-    const trimmed = number.trim();
+  private cleanInputNumber(number: string | number, sourceBase: number): string {
+    const trimmed = String(number).trim();
 
     // Validate base range
     if (sourceBase < 2 || sourceBase > 36) {

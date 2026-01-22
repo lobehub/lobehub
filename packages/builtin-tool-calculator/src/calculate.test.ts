@@ -3,6 +3,17 @@ import { describe, expect, it } from 'vitest';
 import { calculatorExecutor } from '../src/executor';
 
 describe('Calculator Core Functions', () => {
+  it('should handle number input in base conversion', async () => {
+    const result = await calculatorExecutor.convertBase({
+      number: 255,
+      fromBase: 10,
+      toBase: 2,
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.content).toBe('11111111');
+  });
+
   it('should return only result for calculate', async () => {
     const result = await calculatorExecutor.calculate({
       expression: '2 + 3 * 4',
