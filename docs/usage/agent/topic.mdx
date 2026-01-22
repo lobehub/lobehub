@@ -1,44 +1,59 @@
 ---
-title: Basic Usage Guide for Conversations - Large Language Models (LLMs)
+title: Topics
 description: >-
-  Learn about the fundamental functions for interacting with Large Language
-  Models (LLMs) and how to utilize features like model selection, file/image
-  upload, temperature setting, and more.
+  Learn how to interact with large language models, including model selection,
+  file/image uploads, temperature settings, conversation history, and more.
 tags:
-  - Large Language Models
+  - LobeHub
+  - Large Language Model
+  - LLM
   - Model Selection
   - File Upload
   - Temperature Setting
+  - History Settings
   - Voice Input
-  - Plugin Setting
+  - Plugin Settings
+  - Token Usage
+  - New Topic
+  - Send Button
 ---
 
-# Basic Usage Guide for Conversations
+# Topics
 
-<Image alt={'Basic Functions'} cover src={'https://github.com/user-attachments/assets/ca6baea8-d782-4611-8555-7c81078028db'} />
+In LobeHub, each conversation with the assistant is organized into a topic. You can search, rename, favorite, or delete topics to better manage and retrieve your past conversations.
 
-In general, the basic interaction with Large Language Models (LLMs) can be done through the fundamental functions provided in this area (as shown above).
+## Search Topics
 
-## Basic Function Description
+On the conversation page, you can search for previous topics you've discussed with the assistant. Enter the conversation view, click "More" in the topic list, and use the search function to quickly locate the desired conversation.
 
-<Image alt={'Basic Function Description'} src={'https://github.com/user-attachments/assets/de9f188e-8a3a-49a0-bec6-ab628cdda7e6'} />
+![clipboard-1769000274218-d02c4c8024709.png](https://file.rene.wang/clipboard-1769000274218-d02c4c8024709.png)
 
-1. **Model Selection**: Choose the Large Language Model (LLM) to be used in the current conversation. For model settings, refer to [Model Providers](/docs/usage/providers).
-2. **File/Image Upload**: When the selected model supports file or image recognition, users can upload files or images during the conversation with the model.
-3. **Temperature Setting**: Adjust the randomness level of the model's output. The higher the value, the more random the output results. For detailed information, refer to the [Large Language Model Guide](/docs/usage/agents/model).
-4. **History Record Setting**: Set the number of chat records the model needs to remember in this conversation. The longer the history, the more conversation content the model can remember, but it will also consume more context tokens.
-5. **Voice Input**: Click this button to convert speech to text input. For more information, refer to [Speech-to-Text Conversion](/docs/usage/foundation/tts-stt).
-6. **Plugin Setting**: Choose the plugins to enable in this conversation. For more information, refer to [Plugin Usage](/docs/usage/plugins/basic-usage).
-7. **Token Usage**: Display the context length and token consumption of this conversation.
-8. **Start New Topic**: End the current conversation and start a new topic. For more information, refer to [Topic Usage](/docs/usage/agents/topics).
-9. **Send Button**: Send the current input content to the model. The dropdown menu provides additional send operation options.
+## Rename Topics
 
-<Image alt={'Send Button'} inStep src={'https://github.com/user-attachments/assets/0833184e-91df-4b8e-a88e-99a19c20b86a'} />
+You can give topics more meaningful names to make them easier to identify.
 
-<Callout type={'info'}>
-  - **Send Shortcut**: Set a shortcut to send messages and line breaks using the Enter key or ⌘ +
-    Enter key. - **Add an AI Message**: Manually add and edit a message input by an AI character in
-    the conversation context, which will not trigger a model response. - **Add a User Message**: Add
-    the current input content as a message input by the user character to the conversation context,
-    which will not trigger a model response.
-</Callout>
+- Manual Rename: Locate the topic you want to rename, click "Rename", enter a new name, and save it.
+- Smart Rename: Click "Smart Rename" on the topic you want to rename, and the system will automatically generate a suitable name based on the conversation content.
+
+## Duplicate Topics
+
+You can create a duplicate of any topic to preserve the original conversation while branching off into a new direction. Find the topic you want to copy and click "Duplicate". The system will create an identical copy of the topic. This is useful for exploring different discussion paths based on the same starting point.
+
+## Favorite Topics
+
+For important or frequently used topics, you can mark them as favorites. Click the favorite icon on the topic you want to save. Favorited topics will appear in the "Favorites" section of the topic list for quick access.
+
+![clipboard-1769000328858-48f0503640245.png](https://file.rene.wang/clipboard-1769000328858-48f0503640245.png)
+
+## Delete Topics
+
+You can delete topics you no longer need. Locate the topic, click "Delete", and confirm the action. The topic will be removed from your list.
+
+## Topic List
+
+Topics are organized by time to help you easily find conversations from different periods.
+
+- Favorites: Displays all your favorited topics.
+- Time-Based List: Other topics are automatically grouped by their creation time. Expand a time group to view all topics from that period.
+
+If you prefer not to use time-based grouping, you can switch to "Ungrouped" view.
