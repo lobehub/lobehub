@@ -11,6 +11,10 @@ import {
   type AddExperienceMemoryResult,
   type AddIdentityMemoryResult,
   type AddPreferenceMemoryResult,
+  type ExperienceListParams,
+  type ExperienceListResult,
+  type IdentityListParams,
+  type IdentityListResult,
   type LayersEnum,
   type RemoveIdentityMemoryResult,
   type SearchMemoryParams,
@@ -57,6 +61,26 @@ class UserMemoryService {
     return lambdaClient.userMemories.getMemoryDetail.query(params);
   };
 
+  getPersona = async () => {
+    return lambdaClient.userMemory.getPersona.query();
+  };
+
+  /**
+   * Query experiences with pagination, search, and sorting
+   * Returns flat structure optimized for frontend display
+   */
+  queryExperiences = async (params?: ExperienceListParams): Promise<ExperienceListResult> => {
+    return lambdaClient.userMemories.queryExperiences.query(params);
+  };
+
+  /**
+   * Query identities with pagination, search, and sorting
+   * Returns flat structure optimized for frontend display
+   */
+  queryIdentities = async (params?: IdentityListParams): Promise<IdentityListResult> => {
+    return lambdaClient.userMemories.queryIdentities.query(params);
+  };
+
   retrieveMemory = async (params: SearchMemoryParams): Promise<SearchMemoryResult> => {
     return lambdaClient.userMemories.toolSearchMemory.query(params);
   };
@@ -96,7 +120,7 @@ class UserMemoryService {
     page?: number;
     pageSize?: number;
     q?: string;
-    sort?: 'scoreConfidence' | 'scoreImpact' | 'scorePriority' | 'scoreUrgency';
+    sort?: 'capturedAt' | 'scoreConfidence' | 'scoreImpact' | 'scorePriority' | 'scoreUrgency';
     tags?: string[];
     types?: TypesEnum[];
   }) => {

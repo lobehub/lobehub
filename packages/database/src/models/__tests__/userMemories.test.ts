@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { idGenerator } from '@/database/utils/idGenerator';
 
+import { getTestDB } from '../../core/getTestDB';
 import {
   topics,
   userMemories,
@@ -24,7 +25,6 @@ import {
   CreateUserMemoryPreferenceParams,
   UserMemoryModel,
 } from '../userMemory';
-import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -753,20 +753,27 @@ describe('UserMemoryModel', () => {
 
       await userMemoryModel.addIdentityEntry({
         base: { lastAccessedAt: now, tags: [] },
-        identity: { role: 'engineer', tags: ['alpha', 'beta'] },
+        identity: { relationship: 'self', role: 'engineer', tags: ['alpha', 'beta'] },
       });
       await userMemoryModel.addIdentityEntry({
         base: { lastAccessedAt: now, tags: [] },
-        identity: { role: 'engineer', tags: ['alpha'] },
+        identity: { relationship: 'self', role: 'engineer', tags: ['alpha'] },
       });
       await userMemoryModel.addIdentityEntry({
         base: { lastAccessedAt: now, tags: [] },
-        identity: { role: 'manager', tags: [] },
+        identity: { relationship: 'self', role: 'manager', tags: [] },
       });
 
+      // This should not be counted (different user)
       await anotherUserModel.addIdentityEntry({
         base: { lastAccessedAt: now, tags: [] },
-        identity: { role: 'engineer', tags: ['alpha'] },
+        identity: { relationship: 'self', role: 'engineer', tags: ['alpha'] },
+      });
+
+      // This should not be counted (relationship is not 'self')
+      await userMemoryModel.addIdentityEntry({
+        base: { lastAccessedAt: now, tags: [] },
+        identity: { relationship: 'friend', role: 'designer', tags: ['gamma'] },
       });
 
       const result = await userMemoryModel.queryIdentityRoles({ size: 5 });
@@ -1061,6 +1068,56 @@ describe('UserMemoryModel', () => {
       expect(identityItem.identity.description).toBe(identityDescription);
       expect(identityItem.identity.userMemoryId).toBe(identityMemoryId);
       expect(identityItem.identity.type).toBe(identity?.type);
+    });
+
+    it('should order identity memories by capturedAt desc and include capturedAt and title in response', async () => {
+      const olderCapturedAt = new Date('2024-01-01T10:00:00Z');
+      const newerCapturedAt = new Date('2024-01-15T10:00:00Z');
+
+      await userMemoryModel.addIdentityEntry({
+        base: { summary: 'older identity', title: 'Older Title' },
+        identity: {
+          capturedAt: olderCapturedAt,
+          description: 'Older identity description',
+          relationship: 'friend',
+          type: 'personal',
+        },
+      });
+
+      await userMemoryModel.addIdentityEntry({
+        base: { summary: 'newer identity', title: 'Newer Title' },
+        identity: {
+          capturedAt: newerCapturedAt,
+          description: 'Newer identity description',
+          relationship: 'self',
+          type: 'personal',
+        },
+      });
+
+      const result = await userMemoryModel.queryMemories({
+        layer: LayersEnum.Identity,
+      });
+
+      expect(result.total).toBe(2);
+      expect(result.items).toHaveLength(2);
+
+      const firstItem = result.items[0] as any;
+      const secondItem = result.items[1] as any;
+
+      // Verify order by capturedAt desc
+      expect(firstItem.identity.capturedAt).toEqual(newerCapturedAt);
+      expect(secondItem.identity.capturedAt).toEqual(olderCapturedAt);
+
+      expect(firstItem.identity.description).toBe('Newer identity description');
+      expect(secondItem.identity.description).toBe('Older identity description');
+
+      // Verify title comes from memory schema
+      expect(firstItem.identity.title).toBe('Newer Title');
+      expect(secondItem.identity.title).toBe('Older Title');
+
+      // Verify relationship is included
+      expect(firstItem.identity.relationship).toBe('self');
+      expect(secondItem.identity.relationship).toBe('friend');
     });
   });
 

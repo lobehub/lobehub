@@ -2,6 +2,7 @@
 import { RelationshipEnum } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { getTestDB } from '../../../core/getTestDB';
 import {
   NewUserMemoryIdentity,
   userMemories,
@@ -9,7 +10,6 @@ import {
   users,
 } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
-import { getTestDB } from '../../../core/getTestDB';
 import { UserMemoryIdentityModel } from '../identity';
 
 const userId = 'identity-test-user';
@@ -68,21 +68,21 @@ describe('UserMemoryIdentityModel', () => {
           userId,
           type: 'personal',
           description: 'Identity 1',
-          createdAt: new Date('2024-01-01T10:00:00Z'),
+          capturedAt: new Date('2024-01-01T10:00:00Z'),
         },
         {
           id: 'identity-2',
           userId,
           type: 'professional',
           description: 'Identity 2',
-          createdAt: new Date('2024-01-02T10:00:00Z'),
+          capturedAt: new Date('2024-01-02T10:00:00Z'),
         },
         {
           id: 'other-identity',
           userId: otherUserId,
           type: 'personal',
           description: 'Other Identity',
-          createdAt: new Date('2024-01-03T10:00:00Z'),
+          capturedAt: new Date('2024-01-03T10:00:00Z'),
         },
       ]);
     });
@@ -94,7 +94,7 @@ describe('UserMemoryIdentityModel', () => {
       expect(result.every((i) => i.userId === userId)).toBe(true);
     });
 
-    it('should order by createdAt desc', async () => {
+    it('should order by capturedAt desc', async () => {
       const result = await identityModel.query();
 
       expect(result[0].id).toBe('identity-2'); // Most recent first

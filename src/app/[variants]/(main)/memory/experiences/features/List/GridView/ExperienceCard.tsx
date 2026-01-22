@@ -1,3 +1,4 @@
+import type { ExperienceListItem } from '@lobechat/types';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { memo } from 'react';
@@ -5,15 +6,14 @@ import { useTranslation } from 'react-i18next';
 
 import GridCard from '@/app/[variants]/(main)/memory/features/GridView/GridCard';
 import ProgressIcon from '@/app/[variants]/(main)/memory/features/ProgressIcon';
-import { type DisplayExperienceMemory } from '@/database/repositories/userMemory';
 
 import ExperienceDropdown from '../../ExperienceDropdown';
 
 dayjs.extend(relativeTime);
 
 interface ExperienceCardProps {
-  experience: DisplayExperienceMemory;
-  onClick: (experience: DisplayExperienceMemory) => void;
+  experience: ExperienceListItem;
+  onClick: (experience: ExperienceListItem) => void;
 }
 
 const ExperienceCard = memo<ExperienceCardProps>(({ experience, onClick }) => {

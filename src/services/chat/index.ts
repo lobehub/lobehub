@@ -10,7 +10,6 @@ import {
 import { AgentRuntimeError, type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import {
   ChatErrorType,
-  type MessageMapScope,
   type RuntimeInitialContext,
   type RuntimeStepContext,
   type TracePayload,
@@ -75,7 +74,6 @@ interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'mess
    * Required to ensure config consistency and proper isSubTask filtering.
    */
   resolvedAgentConfig: ResolvedAgentConfig;
-  scope?: MessageMapScope;
   topicId?: string;
 }
 

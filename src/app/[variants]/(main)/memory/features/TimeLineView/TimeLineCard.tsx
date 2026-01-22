@@ -1,6 +1,5 @@
-import { Block, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Link2 } from 'lucide-react';
 import { type ReactNode, memo } from 'react';
 
 import CateTag from '../CateTag';
@@ -67,13 +66,7 @@ const TimeLineCard = memo<TimeLineCardProps>(
             ) : (
               title
             )}
-            {typeof titleAddon === 'string' ? (
-              <Tag icon={<Icon icon={Link2} />} variant="borderless">
-                {titleAddon}
-              </Tag>
-            ) : (
-              titleAddon
-            )}
+            {!!titleAddon ? <Tag>{titleAddon}</Tag> : titleAddon}
           </Flexbox>
         )}
         {typeof children === 'string' ? (

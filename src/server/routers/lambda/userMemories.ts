@@ -21,6 +21,7 @@ import { z } from 'zod';
 import {
   type IdentityEntryBasePayload,
   type IdentityEntryPayload,
+  UserMemoryExperienceModel,
   UserMemoryIdentityModel,
   UserMemoryModel,
 } from '@/database/models/userMemory';
@@ -203,6 +204,8 @@ const memoryProcedure = authedProcedure.use(serverDatabase).use(async (opts) => 
   const { ctx } = opts;
   return opts.next({
     ctx: {
+      experienceModel: new UserMemoryExperienceModel(ctx.serverDB, ctx.userId),
+      identityModel: new UserMemoryIdentityModel(ctx.serverDB, ctx.userId),
       memoryModel: new UserMemoryModel(ctx.serverDB, ctx.userId),
     },
   });
@@ -220,13 +223,66 @@ export const userMemoriesRouter = router({
       }
     }),
 
-  queryIdentitiesForInjection: authedProcedure
-    .use(serverDatabase)
+  queryExperiences: memoryProcedure
+    .input(
+      z
+        .object({
+          order: z.enum(['asc', 'desc']).optional(),
+          page: z.coerce.number().int().min(1).optional(),
+          pageSize: z.coerce.number().int().min(1).max(100).optional(),
+          q: z.string().optional(),
+          sort: z.enum(['capturedAt', 'scoreConfidence']).optional(),
+          tags: z.array(z.string()).optional(),
+          types: z.array(z.string()).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const params = input ?? {};
+      const fallbackPage = params.page ?? 1;
+      const fallbackPageSize = params.pageSize ?? 20;
+
+      try {
+        return await ctx.experienceModel.queryList(params);
+      } catch (error) {
+        console.error('Failed to query experiences:', error);
+        return { items: [], page: fallbackPage, pageSize: fallbackPageSize, total: 0 };
+      }
+    }),
+
+  queryIdentities: memoryProcedure
+    .input(
+      z
+        .object({
+          order: z.enum(['asc', 'desc']).optional(),
+          page: z.coerce.number().int().min(1).optional(),
+          pageSize: z.coerce.number().int().min(1).max(100).optional(),
+          q: z.string().optional(),
+          relationships: z.array(z.string()).optional(),
+          sort: z.enum(['capturedAt', 'type']).optional(),
+          tags: z.array(z.string()).optional(),
+          types: z.array(z.string()).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const params = input ?? {};
+      const fallbackPage = params.page ?? 1;
+      const fallbackPageSize = params.pageSize ?? 20;
+
+      try {
+        return await ctx.identityModel.queryList(params);
+      } catch (error) {
+        console.error('Failed to query identities:', error);
+        return { items: [], page: fallbackPage, pageSize: fallbackPageSize, total: 0 };
+      }
+    }),
+
+  queryIdentitiesForInjection: memoryProcedure
     .input(z.object({ limit: z.coerce.number().int().min(1).max(100).optional() }).optional())
     .query(async ({ ctx, input }) => {
       try {
-        const identityModel = new UserMemoryIdentityModel(ctx.serverDB, ctx.userId);
-        return await identityModel.queryForInjection(input?.limit ?? 50);
+        return await ctx.identityModel.queryForInjection(input?.limit ?? 50);
       } catch (error) {
         console.error('Failed to query identities for injection:', error);
         return [];
@@ -262,7 +318,7 @@ export const userMemoriesRouter = router({
           pageSize: z.coerce.number().int().min(1).max(100).optional(),
           q: z.string().optional(),
           sort: z
-            .enum(['scoreConfidence', 'scoreImpact', 'scorePriority', 'scoreUrgency'])
+            .enum(['capturedAt', 'scoreConfidence', 'scoreImpact', 'scorePriority', 'scoreUrgency'])
             .optional(),
           tags: z.array(z.string()).optional(),
           types: z.array(z.string()).optional(),

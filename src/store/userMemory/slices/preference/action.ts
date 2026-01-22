@@ -16,7 +16,7 @@ export interface PreferenceQueryParams {
   page?: number;
   pageSize?: number;
   q?: string;
-  sort?: 'scorePriority';
+  sort?: 'capturedAt' | 'scorePriority';
 }
 
 export interface PreferenceAction {
