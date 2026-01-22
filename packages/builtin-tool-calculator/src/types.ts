@@ -36,9 +36,9 @@ export interface EvaluateExpressionState {
 
 // Base Conversion API
 export interface ConvertBaseParams {
-  fromBase: 'binary' | 'octal' | 'decimal' | 'hexadecimal';
+  fromBase: number;
   number: string;
-  toBase: 'binary' | 'octal' | 'decimal' | 'hexadecimal';
+  toBase: number;
 }
 
 export interface ConvertBaseState {

@@ -82,23 +82,32 @@ class CalculatorExecutor
   }
 
   /**
-   * Convert number to target base with proper formatting
+   * Convert number to target base with clean formatting
    */
-  private convertToBase(decimalValue: number, targetBase: string): string {
-    switch (targetBase) {
-      case 'binary': {
-        return `0b${decimalValue.toString(2)}`;
-      }
-      case 'octal': {
-        return `0o${decimalValue.toString(8)}`;
-      }
-      case 'hexadecimal': {
-        return `0x${decimalValue.toString(16).toUpperCase()}`;
-      }
-      default: {
-        return decimalValue.toString(10);
+  private convertToBase(decimalValue: number, targetBase: number): string {
+    return decimalValue.toString(targetBase).toUpperCase();
+  }
+
+  /**
+   * Clean and validate input number
+   */
+  private cleanInputNumber(number: string, sourceBase: number): string {
+    const trimmed = number.trim();
+
+    // Validate base range
+    if (sourceBase < 2 || sourceBase > 36) {
+      throw new Error(`Base must be between 2 and 36, got ${sourceBase}`);
+    }
+
+    // Validate that the number contains only valid characters for the base
+    const validChars = new Set('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, sourceBase));
+    for (const char of trimmed.toUpperCase()) {
+      if (!validChars.has(char)) {
+        throw new Error(`Invalid digit '${char}' for base ${sourceBase}`);
       }
     }
+
+    return trimmed;
   }
 
   /**
@@ -122,7 +131,7 @@ class CalculatorExecutor
       const formattedResult = this.formatResult(result, params.precision);
 
       return {
-        content: `${params.expression} = ${formattedResult}`,
+        content: formattedResult,
         state: {
           expression: params.expression,
           precision: params.precision,
@@ -163,10 +172,9 @@ class CalculatorExecutor
       }
 
       const formattedResult = this.formatResult(result, params.precision);
-      const expressionDisplay = this.formatExpression(params.expression, variables);
 
       return {
-        content: `${expressionDisplay} = ${formattedResult}`,
+        content: formattedResult,
         state: {
           expression: params.expression,
           precision: params.precision,
@@ -189,52 +197,26 @@ class CalculatorExecutor
   };
 
   /**
-   * Convert numbers between different bases
+   * Convert numbers between different bases (supports bases 2-36)
    */
   convertBase = async (params: ConvertBaseParams): Promise<BuiltinToolResult> => {
     try {
       const { number, fromBase, toBase } = params;
 
-      // Base mapping
-      const baseMap = { binary: 2, decimal: 10, hexadecimal: 16, octal: 8 };
-      const sourceBase = baseMap[fromBase];
+      // Clean and validate input number
+      const cleanNumber = this.cleanInputNumber(number, fromBase);
 
-      // Clean the number (remove prefixes if present)
-      const trimmed = number.trim().toLowerCase();
-      let cleanNumber: string;
-      if (trimmed.startsWith('0b')) {
-        cleanNumber = trimmed.slice(2);
-      } else if (trimmed.startsWith('0o')) {
-        cleanNumber = trimmed.slice(2);
-      } else if (trimmed.startsWith('0x')) {
-        cleanNumber = trimmed.slice(2);
-      } else {
-        cleanNumber = trimmed;
-      }
-
-      // Convert to decimal first
-      let decimalValue: number;
-      try {
-        decimalValue = parseInt(cleanNumber, sourceBase);
-        if (isNaN(decimalValue)) {
-          throw new Error(`Invalid number "${number}" for base ${sourceBase}`);
-        }
-      } catch {
-        return {
-          content: `Invalid number format: "${number}" is not a valid ${fromBase} number`,
-          error: {
-            message: `Failed to parse "${number}" as ${fromBase}`,
-            type: 'ValidationError',
-          },
-          success: false,
-        };
+      // Convert to decimal first using optimized parseInt
+      const decimalValue = parseInt(cleanNumber, fromBase);
+      if (isNaN(decimalValue)) {
+        throw new Error(`Invalid number "${number}" for base ${fromBase}`);
       }
 
       // Convert to target base
       const convertedNumber = this.convertToBase(decimalValue, toBase);
 
       return {
-        content: `${number} (${fromBase}) = ${convertedNumber} (${toBase})`,
+        content: convertedNumber,
         state: {
           convertedNumber,
           decimalValue,
