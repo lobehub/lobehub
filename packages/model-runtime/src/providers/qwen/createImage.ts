@@ -38,7 +38,7 @@ interface QwenImageTaskResponse {
   request_id: string;
 }
 
-// Interface for qwen-image-edit multimodal-generation response
+// Interface for multimodal-generation response
 interface QwenMultimodalGenerationResponse {
   output: {
     choices: Array<{
@@ -126,8 +126,9 @@ async function createQwenImageTask(
 }
 
 /**
- * Create image with Qwen multimodal-generation API for image-to-image models
+ * Create image with Qwen multimodal-generation API
  * This is a synchronous API that returns the result directly
+ * Supports both text-to-image (t2i) and image-to-image (i2i) workflows
  */
 async function createMultimodalGeneration(
   payload: CreateImagePayload,
@@ -135,17 +136,16 @@ async function createMultimodalGeneration(
 ): Promise<CreateImageResponse> {
   const { model, params } = payload;
   const endpoint = `https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation`;
-  log('Creating image edit with model: %s, endpoint: %s', model, endpoint);
+  log('Creating image with model: %s, endpoint: %s', model, endpoint);
 
-  // Handle imageUrls to imageUrl conversion
-  let imageUrl = params.imageUrl;
-  if (!imageUrl && params.imageUrls && params.imageUrls.length > 0) {
-    imageUrl = params.imageUrls[0];
-    log('Converting imageUrls to imageUrl: using first image %s', imageUrl);
-  }
+  const content: Array<{ image: string } | { text: string }> = [{ text: params.prompt }];
 
-  if (!imageUrl) {
-    throw new Error('imageUrl or imageUrls is required for qwen-image-edit model');
+  if (params.imageUrl) {
+    content.unshift({ image: params.imageUrl });
+    log('Using imageUrl for image-to-image generation');
+  } else if (params.imageUrls && params.imageUrls.length > 0) {
+    content.unshift({ image: params.imageUrls[0] });
+    log('Using first imageUrls for image-to-image generation');
   }
 
   const response = await fetch(endpoint, {
@@ -153,7 +153,7 @@ async function createMultimodalGeneration(
       input: {
         messages: [
           {
-            content: [{ image: imageUrl }, { text: params.prompt }],
+            content,
             role: 'user',
           },
         ],
@@ -178,19 +178,19 @@ async function createMultimodalGeneration(
       // Failed to parse JSON error response
     }
     throw new Error(
-      `Failed to create image edit (${response.status}): ${errorData?.message || response.statusText}`,
+      `Failed to create image (${response.status}): ${errorData?.message || response.statusText}`,
     );
   }
 
   const data: QwenMultimodalGenerationResponse = await response.json();
 
   if (!data.output.choices || data.output.choices.length === 0) {
-    throw new Error('No image choices returned from qwen-image-edit API');
+    throw new Error('No image choices returned from API');
   }
 
   const choice = data.output.choices[0];
   if (!choice.message.content || choice.message.content.length === 0) {
-    throw new Error('No image content returned from qwen-image-edit API');
+    throw new Error('No image content returned from API');
   }
 
   const imageContent = choice.message.content.find((content) => 'image' in content);

@@ -658,23 +658,6 @@ describe('createQwenImage', () => {
       });
     });
 
-    it('should throw error when imageUrl is missing for qwen-image-edit', async () => {
-      const payload: CreateImagePayload = {
-        model: 'qwen-image-edit',
-        params: {
-          prompt: 'Edit this image',
-          // imageUrl is missing
-        },
-      };
-
-      await expect(createQwenImage(payload, mockOptions)).rejects.toEqual(
-        expect.objectContaining({
-          errorType: 'ProviderBizError',
-          provider: 'qwen',
-        }),
-      );
-    });
-
     it('should handle qwen-image-edit API errors', async () => {
       global.fetch = vi.fn().mockResolvedValueOnce({
         ok: false,
@@ -787,23 +770,6 @@ describe('createQwenImage', () => {
       expect(body.input.messages[0].content[0].image).toBe('https://example.com/first-image.jpg');
     });
 
-    it('should throw error when imageUrls is empty array', async () => {
-      const payload: CreateImagePayload = {
-        model: 'qwen-image-edit',
-        params: {
-          prompt: 'Edit this image',
-          imageUrls: [], // Empty array
-        },
-      };
-
-      await expect(createQwenImage(payload, mockOptions)).rejects.toEqual(
-        expect.objectContaining({
-          errorType: 'ProviderBizError',
-          provider: 'qwen',
-        }),
-      );
-    });
-
     it('should prioritize imageUrl over imageUrls when both are provided', async () => {
       const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/priority-test.jpg';
 
@@ -843,23 +809,6 @@ describe('createQwenImage', () => {
       // Should use imageUrl, not imageUrls
       expect(body.input.messages[0].content[0].image).toBe(
         'https://example.com/priority-image.jpg',
-      );
-    });
-
-    it('should throw error when neither imageUrl nor imageUrls are provided', async () => {
-      const payload: CreateImagePayload = {
-        model: 'qwen-image-edit',
-        params: {
-          prompt: 'Edit this image',
-          // Neither imageUrl nor imageUrls provided
-        },
-      };
-
-      await expect(createQwenImage(payload, mockOptions)).rejects.toEqual(
-        expect.objectContaining({
-          errorType: 'ProviderBizError',
-          provider: 'qwen',
-        }),
       );
     });
   });
