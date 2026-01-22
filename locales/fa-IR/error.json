@@ -1,7 +1,4 @@
 {
-  "clerkAuth.loginSuccess.action": "ادامه جلسه",
-  "clerkAuth.loginSuccess.desc": "{{greeting}}، خوشحالیم که دوباره در خدمت شما هستیم. بیایید از جایی که متوقف شدیم ادامه دهیم.",
-  "clerkAuth.loginSuccess.title": "خوش آمدید، {{nickName}}",
   "error.backHome": "بازگشت به خانه",
   "error.desc": "بعداً دوباره امتحان کنید یا به دنیای آشنا بازگردید.",
   "error.retry": "بارگذاری مجدد",
@@ -87,7 +84,6 @@
   "response.InsufficientQuota": "متأسفیم، سهمیه این کلید به پایان رسیده است. لطفاً موجودی حساب خود را بررسی کرده یا پس از افزایش سهمیه دوباره تلاش کنید.",
   "response.InvalidAccessCode": "کد دسترسی نامعتبر یا خالی است. لطفاً کد صحیح را وارد کرده یا یک کلید API سفارشی اضافه کنید.",
   "response.InvalidBedrockCredentials": "احراز هویت Bedrock ناموفق بود. لطفاً AccessKeyId/SecretAccessKey را بررسی کرده و دوباره تلاش کنید.",
-  "response.InvalidClerkUser": "متأسفیم، شما وارد نشده‌اید. لطفاً وارد شوید یا یک حساب کاربری ایجاد کنید.",
   "response.InvalidComfyUIArgs": "پیکربندی ComfyUI نامعتبر است. لطفاً تنظیمات را بررسی کرده و دوباره تلاش کنید.",
   "response.InvalidGithubToken": "توکن دسترسی شخصی GitHub نادرست یا خالی است. لطفاً آن را بررسی کرده و دوباره تلاش کنید.",
   "response.InvalidOllamaArgs": "پیکربندی Ollama نامعتبر است. لطفاً تنظیمات را بررسی کرده و دوباره تلاش کنید.",

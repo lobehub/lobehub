@@ -1,4 +1,3 @@
-import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
 import debug from 'debug';
 import { type NextRequest, NextResponse } from 'next/server';
 import { UAParser } from 'ua-parser-js';
@@ -14,10 +13,32 @@ import { type Locales } from '@/locales/resources';
 import { parseBrowserLanguage } from '@/utils/locale';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
+/**
+ * Creates a route matcher function that checks if a request path matches any of the given patterns
+ * @param patterns Array of route patterns (supports wildcards with .*)
+ * @returns Function that returns true if the request matches any pattern
+ */
+function createRouteMatcher(patterns: string[]) {
+  const regexPatterns = patterns.map((pattern) => {
+    // Convert route pattern to regex: escape special chars, convert (.*) to regex
+    const regexStr = pattern
+      .replaceAll('(', '\\(')
+      .replaceAll(')', '\\)')
+      .replaceAll('.', '\\.')
+      .replaceAll('\\(\\.\\*\\)', '.*')
+      .replaceAll('\\*', '.*');
+    return new RegExp(`^${regexStr}$`);
+  });
+
+  return (req: NextRequest) => {
+    const pathname = req.nextUrl.pathname;
+    return regexPatterns.some((regex) => regex.test(pathname));
+  };
+}
+
 // Create debug logger instances
 const logDefault = debug('middleware:default');
 const logNextAuth = debug('middleware:next-auth');
-const logClerk = debug('middleware:clerk');
 const logBetterAuth = debug('middleware:better-auth');
 
 // OIDC session pre-sync constant
@@ -171,11 +192,9 @@ export function defineConfig() {
     '/trpc(.*)',
     // next auth
     '/next-auth/(.*)',
-    // clerk
-    '/login',
-    '/signup',
     // better auth
     '/signin',
+    '/signup',
     '/verify-email',
     '/reset-password',
     // oauth
@@ -253,48 +272,6 @@ export function defineConfig() {
     return response;
   });
 
-  const clerkAuthMiddleware = clerkMiddleware(
-    async (auth, req) => {
-      logClerk('Clerk middleware processing request: %s %s', req.method, req.url);
-
-      // when enable auth protection, only public route is not protected, others are all protected
-      const isProtected = appEnv.ENABLE_AUTH_PROTECTION
-        ? !isPublicRoute(req)
-        : isProtectedRoute(req);
-
-      logClerk('Route protection status: %s, %s', req.url, isProtected ? 'protected' : 'public');
-
-      if (isProtected) {
-        logClerk('Protecting route: %s', req.url);
-        await auth.protect();
-      }
-
-      const response = defaultMiddleware(req);
-
-      const data = await auth();
-      logClerk('Clerk auth status: %O', {
-        isSignedIn: !!data.userId,
-        userId: data.userId,
-      });
-
-      // If OIDC is enabled and Clerk user is logged in, add OIDC session pre-sync header
-      if (authEnv.ENABLE_OIDC && data.userId) {
-        logClerk('OIDC session pre-sync: Setting %s = %s', OIDC_SESSION_HEADER, data.userId);
-        response.headers.set(OIDC_SESSION_HEADER, data.userId);
-      } else if (authEnv.ENABLE_OIDC) {
-        logClerk('No Clerk user detected, not setting OIDC session sync header');
-      }
-
-      return response;
-    },
-    {
-      // https://github.com/lobehub/lobe-chat/pull/3084
-      clockSkewInMs: 60 * 60 * 1000,
-      signInUrl: '/login',
-      signUpUrl: '/signup',
-    },
-  );
-
   const betterAuthMiddleware = async (req: NextRequest) => {
     logBetterAuth('BetterAuth middleware processing request: %s %s', req.method, req.url);
 
@@ -343,16 +320,11 @@ export function defineConfig() {
   logDefault('Middleware configuration: %O', {
     enableAuthProtection: appEnv.ENABLE_AUTH_PROTECTION,
     enableBetterAuth: authEnv.NEXT_PUBLIC_ENABLE_BETTER_AUTH,
-    enableClerk: authEnv.NEXT_PUBLIC_ENABLE_CLERK_AUTH,
     enableNextAuth: authEnv.NEXT_PUBLIC_ENABLE_NEXT_AUTH,
     enableOIDC: authEnv.ENABLE_OIDC,
   });
 
   return {
-    middleware: authEnv.NEXT_PUBLIC_ENABLE_CLERK_AUTH
-      ? clerkAuthMiddleware
-      : authEnv.NEXT_PUBLIC_ENABLE_NEXT_AUTH
-        ? nextAuthMiddleware
-        : betterAuthMiddleware,
+    middleware: authEnv.NEXT_PUBLIC_ENABLE_NEXT_AUTH ? nextAuthMiddleware : betterAuthMiddleware,
   };
 }

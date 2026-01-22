@@ -32,23 +32,18 @@ vi.mock('@/const/version', () => ({
 }));
 
 // Use vi.hoisted to ensure variables exist before vi.mock factory executes
-const { enableAuth, enableClerk } = vi.hoisted(() => ({
+const { enableAuth } = vi.hoisted(() => ({
   enableAuth: { value: true },
-  enableClerk: { value: false },
 }));
 
 vi.mock('@/envs/auth', () => ({
   get enableAuth() {
     return enableAuth.value;
   },
-  get enableClerk() {
-    return enableClerk.value;
-  },
 }));
 
 afterEach(() => {
   enableAuth.value = true;
-  enableClerk.value = false;
   mockNavigate.mockReset();
 });
 
@@ -71,8 +66,6 @@ describe('UserBanner', () => {
       useUserStore.setState({ isSignedIn: true });
     });
 
-    enableClerk.value = true;
-
     render(<UserBanner />);
 
     expect(screen.getByText('Mocked UserInfo')).toBeInTheDocument();
@@ -84,7 +77,6 @@ describe('UserBanner', () => {
     act(() => {
       useUserStore.setState({ isSignedIn: false });
     });
-    enableClerk.value = true;
 
     render(<UserBanner />);
 

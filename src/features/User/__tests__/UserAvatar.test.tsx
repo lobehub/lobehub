@@ -10,18 +10,14 @@ import UserAvatar from '../UserAvatar';
 vi.mock('zustand/traditional');
 
 // Use vi.hoisted to ensure variables exist before vi.mock factory executes
-const { enableAuth, enableClerk, enableNextAuth } = vi.hoisted(() => ({
+const { enableAuth, enableNextAuth } = vi.hoisted(() => ({
   enableAuth: { value: true },
-  enableClerk: { value: false },
   enableNextAuth: { value: false },
 }));
 
 vi.mock('@/envs/auth', () => ({
   get enableAuth() {
     return enableAuth.value;
-  },
-  get enableClerk() {
-    return enableClerk.value;
   },
   get enableNextAuth() {
     return enableNextAuth.value;
@@ -30,7 +26,6 @@ vi.mock('@/envs/auth', () => ({
 
 afterEach(() => {
   enableAuth.value = true;
-  enableClerk.value = false;
   enableNextAuth.value = false;
 });
 

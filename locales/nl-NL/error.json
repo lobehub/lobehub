@@ -1,7 +1,4 @@
 {
-  "clerkAuth.loginSuccess.action": "Sessie voortzetten",
-  "clerkAuth.loginSuccess.desc": "{{greeting}}, fijn om je weer van dienst te zijn. Laten we verdergaan waar we gebleven waren.",
-  "clerkAuth.loginSuccess.title": "Welkom terug, {{nickName}}",
   "error.backHome": "Terug naar home",
   "error.desc": "Probeer het later opnieuw of keer terug naar de bekende wereld.",
   "error.retry": "Opnieuw laden",
@@ -87,7 +84,6 @@
   "response.InsufficientQuota": "Sorry, het quotum voor deze sleutel is bereikt. Controleer je accountbalans of verhoog het quotum en probeer opnieuw.",
   "response.InvalidAccessCode": "Ongeldige of lege toegangscode. Voer de juiste toegangscode in of voeg een aangepaste API-sleutel toe.",
   "response.InvalidBedrockCredentials": "Bedrock-authenticatie mislukt. Controleer AccessKeyId/SecretAccessKey en probeer opnieuw.",
-  "response.InvalidClerkUser": "Sorry, je bent momenteel niet ingelogd. Log in of registreer een account om verder te gaan.",
   "response.InvalidComfyUIArgs": "Ongeldige ComfyUI-configuratie. Controleer de instellingen en probeer opnieuw.",
   "response.InvalidGithubToken": "De GitHub Personal Access Token is onjuist of leeg. Controleer je token en probeer opnieuw.",
   "response.InvalidOllamaArgs": "Ongeldige Ollama-configuratie. Controleer de instellingen en probeer opnieuw.",

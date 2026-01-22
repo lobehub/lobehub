@@ -49,23 +49,18 @@ vi.mock('./useNewVersion', () => ({
 }));
 
 // Use vi.hoisted to ensure variables exist before vi.mock factory executes
-const { enableAuth, enableClerk } = vi.hoisted(() => ({
+const { enableAuth } = vi.hoisted(() => ({
   enableAuth: { value: true },
-  enableClerk: { value: true },
 }));
 
 vi.mock('@/envs/auth', () => ({
   get enableAuth() {
     return enableAuth.value;
   },
-  get enableClerk() {
-    return enableClerk.value;
-  },
 }));
 
 afterEach(() => {
   enableAuth.value = true;
-  enableClerk.value = true;
 });
 
 describe('useMenu', () => {
@@ -74,7 +69,6 @@ describe('useMenu', () => {
       useUserStore.setState({ isSignedIn: true, enableAuth: () => true });
     });
     enableAuth.value = true;
-    enableClerk.value = false;
 
     const { result } = renderHook(() => useMenu(), { wrapper });
 

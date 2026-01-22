@@ -6,10 +6,7 @@ import { ChatErrorType, type ErrorResponse, type ErrorType } from '@lobechat/typ
  * When these errors occur, the response will include X-Auth-Required header
  * to signal the client that re-authentication is needed.
  */
-const AUTH_REQUIRED_ERROR_TYPES = new Set<ErrorType>([
-  ChatErrorType.Unauthorized,
-  ChatErrorType.InvalidClerkUser,
-]);
+const AUTH_REQUIRED_ERROR_TYPES = new Set<ErrorType>([ChatErrorType.Unauthorized]);
 
 const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
   // InvalidAccessCode / InvalidAzureAPIKey / InvalidOpenAIAPIKey / InvalidZhipuAPIKey ....

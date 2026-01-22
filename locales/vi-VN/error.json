@@ -1,7 +1,4 @@
 {
-  "clerkAuth.loginSuccess.action": "Tiếp tục phiên",
-  "clerkAuth.loginSuccess.desc": "{{greeting}}, rất vui được tiếp tục phục vụ bạn. Hãy tiếp tục từ nơi bạn đã dừng lại.",
-  "clerkAuth.loginSuccess.title": "Chào mừng trở lại, {{nickName}}",
   "error.backHome": "Quay về Trang chủ",
   "error.desc": "Hãy thử lại sau, hoặc quay về thế giới quen thuộc.",
   "error.retry": "Tải lại",
@@ -87,7 +84,6 @@
   "response.InsufficientQuota": "Xin lỗi, hạn mức của khóa này đã đạt giới hạn. Vui lòng kiểm tra số dư tài khoản hoặc tăng hạn mức khóa rồi thử lại.",
   "response.InvalidAccessCode": "Mã truy cập không hợp lệ hoặc để trống. Vui lòng nhập mã truy cập chính xác hoặc thêm API Key tùy chỉnh.",
   "response.InvalidBedrockCredentials": "Xác thực Bedrock thất bại. Vui lòng kiểm tra AccessKeyId/SecretAccessKey và thử lại.",
-  "response.InvalidClerkUser": "Xin lỗi, bạn chưa đăng nhập. Vui lòng đăng nhập hoặc đăng ký tài khoản để tiếp tục.",
   "response.InvalidComfyUIArgs": "Cấu hình ComfyUI không hợp lệ. Vui lòng kiểm tra cài đặt và thử lại.",
   "response.InvalidGithubToken": "GitHub Personal Access Token không hợp lệ hoặc để trống. Vui lòng kiểm tra và thử lại.",
   "response.InvalidOllamaArgs": "Cấu hình Ollama không hợp lệ, vui lòng kiểm tra và thử lại.",

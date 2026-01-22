@@ -17,13 +17,9 @@ if (isDesktop) {
 }
 
 // Auth flags - use process.env directly for build-time dead code elimination
-const enableClerk =
-  process.env.NEXT_PUBLIC_ENABLE_CLERK_AUTH === '1'
-    ? true
-    : !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const enableBetterAuth = process.env.NEXT_PUBLIC_ENABLE_BETTER_AUTH === '1';
 const enableNextAuth = process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1';
-const enableAuth = enableClerk || enableBetterAuth || enableNextAuth || false;
+const enableAuth = enableBetterAuth || enableNextAuth || false;
 
 const getCommandVersion = (command: string): string | null => {
   try {
@@ -62,7 +58,6 @@ const printEnvInfo = () => {
 
   // Auth flags
   console.log('\n  Auth Flags:');
-  console.log(`    enableClerk: ${enableClerk}`);
   console.log(`    enableBetterAuth: ${enableBetterAuth}`);
   console.log(`    enableNextAuth: ${enableNextAuth}`);
   console.log(`    enableAuth: ${enableAuth}`);

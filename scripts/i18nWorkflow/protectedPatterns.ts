@@ -11,7 +11,6 @@
  * Files to ignore at file level (won't be scanned at all)
  */
 export const IGNORED_FILES = [
-  'clerk.ts', // Clerk third-party library translations
   'providers.ts', // Dynamically generated from DEFAULT_MODEL_PROVIDER_LIST
   'models.ts', // Dynamically generated from LOBE_DEFAULT_MODEL_LIST
   'auth.ts', // Auth-related dynamic keys

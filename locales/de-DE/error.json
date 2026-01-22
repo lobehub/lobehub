@@ -1,7 +1,4 @@
 {
-  "clerkAuth.loginSuccess.action": "Sitzung fortsetzen",
-  "clerkAuth.loginSuccess.desc": "{{greeting}}, schön, Sie wiederzusehen. Lassen Sie uns dort weitermachen, wo wir aufgehört haben.",
-  "clerkAuth.loginSuccess.title": "Willkommen zurück, {{nickName}}",
   "error.backHome": "Zurück zur Startseite",
   "error.desc": "Versuchen Sie es später erneut oder kehren Sie in die bekannte Welt zurück.",
   "error.retry": "Neu laden",
@@ -87,7 +84,6 @@
   "response.InsufficientQuota": "Das Kontingent für diesen Schlüssel ist aufgebraucht. Bitte prüfen Sie Ihr Guthaben.",
   "response.InvalidAccessCode": "Ungültiger oder leerer Zugangscode. Bitte geben Sie den richtigen Code ein.",
   "response.InvalidBedrockCredentials": "Bedrock-Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihre Zugangsdaten.",
-  "response.InvalidClerkUser": "Sie sind nicht angemeldet. Bitte melden Sie sich an oder registrieren Sie sich.",
   "response.InvalidComfyUIArgs": "Ungültige ComfyUI-Konfiguration. Bitte prüfen Sie die Einstellungen.",
   "response.InvalidGithubToken": "Ungültiger oder leerer GitHub-Personal-Access-Token.",
   "response.InvalidOllamaArgs": "Ungültige Ollama-Konfiguration. Bitte prüfen Sie die Einstellungen.",

@@ -1,7 +1,4 @@
 {
-  "clerkAuth.loginSuccess.action": "Continuar sesión",
-  "clerkAuth.loginSuccess.desc": "{{greeting}}, es un placer seguir atendiéndote. Continuemos donde lo dejamos.",
-  "clerkAuth.loginSuccess.title": "Bienvenido de nuevo, {{nickName}}",
   "error.backHome": "Volver al inicio",
   "error.desc": "Inténtalo más tarde o regresa al mundo conocido.",
   "error.retry": "Recargar",
@@ -87,7 +84,6 @@
   "response.InsufficientQuota": "Lo sentimos, se ha alcanzado la cuota de esta clave. Verifica tu saldo o aumenta la cuota.",
   "response.InvalidAccessCode": "Código de acceso inválido o vacío. Ingresa el código correcto o una API Key personalizada.",
   "response.InvalidBedrockCredentials": "Error de autenticación de Bedrock. Verifica AccessKeyId/SecretAccessKey.",
-  "response.InvalidClerkUser": "Lo sentimos, no has iniciado sesión. Inicia sesión o regístrate para continuar.",
   "response.InvalidComfyUIArgs": "Configuración inválida de ComfyUI. Verifica los ajustes.",
   "response.InvalidGithubToken": "El token de acceso personal de GitHub es incorrecto o está vacío.",
   "response.InvalidOllamaArgs": "Configuración inválida de Ollama. Verifica los ajustes.",

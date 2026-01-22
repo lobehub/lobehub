@@ -8,10 +8,6 @@ import { createErrorResponse } from '@/utils/errorResponse';
 import { RequestHandler, checkAuth } from './index';
 import { checkAuthMethod } from './utils';
 
-vi.mock('@clerk/nextjs/server', () => ({
-  getAuth: vi.fn(),
-}));
-
 vi.mock('@/utils/errorResponse', () => ({
   createErrorResponse: vi.fn(),
 }));

@@ -1,30 +1,15 @@
-import { enableBetterAuth, enableClerk, enableNextAuth } from '@/envs/auth';
+import { enableBetterAuth, enableNextAuth } from '@/envs/auth';
 
 import type { TrustedClientUserInfo } from './index';
 
 /**
  * Get user info from the current session for trusted client authentication
- * This works with different authentication providers (Clerk, BetterAuth, NextAuth)
+ * This works with different authentication providers (BetterAuth, NextAuth)
  *
  * @returns User info or undefined if not authenticated
  */
 export const getSessionUser = async (): Promise<TrustedClientUserInfo | undefined> => {
   try {
-    if (enableClerk) {
-      const { currentUser } = await import('@clerk/nextjs/server');
-      const user = await currentUser();
-
-      if (!user?.id || !user?.primaryEmailAddress?.emailAddress) {
-        return undefined;
-      }
-
-      return {
-        email: user.primaryEmailAddress.emailAddress,
-        name: user.fullName || user.firstName || undefined,
-        userId: user.id,
-      };
-    }
-
     if (enableBetterAuth) {
       const { headers } = await import('next/headers');
       const { auth } = await import('@/auth');

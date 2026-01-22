@@ -1,7 +1,4 @@
 {
-  "clerkAuth.loginSuccess.action": "Continue Session",
-  "clerkAuth.loginSuccess.desc": "{{greeting}}, it's great to continue serving you. Let's pick up where we left off.",
-  "clerkAuth.loginSuccess.title": "Welcome back, {{nickName}}",
   "error.backHome": "Back to Home",
   "error.desc": "Give it a try later, or go back to the known world.",
   "error.retry": "Reload",
@@ -87,7 +84,6 @@
   "response.InsufficientQuota": "Sorry, the quota for this key has been reached. Please check if your account balance is sufficient or try again after increasing the key's quota.",
   "response.InvalidAccessCode": "Invalid access code or empty. Please enter the correct access code or add a custom API Key.",
   "response.InvalidBedrockCredentials": "Bedrock authentication failed. Please check the AccessKeyId/SecretAccessKey and retry.",
-  "response.InvalidClerkUser": "Sorry, you are not currently logged in. Please log in or register an account to continue.",
   "response.InvalidComfyUIArgs": "Invalid ComfyUI configuration. Please check the settings and try again.",
   "response.InvalidGithubToken": "The GitHub Personal Access Token is incorrect or empty. Please check your GitHub Personal Access Token and try again.",
   "response.InvalidOllamaArgs": "Invalid Ollama configuration, please check Ollama configuration and try again",

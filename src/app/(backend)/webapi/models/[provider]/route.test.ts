@@ -9,10 +9,6 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { GET } from './route';
 
-vi.mock('@clerk/nextjs/server', () => ({
-  getAuth: vi.fn(),
-}));
-
 vi.mock('@/app/(backend)/middleware/auth/utils', () => ({
   checkAuthMethod: vi.fn(),
 }));

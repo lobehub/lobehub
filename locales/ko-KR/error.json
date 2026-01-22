@@ -1,7 +1,4 @@
 {
-  "clerkAuth.loginSuccess.action": "계속하기",
-  "clerkAuth.loginSuccess.desc": "{{greeting}}님, {{nickName}}입니다. 이전 주제로 돌아갑니다. 언제든지 새 주제로 전환할 수 있습니다",
-  "clerkAuth.loginSuccess.title": "다시 환영합니다, {{nickName}}",
   "error.backHome": "홈으로 돌아가기",
   "error.desc": "페이지를 일시적으로 사용할 수 없습니다. 홈으로 돌아가거나 잠시 후 다시 시도하세요(설정은 손실되지 않습니다)",
   "error.retry": "다시 로드",
@@ -87,7 +84,6 @@
   "response.InsufficientQuota": "할당량이 소진되었습니다. 잔액/할당량 설정을 확인하거나 사용 가능한 API 키로 전환한 후 다시 시도하세요",
   "response.InvalidAccessCode": "액세스 암호가 비어 있거나 올바르지 않습니다. 올바른 암호를 다시 입력하거나 사용자 정의 API 키를 사용하세요",
   "response.InvalidBedrockCredentials": "Bedrock 인증에 실패했습니다. AccessKeyId/SecretAccessKey를 확인한 후 다시 시도하세요",
-  "response.InvalidClerkUser": "로그인이 필요합니다. 먼저 로그인하거나 등록하세요",
   "response.InvalidComfyUIArgs": "ComfyUI 설정이 올바르지 않습니다. 설정을 확인한 후 다시 시도하세요",
   "response.InvalidGithubToken": "GitHub PAT가 비어 있거나 올바르지 않습니다. 확인한 후 다시 시도하세요",
   "response.InvalidOllamaArgs": "Ollama 설정이 올바르지 않습니다. 설정을 확인한 후 다시 시도하세요",

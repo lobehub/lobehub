@@ -1,16 +1,8 @@
 import { headers } from 'next/headers';
 
-import { enableBetterAuth, enableClerk, enableNextAuth } from '@/envs/auth';
+import { enableBetterAuth, enableNextAuth } from '@/envs/auth';
 
 export const getUserAuth = async () => {
-  if (enableClerk) {
-    const { ClerkAuth } = await import('@/libs/clerk-auth');
-
-    const clerkAuth = new ClerkAuth();
-
-    return await clerkAuth.getAuth();
-  }
-
   if (enableBetterAuth) {
     const { auth: betterAuth } = await import('@/auth');
 

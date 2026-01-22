@@ -1,7 +1,4 @@
 {
-  "clerkAuth.loginSuccess.action": "Oturuma Devam Et",
-  "clerkAuth.loginSuccess.desc": "{{greeting}}, size hizmet vermeye devam etmek harika. Kaldığımız yerden devam edelim.",
-  "clerkAuth.loginSuccess.title": "Tekrar hoş geldiniz, {{nickName}}",
   "error.backHome": "Ana Sayfaya Dön",
   "error.desc": "Daha sonra tekrar deneyin ya da bilinen dünyaya geri dönün.",
   "error.retry": "Yeniden Yükle",
@@ -87,7 +84,6 @@
   "response.InsufficientQuota": "Üzgünüz, bu anahtar için kota sınırına ulaşıldı. Lütfen hesabınızın bakiyesini kontrol edin veya kotayı artırdıktan sonra tekrar deneyin.",
   "response.InvalidAccessCode": "Geçersiz veya boş erişim kodu. Lütfen doğru erişim kodunu girin veya özel bir API Anahtarı ekleyin.",
   "response.InvalidBedrockCredentials": "Bedrock kimlik doğrulaması başarısız oldu. Lütfen AccessKeyId/SecretAccessKey bilgilerinizi kontrol edip tekrar deneyin.",
-  "response.InvalidClerkUser": "Üzgünüz, şu anda giriş yapmadınız. Devam etmek için lütfen giriş yapın veya hesap oluşturun.",
   "response.InvalidComfyUIArgs": "Geçersiz ComfyUI yapılandırması. Lütfen ayarları kontrol edip tekrar deneyin.",
   "response.InvalidGithubToken": "GitHub Kişisel Erişim Anahtarı hatalı veya boş. Lütfen kontrol edip tekrar deneyin.",
   "response.InvalidOllamaArgs": "Geçersiz Ollama yapılandırması. Lütfen ayarları kontrol edip tekrar deneyin.",
