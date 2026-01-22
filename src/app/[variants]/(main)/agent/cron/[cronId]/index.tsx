@@ -3,7 +3,8 @@
 import { EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
-import { App, Empty, message } from 'antd';
+import { App, message } from 'antd';
+import { Empty } from '@lobehub/ui';
 import dayjs, { type Dayjs } from 'dayjs';
 import { Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
