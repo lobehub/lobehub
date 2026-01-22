@@ -1,10 +1,9 @@
 /* eslint-disable unicorn/prefer-top-level-await, unicorn/no-process-exit */
-import { type User, createClerkClient } from '@clerk/backend';
 import { writeFile } from 'node:fs/promises';
 
 import { getClerkSecret, getMigrationMode, resolveDataPaths } from './_internal/config';
 import './_internal/env';
-import { ClerkUser } from './_internal/types';
+import { ClerkApiUser, ClerkUser } from './_internal/types';
 
 /**
  * Fetch all Clerk users via REST API and persist them into a local JSON file.
@@ -24,50 +23,58 @@ const ORDER_BY = '+created_at';
 const DEFAULT_OUTPUT_PATH = resolveDataPaths().clerkUsersPath;
 const formatDuration = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
+const CLERK_API_BASE = 'https://api.clerk.com/v1';
+
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
   });
 
-function getClerkClient(secretKey: string) {
-  return createClerkClient({
-    secretKey,
+async function fetchClerkApi<T>(secretKey: string, endpoint: string): Promise<T> {
+  const response = await fetch(`${CLERK_API_BASE}${endpoint}`, {
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+    },
   });
+
+  if (!response.ok) {
+    throw new Error(`Clerk API error: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json() as Promise<T>;
 }
 
-function mapClerkUser(user: User): ClerkUser {
-  const raw = user.raw!;
-
-  const primaryEmail = raw.email_addresses?.find(
-    (email) => email.id === raw.primary_email_address_id,
+function mapClerkUser(user: ClerkApiUser): ClerkUser {
+  const primaryEmail = user.email_addresses?.find(
+    (email) => email.id === user.primary_email_address_id,
   )?.email_address;
 
   return {
-    banned: raw.banned,
-    created_at: raw.created_at,
-    external_accounts: (raw.external_accounts ?? []).map((acc) => ({
+    banned: user.banned,
+    created_at: user.created_at,
+    external_accounts: (user.external_accounts ?? []).map((acc) => ({
       approved_scopes: acc.approved_scopes,
-      created_at: (acc as any).created_at,
+      created_at: acc.created_at,
       id: acc.id,
       provider: acc.provider,
       provider_user_id: acc.provider_user_id,
-      updated_at: (acc as any).updated_at,
+      updated_at: acc.updated_at,
       verificationStatus: acc.verification?.status === 'verified',
     })),
-    id: raw.id,
-    image_url: raw.image_url,
-    lockout_expires_in_seconds: raw.lockout_expires_in_seconds,
-    password_enabled: raw.password_enabled,
-    password_last_updated_at: raw.password_last_updated_at,
+    id: user.id,
+    image_url: user.image_url,
+    lockout_expires_in_seconds: user.lockout_expires_in_seconds,
+    password_enabled: user.password_enabled,
+    password_last_updated_at: user.password_last_updated_at,
     primaryEmail,
-    two_factor_enabled: raw.two_factor_enabled,
-    updated_at: raw.updated_at,
+    two_factor_enabled: user.two_factor_enabled,
+    updated_at: user.updated_at,
   } satisfies ClerkUser;
 }
 
 async function fetchClerkUserPage(
   offset: number,
-  clerkClient: ReturnType<typeof getClerkClient>,
+  secretKey: string,
   pageIndex: number,
 ): Promise<ClerkUser[]> {
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt += 1) {
@@ -76,11 +83,13 @@ async function fetchClerkUserPage(
         `🚚 [clerk-export] Fetching page #${pageIndex + 1} offset=${offset} limit=${PAGE_SIZE} (attempt ${attempt}/${MAX_RETRIES})`,
       );
 
-      const { data } = await clerkClient.users.getUserList({
-        limit: PAGE_SIZE,
-        offset,
-        orderBy: ORDER_BY,
+      const params = new URLSearchParams({
+        limit: String(PAGE_SIZE),
+        offset: String(offset),
+        order_by: ORDER_BY,
       });
+
+      const data = await fetchClerkApi<ClerkApiUser[]>(secretKey, `/users?${params}`);
 
       console.log(
         `📥 [clerk-export] Received page #${pageIndex + 1} (${data.length} users) offset=${offset}`,
@@ -138,16 +147,14 @@ async function runWithConcurrency<T>(
 }
 
 async function fetchAllClerkUsers(secretKey: string): Promise<ClerkUser[]> {
-  const clerkClient = getClerkClient(secretKey);
   const userMap = new Map<string, ClerkUser>();
 
-  const firstPageResponse = await clerkClient.users.getUserList({
-    limit: PAGE_SIZE,
-    offset: 0,
-    orderBy: ORDER_BY,
-  });
-
-  const totalCount = firstPageResponse.totalCount ?? firstPageResponse.data.length;
+  // Get total count first
+  const countResponse = await fetchClerkApi<{ total_count: number }>(
+    secretKey,
+    '/users/count',
+  );
+  const totalCount = countResponse.total_count;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const offsets = Array.from({ length: totalPages }, (_, pageIndex) => pageIndex * PAGE_SIZE);
 
@@ -156,7 +163,7 @@ async function fetchAllClerkUsers(secretKey: string): Promise<ClerkUser[]> {
   );
 
   await runWithConcurrency(offsets, CONCURRENCY, async (offset, index) => {
-    const page = await fetchClerkUserPage(offset, clerkClient, index);
+    const page = await fetchClerkUserPage(offset, secretKey, index);
 
     for (const user of page) {
       userMap.set(user.id, user);
