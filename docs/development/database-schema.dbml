@@ -174,12 +174,17 @@ table async_tasks {
   error jsonb
   user_id text [not null]
   duration integer
+  parent_id uuid
+  metadata jsonb [not null, default: '{}']
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
     user_id [name: 'async_tasks_user_id_idx']
+    parent_id [name: 'async_tasks_parent_id_idx']
+    (type, status) [name: 'async_tasks_type_status_idx']
+    metadata [name: 'async_tasks_metadata_idx']
   }
 }
 
