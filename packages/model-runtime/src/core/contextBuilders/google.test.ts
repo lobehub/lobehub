@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { Type as SchemaType } from '@google/genai';
 import * as imageToBase64Module from '@lobechat/utils';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
@@ -24,6 +24,10 @@ vi.mock('../../utils/imageToBase64', () => ({
 }));
 
 describe('google contextBuilders', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   describe('buildGooglePart', () => {
     it('should handle text type messages', async () => {
       const content: UserMessageContentPart = {
@@ -108,6 +112,64 @@ describe('google contextBuilders', () => {
       expect(imageToBase64Module.imageUrlToBase64).toHaveBeenCalledWith(imageUrl);
     });
 
+    it('should handle base64 audio', async () => {
+      const base64Audio = 'data:audio/mpeg;base64,mockAudioBase64Data';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: 'mockAudioBase64Data',
+        mimeType: 'audio/mpeg',
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: { url: base64Audio },
+        type: 'audio_url',
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({
+        inlineData: {
+          data: 'mockAudioBase64Data',
+          mimeType: 'audio/mpeg',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should handle URL type audio', async () => {
+      const audioUrl = 'http://example.com/audio.mp3';
+      const mockBase64 = 'mockAudioBase64Data';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: 'audio/mpeg',
+        type: 'url',
+      });
+
+      vi.spyOn(imageToBase64Module, 'imageUrlToBase64').mockResolvedValueOnce({
+        base64: mockBase64,
+        mimeType: 'audio/mpeg',
+      });
+
+      const content: UserMessageContentPart = {
+        audio_url: { url: audioUrl },
+        type: 'audio_url',
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({
+        inlineData: {
+          data: mockBase64,
+          mimeType: 'audio/mpeg',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+
+      expect(imageToBase64Module.imageUrlToBase64).toHaveBeenCalledWith(audioUrl);
+    });
+
     it('should throw TypeError for unsupported image URL types', async () => {
       const unsupportedImageUrl = 'unsupported://example.com/image.png';
 
@@ -148,6 +210,39 @@ describe('google contextBuilders', () => {
         },
         thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
       });
+    });
+
+    it('should handle URL type videos with base64 fallback', async () => {
+      const videoUrl = 'http://example.com/video.mp4';
+      const mockBase64 = 'mockVideoBase64Data';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: 'video/mp4',
+        type: 'url',
+      });
+
+      vi.spyOn(imageToBase64Module, 'imageUrlToBase64').mockResolvedValueOnce({
+        base64: mockBase64,
+        mimeType: 'video/mp4',
+      });
+
+      const content: UserMessageContentPart = {
+        type: 'video_url',
+        video_url: { url: videoUrl },
+      };
+
+      const result = await buildGooglePart(content);
+
+      expect(result).toEqual({
+        inlineData: {
+          data: mockBase64,
+          mimeType: 'video/mp4',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+
+      expect(imageToBase64Module.imageUrlToBase64).toHaveBeenCalledWith(videoUrl);
     });
   });
 

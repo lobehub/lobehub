@@ -326,6 +326,7 @@ export class AiAgentService {
     // 11. Process messages using Server ContextEngineering
     const processedMessages = await serverMessagesEngine({
       capabilities: {
+        isCanUseAudio: () => modelInfo?.abilities?.video ?? false,
         isCanUseFC: isModelSupportToolUse,
         isCanUseVideo: () => modelInfo?.abilities?.video ?? false,
         isCanUseVision: () => modelInfo?.abilities?.vision ?? true,

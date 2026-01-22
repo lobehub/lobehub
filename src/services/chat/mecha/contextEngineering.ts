@@ -35,7 +35,7 @@ import {
   lobehubSkillStoreSelectors,
 } from '@/store/tool/selectors';
 
-import { isCanUseVideo, isCanUseVision } from '../helper';
+import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '../helper';
 import {
   combineUserMemoryData,
   resolveGlobalIdentities,
@@ -345,6 +345,7 @@ export const contextEngineering = async ({
     // Capability injection
     capabilities: {
       isCanUseFC,
+      isCanUseAudio,
       isCanUseVideo,
       isCanUseVision,
     },

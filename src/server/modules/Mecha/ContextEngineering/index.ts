@@ -60,6 +60,7 @@ export const serverMessagesEngine = async ({
     // Capability injection
     capabilities: {
       isCanUseFC: capabilities?.isCanUseFC,
+      isCanUseAudio: capabilities?.isCanUseAudio ?? capabilities?.isCanUseVideo,
       isCanUseVideo: capabilities?.isCanUseVideo,
       isCanUseVision: capabilities?.isCanUseVision,
     },

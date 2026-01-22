@@ -38,9 +38,15 @@ interface UserMessageContentPartVideo {
   video_url: { url: string };
 }
 
+interface UserMessageContentPartAudio {
+  audio_url: { url: string };
+  type: 'audio_url';
+}
+
 export type UserMessageContentPart =
   | UserMessageContentPartText
   | UserMessageContentPartImage
+  | UserMessageContentPartAudio
   | UserMessageContentPartVideo
   | UserMessageContentPartThinking;
 

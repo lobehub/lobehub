@@ -1,5 +1,6 @@
-import { ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
+import { ChatAudioItem, ChatFileItem, ChatImageItem, ChatVideoItem } from '@lobechat/types';
 
+import { audiosPrompts } from './audio';
 import { filePrompts } from './file';
 import { imagesPrompts } from './image';
 import { videosPrompts } from './video';
@@ -10,22 +11,26 @@ export { promptAgentKnowledge } from './knowledgeBase';
 export const filesPrompts = ({
   imageList,
   fileList,
+  audioList,
   videoList,
   addUrl = true,
 }: {
   addUrl?: boolean;
+  audioList?: ChatAudioItem[];
   fileList?: ChatFileItem[];
   imageList?: ChatImageItem[];
   videoList?: ChatVideoItem[];
 }) => {
   const hasImages = (imageList || []).length > 0;
+  const hasAudios = (audioList || []).length > 0;
   const hasFiles = (fileList || []).length > 0;
   const hasVideos = (videoList || []).length > 0;
 
-  if (!hasImages && !hasFiles && !hasVideos) return '';
+  if (!hasImages && !hasAudios && !hasFiles && !hasVideos) return '';
 
   const contentParts = [
     hasImages ? imagesPrompts(imageList!, addUrl) : '',
+    hasAudios ? audiosPrompts(audioList!, addUrl) : '',
     hasFiles ? filePrompts(fileList!, addUrl) : '',
     hasVideos ? videosPrompts(videoList!, addUrl) : '',
   ].filter(Boolean);

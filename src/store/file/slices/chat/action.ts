@@ -121,10 +121,17 @@ export const createFileSlice: StateCreator<
         let base64Url: string | undefined = undefined;
 
         // only image and video can be previewed, we create a previewUrl and base64Url for them
-        if (file.type.startsWith('image') || file.type.startsWith('video')) {
+        // audio doesn't need previewUrl but does need base64Url for runtime usage
+        if (
+          file.type.startsWith('image') ||
+          file.type.startsWith('video') ||
+          file.type.startsWith('audio')
+        ) {
           const data = await file.arrayBuffer();
 
-          previewUrl = URL.createObjectURL(new Blob([data!], { type: file.type }));
+          if (file.type.startsWith('image') || file.type.startsWith('video')) {
+            previewUrl = URL.createObjectURL(new Blob([data!], { type: file.type }));
+          }
 
           const base64 = Buffer.from(data!).toString('base64');
           base64Url = `data:${file.type};base64,${base64}`;

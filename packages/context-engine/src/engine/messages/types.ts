@@ -19,6 +19,8 @@ import type { LobeToolManifest } from '../tools/types';
 export interface ModelCapabilityChecker {
   /** Check if function calling is supported */
   isCanUseFC?: (model: string, provider: string) => boolean;
+  /** Check if audio is supported */
+  isCanUseAudio?: (model: string, provider: string) => boolean;
   /** Check if video is supported */
   isCanUseVideo?: (model: string, provider: string) => boolean;
   /** Check if vision is supported */

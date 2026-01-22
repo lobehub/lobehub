@@ -11,6 +11,10 @@ export const isCanUseVideo = (model: string, provider: string): boolean => {
   return aiModelSelectors.isModelSupportVideo(model, provider)(getAiInfraStoreState()) || false;
 };
 
+export const isCanUseAudio = (model: string, provider: string): boolean => {
+  return aiModelSelectors.isModelSupportVideo(model, provider)(getAiInfraStoreState()) || false;
+};
+
 /**
  * TODO: we need to update this function to auto find deploymentName with provider setting config
  */

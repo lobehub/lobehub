@@ -1,4 +1,4 @@
-import { ChatImageItem, ChatVideoItem, UIChatMessage } from '@lobechat/types';
+import { ChatAudioItem, ChatImageItem, ChatVideoItem, UIChatMessage } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { PipelineContext } from '../../types';
@@ -24,6 +24,7 @@ const createContext = (messages: UIChatMessage[]): PipelineContext => ({
 
 const mockIsCanUseVision = vi.fn();
 const mockIsCanUseVideo = vi.fn();
+const mockIsCanUseAudio = vi.fn();
 
 describe('MessageContentProcessor', () => {
   describe('Image processing functionality', () => {
@@ -548,6 +549,70 @@ describe('MessageContentProcessor', () => {
       expect(content[1].image_url.url).toBe('http://example.com/image.jpg');
       expect(content[2].type).toBe('video_url');
       expect(content[2].video_url.url).toBe('http://example.com/video.mp4');
+    });
+  });
+
+  describe('Audio processing functionality', () => {
+    it('should return plain text if model cannot use audio', async () => {
+      mockIsCanUseAudio.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        model: 'text-model',
+        provider: 'openai',
+        fileContext: { enabled: false },
+        isCanUseAudio: mockIsCanUseAudio,
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Hello',
+          audioList: [
+            { url: 'http://example.com/audio.mp3', alt: '', id: 'audio1' } as ChatAudioItem,
+          ],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      expect(mockIsCanUseAudio).toHaveBeenCalledWith('text-model', 'openai');
+      expect(result.messages[0].content).toBe('Hello');
+    });
+
+    it('should process audio if model can use audio', async () => {
+      mockIsCanUseAudio.mockReturnValue(true);
+
+      const processor = new MessageContentProcessor({
+        model: 'gemini-audio',
+        provider: 'google',
+        fileContext: { enabled: false },
+        isCanUseAudio: mockIsCanUseAudio,
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Hello',
+          audioList: [
+            { url: 'http://example.com/audio.mp3', alt: '', id: 'audio1' } as ChatAudioItem,
+          ],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      expect(Array.isArray(result.messages[0].content)).toBe(true);
+      const content = result.messages[0].content as any[];
+      expect(content).toHaveLength(2);
+      expect(content[0].type).toBe('text');
+      expect(content[1].type).toBe('audio_url');
+      expect(content[1].audio_url.url).toBe('http://example.com/audio.mp3');
     });
   });
 

@@ -19,6 +19,7 @@ export const GEMINI_MAGIC_THOUGHT_SIGNATURE = 'context_engineering_is_the_way_to
 
 /**
  * Convert OpenAI content part to Google Part format
+ *
  */
 export const buildGooglePart = async (
   content: UserMessageContentPart,
@@ -50,15 +51,45 @@ export const buildGooglePart = async (
       }
 
       if (type === 'url') {
-        const { base64, mimeType } = await imageUrlToBase64(content.image_url.url);
+        const url = content.image_url.url;
+        // Convert URL to base64
+        const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(url);
 
         return {
-          inlineData: { data: base64, mimeType },
+          inlineData: { data: urlBase64, mimeType: urlMimeType },
           thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
         };
       }
 
       throw new TypeError(`currently we don't support image url: ${content.image_url.url}`);
+    }
+
+    case 'audio_url': {
+      const { mimeType, base64, type } = parseDataUri(content.audio_url.url);
+
+      if (type === 'base64') {
+        if (!base64) {
+          throw new TypeError("Audio URL doesn't contain base64 data");
+        }
+
+        return {
+          inlineData: { data: base64, mimeType: mimeType || 'audio/mpeg' },
+          thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+        };
+      }
+
+      if (type === 'url') {
+        const url = content.audio_url.url;
+        // Convert URL to base64
+        const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(url);
+
+        return {
+          inlineData: { data: urlBase64, mimeType: urlMimeType },
+          thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+        };
+      }
+
+      throw new TypeError(`currently we don't support audio url: ${content.audio_url.url}`);
     }
 
     case 'video_url': {
@@ -76,12 +107,14 @@ export const buildGooglePart = async (
       }
 
       if (type === 'url') {
+        const url = content.video_url.url;
+        // Convert URL to base64
         // Use imageUrlToBase64 for SSRF protection (works for any binary data including videos)
         // Note: This might need size/duration limits for practical use
-        const { base64, mimeType } = await imageUrlToBase64(content.video_url.url);
+        const { base64: urlBase64, mimeType: urlMimeType } = await imageUrlToBase64(url);
 
         return {
-          inlineData: { data: base64, mimeType },
+          inlineData: { data: urlBase64, mimeType: urlMimeType },
           thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
         };
       }

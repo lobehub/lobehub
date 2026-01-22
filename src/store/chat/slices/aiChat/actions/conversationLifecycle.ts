@@ -3,6 +3,7 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { LOADING_FLAT } from '@lobechat/const';
 import {
+  type ChatAudioItem,
   type ChatImageItem,
   type ChatVideoItem,
   type ConversationContext,
@@ -172,6 +173,13 @@ export const conversationLifecycle: StateCreator<
         url: f.fileUrl || f.base64Url || f.previewUrl || '',
         alt: f.file?.name || f.id,
       }));
+    const tempAudios: ChatAudioItem[] = filesInStore
+      .filter((f) => f.file?.type?.startsWith('audio'))
+      .map((f) => ({
+        id: f.id,
+        url: f.fileUrl || f.base64Url || f.previewUrl || '',
+        alt: f.file?.name || f.id,
+      }));
 
     // use optimistic update to avoid the slow waiting (now with operationId for correct context)
     get().optimisticCreateTmpMessage(
@@ -185,6 +193,7 @@ export const conversationLifecycle: StateCreator<
         topicId: operationContext.topicId ?? undefined,
         threadId: operationContext.threadId ?? undefined,
         imageList: tempImages.length > 0 ? tempImages : undefined,
+        audioList: tempAudios.length > 0 ? tempAudios : undefined,
         videoList: tempVideos.length > 0 ? tempVideos : undefined,
       },
       { operationId, tempMessageId: tempId },

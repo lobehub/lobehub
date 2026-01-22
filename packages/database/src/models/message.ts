@@ -1,5 +1,6 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import {
+  ChatAudioItem,
   ChatFileItem,
   ChatImageItem,
   ChatTTS,
@@ -351,8 +352,12 @@ export class MessageModel {
 
     const imageList = relatedFileList.filter((i) => (i.fileType || '').startsWith('image'));
     const videoList = relatedFileList.filter((i) => (i.fileType || '').startsWith('video'));
+    const audioList = relatedFileList.filter((i) => (i.fileType || '').startsWith('audio'));
     const fileList = relatedFileList.filter(
-      (i) => !(i.fileType || '').startsWith('image') && !(i.fileType || '').startsWith('video'),
+      (i) =>
+        !(i.fileType || '').startsWith('image') &&
+        !(i.fileType || '').startsWith('video') &&
+        !(i.fileType || '').startsWith('audio'),
     );
 
     // 4. get relative file chunks
@@ -452,23 +457,27 @@ export class MessageModel {
         const messageQuery = messageQueriesList.find((relation) => relation.messageId === item.id);
         return {
           ...item,
+          audioList: audioList
+            .filter((relation) => relation.messageId === item.id)
+            // eslint-disable-next-line @typescript-eslint/no-unused-vars
+            .map<ChatAudioItem>(({ id, url, name }) => ({ alt: name!, id, url })),
+
           chunksList: chunksList
             .filter((relation) => relation.messageId === item.id)
             .map((c) => ({
               ...c,
               similarity: c.similarity === null ? undefined : Number(c.similarity),
             })),
-
           extra: {
             model: model,
             provider: provider,
             translate,
             tts: ttsId
               ? {
-                  contentMd5: ttsContentMd5,
-                  file: ttsFile,
-                  voice: ttsVoice,
-                }
+                contentMd5: ttsContentMd5,
+                file: ttsFile,
+                voice: ttsVoice,
+              }
               : undefined,
           },
           fileList: fileList
@@ -1411,7 +1420,7 @@ export class MessageModel {
 
   /**
    * Add files to a message by inserting records into messagesFiles table
-   * This associates existing files with a message for display in fileList/imageList/videoList
+    * This associates existing files with a message for display in fileList/imageList/videoList/audioList
    */
   addFiles = async (messageId: string, fileIds: string[]): Promise<{ success: boolean }> => {
     if (fileIds.length === 0) return { success: true };

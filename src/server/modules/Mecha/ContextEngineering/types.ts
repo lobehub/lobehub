@@ -12,6 +12,8 @@ import type { UIChatMessage } from '@lobechat/types';
  * Model capability checker functions for server-side
  */
 export interface ServerModelCapabilities {
+  /** Check if audio is supported */
+  isCanUseAudio?: (model: string, provider: string) => boolean;
   /** Check if function calling is supported */
   isCanUseFC?: (model: string, provider: string) => boolean;
   /** Check if video is supported */

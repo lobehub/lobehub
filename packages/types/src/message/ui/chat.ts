@@ -16,6 +16,7 @@ import {
 } from '../common/tools';
 import { ChatMessageExtra } from './extra';
 import { ChatFileChunk } from './rag';
+import { ChatAudioItem } from './audio';
 import { ChatVideoItem } from './video';
 
 export type UIMessageRoleType =
@@ -95,6 +96,7 @@ export interface TaskDetail {
 export interface UIChatMessage {
   // Group chat fields (alphabetically before other fields)
   agentId?: string | 'supervisor';
+  audioList?: ChatAudioItem[];
   /**
    * Branch information for user messages with multiple children
    */

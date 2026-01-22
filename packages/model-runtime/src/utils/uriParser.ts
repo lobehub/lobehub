@@ -22,3 +22,14 @@ export const parseDataUri = (dataUri: string): UriParserResult => {
     return { base64: null, mimeType: null, type: null };
   }
 };
+
+/**
+ * Maximum file size limits for Google Gemini file input
+ * @see https://ai.google.dev/gemini-api/docs/file-input-methods#method-comparison
+ *
+ * Inline data: 100MB general, 50MB for PDFs
+ */
+const MAX_INLINE_DATA_SIZE = 100 * 1024 * 1024; // 100MB for inline data (general)
+const MAX_INLINE_PDF_SIZE = 50 * 1024 * 1024; // 50MB for inline PDFs only
+
+export { MAX_INLINE_DATA_SIZE, MAX_INLINE_PDF_SIZE };
