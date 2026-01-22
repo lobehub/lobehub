@@ -149,6 +149,48 @@ describe('google contextBuilders', () => {
         thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
       });
     });
+
+    it('should return undefined for unsupported SVG image (base64)', async () => {
+      const svgBase64 =
+        'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: 'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==',
+        mimeType: 'image/svg+xml',
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: svgBase64 },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined for unsupported SVG image (URL)', async () => {
+      const svgUrl = 'https://example.com/image.svg';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      vi.spyOn(imageToBase64Module, 'imageUrlToBase64').mockResolvedValueOnce({
+        base64: 'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==',
+        mimeType: 'image/svg+xml',
+      });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: svgUrl },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content);
+      expect(result).toBeUndefined();
+    });
   });
 
   describe('buildGoogleMessage', () => {

@@ -5,6 +5,19 @@ import OpenAI from 'openai';
 import { OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 
+const ANTHROPIC_SUPPORTED_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]);
+
+const isImageTypeSupported = (mimeType: string | null): boolean => {
+  if (!mimeType) return true;
+  return ANTHROPIC_SUPPORTED_IMAGE_TYPES.has(mimeType.toLowerCase());
+};
+
 export const buildAnthropicBlock = async (
   content: UserMessageContentPart,
 ): Promise<Anthropic.ContentBlock | Anthropic.ImageBlockParam | undefined> => {
@@ -23,7 +36,9 @@ export const buildAnthropicBlock = async (
     case 'image_url': {
       const { mimeType, base64, type } = parseDataUri(content.image_url.url);
 
-      if (type === 'base64')
+      if (type === 'base64') {
+        if (!isImageTypeSupported(mimeType)) return undefined;
+
         return {
           source: {
             data: base64 as string,
@@ -32,9 +47,13 @@ export const buildAnthropicBlock = async (
           },
           type: 'image',
         };
+      }
 
       if (type === 'url') {
         const { base64, mimeType } = await imageUrlToBase64(content.image_url.url);
+
+        if (!isImageTypeSupported(mimeType)) return undefined;
+
         return {
           source: {
             data: base64 as string,

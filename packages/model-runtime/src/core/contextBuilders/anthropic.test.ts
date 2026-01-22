@@ -125,6 +125,44 @@ describe('anthropicHelpers', () => {
 
       await expect(buildAnthropicBlock(content)).rejects.toThrow('Invalid image URL: invalid-url');
     });
+
+    it('should return undefined for unsupported SVG image (base64)', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        mimeType: 'image/svg+xml',
+        base64: 'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==',
+        type: 'base64',
+      });
+
+      const content = {
+        type: 'image_url',
+        image_url: {
+          url: 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==',
+        },
+      } as const;
+
+      const result = await buildAnthropicBlock(content);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined for unsupported SVG image (URL)', async () => {
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        mimeType: null,
+        base64: null,
+        type: 'url',
+      });
+      vi.mocked(imageUrlToBase64).mockResolvedValueOnce({
+        base64: 'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==',
+        mimeType: 'image/svg+xml',
+      });
+
+      const content = {
+        type: 'image_url',
+        image_url: { url: 'https://example.com/image.svg' },
+      } as const;
+
+      const result = await buildAnthropicBlock(content);
+      expect(result).toBeUndefined();
+    });
   });
 
   describe('buildAnthropicMessage', () => {

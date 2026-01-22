@@ -11,6 +11,19 @@ import { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '.
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import { parseDataUri } from '../../utils/uriParser';
 
+const GOOGLE_SUPPORTED_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]);
+
+const isImageTypeSupported = (mimeType: string | null): boolean => {
+  if (!mimeType) return true;
+  return GOOGLE_SUPPORTED_IMAGE_TYPES.has(mimeType.toLowerCase());
+};
+
 /**
  * Magic thoughtSignature
  * @see https://ai.google.dev/gemini-api/docs/thought-signatures#model-behavior:~:text=context_engineering_is_the_way_to_go
@@ -43,6 +56,8 @@ export const buildGooglePart = async (
           throw new TypeError("Image URL doesn't contain base64 data");
         }
 
+        if (!isImageTypeSupported(mimeType)) return undefined;
+
         return {
           inlineData: { data: base64, mimeType: mimeType || 'image/png' },
           thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
@@ -51,6 +66,8 @@ export const buildGooglePart = async (
 
       if (type === 'url') {
         const { base64, mimeType } = await imageUrlToBase64(content.image_url.url);
+
+        if (!isImageTypeSupported(mimeType)) return undefined;
 
         return {
           inlineData: { data: base64, mimeType },
