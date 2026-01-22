@@ -112,11 +112,9 @@ interface CreateAssistantMessageStream extends FetchSSEOptions {
 class ChatService {
   createAssistantMessage = async (
     {
-      plugins: enabledPlugins,
       messages,
       agentId,
       groupId,
-      scope,
       topicId,
       resolvedAgentConfig,
       ...params
@@ -138,11 +136,7 @@ class ChatService {
 
     const targetAgentId = getTargetAgentId(agentId);
 
-    const {
-      agentConfig,
-      chatConfig,
-      plugins: pluginIds,
-    } = resolvedAgentConfig;
+    const { agentConfig, chatConfig, plugins: pluginIds } = resolvedAgentConfig;
 
     // Get search config with agentId for agent-specific settings
     const searchConfig = getSearchConfig(payload.model, payload.provider!, targetAgentId);
