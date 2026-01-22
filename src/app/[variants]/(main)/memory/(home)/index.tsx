@@ -1,5 +1,5 @@
-import { ActionIcon, Flexbox } from '@lobehub/ui';
-import { PencilLineIcon } from 'lucide-react';
+import { Flexbox } from '@lobehub/ui';
+// import { PencilLineIcon } from 'lucide-react';
 import { type FC } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
@@ -10,7 +10,7 @@ import { useUserMemoryStore } from '@/store/userMemory';
 
 import MemoryEmpty from '../features/MemoryEmpty';
 import { SCROLL_PARENT_ID } from '../features/TimeLineView/useScrollParent';
-import Persona, { usePersonaEditor } from './features/Persona';
+import Persona from './features/Persona';
 import PersonaHeader from './features/Persona/PersonaHeader';
 import RoleTagCloud from './features/RoleTagCloud';
 
@@ -18,7 +18,7 @@ const Home: FC = () => {
   const useFetchTags = useUserMemoryStore((s) => s.useFetchTags);
   const roles = useUserMemoryStore((s) => s.roles);
   const { isLoading } = useFetchTags();
-  const { EditorModalElement, openEditor } = usePersonaEditor();
+  // const { EditorModalElement, openEditor } = usePersonaEditor();
 
   if (isLoading) return <Loading debugId={'Home'} />;
 
@@ -31,7 +31,7 @@ const Home: FC = () => {
       <NavHeader
         right={
           <Flexbox gap={8} horizontal>
-            <ActionIcon icon={PencilLineIcon} onClick={openEditor} />
+            {/* <ActionIcon icon={PencilLineIcon} onClick={openEditor} /> */}
             <WideScreenButton />
           </Flexbox>
         }
@@ -51,7 +51,7 @@ const Home: FC = () => {
           <Persona />
         </WideScreenContainer>
       </Flexbox>
-      {EditorModalElement}
+      {/* {EditorModalElement} */}
     </Flexbox>
   );
 };
