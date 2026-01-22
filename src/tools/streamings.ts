@@ -2,6 +2,7 @@ import {
   AgentBuilderManifest,
   AgentBuilderStreamings,
 } from '@lobechat/builtin-tool-agent-builder/client';
+import { CalculatorManifest } from '@lobechat/builtin-tool-calculator';
 import {
   CloudSandboxManifest,
   CloudSandboxStreamings,
@@ -33,6 +34,7 @@ import { type BuiltinStreaming } from '@lobechat/types';
  */
 const BuiltinToolStreamings: Record<string, Record<string, BuiltinStreaming>> = {
   [AgentBuilderManifest.identifier]: AgentBuilderStreamings as Record<string, BuiltinStreaming>,
+  [CalculatorManifest.identifier]: {} as Record<string, BuiltinStreaming>,
   [CloudSandboxManifest.identifier]: CloudSandboxStreamings as Record<string, BuiltinStreaming>,
   [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderStreamings as Record<
     string,

@@ -166,6 +166,7 @@
     "@lobechat/agent-runtime": "workspace:*",
     "@lobechat/builtin-agents": "workspace:*",
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
+    "@lobechat/builtin-tool-calculator": "workspace:*",
     "@lobechat/builtin-tool-cloud-sandbox": "workspace:*",
     "@lobechat/builtin-tool-group-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-group-management": "workspace:*",

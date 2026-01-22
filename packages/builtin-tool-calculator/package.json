@@ -1,0 +1,25 @@
+{
+  "name": "@lobechat/builtin-tool-calculator",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./executor": "./src/executor/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/prompts": "workspace:*",
+    "mathjs": "^12.4.3"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "@lobehub/ui": "^4",
+    "antd-style": "*",
+    "lucide-react": "*",
+    "react": "*",
+    "react-i18next": "*"
+  }
+}

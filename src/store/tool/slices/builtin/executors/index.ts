@@ -5,6 +5,7 @@
  * Executors are registered as class instances by identifier.
  */
 import { agentBuilderExecutor } from '@lobechat/builtin-tool-agent-builder/executor';
+import { calculatorExecutor } from '@lobechat/builtin-tool-calculator/executor';
 import { cloudSandboxExecutor } from '@lobechat/builtin-tool-cloud-sandbox/executor';
 import { groupAgentBuilderExecutor } from '@lobechat/builtin-tool-group-agent-builder/executor';
 import { groupManagementExecutor } from '@lobechat/builtin-tool-group-management/executor';
@@ -121,6 +122,7 @@ const registerExecutors = (executors: IBuiltinToolExecutor[]): void => {
 // Register all executor instances
 registerExecutors([
   agentBuilderExecutor,
+  calculatorExecutor,
   cloudSandboxExecutor,
   groupAgentBuilderExecutor,
   groupManagementExecutor,
