@@ -150,18 +150,18 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
   const basePlugins = agentConfig.plugins ?? [];
 
   // Check if this is a builtin agent
-  // First check agent store, then check if this is a supervisor agent via groupId
-  let slug = agentSelectors.getAgentSlugById(agentId)(agentStoreState);
-  log('slug from agentStore: %s (agentId: %s)', slug, agentId);
+  // Priority: supervisor check (when in group scope) > agent store slug
+  let slug: string | undefined;
 
-  // If not found in agent store, check if this is a supervisor agent using groupId
-  // This is more reliable than iterating all groups to find a match
-  if (!slug && ctx.groupId) {
+  // IMPORTANT: When in group scope with groupId, check if this agent is the group's supervisor FIRST
+  // This takes priority because supervisor needs special group-supervisor behavior,
+  // even if the agent has its own slug
+  if (ctx.groupId && ctx.scope === 'group') {
     const groupStoreState = getChatGroupStoreState();
     const group = agentGroupByIdSelectors.groupById(ctx.groupId)(groupStoreState);
 
     log(
-      'checking supervisor via groupId %s: group=%o',
+      'checking supervisor FIRST (scope=group): groupId=%s, group=%O, agentId=%s',
       ctx.groupId,
       group
         ? {
@@ -170,6 +170,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
             title: group.title,
           }
         : null,
+      agentId,
     );
 
     // Check if this agent is the supervisor of the specified group
@@ -182,6 +183,12 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
         slug,
       );
     }
+  }
+
+  // If not identified as supervisor, check agent store for slug
+  if (!slug) {
+    slug = agentSelectors.getAgentSlugById(agentId)(agentStoreState) ?? undefined;
+    log('slug from agentStore: %s (agentId: %s)', slug, agentId);
   }
 
   if (!slug) {
