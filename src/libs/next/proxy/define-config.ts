@@ -13,22 +13,7 @@ import { type Locales } from '@/locales/resources';
 import { parseBrowserLanguage } from '@/utils/locale';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
-/**
- * Creates a route matcher function that checks if a request path matches any of the given patterns
- * @param patterns Array of route patterns - supports `(.*)` as wildcard
- * @returns Function that returns true if the request matches any pattern
- */
-function createRouteMatcher(patterns: string[]) {
-  const regexPatterns = patterns.map((pattern) => {
-    // Escape all special regex chars (including parentheses), then restore (.*) to wildcard
-    const regexStr = pattern
-      .replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&')
-      .replaceAll('\\(\\.\\*\\)', '.*');
-    return new RegExp(`^${regexStr}$`);
-  });
-
-  return (req: NextRequest) => regexPatterns.some((regex) => regex.test(req.nextUrl.pathname));
-}
+import { createRouteMatcher } from './createRouteMatcher';
 
 // Create debug logger instances
 const logDefault = debug('middleware:default');
