@@ -15,7 +15,7 @@ import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types'
 import Empty from '../Empty';
 import Item from './Item';
 
-const useStyles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   grid: css`
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -35,7 +35,6 @@ interface LobeHubListProps {
 }
 
 export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
-  const { styles } = useStyles();
 
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);

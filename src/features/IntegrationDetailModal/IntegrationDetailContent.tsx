@@ -11,7 +11,7 @@ import { Button, Divider } from 'antd';
 import { createStyles, cssVar } from 'antd-style';
 import type { Klavis } from 'klavis';
 import { ExternalLink, Loader2, SquareArrowOutUpRight } from 'lucide-react';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSkillConnect } from '@/features/SkillStore/LobeHubList/useSkillConnect';
@@ -113,11 +113,28 @@ export const IntegrationDetailContent = ({
   const { t } = useTranslation(['plugin', 'setting']);
   const { close } = useModalContext();
 
-  const { handleConnect, isConnecting } = useSkillConnect({
+  const {
+    handleConnect,
+    isConnecting,
+    isConnected: hookIsConnected,
+  } = useSkillConnect({
     identifier,
     serverName,
     type,
   });
+
+  const hasTriggeredConnectRef = useRef(false);
+
+  useEffect(() => {
+    if (hasTriggeredConnectRef.current && hookIsConnected) {
+      close();
+    }
+  }, [hookIsConnected, close]);
+
+  const handleConnectWithTracking = async () => {
+    hasTriggeredConnectRef.current = true;
+    await handleConnect();
+  };
 
   const config = useMemo((): KlavisServerType | LobehubSkillProviderType | undefined => {
     if (type === 'klavis') {
@@ -180,11 +197,6 @@ export const IntegrationDetailContent = ({
     }
   };
 
-  const handleConnectAndClose = async () => {
-    await handleConnect();
-    close();
-  };
-
   const renderConnectButton = () => {
     if (isConnected) return null;
 
@@ -199,7 +211,7 @@ export const IntegrationDetailContent = ({
     return (
       <Button
         icon={<Icon icon={SquareArrowOutUpRight} />}
-        onClick={handleConnectAndClose}
+        onClick={handleConnectWithTracking}
         type="primary"
       >
         {t('tools.klavis.connect', { defaultValue: 'Connect', ns: 'setting' })}
