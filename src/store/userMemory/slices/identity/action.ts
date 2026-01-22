@@ -116,28 +116,28 @@ export const createIdentitySlice: StateCreator<
             produce((draft) => {
               draft.identitiesSearchLoading = false;
 
-              // 设置基础信息
+              // Set basic information
               if (!draft.identitiesInit) {
                 draft.identitiesInit = true;
                 draft.identitiesTotal = data.total;
               }
 
-              // 转换数据结构
+              // Transform data structure
               const transformedItems = data.items.map((item: any) => ({
                 ...item.memory,
                 ...item.identity,
               }));
 
-              // 累积数据逻辑
+              // Cumulative data logic
               if (page === 1) {
-                // 第一页，直接设置
+                // First page, set directly
                 draft.identities = uniqBy(transformedItems, 'id');
               } else {
-                // 后续页面，累积数据
+                // Subsequent pages, accumulate data
                 draft.identities = uniqBy([...draft.identities, ...transformedItems], 'id');
               }
 
-              // 更新 hasMore
+              // Update hasMore
               draft.identitiesHasMore = data.items.length >= (params.pageSize || 20);
             }),
             false,

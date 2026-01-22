@@ -97,28 +97,28 @@ export const createExperienceSlice: StateCreator<
             produce((draft) => {
               draft.experiencesSearchLoading = false;
 
-              // 设置基础信息
+              // Set basic information
               if (!draft.experiencesInit) {
                 draft.experiencesInit = true;
                 draft.experiencesTotal = data.total;
               }
 
-              // 转换数据结构
+              // Transform data structure
               const transformedItems = data.items.map((item: any) => ({
                 ...item.memory,
                 ...item.experience,
               }));
 
-              // 累积数据逻辑
+              // Cumulative data logic
               if (page === 1) {
-                // 第一页，直接设置
+                // First page, set directly
                 draft.experiences = uniqBy(transformedItems, 'id');
               } else {
-                // 后续页面，累积数据
+                // Subsequent pages, accumulate data
                 draft.experiences = uniqBy([...draft.experiences, ...transformedItems], 'id');
               }
 
-              // 更新 hasMore
+              // Update hasMore
               draft.experiencesHasMore = data.items.length >= (params.pageSize || 20);
             }),
             false,

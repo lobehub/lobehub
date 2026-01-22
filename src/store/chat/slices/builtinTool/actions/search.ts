@@ -32,7 +32,7 @@ export const searchSlice: StateCreator<
     const operationId = get().messageOperationMap[id];
     const context = operationId ? { operationId } : undefined;
 
-    // 1. 创建一个新的 tool call message
+    // 1. Create a new tool call message
     const newToolCallId = `tool_call_${nanoid()}`;
 
     const toolMessage: CreateMessageParams = {
@@ -61,14 +61,14 @@ export const searchSlice: StateCreator<
     };
 
     const [result] = await Promise.all([
-      // 1. 添加 tool message
+      // 1. Add tool message
       optimisticCreateMessage(toolMessage, context),
-      // 2. 将这条 tool call message 插入到 ai 消息的 tools 中
+      // 2. Insert this tool call message into the AI message's tools array
       addToolItem(),
     ]);
     if (!result) return;
 
-    // 将新创建的 tool message 激活
+    // Activate the newly created tool message
     openToolUI(result.id, message.plugin.identifier);
   },
 
@@ -84,10 +84,10 @@ export const searchSlice: StateCreator<
     const operationId = get().messageOperationMap[id];
     const context = operationId ? { operationId } : undefined;
 
-    // 1. 更新插件参数
+    // 1. Update plugin arguments
     await get().optimisticUpdatePluginArguments(id, data, false, context);
 
-    // 2. 通过 invokeBuiltinTool 调用 Tool Store Executor
+    // 2. Call Tool Store Executor via invokeBuiltinTool
     const payload = {
       apiName: WebBrowsingApiName.search,
       arguments: JSON.stringify(data),
