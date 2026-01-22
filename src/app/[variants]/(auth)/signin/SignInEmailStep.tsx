@@ -1,5 +1,5 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Button, Flexbox, Icon, Input, Skeleton, Text } from '@lobehub/ui';
+import { Alert, Button, Flexbox, Icon, Input, Skeleton, Text } from '@lobehub/ui';
 import { Divider, Form } from 'antd';
 import type { FormInstance, InputRef } from 'antd';
 import { ChevronRight, Mail } from 'lucide-react';
@@ -16,9 +16,11 @@ export const USERNAME_REGEX = /^\w+$/;
 
 export interface SignInEmailStepProps {
   form: FormInstance<{ email: string }>;
+  isSocialOnly: boolean;
   loading: boolean;
   oAuthSSOProviders: string[];
   onCheckUser: (values: { email: string }) => Promise<void>;
+  onSetPassword: () => void;
   onSocialSignIn: (provider: string) => void;
   serverConfigInit: boolean;
   socialLoading: string | null;
@@ -26,11 +28,13 @@ export interface SignInEmailStepProps {
 
 export const SignInEmailStep = ({
   form,
+  isSocialOnly,
   loading,
   oAuthSSOProviders,
   serverConfigInit,
   socialLoading,
   onCheckUser,
+  onSetPassword,
   onSocialSignIn,
 }: SignInEmailStepProps) => {
   const { t } = useTranslation('auth');
@@ -172,6 +176,24 @@ export const SignInEmailStep = ({
           />
         </Form.Item>
       </Form>
+      {isSocialOnly && (
+        <Alert
+          description={
+            <>
+              {t('betterAuth.signin.socialOnlyHint')}{' '}
+              <a
+                onClick={onSetPassword}
+                style={{ color: 'inherit', cursor: 'pointer', textDecoration: 'underline' }}
+              >
+                {t('betterAuth.signin.setPassword')}
+              </a>
+            </>
+          }
+          showIcon
+          style={{ marginTop: 12 }}
+          type="info"
+        />
+      )}
     </AuthCard>
   );
 };

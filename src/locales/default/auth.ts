@@ -97,10 +97,11 @@ export default {
   'betterAuth.signin.orContinueWith': 'OR',
   'betterAuth.signin.passwordPlaceholder': 'Enter your password',
   'betterAuth.signin.passwordStep.subtitle': 'Enter your password to continue',
+  'betterAuth.signin.setPassword': 'set a password',
   'betterAuth.signin.signupLink': 'Sign up now',
   'betterAuth.signin.socialError': 'Social sign in failed, please try again',
   'betterAuth.signin.socialOnlyHint':
-    'This email was registered using a social account. Please sign in using the corresponding social provider.',
+    'This email was registered via a third-party social account. Sign in with that provider, or',
   'betterAuth.signin.submit': 'Sign In',
   'betterAuth.signup.confirmPasswordPlaceholder': 'Confirm your password',
   'betterAuth.signup.emailPlaceholder': 'Enter your email address',

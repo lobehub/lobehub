@@ -20,6 +20,7 @@ This guide helps you migrate your existing Clerk-based LobeChat deployment to Be
 
 <Callout type={'error'}>
   **Important Notice**:
+
   - **Always backup your database first!** For Neon users, create a backup via [Fork Branch](https://neon.tech/docs/manage/branches#create-a-branch)
   - LobeChat is not responsible for any data loss or issues that may occur during the migration process
   - This guide is intended for users with development experience; not recommended for users without technical background
@@ -28,10 +29,10 @@ This guide helps you migrate your existing Clerk-based LobeChat deployment to Be
 
 ## Choose Your Migration Path
 
-| Method | Best For | User Impact | Data Preserved |
-| ------ | -------- | ----------- | -------------- |
-| [Simple Migration](#simple-migration) | Small deployments (< 100 users) | Users reset passwords | Chat history, settings |
-| [Full Migration](#full-migration) | Large deployments | Seamless for users | Everything including passwords |
+| Method                                | Best For                         | User Impact           | Data Preserved                 |
+| ------------------------------------- | -------------------------------- | --------------------- | ------------------------------ |
+| [Simple Migration](#simple-migration) | Small deployments (\< 100 users) | Users reset passwords | Chat history, settings         |
+| [Full Migration](#full-migration)     | Large deployments                | Seamless for users    | Everything including passwords |
 
 ## Simple Migration
 
@@ -41,6 +42,7 @@ For small self-hosted deployments, the simplest approach is to let users reset t
   **Limitation**: This method loses SSO connection data. Use [Full Migration](#full-migration) to preserve SSO connections.
 
   **Example scenario**: If your previous account had two SSO accounts linked:
+
   - Primary email (Google): `mail1@google.com`
   - Secondary email (Microsoft): `mail2@outlook.com`
 
@@ -83,19 +85,30 @@ For small self-hosted deployments, the simplest approach is to let users reset t
 
 4. **Notify Users**
 
-   Inform users to follow these steps to reset their password (chat history and settings will be preserved):
+   Inform users to follow these steps to log in (chat history and settings will be preserved):
 
    1. Visit the login page (e.g., `https://your-domain.com/signin`)
    2. Enter their previous email address and press Enter
-   3. The page will show a password input field, click "Forgot Password" below it
-   4. Click the link in the password reset email to reset their password
-   5. Log in using the new email and password
-   6. (Optional) Go to Profile → Linked Accounts to manually link Google, GitHub, or other accounts
 
-   ![LobeChat Login Page - Forgot Password](https://hub-apac-1.lobeobjects.space/docs/8d0563701fcd17ad7252a72b1746dd42.png)
+   If Magic Link is enabled: The system will automatically send a login link email.
+   Users can click the link to log in directly.
+
+   If Magic Link is not enabled: The page will display a hint message. Users can either:
+
+   - Log in using their previously linked social account (e.g., Google, GitHub)
+   - Click "Set Password" to receive an email and set a new password
+
+   ![LobeChat Login Page - Social Login Hint](https://hub-apac-1.lobeobjects.space/docs/8d0563701fcd17ad7252a72b1746dd42.png)
+
+   3. (Optional) After logging in, users can manage their account in the Profile page:
+      - Linked Accounts: Link additional social accounts
+      - Password: Set or update password at any time
 
 <Callout type={'tip'}>
-  This method is quick and requires minimal setup. Users simply reset their passwords and continue using LobeChat with all their data intact.
+  This method is quick and requires minimal setup.
+  Users can log in via Magic Link, social accounts, or by setting a new password.
+  All data remains intact.
+  Users can manage their password and linked accounts anytime in the [Profile page](/settings/profile).
 </Callout>
 
 ## Full Migration
@@ -104,6 +117,7 @@ For larger deployments or when you need to preserve user passwords and SSO conne
 
 <Callout type={'warning'}>
   **Strongly recommended**: Before production migration, verify the scripts work correctly in test mode:
+
   - Use a [Neon Fork Branch](https://neon.tech/docs/manage/branches#create-a-branch) to create a test database
   - Use Clerk Development environment API keys
   - Only switch to prod mode after confirming test migration succeeds
@@ -280,14 +294,14 @@ After migration is complete, configure Better Auth environment variables and red
 
 ## What Gets Migrated
 
-| Data | Simple Migration | Full Migration |
-| ---- | ---------------- | -------------- |
-| User accounts | ✅ (via password reset) | ✅ |
-| Password hashes | ❌ | ✅ |
-| SSO connections (Google, GitHub, etc.) | ❌ | ✅ |
-| Two-factor authentication | ❌ | ✅ |
-| Chat history | ✅ | ✅ |
-| User settings | ✅ | ✅ |
+| Data                                   | Simple Migration       | Full Migration |
+| -------------------------------------- | ---------------------- | -------------- |
+| User accounts                          | ✅ (via password reset) | ✅              |
+| Password hashes                        | ❌                      | ✅              |
+| SSO connections (Google, GitHub, etc.) | ❌                      | ✅              |
+| Two-factor authentication              | ❌                      | ✅              |
+| Chat history                           | ✅                      | ✅              |
+| User settings                          | ✅                      | ✅              |
 
 ## Troubleshooting
 
@@ -316,6 +330,8 @@ This error occurs because the database schema is outdated. Run `pnpm db:migrate`
 
 <Cards>
   <Card href={'/docs/self-hosting/advanced/auth'} title={'Authentication Service Configuration'} />
+
   <Card href={'/docs/self-hosting/environment-variables/auth'} title={'Auth Environment Variables'} />
+
   <Card href={'/docs/self-hosting/advanced/auth/legacy'} title={'Legacy Authentication (NextAuth & Clerk)'} />
 </Cards>
