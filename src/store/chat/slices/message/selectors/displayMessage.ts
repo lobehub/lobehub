@@ -142,7 +142,10 @@ const currentChatLoadingState = (s: ChatStoreState) => !s.messagesInit;
 /**
  * Check if current chat is loaded in messagesMap
  */
-const isCurrentDisplayChatLoaded = (s: ChatStoreState) => !!s.messagesMap[currentDisplayChatKey(s)];
+const isCurrentDisplayChatLoaded = (s: ChatStoreState) => {
+  const currentKey = currentDisplayChatKey(s);
+  return currentKey in s.messagesMap;
+};
 
 /**
  * Show inbox welcome screen
