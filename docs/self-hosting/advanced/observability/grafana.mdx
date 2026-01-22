@@ -1,9 +1,9 @@
 ---
 title: 'Observability with Grafana, Prometheus, and Tempo'
 description: >-
-  Monitor and analyze your LobeChat instance using Grafana dashboards,
-  Prometheus metrics, and Tempo traces. This guide covers setup, configuration
-  for self-hosted deployments.
+  Monitor and analyze your LobeHub instance using Grafana dashboards, Prometheus
+  metrics, and Tempo traces. This guide covers setup, configuration for
+  self-hosted deployments.
 tags:
   - Observability
   - Grafana
@@ -13,7 +13,7 @@ tags:
 
 # Observability with [Grafana](https://grafana.com/), [Prometheus](https://prometheus.io/), and [Tempo](https://grafana.com/docs/tempo/latest/)
 
-LobeChat supports advanced observability for self-hosted deployments using open-source tools:
+LobeHub supports advanced observability for self-hosted deployments using open-source tools:
 
 - **Grafana** for dashboards and visualization
 - **Prometheus** for metrics collection
@@ -21,7 +21,7 @@ LobeChat supports advanced observability for self-hosted deployments using open-
 - **otel-collector** ingesting other OpenTelemetry supported data
 
 We provided Docker Compose (`docker-compose`) file presets to bootstrap the observability stack with advanced self-hosting features.
-This guide will help you set up and use these tools to monitor your LobeChat instance.
+This guide will help you set up and use these tools to monitor your LobeHub instance.
 
 ## Prerequisites
 
@@ -44,7 +44,7 @@ mv .env.example .env
    docker compose up -d
    ```
 
-   This will launch Grafana, Prometheus, Tempo, and the otel-collector alongside LobeChat with Casdoor, Minio, and other advanced services.
+   This will launch Grafana, Prometheus, Tempo, and the otel-collector alongside LobeHub with Casdoor, Minio, and other advanced services.
 
 ## 2. Access Grafana Dashboards
 
@@ -61,7 +61,7 @@ Click on "Explore" in the left sidebar to access the query editor to run ad-hoc 
 
 - Ensure all containers are running: `docker compose ps`
 - Check logs for any service: `docker compose logs <service-name>`
-- Verify Prometheus and Tempo are scraping and receiving data from LobeChat and otel-collector.
+- Verify Prometheus and Tempo are scraping and receiving data from LobeHub and otel-collector.
 
 ## See Also
 

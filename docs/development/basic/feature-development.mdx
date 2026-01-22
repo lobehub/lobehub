@@ -1,10 +1,17 @@
 ---
-title: LobeChat Feature Development Complete Guide
+title: LobeHub Feature Development Complete Guide
+description: A comprehensive guide for developers on implementing features in LobeHub.
+tags:
+  - LobeHub
+  - Feature Development
+  - Developer Guide
+  - Postgres
+  - Drizzle ORM
 ---
 
-# LobeChat Feature Development Complete Guide
+# LobeHub Feature Development Complete Guide
 
-This document aims to guide developers on how to develop a complete feature in LobeChat.
+This document aims to guide developers on how to develop a complete feature in LobeHub.
 
 We will use [RFC 021 - Custom Assistant Opening Guidance](https://github.com/lobehub/lobe-chat/discussions/891) as an example to illustrate the complete implementation process.
 
@@ -366,7 +373,7 @@ const OpeningQuestions = memo(() => {
         {isRepeat && (
           <p className={styles.repeatError}>{t('settingOpening.openingQuestions.repeat')}</p>
         )}
-     
+
 </Flexbox>
 
       <div className={styles.questionsList}>
@@ -383,7 +390,7 @@ const OpeningQuestions = memo(() => {
                   onClick={() => removeQuestion(item.content)}
                   type="text"
                 />
-             
+
 </SortableList.Item>
             )}
           />
@@ -393,9 +400,9 @@ const OpeningQuestions = memo(() => {
             description={t('settingOpening.openingQuestions.empty')}
           />
         )}
-     
+
 </div>
-   
+
 </Flexbox>
   );
 });
@@ -448,7 +455,7 @@ const WelcomeMessage = () => {
       {chatItem}
       {/* Render guiding questions */}
       <OpeningQuestions mobile={mobile} questions={openingQuestions} />
-   
+
 </Flexbox>
   ) : (
     chatItem
@@ -467,4 +474,4 @@ For the current scenario, I recommend running the tests locally to see which tes
 
 ## Summary
 
-The above is the complete implementation process for the LobeChat opening settings feature. Developers can refer to this document for the development and testing of related features.
+The above is the complete implementation process for the LobeHub opening settings feature. Developers can refer to this document for the development and testing of related features.

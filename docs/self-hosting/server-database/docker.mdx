@@ -1,10 +1,10 @@
 ---
-title: Deploying LobeChat Database with Docker
+title: Deploying LobeHub Database with Docker
 description: >-
-  Learn how to deploy the LobeChat server database version using Docker on Linux
+  Learn how to deploy the LobeHub server database version using Docker on Linux
   and local machines.
 tags:
-  - LobeChat
+  - LobeHub
   - Docker
   - Database Deployment
   - Postgres
@@ -22,16 +22,21 @@ tags:
 
 <Callout type="info">
   This article assumes that you are familiar with the basic principles and processes of deploying
-  the LobeChat server database version, so it only includes content related to core environment
-  variable configuration. If you are not familiar with the deployment principles of the LobeChat
+  the LobeHub server database version, so it only includes content related to core environment
+  variable configuration. If you are not familiar with the deployment principles of the LobeHub
   server database version, please refer to [Deploying Server
   Database](/docs/self-hosting/server-database) first.
 </Callout>
 
+<Callout type="warning">
+  Due to the inability to expose `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` using Docker environment variables, you cannot use Clerk as an authentication service when deploying LobeHub using Docker / Docker Compose.
+
+  If you do need Clerk as an authentication service, you might consider deploying using Vercel or building your own image.
+</Callout>
 
 ## Deploying on a Linux Server
 
-Here is the process for deploying the LobeChat server database version on a Linux server:
+Here is the process for deploying the LobeHub server database version on a Linux server:
 
 <Steps>
   ### Create a Postgres Database Instance
@@ -48,7 +53,7 @@ Here is the process for deploying the LobeChat server database version on a Linu
 
   <Callout type="info">
     The pgvector plugin provides vector search capabilities for Postgres, which is an important
-    component for LobeChat to implement RAG.
+    component for LobeHub to implement RAG.
   </Callout>
 
   <Callout type="warning">
@@ -79,8 +84,8 @@ Here is the process for deploying the LobeChat server database version on a Linu
   S3_ACCESS_KEY_ID=xxxxxxxxxx
   S3_SECRET_ACCESS_KEY=xxxxxxxxxx
   S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com
-  S3_BUCKET=lobechat
-  S3_PUBLIC_DOMAIN=https://s3-for-lobechat.your-domain.com
+  S3_BUCKET=LobeHub
+  S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com
 
   ```
 
@@ -120,7 +125,7 @@ Here is the process for deploying the LobeChat server database version on a Linu
 
 ## Using Locally (Mac / Windows)
 
-The data version of LobeChat also supports direct use on a local Mac/Windows machine.
+The data version of LobeHub also supports direct use on a local Mac/Windows machine.
 
 Here, we assume that you have a pg instance available on port 5432 locally on your Mac/Windows, with the account `postgres` and password `mysecretpassword`, accessible at `localhost:5432`.
 
@@ -136,8 +141,8 @@ $ docker run -it -d --name lobe-chat-database -p 3210:3210 \
   -e S3_ACCESS_KEY_ID=xxxxxxxxxx \
   -e S3_SECRET_ACCESS_KEY=xxxxxxxxxx \
   -e S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com \
-  -e S3_BUCKET=lobechat \
-  -e S3_PUBLIC_DOMAIN=https://s3-for-lobechat.your-domain.com \
+  -e S3_BUCKET=LobeHub \
+  -e S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com \
   lobehub/lobe-chat-database
 ```
 

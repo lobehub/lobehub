@@ -1,11 +1,11 @@
 ---
-title: LobeChat Feature Flags Environment Variables Configuration Guide
+title: LobeHub Feature Flags Environment Variables Configuration Guide
 description: >-
-  Learn how to use environment variables to customize LobeChat's feature flags,
+  Learn how to use environment variables to customize LobeHub's feature flags,
   including controlling whether a feature is enabled or disabled, or enabling or
   disabling features for specific user groups or environments as needed.
 tags:
-  - LobeChat
+  - LobeHub
   - Environment Variables
   - Configuration Guide
   - Feature Flags
@@ -13,12 +13,12 @@ tags:
 
 # Feature Flags
 
-In addition to basic environment variable configuration, LobeChat also offers feature flags to control whether a feature is enabled globally, or to enable or disable features for specific user groups or environments as needed.
+In addition to basic environment variable configuration, LobeHub also offers feature flags to control whether a feature is enabled globally, or to enable or disable features for specific user groups or environments as needed.
 
 ## Feature Flags Environment Variable `FEATURE_FLAGS`
 
 - Type: Optional
-- Description: Used to control LobeChat's feature functionalities. Supports multiple feature flags, using `+` to add a feature and `-` to disable a feature. Separate multiple feature flags with a comma `,` and enclose the entire value in quotes `"` to avoid parsing errors.
+- Description: Used to control LobeHub's feature functionalities. Supports multiple feature flags, using `+` to add a feature and `-` to disable a feature. Separate multiple feature flags with a comma `,` and enclose the entire value in quotes `"` to avoid parsing errors.
 - Default: `-`
 - Example: `"-welcome_suggest"`
 

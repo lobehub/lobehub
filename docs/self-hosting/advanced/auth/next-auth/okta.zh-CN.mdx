@@ -1,6 +1,6 @@
 ---
-title: 在 LobeChat 中配置 Okta 身份验证服务 - 详细步骤和环境变量设置
-description: 学习如何在 LobeChat 中为您的组织配置 Okta 身份验证服务，包括创建应用程序、添加用户和配置环境变量等。
+title: 在 LobeHub 中配置 Okta 身份验证服务 - 详细步骤和环境变量设置
+description: 学习如何在 LobeHub 中为您的组织配置 Okta 身份验证服务，包括创建应用程序、添加用户和配置环境变量等。
 tags:
   - Okta
   - 身份验证
@@ -24,7 +24,7 @@ tags:
 
   | 设置名称                   | 描述                                          | 示例信息                                          |
   | ---------------------- | ------------------------------------------- | --------------------------------------------- |
-  | App Integration Name   | 您的用户将看到的应用程序名称                              | LobeChat Instance                             |
+  | App Integration Name   | 您的用户将看到的应用程序名称                              | LobeHub Instance                              |
   | Sign-in redirect URIs  | Okta 将用户登录请求的身份验证响应和 ID 令牌发送到这些 URI         | (http(s)://your-domain/api/auth/callback/okta |
   | Sign-out redirect URIs | 您的应用程序联系 Okta 关闭用户会话后，Okta 将用户重定向到这些 URI 之一 | (http(s)://your-domain                        |
 
@@ -34,11 +34,11 @@ tags:
 
   ### 添加用户
 
-  点击顶部导航栏中的「Assignments」进入用户管理界面，您可以在此创建或分配组织中的用户来登录 LobeChat。
+  点击顶部导航栏中的「Assignments」进入用户管理界面，您可以在此创建或分配组织中的用户来登录 LobeHub。
 
   ### 配置环境变量
 
-  在部署 LobeChat 时，您需要配置以下环境变量：
+  在部署 LobeHub 时，您需要配置以下环境变量：
 
   | 环境变量                      | 类型 | 描述                                                                                   |
   | ------------------------- | -- | ------------------------------------------------------------------------------------ |
@@ -55,7 +55,7 @@ tags:
 </Steps>
 
 <Callout>
-  部署成功后，用户将能够使用在 Okta 中配置的用户进行身份验证并使用 LobeChat。
+  部署成功后，用户将能够使用在 Okta 中配置的用户进行身份验证并使用 LobeHub。
 </Callout>
 
 [okta-client-page]: https://login.okta.com

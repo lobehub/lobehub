@@ -1,10 +1,17 @@
 ---
 title: Work with Server-Side Database
+description: Learn how to set up a server-side database for LobeHub with Docker.
+tags:
+  - LobeHub
+  - Server-Side Database
+  - Docker
+  - PostgreSQL
+  - MinIO
 ---
 
 # Work with Server-Side Database
 
-LobeChat provides a battery-included experience with its client-side database.
+LobeHub provides a battery-included experience with its client-side database.
 While some features you really care about is only available at a server-side development.
 
 In order to work with the aspect of server-side database,
@@ -55,7 +62,7 @@ You should see: `✅ database migration pass.`
 
 ### Start Development Server
 
-Launch the LobeChat development server:
+Launch the LobeHub development server:
 
 ```bash
 pnpm dev
@@ -144,7 +151,7 @@ await fetch(uploadUrl, {
 
 When running with Docker Compose development setup:
 
-- **PostgreSQL**: `postgres://postgres@localhost:5432/lobechat`
+- **PostgreSQL**: `postgres://postgres@localhost:5432/LobeHub`
 - **MinIO API**: `http://localhost:9000`
 - **MinIO Console**: `http://localhost:9001` (admin/CHANGE\_THIS\_PASSWORD\_IN\_PRODUCTION)
 - **Application**: `http://localhost:3010`

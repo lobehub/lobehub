@@ -27,6 +27,8 @@ const CHECK_CDN = [
   'https://miro.medium.com/v2/',
   'https://images.unsplash.com/',
   'https://github.com/user-attachments/assets',
+  'https://i.imgur.com/',
+  'https://file.rene.wang',
 ];
 
 const CACHE_FILE = resolve(root, 'docs', '.cdn.cache.json');

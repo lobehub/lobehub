@@ -1,22 +1,22 @@
 ---
-title: Configuring Keycloak Authentication Service in LobeChat
+title: Configuring Keycloak Authentication Service in LobeHub
 description: >-
-  Learn how to configure the Keycloak authentication service in LobeChat,
+  Learn how to configure the Keycloak authentication service in LobeHub,
   including deployment, creation, permission settings, and environment
   variables.
 tags:
   - Keycloak Authentication
   - Environment Variable Configuration
   - Single Sign-On
-  - LobeChat
+  - LobeHub
 ---
 
-# Configuring Keycloak Authentication Service in LobeChat
+# Configuring Keycloak Authentication Service in LobeHub
 
 [Keycloak](https://www.keycloak.org/) is an open-source identity and access management solution that provides single sign-on, identity brokering, and social login features, suitable for modern applications and services.
 
 <Callout type={'tip'}>
-  If you want to privately deploy Keycloak, we recommend using it together with LobeChat via Docker
+  If you want to privately deploy Keycloak, we recommend using it together with LobeHub via Docker
   Compose deployment for easier service management.
 </Callout>
 
@@ -24,12 +24,12 @@ tags:
 
 If you deploy using a local network IP, this guide assumes:
 
-- Your LobeChat database version IP/port is `http://LOBECHAT_IP:3210`.
+- Your LobeHub database version IP/port is `http://LobeHub_IP:3210`.
 - Your privately deployed Keycloak domain is `http://KEYCLOAK_IP:8080`.
 
 If you deploy using a public network, this guide assumes:
 
-- Your LobeChat database version domain is `https://lobe.example.com`.
+- Your LobeHub database version domain is `https://lobe.example.com`.
 - Your privately deployed Keycloak domain is `https://lobe-auth-api.example.com`.
 
 <Steps>
@@ -40,13 +40,13 @@ If you deploy using a public network, this guide assumes:
   1. Create a new Realm
 
      - Click the dropdown menu in the upper left corner and select "Create Realm"
-     - Enter a name, such as "LobeChat", then click "Create"
+     - Enter a name, such as "LobeHub", then click "Create"
 
   2. Create a Client
 
      - Select "Clients" from the left menu, then click "Create client"
      - Fill in the following information:
-       - Client ID: `lobechat`
+       - Client ID: `LobeHub`
        - Client type: `OpenID Connect`
        - Click "Next"
      - On the "Capability config" page:
@@ -56,9 +56,9 @@ If you deploy using a public network, this guide assumes:
      - On the "Login settings" page:
        - Valid redirect URIs:
          - Local development environment: `http://localhost:3210/api/auth/callback/keycloak`
-         - Local network IP deployment: `http://LOBECHAT_IP:3210/api/auth/callback/keycloak`
+         - Local network IP deployment: `http://LobeHub_IP:3210/api/auth/callback/keycloak`
          - Public environment: `https://lobe.example.com/api/auth/callback/keycloak`
-       - Web origins: Add your LobeChat domain or IP
+       - Web origins: Add your LobeHub domain or IP
        - Click "Save"
 
   3. Get Client Secret
@@ -97,20 +97,20 @@ If you deploy using a public network, this guide assumes:
 
   ### Configure Environment Variables
 
-  Set the obtained client ID and client secret as `AUTH_KEYCLOAK_ID` and `AUTH_KEYCLOAK_SECRET` in the LobeChat environment variables.
+  Set the obtained client ID and client secret as `AUTH_KEYCLOAK_ID` and `AUTH_KEYCLOAK_SECRET` in the LobeHub environment variables.
 
-  Configure the LobeChat environment variable `AUTH_KEYCLOAK_ISSUER` as:
+  Configure the LobeHub environment variable `AUTH_KEYCLOAK_ISSUER` as:
 
-  - `http://localhost:8080/realms/LobeChat` for local development environment
-  - `http://KEYCLOAK_IP:8080/realms/LobeChat` for privately deployed Keycloak on a local network
-  - `https://lobe-auth-api.example.com/realms/LobeChat` for Keycloak deployed in a public environment
+  - `http://localhost:8080/realms/LobeHub` for local development environment
+  - `http://KEYCLOAK_IP:8080/realms/LobeHub` for privately deployed Keycloak on a local network
+  - `https://lobe-auth-api.example.com/realms/LobeHub` for Keycloak deployed in a public environment
 
-  When deploying LobeChat, you need to configure the following environment variables:
+  When deploying LobeHub, you need to configure the following environment variables:
 
   | Environment Variable      | Type     | Description                                                                                                                                                                              |
   | ------------------------- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
   | `AUTH_SECRET`             | Required | Key used to encrypt Auth.js session tokens. You can generate a key using: `openssl rand -base64 32`                                                                                      |
-  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the single sign-on provider for LobeChat. For Keycloak, fill in `keycloak`.                                                                                                       |
+  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the single sign-on provider for LobeHub. For Keycloak, fill in `keycloak`.                                                                                                        |
   | `AUTH_KEYCLOAK_ID`        | Required | Keycloak client ID                                                                                                                                                                       |
   | `AUTH_KEYCLOAK_SECRET`    | Required | Keycloak client secret                                                                                                                                                                   |
   | `AUTH_KEYCLOAK_ISSUER`    | Required | OpenID Connect issuer URL for the Keycloak provider, in the format `{keycloak_url}/realms/{realm_name}`                                                                                  |
@@ -122,5 +122,5 @@ If you deploy using a public network, this guide assumes:
 </Steps>
 
 <Callout type={'info'}>
-  After successful deployment, users will be able to authenticate through Keycloak and use LobeChat.
+  After successful deployment, users will be able to authenticate through Keycloak and use LobeHub.
 </Callout>

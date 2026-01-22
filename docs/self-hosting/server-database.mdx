@@ -1,8 +1,8 @@
 ---
-title: Deploying Server-Side Database for LobeChat
-description: Learn how to deploy LobeChat's server-side database using Postgres.
+title: Deploying Server-Side Database for LobeHub
+description: Learn how to deploy LobeHub's server-side database using Postgres.
 tags:
-  - LobeChat
+  - LobeHub
   - Server-Side Database
   - Postgres
   - Deployment Guide
@@ -10,7 +10,7 @@ tags:
 
 # Deploying Server-Side Database
 
-LobeChat defaults to using a client-side database (IndexedDB) but also supports deploying a server-side database. LobeChat uses Postgres as the backend storage database.
+LobeHub defaults to using a client-side database (IndexedDB) but also supports deploying a server-side database. LobeHub uses Postgres as the backend storage database.
 
 <Callout>
   PostgreSQL is a powerful open-source relational database management system with high scalability
@@ -19,7 +19,7 @@ LobeChat defaults to using a client-side database (IndexedDB) but also supports 
   management.
 </Callout>
 
-This guide will introduce the process and principles of deploying the server-side database version of LobeChat on any platform from a framework perspective, so you can understand both the what and the why, and then deploy according to your specific needs.
+This guide will introduce the process and principles of deploying the server-side database version of LobeHub on any platform from a framework perspective, so you can understand both the what and the why, and then deploy according to your specific needs.
 
 If you are already familiar with the complete principles, you can quickly get started by checking the deployment guides for each platform:
 
@@ -27,7 +27,7 @@ If you are already familiar with the complete principles, you can quickly get st
 
 ---
 
-For the server-side database version of LobeChat, a normal deployment process typically involves configuring three modules:
+For the server-side database version of LobeHub, a normal deployment process typically involves configuring three modules:
 
 1. Database configuration;
 2. Authentication service configuration;
@@ -44,9 +44,27 @@ Before deployment, make sure you have a Postgres database instance ready. You ca
   There is a slight difference in the way they are configured in terms of environment variables.
 </Callout>
 
-Since we support file-based conversations/knowledge base conversations, we need to install the `pgvector` plugin for Postgres. This plugin provides vector search capabilities and is a key component for LobeChat to implement RAG.
+Since we support file-based conversations/knowledge base conversations, we need to install the `pgvector` plugin for Postgres. This plugin provides vector search capabilities and is a key component for LobeHub to implement RAG.
 
 <Steps>
+  ### `NEXT_PUBLIC_SERVICE_MODE`
+
+  LobeHub supports both client-side and server-side databases, so we provide an environment variable for switching modes, which is `NEXT_PUBLIC_SERVICE_MODE`, with a default value of `client`.
+
+  For server-side database deployment scenarios, you need to set `NEXT_PUBLIC_SERVICE_MODE` to `server`.
+
+  <Callout type={'info'}>
+    In the official `lobe-chat-database` Docker image, this environment variable is already set to
+    `server` by default. Therefore, if you deploy using the Docker image, you do not need to configure
+    this environment variable again.
+  </Callout>
+
+  <Callout type={'tip'}>
+    Since environment variables starting with `NEXT_PUBLIC` take effect in the front-end code, they cannot be modified through container runtime injection. (Refer to the `next.js` documentation [Configuring: Environment Variables | Next.js (nextjs.org)](https://nextjs.org/docs/pages/building-your-application/configuring/environment-variables)). This is why we chose to create a separate DB version image.
+
+    If you need to modify variables with the `NEXT_PUBLIC` prefix in a Docker deployment, you must build the image yourself and inject your own `NEXT_PUBLIC` prefixed environment variables during the build.
+  </Callout>
+
   ### `DATABASE_URL`
 
   The core of configuring the database is to add the `DATABASE_URL` environment variable and fill in the Postgres database connection URL you have prepared. The typical format of the database connection URL is `postgres://username:password@host:port/database`.
@@ -77,7 +95,7 @@ Since we support file-based conversations/knowledge base conversations, we need 
 
   <Callout type={'info'}>
     You can generate a random 32-character string as the value of `KEY_VAULTS_SECRET` using `openssl
-                                                              rand -base64 32`.
+                                                                                                                                                                                  rand -base64 32`.
   </Callout>
 </Steps>
 
@@ -87,7 +105,7 @@ In the server-side database mode, we need an authentication service to distingui
 
 ### Clerk
 
-[Clerk](https://clerk.com?utm_source=lobehub\&utm_medium=docs) is an authentication SaaS service that provides out-of-the-box authentication capabilities with high productization, low integration costs, and a great user experience. For those who offer SaaS products, Clerk is a good choice. Our official [LobeChat Cloud](https://lobechat.com) uses Clerk as the authentication service.
+[Clerk](https://clerk.com?utm_source=lobehub\&utm_medium=docs) is an authentication SaaS service that provides out-of-the-box authentication capabilities with high productization, low integration costs, and a great user experience. For those who offer SaaS products, Clerk is a good choice. Our official [LobeHub Cloud](https://LobeHub.com) uses Clerk as the authentication service.
 
 The integration of Clerk is relatively simple, requiring only the configuration of these environment variables:
 
@@ -120,7 +138,7 @@ For information on configuring NextAuth, you can refer to the [Authentication](/
 
 ## Configuring S3 Storage Service
 
-LobeChat has supported multimodal AI conversations since [a long time ago](https://x.com/lobehub/status/1724289575672291782), involving the function of uploading images to large models. In the client-side database solution, image files are stored as binary data directly in the browser's IndexedDB database. However, this solution is not feasible in the server-side database. Storing file-like data directly in Postgres will greatly waste valuable database storage space and slow down computational performance.
+LobeHub has supported multimodal AI conversations since [a long time ago](https://x.com/lobehub/status/1724289575672291782), involving the function of uploading images to large models. In the client-side database solution, image files are stored as binary data directly in the browser's IndexedDB database. However, this solution is not feasible in the server-side database. Storing file-like data directly in Postgres will greatly waste valuable database storage space and slow down computational performance.
 
 The best practice in this area is to use a file storage service (S3) to store image files, which is also the storage solution relied upon for subsequent file uploads/knowledge base functions.
 
@@ -134,6 +152,6 @@ For detailed configuration guidelines on S3, please refer to [S3 Object Storage]
 
 ## Getting Started with Deployment
 
-The above is a detailed explanation of configuring LobeChat with a server-side database. You can configure it according to your actual situation and then choose a deployment platform that suits you to start deployment:
+The above is a detailed explanation of configuring LobeHub with a server-side database. You can configure it according to your actual situation and then choose a deployment platform that suits you to start deployment:
 
 <PlatformCards urlPrefix={'server-database'} />

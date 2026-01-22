@@ -1,21 +1,34 @@
 ---
-title: LobeChat 身份验证服务配置
-description: 了解如何配置 Better Auth 以统一管理用户授权。支持的 SSO 提供商包括 Google、GitHub、Microsoft 等。
+title: LobeHub 身份验证服务配置
+description: >-
+  了解如何使用 Better Auth、Clerk 或 Next Auth 配置外部身份验证服务，以统一管理用户授权。支持的身份验证服务包括 Auth0、
+  Azure ID 等。
 tags:
   - 身份验证服务
   - Better Auth
+  - LobeHub
   - SSO
 ---
 
 # 身份验证服务
 
-LobeChat 使用 [Better Auth](https://www.better-auth.com) 作为身份验证解决方案，为自托管部署提供全面、安全、灵活的身份验证服务。
+LobeHub 支持使用 Better Auth、Clerk 或者 Next Auth 配置外部身份验证服务，供企业 / 组织内部使用，统一管理用户授权。
 
 <Callout type={'info'}>
   需要使用旧版身份验证方案？请参阅 [旧版身份验证](/zh/docs/self-hosting/advanced/auth/legacy) 了解 NextAuth 和 Clerk 的文档。
 </Callout>
 
-## 主要特性
+Clerk 是一个近期流行起来的全面的身份验证解决方案，它提供了简单而强大的 API 和服务来处理用户认证和会话管理。Clerk 的设计哲学是提供一套简洁、现代的认证解决方案，使得开发者可以轻松集成和使用。
+
+LobeHub 与 Clerk 做了深度集成，能够为用户提供一个更加安全、便捷的登录和注册体验，同时也为开发者减轻了管理身份验证逻辑的负担。Clerk 的简洁和现代的设计理念与 LobeHub 的目标非常契合，使得整个平台的用户管理更加高效和可靠。
+
+在 LobeHub 的环境变量中设置 `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` 和 `CLERK_SECRET_KEY`，即可开启和使用 Clerk。
+
+## Better Auth
+
+[Better Auth](https://www.better-auth.com) 是一个现代化、框架无关的身份验证库，旨在提供全面、安全、灵活的身份验证解决方案。它支持多种认证方式，包括邮箱 / 密码登录、魔法链接登录以及多种 OAuth/SSO 提供商。
+
+### 主要特性
 
 - **邮箱 / 密码认证**：内置支持传统的邮箱和密码登录，采用安全的密码哈希算法
 - **邮箱验证**：可选的邮箱验证流程，支持自定义邮件模板
@@ -25,12 +38,14 @@ LobeChat 使用 [Better Auth](https://www.better-auth.com) 作为身份验证解
 
 ## 快速开始
 
-要在 LobeChat 中启用 Better Auth，请设置以下环境变量：
+要在 LobeHub 中启用 Better Auth，请设置以下环境变量：
 
-| 环境变量                 | 类型 | 描述                                               |
-| -------------------- | -- | ------------------------------------------------ |
-| `AUTH_SECRET`        | 必选 | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`   |
-| `AUTH_SSO_PROVIDERS` | 可选 | 启用的 SSO 提供商列表，以逗号分隔，例如 `google,github,microsoft` |
+| 环境变量                             | 类型 | 描述                                                                                                              |
+| -------------------------------- | -- | --------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_ENABLE_BETTER_AUTH` | 必选 | 设置为 `1` 以启用 Better Auth 服务                                                                                      |
+| `AUTH_SECRET`                    | 必选 | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`                                                                  |
+| `NEXT_PUBLIC_AUTH_URL`           | 必选 | 浏览器可访问的 Better Auth 基础 URL（例如 `http://localhost:3010`、`https://LobeHub.com`）。Vercel 部署时可选（会自动从 `VERCEL_URL` 获取） |
+| `AUTH_SSO_PROVIDERS`             | 可选 | 启用的 SSO 提供商列表，以逗号分隔，例如 `google,github,microsoft`                                                                |
 
 ## 支持的 SSO 提供商
 
@@ -137,9 +152,7 @@ LobeChat 使用 [Better Auth](https://www.better-auth.com) 作为身份验证解
 
 ### 通用配置
 
-| 环境变量                      | 类型 | 描述                          | 示例  |
-| ------------------------- | -- | --------------------------- | --- |
-| `AUTH_EMAIL_VERIFICATION` | 可选 | 设置为 `1` 以要求用户在登录前验证邮箱（默认关闭） | `1` |
+在使用 NextAuth 之前，请先在 LobeHub 的环境变量中设置以下变量：
 
 ## 魔法链接（免密）登录
 
@@ -188,4 +201,14 @@ Better Auth 支持内置提供商（Google、GitHub、Microsoft、Apple、AWS Co
 - 只允许 `example.com` 域名：`AUTH_ALLOWED_EMAILS=example.com`
 - 允许多个域名和特定邮箱：`AUTH_ALLOWED_EMAILS=example.com,company.org,admin@other.com`
 
-留空表示允许所有邮箱注册。此限制对邮箱注册和 SSO 登录均有效。
+### Webhook 支持
+
+允许 LobeHub 在身份提供商中用户信息更新时接收通知。支持的提供商包括 Casdoor 和 Logto。请参考具体提供商文档进行配置。
+
+### 数据库会话
+
+允许会话存储在数据库中，详情请参阅 [Auth.js 会话文档](https://authjs.dev/concepts/session-strategies#database-session)。
+
+## 其他 SSO 提供商
+
+请参考 [NextAuth.js](https://next-auth.js.org/providers) 文档，欢迎提交 Pull Request。

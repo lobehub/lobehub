@@ -1,20 +1,20 @@
 ---
-title: Automatic Synchronization with LobeChat Desktop
-description: Configure LobeChat Desktop for a synchronized experience
+title: Automatic Synchronization with LobeHub Desktop
+description: Configure LobeHub Desktop for a synchronized experience
 tags:
-  - LobeChat
+  - LobeHub
   - Desktop Synchronization
   - Self-Hosted Instance
   - OIDC Configuration
 ---
 
-# Automatic Synchronization with LobeChat Desktop
+# Automatic Synchronization with LobeHub Desktop
 
-LobeChat Desktop provides users with an enhanced experience while also expanding the capabilities of LobeChat, allowing users to utilize LobeChat in offline environments. This document will guide you on how to configure LobeChat Desktop and connect it to your self-hosted instance.
+LobeHub Desktop provides users with an enhanced experience while also expanding the capabilities of LobeHub, allowing users to utilize LobeHub in offline environments. This document will guide you on how to configure LobeHub Desktop and connect it to your self-hosted instance.
 
 ## System Requirements
 
-LobeChat Desktop is built using Electron and supports the following operating systems:
+LobeHub Desktop is built using Electron and supports the following operating systems:
 
 - Windows
 - macOS
@@ -22,16 +22,16 @@ LobeChat Desktop is built using Electron and supports the following operating sy
 
 ## Desktop Version Information
 
-The version release of LobeChat Desktop follows this logic:
+The version release of LobeHub Desktop follows this logic:
 
-- **Beta Version**: All merges to the main branch that are automatically released will be created as Beta versions of LobeChat Desktop.
+- **Beta Version**: All merges to the main branch that are automatically released will be created as Beta versions of LobeHub Desktop.
 - **Stable Version**: The development team will periodically release stable versions through manual tagging.
 
 If you wish to access the latest features, you can use the Beta version; if you prioritize stability, please use the Stable version.
 
 ## Connecting to a Self-Hosted Instance
 
-LobeChat Desktop can connect to your self-hosted LobeChat instance, allowing you to use your self-hosted configuration on the desktop.
+LobeHub Desktop can connect to your self-hosted LobeHub instance, allowing you to use your self-hosted configuration on the desktop.
 
 ### Preparations
 
@@ -58,16 +58,16 @@ Add the generated environment variables to your deployment configuration.
 
 <Callout>If you have already configured `OIDC_JWKS_KEY`, no changes are needed. The system will automatically fall back to `OIDC_JWKS_KEY` for backward compatibility.</Callout>
 
-If you are deploying LobeChat using one-click deployment methods (such as Vercel, Railway, etc.), you need to:
+If you are deploying LobeHub using one-click deployment methods (such as Vercel, Railway, etc.), you need to:
 
 1. Add the above environment variables to the environment variable configuration of your deployment platform.
 2. For Vercel deployments, ensure that the `APP_URL` environment variable is set to your domain URL, which is crucial for correctly handling authentication callbacks.
 
 ### Connection Steps
 
-1. Open LobeChat Desktop.
+1. Open LobeHub Desktop.
 2. Click the Wi-Fi icon in the upper right corner.
-3. Enter the address of your self-hosted instance (e.g., `https://your-lobechat-instance.com`).
+3. Enter the address of your self-hosted instance (e.g., `https://your-LobeHub-instance.com`).
 4. Click the "Connect" button.
 5. You will be redirected to the login page; after completing the authorization, you can use your self-hosted configuration.
 

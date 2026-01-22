@@ -1,73 +1,70 @@
 ---
-title: Using OpenRouter API Key in LobeChat
+title: Using OpenRouter API Key in LobeHub
 description: >-
   Learn how to register, create an API key, add credit, and configure OpenRouter
-  in LobeChat to start using a variety of powerful large language model APIs.
+  in LobeHub to start using a variety of powerful large language model APIs.
 tags:
   - OpenRouter
   - API Key
   - Web UI
 ---
 
-# Using OpenRouter in LobeChat
+# Using OpenRouter in LobeHub
 
-<Image alt={'Using OpenRouter in LobeChat'} cover src={'https://github.com/lobehub/lobe-chat/assets/34400653/40520a43-ac03-4954-8a4d-282fbb946066'} />
+<Image alt={'Using OpenRouter in LobeHub'} cover src={'/blog/assets34400653/40520a43-ac03-4954-8a4d-282fbb946066.webp'} />
 
 [OpenRouter](https://openrouter.ai/) is a platform that provides access to a wide range of high-quality large language model APIs. It supports models from OpenAI (including GPT-3.5/4), Anthropic (Claude2, Instant), LLaMA 2, PaLM Bison, and more.
 
-This guide will walk you through how to use OpenRouter in LobeChat:
+This guide will walk you through how to use OpenRouter in LobeHub:
 
 <Steps>
+  ### Step 1: Register and Log In to OpenRouter
 
-### Step 1: Register and Log In to OpenRouter
+  - Visit [OpenRouter.ai](https://openrouter.ai/) and create an account.
+  - You can log in using your Google account or MetaMask wallet.
 
-- Visit [OpenRouter.ai](https://openrouter.ai/) and create an account.
-- You can log in using your Google account or MetaMask wallet.
+  <Image alt={'Register on OpenRouter'} height={457} inStep src={'/blog/assets34400653/a024af40-e1d9-4df0-b998-0e6e87cebe5b.webp'} />
 
-<Image alt={'Register on OpenRouter'} height={457} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/a024af40-e1d9-4df0-b998-0e6e87cebe5b'} />
+  ### Step 2: Create an API Key
 
-### Step 2: Create an API Key
+  - Go to the `Keys` section or visit [OpenRouter Keys](https://openrouter.ai/keys) directly.
+  - Click `Create Key` to begin.
+  - In the pop-up dialog, give your API key a name, such as "LobeHub Key".
+  - Leave the `Credit limit` field blank if you don’t want to set a spending cap.
 
-- Go to the `Keys` section or visit [OpenRouter Keys](https://openrouter.ai/keys) directly.
-- Click `Create Key` to begin.
-- In the pop-up dialog, give your API key a name, such as "LobeChat Key".
-- Leave the `Credit limit` field blank if you don’t want to set a spending cap.
+  <Image alt={'Create OpenRouter Key'} height={460} inStep src={'/blog/assets34400653/094d701f-ce80-464a-bbbc-0a5ecc8d08e3.webp'} />
 
-<Image alt={'Create OpenRouter Key'} height={460} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/094d701f-ce80-464a-bbbc-0a5ecc8d08e3'} />
+  - Copy the API key from the dialog and store it securely.
 
-- Copy the API key from the dialog and store it securely.
+  <Image alt={'Retrieve OpenRouter Key'} height={519} inStep src={'/blog/assets34400653/7a012a11-87bd-4366-a567-0ebf6d12ae10.webp'} />
 
-<Image alt={'Retrieve OpenRouter Key'} height={519} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/7a012a11-87bd-4366-a567-0ebf6d12ae10'} />
+  <Callout type={'warning'}>
+    Make sure to store your API key securely, as it will only be shown once. If you lose it, you’ll need to generate a new one.
+  </Callout>
 
-<Callout type={'warning'}>
-Make sure to store your API key securely, as it will only be shown once. If you lose it, you’ll need to generate a new one.
-</Callout>
+  ### Step 3: Add Credit to Your Account
 
-### Step 3: Add Credit to Your Account
+  - Go to the `Credit` section or visit [OpenRouter Credit](https://openrouter.ai/credits).
+  - Click `Manage Credits` to add funds. You can view model pricing at [https://openrouter.ai/models](https://openrouter.ai/models).
+  - OpenRouter also offers some free models that can be used without adding credit.
 
-- Go to the `Credit` section or visit [OpenRouter Credit](https://openrouter.ai/credits).
-- Click `Manage Credits` to add funds. You can view model pricing at <https://openrouter.ai/models>.
-- OpenRouter also offers some free models that can be used without adding credit.
+  <Image alt={'Add Credit to OpenRouter'} height={385} inStep src={'/blog/assets34400653/50b73232-01fc-4ef0-939a-3e06354d1b5a.webp'} />
 
-<Image alt={'Add Credit to OpenRouter'} height={385} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/50b73232-01fc-4ef0-939a-3e06354d1b5a'} />
+  ### Step 4: Configure OpenRouter in LobeHub
 
-### Step 4: Configure OpenRouter in LobeChat
+  - Open the `Settings` panel in LobeHub.
+  - Under `AI Providers`, find the `OpenRouter` section.
+  - Enable OpenRouter and paste in your API key.
 
-- Open the `Settings` panel in LobeChat.
-- Under `AI Providers`, find the `OpenRouter` section.
-- Enable OpenRouter and paste in your API key.
+  <Image alt={'Configure OpenRouter in LobeHub'} height={518} inStep src={'/blog/assets34400653/5c3898ab-23d7-44c2-bbd9-b255e25e400c.webp'} />
 
-<Image alt={'Configure OpenRouter in LobeChat'} height={518} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/5c3898ab-23d7-44c2-bbd9-b255e25e400c'} />
+  - Choose an OpenRouter model for your assistant to start chatting.
 
-- Choose an OpenRouter model for your assistant to start chatting.
+  <Image alt={'Using OpenRouter Models'} height={518} inStep src={'/blog/assets34400653/77b5feee-3f46-486d-9a36-31ff60efa5e9.webp'} />
 
-<Image alt={'Using OpenRouter Models'} height={518} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/77b5feee-3f46-486d-9a36-31ff60efa5e9'} />
-
-<Callout type={'warning'}>
-You may incur charges when using API services. Please refer to OpenRouter’s pricing policy for more details.
-</Callout>
-
+  <Callout type={'warning'}>
+    You may incur charges when using API services. Please refer to OpenRouter’s pricing policy for more details.
+  </Callout>
 </Steps>
 
-You’re now ready to start using OpenRouter’s models in LobeChat for conversations.
-
+You’re now ready to start using OpenRouter’s models in LobeHub for conversations.

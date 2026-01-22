@@ -1,10 +1,20 @@
 ---
 title: ''
+description: >-
+  Learn to configure ComfyUI in LobeHub for high-quality image generation and
+  editing.
+tags:
+  - ComfyUI
+  - FLUX
+  - Image Generation
+  - AI Image Editing
+  - Text-to-Image
 ---
-```markdown
+
+````markdown
 ---
-title: Using ComfyUI in LobeChat for Image Generation
-description: Learn how to configure and use the ComfyUI service in LobeChat to support high-quality image generation and editing with the FLUX model series.
+title: Using ComfyUI in LobeHub for Image Generation
+description: Learn how to configure and use the ComfyUI service in LobeHub to support high-quality image generation and editing with the FLUX model series.
 tags:
   - ComfyUI
   - FLUX
@@ -13,15 +23,15 @@ tags:
   - AI Image Generation
 ---
 
-# Using ComfyUI in LobeChat
+# Using ComfyUI in LobeHub
 
-<Image alt={'Using ComfyUI in LobeChat'} cover src={'https://hub-apac-1.lobeobjects.space/docs/e9b811f248a1db2bd1be1af888cf9b9d.png'} />
+<Image alt={'Using ComfyUI in LobeHub'} cover src={'https://hub-apac-1.lobeobjects.space/docs/e9b811f248a1db2bd1be1af888cf9b9d.png'} />
 
-This guide will walk you through how to use [ComfyUI](https://github.com/comfyanonymous/ComfyUI) in LobeChat for high-quality AI image generation and editing.
+This guide will walk you through how to use [ComfyUI](https://github.com/comfyanonymous/ComfyUI) in LobeHub for high-quality AI image generation and editing.
 
 ## Introduction to ComfyUI
 
-ComfyUI is a powerful GUI for Stable Diffusion and Flow Diffusion, offering a node-based workflow interface. LobeChat integrates ComfyUI with full support for the FLUX model series, enabling both text-to-image generation and image editing.
+ComfyUI is a powerful GUI for Stable Diffusion and Flow Diffusion, offering a node-based workflow interface. LobeHub integrates ComfyUI with full support for the FLUX model series, enabling both text-to-image generation and image editing.
 
 ### Key Features
 
@@ -35,14 +45,14 @@ ComfyUI is a powerful GUI for Stable Diffusion and Flow Diffusion, offering a no
 
 ## Quick Start
 
-### Step 1: Configure ComfyUI in LobeChat
+### Step 1: Configure ComfyUI in LobeHub
 
 #### 1. Open Settings
 
-- Go to the `Settings` panel in LobeChat
+- Go to the `Settings` panel in LobeHub
 - Under `AI Providers`, find the `ComfyUI` section
 
-<Image alt={'ComfyUI Settings Panel'} inStep src={'https://github.com/lobehub/lobe-chat/assets/17870709/3f31bc33-509f-4ad2-ba81-280c2a6ec5fa'} />
+<Image alt={'ComfyUI Settings Panel'} inStep src={'/blog/assets17870709/3f31bc33-509f-4ad2-ba81-280c2a6ec5fa.webp'} />
 
 #### 2. Set Connection Parameters
 
@@ -60,7 +70,7 @@ In the chat interface:
 - Click the model selection button
 - Choose your desired FLUX model from the ComfyUI category
 
-<Image alt={'Select FLUX Model'} inStep src={'https://github.com/lobehub/lobe-chat/assets/17870709/ff7ebacf-27f0-42d7-810b-00314499a084'} />
+<Image alt={'Select FLUX Model'} inStep src={'/blog/assets17870709/ff7ebacf-27f0-42d7-810b-00314499a084.webp'} />
 
 #### 2. Text-to-Image Generation
 
@@ -68,7 +78,7 @@ In the chat interface:
 
 ```plaintext
 Generate an image: A cute orange cat sitting on a sunny windowsill, warm lighting, detailed fur texture
-```
+````
 
 **Using FLUX Dev (High-Quality Generation)**:
 
@@ -87,7 +97,7 @@ Edit this image: Change the background to a starry night sky, keep the main subj
 Then upload the original image you want to edit.
 
 <Callout type={'info'}>
-Image editing requires uploading the original image first, followed by a description of the desired changes.
+  Image editing requires uploading the original image first, followed by a description of the desired changes.
 </Callout>
 
 ## Authentication Configuration Guide
@@ -128,7 +138,7 @@ sudo apt-get install apache2-utils
 sudo htpasswd -c /etc/nginx/.htpasswd admin
 ```
 
-2. **LobeChat Configuration**:
+2. **LobeHub Configuration**:
 
 ```yaml
 Authentication Type: Basic
@@ -160,7 +170,7 @@ token = jwt.encode(payload, secret_key, algorithm='HS256')
 print(f"Bearer Token: {token}")
 ```
 
-**LobeChat Configuration**:
+**LobeHub Configuration**:
 
 ```yaml
 Authentication Type: Bearer Token
@@ -175,7 +185,7 @@ API Key: example-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 - Integrating with existing enterprise auth systems
 - Systems requiring multiple custom headers
 
-**LobeChat Configuration**:
+**LobeHub Configuration**:
 
 ```yaml
 Authentication Type: Custom
@@ -183,7 +193,7 @@ Server Address: https://your-domain.com
 Custom Headers:
 {
   "X-API-Key": "your_api_key",
-  "X-Client-ID": "lobechat"
+  "X-Client-ID": "LobeHub"
 }
 ```
 
@@ -196,56 +206,51 @@ Comfy-Manager is an extension manager for ComfyUI that simplifies installing and
 <details>
   <summary><b>📦 Steps to Install Comfy-Manager</b></summary>
 
-#### Method 1: Manual Installation (Recommended)
+  #### Method 1: Manual Installation (Recommended)
 
-```bash
-# Navigate to ComfyUI's custom_nodes directory
-cd ComfyUI/custom_nodes
+  ```bash
+  # Navigate to ComfyUI's custom_nodes directory
+  cd ComfyUI/custom_nodes
 
-# Clone the Comfy-Manager repository
-git clone https://github.com/ltdrdata/ComfyUI-Manager.git
+  # Clone the Comfy-Manager repository
+  git clone https://github.com/ltdrdata/ComfyUI-Manager.git
 
-# Restart the ComfyUI server
-# After restarting, you should see a "Manager" button in the UI
-```
+  # Restart the ComfyUI server
+  # After restarting, you should see a "Manager" button in the UI
+  ```
 
-#### Method 2: One-Click Install Script
+  #### Method 2: One-Click Install Script
 
-```bash
-# Run from the ComfyUI root directory
-curl -fsSL https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/install.sh | bash
-```
+  ```bash
+  # Run from the ComfyUI root directory
+  curl -fsSL https://raw.githubusercontent.com/ltdrdata/ComfyUI-Manager/main/install.sh | bash
+  ```
 
-#### Verify Installation
+  #### Verify Installation
 
-1. Restart the ComfyUI server
-2. Visit `http://localhost:8000`
-3. You should see a "Manager" button in the bottom-right corner
+  1. Restart the ComfyUI server
+  2. Visit `http://localhost:8000`
+  3. You should see a "Manager" button in the bottom-right corner
 
-#### Using Comfy-Manager
+  #### Using Comfy-Manager
 
-**Install Models**:
+  **Install Models**:
 
-1. Click the "Manager" button
-2. Select "Install Models"
-3. Search for the desired model (e.g., FLUX, SD3.5)
-4. Click "Install" to download automatically
+  1. Click the "Manager" button
+  2. Select "Install Models"
+  3. Search for the desired model (e.g., FLUX, SD3.5)
+  4. Click "Install" to download automatically
 
-**Install Node Extensions**:
+  **Install Node Extensions**:
 
-1. Click the "Manager" button
-2. Select "Install Custom Nodes"
-3. Search for nodes (e.g., ControlNet, AnimateDiff)
-4. Click "Install" and restart the server
+  1. Click the "Manager" button
+  2. Select "Install Custom Nodes"
+  3. Search for nodes (e.g., ControlNet, AnimateDiff)
+  4. Click "Install" and restart the server
 
-**Manage Installed Content**:
+  **Manage Installed Content**:
 
-1. Click the "Manager" button
-2. Select "Installed" to view installed extensions
-3. You can update, disable, or uninstall extensions
-
+  1. Click the "Manager" button
+  2. Select "Installed" to view installed extensions
+  3. You can update, disable, or uninstall extensions
 </details>
-
-<!-- The rest of the document continues in the same translated and formatted style -->
-```
-

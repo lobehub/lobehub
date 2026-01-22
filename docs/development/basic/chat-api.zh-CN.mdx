@@ -1,5 +1,11 @@
 ---
 title: Lobe Chat API 前后端交互逻辑
+description: 深入了解 Lobe Chat API 的前后端交互实现逻辑和核心组件。
+tags:
+  - Lobe Chat API
+  - 前后端交互
+  - 事件序列
+  - 核心组件
 ---
 
 # Lobe Chat API 前后端交互逻辑
@@ -251,7 +257,7 @@ AgentRuntime 是 Lobe Chat 中的一个核心抽象层，它封装了与不同 A
             baseURL: OPENROUTER_BASE_URL,
             defaultHeaders: {
               'HTTP-Referer': 'https://github.com/lobehub/lobe-chat',
-              'X-Title': 'LobeChat',
+              'X-Title': 'LobeHub',
             },
           });
           this.baseURL = OPENROUTER_BASE_URL;

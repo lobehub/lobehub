@@ -1,12 +1,20 @@
 ---
-title: 新身份验证提供商开发指南
+title: 新身份验证方式开发指南
+description: 学习如何在 LobeHub 中使用 Auth.js v5 添加新的身份验证提供者。
+tags:
+  - 身份验证
+  - Auth.js
+  - Okta
+  - 开发指南
 ---
 
-# 新身份验证提供商开发指南
+# 新身份验证方式开发指南
+
+LobeHub 使用 [Auth.js v5](https://authjs.dev/) 作为外部身份验证服务。Auth.js 是一个开源的身份验证库，它提供了一种简单的方式来实现身份验证和授权功能。本文档将介绍如何使用 Auth.js 来实现新的身份验证方式。
 
 LobeChat 使用 [Better Auth](https://www.better-auth.com) 作为身份验证服务。本文档介绍如何添加新的 SSO 身份验证提供商。
 
-## 架构概述
+为了在 LobeHub 中添加新的身份验证提供者（例如添加 Okta)，你需要完成以下步骤：
 
 Better Auth SSO 提供商分为两类：
 

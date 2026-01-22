@@ -1,20 +1,20 @@
 ---
-title: 在 LobeChat 中使用 Nvidia NIM API Key
-description: 学习如何在 LobeChat 中配置和使用 Nvidia NIM AI 模型，获取 API 密钥并开始对话。
+title: 在 LobeHub 中使用 Nvidia NIM API Key
+description: 学习如何在 LobeHub 中配置和使用 Nvidia NIM AI 模型，获取 API 密钥并开始对话。
 tags:
-  - LobeChat
+  - LobeHub
   - Nvidia NIM
   - API密钥
   - Web UI
 ---
 
-# 在 LobeChat 中使用 Nvidia NIM
+# 在 LobeHub 中使用 Nvidia NIM
 
-<Image alt={'在 LobeChat 中使用 Nvidia NIM'} cover src={'https://github.com/user-attachments/assets/539349dd-2c16-4f42-b525-cca74e113541'} />
+<Image alt={'在 LobeHub 中使用 Nvidia NIM'} cover src={'/blog/assetsd8927338578c426b833e5cb57e0b57ec.webp'} />
 
 [NVIDIA NIM](https://developer.nvidia.com/nim) 是 NVIDIA AI Enterprise 的一部分，旨在通过微服务加速生成式 AI 应用的部署。它提供了一组易于使用的推理微服务，可以在任何云、数据中心或工作站上运行，支持 NVIDIA GPU 加速。
 
-本文档将指导你如何在 LobeChat 中接入并使用 Nvidia NIM 提供的 AI 模型:
+本文档将指导你如何在 LobeHub 中接入并使用 Nvidia NIM 提供的 AI 模型:
 
 <Steps>
   ### 步骤一：获取 Nvidia NIM  API 密钥
@@ -22,12 +22,12 @@ tags:
   - 首先，访问[Nvidia NIM 控制台](https://build.nvidia.com/explore/discover)并完成注册登录
   - 在 `Models` 页面选择你需要的模型，例如 Deepseek-R1
 
-  <Image alt={'选择模型'} inStep src={'https://github.com/user-attachments/assets/b49ed0c1-d6bf-4f46-b9df-5f7c730afaa3'} />
+  <Image alt={'选择模型'} inStep src={'/blog/assets74000cc1bc59ee4a15e8f0304afbf866.webp'} />
 
   - 在模型详情页点击`使用此NIM构建`
   - 在弹出的对话框中点击`生成 API Key` 按钮
 
-  <Image alt={'获取 API Key'} inStep src={'https://github.com/user-attachments/assets/5321f987-2c64-4211-8549-bd30ca9b59b9'} />
+  <Image alt={'获取 API Key'} inStep src={'/blog/assetsaf57d31364a41634b10c243ed9b1f8f8.webp'} />
 
   - 复制并保存创建好的 API Key
 
@@ -35,21 +35,21 @@ tags:
     请安全地存储密钥，因为它只会出现一次。如果你意外丢失它，您将需要创建一个新密钥。
   </Callout>
 
-  ### 步骤二：在 LobeChat 中配置 Nvidia NIM
+  ### 步骤二：在 LobeHub 中配置 Nvidia NIM
 
-  - 访问 LobeChat 的 `应用设置` 的 `AI 服务供应商` 界面
+  - 访问 LobeHub 的 `应用设置` 的 `AI 服务供应商` 界面
   - 在供应商列表中找到 ` Nvidia NIM` 的设置项
 
-  <Image alt={'填写 Nvidia NIM API 密钥'} inStep src={'https://github.com/user-attachments/assets/dfc45807-2ed6-43eb-af4c-47df66dfff7d'} />
+  <Image alt={'填写 Nvidia NIM API 密钥'} inStep src={'/blog/assetscad58c557fda04b9379000cbbaa4c493.webp'} />
 
   - 打开 Nvidia NIM 服务商并填入获取的 API 密钥
   - 为你的助手选择一个 Nvidia NIM 模型即可开始对话
 
-  <Image alt={'选择 Nvidia NIM 模型'} inStep src={'https://github.com/user-attachments/assets/cb4ba5fe-c223-4b9f-a662-de93e4a536d1'} />
+  <Image alt={'选择 Nvidia NIM 模型'} inStep src={'/blog/assets45d90e73abffd7ae7d85808f81827bb9.webp'} />
 
   <Callout type={'warning'}>
     在使用过程中你可能需要向 API 服务提供商付费，请参考 Nvidia NIM 的相关费用政策。
   </Callout>
 </Steps>
 
-至此你已经可以在 LobeChat 中使用 Nvidia NIM 提供的模型进行对话了。
+至此你已经可以在 LobeHub 中使用 Nvidia NIM 提供的模型进行对话了。
