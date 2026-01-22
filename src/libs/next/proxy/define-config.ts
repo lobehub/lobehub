@@ -20,12 +20,10 @@ import { RouteVariants } from '@/utils/server/routeVariants';
  */
 function createRouteMatcher(patterns: string[]) {
   const regexPatterns = patterns.map((pattern) => {
-    // Escape special regex chars, then restore (.*) to regex wildcard
+    // Escape all special regex chars (including parentheses), then restore (.*) to wildcard
     const regexStr = pattern
-      .replaceAll(/[$+.?[\\\]^{|}]/g, '\\$&')
-      .replaceAll('\\(\\.\\*\\)', '.*')
-      .replaceAll('(', '\\(')
-      .replaceAll(')', '\\)');
+      .replaceAll(/[$()*+.?[\\\]^{|}]/g, '\\$&')
+      .replaceAll('\\(\\.\\*\\)', '.*');
     return new RegExp(`^${regexStr}$`);
   });
 
