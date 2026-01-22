@@ -115,7 +115,7 @@ async function createQwenImageTask(
       // Failed to parse JSON error response
     }
     throw new Error(
-      `Failed to create ${endpoint} task (${response.status}): ${errorData?.message || response.statusText}`,
+      `Failed to create ${endpoint} task for model ${model} (${response.status}): ${errorData?.message || response.statusText}`,
     );
   }
 
@@ -178,24 +178,24 @@ async function createMultimodalGeneration(
       // Failed to parse JSON error response
     }
     throw new Error(
-      `Failed to create image (${response.status}): ${errorData?.message || response.statusText}`,
+      `Failed to create image for model ${model} (${response.status}): ${errorData?.message || response.statusText}`,
     );
   }
 
   const data: QwenMultimodalGenerationResponse = await response.json();
 
   if (!data.output.choices || data.output.choices.length === 0) {
-    throw new Error('No image choices returned from API');
+    throw new Error(`No image choices returned from API for model ${model}`);
   }
 
   const choice = data.output.choices[0];
   if (!choice.message.content || choice.message.content.length === 0) {
-    throw new Error('No image content returned from API');
+    throw new Error(`No image content returned from API for model ${model}`);
   }
 
   const imageContent = choice.message.content.find((content) => 'image' in content);
   if (!imageContent) {
-    throw new Error('No image found in response content');
+    throw new Error(`No image found in response content for model ${model}`);
   }
 
   const resultImageUrl = imageContent.image;
@@ -226,7 +226,7 @@ async function queryTaskStatus(taskId: string, apiKey: string): Promise<QwenImag
       // Failed to parse JSON error response
     }
     throw new Error(
-      `Failed to query task status (${response.status}): ${errorData?.message || response.statusText}`,
+      `Failed to query task status for ${taskId} (${response.status}): ${errorData?.message || response.statusText}`,
     );
   }
 
@@ -275,9 +275,10 @@ export async function createQwenImage(
           }
 
           if (taskStatus.output.task_status === 'FAILED') {
-            const errorMessage = taskStatus.output.error_message || 'Image generation task failed';
+            const errorMessage =
+              taskStatus.output.error_message || 'Task failed without error message';
             return {
-              error: new Error(`Qwen image generation failed: ${errorMessage}`),
+              error: new Error(`Image generation failed for model ${model}: ${errorMessage}`),
               status: 'failed',
             };
           }
@@ -321,9 +322,10 @@ export async function createQwenImage(
           }
 
           if (taskStatus.output.task_status === 'FAILED') {
-            const errorMessage = taskStatus.output.error_message || 'Image generation task failed';
+            const errorMessage =
+              taskStatus.output.error_message || 'Task failed without error message';
             return {
-              error: new Error(`Qwen image generation failed: ${errorMessage}`),
+              error: new Error(`Image generation failed for model ${model}: ${errorMessage}`),
               status: 'failed',
             };
           }
