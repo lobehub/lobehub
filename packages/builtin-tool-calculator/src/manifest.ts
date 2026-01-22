@@ -6,15 +6,14 @@ import { CalculatorApiName, CalculatorIdentifier } from './types';
 export const CalculatorManifest: BuiltinToolManifest = {
   api: [
     {
-      description:
-        'Calculate the result of a mathematical expression. Powered by mathjs library supporting comprehensive math functions, matrices, complex numbers, units, and symbolic calculations.',
+      description: 'Calculate the result of a mathematical expression.',
       name: CalculatorApiName.calculate,
       parameters: {
         additionalProperties: false,
         properties: {
           expression: {
             description:
-              'Mathematical expression to calculate (e.g., "2 + 3 * 4", "sqrt(16)", "sin(30°)", "det([[1,2],[3,4]])", "5 cm to inch")',
+              'Mathematical expression to calculate (e.g., "2 + 3 * 4", "sqrt(16)", "sin(30 deg)", "det([[1,2],[3,4]])", "5 cm to inch")',
             type: 'string',
           },
           precision: {
@@ -29,8 +28,7 @@ export const CalculatorManifest: BuiltinToolManifest = {
       },
     },
     {
-      description:
-        'Evaluate a complex mathematical expression with variable support. Powered by mathjs supporting algebraic expressions, symbolic calculations, matrices, and advanced mathematical operations.',
+      description: 'Evaluate a complex mathematical expression with variable support.',
       name: CalculatorApiName.evaluateExpression,
       parameters: {
         additionalProperties: false,
@@ -57,26 +55,27 @@ export const CalculatorManifest: BuiltinToolManifest = {
       },
     },
     {
-      description:
-        'Convert numbers between different number bases (binary, octal, decimal, hexadecimal). Input number format should match the specified source base.',
+      description: 'Convert numbers between different number bases.',
       name: CalculatorApiName.convertBase,
       parameters: {
         additionalProperties: false,
         properties: {
           fromBase: {
-            description: 'Source base of the input number',
-            enum: ['binary', 'octal', 'decimal', 'hexadecimal'],
-            type: 'string',
+            description: 'Source base of the input number (numeric value between 2-36)',
+            maximum: 36,
+            minimum: 2,
+            type: 'number',
           },
           number: {
             description:
-              'The number to convert (e.g., "1010" for binary, "77" for octal, "255" for decimal, "FF" for hexadecimal)',
-            type: 'string',
+              'The number to convert (string or number, e.g., "1010", 1010, "77", "255", "FF", "Z")',
+            type: ['string', 'number'],
           },
           toBase: {
-            description: 'Target base for conversion',
-            enum: ['binary', 'octal', 'decimal', 'hexadecimal'],
-            type: 'string',
+            description: 'Target base for conversion (numeric value between 2-36)',
+            maximum: 36,
+            minimum: 2,
+            type: 'number',
           },
         },
         required: ['number', 'fromBase', 'toBase'],
