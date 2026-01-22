@@ -1019,7 +1019,8 @@ const qwenChatModels: AIChatModelCard[] = [
       deploymentName: 'qwen-plus-2025-12-01',
     },
     contextWindowTokens: 1_000_000,
-    description: 'Enhanced ultra-large Qwen model supporting Chinese, English, and other languages.',
+    description:
+      'Enhanced ultra-large Qwen model supporting Chinese, English, and other languages.',
     displayName: 'Qwen Plus',
     enabled: true,
     id: 'qwen-plus',
@@ -1477,7 +1478,8 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Qwen3 VL 8B non-thinking mode (Instruct) for standard multimodal generation and recognition.',
+    description:
+      'Qwen3 VL 8B non-thinking mode (Instruct) for standard multimodal generation and recognition.',
     displayName: 'Qwen3 VL 8B Instruct',
     id: 'qwen3-vl-8b-instruct',
     maxOutput: 32_768,
@@ -2182,13 +2184,13 @@ const qwenChatModels: AIChatModelCard[] = [
 const qwenImageModels: AIImageModelCard[] = [
   {
     description:
-      'Qwen Image Edit is an image-to-image model that edits images based on input images and text prompts, enabling precise adjustments and creative transformations.',
+      'Z-Image is a lightweight text-to-image generation model that can rapidly produce images, supports both Chinese and English text rendering, and flexibly adapts to multiple resolutions and aspect ratios.',
     displayName: 'Z-Image Turbo',
     enabled: true,
     id: 'z-image-turbo',
     organization: 'Qwen',
     parameters: {
-      height: { default: 1024, max: 2048, min: 512, step: 1 },
+      height: { default: 1536, max: 2048, min: 512, step: 1 },
       prompt: {
         default: '',
       },
@@ -2197,14 +2199,14 @@ const qwenImageModels: AIImageModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.3, strategy: 'fixed', unit: 'image' }],
+      units: [{ name: 'imageGeneration', rate: 0.1, strategy: 'fixed', unit: 'image' }],
     },
-    releasedAt: '2026-01-16',
+    releasedAt: '2025-12-19',
     type: 'image',
   },
   {
     description:
-      'Qwen Image Edit is an image-to-image model that edits images based on input images and text prompts, enabling precise adjustments and creative transformations.',
+      'Qwen Image Editing Model supports multi-image input and multi-image output, enabling precise in-image text editing, object addition, removal, or relocation, subject action modification, image style transfer, and enhanced visual detail.',
     displayName: 'Qwen Image Edit Max',
     enabled: true,
     id: 'qwen-image-edit-max',
@@ -2220,14 +2222,14 @@ const qwenImageModels: AIImageModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.3, strategy: 'fixed', unit: 'image' }],
+      units: [{ name: 'imageGeneration', rate: 0.5, strategy: 'fixed', unit: 'image' }],
     },
-    releasedAt: '2026-01-16',
+    releasedAt: '2026-01-17',
     type: 'image',
   },
   {
     description:
-      'Qwen Image Edit is an image-to-image model that edits images based on input images and text prompts, enabling precise adjustments and creative transformations.',
+      'Qwen Image Editing Model supports multi-image input and multi-image output, enabling precise in-image text editing, object addition, removal, or relocation, subject action modification, image style transfer, and enhanced visual detail.',
     displayName: 'Qwen Image Edit Plus',
     enabled: true,
     id: 'qwen-image-edit-plus',
@@ -2243,9 +2245,9 @@ const qwenImageModels: AIImageModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.3, strategy: 'fixed', unit: 'image' }],
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
     },
-    releasedAt: '2025-10-30',
+    releasedAt: '2025-12-23',
     type: 'image',
   },
   {
@@ -2273,7 +2275,7 @@ const qwenImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      'Qwen-Image is a general image generation model supporting multiple art styles and strong complex text rendering, especially Chinese and English. It supports multi-line layouts, paragraph-level text, and fine detail for complex text-image layouts.',
+      'Qwen Image Generation Model (Max series) delivers enhanced realism and visual naturalness compared with the Plus series, effectively reducing AI-generated artifacts, and demonstrating outstanding performance in human appearance, texture details, and text rendering.',
     displayName: 'Qwen Image Max',
     enabled: true,
     id: 'qwen-image-max',
@@ -2290,14 +2292,14 @@ const qwenImageModels: AIImageModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.25, strategy: 'fixed', unit: 'image' }],
+      units: [{ name: 'imageGeneration', rate: 0.5, strategy: 'fixed', unit: 'image' }],
     },
-    releasedAt: '2025-12-30',
+    releasedAt: '2025-12-31',
     type: 'image',
   },
   {
     description:
-      'Qwen-Image is a general image generation model supporting multiple art styles and strong complex text rendering, especially Chinese and English. It supports multi-line layouts, paragraph-level text, and fine detail for complex text-image layouts.',
+      'It supports a wide range of artistic styles and is particularly proficient at rendering complex text within images, enabling integrated image–text layout design.',
     displayName: 'Qwen Image Plus',
     enabled: true,
     id: 'qwen-image-plus',
@@ -2314,9 +2316,9 @@ const qwenImageModels: AIImageModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.25, strategy: 'fixed', unit: 'image' }],
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
     },
-    releasedAt: '2026-01-09',
+    releasedAt: '2026-01-12',
     type: 'image',
   },
   {
@@ -2344,14 +2346,16 @@ const qwenImageModels: AIImageModelCard[] = [
     type: 'image',
   },
   {
-    description:
-      'Wanxiang 2.2 Speed is the latest model with upgrades in creativity, stability, and realism, delivering fast generation and high value.',
+    description: 'Wanxiang 2.6 Image supports image editing and mixed image–text layout output.',
     displayName: 'Wanxiang2.6 Image',
     enabled: true,
     id: 'wan2.6-image',
     organization: 'Qwen',
     parameters: {
       height: { default: 1280, max: 1280, min: 768, step: 1 },
+      imageUrl: {
+        default: '',
+      },
       prompt: {
         default: '',
       },
@@ -2360,14 +2364,14 @@ const qwenImageModels: AIImageModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.14, strategy: 'fixed', unit: 'image' }],
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-07-28',
     type: 'image',
   },
   {
     description:
-      'Wanxiang 2.2 Speed is the latest model with upgrades in creativity, stability, and realism, delivering fast generation and high value.',
+      'Wanxiang 2.6 T2I supports flexible selection of image dimensions within total pixel area and aspect ratio constraints (same as Wanxiang 2.5).',
     displayName: 'Wanxiang2.6 T2I',
     enabled: true,
     id: 'wan2.6-t2i',
@@ -2382,14 +2386,14 @@ const qwenImageModels: AIImageModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.14, strategy: 'fixed', unit: 'image' }],
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
     },
-    releasedAt: '2025-07-28',
+    releasedAt: '2025-12-16',
     type: 'image',
   },
   {
     description:
-      'Wanxiang 2.2 Speed is the latest model with upgrades in creativity, stability, and realism, delivering fast generation and high value.',
+      'Wanxiang 2.5 T2I supports flexible selection of image dimensions within total pixel area and aspect ratio constraints.',
     displayName: 'Wanxiang2.5 T2I Preview',
     enabled: true,
     id: 'wan2.5-t2i-preview',
@@ -2404,14 +2408,14 @@ const qwenImageModels: AIImageModelCard[] = [
     },
     pricing: {
       currency: 'CNY',
-      units: [{ name: 'imageGeneration', rate: 0.14, strategy: 'fixed', unit: 'image' }],
+      units: [{ name: 'imageGeneration', rate: 0.2, strategy: 'fixed', unit: 'image' }],
     },
-    releasedAt: '2025-07-28',
+    releasedAt: '2025-09-23',
     type: 'image',
   },
   {
     description:
-      'Wanxiang 2.2 Speed is the latest model with upgrades in creativity, stability, and realism, delivering fast generation and high value.',
+      'Wanxiang 2.2 Flash is the latest model with upgrades in creativity, stability, and realism, delivering fast generation and high value.',
     displayName: 'Wanxiang2.2 T2I Flash',
     enabled: true,
     id: 'wan2.2-t2i-flash',
@@ -2433,7 +2437,7 @@ const qwenImageModels: AIImageModelCard[] = [
   },
   {
     description:
-      'Wanxiang 2.2 Pro is the latest model with upgrades in creativity, stability, and realism, producing richer details.',
+      'Wanxiang 2.2 Plus is the latest model with upgrades in creativity, stability, and realism, producing richer details.',
     displayName: 'Wanxiang2.2 T2I Plus',
     enabled: true,
     id: 'wan2.2-t2i-plus',
