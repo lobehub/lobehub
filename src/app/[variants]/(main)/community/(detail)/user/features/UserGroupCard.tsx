@@ -1,8 +1,28 @@
 'use client';
 
-import { Avatar, Block, Flexbox, Icon, Tag, Text, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
-import { ClockIcon, DownloadIcon, UsersIcon } from 'lucide-react';
+import {
+  Tag as AntTag,
+  Avatar,
+  Block,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+  Tooltip,
+  TooltipGroup,
+} from '@lobehub/ui';
+import { createStaticStyles, cx } from 'antd-style';
+import {
+  AlertTriangle,
+  ClockIcon,
+  DownloadIcon,
+  Eye,
+  EyeOff,
+  MoreVerticalIcon,
+  Pencil,
+  UsersIcon,
+} from 'lucide-react';
 import qs from 'query-string';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,8 +30,30 @@ import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import PublishedTime from '@/components/PublishedTime';
-import { type DiscoverGroupAgentItem } from '@/types/discover';
+import { type DiscoverGroupAgentItem, type GroupAgentStatus } from '@/types/discover';
 import { formatIntergerNumber } from '@/utils/format';
+
+import { useUserDetailContext } from './DetailProvider';
+
+const getStatusTagColor = (status?: GroupAgentStatus) => {
+  switch (status) {
+    case 'published': {
+      return 'green';
+    }
+    case 'unpublished': {
+      return 'orange';
+    }
+    case 'deprecated': {
+      return 'red';
+    }
+    case 'archived': {
+      return 'default';
+    }
+    default: {
+      return 'default';
+    }
+  }
+};
 
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {
@@ -24,6 +66,16 @@ const styles = createStaticStyles(({ css, cssVar }) => {
       margin-block-start: 16px;
       border-block-start: 1px dashed ${cssVar.colorBorder};
       background: ${cssVar.colorBgContainer};
+    `,
+    moreButton: css`
+      position: absolute;
+      z-index: 10;
+      inset-block-start: 12px;
+      inset-inline-end: 12px;
+
+      opacity: 0;
+
+      transition: opacity 0.2s;
     `,
     secondaryDesc: css`
       font-size: 12px;
@@ -47,15 +99,31 @@ const styles = createStaticStyles(({ css, cssVar }) => {
         color: ${cssVar.colorLink};
       }
     `,
+    wrapper: css`
+      &:hover .more-button {
+        opacity: 1;
+      }
+    `,
   };
 });
 
 type UserGroupCardProps = DiscoverGroupAgentItem;
 
 const UserGroupCard = memo<UserGroupCardProps>(
-  ({ avatar, title, description, createdAt, category, installCount, identifier, memberCount }) => {
-    const { t } = useTranslation(['discover']);
+  ({
+    avatar,
+    title,
+    description,
+    createdAt,
+    category,
+    installCount,
+    identifier,
+    memberCount,
+    status,
+  }) => {
+    const { t } = useTranslation(['discover', 'setting']);
     const navigate = useNavigate();
+    const { isOwner, onStatusChange } = useUserDetailContext();
 
     const link = qs.stringifyUrl(
       {
@@ -65,12 +133,55 @@ const UserGroupCard = memo<UserGroupCardProps>(
       { skipNull: true },
     );
 
+    const isPublished = status === 'published';
+
     const handleCardClick = useCallback(() => {
       navigate(link);
     }, [link, navigate]);
 
+    const handleEdit = useCallback(() => {
+      navigate(urlJoin('/group', identifier, 'profile'));
+    }, [identifier, navigate]);
+
+    const handleStatusAction = useCallback(
+      (action: 'publish' | 'unpublish' | 'deprecate') => {
+        onStatusChange?.(identifier, action, 'group');
+      },
+      [identifier, onStatusChange],
+    );
+
+    const menuItems = isOwner
+      ? [
+          {
+            icon: <Icon icon={Pencil} />,
+            key: 'edit',
+            label: t('setting:myAgents.actions.edit'),
+            onClick: handleEdit,
+          },
+          {
+            type: 'divider' as const,
+          },
+          {
+            icon: <Icon icon={isPublished ? EyeOff : Eye} />,
+            key: 'togglePublish',
+            label: isPublished
+              ? t('setting:myAgents.actions.unpublish')
+              : t('setting:myAgents.actions.publish'),
+            onClick: () => handleStatusAction(isPublished ? 'unpublish' : 'publish'),
+          },
+          {
+            danger: true,
+            icon: <Icon icon={AlertTriangle} />,
+            key: 'deprecate',
+            label: t('setting:myAgents.actions.deprecate'),
+            onClick: () => handleStatusAction('deprecate'),
+          },
+        ]
+      : [];
+
     return (
       <Block
+        className={styles.wrapper}
         clickable
         height={'100%'}
         onClick={handleCardClick}
@@ -82,6 +193,15 @@ const UserGroupCard = memo<UserGroupCardProps>(
         variant={'outlined'}
         width={'100%'}
       >
+        {isOwner && (
+          <div onClick={(e) => e.stopPropagation()}>
+            <DropdownMenu items={menuItems as any}>
+              <div className={cx('more-button', styles.moreButton)}>
+                <Icon icon={MoreVerticalIcon} size={16} style={{ cursor: 'pointer' }} />
+              </div>
+            </DropdownMenu>
+          </div>
+        )}
         <Flexbox
           align={'flex-start'}
           gap={16}
@@ -105,15 +225,22 @@ const UserGroupCard = memo<UserGroupCardProps>(
                 overflow: 'hidden',
               }}
             >
-              <Link
-                onClick={(e) => e.stopPropagation()}
-                style={{ color: 'inherit', flex: 1, overflow: 'hidden' }}
-                to={link}
-              >
-                <Text as={'h3'} className={styles.title} ellipsis style={{ flex: 1 }}>
-                  {title}
-                </Text>
-              </Link>
+              <Flexbox align={'center'} gap={8} horizontal>
+                <Link
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ color: 'inherit', flex: 1, overflow: 'hidden' }}
+                  to={link}
+                >
+                  <Text as={'h3'} className={styles.title} ellipsis style={{ flex: 1 }}>
+                    {title}
+                  </Text>
+                </Link>
+                {isOwner && status && (
+                  <AntTag color={getStatusTagColor(status)} style={{ flexShrink: 0, margin: 0 }}>
+                    {t(`setting:myAgents.status.${status}`)}
+                  </AntTag>
+                )}
+              </Flexbox>
             </Flexbox>
           </Flexbox>
         </Flexbox>

@@ -179,6 +179,7 @@
   "delete": "حذف",
   "document": "دليل المستخدم",
   "download": "تنزيل",
+  "downloadClient": "تنزيل العميل",
   "duplicate": "تكرار",
   "edit": "تعديل",
   "errors.invalidFileFormat": "تنسيق الملف غير صالح",

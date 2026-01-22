@@ -25,6 +25,7 @@ describe('usePlatform', () => {
     const { result } = renderHook(() => usePlatform());
 
     expect(result.current).toEqual({
+      isAndroid: false,
       isApple: true,
       isChrome: true,
       isChromium: true,
@@ -50,6 +51,7 @@ describe('usePlatform', () => {
     const { result } = renderHook(() => usePlatform());
 
     expect(result.current).toEqual({
+      isAndroid: false,
       isApple: true,
       isChrome: false,
       isChromium: false,
@@ -75,6 +77,7 @@ describe('usePlatform', () => {
     const { result } = renderHook(() => usePlatform());
 
     expect(result.current).toEqual({
+      isAndroid: false,
       isApple: false,
       isChrome: false,
       isChromium: true,
@@ -100,6 +103,7 @@ describe('usePlatform', () => {
     const { result } = renderHook(() => usePlatform());
 
     expect(result.current).toEqual({
+      isAndroid: false,
       isApple: false,
       isChrome: false,
       isChromium: false,
@@ -125,6 +129,7 @@ describe('usePlatform', () => {
     const { result } = renderHook(() => usePlatform());
 
     expect(result.current).toEqual({
+      isAndroid: false,
       isApple: true,
       isChrome: true,
       isChromium: true,

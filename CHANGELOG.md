@@ -2,6 +2,115 @@
 
 # Changelog
 
+## [Version 2.0.0-next.337](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.336...v2.0.0-next.337)
+
+<sup>Released on **2026-01-22**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix memory schema, update the agentbuilder tools not always use humanIntervention.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fix memory schema, closes [#11645](https://github.com/lobehub/lobe-chat/issues/11645) ([3baf780](https://github.com/lobehub/lobe-chat/commit/3baf780))
+- **misc**: Update the agentbuilder tools not always use humanIntervention, closes [#11696](https://github.com/lobehub/lobe-chat/issues/11696) ([0d3017b](https://github.com/lobehub/lobe-chat/commit/0d3017b))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.336](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.335...v2.0.0-next.336)
+
+<sup>Released on **2026-01-22**</sup>
+
+#### ✨ Features
+
+- **misc**: Support agent group unpublish agents.
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix tool argument scape and improve multi task run.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Support agent group unpublish agents, closes [#11687](https://github.com/lobehub/lobe-chat/issues/11687) ([4e060be](https://github.com/lobehub/lobe-chat/commit/4e060be))
+
+#### What's fixed
+
+- **misc**: Fix tool argument scape and improve multi task run, closes [#11691](https://github.com/lobehub/lobe-chat/issues/11691) ([b13bb8a](https://github.com/lobehub/lobe-chat/commit/b13bb8a))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.335](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.334...v2.0.0-next.335)
+
+<sup>Released on **2026-01-22**</sup>
+
+#### ✨ Features
+
+- **database**: Added user memory activity.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **database**: Added user memory activity, closes [#11680](https://github.com/lobehub/lobe-chat/issues/11680) ([0160fbd](https://github.com/lobehub/lobe-chat/commit/0160fbd))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.334](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.333...v2.0.0-next.334)
+
+<sup>Released on **2026-01-21**</sup>
+
+#### ✨ Features
+
+- **misc**: Add platform-aware download client menu option.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Add platform-aware download client menu option, closes [#11676](https://github.com/lobehub/lobe-chat/issues/11676) ([55abddc](https://github.com/lobehub/lobe-chat/commit/55abddc))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.333](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.332...v2.0.0-next.333)
 
 <sup>Released on **2026-01-21**</sup>

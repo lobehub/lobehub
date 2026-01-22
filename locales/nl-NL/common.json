@@ -179,6 +179,7 @@
   "delete": "Verwijderen",
   "document": "Gebruikershandleiding",
   "download": "Downloaden",
+  "downloadClient": "Client downloaden",
   "duplicate": "Dupliceren",
   "edit": "Bewerken",
   "errors.invalidFileFormat": "Ongeldig bestandsformaat",

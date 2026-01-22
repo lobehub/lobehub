@@ -63,3 +63,9 @@ export const AES_GCM_URL = 'https://datatracker.ietf.org/doc/html/draft-ietf-avt
 export const BASE_PROVIDER_DOC_URL = 'https://lobehub.com/docs/usage/providers';
 export const SITEMAP_BASE_URL = isDev ? '/sitemap.xml/' : 'sitemap';
 export const CHANGELOG_URL = urlJoin(OFFICIAL_SITE, 'changelog/versions');
+
+export const DOWNLOAD_URL = {
+  android: 'https://play.google.com/store/apps/details?id=com.lobehub.app',
+  default: urlJoin(OFFICIAL_SITE, '/download'),
+  ios: 'https://testflight.apple.com/join/2ZbjX4Qp',
+} as const;

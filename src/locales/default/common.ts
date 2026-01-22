@@ -193,6 +193,7 @@ export default {
   'delete': 'Delete',
   'document': 'User Manual',
   'download': 'Download',
+  'downloadClient': 'Download Client',
   'duplicate': 'Duplicate',
   'edit': 'Edit',
   'errors.invalidFileFormat': 'Invalid file format',

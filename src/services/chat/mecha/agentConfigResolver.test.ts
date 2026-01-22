@@ -800,4 +800,117 @@ describe('resolveAgentConfig', () => {
       expect(result.agentConfig.systemRole).toBe('Supervisor system role');
     });
   });
+
+  describe('sub-task filtering (isSubTask)', () => {
+    beforeEach(() => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(() => undefined);
+    });
+
+    it('should filter out lobe-gtd when isSubTask is true for regular agent', () => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () =>
+          ({
+            ...mockAgentConfig,
+            plugins: ['lobe-gtd', 'plugin-a', 'plugin-b'],
+          }) as any,
+      );
+
+      const result = resolveAgentConfig({
+        agentId: 'test-agent',
+        isSubTask: true,
+      });
+
+      expect(result.plugins).not.toContain('lobe-gtd');
+      expect(result.plugins).toEqual(['plugin-a', 'plugin-b']);
+    });
+
+    it('should keep lobe-gtd when isSubTask is false', () => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () =>
+          ({
+            ...mockAgentConfig,
+            plugins: ['lobe-gtd', 'plugin-a', 'plugin-b'],
+          }) as any,
+      );
+
+      const result = resolveAgentConfig({
+        agentId: 'test-agent',
+        isSubTask: false,
+      });
+
+      expect(result.plugins).toContain('lobe-gtd');
+      expect(result.plugins).toEqual(['lobe-gtd', 'plugin-a', 'plugin-b']);
+    });
+
+    it('should keep lobe-gtd when isSubTask is undefined', () => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () =>
+          ({
+            ...mockAgentConfig,
+            plugins: ['lobe-gtd', 'plugin-a'],
+          }) as any,
+      );
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.plugins).toContain('lobe-gtd');
+    });
+
+    it('should filter lobe-gtd in page scope when isSubTask is true', () => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () =>
+          ({
+            ...mockAgentConfig,
+            plugins: ['lobe-gtd', 'plugin-a'],
+          }) as any,
+      );
+      vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+        systemRole: 'Page agent system role',
+      });
+
+      const result = resolveAgentConfig({
+        agentId: 'test-agent',
+        scope: 'page',
+        isSubTask: true,
+      });
+
+      expect(result.plugins).not.toContain('lobe-gtd');
+      expect(result.plugins).toContain(PageAgentIdentifier);
+    });
+
+    it('should filter lobe-gtd for builtin agent when isSubTask is true', () => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
+        () => 'some-builtin-slug',
+      );
+      vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+        plugins: ['lobe-gtd', 'runtime-plugin'],
+        systemRole: 'Runtime system role',
+      });
+
+      const result = resolveAgentConfig({
+        agentId: 'builtin-agent',
+        isSubTask: true,
+      });
+
+      expect(result.plugins).not.toContain('lobe-gtd');
+      expect(result.plugins).toContain('runtime-plugin');
+    });
+
+    it('should keep lobe-gtd for builtin agent when isSubTask is false', () => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
+        () => 'some-builtin-slug',
+      );
+      vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+        plugins: ['lobe-gtd', 'runtime-plugin'],
+        systemRole: 'Runtime system role',
+      });
+
+      const result = resolveAgentConfig({
+        agentId: 'builtin-agent',
+        isSubTask: false,
+      });
+
+      expect(result.plugins).toContain('lobe-gtd');
+    });
+  });
 });

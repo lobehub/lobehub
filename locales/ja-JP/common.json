@@ -179,6 +179,7 @@
   "delete": "削除",
   "document": "ドキュメント",
   "download": "ダウンロード",
+  "downloadClient": "クライアントをダウンロード",
   "duplicate": "コピーを作成",
   "edit": "編集",
   "errors.invalidFileFormat": "ファイルフォーマットエラー",

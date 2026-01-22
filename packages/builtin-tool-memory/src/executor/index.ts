@@ -74,7 +74,7 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
       }
 
       return {
-        content: `🧠 Context memory saved: "${params.title}"`,
+        content: `Context memory "${params.title}" saved with memoryId: "${result.memoryId}" and contextId: "${result.contextId}"`,
         state: { contextId: result.contextId, memoryId: result.memoryId },
         success: true,
       };
@@ -151,7 +151,7 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
       }
 
       return {
-        content: `🧠 Identity memory saved: "${params.title}"`,
+        content: `Identity memory "${params.title}" saved with memoryId: "${result.memoryId}" and identityId: "${result.identityId}"`,
         state: { identityId: result.identityId, memoryId: result.memoryId },
         success: true,
       };
@@ -189,7 +189,7 @@ class MemoryExecutor extends BaseExecutor<typeof MemoryApiName> {
       }
 
       return {
-        content: `🧠 Preference memory saved: "${params.title}"`,
+        content: `Preference memory "${params.title}" saved with memoryId: "${result.memoryId}" and preferenceId: "${result.preferenceId}"`,
         state: { memoryId: result.memoryId, preferenceId: result.preferenceId },
         success: true,
       };

@@ -1,5 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import { ToolNameResolver } from '@lobechat/context-engine';
+import { ToolArgumentsRepairer, ToolNameResolver } from '@lobechat/context-engine';
 import { type ChatToolPayload, type MessageToolCall } from '@lobechat/types';
 import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { type StateCreator } from 'zustand/vanilla';
@@ -78,9 +78,18 @@ export const pluginInternals: StateCreator<
 
     // Resolve tool calls and add source field
     const resolved = toolNameResolver.resolve(toolCalls, manifests);
-    return resolved.map((payload) => ({
-      ...payload,
-      source: sourceMap[payload.identifier],
-    }));
+
+    return resolved.map((payload) => {
+      // Parse and repair arguments if needed
+      const manifest = manifests[payload.identifier];
+      const repairer = new ToolArgumentsRepairer(manifest);
+      const repairedArgs = repairer.parse(payload.apiName, payload.arguments);
+
+      return {
+        ...payload,
+        arguments: JSON.stringify(repairedArgs),
+        source: sourceMap[payload.identifier],
+      };
+    });
   },
 });

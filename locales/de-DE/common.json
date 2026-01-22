@@ -179,6 +179,7 @@
   "delete": "Löschen",
   "document": "Benutzerhandbuch",
   "download": "Herunterladen",
+  "downloadClient": "Client herunterladen",
   "duplicate": "Duplizieren",
   "edit": "Bearbeiten",
   "errors.invalidFileFormat": "Ungültiges Dateiformat",

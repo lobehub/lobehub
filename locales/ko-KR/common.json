@@ -179,6 +179,7 @@
   "delete": "삭제",
   "document": "사용 설명서",
   "download": "다운로드",
+  "downloadClient": "클라이언트 다운로드",
   "duplicate": "복사본 만들기",
   "edit": "편집",
   "errors.invalidFileFormat": "파일 형식 오류",

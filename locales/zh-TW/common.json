@@ -179,6 +179,7 @@
   "delete": "刪除",
   "document": "使用說明文件",
   "download": "下載",
+  "downloadClient": "下載客戶端",
   "duplicate": "建立副本",
   "edit": "編輯",
   "errors.invalidFileFormat": "檔案格式錯誤",

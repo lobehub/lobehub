@@ -1,8 +1,20 @@
 import type { AgentInstruction, AgentState } from '@lobechat/agent-runtime';
 
+import { DEFAULT_AGENT_CHAT_CONFIG, DEFAULT_AGENT_CONFIG } from '@/const/settings';
+import type { ResolvedAgentConfig } from '@/services/chat/mecha';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
 import type { OperationType } from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
+
+/**
+ * Create a mock ResolvedAgentConfig for testing
+ */
+const createMockResolvedAgentConfig = (): ResolvedAgentConfig => ({
+  agentConfig: { ...DEFAULT_AGENT_CONFIG },
+  chatConfig: { ...DEFAULT_AGENT_CHAT_CONFIG },
+  isBuiltinAgent: false,
+  plugins: [],
+});
 
 /**
  * Execute an executor with mock context
@@ -60,6 +72,7 @@ export const executeWithMockContext = async ({
 
   // Create executors with mock context
   const executors = createAgentExecutors({
+    agentConfig: createMockResolvedAgentConfig(),
     get: () => mockStore,
     messageKey: context.messageKey,
     operationId: context.operationId,

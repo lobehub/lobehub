@@ -84,43 +84,44 @@ export const GroupManagementManifest: BuiltinToolManifest = {
     // },
 
     // ==================== Task Execution ====================
-    {
-      description:
-        'Assign an asynchronous task to an agent. The task runs in the background and results are returned to the conversation context upon completion. Ideal for longer operations.',
-      name: GroupManagementApiName.executeAgentTask,
-      humanIntervention: 'required',
-      parameters: {
-        properties: {
-          agentId: {
-            description: 'The ID of the agent to execute the task.',
-            type: 'string',
-          },
-          title: {
-            description: 'Brief title describing what this task does (shown in UI).',
-            type: 'string',
-          },
-          task: {
-            description:
-              'Clear description of the task to perform. Be specific about expected deliverables.',
-            type: 'string',
-          },
-          timeout: {
-            default: 1_800_000,
-            description:
-              'Maximum time in milliseconds to wait for task completion (default: 1800000, 30 minutes).',
-            type: 'number',
-          },
-          skipCallSupervisor: {
-            default: false,
-            description:
-              'If true, the orchestration will end after the task completes, without calling the supervisor again. Use this when the task is the final action needed.',
-            type: 'boolean',
-          },
-        },
-        required: ['agentId', 'title', 'task'],
-        type: 'object',
-      },
-    },
+    // TODO: Enable executeAgentTask when ready
+    // {
+    //   description:
+    //     'Assign an asynchronous task to an agent. The task runs in the background and results are returned to the conversation context upon completion. Ideal for longer operations.',
+    //   name: GroupManagementApiName.executeAgentTask,
+    //   humanIntervention: 'required',
+    //   parameters: {
+    //     properties: {
+    //       agentId: {
+    //         description: 'The ID of the agent to execute the task.',
+    //         type: 'string',
+    //       },
+    //       title: {
+    //         description: 'Brief title describing what this task does (shown in UI).',
+    //         type: 'string',
+    //       },
+    //       task: {
+    //         description:
+    //           'Clear description of the task to perform. Be specific about expected deliverables.',
+    //         type: 'string',
+    //       },
+    //       timeout: {
+    //         default: 1_800_000,
+    //         description:
+    //           'Maximum time in milliseconds to wait for task completion (default: 1800000, 30 minutes).',
+    //         type: 'number',
+    //       },
+    //       skipCallSupervisor: {
+    //         default: false,
+    //         description:
+    //           'If true, the orchestration will end after the task completes, without calling the supervisor again. Use this when the task is the final action needed.',
+    //         type: 'boolean',
+    //       },
+    //     },
+    //     required: ['agentId', 'title', 'task'],
+    //     type: 'object',
+    //   },
+    // },
     // TODO: Enable executeAgentTasks when ready
     // {
     //   description:
@@ -168,22 +169,22 @@ export const GroupManagementManifest: BuiltinToolManifest = {
     //     type: 'object',
     //   },
     // },
-    {
-      description:
-        'Interrupt a running agent task. Use this to stop a task that is taking too long or is no longer needed.',
-      humanIntervention: 'always',
-      name: GroupManagementApiName.interrupt,
-      parameters: {
-        properties: {
-          taskId: {
-            description: 'The ID of the task to interrupt (returned by executeTask).',
-            type: 'string',
-          },
-        },
-        required: ['taskId'],
-        type: 'object',
-      },
-    },
+    // {
+    //   description:
+    //     'Interrupt a running agent task. Use this to stop a task that is taking too long or is no longer needed.',
+    //   humanIntervention: 'always',
+    //   name: GroupManagementApiName.interrupt,
+    //   parameters: {
+    //     properties: {
+    //       taskId: {
+    //         description: 'The ID of the task to interrupt (returned by executeTask).',
+    //         type: 'string',
+    //       },
+    //     },
+    //     required: ['taskId'],
+    //     type: 'object',
+    //   },
+    // },
 
     // ==================== Context Management ====================
     // {
