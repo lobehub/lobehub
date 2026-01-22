@@ -913,4 +913,108 @@ describe('resolveAgentConfig', () => {
       expect(result.plugins).toContain('lobe-gtd');
     });
   });
+
+  describe('disableTools (broadcast scenario)', () => {
+    beforeEach(() => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(() => undefined);
+    });
+
+    it('should return empty plugins when disableTools is true for regular agent', () => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () =>
+          ({
+            ...mockAgentConfig,
+            plugins: ['plugin-a', 'plugin-b', 'lobe-gtd'],
+          }) as any,
+      );
+
+      const result = resolveAgentConfig({
+        agentId: 'test-agent',
+        disableTools: true,
+      });
+
+      expect(result.plugins).toEqual([]);
+    });
+
+    it('should keep plugins when disableTools is false', () => {
+      const result = resolveAgentConfig({
+        agentId: 'test-agent',
+        disableTools: false,
+      });
+
+      expect(result.plugins).toEqual(['plugin-a', 'plugin-b']);
+    });
+
+    it('should keep plugins when disableTools is undefined', () => {
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.plugins).toEqual(['plugin-a', 'plugin-b']);
+    });
+
+    it('should return empty plugins for builtin agent when disableTools is true', () => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
+        () => 'some-builtin-slug',
+      );
+      vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+        plugins: ['runtime-plugin-1', 'runtime-plugin-2'],
+        systemRole: 'Runtime system role',
+      });
+
+      const result = resolveAgentConfig({
+        agentId: 'builtin-agent',
+        disableTools: true,
+      });
+
+      expect(result.plugins).toEqual([]);
+      expect(result.isBuiltinAgent).toBe(true);
+    });
+
+    it('should return empty plugins in page scope when disableTools is true', () => {
+      vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+        plugins: [PageAgentIdentifier],
+        systemRole: 'Page agent system role',
+      });
+
+      const result = resolveAgentConfig({
+        agentId: 'test-agent',
+        disableTools: true,
+        scope: 'page',
+      });
+
+      // disableTools should override page scope injection
+      expect(result.plugins).toEqual([]);
+    });
+
+    it('should take precedence over isSubTask filtering', () => {
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+        () =>
+          ({
+            ...mockAgentConfig,
+            plugins: ['lobe-gtd', 'plugin-a'],
+          }) as any,
+      );
+
+      const result = resolveAgentConfig({
+        agentId: 'test-agent',
+        disableTools: true,
+        isSubTask: true,
+      });
+
+      // disableTools should result in empty plugins regardless of isSubTask
+      expect(result.plugins).toEqual([]);
+    });
+
+    it('should preserve agentConfig and chatConfig when disableTools is true', () => {
+      const result = resolveAgentConfig({
+        agentId: 'test-agent',
+        disableTools: true,
+      });
+
+      // Only plugins should be empty, other config should be preserved
+      expect(result.plugins).toEqual([]);
+      expect(result.agentConfig).toEqual(mockAgentConfig);
+      expect(result.chatConfig).toEqual(mockChatConfig);
+      expect(result.isBuiltinAgent).toBe(false);
+    });
+  });
 });

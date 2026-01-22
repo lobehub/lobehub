@@ -192,22 +192,29 @@ export const streamingExecutor: StateCreator<
 
     // Resolve agent config with builtin agent runtime config merged
     // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
-    // isSubTask is passed to filter out lobe-gtd tools to prevent nested sub-task creation
+    // - isSubTask: filters out lobe-gtd tools to prevent nested sub-task creation
+    // - disableTools: clears all plugins for broadcast scenarios
     const agentConfig = resolveAgentConfig({
       agentId: effectiveAgentId || '',
+      disableTools, // Clear plugins for broadcast scenarios
       groupId, // Pass groupId for supervisor detection
       isSubTask, // Filter out lobe-gtd in sub-task context
       scope, // Pass scope from operation context
     });
     const { agentConfig: agentConfigData, plugins: pluginIds } = agentConfig;
 
-    log('[internal_createAgentState] resolved plugins=%o, isSubTask=%s', pluginIds, isSubTask);
+    log(
+      '[internal_createAgentState] resolved plugins=%o, isSubTask=%s, disableTools=%s',
+      pluginIds,
+      isSubTask,
+      disableTools,
+    );
 
-    // Get tools manifest map (skip if disableTools is true)
+    // Get tools manifest map (skip if disableTools is true / no plugins)
     let toolManifestMap: Record<string, unknown> = {};
     let enabledToolIds: string[] = [];
 
-    if (!disableTools) {
+    if (pluginIds.length > 0) {
       const toolsEngine = createAgentToolsEngine({
         model: agentConfigData.model,
         provider: agentConfigData.provider!,
@@ -222,6 +229,12 @@ export const streamingExecutor: StateCreator<
         toolsEngine.getEnabledPluginManifests(enabledToolIds).entries(),
       );
     }
+
+    log(
+      '[internal_createAgentState] toolManifestMap keys=%o, count=%d',
+      Object.keys(toolManifestMap),
+      Object.keys(toolManifestMap).length,
+    );
 
     // Get user intervention config
     const userStore = getUserStoreState();
@@ -606,7 +619,7 @@ export const streamingExecutor: StateCreator<
     }
 
     log(
-      '[internal_execAgentRuntime] start, operationId: %s, agentId: %s, subAgentId: %s, effectiveAgentId: %s, topicId: %s, messageKey: %s, parentMessageId: %s, parentMessageType: %s, messages count: %d',
+      '[internal_execAgentRuntime] start, operationId: %s, agentId: %s, subAgentId: %s, effectiveAgentId: %s, topicId: %s, messageKey: %s, parentMessageId: %s, parentMessageType: %s, messages count: %d, disableTools: %s',
       operationId,
       agentId,
       subAgentId,
@@ -616,6 +629,7 @@ export const streamingExecutor: StateCreator<
       parentMessageId,
       parentMessageType,
       originalMessages.length,
+      disableTools,
     );
 
     // Create a new array to avoid modifying the original messages

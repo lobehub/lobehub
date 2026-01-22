@@ -51,6 +51,12 @@ export interface AgentConfigResolverContext {
   /** Agent ID to resolve config for */
   agentId: string;
 
+  /**
+   * Whether to disable all tools for this agent execution.
+   * When true, returns empty plugins array (used for broadcast scenarios).
+   */
+  disableTools?: boolean;
+
   // Builtin agent specific context
   /** Document content for page-agent */
   documentContent?: string;
@@ -112,13 +118,27 @@ export interface ResolvedAgentConfig {
  * For regular agents, this simply returns the config from the store.
  */
 export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAgentConfig => {
-  const { agentId, model, documentContent, plugins, targetAgentConfig, isSubTask } = ctx;
+  const { agentId, model, documentContent, plugins, targetAgentConfig, isSubTask, disableTools } =
+    ctx;
 
-  log('resolveAgentConfig called with agentId: %s, scope: %s, isSubTask: %s', agentId, ctx.scope, isSubTask);
+  log(
+    'resolveAgentConfig called with agentId: %s, scope: %s, isSubTask: %s, disableTools: %s',
+    agentId,
+    ctx.scope,
+    isSubTask,
+    disableTools,
+  );
 
-  // Helper to filter out lobe-gtd in sub-task context to prevent nested sub-task creation
-  const applySubTaskFilter = (pluginIds: string[]) =>
-    isSubTask ? pluginIds.filter((id) => id !== 'lobe-gtd') : pluginIds;
+  // Helper to apply plugin filters:
+  // 1. If disableTools is true, return empty array (for broadcast scenarios)
+  // 2. If isSubTask is true, filter out lobe-gtd to prevent nested sub-task creation
+  const applyPluginFilters = (pluginIds: string[]) => {
+    if (disableTools) {
+      log('disableTools is true, returning empty plugins');
+      return [];
+    }
+    return isSubTask ? pluginIds.filter((id) => id !== 'lobe-gtd') : pluginIds;
+  };
 
   const agentStoreState = getAgentStoreState();
 
@@ -209,7 +229,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
         agentConfig: finalAgentConfig,
         chatConfig: finalChatConfig,
         isBuiltinAgent: false,
-        plugins: applySubTaskFilter(pageAgentPlugins),
+        plugins: applyPluginFilters(pageAgentPlugins),
       };
     }
 
@@ -218,7 +238,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
       agentConfig: finalAgentConfig,
       chatConfig: finalChatConfig,
       isBuiltinAgent: false,
-      plugins: applySubTaskFilter(finalPlugins),
+      plugins: applyPluginFilters(finalPlugins),
     };
   }
 
@@ -339,7 +359,7 @@ export const resolveAgentConfig = (ctx: AgentConfigResolverContext): ResolvedAge
     agentConfig: finalAgentConfig,
     chatConfig: resolvedChatConfig,
     isBuiltinAgent: true,
-    plugins: applySubTaskFilter(finalPlugins),
+    plugins: applyPluginFilters(finalPlugins),
     slug,
   };
 };
