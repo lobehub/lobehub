@@ -31,7 +31,7 @@ const PRODUCT_HUNT_NOTIFICATION = {
   actionHref: 'https://www.producthunt.com/posts/lobehub',
   actionLabel: 'Support us',
   description: 'Support us on Product Hunt. Your support means a lot to us!',
-  endTime: new Date('2026-01-29T23:59:59Z'),
+  endTime: new Date('2026-02-01T00:00:00Z'),
   image: 'https://file.rene.wang/clipboard-1769069508675-4576fadc5abe.png',
   slug: 'product-hunt-2025',
   startTime: new Date('2026-01-27T00:00:00Z'),
