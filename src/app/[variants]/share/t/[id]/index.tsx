@@ -56,7 +56,7 @@ const ShareTopicPage = memo(() => {
           <NotFound
             desc={t('sharePage.error.unauthorized.subtitle')}
             extra={
-              <Button href="/login" type="primary">
+              <Button href="/signin" type="primary">
                 {t('sharePage.error.unauthorized.action')}
               </Button>
             }

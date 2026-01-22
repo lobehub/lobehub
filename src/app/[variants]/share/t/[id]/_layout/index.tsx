@@ -65,7 +65,7 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
                 <UserAvatar size={32} />
               </Link>
             ) : (
-              <NextLink href="/login">
+              <NextLink href="/signin">
                 <ProductLogo size={32} />
               </NextLink>
             )}
