@@ -1,3 +1,6 @@
+import { DEFAULT_PROVIDER } from '@lobechat/business-const';
+import { DEFAULT_MODEL } from '@lobechat/const';
+
 import type { BuiltinAgentDefinition } from '../../types';
 import { BUILTIN_AGENT_SLUGS } from '../../types';
 import { systemRoleTemplate } from './systemRole';
@@ -9,8 +12,8 @@ export const PAGE_AGENT: BuiltinAgentDefinition = {
   avatar: '/avatars/doc-copilot.png',
   // Persist config - stored in database
   persist: {
-    model: 'claude-sonnet-4-5-20250929',
-    provider: 'lobehub',
+    model: DEFAULT_MODEL,
+    provider: DEFAULT_PROVIDER,
   },
 
   // Runtime function - generates dynamic config
