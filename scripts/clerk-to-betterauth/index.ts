@@ -80,10 +80,8 @@ async function migrateFromClerk() {
   const startedAt = Date.now();
   const accountCounts: Record<string, number> = {};
   let missingScopeNonCredential = 0;
-  let missingAccountIdNonCredential = 0;
   let passwordEnabledButNoDigest = 0;
   const sampleMissingScope: string[] = [];
-  const sampleMissingAccountId: string[] = [];
   const sampleMissingDigest: string[] = [];
 
   const bumpAccountCount = (providerId: string) => {
@@ -121,17 +119,27 @@ async function migrateFromClerk() {
 
       if (externalAccounts) {
         for (const externalAccount of externalAccounts) {
+          const provider = externalAccount.provider;
           const providerUserId = externalAccount.provider_user_id;
-          const providerId =
-            externalAccount.provider === 'credential'
-              ? 'credential'
-              : externalAccount.provider.replace('oauth_', '');
 
-          if (providerId !== 'credential' && !providerUserId) {
-            missingAccountIdNonCredential += 1;
-            if (sampleMissingAccountId.length < 5) sampleMissingAccountId.push(user.id);
+          /**
+           * Clerk external accounts never contain credential providers and always include provider_user_id.
+           * Enforce this assumption to avoid inserting invalid account rows.
+           */
+          if (provider === 'credential') {
+            throw new Error(
+              `[clerk-to-betterauth] unexpected credential external account: userId=${user.id}, externalAccountId=${externalAccount.id}`,
+            );
           }
-          if (providerId !== 'credential' && !externalAccount.approved_scopes) {
+          if (!providerUserId) {
+            throw new Error(
+              `[clerk-to-betterauth] missing provider_user_id: userId=${user.id}, externalAccountId=${externalAccount.id}, provider=${provider}`,
+            );
+          }
+
+          const providerId = provider.replace('oauth_', '');
+
+          if (!externalAccount.approved_scopes) {
             missingScopeNonCredential += 1;
             if (sampleMissingScope.length < 5) sampleMissingScope.push(user.id);
           }
@@ -140,7 +148,6 @@ async function migrateFromClerk() {
             accountId: providerUserId,
             createdAt: safeDateConversion(externalAccount.created_at),
             id: externalAccount.id,
-            password: externalAccount.provider === 'credential' ? user.password_digest : undefined,
             providerId,
             scope: externalAccount.approved_scopes?.replace(/\s+/g, ',') || undefined,
             updatedAt: safeDateConversion(externalAccount.updated_at),
@@ -250,7 +257,6 @@ async function migrateFromClerk() {
     [
       '[clerk-to-betterauth] anomalies:',
       `  - missing scope (non-credential): ${missingScopeNonCredential} sample=${sampleMissingScope.join(';') || 'n/a'}`,
-      `  - missing account_id (non-credential): ${missingAccountIdNonCredential} sample=${sampleMissingAccountId.join(';') || 'n/a'}`,
       `  - passwordEnabled without digest: ${passwordEnabledButNoDigest} sample=${sampleMissingDigest.join(';') || 'n/a'}`,
     ].join('\n'),
   );
