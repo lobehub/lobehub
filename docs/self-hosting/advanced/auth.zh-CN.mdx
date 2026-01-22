@@ -103,17 +103,17 @@ LobeChat 使用 [Better Auth](https://www.better-auth.com) 作为身份验证解
 
 用于邮箱验证、密码重置和魔法链接发送。先选择邮件服务，再填对应变量：
 
-| 环境变量                      | 类型 | 描述                                                                                        |
-| ------------------------- | -- | ----------------------------------------------------------------------------------------- |
-| `AUTH_EMAIL_VERIFICATION` | 可选 | 设置为 `1` 以要求用户在登录前验证邮箱（默认关闭）                                                               |
-| `EMAIL_SERVICE_PROVIDER`  | 可选 | 邮件服务选择：`nodemailer`（默认，SMTP）或 `resend`                                                    |
-| `SMTP_HOST`               | 必选 | SMTP 服务器主机名（如 `smtp.gmail.com`），仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要                |
-| `SMTP_PORT`               | 必选 | SMTP 服务器端口（TLS 通常为 `587`，SSL 为 `465`），仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要          |
-| `SMTP_SECURE`             | 可选 | SSL 设置为 `true`（端口 465），TLS 设置为 `false`（端口 587），仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要 |
-| `SMTP_USER`               | 必选 | SMTP 认证用户名，仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要                                     |
-| `SMTP_PASS`               | 必选 | SMTP 认证密码，仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要                                      |
-| `RESEND_API_KEY`          | 必选 | Resend API Key，`EMAIL_SERVICE_PROVIDER=resend` 时必填                                        |
-| `RESEND_FROM`             | 推荐 | 默认发件人地址（如 `noreply@已验证域名`），需为 Resend 已验证域名下的邮箱，`EMAIL_SERVICE_PROVIDER=resend` 时使用        |
+| 环境变量                      | 类型 | 描述                                                                                        | 示例                               |
+| ------------------------- | -- | ----------------------------------------------------------------------------------------- | -------------------------------- |
+| `AUTH_EMAIL_VERIFICATION` | 可选 | 设置为 `1` 以要求用户在登录前验证邮箱（默认关闭）                                                               | `1`                              |
+| `EMAIL_SERVICE_PROVIDER`  | 可选 | 邮件服务选择：`nodemailer`（默认，SMTP）或 `resend`                                                    | `resend`                         |
+| `SMTP_HOST`               | 必选 | SMTP 服务器主机名，仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要                                    | `smtp.gmail.com`                 |
+| `SMTP_PORT`               | 必选 | SMTP 服务器端口（TLS 通常为 `587`，SSL 为 `465`），仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要          | `587`                            |
+| `SMTP_SECURE`             | 可选 | SSL 设置为 `true`（端口 465），TLS 设置为 `false`（端口 587），仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要 | `false`                          |
+| `SMTP_USER`               | 必选 | SMTP 认证用户名，仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要                                     | `user@gmail.com`                 |
+| `SMTP_PASS`               | 必选 | SMTP 认证密码，仅在 `EMAIL_SERVICE_PROVIDER=nodemailer` 时需要                                      | `your-app-password`              |
+| `RESEND_API_KEY`          | 必选 | Resend API Key，`EMAIL_SERVICE_PROVIDER=resend` 时必填                                        | `re_xxxxxxxxxxxxxxxxxxxxxx`      |
+| `RESEND_FROM`             | 推荐 | 默认发件人地址，需为 Resend 已验证域名下的邮箱，`EMAIL_SERVICE_PROVIDER=resend` 时使用                           | `noreply@your-domain.com`        |
 
 ## 魔法链接（免密）登录
 
