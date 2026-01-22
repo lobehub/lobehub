@@ -1,6 +1,7 @@
 import type { ExternalAccountJSON, UserJSON } from '@clerk/backend';
 
 export type ClerkToBetterAuthMode = 'test' | 'prod';
+export type DatabaseDriver = 'neon' | 'node';
 
 export type CSVUserRow = {
   first_name: string;

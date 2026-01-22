@@ -1,7 +1,8 @@
 import './env';
-import type { ClerkToBetterAuthMode } from './types';
+import type { ClerkToBetterAuthMode, DatabaseDriver } from './types';
 
 const DEFAULT_MODE: ClerkToBetterAuthMode = 'test';
+const DEFAULT_DATABASE_DRIVER: DatabaseDriver = 'neon';
 
 export function getMigrationMode(): ClerkToBetterAuthMode {
   const mode = process.env.CLERK_TO_BETTERAUTH_MODE;
@@ -45,4 +46,10 @@ export function getClerkSecret(mode = getMigrationMode()): string {
   }
 
   return value;
+}
+
+export function getDatabaseDriver(): DatabaseDriver {
+  const driver = process.env.CLERK_TO_BETTERAUTH_DATABASE_DRIVER;
+  if (driver === 'neon' || driver === 'node') return driver;
+  return DEFAULT_DATABASE_DRIVER;
 }
