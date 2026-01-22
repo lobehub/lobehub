@@ -207,6 +207,13 @@ CLERK_TO_BETTERAUTH_DRY_RUN=1
 
 ### Step 2: Export Clerk Data
 
+#### Stop New User Registration
+
+Before exporting data, disable new user registration to ensure data consistency during migration:
+
+1. Go to [Clerk Dashboard](https://dashboard.clerk.com) → Configure → Restrictions
+2. Enable "Restricted" mode
+
 #### Export CSV from Clerk Dashboard
 
 1. Go to [Clerk Dashboard](https://dashboard.clerk.com) → Configure → Settings → User exports

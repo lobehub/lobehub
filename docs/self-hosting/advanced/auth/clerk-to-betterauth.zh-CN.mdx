@@ -201,6 +201,13 @@ CLERK_TO_BETTERAUTH_DRY_RUN=1
 
 ### 步骤 2：导出 Clerk 数据
 
+#### 停止新用户注册
+
+在导出数据前，先禁止新用户注册，确保迁移期间数据不变：
+
+1. 前往 [Clerk 控制台](https://dashboard.clerk.com) → Configure → Restrictions
+2. 启用「Restricted」模式
+
 #### 从 Clerk 控制台导出 CSV
 
 1. 前往 [Clerk 控制台](https://dashboard.clerk.com) → Configure → Settings → User exports
