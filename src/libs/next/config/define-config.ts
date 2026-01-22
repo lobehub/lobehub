@@ -36,6 +36,7 @@ export function defineConfig(config: CustomNextConfig) {
   const nextConfig: NextConfig = {
     ...(isStandaloneMode ? standaloneConfig : {}),
     assetPrefix,
+
     compiler: {
       emotion: true,
     },
@@ -313,13 +314,14 @@ export function defineConfig(config: CustomNextConfig) {
       },
       ...(config.redirects ?? []),
     ],
-
     // when external packages in dev mode with turbopack, this config will lead to bundle error
+    // @napi-rs/canvas is a native module that can't be bundled by Turbopack
+    // pdfjs-dist uses @napi-rs/canvas for DOMMatrix polyfill in Node.js environment
     serverExternalPackages: config.serverExternalPackages
       ? config.serverExternalPackages
-      : ['pdfkit'],
+      : ['pdfkit', '@napi-rs/canvas', 'pdfjs-dist'],
 
-    transpilePackages: ['pdfjs-dist', 'mermaid', 'better-auth-harmony'],
+    transpilePackages: ['mermaid', 'better-auth-harmony'],
     turbopack: {
       rules: isTest
         ? void 0
