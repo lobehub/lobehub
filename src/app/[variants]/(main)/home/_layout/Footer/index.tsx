@@ -4,11 +4,21 @@ import { BRANDING_EMAIL, SOCIAL_URL } from '@lobechat/business-const';
 import { ActionIcon, DropdownMenu, Icon, type MenuProps } from '@lobehub/ui';
 import { Flexbox } from '@lobehub/ui';
 import { DiscordIcon } from '@lobehub/ui/icons';
-import { Book, CircleHelp, Feather, FileClockIcon, FlaskConical, Github, Mail } from 'lucide-react';
+import {
+  Book,
+  CircleHelp,
+  Feather,
+  FileClockIcon,
+  FlaskConical,
+  Github,
+  Mail,
+  Rocket,
+} from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ChangelogModal from '@/components/ChangelogModal';
+import HighlightNotification from '@/components/HighlightNotification';
 import LabsModal from '@/components/LabsModal';
 import { DOCUMENTS_REFER_URL, GITHUB, mailTo } from '@/const/url';
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';
@@ -21,6 +31,7 @@ const Footer = memo(() => {
   const [isLabsModalOpen, setIsLabsModalOpen] = useState(false);
   const [shouldLoadChangelog, setShouldLoadChangelog] = useState(false);
   const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
+  const [isProductHuntCardOpen, setIsProductHuntCardOpen] = useState(false);
 
   const { open: openFeedbackModal } = useFeedbackModal();
 
@@ -43,6 +54,14 @@ const Footer = memo(() => {
 
   const handleOpenFeedbackModal = () => {
     openFeedbackModal();
+  };
+
+  const handleOpenProductHuntCard = () => {
+    setIsProductHuntCardOpen(true);
+  };
+
+  const handleCloseProductHuntCard = () => {
+    setIsProductHuntCardOpen(false);
   };
 
   const helpMenuItems: MenuProps['items'] = useMemo(
@@ -95,6 +114,12 @@ const Footer = memo(() => {
         label: t('labs'),
         onClick: handleOpenLabsModal,
       },
+      {
+        icon: <Icon icon={Rocket} />,
+        key: 'productHunt',
+        label: 'Product Hunt',
+        onClick: handleOpenProductHuntCard,
+      },
     ],
     [t],
   );
@@ -119,6 +144,13 @@ const Footer = memo(() => {
         onClose={handleCloseChangelogModal}
         open={isChangelogModalOpen}
         shouldLoad={shouldLoadChangelog}
+      />
+      <HighlightNotification
+        description="Support us on Product Hunt. Your support means a lot to us!"
+        image="https://file.rene.wang/clipboard-1769069508675-4576fadc5abe.png"
+        onClose={handleCloseProductHuntCard}
+        open={isProductHuntCardOpen}
+        title="We're on Product Hunt!"
       />
     </>
   );
