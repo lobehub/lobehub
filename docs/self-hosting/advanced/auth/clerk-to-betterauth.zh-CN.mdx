@@ -110,31 +110,53 @@ tags:
 
 对于大型部署或需要保留用户密码和 SSO 连接的情况，请使用迁移脚本。
 
+<Callout type={'error'}>
+  **重要说明**：
+
+  - 迁移脚本需要 **clone 仓库后在本地运行**，不是在部署环境中执行
+  - 由于迁移涉及用户数据，风险较高，**官方不提供部署时自动迁移功能**
+  - 请务必在测试环境验证后再操作生产数据库
+</Callout>
+
 <Callout type={'warning'}>
-  **强烈建议**：在正式迁移前，先使用 test 模式验证脚本能正常运行：
+  **迁移前准备**：
 
   - 使用 [Neon Fork 分支](https://neon.tech/docs/manage/branches#create-a-branch) 创建测试数据库
   - 使用 Clerk Development 环境的 API 密钥
-  - 确认测试迁移成功后再切换到 prod 模式
+  - 先在 test 模式下验证，确认成功后再切换到 prod 模式
 </Callout>
 
 ### 前置条件
 
+**环境要求：**
+
 - Node.js 18+
-- 访问 Clerk 控制台（用于 CSV 导出）
-- Clerk API 密钥（用于 API 导出）
-- 数据库连接字符串
-- 数据库 schema 已更新至最新版本
-- 已阅读 [身份验证服务配置](/zh/docs/self-hosting/advanced/auth) 文档，了解 Better Auth 环境变量
+- Git（用于 clone 仓库）
+- pnpm（用于安装依赖）
+
+**准备工作：**
+
+1. Clone LobeChat 仓库并安装依赖：
+
+   ```bash
+   git clone https://github.com/lobehub/lobe-chat.git
+   cd lobe-chat
+   pnpm install
+   ```
+
+2. 准备以下信息：
+   - Clerk 控制台访问权限（用于 CSV 导出）
+   - Clerk API 密钥（用于 API 导出）
+   - 数据库连接字符串
+
+3. 确保数据库 schema 为最新版本
 
 <Callout type={'info'}>
-  如果你长期停留在旧版本（如 1.x），数据库 schema 可能不是最新的。在运行迁移脚本前，请先更新数据库 schema：
+  如果你长期停留在旧版本（如 1.x），数据库 schema 可能不是最新的。请在 clone 的仓库中运行：
 
   ```bash
   DATABASE_URL=your-database-url pnpm db:migrate
   ```
-
-  详见 [数据库迁移文档](/zh/docs/self-hosting/server-database/docker-compose#upgrade)。
 </Callout>
 
 ### 步骤 1：配置迁移脚本环境变量

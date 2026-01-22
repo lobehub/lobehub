@@ -115,31 +115,53 @@ For small self-hosted deployments, the simplest approach is to let users reset t
 
 For larger deployments or when you need to preserve user passwords and SSO connections, use the migration scripts.
 
+<Callout type={'error'}>
+  **Important Notice**:
+
+  - Migration scripts must be **run locally after cloning the repository**, not in the deployment environment
+  - Due to the high-risk nature of user data migration, **we do not provide automatic migration during deployment**
+  - Always verify in a test environment before operating on production database
+</Callout>
+
 <Callout type={'warning'}>
-  **Strongly recommended**: Before production migration, verify the scripts work correctly in test mode:
+  **Before Migration**:
 
   - Use a [Neon Fork Branch](https://neon.tech/docs/manage/branches#create-a-branch) to create a test database
   - Use Clerk Development environment API keys
-  - Only switch to prod mode after confirming test migration succeeds
+  - Verify in test mode first, then switch to prod mode after confirming success
 </Callout>
 
 ### Prerequisites
 
+**Environment Requirements:**
+
 - Node.js 18+
-- Access to Clerk Dashboard (for CSV export)
-- Clerk API Secret Key (for API export)
-- Database connection string
-- Database schema updated to latest version
-- Familiar with [Authentication Service Configuration](/docs/self-hosting/advanced/auth) for Better Auth environment variables
+- Git (for cloning the repository)
+- pnpm (for installing dependencies)
+
+**Preparation:**
+
+1. Clone the LobeChat repository and install dependencies:
+
+   ```bash
+   git clone https://github.com/lobehub/lobe-chat.git
+   cd lobe-chat
+   pnpm install
+   ```
+
+2. Prepare the following information:
+   - Access to Clerk Dashboard (for CSV export)
+   - Clerk API Secret Key (for API export)
+   - Database connection string
+
+3. Ensure database schema is up to date
 
 <Callout type={'info'}>
-  If you've been on an older version (e.g., 1.x) for a while, your database schema may be outdated. Before running the migration scripts, update your database schema first:
+  If you've been on an older version (e.g., 1.x) for a while, your database schema may be outdated. Run this in the cloned repository:
 
   ```bash
   DATABASE_URL=your-database-url pnpm db:migrate
   ```
-
-  See [Database Migration Documentation](/docs/self-hosting/server-database/docker-compose#upgrade) for details.
 </Callout>
 
 ### Step 1: Configure Migration Script Environment Variables
