@@ -394,7 +394,6 @@ const ProviderConfig = memo<ProviderConfigProps>(
             ),
             desc: t('providerModels.config.checker.desc'),
             label: t('providerModels.config.checker.title'),
-            minWidth: undefined,
           }
         : undefined,
       showAceGcm && aceGcmItem,

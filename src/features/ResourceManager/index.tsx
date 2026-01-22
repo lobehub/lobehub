@@ -2,8 +2,8 @@
 
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Flexbox } from '@lobehub/ui';
-import { createStyles, cssVar } from 'antd-style';
-import { memo, useEffect } from 'react';
+import { createStaticStyles, useTheme } from 'antd-style';
+import { memo, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
@@ -19,7 +19,7 @@ import UploadDock from './components/UploadDock';
 
 const ChunkDrawer = dynamic(() => import('./components/ChunkDrawer'), { ssr: false });
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     container: css`
       position: relative;
@@ -33,7 +33,7 @@ const useStyles = createStyles(({ css, token }) => {
       width: 100%;
       height: 100%;
 
-      background-color: ${token.colorBgContainerSecondary};
+      background-color: var(--editor-overlay-bg, ${cssVar.colorBgContainer});
     `,
     pageEditorOverlay: css`
       position: absolute;
@@ -56,7 +56,7 @@ export type ResouceManagerMode = 'editor' | 'explorer' | 'page';
  * Business component, no need be reusable.
  */
 const ResourceManager = memo(() => {
-  const { styles } = useStyles();
+  const theme = useTheme();
   const [, setSearchParams] = useSearchParams();
   const [mode, currentViewItemId, libraryId, setMode, setCurrentViewItemId] =
     useResourceManagerStore((s) => [
@@ -68,6 +68,13 @@ const ResourceManager = memo(() => {
     ]);
 
   const currentDocument = useFileStore(documentSelectors.getDocumentById(currentViewItemId));
+
+  const cssVariables = useMemo<Record<string, string>>(
+    () => ({
+      '--editor-overlay-bg': theme.colorBgContainerSecondary,
+    }),
+    [theme.colorBgContainerSecondary],
+  );
 
   // Fetch specific document when switching to page mode if not already loaded
   useEffect(() => {
@@ -98,7 +105,7 @@ const ResourceManager = memo(() => {
 
   return (
     <>
-      <Flexbox className={styles.container} height={'100%'}>
+      <Flexbox className={styles.container} height={'100%'} style={cssVariables}>
         {/* Explorer is always rendered to preserve its state */}
         <Explorer />
 

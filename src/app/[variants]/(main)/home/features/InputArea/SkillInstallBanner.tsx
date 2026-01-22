@@ -2,7 +2,7 @@
 
 import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
 import { Avatar, Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Blocks } from 'lucide-react';
 import { type ReactNode, createElement, memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +11,7 @@ import SkillStore from '@/features/SkillStore';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   banner: css`
     cursor: pointer;
 
@@ -28,24 +28,24 @@ const useStyles = createStyles(({ css, token }) => ({
     margin-block-end: 6px;
     padding-block: 42px 10px;
     padding-inline: 16px;
-    border: 1px solid ${token.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 20px;
 
-    background: ${token.colorFillQuaternary};
+    background: ${cssVar.colorFillQuaternary};
     box-shadow: 0 12px 32px rgb(0 0 0 / 4%);
 
     transition: background 0.2s ease-in-out;
 
     &:hover {
-      background: ${token.colorFillQuaternary};
+      background: ${cssVar.colorFillQuaternary};
     }
   `,
   icon: css`
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   text: css`
     font-size: 13px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
 }));
 
@@ -60,7 +60,6 @@ const BANNER_SKILL_IDS = [
 ] as const;
 
 const SkillInstallBanner = memo(() => {
-  const { styles } = useStyles();
   const { t } = useTranslation('plugin');
   const [open, setOpen] = useState(false);
 

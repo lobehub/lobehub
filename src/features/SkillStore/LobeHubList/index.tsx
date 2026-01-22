@@ -1,7 +1,7 @@
 'use client';
 
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import type { Klavis } from 'klavis';
 import { memo, useMemo, useState } from 'react';
@@ -17,7 +17,7 @@ import Empty from '../Empty';
 import Item from './Item';
 import { useSkillConnect } from './useSkillConnect';
 
-const useStyles = createStyles(({ css }) => ({
+const styles = createStaticStyles(({ css }) => ({
   grid: css`
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -69,7 +69,6 @@ const DetailModalWithConnect = memo<DetailModalWithConnectProps>(({ detailState,
 DetailModalWithConnect.displayName = 'DetailModalWithConnect';
 
 export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
-  const { styles } = useStyles();
   const [detailState, setDetailState] = useState<DetailState | null>(null);
 
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);

@@ -1,7 +1,7 @@
 'use client';
 
 import { Block, Flexbox, Modal } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,7 +15,7 @@ import { type LobeToolType } from '@/types/tool/tool';
 
 import Actions from './Actions';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     padding-block: 12px;
     padding-inline: 0;
@@ -33,10 +33,10 @@ const useStyles = createStyles(({ css, token }) => ({
     cursor: pointer;
     font-size: 15px;
     font-weight: 500;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
 
     &:hover {
-      color: ${token.colorPrimary};
+      color: ${cssVar.colorPrimary};
     }
   `,
 }));
@@ -52,7 +52,6 @@ interface McpSkillItemProps {
 
 const McpSkillItem = memo<McpSkillItemProps>(
   ({ identifier, title, avatar, type, runtimeType, author }) => {
-    const { styles } = useStyles();
     const { t } = useTranslation('plugin');
     const isMCP = runtimeType === 'mcp';
     const isCustomPlugin = type === 'customPlugin';

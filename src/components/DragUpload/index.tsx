@@ -1,6 +1,6 @@
 /* eslint-disable no-undef */
 import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { FileImage, FileText, FileUpIcon } from 'lucide-react';
 import { memo } from 'react';
 import { createPortal } from 'react-dom';
@@ -11,22 +11,22 @@ import { getContainer, useDragUpload } from './useDragUpload';
 const BLOCK_SIZE = 64;
 const ICON_SIZE = { size: 36, strokeWidth: 1.5 };
 
-const useStyles = createStyles(({ css, token }) => {
+const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     container: css`
       width: 320px;
       height: 200px;
-      padding: calc(${token.borderRadiusLG}px + 4px);
+      padding: calc(${cssVar.borderRadiusLG} + 4px);
       border-radius: 16px;
 
-      background: ${token.geekblue};
+      background: ${cssVar.geekblue};
     `,
     content: css`
       width: 100%;
       height: 100%;
       padding: 16px;
       border: 1.5px dashed #fff;
-      border-radius: ${token.borderRadiusLG}px;
+      border-radius: ${cssVar.borderRadiusLG};
     `,
     desc: css`
       font-size: 14px;
@@ -34,24 +34,24 @@ const useStyles = createStyles(({ css, token }) => {
       color: #fff;
     `,
     icon: css`
-      border-radius: ${token.borderRadiusLG}px;
-      color: color-mix(in srgb, ${token.geekblue} 95%, black);
-      background: color-mix(in srgb, ${token.geekblue} 38%, white);
+      border-radius: ${cssVar.borderRadiusLG};
+      color: color-mix(in srgb, ${cssVar.geekblue} 95%, black);
+      background: color-mix(in srgb, ${cssVar.geekblue} 38%, white);
     `,
     iconGroup: css`
       margin-block-start: -44px;
     `,
     iconLeft: css`
       transform: rotateZ(-20deg) translateX(10px);
-      border-radius: ${token.borderRadiusLG}px;
-      color: color-mix(in srgb, ${token.geekblue} 95%, black);
-      background: color-mix(in srgb, ${token.geekblue} 68%, white);
+      border-radius: ${cssVar.borderRadiusLG};
+      color: color-mix(in srgb, ${cssVar.geekblue} 95%, black);
+      background: color-mix(in srgb, ${cssVar.geekblue} 68%, white);
     `,
     iconRight: css`
       transform: rotateZ(20deg) translateX(-10px);
-      border-radius: ${token.borderRadiusLG}px;
-      color: color-mix(in srgb, ${token.geekblue} 95%, black);
-      background: color-mix(in srgb, ${token.geekblue} 68%, white);
+      border-radius: ${cssVar.borderRadiusLG};
+      color: color-mix(in srgb, ${cssVar.geekblue} 95%, black);
+      background: color-mix(in srgb, ${cssVar.geekblue} 68%, white);
     `,
     title: css`
       font-size: 20px;
@@ -66,7 +66,7 @@ const useStyles = createStyles(({ css, token }) => {
       width: 100%;
       height: 100%;
 
-      background: ${token.colorBgMask};
+      background: ${cssVar.colorBgMask};
 
       transition: all 0.3s ease-in-out;
     `,
@@ -80,7 +80,6 @@ interface DragUploadProps {
 
 const DragUpload = memo<DragUploadProps>(({ enabledFiles = true, onUploadFiles }) => {
   const { t } = useTranslation('components');
-  const { styles } = useStyles();
 
   const isDragging = useDragUpload(onUploadFiles);
 

@@ -1,6 +1,6 @@
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 
-export const useItemStyles = createStyles(({ css, token }) => ({
+export const itemStyles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     position: relative;
     overflow: hidden;
@@ -11,7 +11,7 @@ export const useItemStyles = createStyles(({ css, token }) => ({
     overflow: hidden;
 
     font-size: 12px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,
@@ -20,7 +20,7 @@ export const useItemStyles = createStyles(({ css, token }) => ({
 
     font-size: 14px;
     font-weight: 500;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
     text-overflow: ellipsis;
     white-space: nowrap;
   `,

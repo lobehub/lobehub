@@ -8,7 +8,7 @@ import {
 } from '@lobechat/const';
 import { Flexbox, Icon, Image, Modal, Tag, Text, Typography } from '@lobehub/ui';
 import { Button, Divider } from 'antd';
-import { createStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { ExternalLink, Loader2, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +18,7 @@ import { klavisStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/s
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   authorLink: css`
     cursor: pointer;
 
@@ -26,7 +26,7 @@ const useStyles = createStyles(({ css, token }) => ({
     gap: 4px;
     align-items: center;
 
-    color: ${token.colorPrimary};
+    color: ${cssVar.colorPrimary};
 
     &:hover {
       text-decoration: underline;
@@ -39,7 +39,7 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   detailLabel: css`
     font-size: 12px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   header: css`
     display: flex;
@@ -49,7 +49,7 @@ const useStyles = createStyles(({ css, token }) => ({
     padding: 16px;
     border-radius: 12px;
 
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
   `,
   icon: css`
     display: flex;
@@ -61,25 +61,25 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 56px;
     border-radius: 12px;
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   introduction: css`
     font-size: 14px;
     line-height: 1.8;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   sectionTitle: css`
     font-size: 14px;
     font-weight: 600;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   title: css`
     font-size: 18px;
     font-weight: 600;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
   `,
   toolTag: css`
-    font-family: ${token.fontFamilyCode};
+    font-family: ${cssVar.fontFamilyCode};
     font-size: 12px;
   `,
   toolsContainer: css`
@@ -90,7 +90,7 @@ const useStyles = createStyles(({ css, token }) => ({
   trustWarning: css`
     font-size: 12px;
     line-height: 1.6;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -107,7 +107,6 @@ export interface IntegrationDetailModalProps {
 
 const IntegrationDetailModal = memo<IntegrationDetailModalProps>(
   ({ open, onClose, type, identifier, isConnecting, onConnect }) => {
-    const { styles } = useStyles();
     const { t } = useTranslation(['plugin', 'setting']);
 
     // Get static config based on type

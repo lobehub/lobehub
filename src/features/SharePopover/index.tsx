@@ -12,7 +12,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
 
-import { useStyles } from './style';
+import { styles } from './style';
 
 type Visibility = 'private' | 'link';
 
@@ -23,7 +23,6 @@ interface SharePopoverContentProps {
 const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => {
   const { t } = useTranslation('chat');
   const { message, modal } = App.useApp();
-  const { styles } = useStyles();
   const [updating, setUpdating] = useState(false);
   const { close } = usePopoverContext();
   const containerRef = useRef<HTMLDivElement>(null);

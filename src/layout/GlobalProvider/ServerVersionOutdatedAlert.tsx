@@ -1,9 +1,9 @@
 'use client';
 
 import { Button, Flexbox, Icon } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles, useTheme } from 'antd-style';
 import { TriangleAlert, X } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MANUAL_UPGRADE_URL } from '@/const/url';
@@ -12,7 +12,7 @@ import { useElectronStore } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import { useGlobalStore } from '@/store/global';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   closeButton: css`
     cursor: pointer;
 
@@ -26,15 +26,15 @@ const useStyles = createStyles(({ css, token }) => ({
 
     width: 28px;
     height: 28px;
-    border-radius: ${token.borderRadius}px;
+    border-radius: ${cssVar.borderRadius};
 
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
 
     transition: all 0.2s;
 
     &:hover {
-      color: ${token.colorText};
-      background: ${token.colorFillSecondary};
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillSecondary};
     }
   `,
   container: css`
@@ -46,7 +46,7 @@ const useStyles = createStyles(({ css, token }) => ({
     align-items: center;
     justify-content: center;
 
-    background: ${token.colorBgMask};
+    background: ${cssVar.colorBgMask};
   `,
   content: css`
     position: relative;
@@ -55,39 +55,47 @@ const useStyles = createStyles(({ css, token }) => ({
 
     max-width: 480px;
     padding: 24px;
-    border: 1px solid ${token.yellowBorder};
-    border-radius: ${token.borderRadiusLG}px;
+    border: 1px solid var(--content-yellow-border, ${cssVar.colorWarningBorder});
+    border-radius: ${cssVar.borderRadiusLG};
 
-    background: ${token.colorBgContainer};
-    box-shadow: ${token.boxShadowSecondary};
+    background: ${cssVar.colorBgContainer};
+    box-shadow: ${cssVar.boxShadowSecondary};
   `,
   desc: css`
     line-height: 1.6;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   title: css`
     font-size: 16px;
     font-weight: bold;
-    color: ${token.colorWarningText};
+    color: ${cssVar.colorWarningText};
   `,
   titleIcon: css`
     flex-shrink: 0;
-    color: ${token.colorWarning};
+    color: ${cssVar.colorWarning};
   `,
   warning: css`
     padding: 12px;
-    border-radius: ${token.borderRadius}px;
-    color: ${token.colorWarningText};
-    background: ${token.yellowBg};
+    border-radius: ${cssVar.borderRadius};
+    color: ${cssVar.colorWarningText};
+    background: var(--warning-yellow-bg, ${cssVar.colorWarningBg});
   `,
 }));
 
 const ServerVersionOutdatedAlert = () => {
-  const { styles } = useStyles();
+  const theme = useTheme();
   const { t } = useTranslation('common');
   const [dismissed, setDismissed] = useState(false);
   const isServerVersionOutdated = useGlobalStore((s) => s.isServerVersionOutdated);
   const storageMode = useElectronStore(electronSyncSelectors.storageMode);
+
+  const cssVariables = useMemo<Record<string, string>>(
+    () => ({
+      '--content-yellow-border': theme.yellowBorder,
+      '--warning-yellow-bg': theme.yellowBg,
+    }),
+    [theme.yellowBorder, theme.yellowBg],
+  );
 
   // Only show alert when using self-hosted server, not cloud
   if (storageMode !== 'selfHost') return null;
@@ -95,7 +103,7 @@ const ServerVersionOutdatedAlert = () => {
 
   return (
     <div className={styles.container}>
-      <div className={styles.content}>
+      <div className={styles.content} style={cssVariables}>
         <div className={styles.closeButton} onClick={() => setDismissed(true)}>
           <Icon icon={X} />
         </div>

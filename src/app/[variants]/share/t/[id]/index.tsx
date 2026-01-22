@@ -1,29 +1,27 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Button, Center } from '@lobehub/ui';
 import { TRPCClientError } from '@trpc/client';
-import { Button, Result, Skeleton } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router-dom';
 import useSWR from 'swr';
 
+import NotFound from '@/components/404';
+import Loading from '@/components/Loading/BrandTextLoading';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import SharedMessageList from './SharedMessageList';
 
-const useStyles = createStyles(({ css }) => ({
-  container: css`
-    flex: 1;
-  `,
+const styles = createStaticStyles(({ css }) => ({
   errorContainer: css`
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
 
-    min-height: 400px;
+    height: 80vh;
     padding: 48px;
 
     text-align: center;
@@ -31,7 +29,6 @@ const useStyles = createStyles(({ css }) => ({
 }));
 
 const ShareTopicPage = memo(() => {
-  const { styles } = useStyles();
   const { t } = useTranslation('chat');
   const { id } = useParams<{ id: string }>();
 
@@ -41,12 +38,11 @@ const ShareTopicPage = memo(() => {
     { revalidateOnFocus: false },
   );
 
-  if (isLoading) {
+  if (!error && isLoading) {
     return (
-      <Flexbox className={styles.container} gap={16}>
-        <Skeleton active paragraph={{ rows: 1 }} title={false} />
-        <Skeleton active paragraph={{ rows: 6 }} />
-      </Flexbox>
+      <Center className={styles.errorContainer}>
+        <Loading debugId="share" />
+      </Center>
     );
   }
 
@@ -56,56 +52,53 @@ const ShareTopicPage = memo(() => {
 
     if (errorCode === 'UNAUTHORIZED') {
       return (
-        <Flexbox className={styles.errorContainer}>
-          <Result
+        <Center className={styles.errorContainer}>
+          <NotFound
+            desc={t('sharePage.error.unauthorized.subtitle')}
             extra={
               <Button href="/login" type="primary">
                 {t('sharePage.error.unauthorized.action')}
               </Button>
             }
-            status="403"
-            subTitle={t('sharePage.error.unauthorized.subtitle')}
+            status={''}
             title={t('sharePage.error.unauthorized.title')}
           />
-        </Flexbox>
+        </Center>
       );
     }
 
     if (errorCode === 'FORBIDDEN') {
       return (
-        <Flexbox className={styles.errorContainer}>
-          <Result
-            status="403"
-            subTitle={t('sharePage.error.forbidden.subtitle')}
+        <Center className={styles.errorContainer}>
+          <NotFound
+            desc={t('sharePage.error.forbidden.subtitle')}
+            status={403}
             title={t('sharePage.error.forbidden.title')}
           />
-        </Flexbox>
+        </Center>
       );
     }
 
     // NOT_FOUND or other errors
     return (
-      <Flexbox className={styles.errorContainer}>
-        <Result
-          status="404"
-          subTitle={t('sharePage.error.notFound.subtitle')}
+      <Center className={styles.errorContainer}>
+        <NotFound
+          desc={t('sharePage.error.notFound.subtitle')}
           title={t('sharePage.error.notFound.title')}
         />
-      </Flexbox>
+      </Center>
     );
   }
 
   if (!data) return null;
 
   return (
-    <Flexbox className={styles.container}>
-      <SharedMessageList
-        agentId={data.agentId}
-        groupId={data.groupId}
-        shareId={data.shareId}
-        topicId={data.topicId}
-      />
-    </Flexbox>
+    <SharedMessageList
+      agentId={data.agentId}
+      groupId={data.groupId}
+      shareId={data.shareId}
+      topicId={data.topicId}
+    />
   );
 });
 

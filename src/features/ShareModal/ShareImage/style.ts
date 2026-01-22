@@ -12,7 +12,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     background-size: 120% 120%;
   `,
   container: css`
-    background: ${cssVar.colorBgLayout};
+    background: ${cssVar.colorBgContainer};
   `,
   container_withBackground_true: css`
     overflow: hidden;
@@ -25,7 +25,8 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   header: css`
     margin-block-end: -24px;
-    padding: 16px;
+    padding-block: 16px;
+    padding-inline: 24px;
     border-block-end: 1px solid ${cssVar.colorBorder};
     background: ${cssVar.colorBgContainer};
   `,

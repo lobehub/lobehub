@@ -8,7 +8,7 @@ import { Loader2, MoreVerticalIcon, Plus, Unplug } from 'lucide-react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useItemStyles } from '../style';
+import { itemStyles } from '../style';
 import { useSkillConnect } from './useSkillConnect';
 
 interface ItemProps {
@@ -25,7 +25,7 @@ interface ItemProps {
 const Item = memo<ItemProps>(
   ({ description, icon, identifier, label, onOpenDetail, serverName, type }) => {
     const { t } = useTranslation('setting');
-    const { styles } = useItemStyles();
+    const styles = itemStyles;
     const { modal } = App.useApp();
 
     const { handleConnect, handleDisconnect, isConnected, isConnecting } = useSkillConnect({

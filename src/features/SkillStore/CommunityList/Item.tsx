@@ -17,10 +17,10 @@ import { useToolStore } from '@/store/tool';
 import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
 import { type DiscoverMcpItem } from '@/types/discover';
 
-import { useItemStyles } from '../style';
+import { itemStyles } from '../style';
 
 const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => {
-  const { styles } = useItemStyles();
+  const styles = itemStyles;
   const { t } = useTranslation('plugin');
   const { modal } = App.useApp();
   const [detailOpen, setDetailOpen] = useState(false);
