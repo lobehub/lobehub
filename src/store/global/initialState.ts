@@ -180,9 +180,18 @@ export interface GlobalState {
    */
   initClientDBStage: DatabaseLoadingState;
   isMobile?: boolean;
+  /**
+   * 服务端版本过旧，不支持 /api/version 接口
+   * 需要提示用户更新服务端
+   */
+  isServerVersionOutdated?: boolean;
   isStatusInit?: boolean;
   latestVersion?: string;
   navigate?: NavigateFunction;
+  /**
+   * 服务端版本号，用于检测客户端与服务端版本是否一致
+   */
+  serverVersion?: string;
   sidebarKey: SidebarTabKey;
   status: SystemStatus;
   statusStorage: AsyncLocalStorage<SystemStatus>;

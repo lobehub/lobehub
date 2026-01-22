@@ -5,6 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
 
+import { isDesktop } from '@/const/version';
 import { enableNextAuth } from '@/envs/auth';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAgentStore } from '@/store/agent';
@@ -32,7 +33,10 @@ const StoreInitialization = memo(() => {
 
   const { serverConfig } = useServerConfigStore();
 
-  const useInitSystemStatus = useGlobalStore((s) => s.useInitSystemStatus);
+  const [useInitSystemStatus, useCheckServerVersion] = useGlobalStore((s) => [
+    s.useInitSystemStatus,
+    s.useCheckServerVersion,
+  ]);
 
   const useInitBuiltinAgent = useAgentStore((s) => s.useInitBuiltinAgent);
   const useInitAiProviderKeyVaults = useAiInfraStore((s) => s.useFetchAiProviderRuntimeState);
@@ -40,6 +44,9 @@ const StoreInitialization = memo(() => {
 
   // init the system preference
   useInitSystemStatus();
+
+  // check server version in desktop app
+  useCheckServerVersion(isDesktop);
 
   // fetch server config
   const useFetchServerConfig = useServerConfigStore((s) => s.useInitServerConfig);

@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
 import { CHANGELOG_URL, MANUAL_UPGRADE_URL, OFFICIAL_SITE } from '@/const/url';
-import { CURRENT_VERSION } from '@/const/version';
+import { CURRENT_VERSION, isDesktop } from '@/const/version';
 import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
 import { useGlobalStore } from '@/store/global';
 
@@ -18,8 +18,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   const hasNewVersion = useNewVersion();
-  const [latestVersion] = useGlobalStore((s) => [s.latestVersion]);
+  const [latestVersion, serverVersion, useCheckServerVersion] = useGlobalStore((s) => [
+    s.latestVersion,
+    s.serverVersion,
+    s.useCheckServerVersion,
+  ]);
   const { t } = useTranslation('common');
+
+  useCheckServerVersion(isDesktop);
+
+  const showServerVersion = serverVersion && serverVersion !== CURRENT_VERSION;
 
   return (
     <Flexbox
@@ -46,6 +54,9 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
           <div style={{ fontSize: 18, fontWeight: 'bolder' }}>{BRANDING_NAME}</div>
           <Flexbox gap={6} horizontal={!mobile}>
             <Tag>v{CURRENT_VERSION}</Tag>
+            {showServerVersion && (
+              <Tag>{t('upgradeVersion.serverVersion', { version: `v${serverVersion}` })}</Tag>
+            )}
             {hasNewVersion && (
               <Tag color={'info'}>
                 {t('upgradeVersion.newVersion', { version: `v${latestVersion}` })}

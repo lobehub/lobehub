@@ -6,7 +6,9 @@ import { type ReactNode, Suspense } from 'react';
 import { ReferralProvider } from '@/business/client/ReferralProvider';
 import { LobeAnalyticsProviderWrapper } from '@/components/Analytics/LobeAnalyticsProviderWrapper';
 import { DragUploadProvider } from '@/components/DragUploadZone/DragUploadProvider';
+import ClientOnly from '@/components/client/ClientOnly';
 import { getServerFeatureFlagsValue } from '@/config/featureFlags';
+import { isDesktop } from '@/const/version';
 import { appEnv } from '@/envs/app';
 import DevPanel from '@/features/DevPanel';
 import { getServerGlobalConfig } from '@/server/globalConfig';
@@ -20,6 +22,7 @@ import ImportSettings from './ImportSettings';
 import Locale from './Locale';
 import NextThemeProvider from './NextThemeProvider';
 import QueryProvider from './Query';
+import ServerVersionOutdatedAlert from './ServerVersionOutdatedAlert';
 import StoreInitialization from './StoreInitialization';
 import StyleRegistry from './StyleRegistry';
 
@@ -66,6 +69,8 @@ const GlobalLayout = async ({
             >
               <QueryProvider>
                 <StoreInitialization />
+
+                <ClientOnly>{isDesktop && <ServerVersionOutdatedAlert />}</ClientOnly>
                 <FaviconProvider>
                   <GroupWizardProvider>
                     <DragUploadProvider>
