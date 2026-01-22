@@ -102,6 +102,9 @@ class CalculatorExecutor
     // Validate that the number contains only valid characters for the base
     const validChars = new Set('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, sourceBase));
     for (const char of trimmed.toUpperCase()) {
+      // Allow decimal points for parseInt compatibility (parseInt ignores decimal part)
+      if (char === '.') continue;
+
       if (!validChars.has(char)) {
         throw new Error(`Invalid digit '${char}' for base ${sourceBase}`);
       }
