@@ -12,7 +12,6 @@ const ComfyUI: ModelProviderCard = {
   chatModels: [],
   description:
     'A powerful open-source workflow engine for image, video, and audio generation, supporting models like SD, FLUX, Qwen, Hunyuan, and WAN with node-based editing and private deployment.',
-  enabled: true,
   id: 'comfyui',
   name: 'ComfyUI',
   settings: {
