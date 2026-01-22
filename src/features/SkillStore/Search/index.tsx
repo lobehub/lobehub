@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useToolStore } from '@/store/tool';
 
-import { SkillStoreTab } from '../Content';
+import { SkillStoreTab } from '../SkillStoreContent';
 
 interface SearchProps {
   activeTab: SkillStoreTab;

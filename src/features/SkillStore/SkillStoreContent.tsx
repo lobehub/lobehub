@@ -2,11 +2,10 @@
 
 import { Flexbox, Segmented } from '@lobehub/ui';
 import { type SegmentedOptions } from 'antd/es/segmented';
-import { memo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AddSkillButton from './AddSkillButton';
-
 import CommunityList from './CommunityList';
 import LobeHubList from './LobeHubList';
 import Search from './Search';
@@ -16,7 +15,7 @@ export enum SkillStoreTab {
   LobeHub = 'lobehub',
 }
 
-export const Content = memo(() => {
+export const SkillStoreContent = () => {
   const { t } = useTranslation('setting');
   const [activeTab, setActiveTab] = useState<SkillStoreTab>(SkillStoreTab.LobeHub);
   const [lobehubKeywords, setLobehubKeywords] = useState('');
@@ -52,8 +51,4 @@ export const Content = memo(() => {
       </Flexbox>
     </Flexbox>
   );
-});
-
-Content.displayName = 'SkillStoreContent';
-
-export default Content;
+};

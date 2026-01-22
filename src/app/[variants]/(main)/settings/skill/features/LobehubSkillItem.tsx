@@ -8,7 +8,7 @@ import { Loader2, MoreVerticalIcon, SquareArrowOutUpRight, Unplug } from 'lucide
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import IntegrationDetailModal from '@/features/IntegrationDetailModal';
+import { createIntegrationDetailModal } from '@/features/IntegrationDetailModal';
 import { useToolStore } from '@/store/tool';
 import {
   type LobehubSkillServer,
@@ -75,7 +75,6 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
   const { modal } = App.useApp();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWaitingAuth, setIsWaitingAuth] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
 
   const oauthWindowRef = useRef<Window | null>(null);
   const windowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -299,8 +298,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
   const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
 
   return (
-    <>
-      <Flexbox
+    <Flexbox
         align="center"
         className={styles.container}
         gap={16}
@@ -314,7 +312,12 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
           <Flexbox gap={4} style={{ overflow: 'hidden' }}>
             <span
               className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}
-              onClick={() => setDetailOpen(true)}
+              onClick={() =>
+                createIntegrationDetailModal({
+                  identifier: provider.id,
+                  type: 'lobehub',
+                })
+              }
             >
               {provider.label}
             </span>
@@ -326,15 +329,6 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
           {renderAction()}
         </Flexbox>
       </Flexbox>
-      <IntegrationDetailModal
-        identifier={provider.id}
-        isConnecting={isConnecting || isWaitingAuth}
-        onClose={() => setDetailOpen(false)}
-        onConnect={handleConnect}
-        open={detailOpen}
-        type="lobehub"
-      />
-    </>
   );
 });
 

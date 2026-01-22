@@ -5,14 +5,14 @@ import { Center, Flexbox } from '@lobehub/ui';
 import { Space, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { LucideTrash2, Plug2, Store } from 'lucide-react';
-import { memo, useState } from 'react';
+import { memo, useCallback } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import PluginTag from '@/components/Plugins/PluginTag';
 import { FORM_STYLE } from '@/const/layoutTokens';
-import SkillStore from '@/features/SkillStore';
+import { createSkillStoreModal } from '@/features/SkillStore';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { pluginHelpers, useToolStore } from '@/store/tool';
@@ -27,9 +27,11 @@ import PluginAction from './PluginAction';
 const AgentPlugin = memo(() => {
   const { t } = useTranslation('setting');
 
-  const [showStore, setShowStore] = useState(false);
-
   const navigate = useNavigate();
+
+  const handleOpenStore = useCallback(() => {
+    createSkillStoreModal();
+  }, []);
 
   const [userEnabledPlugins, toggleAgentPlugin] = useStore((s) => [
     s.config.plugins || [],
@@ -120,7 +122,7 @@ const AgentPlugin = memo(() => {
             icon={Store}
             onClick={(e) => {
               e.stopPropagation();
-              setShowStore(true);
+              handleOpenStore();
             }}
             size={'small'}
           />
@@ -139,7 +141,7 @@ const AgentPlugin = memo(() => {
               onClick={(e) => {
                 e.stopPropagation();
                 e.preventDefault();
-                setShowStore(true);
+                handleOpenStore();
                 navigate('/community/mcp');
               }}
               to={'/community/mcp'}
@@ -168,12 +170,7 @@ const AgentPlugin = memo(() => {
     title: t('settingPlugin.title'),
   };
 
-  return (
-    <>
-      <SkillStore open={showStore} setOpen={setShowStore} />
-      <Form items={[plugin]} itemsType={'group'} variant={'borderless'} {...FORM_STYLE} />
-    </>
-  );
+  return <Form items={[plugin]} itemsType={'group'} variant={'borderless'} {...FORM_STYLE} />;
 });
 
 export default AgentPlugin;

@@ -4,10 +4,10 @@ import { getKlavisServerByServerIdentifier, getLobehubSkillProviderById } from '
 import { Avatar, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { Blocks } from 'lucide-react';
-import { type ReactNode, createElement, memo, useMemo, useState } from 'react';
+import { type ReactNode, createElement, memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import SkillStore from '@/features/SkillStore';
+import { createSkillStoreModal } from '@/features/SkillStore';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 
@@ -61,7 +61,6 @@ const BANNER_SKILL_IDS = [
 
 const SkillInstallBanner = memo(() => {
   const { t } = useTranslation('plugin');
-  const [open, setOpen] = useState(false);
 
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
@@ -108,20 +107,21 @@ const SkillInstallBanner = memo(() => {
     return items;
   }, []);
 
+  const handleOpenStore = useCallback(() => {
+    createSkillStoreModal();
+  }, []);
+
   // Don't show banner if no skills are enabled
   if (!isLobehubSkillEnabled && !isKlavisEnabled) return null;
 
   return (
-    <>
-      <div className={styles.banner} onClick={() => setOpen(true)}>
-        <Flexbox align="center" gap={8} horizontal>
-          <Icon className={styles.icon} icon={Blocks} size={18} />
-          <span className={styles.text}>{t('skillInstallBanner.title')}</span>
-        </Flexbox>
-        {avatarItems.length > 0 && <Avatar.Group items={avatarItems} shape="circle" size={24} />}
-      </div>
-      <SkillStore open={open} setOpen={setOpen} />
-    </>
+    <div className={styles.banner} onClick={handleOpenStore}>
+      <Flexbox align="center" gap={8} horizontal>
+        <Icon className={styles.icon} icon={Blocks} size={18} />
+        <span className={styles.text}>{t('skillInstallBanner.title')}</span>
+      </Flexbox>
+      {avatarItems.length > 0 && <Avatar.Group items={avatarItems} shape="circle" size={24} />}
+    </div>
   );
 });
 

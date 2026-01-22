@@ -18,7 +18,7 @@ import KlavisServerItem from '@/features/ChatInput/ActionBar/Tools/KlavisServerI
 import LobehubSkillServerItem from '@/features/ChatInput/ActionBar/Tools/LobehubSkillServerItem';
 import ToolItem from '@/features/ChatInput/ActionBar/Tools/ToolItem';
 import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
-import SkillStore from '@/features/SkillStore';
+import { createSkillStoreModal } from '@/features/SkillStore';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { useAgentStore } from '@/store/agent';
@@ -157,8 +157,6 @@ const AgentTool = memo<AgentToolProps>(
     const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
     const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
 
-    // Plugin store modal state
-    const [modalOpen, setModalOpen] = useState(false);
     const [updating, setUpdating] = useState(false);
 
     // Tab state for dual-column layout
@@ -423,7 +421,7 @@ const AgentTool = memo<AgentToolProps>(
           key: 'plugin-store',
           label: t('tools.plugins.store'),
           onClick: () => {
-            setModalOpen(true);
+            createSkillStoreModal();
           },
         },
       ],
@@ -623,9 +621,6 @@ const AgentTool = memo<AgentToolProps>(
             </ActionDropdown>
           </Suspense>
         </Flexbox>
-
-        {/* PluginStore Modal - rendered outside Flexbox to avoid event interference */}
-        {modalOpen && <SkillStore open={modalOpen} setOpen={setModalOpen} />}
       </>
     );
   },
