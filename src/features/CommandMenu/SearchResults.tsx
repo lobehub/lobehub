@@ -11,12 +11,12 @@ import {
   Puzzle,
   Sparkles,
 } from 'lucide-react';
-import { markdownToTxt } from 'markdown-to-txt';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import type { SearchResult } from '@/database/repositories/search';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { CommandItem } from './components';
 import { styles } from './styles';

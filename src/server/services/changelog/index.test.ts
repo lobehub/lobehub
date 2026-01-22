@@ -19,8 +19,9 @@ vi.mock('gray-matter', () => ({
   })),
 }));
 
-vi.mock('markdown-to-txt', () => ({
-  markdownToTxt: vi.fn().mockImplementation((text) => text),
+vi.mock('@/utils/markdownToTxt', () => ({
+  default: vi.fn().mockImplementation((text: string) => text),
+  markdownToTxt: vi.fn().mockImplementation((text: string) => text),
 }));
 
 vi.mock('semver', async (importOriginal) => {
