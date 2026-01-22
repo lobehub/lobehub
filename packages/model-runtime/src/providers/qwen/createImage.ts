@@ -24,7 +24,7 @@ const text2ImageModels = new Set([
   'flux-merged',
 ]);
 
-const image2ImageModels = new Set(['wan2.5-i2i-preview', 'wanx2.1-imageedit']);
+const image2ImageModels = new Set(['wan2.5-i2i-preview']);
 
 interface QwenImageTaskResponse {
   output: {
@@ -248,10 +248,7 @@ export async function createQwenImage(
   const { model } = payload;
 
   try {
-    const isImage2ImageModel = image2ImageModels.has(model);
-    const isText2ImageModel = text2ImageModels.has(model);
-
-    if (isImage2ImageModel) {
+    if (image2ImageModels.has(model)) {
       log('Using image2image API for model: %s', model);
 
       const taskId = await createQwenImageTask(payload, apiKey, 'image2image');
@@ -297,7 +294,7 @@ export async function createQwenImage(
       return result;
     }
 
-    if (isText2ImageModel) {
+    if (text2ImageModels.has(model)) {
       log('Using text2image API for model: %s', model);
 
       const taskId = await createQwenImageTask(payload, apiKey, 'text2image');
