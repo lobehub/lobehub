@@ -23,8 +23,7 @@ interface BackendAdapterResponse {
 export const dateKeys = ['expires', 'emailVerified'];
 
 /**
- * @description LobeNextAuthDbAdapter is implemented to handle the database operations
- * for NextAuth, this function do the same things as `src/app/api/webhooks/clerk/route.ts`
+ * @description LobeNextAuthDbAdapter is implemented to handle the database operations for NextAuth
  * @returns {Adapter}
  */
 export function LobeNextAuthDbAdapter(): Adapter {

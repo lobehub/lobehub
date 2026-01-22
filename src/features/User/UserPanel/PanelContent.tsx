@@ -10,8 +10,6 @@ import BusinessPanelContent from '@/business/client/features/User/BusinessPanelC
 import BrandWatermark from '@/components/BrandWatermark';
 import Menu from '@/components/Menu';
 import { isDesktop } from '@/const/version';
-import { enableBetterAuth, enableNextAuth } from '@/envs/auth';
-import { useRouter } from '@/libs/next/navigation';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
@@ -22,8 +20,6 @@ import LangButton from './LangButton';
 import { useMenu } from './useMenu';
 
 const PanelContent = memo<{ closePopover: () => void }>(({ closePopover }) => {
-  const router = useRouter();
-
   const isLoginWithAuth = useUserStore(authSelectors.isLoginWithAuth);
   const [openSignIn, signOut] = useUserStore((s) => [s.openLogin, s.logout]);
   const { mainItems, logoutItems } = useMenu();
@@ -52,10 +48,6 @@ const PanelContent = memo<{ closePopover: () => void }>(({ closePopover }) => {
 
     signOut();
     closePopover();
-    // NextAuth and Better Auth handle redirect in their own signOut methods
-    if (enableNextAuth || enableBetterAuth) return;
-    // Clerk uses /login page
-    router.push('/login');
   };
 
   return (

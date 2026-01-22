@@ -138,124 +138,6 @@ const assertSpeedInsightsAndAnalyticsRemoved = (code: string) =>
   !/import\s+\{\s*SpeedInsights\s*\}\s+from\b/.test(code) &&
   !/import\s+Analytics\s+from\b/.test(code);
 
-const removeClerkLogic = (code: string) => {
-  const ast = parse(Lang.Tsx, code);
-  const root = ast.root();
-  const edits: Array<{ start: number; end: number; text: string }> = [];
-
-  // Remove Clerk import - try multiple patterns
-  const clerkImportPatterns = [
-    { pattern: 'import Clerk from $SOURCE' },
-    { pattern: "import Clerk from './Clerk'" },
-    { pattern: "import Clerk from './Clerk/index'" },
-  ];
-
-  for (const pattern of clerkImportPatterns) {
-    const clerkImport = root.find({
-      rule: pattern,
-    });
-    if (clerkImport) {
-      const range = clerkImport.range();
-      edits.push({ start: range.start.index, end: range.end.index, text: '' });
-      break;
-    }
-  }
-
-  const findClerkIfStatement = () => {
-    const directMatch = root.find({
-      rule: {
-        pattern: 'if (authEnv.NEXT_PUBLIC_ENABLE_CLERK_AUTH) { $$$ }',
-      },
-    });
-
-    if (directMatch) return directMatch;
-
-    const allIfStatements = root.findAll({
-      rule: {
-        kind: 'if_statement',
-      },
-    });
-
-    for (const ifStmt of allIfStatements) {
-      const condition = ifStmt.find({
-        rule: {
-          pattern: 'authEnv.NEXT_PUBLIC_ENABLE_CLERK_AUTH',
-        },
-      });
-
-      if (condition) return ifStmt;
-    }
-
-    return null;
-  };
-
-  const clerkIfStatement = findClerkIfStatement();
-
-  if (clerkIfStatement) {
-    const ifRange = clerkIfStatement.range();
-    const elseClause = clerkIfStatement.find({
-      rule: {
-        kind: 'else_clause',
-      },
-    });
-
-    if (elseClause) {
-      const elseIfStmt = elseClause.find({
-        rule: {
-          kind: 'if_statement',
-        },
-      });
-
-      if (elseIfStmt) {
-        // Promote the first else-if to a top-level if and keep the rest of the chain
-        const elseRange = elseClause.range();
-        const replacement = code
-          .slice(elseRange.start.index, elseRange.end.index)
-          .replace(/^\s*else\s+/, '');
-
-        edits.push({
-          start: ifRange.start.index,
-          end: ifRange.end.index,
-          text: replacement,
-        });
-      } else {
-        const elseBlock = elseClause.find({
-          rule: {
-            kind: 'statement_block',
-          },
-        });
-
-        if (elseBlock) {
-          edits.push({
-            start: ifRange.start.index,
-            end: ifRange.end.index,
-            text: code.slice(elseBlock.range().start.index, elseBlock.range().end.index),
-          });
-        } else {
-          edits.push({ start: ifRange.start.index, end: ifRange.end.index, text: '' });
-        }
-      }
-    } else {
-      edits.push({ start: ifRange.start.index, end: ifRange.end.index, text: '' });
-    }
-  }
-
-  // Apply edits
-  if (edits.length === 0) return code;
-
-  edits.sort((a, b) => b.start - a.start);
-  let result = code;
-  for (const edit of edits) {
-    result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
-  }
-
-  return result;
-};
-
-const assertClerkLogicRemoved = (code: string) =>
-  !/\bNEXT_PUBLIC_ENABLE_CLERK_AUTH\b/.test(code) &&
-  !/\bauthEnv\.NEXT_PUBLIC_ENABLE_CLERK_AUTH\b/.test(code);
-
 const removeManifestFromMetadata = (code: string) => {
   const ast = parse(Lang.Tsx, code);
   const root = ast.root();
@@ -387,17 +269,7 @@ export const modifyAppCode = async (TEMP_DIR: string) => {
     assertAfter: assertSpeedInsightsAndAnalyticsRemoved,
   });
 
-  // 6. Remove Clerk logic from src/layout/AuthProvider/index.tsx
-  const authProviderPath = path.join(TEMP_DIR, 'src/layout/AuthProvider/index.tsx');
-  console.log('  Processing src/layout/AuthProvider/index.tsx...');
-  await updateFile({
-    filePath: authProviderPath,
-    name: 'modifyAppCode:removeClerkLogic',
-    transformer: removeClerkLogic,
-    assertAfter: assertClerkLogicRemoved,
-  });
-
-  // 7. Replace mdx Image component with next/image export
+  // 6. Replace mdx Image component with next/image export
   const mdxImagePath = path.join(TEMP_DIR, 'src/components/mdx/Image.tsx');
   console.log('  Processing src/components/mdx/Image.tsx...');
   await writeFileEnsuring({
@@ -407,7 +279,7 @@ export const modifyAppCode = async (TEMP_DIR: string) => {
     assertAfter: (code) => normalizeEol(code).trim() === "export { default } from 'next/image';",
   });
 
-  // 8. Remove manifest from metadata
+  // 7. Remove manifest from metadata
   const metadataPath = path.join(TEMP_DIR, 'src/app/[variants]/metadata.ts');
   console.log('  Processing src/app/[variants]/metadata.ts...');
   await updateFile({
@@ -424,7 +296,6 @@ if (isDirectRun(import.meta.url)) {
     { lang: Lang.Tsx, path: 'src/layout/GlobalProvider/index.tsx' },
     { lang: Lang.Tsx, path: 'src/app/[variants]/(main)/settings/features/SettingsContent.tsx' },
     { lang: Lang.Tsx, path: 'src/app/[variants]/layout.tsx' },
-    { lang: Lang.Tsx, path: 'src/layout/AuthProvider/index.tsx' },
     { lang: Lang.Tsx, path: 'src/components/mdx/Image.tsx' },
     { lang: Lang.Tsx, path: 'src/app/[variants]/metadata.ts' },
   ]);

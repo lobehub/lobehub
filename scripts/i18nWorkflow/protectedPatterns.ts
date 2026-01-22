@@ -76,7 +76,7 @@ export const PROTECTED_KEY_PATTERNS = [
  * How to use:
  *
  * 1. IGNORED_FILES - Files to completely skip during analysis:
- *    Add filename with .ts extension (e.g., 'clerk.ts')
+ *    Add filename with .ts extension (e.g., 'auth.ts')
  *    These files won't be scanned at all
  *
  * 2. PROTECTED_KEY_PATTERNS - Namespace/patterns to protect:

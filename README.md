@@ -422,13 +422,11 @@ Regardless of which database you choose, LobeChat can provide you with an excell
 
 ### [Support Multi-User Management][docs-feat-auth]
 
-LobeChat supports multi-user management and provides two main user authentication and management solutions to meet different needs:
+LobeChat supports multi-user management and provides flexible user authentication solutions:
 
-- **next-auth**: LobeChat integrates `next-auth`, a flexible and powerful identity verification library that supports multiple authentication methods, including OAuth, email login, credential login, etc. With `next-auth`, you can easily implement user registration, login, session management, social login, and other functions to ensure the security and privacy of user data.
+- **Better Auth**: LobeChat integrates `Better Auth`, a modern and flexible authentication library that supports multiple authentication methods, including OAuth, email login, credential login, magic link, and more. With `Better Auth`, you can easily implement user registration, login, session management, social login, multi-factor authentication (MFA), and other functions to ensure the security and privacy of user data.
 
-- [**Clerk**](https://go.clerk.com/exgqLG0): For users who need more advanced user management features, LobeChat also supports `Clerk`, a modern user management platform. `Clerk` provides richer functions, such as multi-factor authentication (MFA), user profile management, login activity monitoring, etc. With `Clerk`, you can get higher security and flexibility, and easily cope with complex user management needs.
-
-Regardless of which user management solution you choose, LobeChat can provide you with an excellent user experience and powerful functional support.
+- **next-auth**: LobeChat also supports `next-auth`, a widely-used identity verification library with extensive OAuth provider support and flexible session management options.
 
 <div align="right">
 

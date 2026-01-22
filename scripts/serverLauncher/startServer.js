@@ -2,6 +2,35 @@ const dns = require('node:dns').promises;
 const fs = require('node:fs').promises;
 const { spawn } = require('node:child_process');
 
+const CLERK_MIGRATION_DOC_URL =
+  'https://lobehub.com/docs/self-hosting/advanced/auth/clerk-to-betterauth';
+
+// Check for deprecated Clerk environment variables
+const checkDeprecatedClerkEnv = () => {
+  const clerkEnvVars = [
+    'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
+    'CLERK_SECRET_KEY',
+    'CLERK_WEBHOOK_SECRET',
+  ];
+
+  const foundClerkEnvVars = clerkEnvVars.filter((envVar) => process.env[envVar]);
+
+  if (foundClerkEnvVars.length > 0) {
+    console.error('\n' + '═'.repeat(70));
+    console.error('❌ ERROR: Clerk authentication is no longer supported!');
+    console.error('═'.repeat(70));
+    console.error('\nDetected deprecated Clerk environment variables:');
+    for (const envVar of foundClerkEnvVars) {
+      console.error(`  • ${envVar}`);
+    }
+    console.error('\nClerk has been removed from LobeChat. Please migrate to Better Auth.');
+    console.error(`\n📖 Migration guide: ${CLERK_MIGRATION_DOC_URL}`);
+    console.error('\nAfter migration, remove the Clerk environment variables and restart.');
+    console.error('═'.repeat(70) + '\n');
+    process.exit(1);
+  }
+};
+
 // Set file paths
 const DB_MIGRATION_SCRIPT_PATH = '/app/docker.cjs';
 const SERVER_SCRIPT_PATH = '/app/server.js';
@@ -124,6 +153,9 @@ const runServer = async () => {
 
 // Main execution block
 (async () => {
+  // Check for deprecated Clerk env vars first - fail fast if found
+  checkDeprecatedClerkEnv();
+
   console.log('🌐 DNS Server:', dns.getServers());
   console.log('-------------------------------------');
 

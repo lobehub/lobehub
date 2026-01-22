@@ -68,7 +68,8 @@ const BtnListLoading = memo(() => {
  * ref: https://authjs.dev/guides/pages/signin
  */
 export default memo(() => {
-  const { t } = useTranslation('clerk');
+  const { t } = useTranslation('auth');
+  const { t: tCommon } = useTranslation('common');
   const router = useRouter();
   const [loadingProvider, setLoadingProvider] = useState<string | null>(null);
 
@@ -100,9 +101,9 @@ export default memo(() => {
   };
 
   const footerBtns = [
-    { href: DOCUMENTS_REFER_URL, id: 0, label: t('footerPageLink__help') },
-    { href: PRIVACY_URL, id: 1, label: t('footerPageLink__privacy') },
-    { href: TERMS_URL, id: 2, label: t('footerPageLink__terms') },
+    { href: DOCUMENTS_REFER_URL, id: 0, label: tCommon('document') },
+    { href: PRIVACY_URL, id: 1, label: t('footer.privacy') },
+    { href: TERMS_URL, id: 2, label: t('footer.terms') },
   ];
 
   return (
@@ -116,10 +117,10 @@ export default memo(() => {
               <div>
                 <LobeHub size={48} />
               </div>
-              {t('signIn.start.title', { applicationName: BRANDING_NAME })}
+              {t('signin.title')}
             </Text>
             <Text as={'p'} className={styles.description}>
-              {t('signIn.start.subtitle')}
+              {t('signin.subtitle', { appName: BRANDING_NAME })}
             </Text>
           </div>
           {/* Content */}
