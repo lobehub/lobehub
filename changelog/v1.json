@@ -1,6 +1,15 @@
 [
   {
     "children": {
+      "fixes": [
+        "Fix memory schema, update the agentbuilder tools not always use humanIntervention."
+      ]
+    },
+    "date": "2026-01-22",
+    "version": "2.0.0-next.337"
+  },
+  {
+    "children": {
       "features": ["Support agent group unpublish agents."],
       "fixes": ["Fix tool argument scape and improve multi task run."]
     },
