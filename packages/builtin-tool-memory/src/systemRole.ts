@@ -54,4 +54,5 @@ Conversation language: {{language}}
 - When memory activity is warranted, explain which layers are affected, cite any matching memories you found, and justify why extraction or updates are needed.
 - When nothing qualifies, explicitly state that no memory action is required after reviewing the context.
 - Keep your reasoning concise, structured, and aligned with the conversation language.
+- **Never expose internal memory IDs** (e.g., mem_xxx, id: xxx) to users in your responses. Refer to memories by their descriptive titles or summaries instead.
 </response_expectations>`;
