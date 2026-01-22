@@ -2183,6 +2183,74 @@ const qwenImageModels: AIImageModelCard[] = [
   {
     description:
       'Qwen Image Edit is an image-to-image model that edits images based on input images and text prompts, enabling precise adjustments and creative transformations.',
+    displayName: 'Z-Image Turbo',
+    enabled: true,
+    id: 'z-image-turbo',
+    organization: 'Qwen',
+    parameters: {
+      height: { default: 1024, max: 2048, min: 512, step: 1 },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 1024, max: 2048, min: 512, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.3, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-01-16',
+    type: 'image',
+  },
+  {
+    description:
+      'Qwen Image Edit is an image-to-image model that edits images based on input images and text prompts, enabling precise adjustments and creative transformations.',
+    displayName: 'Qwen Image Edit Max',
+    enabled: true,
+    id: 'qwen-image-edit-max',
+    organization: 'Qwen',
+    parameters: {
+      imageUrl: {
+        default: '',
+      },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.3, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-01-16',
+    type: 'image',
+  },
+  {
+    description:
+      'Qwen Image Edit is an image-to-image model that edits images based on input images and text prompts, enabling precise adjustments and creative transformations.',
+    displayName: 'Qwen Image Edit Plus',
+    enabled: true,
+    id: 'qwen-image-edit-plus',
+    organization: 'Qwen',
+    parameters: {
+      imageUrl: {
+        default: '',
+      },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.3, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2025-10-30',
+    type: 'image',
+  },
+  {
+    description:
+      'Qwen Image Edit is an image-to-image model that edits images based on input images and text prompts, enabling precise adjustments and creative transformations.',
     displayName: 'Qwen Image Edit',
     enabled: true,
     id: 'qwen-image-edit',
@@ -2201,6 +2269,54 @@ const qwenImageModels: AIImageModelCard[] = [
       units: [{ name: 'imageGeneration', rate: 0.3, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-09-18',
+    type: 'image',
+  },
+  {
+    description:
+      'Qwen-Image is a general image generation model supporting multiple art styles and strong complex text rendering, especially Chinese and English. It supports multi-line layouts, paragraph-level text, and fine detail for complex text-image layouts.',
+    displayName: 'Qwen Image Max',
+    enabled: true,
+    id: 'qwen-image-max',
+    organization: 'Qwen',
+    parameters: {
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      size: {
+        default: '1664x928',
+        enum: ['1664x928', '1472x1140', '1328x1328', '1140x1472', '928x1664'],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.25, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2025-12-30',
+    type: 'image',
+  },
+  {
+    description:
+      'Qwen-Image is a general image generation model supporting multiple art styles and strong complex text rendering, especially Chinese and English. It supports multi-line layouts, paragraph-level text, and fine detail for complex text-image layouts.',
+    displayName: 'Qwen Image Plus',
+    enabled: true,
+    id: 'qwen-image-plus',
+    organization: 'Qwen',
+    parameters: {
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      size: {
+        default: '1664x928',
+        enum: ['1664x928', '1472x1140', '1328x1328', '1140x1472', '928x1664'],
+      },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.25, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2026-01-09',
     type: 'image',
   },
   {
@@ -2225,6 +2341,72 @@ const qwenImageModels: AIImageModelCard[] = [
       units: [{ name: 'imageGeneration', rate: 0.25, strategy: 'fixed', unit: 'image' }],
     },
     releasedAt: '2025-08-13',
+    type: 'image',
+  },
+  {
+    description:
+      'Wanxiang 2.2 Speed is the latest model with upgrades in creativity, stability, and realism, delivering fast generation and high value.',
+    displayName: 'Wanxiang2.6 Image',
+    enabled: true,
+    id: 'wan2.6-image',
+    organization: 'Qwen',
+    parameters: {
+      height: { default: 1280, max: 1280, min: 768, step: 1 },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 1280, max: 1280, min: 768, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.14, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2025-07-28',
+    type: 'image',
+  },
+  {
+    description:
+      'Wanxiang 2.2 Speed is the latest model with upgrades in creativity, stability, and realism, delivering fast generation and high value.',
+    displayName: 'Wanxiang2.6 T2I',
+    enabled: true,
+    id: 'wan2.6-t2i',
+    organization: 'Qwen',
+    parameters: {
+      height: { default: 1280, max: 1440, min: 1280, step: 1 },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 1280, max: 1440, min: 1280, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.14, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2025-07-28',
+    type: 'image',
+  },
+  {
+    description:
+      'Wanxiang 2.2 Speed is the latest model with upgrades in creativity, stability, and realism, delivering fast generation and high value.',
+    displayName: 'Wanxiang2.5 T2I Preview',
+    enabled: true,
+    id: 'wan2.5-t2i-preview',
+    organization: 'Qwen',
+    parameters: {
+      height: { default: 1280, max: 1440, min: 1280, step: 1 },
+      prompt: {
+        default: '',
+      },
+      seed: { default: null },
+      width: { default: 1280, max: 1440, min: 1280, step: 1 },
+    },
+    pricing: {
+      currency: 'CNY',
+      units: [{ name: 'imageGeneration', rate: 0.14, strategy: 'fixed', unit: 'image' }],
+    },
+    releasedAt: '2025-07-28',
     type: 'image',
   },
   {
