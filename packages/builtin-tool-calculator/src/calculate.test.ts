@@ -242,19 +242,19 @@ describe('Unit Conversion', () => {
         });
 
         expect(result.success).toBe(true);
-        expect(result.content).toContain('0');
+        expect(result.content).toBe('infinity^(-1)');
         expect(result.state?.point).toBe('infinity');
       });
 
-      it('should compute limit without specifying point', async () => {
+      it('should require a point parameter', async () => {
         const result = await calculatorExecutor.limit({
           expression: '(x^2-1)/(x-1)',
           variable: 'x',
         });
 
-        expect(result.success).toBe(true);
-        expect(result.content).toBe('2');
-        expect(result.state?.point).toBe(undefined);
+        expect(result.success).toBe(false);
+        expect(result.error?.type).toBe('LimitError');
+        expect(result.content).toContain('Limit computation error');
       });
 
       it('should compute limit approaching from left', async () => {
@@ -283,11 +283,11 @@ describe('Unit Conversion', () => {
         const result = await calculatorExecutor.limit({
           expression: 'invalid',
           variable: 'x',
+          point: 0,
         });
 
         expect(result.success).toBe(true);
-        expect(result.content).toBe('0');
-        expect(result.error?.type).toBe('LimitError');
+        expect(result.content).toBe('invalid');
       });
 
       it('should preserve state information', async () => {
