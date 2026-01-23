@@ -36,5 +36,4 @@ export const authSelectors = {
   isLoadedAuthProviders: (s: UserStore) => s.isLoadedAuthProviders ?? false,
   isLogin: (s: UserStore) => s.isSignedIn,
   isLoginWithAuth: (s: UserStore) => s.isSignedIn,
-  isLoginWithBetterAuth: (s: UserStore): boolean => s.isSignedIn || false,
 };

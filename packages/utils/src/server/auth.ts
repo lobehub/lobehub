@@ -1,12 +1,12 @@
 import { headers } from 'next/headers';
 
-export const getUserAuth = async () => {
-  const { auth: betterAuth } = await import('@/auth');
+import { auth } from '@/auth';
 
+export const getUserAuth = async () => {
   const currentHeaders = await headers();
   const requestHeaders = Object.fromEntries(currentHeaders.entries());
 
-  const session = await betterAuth.api.getSession({
+  const session = await auth.api.getSession({
     headers: requestHeaders,
   });
 

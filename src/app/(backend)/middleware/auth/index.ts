@@ -6,6 +6,7 @@ import {
 import { ChatErrorType, type ClientSecretPayload } from '@lobechat/types';
 import { getXorPayload } from '@lobechat/utils/server';
 
+import { auth } from '@/auth';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { type LobeChatDatabase } from '@/database/type';
 import { LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER, OAUTH_AUTHORIZED } from '@/envs/auth';
@@ -55,9 +56,7 @@ export const checkAuth =
       const oauthAuthorized = !!req.headers.get(OAUTH_AUTHORIZED);
 
       // better auth handler
-      const { auth: betterAuth } = await import('@/auth');
-
-      const session = await betterAuth.api.getSession({
+      const session = await auth.api.getSession({
         headers: req.headers,
       });
 

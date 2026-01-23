@@ -3,6 +3,7 @@ import { parse } from 'cookie';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
 
+import { auth } from '@/auth';
 import { LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER, authEnv } from '@/envs/auth';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 
@@ -151,9 +152,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   // If OIDC is not enabled or validation fails, try Better Auth authentication
   log('Attempting Better Auth authentication');
   try {
-    const { auth: betterAuth } = await import('@/auth');
-
-    const session = await betterAuth.api.getSession({
+    const session = await auth.api.getSession({
       headers: request.headers,
     });
 

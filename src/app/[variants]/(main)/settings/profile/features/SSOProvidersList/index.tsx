@@ -16,7 +16,7 @@ const providerNameStyle: CSSProperties = {
 };
 
 export const SSOProvidersList = memo(() => {
-  const isLoginWithBetterAuth = useUserStore(authSelectors.isLoginWithBetterAuth);
+  const isLogin = useUserStore(authSelectors.isLogin);
   const providers = useUserStore(authSelectors.authProviders);
   const hasPasswordAccount = useUserStore(authSelectors.hasPasswordAccount);
   const refreshAuthProviders = useUserStore((s) => s.refreshAuthProviders);
@@ -25,7 +25,7 @@ export const SSOProvidersList = memo(() => {
 
   // Allow unlink if user has multiple SSO providers OR has email/password login
   const allowUnlink = providers.length > 1 || hasPasswordAccount;
-  const enableBetterAuthActions = !isDesktop && isLoginWithBetterAuth;
+  const enableAuthActions = !isDesktop && isLogin;
 
   // Get linked provider IDs for filtering
   const linkedProviderIds = useMemo(() => {
@@ -63,7 +63,7 @@ export const SSOProvidersList = memo(() => {
   };
 
   const handleLinkSSO = async (provider: string) => {
-    if (enableBetterAuthActions) {
+    if (enableAuthActions) {
       // Use better-auth native linkSocial API
       const { linkSocial } = await import('@/libs/better-auth/auth-client');
       await linkSocial({
@@ -111,8 +111,8 @@ export const SSOProvidersList = memo(() => {
         </Flexbox>
       ))}
 
-      {/* Link Account Button - Only show for Better-Auth users with available providers */}
-      {enableBetterAuthActions && availableProviders.length > 0 && (
+      {/* Link Account Button - Only show for logged in users with available providers */}
+      {enableAuthActions && availableProviders.length > 0 && (
         <DropdownMenu items={linkMenuItems} popupProps={{ style: { maxWidth: '200px' } }}>
           <Flexbox align={'center'} gap={6} horizontal style={{ cursor: 'pointer', fontSize: 12 }}>
             <Plus size={14} />
