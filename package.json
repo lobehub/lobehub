@@ -133,6 +133,7 @@
     ]
   },
   "overrides": {
+    "better-call": "1.1.8",
     "pdfjs-dist": "5.4.530",
     "stylelint-config-clean-order": "7.0.0"
   },
@@ -239,7 +240,7 @@
     "bcryptjs": "^3.0.3",
     "better-auth": "1.4.6",
     "better-auth-harmony": "^1.2.5",
-    "better-call": "^1.2.0",
+    "better-call": "1.1.8",
     "brotli-wasm": "^3.0.1",
     "chroma-js": "^3.2.0",
     "class-variance-authority": "^0.7.1",
