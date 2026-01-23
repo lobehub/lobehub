@@ -268,7 +268,7 @@
     "js-sha256": "^0.11.1",
     "jsonl-parse-stringify": "^1.0.3",
     "klavis": "^2.15.0",
-    "langchain": "^0.3.36",
+    "langchain": "^0.3.37",
     "langfuse": "^3.38.6",
     "langfuse-core": "^3.38.6",
     "lucide-react": "^0.562.0",
