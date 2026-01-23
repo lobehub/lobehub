@@ -1,6 +1,5 @@
 /* eslint-disable unicorn/prefer-top-level-await */
 import { sql } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
 
 import { getBatchSize, getMigrationMode, isDryRun } from './_internal/config';
 import { db, pool, schema } from './_internal/db';
@@ -9,6 +8,11 @@ const BATCH_SIZE = getBatchSize();
 const PROGRESS_TABLE = sql.identifier('nextauth_migration_progress');
 const IS_DRY_RUN = isDryRun();
 const formatDuration = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
+
+// ANSI color codes
+const GREEN_BOLD = '\u001B[1;32m';
+const RED_BOLD = '\u001B[1;31m';
+const RESET = '\u001B[0m';
 
 function chunk<T>(items: T[], size: number): T[][] {
   if (!Number.isFinite(size) || size <= 0) return [items];
@@ -25,6 +29,15 @@ function chunk<T>(items: T[], size: number): T[][] {
 function convertExpiresAt(expiresAt: number | null): Date | undefined {
   if (expiresAt === null || expiresAt === undefined) return undefined;
   return new Date(expiresAt * 1000);
+}
+
+/**
+ * Convert scope format from NextAuth (space-separated) to Better Auth (comma-separated)
+ * e.g., "openid profile email" -> "openid,profile,email"
+ */
+function convertScope(scope: string | null): string | undefined {
+  if (!scope) return undefined;
+  return scope.trim().split(/\s+/).join(',');
 }
 
 /**
@@ -106,19 +119,17 @@ async function migrateFromNextAuth() {
         nextauthAccount.provider,
         nextauthAccount.providerAccountId,
       );
-      const now = new Date();
 
       const accountRow: typeof schema.account.$inferInsert = {
         accessToken: nextauthAccount.access_token ?? undefined,
         accessTokenExpiresAt: convertExpiresAt(nextauthAccount.expires_at),
         accountId: nextauthAccount.providerAccountId,
-        createdAt: now,
-        id: nanoid(),
+        // id and createdAt/updatedAt use database defaults
+        id: accountKey, // deterministic id based on provider + providerAccountId
         idToken: nextauthAccount.id_token ?? undefined,
         providerId: nextauthAccount.provider,
         refreshToken: nextauthAccount.refresh_token ?? undefined,
-        scope: nextauthAccount.scope ?? undefined,
-        updatedAt: now,
+        scope: convertScope(nextauthAccount.scope),
         userId: nextauthAccount.userId,
       };
 
@@ -151,7 +162,7 @@ async function migrateFromNextAuth() {
   }
 
   console.log(
-    `[nextauth-to-betterauth] completed accounts=${processed}, skipped=${skipped}, dryRun=${IS_DRY_RUN}, elapsed=${formatDuration(Date.now() - startedAt)}`,
+    `[nextauth-to-betterauth] completed accounts=${GREEN_BOLD}${processed}${RESET}, skipped=${skipped}, dryRun=${IS_DRY_RUN}, elapsed=${formatDuration(Date.now() - startedAt)}`,
   );
 
   const providerCountsText = Object.entries(providerCounts)
@@ -202,10 +213,10 @@ async function main() {
   try {
     await migrateFromNextAuth();
     console.log('');
-    console.log(`✅ Migration success! (${formatDuration(Date.now() - startedAt)})`);
+    console.log(`${GREEN_BOLD}✅ Migration success!${RESET} (${formatDuration(Date.now() - startedAt)})`);
   } catch (error) {
     console.log('');
-    console.error(`❌ Migration failed (${formatDuration(Date.now() - startedAt)}):`, error);
+    console.error(`${RED_BOLD}❌ Migration failed${RESET} (${formatDuration(Date.now() - startedAt)}):`, error);
     process.exitCode = 1;
   } finally {
     await pool.end();
