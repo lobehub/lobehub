@@ -16,6 +16,19 @@ LobeChat 在部署时提供了一些额外的配置项，你可以使用环境�
 
 ## 通用变量
 
+### `KEY_VAULTS_SECRET`
+
+- 类型：必选（服务端数据库模式）
+- 描述：用于加密用户存储在数据库中的敏感信息（如 API Key、baseURL 等），防止数据库泄露时关键信息被暴露
+- 默认值：-
+- 示例：`Kix2wcUONd4CX51E/ZPAd36BqM4wzJgKjPtz2sGztqQ=`
+
+<Callout type={'warning'}>
+  此密钥用于加密敏感数据，一旦设置后请勿更改，否则已加密的数据将无法解密。
+</Callout>
+
+<GenerateSecret envName="KEY_VAULTS_SECRET" />
+
 ### `API_KEY_SELECT_MODE`
 
 - 类型：可选
