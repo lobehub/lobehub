@@ -49,6 +49,13 @@ const normalizeLayers = (layers?: string[]) => {
   return Array.from(set);
 };
 
+interface SessionExtractionResult {
+  extraction?: Awaited<ReturnType<MemoryExtractionExecutor['extractBenchmarkSource']>>;
+  insertedParts: number;
+  sessionId: string;
+  sourceId: string;
+}
+
 export const POST = async (req: Request) => {
   try {
     const { webhookHeaders } = parseMemoryExtractionConfig();
@@ -69,18 +76,38 @@ export const POST = async (req: Request) => {
     const parsed = ingestSchema.parse(json);
 
     const sourceModel = new UserMemorySourceBenchmarkLoCoMoModel(parsed.userId);
+    const baseSourceId = parsed.sourceId || `sample_${parsed.sampleId}`;
+    const executor = await MemoryExtractionExecutor.create();
+    const layers = normalizeLayers(parsed.layers);
 
-    const sourceId = parsed.sourceId || `sample_${parsed.sampleId}`;
-    await sourceModel.upsertSource({
-      id: sourceId,
-      metadata: { ingestAt: new Date().toISOString() },
-      sampleId: parsed.sampleId,
-      sourceType: (parsed.source ?? MemorySourceType.BenchmarkLocomo) as string,
-    });
+    const results: SessionExtractionResult[] = [];
+    let totalInsertedParts = 0;
 
-    let partCounter = 0;
-    const parts = parsed.sessions.flatMap((session) => {
-      return session.turns.map((turn) => {
+    await Promise.all(parsed.sessions.map(async (session) => {
+      const sessionSourceId = `${baseSourceId}_${session.sessionId}`;
+
+      try {
+        await sourceModel.upsertSource({
+          id: sessionSourceId,
+          metadata: {
+            ingestAt: new Date().toISOString(),
+            sessionId: session.sessionId,
+            sessionTimestamp: session.timestamp,
+          },
+          sampleId: parsed.sampleId,
+          sourceType: (parsed.source ?? MemorySourceType.BenchmarkLocomo) as string,
+        });
+      } catch (error) {
+        console.error(`[locomo-ingest-webhook] upsertSource failed for sourceId=${sessionSourceId}`, error);
+        return {
+          extraction: undefined,
+          insertedParts: 0,
+          sessionId: session.sessionId,
+          sourceId: sessionSourceId,
+        }
+      }
+
+      const parts = session.turns.map((turn, index) => {
         const createdAt = new Date(turn.createdAt);
         const metadata: Record<string, unknown> = {
           diaId: turn.diaId,
@@ -89,45 +116,59 @@ export const POST = async (req: Request) => {
           sessionId: session.sessionId,
         };
 
-        const part = {
+        return {
           content: turn.text,
           createdAt,
           metadata,
-          partIndex: partCounter,
+          partIndex: index,
           sessionId: session.sessionId,
           speaker: turn.speaker,
         };
-        partCounter += 1;
-        return part;
       });
-    });
 
-    await sourceModel.replaceParts(sourceId, parts);
+      sourceModel.replaceParts(sessionSourceId, parts);
 
-    const contextProvider = new BenchmarkLocomoContextProvider({
-      parts,
-      sampleId: parsed.sampleId,
-      sourceId,
-      userId: parsed.userId,
-    });
+      const contextProvider = new BenchmarkLocomoContextProvider({
+        parts,
+        sampleId: parsed.sampleId,
+        sourceId: sessionSourceId,
+        userId: parsed.userId,
+      });
 
-    const executor = await MemoryExtractionExecutor.create();
-    const layers = normalizeLayers(parsed.layers);
-    const extraction = await executor.extractBenchmarkSource({
-      contextProvider,
-      forceAll: parsed.force ?? true,
-      layers,
-      parts,
-      source: parsed.source ?? MemorySourceType.BenchmarkLocomo,
-      sourceId,
-      userId: parsed.userId,
-    });
+      try {
+        const extraction = await executor.extractBenchmarkSource({
+          contextProvider,
+          forceAll: parsed.force ?? true,
+          layers,
+          parts,
+          source: parsed.source ?? MemorySourceType.BenchmarkLocomo,
+          sourceId: sessionSourceId,
+          userId: parsed.userId,
+        });
+
+        return {
+          extraction,
+          insertedParts: parts.length,
+          sessionId: session.sessionId,
+          sourceId: sessionSourceId,
+        }
+      } catch (error) {
+        console.error(`[locomo-ingest-webhook] extractBenchmarkSource failed for sourceId=${sessionSourceId}`, error);
+        return {
+          extraction: undefined,
+          insertedParts: parts.length,
+          sessionId: session.sessionId,
+          sourceId: sessionSourceId,
+        }
+      }
+    }))
 
     return NextResponse.json(
       {
-        extraction,
-        insertedParts: parts.length,
-        sourceId,
+        baseSourceId,
+        insertedParts: totalInsertedParts,
+        results,
+        sourceIds: results.map((item) => item.sourceId),
         userId: parsed.userId,
       },
       { status: 200 },
