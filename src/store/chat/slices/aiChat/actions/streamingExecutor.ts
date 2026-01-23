@@ -344,13 +344,21 @@ export const streamingExecutor: StateCreator<
         log('[internal_fetchAIChatMessage] ERROR: Operation not found: %s', operationId);
         throw new Error(`Operation not found: ${operationId}`);
       }
-      agentId = operation.context.agentId!;
-      subAgentId = operation.context.subAgentId;
       topicId = operation.context.topicId;
       threadId = operation.context.threadId ?? undefined;
       groupId = operation.context.groupId;
       scope = operation.context.scope;
+      subAgentId = operation.context.subAgentId;
       abortController = operation.abortController; // 👈 Use operation's abortController
+
+      // In group orchestration scenarios (has groupId), subAgentId is the actual responding agent
+      // Use it for context injection instead of the session agentId
+      if (groupId && subAgentId) {
+        agentId = subAgentId;
+      } else {
+        agentId = operation.context.agentId!;
+      }
+
       log(
         '[internal_fetchAIChatMessage] get context from operation %s: agentId=%s, subAgentId=%s, topicId=%s, groupId=%s, aborted=%s',
         operationId,
