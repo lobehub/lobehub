@@ -60,6 +60,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     displayName: 'Kimi K2 0905',
     enabled: true,
     id: 'kimi-k2-0905-preview',
+    maxOutput: 65_536,
     pricing: {
       currency: 'CNY',
       units: [

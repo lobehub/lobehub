@@ -300,6 +300,32 @@ describe('AiModelModel', () => {
       expect(models).toHaveLength(1);
       expect(models[0].enabled).toBe(false);
     });
+
+    it('should preserve type property when disabling all models', async () => {
+      // Create models with type information
+      await aiProviderModel.create({
+        id: 'gpt-4',
+        providerId: 'openai',
+        enabled: true,
+        type: 'chat',
+      });
+      await aiProviderModel.create({
+        id: 'dall-e-3',
+        providerId: 'openai',
+        enabled: true,
+        type: 'image',
+      });
+
+      // Batch disable all models
+      await aiProviderModel.batchToggleAiModels('openai', ['gpt-4', 'dall-e-3'], false);
+
+      // Verify type is preserved
+      const models = await aiProviderModel.getModelListByProviderId('openai');
+      expect(models).toHaveLength(2);
+      expect(models.find((m) => m.id === 'gpt-4')?.type).toBe('chat');
+      expect(models.find((m) => m.id === 'dall-e-3')?.type).toBe('image');
+      expect(models.every((m) => !m.enabled)).toBe(true);
+    });
   });
 
   describe('clearRemoteModels', () => {

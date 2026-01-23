@@ -9,6 +9,7 @@ import { ChatStreamPayload } from '../../types';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 
 export interface MoonshotModelCard {
+  context_length?: number;
   id: string;
 }
 
@@ -41,14 +42,14 @@ export const params = {
 
       const moonshotTools = enabledSearch
         ? [
-            ...(tools || []),
-            {
-              function: {
-                name: '$web_search',
-              },
-              type: 'builtin_function',
+          ...(tools || []),
+          {
+            function: {
+              name: '$web_search',
             },
-          ]
+            type: 'builtin_function',
+          },
+        ]
         : tools;
 
       // Resolve parameters with normalization
@@ -69,7 +70,12 @@ export const params = {
     const modelsPage = (await client.models.list()) as any;
     const modelList: MoonshotModelCard[] = modelsPage.data;
 
-    return processModelList(modelList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
+    const processedList = modelList.map((model) => ({
+      contextWindowTokens: model.context_length,
+      id: model.id,
+    }));
+
+    return processModelList(processedList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
   },
   provider: ModelProvider.Moonshot,
 } satisfies OpenAICompatibleFactoryOptions;

@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import {
   AiModelSortMap,
   AiModelSourceEnum,
@@ -188,41 +188,44 @@ export class AiModelModel {
       return;
     }
 
-    return this.db.transaction(async (trx) => {
-      // 1. insert models that are not in the db
-      const insertedRecords = await trx
-        .insert(aiModels)
-        .values(
-          models.map((i) => ({
-            enabled,
-            id: i,
-            providerId,
-            // if the model is not in the db, it's a builtin model
-            source: AiModelSourceEnum.Builtin,
-            updatedAt: new Date(),
-            userId: this.userId,
-          })),
-        )
-        .onConflictDoNothing({
-          target: [aiModels.id, aiModels.userId, aiModels.providerId],
-        })
-        .returning();
+    // Get default model list to preserve type information
+    const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
+    const defaultModelMap = new Map(LOBE_DEFAULT_MODEL_LIST.map((m) => [m.id, m]));
 
-      // 2. update models that are in the db
-      const insertedIds = new Set(insertedRecords.map((r) => r.id));
-      const recordsToUpdate = models.filter((r) => !insertedIds.has(r));
+    // Prepare all records for batch upsert
+    const allRecords = models.map((modelId) => {
+      const defaultModel = defaultModelMap.get(modelId);
+      const record: typeof aiModels.$inferInsert = {
+        enabled,
+        id: modelId,
+        providerId,
+        // if the model is not in the db, it's a builtin model
+        source: AiModelSourceEnum.Builtin,
+        updatedAt: new Date(),
+        userId: this.userId,
+      };
 
-      await trx
-        .update(aiModels)
-        .set({ enabled })
-        .where(
-          and(
-            eq(aiModels.providerId, providerId),
-            inArray(aiModels.id, recordsToUpdate),
-            eq(aiModels.userId, this.userId),
-          ),
-        );
+      // Preserve type if available from default model list
+      if (defaultModel?.type) {
+        record.type = defaultModel.type;
+      }
+
+      return record;
     });
+
+    // Use batch upsert to handle both insert and update in a single query
+    return this.db
+      .insert(aiModels)
+      .values(allRecords)
+      .onConflictDoUpdate({
+        set: {
+          enabled: sql`excluded.enabled`,
+          // Preserve existing type in database, only update if new type is provided
+          type: sql`COALESCE(excluded.type, ${aiModels.type})`,
+          updatedAt: sql`excluded.updated_at`,
+        },
+        target: [aiModels.id, aiModels.userId, aiModels.providerId],
+      });
   };
 
   clearRemoteModels(providerId: string) {
