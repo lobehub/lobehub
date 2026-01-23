@@ -1,8 +1,8 @@
 export const CalculatorIdentifier = 'lobe-calculator';
 
 export const CalculatorApiName = {
+  base: 'base',
   calculate: 'calculate',
-  convert: 'convert',
   differentiate: 'differentiate',
   evaluate: 'evaluate',
   integrate: 'integrate',
@@ -40,13 +40,13 @@ export interface EvaluateState {
 }
 
 // Base Conversion API
-export interface ConvertParams {
+export interface BaseParams {
   fromBase: number;
   number: string | number;
   toBase: number;
 }
 
-export interface ConvertState {
+export interface BaseState {
   convertedNumber?: string;
   decimalValue?: number;
   originalBase?: string;

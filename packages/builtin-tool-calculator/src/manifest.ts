@@ -95,7 +95,7 @@ export const CalculatorManifest: BuiltinToolManifest = {
     },
     {
       description: 'Convert numbers between different number bases.',
-      name: CalculatorApiName.convert,
+      name: CalculatorApiName.base,
       parameters: {
         additionalProperties: false,
         properties: {

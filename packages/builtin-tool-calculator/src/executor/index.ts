@@ -5,10 +5,10 @@ import { all, create } from 'mathjs';
 import nerdamer from 'nerdamer/all';
 
 import {
+  type BaseParams,
   type CalculateParams,
   CalculatorApiName,
   CalculatorIdentifier,
-  type ConvertParams,
   type DifferentiateParams,
   type EvaluateParams,
   type IntegrateParams,
@@ -277,7 +277,7 @@ class CalculatorExecutor
   /**
    * Convert numbers between different bases (supports bases 2-36)
    */
-  convert = async (params: ConvertParams): Promise<BuiltinToolResult> => {
+  base = async (params: BaseParams): Promise<BuiltinToolResult> => {
     try {
       const { number, fromBase, toBase } = params;
 
