@@ -1,5 +1,5 @@
 import { type LobeChatDatabase } from '@lobechat/database';
-import { inferContentTypeFromImageUrl, nanoid, uuid } from '@lobechat/utils';
+import { inferContentTypeFromImageUrl, inferContentTypeFromUrl, nanoid, uuid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import { sha256 } from 'js-sha256';
 
@@ -152,11 +152,14 @@ export class FileService {
    * Upload base64 data and create database record
    * @param base64Data - Base64 data (supports data URI format or pure base64)
    * @param pathname - File storage path (must include file extension)
+   * @param options - Optional configuration options
+   * @param options.skipCheckFileType - Skip file type validation (useful for audio files)
    * @returns Contains key (storage path), fileId (database record ID) and url (proxy access path)
    */
   public async uploadBase64(
     base64Data: string,
     pathname: string,
+    options: { skipCheckFileType?: boolean } = {},
   ): Promise<{ fileId: string; key: string; url: string }> {
     let base64String: string;
 
@@ -183,7 +186,9 @@ export class FileService {
 
     // Calculate file metadata
     const size = buffer.length;
-    const fileType = inferContentTypeFromImageUrl(pathname) || 'application/octet-stream';
+    const fileType = options.skipCheckFileType 
+      ? inferContentTypeFromUrl(pathname)
+      : inferContentTypeFromImageUrl(pathname) || 'application/octet-stream';
     const hash = sha256(buffer);
 
     // Generate UUID for cleaner URLs

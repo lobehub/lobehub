@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   inferContentTypeFromImageUrl,
+  inferContentTypeFromUrl,
   inferFileExtensionFromImageUrl,
   isDesktopLocalStaticServerUrl,
   isLocalOrPrivateUrl,
@@ -539,6 +540,56 @@ describe('isLocalOrPrivateUrl', () => {
     it('should return false for invalid IP addresses', () => {
       expect(isLocalOrPrivateUrl('http://256.256.256.256')).toBe(false);
       expect(isLocalOrPrivateUrl('http://192.168.1.256')).toBe(false);
+    });
+  });
+});
+
+describe('inferContentTypeFromUrl', () => {
+  describe('image files', () => {
+    it('should return correct MIME types for common image formats', () => {
+      expect(inferContentTypeFromUrl('https://example.com/image.jpg')).toBe('image/jpeg');
+      expect(inferContentTypeFromUrl('https://example.com/image.png')).toBe('image/png');
+      expect(inferContentTypeFromUrl('https://example.com/image.webp')).toBe('image/webp');
+      expect(inferContentTypeFromUrl('https://example.com/image.gif')).toBe('image/gif');
+    });
+  });
+
+  describe('audio files', () => {
+    it('should return correct MIME types for common audio formats', () => {
+      expect(inferContentTypeFromUrl('https://example.com/audio.mp3')).toBe('audio/mp3');
+      expect(inferContentTypeFromUrl('files/mcp/audio/2025-12-14/YdRVoA3B.mp3')).toBe('audio/mp3');
+      expect(inferContentTypeFromUrl('https://example.com/sound.wav')).toBe('audio/wav');
+      expect(inferContentTypeFromUrl('https://example.com/music.ogg')).toBe('audio/ogg');
+    });
+  });
+
+  describe('case insensitive', () => {
+    it('should handle mixed case extensions', () => {
+      expect(inferContentTypeFromUrl('https://example.com/audio.MP3')).toBe('audio/mp3');
+      expect(inferContentTypeFromUrl('https://example.com/image.JPG')).toBe('image/jpeg');
+    });
+  });
+
+  describe('URLs with query parameters and fragments', () => {
+    it('should extract content type ignoring query parameters and hash fragments', () => {
+      expect(inferContentTypeFromUrl('https://example.com/audio.mp3?v=123&size=large')).toBe('audio/mp3');
+      expect(inferContentTypeFromUrl('https://example.com/audio.mp3#section')).toBe('audio/mp3');
+    });
+  });
+
+  describe('fallback behavior', () => {
+    it('should return fallback for unknown extensions', () => {
+      expect(inferContentTypeFromUrl('https://example.com/file.xyz')).toBe('application/octet-stream');
+      expect(inferContentTypeFromUrl('https://example.com/file')).toBe('application/octet-stream');
+      expect(inferContentTypeFromUrl('https://example.com/file.')).toBe('application/octet-stream');
+    });
+  });
+
+  describe('relative paths', () => {
+    it('should handle relative paths', () => {
+      expect(inferContentTypeFromUrl('files/mcp/audio/2025-12-14/test.mp3')).toBe('audio/mp3');
+      expect(inferContentTypeFromUrl('./images/photo.jpg')).toBe('image/jpeg');
+      expect(inferContentTypeFromUrl('../sounds/beep.wav')).toBe('audio/wav');
     });
   });
 });

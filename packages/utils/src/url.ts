@@ -125,6 +125,41 @@ export function inferContentTypeFromImageUrl(url: string) {
 }
 
 /**
+ * Infer content type (MIME type) from a file URL (supports images and audio)
+ *
+ * This function extracts the file extension from a URL and returns the corresponding MIME type.
+ * Unlike inferContentTypeFromImageUrl, this function supports both image and audio files.
+ *
+ * @param url - The file URL to analyze (can be relative, absolute, or include query parameters and hash fragments)
+ * @returns MIME type string (e.g., 'image/jpeg', 'audio/mp3') or fallback to 'application/octet-stream'
+ *
+ * @example
+ * ```typescript
+ * inferContentTypeFromUrl('https://example.com/image.jpg') // 'image/jpeg'
+ * inferContentTypeFromUrl('https://example.com/audio.mp3') // 'audio/mp3'
+ * inferContentTypeFromUrl('files/mcp/audio/2025-12-14/YdRVoA3B.mp3') // 'audio/mp3'
+ * ```
+ */
+export function inferContentTypeFromUrl(url: string): string {
+  // Use a temporary base URL for proper URL parsing and formatting (handles relative paths)
+  const tempBase = 'https://a.com';
+  const urlObj = new URL(url, tempBase);
+  const pathname = urlObj.pathname;
+
+  // Find the last dot in the pathname to get the file extension
+  const lastDotIndex = pathname.lastIndexOf('.');
+  if (lastDotIndex === -1) return 'application/octet-stream'; // No extension found
+
+  // Extract extension after the last dot and convert to lowercase
+  const extension = pathname.slice(Math.max(0, lastDotIndex + 1)).toLowerCase();
+
+  // Get MIME type using the mime library
+  const mimeType = mime.getType(extension);
+  
+  return mimeType || 'application/octet-stream';
+}
+
+/**
  *
  * Check if a URL points to desktop local static server
  *

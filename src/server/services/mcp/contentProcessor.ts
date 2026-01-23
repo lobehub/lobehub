@@ -52,7 +52,7 @@ export const processContentBlocks = async (
       const pathname = `${fileEnv.NEXT_PUBLIC_S3_FILE_PATH}/mcp/audio/${today}/${nanoid()}.${fileExtension}`;
 
       // Upload base64 audio and get proxy URL
-      const { url } = await fileService.uploadBase64(audioBlock.data, pathname);
+      const { url } = await fileService.uploadBase64(audioBlock.data, pathname, { skipCheckFileType: true });
 
       log(`Audio uploaded, proxy URL: ${url}`);
 
