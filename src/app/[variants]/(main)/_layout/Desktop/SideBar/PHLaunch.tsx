@@ -10,12 +10,12 @@ import { Flexbox } from 'react-layout-kit';
 
 import { useGlobalStore } from '@/store/global';
 
-const PH_LAUNCH_URL = 'https://www.producthunt.com/posts/lobechat-2';
+const PH_LAUNCH_URL = 'https://www.producthunt.com/products/lobehub?launch=lobehub';
 const PH_IMAGE_URL = 'https://hub-apac-1.lobeobjects.space/og/lobehub-ph.png';
 
 // Configure the date range for showing the PH launch card
-const PH_START_DATE = new Date('2026-01-01T00:00:00Z');
-const PH_END_DATE = new Date('2026-02-28T23:59:59Z');
+const PH_START_DATE = new Date('2026-01-27T08:00:00Z');
+const PH_END_DATE = new Date('2026-02-01T00:00:00Z');
 
 const useStyles = createStyles(({ css, token }) => ({
   action: css`
