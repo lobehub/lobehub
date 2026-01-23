@@ -17,7 +17,14 @@ import {
   sql,
 } from 'drizzle-orm';
 
-import { TopicItem, agents, agentsToSessions, messages, topics } from '../schemas';
+import {
+  TopicItem,
+  agents,
+  agentsToSessions,
+  messagePlugins,
+  messages,
+  topics,
+} from '../schemas';
 import { LobeChatDatabase } from '../type';
 import { genEndDateWhere, genRangeWhere, genStartDateWhere, genWhere } from '../utils/genWhere';
 import { idGenerator } from '../utils/idGenerator';
@@ -498,28 +505,83 @@ export class TopicModel {
         })
         .returning();
 
-      // Find messages associated with the original topic
+      // Find messages associated with the original topic, ordered by createdAt
       const originalMessages = await tx
         .select()
         .from(messages)
-        .where(and(eq(messages.topicId, topicId), eq(messages.userId, this.userId)));
+        .where(and(eq(messages.topicId, topicId), eq(messages.userId, this.userId)))
+        .orderBy(messages.createdAt);
 
-      // copy messages
-      const duplicatedMessages = await Promise.all(
-        originalMessages.map(async (message) => {
-          const result = (await tx
-            .insert(messages)
-            .values({
-              ...message,
-              clientId: null,
-              id: idGenerator('messages'),
-              topicId: duplicatedTopic.id,
-            })
-            .returning()) as DBMessageItem[];
+      // Find all messagePlugins for this topic
+      const messageIds = originalMessages.map((m) => m.id);
+      const originalPlugins =
+        messageIds.length > 0
+          ? await tx
+              .select()
+              .from(messagePlugins)
+              .where(inArray(messagePlugins.id, messageIds))
+          : [];
 
-          return result[0];
-        }),
-      );
+      // Build oldId -> newId mapping for messages
+      const idMap = new Map<string, string>();
+      originalMessages.forEach((message) => {
+        idMap.set(message.id, idGenerator('messages'));
+      });
+
+      // Build oldToolId -> newToolId mapping for tools
+      const toolIdMap = new Map<string, string>();
+      originalMessages.forEach((message) => {
+        if (message.tools && Array.isArray(message.tools)) {
+          (message.tools as any[]).forEach((tool: any) => {
+            if (tool.id) {
+              toolIdMap.set(tool.id, `toolu_${idGenerator('messages')}`);
+            }
+          });
+        }
+      });
+
+      // copy messages sequentially to respect foreign key constraints
+      const duplicatedMessages: DBMessageItem[] = [];
+      for (const message of originalMessages) {
+        const newId = idMap.get(message.id)!;
+        const newParentId = message.parentId ? idMap.get(message.parentId) || null : null;
+
+        // Update tool IDs in tools array
+        let newTools = message.tools;
+        if (newTools && Array.isArray(newTools)) {
+          newTools = (newTools as any[]).map((tool: any) => ({
+            ...tool,
+            id: tool.id ? toolIdMap.get(tool.id) || tool.id : tool.id,
+          }));
+        }
+
+        const result = (await tx
+          .insert(messages)
+          .values({
+            ...message,
+            clientId: null,
+            id: newId,
+            parentId: newParentId,
+            topicId: duplicatedTopic.id,
+            tools: newTools,
+          })
+          .returning()) as DBMessageItem[];
+
+        duplicatedMessages.push(result[0]);
+
+        // Copy messagePlugins if exists for this message
+        const plugin = originalPlugins.find((p) => p.id === message.id);
+        if (plugin) {
+          const newToolCallId = plugin.toolCallId ? toolIdMap.get(plugin.toolCallId) || null : null;
+
+          await tx.insert(messagePlugins).values({
+            ...plugin,
+            id: newId,
+            clientId: null,
+            toolCallId: newToolCallId,
+          });
+        }
+      }
 
       return {
         messages: duplicatedMessages,

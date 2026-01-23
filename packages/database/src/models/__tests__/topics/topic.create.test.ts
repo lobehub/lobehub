@@ -2,7 +2,7 @@ import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { agents, messages, sessions, topics, users } from '../../../schemas';
+import { agents, messagePlugins, messages, sessions, topics, users } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
 import { CreateTopicParams, TopicModel } from '../../topic';
 
@@ -277,6 +277,129 @@ describe('TopicModel - Create', () => {
       expect(duplicatedMessages[1].id).not.toBe('message2');
       expect(duplicatedMessages[1].topicId).toBe(duplicatedTopic.id);
       expect(duplicatedMessages[1].content).toBe('Assistant message');
+    });
+
+    it('should correctly map parentId references when duplicating messages', async () => {
+      const topicId = 'topic-with-parent-refs';
+
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(topics).values({ id: topicId, sessionId, userId, title: 'Original Topic' });
+        await tx.insert(messages).values([
+          { id: 'msg1', role: 'user', topicId, userId, content: 'First message', parentId: null },
+          {
+            id: 'msg2',
+            role: 'assistant',
+            topicId,
+            userId,
+            content: 'Reply to first',
+            parentId: 'msg1',
+          },
+          {
+            id: 'msg3',
+            role: 'tool',
+            topicId,
+            userId,
+            content: 'Tool response',
+            parentId: 'msg2',
+          },
+          {
+            id: 'msg4',
+            role: 'assistant',
+            topicId,
+            userId,
+            content: 'Final message',
+            parentId: 'msg3',
+          },
+        ]);
+      });
+
+      const { topic: duplicatedTopic, messages: duplicatedMessages } = await topicModel.duplicate(
+        topicId,
+        'Duplicated Topic',
+      );
+
+      expect(duplicatedMessages).toHaveLength(4);
+
+      const msgMap = new Map(duplicatedMessages.map((m) => [m.content, m]));
+      const newMsg1 = msgMap.get('First message')!;
+      const newMsg2 = msgMap.get('Reply to first')!;
+      const newMsg3 = msgMap.get('Tool response')!;
+      const newMsg4 = msgMap.get('Final message')!;
+
+      expect(newMsg1.parentId).toBeNull();
+      expect(newMsg2.parentId).toBe(newMsg1.id);
+      expect(newMsg3.parentId).toBe(newMsg2.id);
+      expect(newMsg4.parentId).toBe(newMsg3.id);
+
+      expect(newMsg1.id).not.toBe('msg1');
+      expect(newMsg2.id).not.toBe('msg2');
+      expect(newMsg3.id).not.toBe('msg3');
+      expect(newMsg4.id).not.toBe('msg4');
+    });
+
+    it('should correctly map tool_call_id when duplicating messages with tools', async () => {
+      const topicId = 'topic-with-tools';
+      const originalToolId = 'toolu_original_123';
+
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(topics).values({ id: topicId, sessionId, userId, title: 'Original Topic' });
+
+        // Insert assistant message with tools
+        await tx.insert(messages).values({
+          id: 'msg1',
+          role: 'assistant',
+          topicId,
+          userId,
+          content: 'Using tool',
+          parentId: null,
+          tools: [{ id: originalToolId, type: 'builtin', apiName: 'broadcast' }],
+        });
+
+        // Insert tool message
+        await tx.insert(messages).values({
+          id: 'msg2',
+          role: 'tool',
+          topicId,
+          userId,
+          content: 'Tool response',
+          parentId: 'msg1',
+        });
+
+        // Insert messagePlugins entry
+        await tx.insert(messagePlugins).values({
+          id: 'msg2',
+          userId,
+          toolCallId: originalToolId,
+          apiName: 'broadcast',
+        });
+      });
+
+      const { topic: duplicatedTopic, messages: duplicatedMessages } = await topicModel.duplicate(
+        topicId,
+        'Duplicated Topic',
+      );
+
+      expect(duplicatedMessages).toHaveLength(2);
+
+      const msgMap = new Map(duplicatedMessages.map((m) => [m.role, m]));
+      const newAssistant = msgMap.get('assistant')!;
+      const newTool = msgMap.get('tool')!;
+
+      // Check that tools array has new IDs
+      expect(newAssistant.tools).toBeDefined();
+      const newTools = newAssistant.tools as any[];
+      expect(newTools).toHaveLength(1);
+      expect(newTools[0].id).not.toBe(originalToolId);
+      expect(newTools[0].id).toMatch(/^toolu_/);
+
+      // Check that messagePlugins was copied with new toolCallId
+      const newPlugin = await serverDB.query.messagePlugins.findFirst({
+        where: eq(messagePlugins.id, newTool.id),
+      });
+
+      expect(newPlugin).toBeDefined();
+      expect(newPlugin!.toolCallId).toBe(newTools[0].id);
+      expect(newPlugin!.toolCallId).not.toBe(originalToolId);
     });
 
     it('should throw an error if the topic to duplicate does not exist', async () => {
