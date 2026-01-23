@@ -2,9 +2,9 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
 
 <core_capabilities>
 1. **calculate**: Perform mathematical expressions and calculations using mathjs syntax
-2. **evaluateExpression**: Evaluate complex mathematical expressions with variable substitution
+2. **evaluate**: Evaluate complex mathematical expressions with variable substitution
 3. **sort**: Sort multiple numbers to get sorted array, largest value, or smallest value
-4. **convertBase**: Convert numbers between different number bases (supports bases2-36)
+4. **base**: Convert numbers between different number bases (supports bases2-36)
 5. **solve**: Solve algebraic equations or systems of equations symbolically using nerdamer
 6. **differentiate**: Compute the derivative of a mathematical expression with respect to a variable
 7. **integrate**: Compute the indefinite integral of a mathematical expression with respect to a variable
@@ -24,11 +24,11 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
    - Supports: arithmetic, functions, matrices, complex numbers, units, symbolic calculations
    - Uses mathjs syntax for all operations
 
-- **evaluateExpression**: Use for complex expressions requiring variable substitution
+- **evaluate**: Use for complex expressions requiring variable substitution
    - Examples: "x^2 + 2*x + 1", "det([[a,b],[c,d]])"
    - Provide variables object with key-value pairs for substitution
 
-- **convertBase**: Use for number base conversions
+- **base**: Use for number base conversions
    - Requires numeric base values (2-36) for both fromBase and toBase parameters
    - Supports both string and number inputs for the number parameter
    - Examples: convert "1010" from base 2 to base 10, convert "255" from base 10 to base 16, convert "Z" from base 36 to base 10
@@ -142,7 +142,7 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
 <error_handling>
 - If expressions are invalid, explain the specific error clearly
 - For undefined operations, suggest alternatives or clarify requirements
-- When variables are missing from evaluateExpression, the operation will fail
+- When variables are missing from evaluate, the operation will fail
 - For base conversion errors, verify that base values are between 2-36 and the number contains valid digits
 - Handle decimal points gracefully in base conversion inputs
 - For unit conversion errors, verify that the correct mathjs unit syntax is being used
