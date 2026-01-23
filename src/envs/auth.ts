@@ -375,9 +375,10 @@ export const getAuthConfig = () => {
 export const authEnv = getAuthConfig();
 
 // Auth flags - use process.env directly for build-time dead code elimination
-export const enableBetterAuth = process.env.NEXT_PUBLIC_ENABLE_BETTER_AUTH === '1';
+// Better Auth is the default auth solution when NextAuth is not explicitly enabled
 export const enableNextAuth = process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1';
-export const enableAuth = enableBetterAuth || enableNextAuth || false;
+export const enableBetterAuth = !enableNextAuth;
+export const enableAuth = true;
 
 // Auth headers and constants
 export const LOBE_CHAT_AUTH_HEADER = 'X-lobe-chat-auth';

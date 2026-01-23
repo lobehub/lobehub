@@ -22,9 +22,10 @@ if (isDesktop) {
 }
 
 // Auth flags - use process.env directly for build-time dead code elimination
-const enableBetterAuth = process.env.NEXT_PUBLIC_ENABLE_BETTER_AUTH === '1';
+// Better Auth is the default auth solution when NextAuth is not explicitly enabled
 const enableNextAuth = process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1';
-const enableAuth = enableBetterAuth || enableNextAuth || false;
+const enableBetterAuth = !enableNextAuth;
+const enableAuth = true;
 
 const getCommandVersion = (command: string): string | null => {
   try {
