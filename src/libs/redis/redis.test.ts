@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { IoRedisConfig } from './types';
+import { RedisConfig } from './types';
 
-const buildRedisConfig = (): IoRedisConfig | null => {
+const buildRedisConfig = (): RedisConfig | null => {
   const url = process.env.REDIS_URL;
 
   if (!url) return null;
@@ -14,7 +14,6 @@ const buildRedisConfig = (): IoRedisConfig | null => {
     enabled: true,
     password: process.env.REDIS_PASSWORD,
     prefix: process.env.REDIS_PREFIX ?? 'lobe-chat-test',
-    provider: 'redis',
     tls: process.env.REDIS_TLS === 'true',
     url,
     username: process.env.REDIS_USERNAME,
@@ -79,7 +78,6 @@ const createMockedProvider = async () => {
   const provider = new IoRedisRedisProvider({
     enabled: true,
     prefix: 'mock',
-    provider: 'redis',
     tls: false,
     url: 'redis://localhost:6379',
   });

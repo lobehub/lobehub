@@ -1,5 +1,3 @@
-import type { SetCommandOptions } from '@upstash/redis';
-
 import { type RedisKey, type RedisMSetArgument, type RedisValue, type SetOptions } from './types';
 
 export const normalizeRedisKey = (key: RedisKey) =>
@@ -33,21 +31,4 @@ export const buildIORedisSetArgs = (options?: SetOptions): Array<string | number
   if (options.get) args.push('GET');
 
   return args;
-};
-
-export const buildUpstashSetOptions = (options?: SetOptions): SetCommandOptions | undefined => {
-  if (!options) return undefined;
-
-  const mapped: Partial<SetCommandOptions> = {};
-
-  if (options.ex !== undefined) mapped.ex = options.ex;
-  if (options.px !== undefined) mapped.px = options.px;
-  if (options.exat !== undefined) mapped.exat = options.exat;
-  if (options.pxat !== undefined) mapped.pxat = options.pxat;
-  if (options.keepTtl) mapped.keepTtl = true;
-  if (options.nx) mapped.nx = true;
-  if (options.xx) mapped.xx = true;
-  if (options.get) mapped.get = true;
-
-  return Object.keys(mapped).length ? (mapped as SetCommandOptions) : undefined;
 };
