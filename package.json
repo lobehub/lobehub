@@ -160,7 +160,7 @@
     "@huggingface/inference": "^4.13.5",
     "@icons-pack/react-simple-icons": "^13.8.0",
     "@khmyznikov/pwa-install": "0.3.9",
-    "@langchain/community": "^0.3.58",
+    "@langchain/community": "^0.3.59",
     "@lobechat/agent-runtime": "workspace:*",
     "@lobechat/builtin-agents": "workspace:*",
     "@lobechat/builtin-tool-agent-builder": "workspace:*",
