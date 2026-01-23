@@ -6,6 +6,6 @@ export {
   CalculatorApiName,
   type CalculatorApiNameType,
   CalculatorIdentifier,
-  type EvaluateExpressionParams,
-  type EvaluateExpressionState,
+  type EvaluateParams,
+  type EvaluateState,
 } from './types';

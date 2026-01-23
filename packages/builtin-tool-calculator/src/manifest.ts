@@ -29,7 +29,7 @@ export const CalculatorManifest: BuiltinToolManifest = {
     },
     {
       description: 'Evaluate a complex mathematical expression with variable support.',
-      name: CalculatorApiName.evaluateExpression,
+      name: CalculatorApiName.evaluate,
       parameters: {
         additionalProperties: false,
         properties: {
@@ -95,7 +95,7 @@ export const CalculatorManifest: BuiltinToolManifest = {
     },
     {
       description: 'Convert numbers between different number bases.',
-      name: CalculatorApiName.convertBase,
+      name: CalculatorApiName.convert,
       parameters: {
         additionalProperties: false,
         properties: {

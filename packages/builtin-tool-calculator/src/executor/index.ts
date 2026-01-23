@@ -8,9 +8,9 @@ import {
   type CalculateParams,
   CalculatorApiName,
   CalculatorIdentifier,
-  type ConvertBaseParams,
+  type ConvertParams,
   type DifferentiateParams,
-  type EvaluateExpressionParams,
+  type EvaluateParams,
   type IntegrateParams,
   type LimitParams,
   type SolveParams,
@@ -148,7 +148,7 @@ class CalculatorExecutor
   /**
    * Evaluate a complex mathematical expression with variables
    */
-  evaluateExpression = async (params: EvaluateExpressionParams): Promise<BuiltinToolResult> => {
+  evaluate = async (params: EvaluateParams): Promise<BuiltinToolResult> => {
     try {
       const variables = params.variables || {};
       const result = this.evaluateMathExpression(params.expression, variables);
@@ -277,7 +277,7 @@ class CalculatorExecutor
   /**
    * Convert numbers between different bases (supports bases 2-36)
    */
-  convertBase = async (params: ConvertBaseParams): Promise<BuiltinToolResult> => {
+  convert = async (params: ConvertParams): Promise<BuiltinToolResult> => {
     try {
       const { number, fromBase, toBase } = params;
 

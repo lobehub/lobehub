@@ -324,8 +324,8 @@ describe('Unit Conversion', () => {
     expect(parseFloat(result.content || '0')).toBeCloseTo(1, 5);
   });
 
-  it('should handle PI in evaluateExpression', async () => {
-    const result = await calculatorExecutor.evaluateExpression({
+  it('should handle PI in evaluate', async () => {
+    const result = await calculatorExecutor.evaluate({
       expression: 'x * pi',
       variables: { x: 3 },
     });
@@ -348,7 +348,7 @@ describe('Unit Conversion', () => {
 
 describe('Calculator Base Conversion', () => {
   it('should convert binary to decimal', async () => {
-    const result = await calculatorExecutor.convertBase({
+    const result = await calculatorExecutor.convert({
       number: '1010',
       fromBase: 2,
       toBase: 10,
@@ -360,7 +360,7 @@ describe('Calculator Base Conversion', () => {
   });
 
   it('should convert decimal to binary', async () => {
-    const result = await calculatorExecutor.convertBase({
+    const result = await calculatorExecutor.convert({
       number: '255',
       fromBase: 10,
       toBase: 2,
@@ -372,7 +372,7 @@ describe('Calculator Base Conversion', () => {
   });
 
   it('should convert hexadecimal to octal', async () => {
-    const result = await calculatorExecutor.convertBase({
+    const result = await calculatorExecutor.convert({
       number: 'FF',
       fromBase: 16,
       toBase: 8,
@@ -384,7 +384,7 @@ describe('Calculator Base Conversion', () => {
   });
 
   it('should convert octal to hexadecimal', async () => {
-    const result = await calculatorExecutor.convertBase({
+    const result = await calculatorExecutor.convert({
       number: '77',
       fromBase: 8,
       toBase: 16,
@@ -396,7 +396,7 @@ describe('Calculator Base Conversion', () => {
   });
 
   it('should handle hexadecimal input', async () => {
-    const result = await calculatorExecutor.convertBase({
+    const result = await calculatorExecutor.convert({
       number: 'FF',
       fromBase: 16,
       toBase: 10,
@@ -408,7 +408,7 @@ describe('Calculator Base Conversion', () => {
   });
 
   it('should handle invalid numbers', async () => {
-    const result = await calculatorExecutor.convertBase({
+    const result = await calculatorExecutor.convert({
       number: '2AB',
       fromBase: 2,
       toBase: 10,
@@ -419,7 +419,7 @@ describe('Calculator Base Conversion', () => {
   });
 
   it('should support bases 2-36 with numeric input', async () => {
-    const result = await calculatorExecutor.convertBase({
+    const result = await calculatorExecutor.convert({
       number: 'Z',
       fromBase: 36,
       toBase: 10,
@@ -431,7 +431,7 @@ describe('Calculator Base Conversion', () => {
   });
 
   it('should convert decimal to base 32', async () => {
-    const result = await calculatorExecutor.convertBase({
+    const result = await calculatorExecutor.convert({
       number: '1000',
       fromBase: 10,
       toBase: 32,
@@ -443,7 +443,7 @@ describe('Calculator Base Conversion', () => {
   });
 
   it('should handle invalid base numbers', async () => {
-    const result = await calculatorExecutor.convertBase({
+    const result = await calculatorExecutor.convert({
       number: '123',
       fromBase: 1,
       toBase: 10,
@@ -454,7 +454,7 @@ describe('Calculator Base Conversion', () => {
   });
 
   it('should handle invalid base 37', async () => {
-    const result = await calculatorExecutor.convertBase({
+    const result = await calculatorExecutor.convert({
       number: '123',
       fromBase: 10,
       toBase: 37,
@@ -465,7 +465,7 @@ describe('Calculator Base Conversion', () => {
   });
 
   it('should validate digit characters for base', async () => {
-    const result = await calculatorExecutor.convertBase({
+    const result = await calculatorExecutor.convert({
       number: 'G',
       fromBase: 16,
       toBase: 10,
@@ -563,9 +563,9 @@ describe('Calculator Core Functions', () => {
     });
   });
 
-  describe('evaluateExpression', () => {
+  describe('evaluate', () => {
     it('should handle variable substitution', async () => {
-      const result = await calculatorExecutor.evaluateExpression({
+      const result = await calculatorExecutor.evaluate({
         expression: 'x^2 + 2*x + 1',
         variables: { x: 5 },
       });
@@ -577,7 +577,7 @@ describe('Calculator Core Functions', () => {
     });
 
     it('should handle multiple variables', async () => {
-      const result = await calculatorExecutor.evaluateExpression({
+      const result = await calculatorExecutor.evaluate({
         expression: 'a*x + b',
         variables: { a: 2, x: 3, b: 1 },
       });
@@ -587,7 +587,7 @@ describe('Calculator Core Functions', () => {
     });
 
     it('should handle no variables', async () => {
-      const result = await calculatorExecutor.evaluateExpression({
+      const result = await calculatorExecutor.evaluate({
         expression: '2 + 2',
       });
 
@@ -596,7 +596,7 @@ describe('Calculator Core Functions', () => {
     });
 
     it('should handle missing variables gracefully', async () => {
-      const result = await calculatorExecutor.evaluateExpression({
+      const result = await calculatorExecutor.evaluate({
         expression: 'x + y',
         variables: { x: 1 }, // y is missing
       });
@@ -606,7 +606,7 @@ describe('Calculator Core Functions', () => {
     });
 
     it('should handle complex expressions with variables', async () => {
-      const result = await calculatorExecutor.evaluateExpression({
+      const result = await calculatorExecutor.evaluate({
         expression: 'sin(x) * cos(y)',
         variables: { x: 1.5708, y: 0 }, // Approximate pi/2
       });
@@ -616,9 +616,9 @@ describe('Calculator Core Functions', () => {
     });
   });
 
-  describe('convertBase', () => {
+  describe('convert', () => {
     it('should handle number input in base conversion', async () => {
-      const result = await calculatorExecutor.convertBase({
+      const result = await calculatorExecutor.convert({
         number: 255,
         fromBase: 10,
         toBase: 2,
@@ -629,7 +629,7 @@ describe('Calculator Core Functions', () => {
     });
 
     it('should handle string input in base conversion', async () => {
-      const result = await calculatorExecutor.convertBase({
+      const result = await calculatorExecutor.convert({
         number: '255',
         fromBase: 10,
         toBase: 2,
@@ -640,7 +640,7 @@ describe('Calculator Core Functions', () => {
     });
 
     it('should handle zero in base conversion', async () => {
-      const result = await calculatorExecutor.convertBase({
+      const result = await calculatorExecutor.convert({
         number: '0',
         fromBase: 10,
         toBase: 16,
@@ -651,7 +651,7 @@ describe('Calculator Core Functions', () => {
     });
 
     it('should handle large numbers', async () => {
-      const result = await calculatorExecutor.convertBase({
+      const result = await calculatorExecutor.convert({
         number: '4294967295',
         fromBase: 10,
         toBase: 16,
@@ -662,7 +662,7 @@ describe('Calculator Core Functions', () => {
     });
 
     it('should handle base 36 conversion', async () => {
-      const result = await calculatorExecutor.convertBase({
+      const result = await calculatorExecutor.convert({
         number: '123456789',
         fromBase: 10,
         toBase: 36,
@@ -673,7 +673,7 @@ describe('Calculator Core Functions', () => {
     });
 
     it('should handle invalid base error', async () => {
-      const result = await calculatorExecutor.convertBase({
+      const result = await calculatorExecutor.convert({
         number: '123',
         fromBase: 1, // Invalid base
         toBase: 10,
@@ -685,7 +685,7 @@ describe('Calculator Core Functions', () => {
     });
 
     it('should handle invalid digit error', async () => {
-      const result = await calculatorExecutor.convertBase({
+      const result = await calculatorExecutor.convert({
         number: 'G', // Invalid digit for hex
         fromBase: 16,
         toBase: 10,
@@ -697,7 +697,7 @@ describe('Calculator Core Functions', () => {
     });
 
     it('should handle decimal input with parseInt behavior', async () => {
-      const result = await calculatorExecutor.convertBase({
+      const result = await calculatorExecutor.convert({
         number: '15.5',
         fromBase: 10,
         toBase: 2,
@@ -721,7 +721,7 @@ describe('Calculator Core Functions', () => {
     });
 
     it('should handle expression evaluation errors gracefully', async () => {
-      const result = await calculatorExecutor.evaluateExpression({
+      const result = await calculatorExecutor.evaluate({
         expression: 'x ^^^^^ y',
         variables: { x: 1, y: 2 },
       });

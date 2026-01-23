@@ -2,9 +2,9 @@ export const CalculatorIdentifier = 'lobe-calculator';
 
 export const CalculatorApiName = {
   calculate: 'calculate',
-  convertBase: 'convertBase',
+  convert: 'convert',
   differentiate: 'differentiate',
-  evaluateExpression: 'evaluateExpression',
+  evaluate: 'evaluate',
   integrate: 'integrate',
   limit: 'limit',
   solve: 'solve',
@@ -25,14 +25,14 @@ export interface CalculateState {
   result?: number | string;
 }
 
-// Evaluate Expression API (for more complex mathematical expressions)
-export interface EvaluateExpressionParams {
+// Evaluate API (for more complex mathematical expressions with variables)
+export interface EvaluateParams {
   expression: string;
   precision?: number;
   variables?: Record<string, number>;
 }
 
-export interface EvaluateExpressionState {
+export interface EvaluateState {
   expression?: string;
   precision?: number;
   result?: number | string;
@@ -40,13 +40,13 @@ export interface EvaluateExpressionState {
 }
 
 // Base Conversion API
-export interface ConvertBaseParams {
+export interface ConvertParams {
   fromBase: number;
   number: string | number;
   toBase: number;
 }
 
-export interface ConvertBaseState {
+export interface ConvertState {
   convertedNumber?: string;
   decimalValue?: number;
   originalBase?: string;
