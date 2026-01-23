@@ -16,8 +16,6 @@ import SharedMessageList from './SharedMessageList';
 
 const styles = createStaticStyles(({ css }) => ({
   errorContainer: css`
-    position: relative;
-
     display: flex;
     flex-direction: column;
     align-items: center;
