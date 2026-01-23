@@ -281,6 +281,34 @@ describe('anthropicHelpers', () => {
       const result = await buildAnthropicMessage(message);
       expect(result).toBeUndefined();
     });
+
+    it('should handle assistant message with tool_calls but null content', async () => {
+      const message: OpenAIChatMessage = {
+        content: null as any,
+        role: 'assistant',
+        tool_calls: [
+          {
+            id: 'call1',
+            type: 'function',
+            function: {
+              name: 'search_people',
+              arguments: '{"location":"Singapore"}',
+            },
+          },
+        ],
+      };
+      const result = await buildAnthropicMessage(message);
+      expect(result!.role).toBe('assistant');
+      expect(result!.content).toEqual([
+        { text: '<empty_content>', type: 'text' },
+        {
+          id: 'call1',
+          input: { location: 'Singapore' },
+          name: 'search_people',
+          type: 'tool_use',
+        },
+      ]);
+    });
   });
 
   describe('buildAnthropicMessages', () => {
@@ -518,6 +546,120 @@ describe('anthropicHelpers', () => {
                   },
                 ],
                 tool_use_id: 'toolu_01AgNoyb9FKuY8TGePPjEfrE',
+                type: 'tool_result',
+              },
+            ],
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should handle tool message with null content', async () => {
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: '搜索人员',
+            role: 'user',
+          },
+          {
+            content: '正在搜索...',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: {
+                  arguments: '{"location": "Singapore"}',
+                  name: 'search_people',
+                },
+                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: null as any,
+            name: 'search_people',
+            role: 'tool',
+            tool_call_id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+          },
+        ];
+
+        const contents = await buildAnthropicMessages(messages);
+
+        expect(contents).toEqual([
+          { content: '搜索人员', role: 'user' },
+          {
+            content: [
+              { text: '正在搜索...', type: 'text' },
+              {
+                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                input: { location: 'Singapore' },
+                name: 'search_people',
+                type: 'tool_use',
+              },
+            ],
+            role: 'assistant',
+          },
+          {
+            content: [
+              {
+                content: [{ text: '<empty_content>', type: 'text' }],
+                tool_use_id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                type: 'tool_result',
+              },
+            ],
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should handle tool message with empty string content', async () => {
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: '搜索人员',
+            role: 'user',
+          },
+          {
+            content: '正在搜索...',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: {
+                  arguments: '{"location": "Singapore"}',
+                  name: 'search_people',
+                },
+                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: '',
+            name: 'search_people',
+            role: 'tool',
+            tool_call_id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+          },
+        ];
+
+        const contents = await buildAnthropicMessages(messages);
+
+        expect(contents).toEqual([
+          { content: '搜索人员', role: 'user' },
+          {
+            content: [
+              { text: '正在搜索...', type: 'text' },
+              {
+                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                input: { location: 'Singapore' },
+                name: 'search_people',
+                type: 'tool_use',
+              },
+            ],
+            role: 'assistant',
+          },
+          {
+            content: [
+              {
+                content: [{ text: '<empty_content>', type: 'text' }],
+                tool_use_id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
                 type: 'tool_result',
               },
             ],

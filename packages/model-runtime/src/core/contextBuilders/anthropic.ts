@@ -117,7 +117,9 @@ export const buildAnthropicMessage = async (
         const rawContent =
           typeof content === 'string'
             ? ([{ text: message.content, type: 'text' }] as UserMessageContentPart[])
-            : content;
+            : Array.isArray(content)
+              ? content
+              : ([{ text: '<empty_content>', type: 'text' }] as UserMessageContentPart[]);
 
         const messageContent = await buildArrayContent(rawContent);
 
@@ -180,10 +182,13 @@ export const buildAnthropicMessages = async (
 
     // refs: https://docs.anthropic.com/claude/docs/tool-use#tool-use-and-tool-result-content-blocks
     if (message.role === 'tool') {
+      // Handle null/undefined content in tool messages
+      const toolContent = !message.content ? '<empty_content>' : message.content;
+
       // 检查这个工具消息是否有对应的 assistant 工具调用
       if (message.tool_call_id && validToolCallIds.has(message.tool_call_id)) {
         pendingToolResults.push({
-          content: [{ text: message.content as string, type: 'text' }],
+          content: [{ text: toolContent as string, type: 'text' }],
           tool_use_id: message.tool_call_id,
           type: 'tool_result',
         });
@@ -199,7 +204,7 @@ export const buildAnthropicMessages = async (
       } else {
         // 如果工具消息没有对应的 assistant 工具调用，则作为普通文本处理
         messages.push({
-          content: message.content as string,
+          content: toolContent as string,
           role: 'user',
         });
       }
