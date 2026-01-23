@@ -182,6 +182,7 @@ ENV KEY_VAULTS_SECRET="" \
 # Better Auth
 ENV AUTH_SECRET="" \
     AUTH_SSO_PROVIDERS="" \
+    AUTH_ALLOWED_EMAILS="" \
     # Google
     AUTH_GOOGLE_ID="" \
     AUTH_GOOGLE_SECRET="" \

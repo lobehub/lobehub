@@ -12,6 +12,7 @@ declare global {
       ENABLE_MAGIC_LINK?: string;
       AUTH_SSO_PROVIDERS?: string;
       AUTH_TRUSTED_ORIGINS?: string;
+      AUTH_ALLOWED_EMAILS?: string;
 
       // ===== Auth Provider Credentials ===== //
       AUTH_GOOGLE_ID?: string;
@@ -128,6 +129,7 @@ export const getAuthConfig = () => {
       AUTH_TRUSTED_ORIGINS: z.string().optional(),
       AUTH_EMAIL_VERIFICATION: z.boolean().optional().default(false),
       ENABLE_MAGIC_LINK: z.boolean().optional().default(false),
+      AUTH_ALLOWED_EMAILS: z.string().optional(),
 
       AUTH_GOOGLE_ID: z.string().optional(),
       AUTH_GOOGLE_SECRET: z.string().optional(),
@@ -235,6 +237,7 @@ export const getAuthConfig = () => {
       AUTH_SECRET: process.env.AUTH_SECRET,
       AUTH_SSO_PROVIDERS: process.env.AUTH_SSO_PROVIDERS,
       AUTH_TRUSTED_ORIGINS: process.env.AUTH_TRUSTED_ORIGINS,
+      AUTH_ALLOWED_EMAILS: process.env.AUTH_ALLOWED_EMAILS,
 
       // Cognito provider specific env vars
       AUTH_COGNITO_DOMAIN: process.env.AUTH_COGNITO_DOMAIN,
