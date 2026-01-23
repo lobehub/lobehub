@@ -1,0 +1,126 @@
+---
+title: 配置 Redis 缓存服务
+description: 了解如何配置 Redis 缓存服务以优化 LobeChat 的性能和会话管理。
+tags:
+  - Redis
+  - 缓存
+  - 会话存储
+  - 性能优化
+---
+
+# 配置 Redis 缓存服务
+
+LobeChat 使用 Redis 作为高性能缓存和会话存储服务，用于优化系统性能和管理用户认证状态。
+
+<Callout type={'info'}>
+  LobeChat 使用标准 Redis 协议（通过 ioredis 库），支持任何兼容 Redis 协议的服务，包括 Redis
+  官方服务、自部署 Redis、以及云服务商提供的 Redis 服务（如 AWS ElastiCache、阿里云 Redis
+  等）。
+</Callout>
+
+## 使用场景
+
+Redis 在 LobeChat 中主要用于以下场景：
+
+### 认证会话存储
+
+作为 Better Auth 的二级存储，用于存储用户认证 session 和 token 数据。这可以实现：
+
+- 跨多个服务实例共享会话状态
+- 更快的会话验证速度
+- 支持会话撤销和管理
+
+### 文件代理缓存
+
+缓存 S3 预签名 URL，减少对 S3 API 的调用次数，优化文件访问性能。
+
+### Agent 配置缓存
+
+缓存 Agent 配置数据，减少数据库查询，提升响应速度。
+
+## 核心环境变量
+
+<Steps>
+  ### `REDIS_URL`
+
+  Redis 服务器的连接 URL，这是启用 Redis 功能的必需配置。
+
+  ```shell
+  REDIS_URL=redis://localhost:6379
+  ```
+
+  支持的 URL 格式：
+
+  - 标准格式：`redis://localhost:6379`
+  - 带认证：`redis://username:password@localhost:6379`
+  - 带数据库：`redis://localhost:6379/0`
+
+  ### `REDIS_PREFIX`
+
+  Redis 键的前缀，用于在共享 Redis 实例中隔离 LobeChat 的数据。
+
+  - 默认值：`lobechat`
+  - 示例：`REDIS_PREFIX=my-lobechat`
+
+  ### `REDIS_TLS`
+
+  是否启用 TLS/SSL 加密连接。
+
+  - 默认值：`false`
+  - 示例：`REDIS_TLS=true`
+
+  <Callout type={'tip'}>
+    如果你使用云服务商提供的 Redis 服务，通常需要启用 TLS 以确保数据传输安全。
+  </Callout>
+
+  ### `REDIS_PASSWORD`
+
+  Redis 认证密码（可选）。如果 Redis 服务器配置了密码认证，需要设置此变量。
+
+  ### `REDIS_USERNAME`
+
+  Redis 认证用户名（可选）。Redis 6.0+ 支持 ACL 用户认证，如果使用了用户名认证，需要设置此变量。
+
+  ### `REDIS_DATABASE`
+
+  Redis 数据库索引（可选）。Redis 支持多个数据库（默认 0-15），可以指定使用的数据库。
+
+  - 默认值：`0`
+  - 示例：`REDIS_DATABASE=1`
+</Steps>
+
+## 配置示例
+
+### 本地开发
+
+```shell
+REDIS_URL=redis://localhost:6379
+REDIS_PREFIX=lobechat-dev
+```
+
+### 生产环境（带认证）
+
+```shell
+REDIS_URL=redis://localhost:6379
+REDIS_PASSWORD=your-strong-password
+REDIS_PREFIX=lobechat
+REDIS_TLS=true
+```
+
+### 云服务（如 AWS ElastiCache）
+
+```shell
+REDIS_URL=redis://your-cluster.cache.amazonaws.com:6379
+REDIS_TLS=true
+REDIS_PREFIX=lobechat
+```
+
+## 注意事项
+
+<Callout type={'warning'}>
+  Redis 是可选服务。如果不配置 `REDIS_URL`，LobeChat 仍然可以正常运行，但会失去上述缓存和会话管理的优化功能。
+</Callout>
+
+- **内存管理**：Redis 是内存数据库，请确保服务器有足够的内存
+- **持久化**：建议启用 Redis 的 RDB 或 AOF 持久化，防止数据丢失
+- **高可用**：生产环境建议使用 Redis Sentinel 或 Redis Cluster 实现高可用
