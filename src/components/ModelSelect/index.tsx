@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { type ModelAbilities } from 'model-bank';
 import numeral from 'numeral';
-import { CSSProperties, type ComponentProps, type FC, memo } from 'react';
+import { CSSProperties, type FC, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { type AiProviderSourceType } from '@/types/aiProvider';
@@ -51,14 +51,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 type TooltipStyles = typeof styles;
 
-const DEFAULT_TOOLTIP_STYLES = {
-  root: { pointerEvents: 'none' },
-} as const satisfies ComponentProps<typeof Tooltip>['styles'];
-
-const FUNCTION_CALL_TOOLTIP_STYLES = {
-  root: { maxWidth: 'unset', pointerEvents: 'none' },
-} as const satisfies ComponentProps<typeof Tooltip>['styles'];
-
 interface ModelInfoTagsProps extends ModelAbilities {
   contextWindowTokens?: number | null;
   directionReverse?: boolean;
@@ -82,11 +74,10 @@ interface FeatureTagItemProps {
   icon: Parameters<typeof Icon>[0]['icon'];
   placement: 'top' | 'right';
   title: string;
-  tooltipStyles?: ComponentProps<typeof Tooltip>['styles'];
 }
 
 const FeatureTagItem = memo<FeatureTagItemProps>(
-  ({ className, color, enabled, icon, placement, title, tooltipStyles }) => {
+  ({ className, color, enabled, icon, placement, title }) => {
     if (!enabled) return null;
 
     const tag = (
@@ -96,7 +87,7 @@ const FeatureTagItem = memo<FeatureTagItemProps>(
     );
 
     return (
-      <Tooltip placement={placement} styles={tooltipStyles ?? DEFAULT_TOOLTIP_STYLES} title={title}>
+      <Tooltip placement={placement} title={title}>
         {tag}
       </Tooltip>
     );
@@ -158,7 +149,6 @@ const FeatureTags = memo<FeatureTagsProps>(
           icon={ToyBrick}
           placement={placement}
           title={t('ModelSelect.featureTag.functionCall')}
-          tooltipStyles={FUNCTION_CALL_TOOLTIP_STYLES}
         />
         <FeatureTagItem
           className={tagClassName}
