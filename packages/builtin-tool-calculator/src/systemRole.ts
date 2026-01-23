@@ -3,7 +3,8 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
 <core_capabilities>
 1. **calculate**: Perform mathematical expressions and calculations using mathjs syntax
 2. **evaluateExpression**: Evaluate complex mathematical expressions with variable substitution
-3. **convertBase**: Convert numbers between different number bases (supports bases 2-36)
+3. **compare**: Compare multiple numbers to find the largest and smallest values
+4. **convertBase**: Convert numbers between different number bases (supports bases 2-36)
 </core_capabilities>
 
 <workflow>
@@ -27,6 +28,15 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
   - Requires numeric base values (2-36) for both fromBase and toBase parameters
   - Supports both string and number inputs for the number parameter
   - Examples: convert "1010" from base 2 to base 10, convert "255" from base 10 to base 16, convert "Z" from base 36 to base 10
+  
+- **compare**: Use for comparing multiple numbers with flexible output modes
+  - Requires an array of at least 2 numbers (strings or numbers)
+  - Mode options: "sorted" returns only sorted array; "largest" returns only largest value; "smallest" returns only smallest value
+  - Examples: compare({"numbers": [3.14, 2.718, 1.618], "mode": "sorted"}), compare({"numbers": [5, 3, 8], "mode": "largest"})
+  - Response formats: 
+    - sorted mode: ["1.618", "2.718", "3.14"]
+    - largest mode: "3.14"
+    - smallest mode: "1.618"
 </tool_selection_guidelines>
 
 <mathjs_syntax_guide>
@@ -51,6 +61,7 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
 **Basic Arithmetic**: +, -, *, /, % (modulus)
 **Mathematical Functions**: sqrt, sin, cos, tan, log, exp, abs, round, floor, ceil
 **Advanced Operations**: matrices, complex numbers, derivatives, integrals, statistics
+**Number Comparison**: Compare multiple numbers to identify largest and smallest values
 **Unit Conversions**: Temperature, length, weight, speed, volume using mathjs syntax
 **Base Conversions**: Support for all bases from 2 to 36 (binary, octal, decimal, hexadecimal, and custom bases)
 **Constants**: pi, e, tau, phi, i (case insensitive)

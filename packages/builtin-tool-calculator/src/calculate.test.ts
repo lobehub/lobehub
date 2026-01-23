@@ -492,3 +492,178 @@ describe('Calculator Core Functions', () => {
     });
   });
 });
+
+describe('Calculator Comparison', () => {
+  describe('compare', () => {
+    it('should default to sorted mode', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: [3.14, 2.718],
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed).toEqual(['2.718', '3.14']);
+    });
+
+    it('should return sorted array in sorted mode', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: [3.14, 2.718, 1.618, 4.669],
+        mode: 'sorted',
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed).toEqual(['1.618', '2.718', '3.14', '4.669']);
+    });
+
+    it('should return largest value only in largest mode', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: [3.14, 2.718, 1.618, 4.669],
+        mode: 'largest',
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parsed).toBe('4.669');
+    });
+
+    it('should return smallest value only in smallest mode', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: [3.14, 2.718, 1.618, 4.669],
+        mode: 'smallest',
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parsed).toBe('1.618');
+    });
+
+    it('should compare string numbers', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: ['3.14', '2.718', '1.618'],
+        mode: 'sorted',
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parsed).toEqual(['1.618', '2.718', '3.14']);
+    });
+
+    it('should compare mixed string and number inputs', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: ['3.14', 2.718, '1.618'],
+        mode: 'largest',
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parsed).toBe('3.14');
+    });
+
+    it('should handle precision formatting', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: [3.1415926535, 2.7182818284, 1.6180339887],
+        mode: 'sorted',
+        precision: 3,
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parsed).toEqual(['1.618', '2.718', '3.142']);
+    });
+
+    it('should handle zero precision', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: [3.14, 2.718, 1.618],
+        mode: 'largest',
+        precision: 0,
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parsed).toBe('3');
+    });
+
+    it('should handle duplicate values', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: [5, 3, 5, 2],
+        mode: 'sorted',
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parsed).toEqual(['2', '3', '5', '5']);
+    });
+
+    it('should require at least 2 numbers', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: [3.14],
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.type).toBe('ValidationError');
+      expect(result.content).toContain('At least 2 numbers are required');
+    });
+
+    it('should handle invalid number strings', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: ['3.14', 'invalid', '2.718'],
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.type).toBe('ComparisonError');
+      expect(result.content).toContain('Invalid number: invalid');
+    });
+
+    it('should handle negative numbers', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: [-3.14, -2.718, -1.618],
+        mode: 'smallest',
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parsed).toBe('-3.14');
+    });
+
+    it('should handle zero values', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: [0, -1, 1],
+        mode: 'largest',
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parsed).toBe('1');
+    });
+
+    it('should handle very large numbers', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: [1e10, 1e9, 1e11],
+        mode: 'smallest',
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parsed).toBe('1000000000');
+    });
+
+    it('should preserve state information', async () => {
+      const result = await calculatorExecutor.compare({
+        numbers: [3.14, 2.718],
+        mode: 'largest',
+        precision: 2,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.state?.originalNumbers).toEqual([3.14, 2.718]);
+      expect(result.state?.mode).toBe('largest');
+      expect(result.state?.precision).toBe(2);
+      expect(result.state?.largest).toBe('3.14');
+      expect(result.state?.smallest).toBe('2.72');
+      expect(result.state?.sorted).toEqual(['2.72', '3.14']);
+    });
+  });
+});

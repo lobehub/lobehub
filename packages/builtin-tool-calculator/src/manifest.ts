@@ -55,6 +55,40 @@ export const CalculatorManifest: BuiltinToolManifest = {
       },
     },
     {
+      description:
+        'Compare multiple numbers with flexible output options (sorted array, largest value, or smallest value).',
+      name: CalculatorApiName.compare,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          mode: {
+            description:
+              'Output mode: "sorted" returns only sorted array; "largest" returns only largest value; "smallest" returns only smallest value',
+            enum: ['sorted', 'largest', 'smallest'],
+            type: 'string',
+          },
+          numbers: {
+            description:
+              'Array of numbers to compare (e.g., ["3.14", "2.718", "1.618"] or [3.14, 2.718, 1.618])',
+            items: {
+              type: ['string', 'number'],
+            },
+            minItems: 2,
+            type: 'array',
+          },
+          precision: {
+            description:
+              'Number of decimal places for comparison results (optional, defaults to 10)',
+            maximum: 20,
+            minimum: 0,
+            type: 'number',
+          },
+        },
+        required: ['numbers'],
+        type: 'object',
+      },
+    },
+    {
       description: 'Convert numbers between different number bases.',
       name: CalculatorApiName.convertBase,
       parameters: {

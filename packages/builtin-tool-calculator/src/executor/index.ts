@@ -5,6 +5,7 @@ import {
   type CalculateParams,
   CalculatorApiName,
   CalculatorIdentifier,
+  type CompareParams,
   type ConvertBaseParams,
   type EvaluateExpressionParams,
 } from '../types';
@@ -65,20 +66,6 @@ class CalculatorExecutor
 
     // Handle complex numbers, matrices, etc.
     return math.format(result, { precision: precision || 10 });
-  }
-
-  /**
-   * Format expression with variables for display
-   */
-  private formatExpression(expression: string, variables: Record<string, number>): string {
-    if (Object.keys(variables).length === 0) {
-      return expression;
-    }
-
-    const varStr = Object.entries(variables)
-      .map(([key, value]) => `${key} = ${value}`)
-      .join(', ');
-    return `${expression} (where ${varStr})`;
   }
 
   /**
@@ -193,6 +180,94 @@ class CalculatorExecutor
         error: {
           message: err.message,
           type: 'CalculationError',
+        },
+        success: false,
+      };
+    }
+  };
+
+  /**
+   * Compare multiple numbers with flexible output options
+   */
+  compare = async (params: CompareParams): Promise<BuiltinToolResult> => {
+    try {
+      const { numbers, mode = 'sorted', precision } = params;
+
+      if (numbers.length < 2) {
+        return {
+          content: 'At least 2 numbers are required for comparison',
+          error: {
+            message: 'Insufficient numbers for comparison',
+            type: 'ValidationError',
+          },
+          success: false,
+        };
+      }
+
+      // Convert all numbers to actual numbers for comparison
+      const parsedNumbers = numbers.map((num) => {
+        const parsed = typeof num === 'string' ? parseFloat(num) : num;
+        if (isNaN(parsed)) {
+          throw new Error(`Invalid number: ${num}`);
+        }
+        return parsed;
+      });
+
+      // Sort numbers in ascending order
+      const sortedParsed = [...parsedNumbers].sort((a, b) => a - b);
+
+      // Format numbers for output
+      const formatNumber = (num: number): string => {
+        if (precision !== undefined) {
+          return num.toFixed(precision);
+        }
+        return num.toString();
+      };
+
+      const sorted = sortedParsed.map(formatNumber);
+      const largest = formatNumber(sortedParsed.at(-1));
+      const smallest = formatNumber(sortedParsed[0]);
+
+      let result: any;
+
+      switch (mode) {
+        case 'sorted': {
+          result = sorted;
+          break;
+        }
+        case 'largest': {
+          result = largest;
+          break;
+        }
+        case 'smallest': {
+          result = smallest;
+          break;
+        }
+        default: {
+          result = { largest, smallest, sorted };
+        }
+      }
+
+      return {
+        content: JSON.stringify(result),
+        state: {
+          largest,
+          mode,
+          originalNumbers: numbers,
+          precision,
+          result,
+          smallest,
+          sorted,
+        },
+        success: true,
+      };
+    } catch (error) {
+      const err = error as Error;
+      return {
+        content: `Comparison error: ${err.message}`,
+        error: {
+          message: err.message,
+          type: 'ComparisonError',
         },
         success: false,
       };
