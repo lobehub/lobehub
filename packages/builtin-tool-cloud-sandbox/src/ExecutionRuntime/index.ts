@@ -65,6 +65,14 @@ export class CloudSandboxExecutionRuntime {
     try {
       const result = await this.callTool('listLocalFiles', args);
 
+      if (!result.success) {
+        return {
+          content: result.error?.message || JSON.stringify(result.error),
+          state: { files: [] },
+          success: true,
+        };
+      }
+
       const files = result.result?.files || [];
       const state: ListLocalFilesState = { files };
 
@@ -89,6 +97,19 @@ export class CloudSandboxExecutionRuntime {
   async readLocalFile(args: ReadLocalFileParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       const result = await this.callTool('readLocalFile', args);
+
+      if (!result.success) {
+        return {
+          content: result.error?.message || JSON.stringify(result.error),
+          state: {
+            content: '',
+            endLine: args.endLine,
+            path: args.path,
+            startLine: args.startLine,
+          },
+          success: true,
+        };
+      }
 
       const state: ReadLocalFileState = {
         content: result.result?.content || '',
@@ -123,6 +144,17 @@ export class CloudSandboxExecutionRuntime {
     try {
       const result = await this.callTool('writeLocalFile', args);
 
+      if (!result.success) {
+        return {
+          content: result.error?.message || JSON.stringify(result.error),
+          state: {
+            path: args.path,
+            success: false,
+          },
+          success: true,
+        };
+      }
+
       const state: WriteLocalFileState = {
         bytesWritten: result.result?.bytesWritten,
         path: args.path,
@@ -147,6 +179,17 @@ export class CloudSandboxExecutionRuntime {
   async editLocalFile(args: EditLocalFileParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       const result = await this.callTool('editLocalFile', args);
+
+      if (!result.success) {
+        return {
+          content: result.error?.message || JSON.stringify(result.error),
+          state: {
+            path: args.path,
+            replacements: 0,
+          },
+          success: true,
+        };
+      }
 
       const state: EditLocalFileState = {
         diffText: result.result?.diffText,
@@ -177,6 +220,17 @@ export class CloudSandboxExecutionRuntime {
     try {
       const result = await this.callTool('searchLocalFiles', args);
 
+      if (!result.success) {
+        return {
+          content: result.error?.message || JSON.stringify(result.error),
+          state: {
+            results: [],
+            totalCount: 0,
+          },
+          success: true,
+        };
+      }
+
       const results = result.result?.results || [];
       const state: SearchLocalFilesState = {
         results,
@@ -201,6 +255,18 @@ export class CloudSandboxExecutionRuntime {
     try {
       const result = await this.callTool('moveLocalFiles', args);
 
+      if (!result.success) {
+        return {
+          content: result.error?.message || JSON.stringify(result.error),
+          state: {
+            results: [],
+            successCount: 0,
+            totalCount: args.operations.length,
+          },
+          success: true,
+        };
+      }
+
       const results = result.result?.results || [];
       const state: MoveLocalFilesState = {
         results,
@@ -224,6 +290,19 @@ export class CloudSandboxExecutionRuntime {
     try {
       const result = await this.callTool('renameLocalFile', args);
 
+      if (!result.success) {
+        return {
+          content: result.error?.message || JSON.stringify(result.error),
+          state: {
+            error: result.error?.message,
+            newPath: '',
+            oldPath: args.oldPath,
+            success: false,
+          },
+          success: true,
+        };
+      }
+
       const state: RenameLocalFileState = {
         error: result.result?.error,
         newPath: result.result?.newPath || '',
@@ -241,7 +320,7 @@ export class CloudSandboxExecutionRuntime {
       return {
         content,
         state,
-        success: result.success,
+        success: true,
       };
     } catch (error) {
       return this.handleError(error);
@@ -264,15 +343,24 @@ export class CloudSandboxExecutionRuntime {
         language,
         output: result.result?.output,
         stderr: result.result?.stderr,
-        success: result.success,
+        success: result.success || false,
       };
+
+      if (!result.success) {
+        return {
+          content: result.error?.message || JSON.stringify(result.error),
+          state,
+          success: true,
+        };
+      }
 
       return {
         content: JSON.stringify(result.result),
         state,
-        success: result.success,
+        success: true,
       };
     } catch (error) {
+      console.log('executeCode error', error);
       return this.handleError(error);
     }
   }
@@ -282,6 +370,18 @@ export class CloudSandboxExecutionRuntime {
   async runCommand(args: RunCommandParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       const result = await this.callTool('runCommand', args);
+
+      if (!result.success) {
+        return {
+          content: result.error?.message || JSON.stringify(result.error),
+          state: {
+            error: result.error?.message,
+            isBackground: args.background || false,
+            success: false,
+          },
+          success: true,
+        };
+      }
 
       const state: RunCommandState = {
         commandId: result.result?.commandId,
@@ -296,7 +396,7 @@ export class CloudSandboxExecutionRuntime {
       return {
         content: JSON.stringify(result.result),
         state,
-        success: result.success,
+        success: true,
       };
     } catch (error) {
       return this.handleError(error);
@@ -306,6 +406,18 @@ export class CloudSandboxExecutionRuntime {
   async getCommandOutput(args: GetCommandOutputParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       const result = await this.callTool('getCommandOutput', args);
+
+      if (!result.success) {
+        return {
+          content: result.error?.message || JSON.stringify(result.error),
+          state: {
+            error: result.error?.message,
+            running: false,
+            success: false,
+          },
+          success: true,
+        };
+      }
 
       const state: GetCommandOutputState = {
         error: result.result?.error,
@@ -317,7 +429,7 @@ export class CloudSandboxExecutionRuntime {
       return {
         content: JSON.stringify(result.result),
         state,
-        success: result.success,
+        success: true,
       };
     } catch (error) {
       return this.handleError(error);
@@ -327,6 +439,18 @@ export class CloudSandboxExecutionRuntime {
   async killCommand(args: KillCommandParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       const result = await this.callTool('killCommand', args);
+
+      if (!result.success) {
+        return {
+          content: result.error?.message || JSON.stringify(result.error),
+          state: {
+            commandId: args.commandId,
+            error: result.error?.message,
+            success: false,
+          },
+          success: true,
+        };
+      }
 
       const state: KillCommandState = {
         commandId: args.commandId,
@@ -340,7 +464,7 @@ export class CloudSandboxExecutionRuntime {
           success: true,
         }),
         state,
-        success: result.success,
+        success: true,
       };
     } catch (error) {
       return this.handleError(error);
@@ -352,6 +476,18 @@ export class CloudSandboxExecutionRuntime {
   async grepContent(args: GrepContentParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       const result = await this.callTool('grepContent', args);
+
+      if (!result.success) {
+        return {
+          content: result.error?.message || JSON.stringify(result.error),
+          state: {
+            matches: [],
+            pattern: args.pattern,
+            totalMatches: 0,
+          },
+          success: true,
+        };
+      }
 
       const state: GrepContentState = {
         matches: result.result?.matches || [],
@@ -372,6 +508,18 @@ export class CloudSandboxExecutionRuntime {
   async globLocalFiles(args: GlobLocalFilesParams): Promise<BuiltinServerRuntimeOutput> {
     try {
       const result = await this.callTool('globLocalFiles', args);
+
+      if (!result.success) {
+        return {
+          content: result.error?.message || JSON.stringify(result.error),
+          state: {
+            files: [],
+            pattern: args.pattern,
+            totalCount: 0,
+          },
+          success: true,
+        };
+      }
 
       const files = result.result?.files || [];
       const totalCount = result.result?.totalCount || 0;
@@ -433,7 +581,7 @@ export class CloudSandboxExecutionRuntime {
             success: false,
           }),
           state,
-          success: false,
+          success: true,
         };
       }
 
@@ -455,12 +603,13 @@ export class CloudSandboxExecutionRuntime {
   private async callTool(
     toolName: string,
     params: Record<string, any>,
-  ): Promise<{ result: any; sessionExpiredAndRecreated?: boolean; success: boolean }> {
+  ): Promise<{
+    error?: { message: string; name?: string };
+    result: any;
+    sessionExpiredAndRecreated?: boolean;
+    success: boolean;
+  }> {
     const result = await this.sandboxService.callTool(toolName, params);
-
-    if (!result.success) {
-      throw new Error(result.error?.message || `Cloud Sandbox tool ${toolName} failed`);
-    }
 
     return result;
   }
