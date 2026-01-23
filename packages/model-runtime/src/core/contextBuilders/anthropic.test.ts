@@ -838,6 +838,64 @@ describe('anthropicHelpers', () => {
         ]);
       });
 
+      it('should handle orphan tool message with null content', async () => {
+        // Tool message without corresponding assistant tool_call
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: null as any,
+            name: 'some_tool',
+            role: 'tool',
+            tool_call_id: 'orphan_tool_call_id',
+          },
+          {
+            content: 'Continue',
+            role: 'user',
+          },
+        ];
+
+        const contents = await buildAnthropicMessages(messages);
+
+        expect(contents).toEqual([
+          {
+            content: '<empty_content>',
+            role: 'user',
+          },
+          {
+            content: 'Continue',
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should handle orphan tool message with empty string content', async () => {
+        // Tool message without corresponding assistant tool_call
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: '',
+            name: 'some_tool',
+            role: 'tool',
+            tool_call_id: 'orphan_tool_call_id',
+          },
+          {
+            content: 'Continue',
+            role: 'user',
+          },
+        ];
+
+        const contents = await buildAnthropicMessages(messages);
+
+        expect(contents).toEqual([
+          {
+            content: '<empty_content>',
+            role: 'user',
+          },
+          {
+            content: 'Continue',
+            role: 'user',
+          },
+        ]);
+      });
+
       it('should work well starting with tool message', async () => {
         const messages: OpenAIChatMessage[] = [
           {
