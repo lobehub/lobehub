@@ -130,13 +130,7 @@ declare global {
 
 export const getAuthConfig = () => {
   return createEnv({
-    client: {
-      // ---------------------------------- better auth ----------------------------------
-      NEXT_PUBLIC_ENABLE_BETTER_AUTH: z.boolean().optional(),
-
-      // ---------------------------------- next auth ----------------------------------
-      NEXT_PUBLIC_ENABLE_NEXT_AUTH: z.boolean().optional(),
-    },
+    client: {},
     server: {
       // ---------------------------------- better auth ----------------------------------
       AUTH_SECRET: z.string().optional(),
@@ -249,7 +243,6 @@ export const getAuthConfig = () => {
 
     runtimeEnv: {
       // ---------------------------------- better auth ----------------------------------
-      NEXT_PUBLIC_ENABLE_BETTER_AUTH: process.env.NEXT_PUBLIC_ENABLE_BETTER_AUTH === '1',
       // Fallback to NEXT_PUBLIC_* for seamless migration
       AUTH_EMAIL_VERIFICATION:
         process.env.AUTH_EMAIL_VERIFICATION === '1' ||
@@ -268,7 +261,6 @@ export const getAuthConfig = () => {
       AUTH_COGNITO_USERPOOL_ID: process.env.AUTH_COGNITO_USERPOOL_ID,
 
       // ---------------------------------- next auth ----------------------------------
-      NEXT_PUBLIC_ENABLE_NEXT_AUTH: process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1',
       NEXT_AUTH_SSO_PROVIDERS: process.env.NEXT_AUTH_SSO_PROVIDERS,
       NEXT_AUTH_SECRET: process.env.NEXT_AUTH_SECRET,
       NEXT_AUTH_DEBUG: !!process.env.NEXT_AUTH_DEBUG,

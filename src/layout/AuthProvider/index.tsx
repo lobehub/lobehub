@@ -12,7 +12,7 @@ const AuthProvider = ({ children }: PropsWithChildren) => {
     return <Desktop>{children}</Desktop>;
   }
 
-  if (authEnv.NEXT_PUBLIC_ENABLE_BETTER_AUTH) {
+  if (authEnv.AUTH_SECRET) {
     return <BetterAuth>{children}</BetterAuth>;
   }
 
