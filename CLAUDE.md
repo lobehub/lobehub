@@ -61,11 +61,19 @@ see @.cursor/rules/typescript.mdc
 - **Dev**: Translate `locales/zh-CN/namespace.json` and `locales/en-US/namespace.json` locales file only for dev preview
 - DON'T run `pnpm i18n`, let CI auto handle it
 
-## Linear Issue Management (search tools first; ignore if not installed)
+## Linear Issue Management
 
-ClaudeCode may not inject MCP tools until they are discovered/used.\
-Before applying Linear workflows, **use tool search** to confirm `linear-server` exists (e.g. search `linear` / `mcp__linear-server__`). If not found, treat it as not installed.\
-Then read `@.cursor/rules/linear.mdc` when working with Linear issues.
+**Trigger conditions** - when ANY of these occur, apply Linear workflow:
+
+- User mentions issue ID like `LOBE-XXX`
+- User says "linear", "link linear", "linear issue"
+- Creating PR that references a Linear issue
+
+**Workflow:**
+
+1. Use `ToolSearch` to confirm `linear-server` MCP exists (search `linear` or `mcp__linear-server__`)
+2. If found, read `.cursor/rules/linear.mdc` and follow the workflow
+3. If not found, skip Linear integration (treat as not installed)
 
 ## Rules Index
 
