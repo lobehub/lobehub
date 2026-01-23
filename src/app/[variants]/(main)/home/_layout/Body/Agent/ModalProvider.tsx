@@ -5,8 +5,8 @@ import { type ReactNode, createContext, memo, useContext, useMemo, useState } fr
 import { ChatGroupWizard } from '@/components/ChatGroupWizard';
 import { MemberSelectionModal } from '@/components/MemberSelectionModal';
 
-import CreateGroupModal from '../../CreateGroupModal';
 import ConfigGroupModal from './Modals/ConfigGroupModal';
+import CreateGroupModal from './Modals/CreateGroupModal';
 
 interface AgentModalContextValue {
   closeAllModals: () => void;
