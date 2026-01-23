@@ -20,13 +20,16 @@ const AutoScroll = memo(() => {
 
   const shouldAutoScroll = atBottom && isGenerating && !isScrolling;
 
+  // 获取最后一条消息的 content 长度，用于监听流式输出
+  const lastMessage = dbMessages.at(-1);
+  const lastMessageContentLength =
+    typeof lastMessage?.content === 'string' ? lastMessage.content.length : 0;
+
   useEffect(() => {
-    console.log('[AutoScroll] effect 执行', { dbMsgLen: dbMessages.length, shouldAutoScroll });
     if (shouldAutoScroll) {
-      console.log('[AutoScroll] ✅ 调用 scrollToBottom');
       scrollToBottom(false);
     }
-  }, [shouldAutoScroll, scrollToBottom, dbMessages.length]);
+  }, [shouldAutoScroll, scrollToBottom, dbMessages.length, lastMessageContentLength]);
 
   return (
     <div style={{ position: 'relative', width: '100%' }}>
