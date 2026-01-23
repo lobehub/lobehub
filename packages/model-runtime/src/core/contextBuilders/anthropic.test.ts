@@ -759,6 +759,85 @@ describe('anthropicHelpers', () => {
         ]);
       });
 
+      it('should handle tool message with array content containing image', async () => {
+        vi.mocked(parseDataUri).mockReturnValueOnce({
+          mimeType: 'image/png',
+          base64: 'screenshotBase64Data',
+          type: 'base64',
+        });
+
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: '截图分析',
+            role: 'user',
+          },
+          {
+            content: '正在截图...',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: {
+                  arguments: '{"url": "https://example.com"}',
+                  name: 'screenshot',
+                },
+                id: 'toolu_screenshot_123',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: [
+              { type: 'text', text: 'Screenshot captured' },
+              {
+                type: 'image_url',
+                image_url: { url: 'data:image/png;base64,screenshotBase64Data' },
+              },
+            ] as any,
+            name: 'screenshot',
+            role: 'tool',
+            tool_call_id: 'toolu_screenshot_123',
+          },
+        ];
+
+        const contents = await buildAnthropicMessages(messages);
+
+        expect(contents).toEqual([
+          { content: '截图分析', role: 'user' },
+          {
+            content: [
+              { text: '正在截图...', type: 'text' },
+              {
+                id: 'toolu_screenshot_123',
+                input: { url: 'https://example.com' },
+                name: 'screenshot',
+                type: 'tool_use',
+              },
+            ],
+            role: 'assistant',
+          },
+          {
+            content: [
+              {
+                content: [
+                  { type: 'text', text: 'Screenshot captured' },
+                  {
+                    type: 'image',
+                    source: {
+                      type: 'base64',
+                      media_type: 'image/png',
+                      data: 'screenshotBase64Data',
+                    },
+                  },
+                ],
+                tool_use_id: 'toolu_screenshot_123',
+                type: 'tool_result',
+              },
+            ],
+            role: 'user',
+          },
+        ]);
+      });
+
       it('should work well starting with tool message', async () => {
         const messages: OpenAIChatMessage[] = [
           {
