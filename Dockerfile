@@ -181,7 +181,32 @@ ENV KEY_VAULTS_SECRET="" \
 
 # Better Auth
 ENV AUTH_SECRET="" \
-    AUTH_SSO_PROVIDERS=""
+    AUTH_SSO_PROVIDERS="" \
+    # Google
+    AUTH_GOOGLE_ID="" \
+    AUTH_GOOGLE_SECRET="" \
+    # GitHub
+    AUTH_GITHUB_ID="" \
+    AUTH_GITHUB_SECRET="" \
+    # Microsoft
+    AUTH_MICROSOFT_ID="" \
+    AUTH_MICROSOFT_SECRET=""
+
+# Redis
+ENV REDIS_URL="" \
+    REDIS_PREFIX="" \
+    REDIS_TLS=""
+
+# Email
+ENV EMAIL_SERVICE_PROVIDER="" \
+    SMTP_HOST="" \
+    SMTP_PORT="" \
+    SMTP_SECURE="" \
+    SMTP_USER="" \
+    SMTP_PASS="" \
+    SMTP_FROM="" \
+    RESEND_API_KEY="" \
+    RESEND_FROM=""
 
 # S3
 ENV NEXT_PUBLIC_S3_DOMAIN="" \
