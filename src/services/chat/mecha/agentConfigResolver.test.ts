@@ -743,9 +743,7 @@ describe('resolveAgentConfig', () => {
     });
 
     describe('supervisor with own slug (priority check)', () => {
-      // This tests the fix for LOBE-4127: When supervisor agent has its own slug,
-      // it should still use 'group-supervisor' slug when in group scope
-
+      // When supervisor agent has its own slug, it should still use 'group-supervisor' slug when in group scope
       it('should use group-supervisor slug even when agent has its own slug in group scope', () => {
         // Supervisor agent has its own slug (e.g., from being a builtin agent)
         vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
