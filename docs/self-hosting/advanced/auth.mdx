@@ -177,3 +177,7 @@ Better Auth supports built-in providers (Google, GitHub, Microsoft, Apple, AWS C
 ### How do I enable multiple SSO providers?
 
 Set the `AUTH_SSO_PROVIDERS` environment variable with a comma-separated list, e.g., `google,github,microsoft`. The order determines the display order on the login page.
+
+### What if Casdoor users only have username without email?
+
+The current authentication system requires email. Please configure a valid email address for users in Casdoor. Using a real, valid email is strongly recommended, otherwise features like password reset and magic link login will not work.

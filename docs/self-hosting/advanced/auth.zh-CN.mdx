@@ -174,3 +174,7 @@ Better Auth 支持内置提供商（Google、GitHub、Microsoft、Apple、AWS Co
 ### 如何启用多个 SSO 提供商？
 
 设置 `AUTH_SSO_PROVIDERS` 环境变量，使用逗号分隔多个提供商，例如 `google,github,microsoft`。顺序决定登录页面上的显示顺序。
+
+### Casdoor 用户只有 username 没有 email 怎么办？
+
+当前身份验证方案强依赖 email。请在 Casdoor 中为用户配置有效的 email 地址。强烈建议使用真实有效的邮箱，否则密码重置、魔法链接登录等功能将无法使用。
