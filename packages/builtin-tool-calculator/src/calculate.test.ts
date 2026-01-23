@@ -664,5 +664,76 @@ describe('Calculator Sorting', () => {
       expect(result.state?.smallest).toBe('2.72');
       expect(result.state?.sorted).toEqual(['2.72', '3.14']);
     });
+
+    it('should sort in descending order when reverse is true', async () => {
+      const result = await calculatorExecutor.sort({
+        numbers: [3.14, 2.718, 1.618, 4.669],
+        reverse: true,
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed).toEqual(['4.669', '3.14', '2.718', '1.618']);
+    });
+
+    it('should sort in ascending order when reverse is false', async () => {
+      const result = await calculatorExecutor.sort({
+        numbers: [3.14, 2.718, 1.618, 4.669],
+        reverse: false,
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed).toEqual(['1.618', '2.718', '3.14', '4.669']);
+    });
+
+    it('should default to ascending order when reverse is not specified', async () => {
+      const result = await calculatorExecutor.sort({
+        numbers: [3.14, 2.718, 1.618, 4.669],
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed).toEqual(['1.618', '2.718', '3.14', '4.669']);
+    });
+
+    it('should work with reverse parameter in largest mode', async () => {
+      const result = await calculatorExecutor.sort({
+        numbers: [3.14, 2.718, 1.618, 4.669],
+        mode: 'largest',
+        reverse: true,
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parsed).toBe('4.669');
+    });
+
+    it('should work with reverse parameter in smallest mode', async () => {
+      const result = await calculatorExecutor.sort({
+        numbers: [3.14, 2.718, 1.618, 4.669],
+        mode: 'smallest',
+        reverse: true,
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parsed).toBe('1.618');
+    });
+
+    it('should preserve reverse parameter in state', async () => {
+      const result = await calculatorExecutor.sort({
+        numbers: [3.14, 2.718],
+        reverse: true,
+        precision: 2,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.state?.reverse).toBe(true);
+      expect(result.state?.sorted).toEqual(['3.14', '2.72']);
+    });
   });
 });

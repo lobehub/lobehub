@@ -83,6 +83,11 @@ export const CalculatorManifest: BuiltinToolManifest = {
             minimum: 0,
             type: 'number',
           },
+          reverse: {
+            description:
+              'Sort order: false (default) sorts ascending (smallest to largest); true sorts descending (largest to smallest)',
+            type: 'boolean',
+          },
         },
         required: ['numbers'],
         type: 'object',

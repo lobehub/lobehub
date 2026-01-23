@@ -55,6 +55,7 @@ export interface SortParams {
   mode?: 'largest' | 'smallest';
   numbers: (string | number)[];
   precision?: number;
+  reverse?: boolean;
 }
 
 export interface SortState {

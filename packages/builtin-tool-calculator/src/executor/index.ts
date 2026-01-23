@@ -191,7 +191,7 @@ class CalculatorExecutor
    */
   sort = async (params: SortParams): Promise<BuiltinToolResult> => {
     try {
-      const { numbers, mode, precision } = params;
+      const { numbers, mode, precision, reverse } = params;
 
       if (numbers.length < 2) {
         return {
@@ -213,8 +213,8 @@ class CalculatorExecutor
         return parsed;
       });
 
-      // Sort numbers in ascending order
-      const sortedParsed = [...parsedNumbers].sort((a, b) => a - b);
+      // Sort numbers (ascending by default, reverse if specified)
+      const sortedParsed = [...parsedNumbers].sort((a, b) => (reverse ? b - a : a - b));
 
       // Format numbers for output
       const formatNumber = (num: number): string => {
@@ -225,33 +225,36 @@ class CalculatorExecutor
       };
 
       const sorted = sortedParsed.map(formatNumber);
-      // prettier-ignore
-      const largest = formatNumber(sortedParsed[sortedParsed.length - 1]);
-      const smallest = formatNumber(sortedParsed[0]);
+      const largest = formatNumber(Math.max(...parsedNumbers));
+      const smallest = formatNumber(Math.min(...parsedNumbers));
 
       let result: any;
 
       switch (mode) {
-        case 'largest':
+        case 'largest': {
           result = largest;
           break;
-        case 'smallest':
+        }
+        case 'smallest': {
           result = smallest;
           break;
-        default:
+        }
+        default: {
           result = sorted;
+        }
       }
 
       return {
         content: JSON.stringify(result),
         state: {
-          result,
           largest,
+          mode,
+          originalNumbers: numbers,
+          precision,
+          result,
+          reverse,
           smallest,
           sorted,
-          originalNumbers: numbers,
-          mode,
-          precision,
         },
         success: true,
       };

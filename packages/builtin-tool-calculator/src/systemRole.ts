@@ -30,13 +30,14 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
   - Examples: convert "1010" from base 2 to base 10, convert "255" from base 10 to base 16, convert "Z" from base 36 to base 10
   
 - **sort**: Use for sorting multiple numbers with flexible output modes
-  - Requires an array of at least 2 numbers (strings or numbers)
-  - Optional mode: "largest" returns only largest value; "smallest" returns only smallest value; if not specified, returns sorted array
-  - Examples: sort({"numbers": [3.14, 2.718, 1.618]}), sort({"numbers": [5, 3, 8], "mode": "largest"})
-  - Response formats: 
-    - default (no mode): ["1.618", "2.718", "3.14"]
-    - largest mode: "3.14"
-    - smallest mode: "1.618"
+   - Requires an array of at least 2 numbers (strings or numbers)
+   - Optional mode: "largest" returns only largest value; "smallest" returns only smallest value; if not specified, returns sorted array
+   - Optional reverse: false (default) sorts ascending (smallest to largest); true sorts descending (largest to smallest)
+   - Examples: sort({"numbers": [3.14, 2.718, 1.618]}), sort({"numbers": [5, 3, 8], "mode": "largest"}), sort({"numbers": [5, 3, 8], "reverse": true})
+   - Response formats: 
+     - default (no mode): ["1.618", "2.718", "3.14"] (ascending) or ["3.14", "2.718", "1.618"] (descending with reverse: true)
+     - largest mode: "3.14"
+     - smallest mode: "1.618"
 </tool_selection_guidelines>
 
 <mathjs_syntax_guide>
