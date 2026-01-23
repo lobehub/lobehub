@@ -5,6 +5,8 @@ import {
   UserMemoryContextsListItem,
   UserMemoryExperiencesListItem,
   UserMemoryPreferencesListItem,
+  UserMemoryActivitiesListItem,
+  UserMemoryActivityWithoutVectors,
 } from './layers'
 import {
   UserMemoryIdentityWithoutVectors,
@@ -87,14 +89,30 @@ export interface IdentityMemoryDetail {
   sourceType?: MemorySourceType;
 }
 
+export interface ActivityMemorySimple {
+  activity: UserMemoryActivitiesListItem;
+  layer: LayersEnum.Activity;
+  memory: UserMemoryListItem;
+}
+
+export interface ActivityMemoryDetail {
+  activity: UserMemoryActivityWithoutVectors;
+  layer: LayersEnum.Activity;
+  memory: UserMemoryWithoutVectors;
+  source?: MemorySource;
+  sourceType?: MemorySourceType;
+}
+
 export type UserMemoryItemSimple =
   | ContextMemorySimple
   | ExperienceMemorySimple
   | IdentityMemorySimple
-  | PreferenceMemorySimple;
+  | PreferenceMemorySimple
+  | ActivityMemorySimple;
 
 export type UserMemoryDetail =
   | ContextMemoryDetail
   | ExperienceMemoryDetail
   | IdentityMemoryDetail
-  | PreferenceMemoryDetail;
+  | PreferenceMemoryDetail
+  | ActivityMemoryDetail;

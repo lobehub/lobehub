@@ -3,6 +3,7 @@ import type { MemorySourceType } from './list';
 
 export type MemoryExtractionAgent =
   | 'gatekeeper'
+  | 'layer-activity'
   | 'layer-context'
   | 'layer-experience'
   | 'layer-identity'

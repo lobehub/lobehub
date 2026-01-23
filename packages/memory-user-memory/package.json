@@ -20,8 +20,8 @@
     "@lobechat/context-engine": "workspace:*",
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/prompts": "workspace:*",
-    "dotenv": "^17.2.3",
     "dayjs": "^1.11.11",
+    "dotenv": "^17.2.3",
     "ora": "^9.0.0",
     "unist-builder": "^4.0.0",
     "xast-util-to-xml": "^4.0.0",
@@ -30,6 +30,7 @@
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*",
+    "@types/json-schema": "^7.0.15",
     "@types/xast": "^2.0.4",
     "promptfoo": "^0.118.17",
     "tsx": "^4.20.6"

@@ -3,6 +3,7 @@ description: LobeHub Prompts (memory-user-memory) Testing Suite
 # Test configurations - run all prompt tests
 testPaths:
   - promptfoo/evals/identity/with-s3-trace/eval.yaml
+  - promptfoo/evals/activity/basic/eval.yaml
 
 # Output configuration
 outputPath: promptfoo-results.json

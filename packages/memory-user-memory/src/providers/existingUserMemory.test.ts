@@ -19,6 +19,30 @@ describe('RetrievalUserMemoryContextProvider', () => {
     const provider = new RetrievalUserMemoryContextProvider({
       fetchedAt,
       retrievedMemories: {
+        activities: [
+          {
+            accessedAt: new Date(),
+            type: 'meeting',
+            associatedLocations: [{ name: 'Zoom' }],
+            associatedSubjects: [{ name: 'Alice', type: 'person' }],
+            capturedAt: new Date(),
+            createdAt: new Date(),
+            endsAt: new Date('2024-02-01T02:00:00.000Z'),
+            feedback: 'Felt good',
+            id: 'act-1',
+            metadata: {},
+            narrative: 'Weekly sync about roadmap',
+            notes: 'Agenda: roadmap',
+            startsAt: new Date('2024-02-01T01:00:00.000Z'),
+            status: 'completed',
+            tags: ['meeting'],
+            timezone: 'UTC',
+            updatedAt: new Date(),
+            userId: 'user-1',
+            userMemoryId: 'mem-act-1',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any,
+        ],
         contexts: [
           {
             accessedAt: new Date(),
@@ -91,7 +115,7 @@ describe('RetrievalUserMemoryContextProvider', () => {
     expect(result.userId).toBe('user-1');
     expect(result.metadata).toEqual({});
     expect(result.context).equal(
-      '<user_memories contexts="1" experiences="1" memory_fetched_at="2024-02-01T00:00:00.000Z" preferences="1"><user_memories_context id="ctx-1" type="project"><context_title>LobeHub</context_title><context_description>Weekly syncs for LobeHub</context_description><context_current_status>active</context_current_status><context_tags>project, team</context_tags></user_memories_context><user_memories_experience id="exp-1" type="product"><experience_situation>Release planning</experience_situation><experience_key_learning>Ship smaller increments</experience_key_learning><experience_action>Shipped feature</experience_action><experience_reasoning>Better agility</experience_reasoning><experience_possible_outcome>Faster releases</experience_possible_outcome><experience_tags>release</experience_tags></user_memories_experience><user_memories_preference id="pref-1" type="style"><preference_conclusion_directives>Always keep updates concise</preference_conclusion_directives><preference_suggestions>Use bullet points</preference_suggestions><preference_tags>communication</preference_tags></user_memories_preference></user_memories>',
+      '<user_memories activities="1" contexts="1" experiences="1" memory_fetched_at="2024-02-01T00:00:00.000Z" preferences="1"><user_memories_activity id="act-1" activity_type="meeting" status="completed" timezone="UTC" starts_at="2024-02-01T01:00:00.000Z" ends_at="2024-02-01T02:00:00.000Z"><activity_narrative>Weekly sync about roadmap</activity_narrative><activity_notes>Agenda: roadmap</activity_notes><activity_feedback>Felt good</activity_feedback><activity_associated_location>Zoom</activity_associated_location><activity_associated_subject>Alice | type: person</activity_associated_subject><activity_tags>meeting</activity_tags></user_memories_activity><user_memories_context id="ctx-1" type="project"><context_title>LobeHub</context_title><context_description>Weekly syncs for LobeHub</context_description><context_current_status>active</context_current_status><context_tags>project, team</context_tags></user_memories_context><user_memories_experience id="exp-1" type="product"><experience_situation>Release planning</experience_situation><experience_key_learning>Ship smaller increments</experience_key_learning><experience_action>Shipped feature</experience_action><experience_reasoning>Better agility</experience_reasoning><experience_possible_outcome>Faster releases</experience_possible_outcome><experience_tags>release</experience_tags></user_memories_experience><user_memories_preference id="pref-1" type="style"><preference_conclusion_directives>Always keep updates concise</preference_conclusion_directives><preference_suggestions>Use bullet points</preference_suggestions><preference_tags>communication</preference_tags></user_memories_preference></user_memories>',
     );
   });
 });

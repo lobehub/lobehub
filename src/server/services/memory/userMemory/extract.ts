@@ -90,6 +90,7 @@ const LAYER_ALIAS = new Set<LayersEnum>([
 ]);
 
 const LAYER_LABEL_MAP: Record<LayersEnum, string> = {
+  [LayersEnum.Activity]: 'activities',
   [LayersEnum.Context]: 'contexts',
   [LayersEnum.Experience]: 'experiences',
   [LayersEnum.Identity]: 'identities',
@@ -267,6 +268,7 @@ const resolveLayerModels = (
   layers: Partial<Record<GlobalMemoryLayer, string>> | undefined,
   fallback: Record<GlobalMemoryLayer, string>,
 ): Record<LayersEnum, string> => ({
+  activity: layers?.activity ?? fallback.activity,
   context: layers?.context ?? fallback.context,
   experience: layers?.experience ?? fallback.experience,
   identity: layers?.identity ?? fallback.identity,
@@ -569,6 +571,79 @@ export class MemoryExtractionExecutor {
     });
   }
 
+  async persistActivityMemories(
+    job: MemoryExtractionJob,
+    messageIds: string[],
+    result: NonNullable<MemoryExtractionResult['outputs']['activity']>['data'],
+    runtime: ModelRuntime,
+    model: string,
+    tokenLimit: number | undefined,
+    db: Awaited<ReturnType<typeof getServerDB>>,
+  ) {
+    const insertedIds: string[] = [];
+    const userMemoryModel = new UserMemoryModel(db, job.userId);
+
+    for (const item of result?.memories ?? []) {
+      const activityTags = item.withActivity?.tags ?? item.tags;
+      const associatedObjects = UserMemoryModel.parseAssociatedObjects(
+        item.withActivity?.associatedObjects,
+      );
+      const associatedSubjects = UserMemoryModel.parseAssociatedSubjects(
+        item.withActivity?.associatedSubjects,
+      );
+      const associatedLocations = UserMemoryModel.parseAssociatedLocations(
+        item.withActivity?.associatedLocations,
+      );
+      const [summaryVector, detailsVector, narrativeVector, feedbackVector] =
+        await this.generateEmbeddings(
+          runtime,
+          model,
+          [item.summary, item.details, item.withActivity?.narrative, item.withActivity?.feedback],
+          tokenLimit,
+        );
+      const baseMetadata = this.buildBaseMetadata(
+        job,
+        messageIds,
+        LayersEnum.Activity,
+        activityTags,
+      );
+
+      const { memory } = await userMemoryModel.createActivityMemory({
+        activity: {
+          associatedLocations: associatedLocations.length > 0 ? associatedLocations : [],
+          associatedObjects: associatedObjects.length > 0 ? associatedObjects : [],
+          associatedSubjects: associatedSubjects.length > 0 ? associatedSubjects : [],
+          capturedAt: job.sourceUpdatedAt,
+          endsAt: UserMemoryModel.parseDateFromString(item.withActivity?.endsAt),
+          feedback: item.withActivity?.feedback ?? null,
+          feedbackVector: feedbackVector ?? null,
+          metadata: baseMetadata,
+          narrative: item.withActivity?.narrative ?? null,
+          narrativeVector: narrativeVector ?? null,
+          notes: item.withActivity?.notes ?? null,
+          startsAt: UserMemoryModel.parseDateFromString(item.withActivity?.startsAt),
+          status: item.withActivity?.status ?? 'pending',
+          tags: activityTags ?? null,
+          timezone: item.withActivity?.timezone ?? null,
+          type: item.withActivity?.type ?? 'other',
+        },
+        capturedAt: job.sourceUpdatedAt,
+        details: item.details ?? '',
+        detailsEmbedding: detailsVector ?? undefined,
+        memoryCategory: item.memoryCategory ?? null,
+        memoryLayer: (item.memoryLayer as LayersEnum) ?? LayersEnum.Activity,
+        memoryType: (item.memoryType as TypesEnum) ?? TypesEnum.Activity,
+        summary: item.summary ?? '',
+        summaryEmbedding: summaryVector ?? undefined,
+        title: item.title ?? '',
+      });
+
+      insertedIds.push(memory.id);
+    }
+
+    return insertedIds;
+  }
+
   async persistContextMemories(
     job: MemoryExtractionJob,
     messageIds: string[],
@@ -601,7 +676,7 @@ export class MemoryExtractionExecutor {
           associatedObjects: UserMemoryModel.parseAssociatedObjects(
             item.withContext?.associatedObjects,
           ),
-          associatedSubjects: UserMemoryModel.parseAssociatedObjects(
+          associatedSubjects: UserMemoryModel.parseAssociatedSubjects(
             item.withContext?.associatedSubjects,
           ),
           capturedAt: job.sourceUpdatedAt,
@@ -923,13 +998,14 @@ export class MemoryExtractionExecutor {
     if (vector) {
       const retrieved = await userMemoryModel.searchWithEmbedding({
         embedding: vector,
-        limits: { contexts: topK, experiences: topK, preferences: topK },
+        limits: { activities: topK, contexts: topK, experiences: topK, preferences: topK },
       });
 
       return retrieved;
     }
 
     return {
+      activities: [],
       contexts: [],
       experiences: [],
       preferences: [],
@@ -1563,6 +1639,24 @@ export class MemoryExtractionExecutor {
       );
     };
 
+    const activityOutput = extraction.outputs.activity;
+    if (activityOutput?.error) {
+      appendError(LayersEnum.Activity, 'extract', activityOutput.error);
+    }
+    if (activityOutput?.data) {
+      await persistWithSpan(LayersEnum.Activity, () =>
+        this.persistActivityMemories(
+          job,
+          messageIds,
+          activityOutput.data,
+          runtimes.embeddings,
+          this.modelConfig.embeddingsModel,
+          this.embeddingContextLimit,
+          db,
+        ),
+      );
+    }
+
     const contextOutput = extraction.outputs.context;
     if (contextOutput?.error) {
       appendError(LayersEnum.Context, 'extract', contextOutput.error);
@@ -1636,7 +1730,7 @@ export class MemoryExtractionExecutor {
     }
 
     if (errors.length) {
-      const detail = errors.map((error) => error.message).join('; ');
+      const detail = errors.map((error) => `${error.message}${error.cause ? `: ${error.cause}` : ''}`).join('; ');
       throw new AggregateError(errors, `Memory extraction encountered layer errors: ${detail}`);
     }
 
@@ -1825,14 +1919,21 @@ export class MemoryExtractionExecutor {
               userId: params.userId,
             });
 
+          const latestCreatedAt = params.parts.reduce<Date | undefined>((latest, part) => {
+            if (!part.createdAt) return latest;
+
+            const date = new Date(part.createdAt);
+            if (Number.isNaN(date.getTime())) return latest;
+
+            return !latest || date > latest ? date : latest;
+          }, undefined);
+
           extractionJob = {
             force: params.forceAll ?? true,
             layers: params.layers,
             source: params.source,
             sourceId: params.sourceId,
-            sourceUpdatedAt: params.parts.at(-1)?.createdAt
-              ? new Date(params.parts.at(-1)!.createdAt as Date)
-              : new Date(),
+            sourceUpdatedAt: latestCreatedAt ?? new Date(),
             userId: params.userId,
           };
 
@@ -1898,7 +1999,7 @@ export class MemoryExtractionExecutor {
             language,
             retrievedContexts: [trimmedContext],
             retrievedIdentitiesContext: undefined,
-            sessionDate: new Date().toISOString(),
+            sessionDate: (latestCreatedAt ?? new Date()).toISOString(),
             topK: 10,
             username:
               userState.fullName || `${userState.firstName} ${userState.lastName}`.trim() || 'User',

@@ -8,7 +8,13 @@ import {
   type MemoryLayerExtractorPublicConfig,
 } from '@/types/serverConfig';
 
-const MEMORY_LAYERS: GlobalMemoryLayer[] = ['context', 'experience', 'identity', 'preference'];
+const MEMORY_LAYERS: GlobalMemoryLayer[] = [
+  'activity',
+  'context',
+  'experience',
+  'identity',
+  'preference',
+];
 
 const parseTokenLimitEnv = (value?: string) => {
   if (value === undefined) return undefined;
