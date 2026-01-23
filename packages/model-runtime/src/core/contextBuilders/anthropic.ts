@@ -114,12 +114,13 @@ export const buildAnthropicMessage = async (
       // if there is tool_calls , we need to covert the tool_calls to tool_use content block
       // refs: https://docs.anthropic.com/claude/docs/tool-use#tool-use-and-tool-result-content-blocks
       if (message.tool_calls && message.tool_calls.length > 0) {
+        // Handle content: string with text, array, null/undefined/empty -> filter out
         const rawContent =
-          typeof content === 'string'
-            ? ([{ text: message.content, type: 'text' }] as UserMessageContentPart[])
+          typeof content === 'string' && content.trim()
+            ? ([{ text: content, type: 'text' }] as UserMessageContentPart[])
             : Array.isArray(content)
               ? content
-              : ([{ text: '<empty_content>', type: 'text' }] as UserMessageContentPart[]);
+              : []; // null/undefined/empty string -> empty array (will be filtered)
 
         const messageContent = await buildArrayContent(rawContent);
 

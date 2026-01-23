@@ -299,8 +299,36 @@ describe('anthropicHelpers', () => {
       };
       const result = await buildAnthropicMessage(message);
       expect(result!.role).toBe('assistant');
+      // null content should be filtered out, only tool_use remains
       expect(result!.content).toEqual([
-        { text: '<empty_content>', type: 'text' },
+        {
+          id: 'call1',
+          input: { location: 'Singapore' },
+          name: 'search_people',
+          type: 'tool_use',
+        },
+      ]);
+    });
+
+    it('should handle assistant message with tool_calls but empty string content', async () => {
+      const message: OpenAIChatMessage = {
+        content: '',
+        role: 'assistant',
+        tool_calls: [
+          {
+            id: 'call1',
+            type: 'function',
+            function: {
+              name: 'search_people',
+              arguments: '{"location":"Singapore"}',
+            },
+          },
+        ],
+      };
+      const result = await buildAnthropicMessage(message);
+      expect(result!.role).toBe('assistant');
+      // empty string content should be filtered out, only tool_use remains
+      expect(result!.content).toEqual([
         {
           id: 'call1',
           input: { location: 'Singapore' },
