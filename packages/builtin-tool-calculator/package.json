@@ -10,6 +10,7 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/prompts": "workspace:*",
+    "@thi.ng/base-n": "^2.7.58",
     "mathjs": "^15.1.0",
     "nerdamer": "1.1.13"
   },

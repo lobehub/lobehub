@@ -1,4 +1,5 @@
 import { BaseExecutor, type BuiltinToolResult, type IBuiltinToolExecutor } from '@lobechat/types';
+import { defBase } from '@thi.ng/base-n/base';
 import { all, create } from 'mathjs';
 // @ts-ignore - nerdamer doesn't have TypeScript definitions
 import nerdamer from 'nerdamer/all';
@@ -75,35 +76,31 @@ class CalculatorExecutor
   }
 
   /**
-   * Convert number to target base with clean formatting
+   * Convert number between bases using @thi.ng/base-n
    */
-  private convertToBase(decimalValue: number, targetBase: number): string {
-    return decimalValue.toString(targetBase).toUpperCase();
-  }
+  private convertNumber(number: string | number, fromBase: number, toBase: number): string {
+    // Define character set for source and target bases
+    const sourceChars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, fromBase);
+    const targetChars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, toBase);
 
-  /**
-   * Clean and validate input number
-   */
-  private cleanInputNumber(number: string | number, sourceBase: number): string {
-    const trimmed = String(number).trim();
+    // Create converters
+    const sourceConverter = defBase(sourceChars);
+    const targetConverter = defBase(targetChars);
 
-    // Validate base range
-    if (sourceBase < 2 || sourceBase > 36) {
-      throw new Error(`Base must be between 2 and 36, got ${sourceBase}`);
+    // Convert input number to string
+    let numStr = String(number).trim().toUpperCase();
+
+    // Handle decimal input like parseInt - take only integer part
+    const decimalIndex = numStr.indexOf('.');
+    if (decimalIndex !== -1) {
+      numStr = numStr.slice(0, Math.max(0, decimalIndex));
     }
 
-    // Validate that the number contains only valid characters for the base
-    const validChars = new Set('0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'.slice(0, sourceBase));
-    for (const char of trimmed.toUpperCase()) {
-      // Allow decimal points for parseInt compatibility (parseInt ignores decimal part)
-      if (char === '.') continue;
+    // Convert from source base to decimal (as bigint)
+    const decimal = sourceConverter.decodeBigInt(numStr);
 
-      if (!validChars.has(char)) {
-        throw new Error(`Invalid digit '${char}' for base ${sourceBase}`);
-      }
-    }
-
-    return trimmed;
+    // Convert decimal to target base
+    return targetConverter.encodeBigInt(decimal);
   }
 
   /**
@@ -284,17 +281,16 @@ class CalculatorExecutor
     try {
       const { number, fromBase, toBase } = params;
 
-      // Clean and validate input number
-      const cleanNumber = this.cleanInputNumber(number, fromBase);
-
-      // Convert to decimal first using optimized parseInt
-      const decimalValue = parseInt(cleanNumber, fromBase);
-      if (isNaN(decimalValue)) {
-        throw new Error(`Invalid number "${number}" for base ${fromBase}`);
+      // Validate base range
+      if (fromBase < 2 || fromBase > 36 || toBase < 2 || toBase > 36) {
+        throw new Error('Base must be between 2 and 36');
       }
 
-      // Convert to target base
-      const convertedNumber = this.convertToBase(decimalValue, toBase);
+      // Convert using @thi.ng/base-n
+      const convertedNumber = this.convertNumber(number, fromBase, toBase);
+
+      // Get decimal value for state
+      const decimalValue = parseInt(String(number), fromBase);
 
       return {
         content: convertedNumber,
@@ -309,10 +305,17 @@ class CalculatorExecutor
       };
     } catch (error) {
       const err = error as Error;
+
+      // Check for digit validation error
+      let errorMessage = err.message;
+      if (err.message?.includes('Cannot convert') || err.message?.includes('Invalid digit')) {
+        errorMessage = 'Invalid digit';
+      }
+
       return {
-        content: `Base conversion error: ${err.message}`,
+        content: `Base conversion error: ${errorMessage}`,
         error: {
-          message: err.message,
+          message: errorMessage,
           type: 'ConversionError',
         },
         success: false,
