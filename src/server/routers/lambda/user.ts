@@ -1,6 +1,5 @@
 import { isDesktop } from '@lobechat/const';
 import {
-  NextAuthAccountSchame,
   Plans,
   UserGuideSchema,
   type UserInitializationState,
@@ -16,8 +15,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 
 import {
-  getIsInviteCodeRequired,
   getIsInWaitList,
+  getIsInviteCodeRequired,
   getReferralStatus,
   getSubscriptionPlan,
 } from '@/business/server/user';
@@ -29,7 +28,6 @@ import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { FileS3 } from '@/server/modules/S3';
 import { FileService } from '@/server/services/file';
-import { NextAuthUserService } from '@/server/services/nextAuthUser';
 
 const usernameSchema = z
   .string()
@@ -42,7 +40,6 @@ const userProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next
     ctx: {
       fileService: new FileService(ctx.serverDB, ctx.userId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
-      nextAuthUserService: new NextAuthUserService(ctx.serverDB),
       sessionModel: new SessionModel(ctx.serverDB, ctx.userId),
       userModel: new UserModel(ctx.serverDB, ctx.userId),
     },
@@ -136,14 +133,6 @@ export const userRouter = router({
 
   resetSettings: userProcedure.mutation(async ({ ctx }) => {
     return ctx.userModel.deleteSetting();
-  }),
-
-  unlinkSSOProvider: userProcedure.input(NextAuthAccountSchame).mutation(async ({ ctx, input }) => {
-    const { provider, providerAccountId } = input;
-    const account = await ctx.nextAuthUserService.getAccount(providerAccountId, provider);
-    // The userId can either get from ctx.nextAuth?.id or ctx.userId
-    if (!account || account.userId !== ctx.userId) throw new Error('The account does not exist');
-    await ctx.nextAuthUserService.unlinkAccount({ provider, providerAccountId });
   }),
 
   updateAvatar: userProcedure.input(z.string()).mutation(async ({ ctx, input }) => {

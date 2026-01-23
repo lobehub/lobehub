@@ -37,7 +37,7 @@ const className = cx(css`
 `);
 
 const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
-  const [editor, slashMenuRef, send, updateMarkdownContent, expand, mentionItems] =
+  const [editor, slashMenuRef, send, updateMarkdownContent, expand, mentionItems, contentRef] =
     useChatInputStore((s) => [
       s.editor,
       s.slashMenuRef,
@@ -45,6 +45,7 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       s.updateMarkdownContent,
       s.expand,
       s.mentionItems,
+      s.contentRef,
     ]);
 
   const storeApi = useStoreApi();
@@ -151,7 +152,11 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       onBlur={() => {
         disableScope(HotkeyEnum.AddUserMessage);
       }}
-      onChange={() => {
+      onChange={(e) => {
+        // Save content to parent ref for restoration when enableRichRender changes
+        if (contentRef) {
+          contentRef.current = e.getDocument('markdown') as unknown as string;
+        }
         updateMarkdownContent();
       }}
       onCompositionEnd={() => {
@@ -177,7 +182,13 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
       onFocus={() => {
         enableScope(HotkeyEnum.AddUserMessage);
       }}
-      onInit={(editor) => storeApi.setState({ editor })}
+      onInit={(editor) => {
+        storeApi.setState({ editor });
+        // Restore content from parent ref when editor re-initializes
+        if (contentRef?.current) {
+          editor.setDocument('markdown', contentRef.current);
+        }
+      }}
       onPressEnter={({ event: e }) => {
         if (e.shiftKey || isChineseInput.current) return;
         // when user like alt + enter to add ai message

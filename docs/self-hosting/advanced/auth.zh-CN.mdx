@@ -107,14 +107,15 @@ LobeChat 使用 [Better Auth](https://www.better-auth.com) 作为身份验证解
 
 使用 SMTP 协议发送邮件，适合已有邮箱服务的用户。参考 [Nodemailer SMTP 文档](https://nodemailer.com/smtp/)。
 
-| 环境变量                     | 类型 | 描述                                              | 示例                 |
-| ------------------------- | -- | ----------------------------------------------- | ------------------ |
-| `EMAIL_SERVICE_PROVIDER`  | 可选 | 设置为 `nodemailer`（默认值）                           | `nodemailer`       |
-| `SMTP_HOST`               | 必选 | SMTP 服务器主机名                                     | `smtp.gmail.com`   |
-| `SMTP_PORT`               | 必选 | SMTP 服务器端口（TLS 通常为 `587`，SSL 为 `465`）           | `587`              |
-| `SMTP_SECURE`             | 可选 | SSL 设置为 `true`（端口 465），TLS 设置为 `false`（端口 587） | `false`            |
-| `SMTP_USER`               | 必选 | SMTP 认证用户名                                      | `user@gmail.com`   |
-| `SMTP_PASS`               | 必选 | SMTP 认证密码                                       | `your-app-password`|
+| 环境变量                     | 类型 | 描述                                             | 示例                     |
+| ------------------------ | -- | ---------------------------------------------- | ---------------------- |
+| `EMAIL_SERVICE_PROVIDER` | 可选 | 设置为 `nodemailer`（默认值）                          | `nodemailer`           |
+| `SMTP_HOST`              | 必选 | SMTP 服务器主机名                                    | `smtp.gmail.com`       |
+| `SMTP_PORT`              | 必选 | SMTP 服务器端口（TLS 通常为 `587`，SSL 为 `465`）          | `587`                  |
+| `SMTP_SECURE`            | 可选 | SSL 设置为 `true`（端口 465），TLS 设置为 `false`（端口 587） | `false`                |
+| `SMTP_USER`              | 必选 | SMTP 认证用户名                                     | `user@gmail.com`       |
+| `SMTP_PASS`              | 必选 | SMTP 认证密码                                      | `your-app-password`    |
+| `SMTP_FROM`              | 可选 | 发件人地址（AWS SES 必填），默认为 `SMTP_USER`             | `noreply@example.com`  |
 
 <Callout type={'warning'}>
   使用 Gmail 时，需使用应用专用密码而非账户密码。前往 [Google 应用专用密码](https://myaccount.google.com/apppasswords) 生成。
@@ -124,11 +125,11 @@ LobeChat 使用 [Better Auth](https://www.better-auth.com) 作为身份验证解
 
 [Resend](https://resend.com/) 是一个现代邮件 API 服务，配置简单，推荐新用户使用。
 
-| 环境变量                     | 类型 | 描述                                 | 示例                          |
-| ------------------------- | -- | ---------------------------------- | --------------------------- |
-| `EMAIL_SERVICE_PROVIDER`  | 必选 | 设置为 `resend`                       | `resend`                    |
-| `RESEND_API_KEY`          | 必选 | Resend API Key                     | `re_xxxxxxxxxxxxxxxxxxxxxx` |
-| `RESEND_FROM`             | 推荐 | 发件人地址，需为 Resend 已验证域名下的邮箱          | `noreply@your-domain.com`   |
+| 环境变量                     | 类型 | 描述                        | 示例                          |
+| ------------------------ | -- | ------------------------- | --------------------------- |
+| `EMAIL_SERVICE_PROVIDER` | 必选 | 设置为 `resend`              | `resend`                    |
+| `RESEND_API_KEY`         | 必选 | Resend API Key            | `re_xxxxxxxxxxxxxxxxxxxxxx` |
+| `RESEND_FROM`            | 推荐 | 发件人地址，需为 Resend 已验证域名下的邮箱 | `noreply@your-domain.com`   |
 
 <Callout type={'info'}>
   使用 Resend 前需先 [验证发件域名](https://resend.com/docs/dashboard/domains/introduction)，否则只能发送到自己的邮箱。
@@ -136,9 +137,9 @@ LobeChat 使用 [Better Auth](https://www.better-auth.com) 作为身份验证解
 
 ### 通用配置
 
-| 环境变量                      | 类型 | 描述                           | 示例 |
-| ------------------------- | -- | ---------------------------- | -- |
-| `AUTH_EMAIL_VERIFICATION` | 可选 | 设置为 `1` 以要求用户在登录前验证邮箱（默认关闭） | `1`|
+| 环境变量                      | 类型 | 描述                          | 示例  |
+| ------------------------- | -- | --------------------------- | --- |
+| `AUTH_EMAIL_VERIFICATION` | 可选 | 设置为 `1` 以要求用户在登录前验证邮箱（默认关闭） | `1` |
 
 ## 魔法链接（免密）登录
 
@@ -152,6 +153,19 @@ LobeChat 使用 [Better Auth](https://www.better-auth.com) 作为身份验证解
   前往 [环境变量](/zh/docs/self-hosting/environment-variables/auth#better-auth) 可查阅所有 Better Auth 相关变量详情。
 </Callout>
 
+## 会话存储配置（可选）
+
+默认情况下，Better Auth 使用数据库存储会话数据。你可以配置 Redis 作为二级存储，以获得更好的性能和跨实例会话共享能力。
+
+| 环境变量           | 类型 | 描述                              |
+| -------------- | -- | ------------------------------- |
+| `REDIS_URL`    | 可选 | Redis 连接 URL，配置后自动启用 Redis 会话存储 |
+| `REDIS_PREFIX` | 可选 | Redis 键前缀，默认为 `lobechat`        |
+
+<Callout type={'info'}>
+  配置 Redis 后，认证会话数据将存储在 Redis 中，可以实现跨多个服务实例的会话共享，并提升会话验证速度。详细配置请参阅 [Redis 缓存服务](/zh/docs/self-hosting/advanced/redis)。
+</Callout>
+
 ## 常见问题
 
 ### Better Auth 支持哪些 SSO 提供商？
@@ -161,3 +175,17 @@ Better Auth 支持内置提供商（Google、GitHub、Microsoft、Apple、AWS Co
 ### 如何启用多个 SSO 提供商？
 
 设置 `AUTH_SSO_PROVIDERS` 环境变量，使用逗号分隔多个提供商，例如 `google,github,microsoft`。顺序决定登录页面上的显示顺序。
+
+### Casdoor 用户只有 username 没有 email 怎么办？
+
+当前身份验证方案强依赖 email。请在 Casdoor 中为用户配置有效的 email 地址。
+强烈建议使用真实有效的邮箱，否则密码重置、魔法链接登录等功能将无法使用。
+
+### 如何限制只允许特定邮箱或域名注册？
+
+设置 `AUTH_ALLOWED_EMAILS` 环境变量，支持完整邮箱地址或域名，以逗号分隔。例如：
+
+- 只允许 `example.com` 域名：`AUTH_ALLOWED_EMAILS=example.com`
+- 允许多个域名和特定邮箱：`AUTH_ALLOWED_EMAILS=example.com,company.org,admin@other.com`
+
+留空表示允许所有邮箱注册。此限制对邮箱注册和 SSO 登录均有效。

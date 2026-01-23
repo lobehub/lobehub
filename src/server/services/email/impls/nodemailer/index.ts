@@ -49,8 +49,8 @@ export class NodemailerImpl implements EmailServiceImpl {
   }
 
   async sendMail(payload: EmailPayload): Promise<EmailResponse> {
-    // Use SMTP_USER as default sender if not provided
-    const from = payload.from ?? emailEnv.SMTP_USER!;
+    // Use SMTP_FROM as default sender, fallback to SMTP_USER for backward compatibility
+    const from = payload.from ?? emailEnv.SMTP_FROM ?? emailEnv.SMTP_USER!;
 
     log('Sending email with payload: %o', {
       from,

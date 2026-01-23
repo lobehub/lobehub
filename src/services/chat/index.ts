@@ -284,7 +284,7 @@ class ChatService {
         stream: chatConfig.enableStreaming !== false,
         tools,
       },
-      options,
+      { ...options, agentId: targetAgentId, topicId },
     );
   };
 
@@ -314,7 +314,7 @@ class ChatService {
   };
 
   getChatCompletion = async (params: Partial<ChatStreamPayload>, options?: FetchOptions) => {
-    const { signal, responseAnimation } = options ?? {};
+    const { agentId, signal, responseAnimation, topicId } = options ?? {};
 
     const { provider = ModelProvider.OpenAI, ...res } = params;
 
@@ -401,7 +401,12 @@ class ChatService {
     const traceHeader = createTraceHeader({ ...options?.trace });
 
     const headers = await createHeaderWithAuth({
-      headers: { 'Content-Type': 'application/json', ...traceHeader },
+      headers: {
+        'Content-Type': 'application/json',
+        ...traceHeader,
+        ...(agentId && { 'x-agent-id': agentId }),
+        ...(topicId && { 'x-topic-id': topicId }),
+      },
       provider,
     });
 

@@ -361,8 +361,10 @@ Then('Agent 应该从列表中移除', async function (this: CustomWorld) {
 
   await this.page.waitForTimeout(500);
 
-  if (this.testContext.targetItemId) {
-    const deletedItem = this.page.locator(`a[aria-label="${this.testContext.targetItemId}"]`);
+  // Use unique selector based on agent ID (href) to avoid false positives
+  // when multiple agents have the same name
+  if (this.testContext.targetItemSelector) {
+    const deletedItem = this.page.locator(this.testContext.targetItemSelector);
     await expect(deletedItem).not.toBeVisible({ timeout: 5000 });
   }
 

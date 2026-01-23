@@ -1,7 +1,6 @@
 import { type LobeUser, type SSOProvider } from '@lobechat/types';
 import { t } from 'i18next';
 
-import { enableBetterAuth, enableNextAuth } from '@/envs/auth';
 import type { UserStore } from '@/store/user';
 
 const nickName = (s: UserStore) => {
@@ -37,6 +36,4 @@ export const authSelectors = {
   isLoadedAuthProviders: (s: UserStore) => s.isLoadedAuthProviders ?? false,
   isLogin: (s: UserStore) => s.isSignedIn,
   isLoginWithAuth: (s: UserStore) => s.isSignedIn,
-  isLoginWithBetterAuth: (s: UserStore): boolean => (s.isSignedIn && enableBetterAuth) || false,
-  isLoginWithNextAuth: (s: UserStore): boolean => (s.isSignedIn && !!enableNextAuth) || false,
 };

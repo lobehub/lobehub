@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { asc, eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -188,12 +188,12 @@ describe('TopicModel - Create', () => {
         userId,
       });
 
-      const items = await serverDB.select().from(topics);
+      const items = await serverDB.select().from(topics).orderBy(asc(topics.title));
       expect(items).toHaveLength(2);
       expect(items[0]).toMatchObject({ title: 'Topic 1', favorite: true, sessionId, userId });
       expect(items[1]).toMatchObject({ title: 'Topic 2', favorite: false, sessionId, userId });
 
-      const updatedMessages = await serverDB.select().from(messages);
+      const updatedMessages = await serverDB.select().from(messages).orderBy(asc(messages.id));
       expect(updatedMessages).toHaveLength(3);
       expect(updatedMessages[0].topicId).toBe(createdTopics[0].id);
       expect(updatedMessages[1].topicId).toBe(createdTopics[0].id);

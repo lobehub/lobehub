@@ -24,9 +24,16 @@ vi.mock('@/envs/auth', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/envs/auth')>();
   return {
     ...actual,
-    enableBetterAuth: false,
   };
 });
+
+vi.mock('@/auth', () => ({
+  auth: {
+    api: {
+      getSession: vi.fn().mockResolvedValue(null),
+    },
+  },
+}));
 
 describe('checkAuth', () => {
   const mockHandler: RequestHandler = vi.fn();

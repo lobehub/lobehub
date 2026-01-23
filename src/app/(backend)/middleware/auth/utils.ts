@@ -1,5 +1,3 @@
-import { enableBetterAuth, enableNextAuth } from '@/envs/auth';
-
 interface CheckAuthParams {
   apiKey?: string;
   betterAuthAuthorized?: boolean;
@@ -11,16 +9,13 @@ interface CheckAuthParams {
  * @param {CheckAuthParams} params - Authentication parameters extracted from headers.
  * @param {string} [params.apiKey] - The user API key.
  * @param {boolean} [params.betterAuthAuthorized] - Whether the Better Auth session exists.
- * @param {boolean} [params.nextAuthAuthorized] - Whether the OAuth 2 header is provided.
+ * @param {boolean} [params.nextAuthAuthorized] - Whether the OAuth 2 header is provided (legacy, kept for compatibility).
  */
 export const checkAuthMethod = (params: CheckAuthParams) => {
-  const { apiKey, betterAuthAuthorized, nextAuthAuthorized } = params;
+  const { apiKey, betterAuthAuthorized } = params;
 
   // if better auth session exists
-  if (enableBetterAuth && betterAuthAuthorized) return;
-
-  // if next auth handler is provided
-  if (enableNextAuth && nextAuthAuthorized) return;
+  if (betterAuthAuthorized) return;
 
   // if apiKey exist
   if (apiKey) return;

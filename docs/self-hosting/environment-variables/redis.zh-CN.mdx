@@ -1,0 +1,67 @@
+---
+title: 配置 Redis 缓存服务
+description: 了解如何配置 Redis 缓存服务以优化性能和会话管理。
+tags:
+  - Redis
+  - 缓存
+  - 会话存储
+  - 环境变量
+---
+
+# 配置 Redis 缓存服务
+
+LobeChat 使用 Redis 作为高性能缓存和会话存储服务。配置 Redis 可以优化认证会话管理、文件代理缓存等功能。
+
+## 核心环境变量
+
+### `REDIS_URL`
+
+- 类型：可选
+- 描述：Redis 服务器的连接 URL
+- 默认值：-
+- 示例：`redis://localhost:6379`
+
+支持的 URL 格式：
+
+- 标准格式：`redis://localhost:6379`
+- 带认证：`redis://username:password@localhost:6379`
+- 带数据库：`redis://localhost:6379/0`
+
+### `REDIS_PREFIX`
+
+- 类型：可选
+- 描述：Redis 键的前缀，用于在共享 Redis 实例中隔离数据
+- 默认值：`lobechat`
+- 示例：`my-lobechat`
+
+### `REDIS_TLS`
+
+- 类型：可选
+- 描述：是否启用 TLS/SSL 加密连接
+- 默认值：`false`
+- 示例：`true`
+
+<Callout type={'tip'}>
+  云服务商提供的 Redis 服务通常需要启用 TLS 以确保数据传输安全。
+</Callout>
+
+### `REDIS_PASSWORD`
+
+- 类型：可选
+- 描述：Redis 认证密码
+- 默认值：-
+- 示例：`your-password`
+
+### `REDIS_USERNAME`
+
+- 类型：可选
+- 描述：Redis 认证用户名（Redis 6.0+ ACL 认证）
+- 默认值：-
+- 示例：`default`
+
+### `REDIS_DATABASE`
+
+- 类型：可选
+- 描述：Redis 数据库索引（0-15）
+- 默认值：`0`
+- 示例：`1`

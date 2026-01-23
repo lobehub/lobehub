@@ -1,7 +1,12 @@
 import { boolean, integer, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
-import { AdapterAccount } from 'next-auth/adapters';
 
 import { users } from './user';
+
+/**
+ * NextAuth account type (oauth, email, credentials, etc.)
+ * Previously imported from next-auth/adapters, now defined locally to remove dependency
+ */
+type AccountType = 'credentials' | 'email' | 'oauth' | 'oidc' | 'webauthn';
 
 /**
  * This table stores nextauth accounts. This is used to link users to their sso profiles.
@@ -19,7 +24,7 @@ export const nextauthAccounts = pgTable(
     scope: text('scope'),
     session_state: text('session_state'),
     token_type: text('token_type'),
-    type: text('type').$type<AdapterAccount>().notNull(),
+    type: text('type').$type<AccountType>().notNull(),
     userId: text('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),

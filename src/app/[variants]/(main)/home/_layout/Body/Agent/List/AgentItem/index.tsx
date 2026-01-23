@@ -106,7 +106,7 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className }) => {
 
   return (
     <>
-      <Link aria-label={id} to={agentUrl}>
+      <Link aria-label={displayTitle} to={agentUrl}>
         <NavItem
           actions={<Actions dropdownMenu={dropdownMenu} />}
           className={className}

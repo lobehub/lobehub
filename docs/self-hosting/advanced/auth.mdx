@@ -110,14 +110,15 @@ Used by email verification, password reset, and magic-link delivery. Two provide
 
 Send emails via SMTP protocol, suitable for users with existing email services. See [Nodemailer SMTP docs](https://nodemailer.com/smtp/).
 
-| Environment Variable     | Type     | Description                                             | Example             |
-| ------------------------ | -------- | ------------------------------------------------------- | ------------------- |
-| `EMAIL_SERVICE_PROVIDER` | Optional | Set to `nodemailer` (default)                           | `nodemailer`        |
-| `SMTP_HOST`              | Required | SMTP server hostname                                    | `smtp.gmail.com`    |
-| `SMTP_PORT`              | Required | SMTP server port (`587` for TLS, `465` for SSL)         | `587`               |
-| `SMTP_SECURE`            | Optional | `true` for SSL (port 465), `false` for TLS (port 587)   | `false`             |
-| `SMTP_USER`              | Required | SMTP auth username                                      | `user@gmail.com`    |
-| `SMTP_PASS`              | Required | SMTP auth password                                      | `your-app-password` |
+| Environment Variable     | Type     | Description                                                       | Example                |
+| ------------------------ | -------- | ----------------------------------------------------------------- | ---------------------- |
+| `EMAIL_SERVICE_PROVIDER` | Optional | Set to `nodemailer` (default)                                     | `nodemailer`           |
+| `SMTP_HOST`              | Required | SMTP server hostname                                              | `smtp.gmail.com`       |
+| `SMTP_PORT`              | Required | SMTP server port (`587` for TLS, `465` for SSL)                   | `587`                  |
+| `SMTP_SECURE`            | Optional | `true` for SSL (port 465), `false` for TLS (port 587)             | `false`                |
+| `SMTP_USER`              | Required | SMTP auth username                                                | `user@gmail.com`       |
+| `SMTP_PASS`              | Required | SMTP auth password                                                | `your-app-password`    |
+| `SMTP_FROM`              | Optional | Sender address (required for AWS SES), defaults to `SMTP_USER`    | `noreply@example.com`  |
 
 <Callout type={'warning'}>
   When using Gmail, you must use an App Password instead of your account password. Generate one at [Google App Passwords](https://myaccount.google.com/apppasswords).
@@ -127,11 +128,11 @@ Send emails via SMTP protocol, suitable for users with existing email services. 
 
 [Resend](https://resend.com/) is a modern email API service with simple setup, recommended for new users.
 
-| Environment Variable     | Type        | Description                              | Example                     |
-| ------------------------ | ----------- | ---------------------------------------- | --------------------------- |
-| `EMAIL_SERVICE_PROVIDER` | Required    | Set to `resend`                          | `resend`                    |
-| `RESEND_API_KEY`         | Required    | Resend API Key                           | `re_xxxxxxxxxxxxxxxxxxxxxx` |
-| `RESEND_FROM`            | Recommended | Sender address, must be a verified domain| `noreply@your-domain.com`   |
+| Environment Variable     | Type        | Description                               | Example                     |
+| ------------------------ | ----------- | ----------------------------------------- | --------------------------- |
+| `EMAIL_SERVICE_PROVIDER` | Required    | Set to `resend`                           | `resend`                    |
+| `RESEND_API_KEY`         | Required    | Resend API Key                            | `re_xxxxxxxxxxxxxxxxxxxxxx` |
+| `RESEND_FROM`            | Recommended | Sender address, must be a verified domain | `noreply@your-domain.com`   |
 
 <Callout type={'info'}>
   Before using Resend, you need to [verify your sending domain](https://resend.com/docs/dashboard/domains/introduction), otherwise emails can only be sent to your own address.
@@ -139,9 +140,9 @@ Send emails via SMTP protocol, suitable for users with existing email services. 
 
 ### Common Configuration
 
-| Environment Variable      | Type     | Description                                              | Example |
-| ------------------------- | -------- | -------------------------------------------------------- | ------- |
-| `AUTH_EMAIL_VERIFICATION` | Optional | Set to `1` to require email verification (off by default)| `1`     |
+| Environment Variable      | Type     | Description                                               | Example |
+| ------------------------- | -------- | --------------------------------------------------------- | ------- |
+| `AUTH_EMAIL_VERIFICATION` | Optional | Set to `1` to require email verification (off by default) | `1`     |
 
 ## Magic Link (Passwordless) Login
 
@@ -155,6 +156,19 @@ Enable magic-link login (depends on a working email provider above, off by defau
   Go to [Environment Variables](/docs/self-hosting/environment-variables/auth#better-auth) for detailed information on all Better Auth variables.
 </Callout>
 
+## Session Storage Configuration (Optional)
+
+By default, Better Auth uses the database to store session data. You can configure Redis as secondary storage for better performance and cross-instance session sharing.
+
+| Environment Variable | Type     | Description                                                  |
+| -------------------- | -------- | ------------------------------------------------------------ |
+| `REDIS_URL`          | Optional | Redis connection URL, enables Redis session storage when set |
+| `REDIS_PREFIX`       | Optional | Redis key prefix, defaults to `lobechat`                     |
+
+<Callout type={'info'}>
+  When Redis is configured, authentication session data will be stored in Redis, enabling session sharing across multiple service instances and faster session validation. See [Redis Cache Service](/docs/self-hosting/advanced/redis) for detailed configuration.
+</Callout>
+
 ## FAQ
 
 ### What SSO providers does Better Auth support?
@@ -164,3 +178,16 @@ Better Auth supports built-in providers (Google, GitHub, Microsoft, Apple, AWS C
 ### How do I enable multiple SSO providers?
 
 Set the `AUTH_SSO_PROVIDERS` environment variable with a comma-separated list, e.g., `google,github,microsoft`. The order determines the display order on the login page.
+
+### What if Casdoor users only have username without email?
+
+The current authentication system requires email. Please configure a valid email address for users in Casdoor. Using a real, valid email is strongly recommended, otherwise features like password reset and magic link login will not work.
+
+### How do I restrict registration to specific emails or domains?
+
+Set the `AUTH_ALLOWED_EMAILS` environment variable with a comma-separated list of allowed emails or domains. For example:
+
+- Allow only `example.com` domain: `AUTH_ALLOWED_EMAILS=example.com`
+- Allow multiple domains and specific emails: `AUTH_ALLOWED_EMAILS=example.com,company.org,admin@other.com`
+
+Leave empty to allow all emails. This restriction applies to both email registration and SSO login.

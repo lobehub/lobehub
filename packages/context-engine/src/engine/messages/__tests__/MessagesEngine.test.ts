@@ -113,31 +113,6 @@ describe('MessagesEngine', () => {
       expect(result.messages[0].content).toBe(systemRole);
     });
 
-    it('should truncate history when enabled', async () => {
-      const messages: UIChatMessage[] = [];
-      for (let i = 0; i < 20; i++) {
-        messages.push({
-          content: `Message ${i}`,
-          createdAt: Date.now(),
-          id: `msg-${i}`,
-          role: i % 2 === 0 ? 'user' : 'assistant',
-          updatedAt: Date.now(),
-        } as UIChatMessage);
-      }
-
-      const params = createBasicParams({
-        enableHistoryCount: true,
-        historyCount: 5,
-        messages,
-      });
-      const engine = new MessagesEngine(params);
-
-      const result = await engine.process();
-
-      // Should have truncated to 5 messages
-      expect(result.messages.length).toBeLessThanOrEqual(5);
-    });
-
     it('should inject history summary when provided', async () => {
       const historySummary = 'We discussed AI and machine learning';
       const params = createBasicParams({ historySummary });

@@ -281,6 +281,62 @@ describe('anthropicHelpers', () => {
       const result = await buildAnthropicMessage(message);
       expect(result).toBeUndefined();
     });
+
+    it('should handle assistant message with tool_calls but null content', async () => {
+      const message: OpenAIChatMessage = {
+        content: null as any,
+        role: 'assistant',
+        tool_calls: [
+          {
+            id: 'call1',
+            type: 'function',
+            function: {
+              name: 'search_people',
+              arguments: '{"location":"Singapore"}',
+            },
+          },
+        ],
+      };
+      const result = await buildAnthropicMessage(message);
+      expect(result!.role).toBe('assistant');
+      // null content should be filtered out, only tool_use remains
+      expect(result!.content).toEqual([
+        {
+          id: 'call1',
+          input: { location: 'Singapore' },
+          name: 'search_people',
+          type: 'tool_use',
+        },
+      ]);
+    });
+
+    it('should handle assistant message with tool_calls but empty string content', async () => {
+      const message: OpenAIChatMessage = {
+        content: '',
+        role: 'assistant',
+        tool_calls: [
+          {
+            id: 'call1',
+            type: 'function',
+            function: {
+              name: 'search_people',
+              arguments: '{"location":"Singapore"}',
+            },
+          },
+        ],
+      };
+      const result = await buildAnthropicMessage(message);
+      expect(result!.role).toBe('assistant');
+      // empty string content should be filtered out, only tool_use remains
+      expect(result!.content).toEqual([
+        {
+          id: 'call1',
+          input: { location: 'Singapore' },
+          name: 'search_people',
+          type: 'tool_use',
+        },
+      ]);
+    });
   });
 
   describe('buildAnthropicMessages', () => {
@@ -521,6 +577,320 @@ describe('anthropicHelpers', () => {
                 type: 'tool_result',
               },
             ],
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should handle tool message with null content', async () => {
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: '搜索人员',
+            role: 'user',
+          },
+          {
+            content: '正在搜索...',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: {
+                  arguments: '{"location": "Singapore"}',
+                  name: 'search_people',
+                },
+                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: null as any,
+            name: 'search_people',
+            role: 'tool',
+            tool_call_id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+          },
+        ];
+
+        const contents = await buildAnthropicMessages(messages);
+
+        expect(contents).toEqual([
+          { content: '搜索人员', role: 'user' },
+          {
+            content: [
+              { text: '正在搜索...', type: 'text' },
+              {
+                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                input: { location: 'Singapore' },
+                name: 'search_people',
+                type: 'tool_use',
+              },
+            ],
+            role: 'assistant',
+          },
+          {
+            content: [
+              {
+                content: [{ text: '<empty_content>', type: 'text' }],
+                tool_use_id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                type: 'tool_result',
+              },
+            ],
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should handle tool message with empty string content', async () => {
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: '搜索人员',
+            role: 'user',
+          },
+          {
+            content: '正在搜索...',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: {
+                  arguments: '{"location": "Singapore"}',
+                  name: 'search_people',
+                },
+                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: '',
+            name: 'search_people',
+            role: 'tool',
+            tool_call_id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+          },
+        ];
+
+        const contents = await buildAnthropicMessages(messages);
+
+        expect(contents).toEqual([
+          { content: '搜索人员', role: 'user' },
+          {
+            content: [
+              { text: '正在搜索...', type: 'text' },
+              {
+                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                input: { location: 'Singapore' },
+                name: 'search_people',
+                type: 'tool_use',
+              },
+            ],
+            role: 'assistant',
+          },
+          {
+            content: [
+              {
+                content: [{ text: '<empty_content>', type: 'text' }],
+                tool_use_id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                type: 'tool_result',
+              },
+            ],
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should handle tool message with array content', async () => {
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: '搜索人员',
+            role: 'user',
+          },
+          {
+            content: '正在搜索...',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: {
+                  arguments: '{"location": "Singapore"}',
+                  name: 'search_people',
+                },
+                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: [
+              { type: 'text', text: 'Found 5 candidates' },
+              { type: 'text', text: 'Result details here' },
+            ] as any,
+            name: 'search_people',
+            role: 'tool',
+            tool_call_id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+          },
+        ];
+
+        const contents = await buildAnthropicMessages(messages);
+
+        expect(contents).toEqual([
+          { content: '搜索人员', role: 'user' },
+          {
+            content: [
+              { text: '正在搜索...', type: 'text' },
+              {
+                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                input: { location: 'Singapore' },
+                name: 'search_people',
+                type: 'tool_use',
+              },
+            ],
+            role: 'assistant',
+          },
+          {
+            content: [
+              {
+                content: [
+                  { type: 'text', text: 'Found 5 candidates' },
+                  { type: 'text', text: 'Result details here' },
+                ],
+                tool_use_id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                type: 'tool_result',
+              },
+            ],
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should handle tool message with array content containing image', async () => {
+        vi.mocked(parseDataUri).mockReturnValueOnce({
+          mimeType: 'image/png',
+          base64: 'screenshotBase64Data',
+          type: 'base64',
+        });
+
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: '截图分析',
+            role: 'user',
+          },
+          {
+            content: '正在截图...',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: {
+                  arguments: '{"url": "https://example.com"}',
+                  name: 'screenshot',
+                },
+                id: 'toolu_screenshot_123',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: [
+              { type: 'text', text: 'Screenshot captured' },
+              {
+                type: 'image_url',
+                image_url: { url: 'data:image/png;base64,screenshotBase64Data' },
+              },
+            ] as any,
+            name: 'screenshot',
+            role: 'tool',
+            tool_call_id: 'toolu_screenshot_123',
+          },
+        ];
+
+        const contents = await buildAnthropicMessages(messages);
+
+        expect(contents).toEqual([
+          { content: '截图分析', role: 'user' },
+          {
+            content: [
+              { text: '正在截图...', type: 'text' },
+              {
+                id: 'toolu_screenshot_123',
+                input: { url: 'https://example.com' },
+                name: 'screenshot',
+                type: 'tool_use',
+              },
+            ],
+            role: 'assistant',
+          },
+          {
+            content: [
+              {
+                content: [
+                  { type: 'text', text: 'Screenshot captured' },
+                  {
+                    type: 'image',
+                    source: {
+                      type: 'base64',
+                      media_type: 'image/png',
+                      data: 'screenshotBase64Data',
+                    },
+                  },
+                ],
+                tool_use_id: 'toolu_screenshot_123',
+                type: 'tool_result',
+              },
+            ],
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should handle orphan tool message with null content', async () => {
+        // Tool message without corresponding assistant tool_call
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: null as any,
+            name: 'some_tool',
+            role: 'tool',
+            tool_call_id: 'orphan_tool_call_id',
+          },
+          {
+            content: 'Continue',
+            role: 'user',
+          },
+        ];
+
+        const contents = await buildAnthropicMessages(messages);
+
+        expect(contents).toEqual([
+          {
+            content: '<empty_content>',
+            role: 'user',
+          },
+          {
+            content: 'Continue',
+            role: 'user',
+          },
+        ]);
+      });
+
+      it('should handle orphan tool message with empty string content', async () => {
+        // Tool message without corresponding assistant tool_call
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: '',
+            name: 'some_tool',
+            role: 'tool',
+            tool_call_id: 'orphan_tool_call_id',
+          },
+          {
+            content: 'Continue',
+            role: 'user',
+          },
+        ];
+
+        const contents = await buildAnthropicMessages(messages);
+
+        expect(contents).toEqual([
+          {
+            content: '<empty_content>',
+            role: 'user',
+          },
+          {
+            content: 'Continue',
             role: 'user',
           },
         ]);

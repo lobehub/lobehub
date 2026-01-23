@@ -7,8 +7,7 @@ import { auth } from '@/auth';
 import { LOBE_LOCALE_COOKIE } from '@/const/locale';
 import { isDesktop } from '@/const/version';
 import { appEnv } from '@/envs/app';
-import { OAUTH_AUTHORIZED, authEnv } from '@/envs/auth';
-import NextAuth from '@/libs/next-auth';
+import { authEnv } from '@/envs/auth';
 import { type Locales } from '@/locales/resources';
 import { parseBrowserLanguage } from '@/utils/locale';
 import { RouteVariants } from '@/utils/server/routeVariants';
@@ -17,11 +16,7 @@ import { createRouteMatcher } from './createRouteMatcher';
 
 // Create debug logger instances
 const logDefault = debug('middleware:default');
-const logNextAuth = debug('middleware:next-auth');
 const logBetterAuth = debug('middleware:better-auth');
-
-// OIDC session pre-sync constant
-const OIDC_SESSION_HEADER = 'x-oidc-session-sync';
 
 export function defineConfig() {
   const backendApiEndpoints = ['/api', '/trpc', '/webapi', '/oidc'];
@@ -169,8 +164,6 @@ export function defineConfig() {
     '/api/agent(.*)',
     '/webapi(.*)',
     '/trpc(.*)',
-    // next auth
-    '/next-auth/(.*)',
     // better auth
     '/signin',
     '/signup',
@@ -186,70 +179,6 @@ export function defineConfig() {
     // public share pages
     '/share(.*)',
   ]);
-
-  const isProtectedRoute = createRouteMatcher([
-    '/settings(.*)',
-    '/knowledge(.*)',
-    '/onboard(.*)',
-    '/oauth(.*)',
-    // ↓ cloud ↓
-  ]);
-
-  // Initialize an Edge compatible NextAuth middleware
-  const nextAuthMiddleware = NextAuth.auth((req) => {
-    logNextAuth('NextAuth middleware processing request: %s %s', req.method, req.url);
-
-    const response = defaultMiddleware(req);
-
-    // when enable auth protection, only public route is not protected, others are all protected
-    const isProtected = appEnv.ENABLE_AUTH_PROTECTION ? !isPublicRoute(req) : isProtectedRoute(req);
-
-    logNextAuth('Route protection status: %s, %s', req.url, isProtected ? 'protected' : 'public');
-
-    // Just check if session exists
-    const session = req.auth;
-
-    // Check if next-auth throws errors
-    // refs: https://github.com/lobehub/lobe-chat/pull/1323
-    const isLoggedIn = !!session?.expires;
-
-    logNextAuth('NextAuth session status: %O', {
-      expires: session?.expires,
-      isLoggedIn,
-      userId: session?.user?.id,
-    });
-
-    // Remove & amend OAuth authorized header
-    response.headers.delete(OAUTH_AUTHORIZED);
-    if (isLoggedIn) {
-      logNextAuth('Setting auth header: %s = %s', OAUTH_AUTHORIZED, 'true');
-      response.headers.set(OAUTH_AUTHORIZED, 'true');
-
-      // If OIDC is enabled and user is logged in, add OIDC session pre-sync header
-      if (authEnv.ENABLE_OIDC && session?.user?.id) {
-        logNextAuth('OIDC session pre-sync: Setting %s = %s', OIDC_SESSION_HEADER, session.user.id);
-        response.headers.set(OIDC_SESSION_HEADER, session.user.id);
-      }
-    } else {
-      // If request a protected route, redirect to sign-in page
-      // ref: https://authjs.dev/getting-started/session-management/protecting
-      if (isProtected) {
-        logNextAuth('Request a protected route, redirecting to sign-in page');
-        const callbackUrl = `${appEnv.APP_URL}${req.nextUrl.pathname}${req.nextUrl.search}`;
-        const nextLoginUrl = new URL('/next-auth/signin', appEnv.APP_URL);
-        nextLoginUrl.searchParams.set('callbackUrl', callbackUrl);
-        const hl = req.nextUrl.searchParams.get('hl');
-        if (hl) {
-          nextLoginUrl.searchParams.set('hl', hl);
-          logNextAuth('Preserving locale to sign-in: hl=%s', hl);
-        }
-        return Response.redirect(nextLoginUrl);
-      }
-      logNextAuth('Request a free route but not login, allow visit without auth header');
-    }
-
-    return response;
-  });
 
   const betterAuthMiddleware = async (req: NextRequest) => {
     logBetterAuth('BetterAuth middleware processing request: %s %s', req.method, req.url);
@@ -298,12 +227,10 @@ export function defineConfig() {
 
   logDefault('Middleware configuration: %O', {
     enableAuthProtection: appEnv.ENABLE_AUTH_PROTECTION,
-    enableBetterAuth: authEnv.NEXT_PUBLIC_ENABLE_BETTER_AUTH,
-    enableNextAuth: authEnv.NEXT_PUBLIC_ENABLE_NEXT_AUTH,
     enableOIDC: authEnv.ENABLE_OIDC,
   });
 
   return {
-    middleware: authEnv.NEXT_PUBLIC_ENABLE_NEXT_AUTH ? nextAuthMiddleware : betterAuthMiddleware,
+    middleware: betterAuthMiddleware,
   };
 }

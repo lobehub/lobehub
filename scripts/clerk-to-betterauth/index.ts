@@ -13,6 +13,11 @@ const IS_DRY_RUN =
   process.argv.includes('--dry-run') || process.env.CLERK_TO_BETTERAUTH_DRY_RUN === '1';
 const formatDuration = (ms: number) => `${(ms / 1000).toFixed(1)}s`;
 
+// ANSI color codes
+const GREEN_BOLD = '\u001B[1;32m';
+const RED_BOLD = '\u001B[1;31m';
+const RESET = '\u001B[0m';
+
 function chunk<T>(items: T[], size: number): T[][] {
   if (!Number.isFinite(size) || size <= 0) return [items];
   const result: T[][] = [];
@@ -241,7 +246,7 @@ async function migrateFromClerk() {
   }
 
   console.log(
-    `[clerk-to-betterauth] completed users=${processed}, skipped=${skipped}, accounts attempted=${accountAttempts}, 2fa attempted=${twoFactorAttempts}, dryRun=${IS_DRY_RUN}, elapsed=${formatDuration(Date.now() - startedAt)}`,
+    `[clerk-to-betterauth] completed users=${GREEN_BOLD}${processed}${RESET}, skipped=${skipped}, accounts attempted=${accountAttempts}, 2fa attempted=${twoFactorAttempts}, dryRun=${IS_DRY_RUN}, elapsed=${formatDuration(Date.now() - startedAt)}`,
   );
 
   const accountCountsText = Object.entries(accountCounts)
@@ -301,10 +306,10 @@ async function main() {
   try {
     await migrateFromClerk();
     console.log('');
-    console.log(`✅ Migration success! (${formatDuration(Date.now() - startedAt)})`);
+    console.log(`${GREEN_BOLD}✅ Migration success!${RESET} (${formatDuration(Date.now() - startedAt)})`);
   } catch (error) {
     console.log('');
-    console.error(`❌ Migration failed (${formatDuration(Date.now() - startedAt)}):`, error);
+    console.error(`${RED_BOLD}❌ Migration failed${RESET} (${formatDuration(Date.now() - startedAt)}):`, error);
     process.exitCode = 1;
   } finally {
     await pool.end();

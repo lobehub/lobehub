@@ -1,5 +1,3 @@
-import { enableBetterAuth } from '@/envs/auth';
-import { notFound } from '@/libs/next/navigation';
 import { metadataModule } from '@/server/metadata';
 import { translation } from '@/server/translation';
 import { type DynamicLayoutProps } from '@/types/next';
@@ -9,28 +7,17 @@ import BetterAuthSignUpForm from './BetterAuthSignUpForm';
 
 export const generateMetadata = async (props: DynamicLayoutProps) => {
   const locale = await RouteVariants.getLocale(props);
-
-  if (enableBetterAuth) {
-    const { t } = await translation('auth', locale);
-    return metadataModule.generate({
-      description: t('betterAuth.signup.subtitle'),
-      title: t('betterAuth.signup.title'),
-      url: '/signup',
-    });
-  }
+  const { t } = await translation('auth', locale);
 
   return metadataModule.generate({
-    title: 'Sign Up',
+    description: t('betterAuth.signup.subtitle'),
+    title: t('betterAuth.signup.title'),
     url: '/signup',
   });
 };
 
 const Page = () => {
-  if (enableBetterAuth) {
-    return <BetterAuthSignUpForm />;
-  }
-
-  return notFound();
+  return <BetterAuthSignUpForm />;
 };
 
 export default Page;

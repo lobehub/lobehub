@@ -1,0 +1,128 @@
+---
+title: Configure Redis Cache Service
+description: Learn how to configure Redis cache service to optimize LobeChat performance and session management.
+tags:
+  - Redis
+  - Cache
+  - Session Storage
+  - Performance
+---
+
+# Configure Redis Cache Service
+
+LobeChat uses Redis as a high-performance cache and session storage service to optimize system performance and manage user authentication state.
+
+<Callout type={'info'}>
+  LobeChat uses the standard Redis protocol (via ioredis library), supporting any Redis
+  protocol-compatible service, including official Redis, self-hosted Redis, and cloud provider Redis
+  services (such as AWS ElastiCache, Alibaba Cloud Redis, etc.).
+</Callout>
+
+## Use Cases
+
+Redis is used in LobeChat for the following scenarios:
+
+### Authentication Session Storage
+
+As secondary storage for Better Auth, used to store user authentication sessions and token data. This enables:
+
+- Sharing session state across multiple service instances
+- Faster session validation
+- Session revocation and management support
+
+### File Proxy Cache
+
+Caches S3 presigned URLs to reduce S3 API calls and optimize file access performance.
+
+### Agent Configuration Cache
+
+Caches Agent configuration data to reduce database queries and improve response speed.
+
+## Core Environment Variables
+
+<Steps>
+  ### `REDIS_URL`
+
+  The Redis server connection URL. This is required to enable Redis functionality.
+
+  ```shell
+  REDIS_URL=redis://localhost:6379
+  ```
+
+  Supported URL formats:
+
+  - Standard: `redis://localhost:6379`
+  - With authentication: `redis://username:password@localhost:6379`
+  - With database: `redis://localhost:6379/0`
+
+  ### `REDIS_PREFIX`
+
+  The prefix for Redis keys, used to isolate LobeChat data in a shared Redis instance.
+
+  - Default: `lobechat`
+  - Example: `REDIS_PREFIX=my-lobechat`
+
+  ### `REDIS_TLS`
+
+  Whether to enable TLS/SSL encrypted connection.
+
+  - Default: `false`
+  - Example: `REDIS_TLS=true`
+
+  <Callout type={'tip'}>
+    If you use Redis services from cloud providers, you usually need to enable TLS to ensure secure
+    data transmission.
+  </Callout>
+
+  ### `REDIS_PASSWORD`
+
+  Redis authentication password (optional). Set this if your Redis server is configured with password authentication.
+
+  ### `REDIS_USERNAME`
+
+  Redis authentication username (optional). Redis 6.0+ supports ACL user authentication. Set this if using username authentication.
+
+  ### `REDIS_DATABASE`
+
+  Redis database index (optional). Redis supports multiple databases (default 0-15), you can specify which database to use.
+
+  - Default: `0`
+  - Example: `REDIS_DATABASE=1`
+</Steps>
+
+## Configuration Examples
+
+### Local Development
+
+```shell
+REDIS_URL=redis://localhost:6379
+REDIS_PREFIX=lobechat-dev
+```
+
+### Production (with authentication)
+
+```shell
+REDIS_URL=redis://localhost:6379
+REDIS_PASSWORD=your-strong-password
+REDIS_PREFIX=lobechat
+REDIS_TLS=true
+```
+
+### Cloud Service (e.g., AWS ElastiCache)
+
+```shell
+REDIS_URL=redis://your-cluster.cache.amazonaws.com:6379
+REDIS_TLS=true
+REDIS_PREFIX=lobechat
+```
+
+## Notes
+
+<Callout type={'warning'}>
+  Redis is an optional service. If `REDIS_URL` is not configured, LobeChat will still function
+  normally, but will lose the caching and session management optimizations mentioned above.
+</Callout>
+
+- **Memory Management**: Redis is an in-memory database, ensure your server has sufficient memory
+- **Persistence**: Enable Redis RDB or AOF persistence to prevent data loss
+- **High Availability**: For production, consider using Redis Sentinel or Redis Cluster for high availability

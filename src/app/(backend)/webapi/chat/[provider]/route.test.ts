@@ -27,9 +27,16 @@ vi.mock('@/envs/auth', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/envs/auth')>();
   return {
     ...actual,
-    enableBetterAuth: false,
   };
 });
+
+vi.mock('@/auth', () => ({
+  auth: {
+    api: {
+      getSession: vi.fn().mockResolvedValue(null),
+    },
+  },
+}));
 
 // 模拟请求和响应
 let request: Request;

@@ -22,10 +22,9 @@ import type { ChatToolPayload, ConversationContext, CreateMessageParams } from '
 import debug from 'debug';
 import pMap from 'p-map';
 
-import type { ResolvedAgentConfig } from '@/services/chat/mecha';
-
 import { LOADING_FLAT } from '@/const/message';
 import { aiAgentService } from '@/services/aiAgent';
+import type { ResolvedAgentConfig } from '@/services/chat/mecha';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { getAgentStoreState } from '@/store/agent/store';
 import type { ChatStore } from '@/store/chat/store';
@@ -96,7 +95,12 @@ export const createAgentExecutors = (context: {
       const llmPayload = (instruction as AgentInstructionCallLlm)
         .payload as GeneralAgentCallLLMInstructionPayload;
 
-      log(`${stagePrefix} Starting session`);
+      log(
+        `${stagePrefix} Starting session. Input: state.messages=%d, llmPayload.messages=%d, messageKey=%s`,
+        state.messages.length,
+        llmPayload.messages.length,
+        context.messageKey,
+      );
 
       let assistantMessageId: string;
 
@@ -184,6 +188,12 @@ export const createAgentExecutors = (context: {
       // Get latest messages from store (already updated by internal_fetchAIChatMessage)
       const latestMessages = context.get().dbMessagesMap[context.messageKey] || [];
 
+      log(
+        `${stagePrefix} After fetch: dbMessagesMap[${context.messageKey}]=%d messages, available keys=%o`,
+        latestMessages.length,
+        Object.keys(context.get().dbMessagesMap),
+      );
+
       // Get updated assistant message to extract usage/cost information
       const assistantMessage = latestMessages.find((m) => m.id === assistantMessageId);
 
@@ -206,10 +216,11 @@ export const createAgentExecutors = (context: {
       }
 
       log(
-        '[%s:%d] call_llm completed, finishType: %s',
+        '[%s:%d] call_llm completed, finishType: %s, outputMessages: %d',
         state.operationId,
         state.stepCount,
         finishType,
+        latestMessages.length,
       );
 
       // Accumulate usage and cost to state

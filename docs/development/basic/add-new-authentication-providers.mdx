@@ -4,184 +4,192 @@ title: New Authentication Provider Guide
 
 # New Authentication Provider Guide
 
-LobeChat uses [Auth.js v5](https://authjs.dev/) as the external authentication service. Auth.js is an open-source authentication library that provides a simple way to implement authentication and authorization features. This document will introduce how to use Auth.js to implement a new authentication provider.
+LobeChat uses [Better Auth](https://www.better-auth.com) as its authentication service. This document explains how to add new SSO authentication providers.
 
-## Add New Authentication Provider
+## Architecture Overview
 
-To add a new authentication provider in LobeChat (for example, adding Okta), you need to follow the steps below:
+Better Auth SSO providers fall into two categories:
 
-### Pre-requisites: Check the Official Provider List
+| Type      | Description                                 | Examples                         |
+| --------- | ------------------------------------------- | -------------------------------- |
+| `builtin` | Providers natively supported by Better Auth | Google, GitHub, Microsoft, Apple |
+| `generic` | Implemented via Generic OIDC/OAuth plugin   | Okta, Auth0, Keycloak, etc.      |
 
-First, you need to check the [Auth.js Provider List](https://authjs.dev/reference/core/providers) to see if your provider is already supported. If yes, you can directly use the SDK provided by Auth.js to implement the authentication feature.
+## Adding a New SSO Provider
 
-Next, I will use [Okta](https://authjs.dev/reference/core/providers/okta) as an example to introduce how to add a new authentication provider.
+Using **Okta** as an example, here's how to add a `generic` type provider.
 
-### Step 1: Add Authenticator Core Code
+### Step 1: Create Provider Definition File
 
-Open the `src/app/api/auth/next-auth.ts` file and import `next-auth/providers/okta`.
-
-```ts
-import { NextAuth } from 'next-auth';
-import Auth0 from 'next-auth/providers/auth0';
-import Okta from 'next-auth/providers/okta';
-
-// Import Okta provider
-```
-
-Add the predefined server configuration.
+Create `okta.ts` in `src/libs/better-auth/sso/providers/`:
 
 ```ts
-// Import server configuration
-const { OKTA_CLIENT_ID, OKTA_CLIENT_SECRET, OKTA_ISSUER } = getServerConfig();
+import { authEnv } from '@/envs/auth';
 
-const nextAuth = NextAuth({
-  providers: [
-    // ... Other providers
+import { buildOidcConfig } from '../helpers';
+import type { GenericProviderDefinition } from '../types';
 
-    Okta({
-      clientId: OKTA_CLIENT_ID,
-      clientSecret: OKTA_CLIENT_SECRET,
-      issuer: OKTA_ISSUER,
+const provider: GenericProviderDefinition<{
+  AUTH_OKTA_ID: string;
+  AUTH_OKTA_ISSUER: string;
+  AUTH_OKTA_SECRET: string;
+}> = {
+  // Build OIDC configuration
+  build: (env) =>
+    buildOidcConfig({
+      clientId: env.AUTH_OKTA_ID,
+      clientSecret: env.AUTH_OKTA_SECRET,
+      issuer: env.AUTH_OKTA_ISSUER,
+      overrides: {
+        // Optional: customize user profile mapping
+        mapProfileToUser: (profile) => ({
+          email: profile.email,
+          name: profile.name ?? profile.preferred_username ?? profile.email ?? profile.sub,
+        }),
+      },
+      providerId: 'okta',
     }),
-  ],
-});
-```
 
-### Step 2: Update Server Configuration Code
+  // Environment variable validation
+  checkEnvs: () => {
+    return !!(authEnv.AUTH_OKTA_ID && authEnv.AUTH_OKTA_SECRET && authEnv.AUTH_OKTA_ISSUER)
+      ? {
+          AUTH_OKTA_ID: authEnv.AUTH_OKTA_ID,
+          AUTH_OKTA_ISSUER: authEnv.AUTH_OKTA_ISSUER,
+          AUTH_OKTA_SECRET: authEnv.AUTH_OKTA_SECRET,
+        }
+      : false;
+  },
 
-Open the `src/config/server/app.ts` file and add Okta-related environment variables in the `getAppConfig` function.
-
-```ts
-export const getAppConfig = () => {
-  // ... Other code
-
-  return {
-    // ... Other environment variables
-
-    OKTA_CLIENT_ID: process.env.OKTA_CLIENT_ID || '',
-    OKTA_CLIENT_SECRET: process.env.OKTA_CLIENT_SECRET || '',
-    OKTA_ISSUER: process.env.OKTA_ISSUER || '',
-  };
+  // Provider ID (used in AUTH_SSO_PROVIDERS)
+  id: 'okta',
+  type: 'generic',
 };
+
+export default provider;
 ```
 
-### Step 3: Change Frontend Pages
+### Step 2: Register the Provider
 
-Modify the `signIn` function parameter in `src/Features/Conversation/Error/OAuthForm.tsx` and \`src/app/settings/common/Common.tsx
-
-The default is `auth0`, which you can change to `okta` to switch to the Okta provider, or remove this parameter to support all added authentication services
-
-This value is the id of the Auth.js provider, and you can read the source code of the corresponding `next-auth/providers` module to read the default ID.
-
-### Step 4: Configure the Environment Variables
-
-Add `OKTA_CLIENT_ID`、`OKTA_CLIENT_SECRET`、`OKTA_ISSUER` environment variables when you deploy.
-
-### Step 5: Modify server-side user information processing logic
-
-#### Get user information in the frontend
-
-Use the `useOAuthSession()` method in the frontend page to get the user information `user` returned by the backend:
+Import and register in `src/libs/better-auth/sso/index.ts`:
 
 ```ts
-import { useOAuthSession } from '@/hooks/useOAuthSession';
+// Import provider
+import Okta from './providers/okta';
 
-const { user, isOAuthLoggedIn } = useOAuthSession();
+// Add to providerDefinitions array
+const providerDefinitions = [
+  // ... other providers
+  Okta,
+] as const;
 ```
 
-The default type of `user` is `User`, and the type definition is:
+### Step 3: Add Environment Variable Types
+
+Add type declarations in `src/envs/auth.ts`:
 
 ```ts
-interface User {
-  id?: string;
-  name?: string | null;
-  email?: string | null;
-  image?: string | null;
-}
+// Add to ProcessEnv interface
+AUTH_OKTA_ID?: string;
+AUTH_OKTA_SECRET?: string;
+AUTH_OKTA_ISSUER?: string;
+
+// Add to getAuthConfig server schema
+AUTH_OKTA_ID: z.string().optional(),
+AUTH_OKTA_SECRET: z.string().optional(),
+AUTH_OKTA_ISSUER: z.string().optional(),
+
+// Add to runtimeEnv
+AUTH_OKTA_ID: process.env.AUTH_OKTA_ID,
+AUTH_OKTA_SECRET: process.env.AUTH_OKTA_SECRET,
+AUTH_OKTA_ISSUER: process.env.AUTH_OKTA_ISSUER,
 ```
 
-#### Modify user `id` handling logic
+### Step 4: Update Documentation (Optional)
 
-The `user.id` is used to identify users. When introducing a new OAuth identity provider, you need to handle the information carried in the OAuth callback in `src/app/api/auth/next-auth.ts`. You need to select the user's `id` from this information. Before that, we need to understand the data processing sequence of `Auth.js`:
+Add provider documentation in `docs/self-hosting/advanced/auth.mdx` and `docs/self-hosting/advanced/auth.zh-CN.mdx`.
 
-```txt
-authorize --> jwt --> session
-```
+## Adding a Built-in Provider
 
-By default, in the `jwt --> session` process, `Auth.js` will [automatically assign the user `id` to `account.providerAccountId` based on the login type](https://authjs.dev/reference/core/types#provideraccountid). If you need to select a different value as the user `id`, you need to implement the following handling logic:
+For providers natively supported by Better Auth (e.g., Discord), the steps differ slightly:
+
+### Step 1: Create Provider Definition File
 
 ```ts
-callbacks: {
-  async jwt({ token, account, profile }) {
-    if (account) {
-      // You can select a different value from `account` or `profile`
-      token.userId = account.providerAccountId;
-    }
-    return token;
+import { authEnv } from '@/envs/auth';
+
+import type { BuiltinProviderDefinition } from '../types';
+
+const provider: BuiltinProviderDefinition<{
+  AUTH_DISCORD_ID: string;
+  AUTH_DISCORD_SECRET: string;
+}> = {
+  build: (env) => ({
+    clientId: env.AUTH_DISCORD_ID,
+    clientSecret: env.AUTH_DISCORD_SECRET,
+  }),
+  checkEnvs: () => {
+    return !!(authEnv.AUTH_DISCORD_ID && authEnv.AUTH_DISCORD_SECRET)
+      ? {
+          AUTH_DISCORD_ID: authEnv.AUTH_DISCORD_ID,
+          AUTH_DISCORD_SECRET: authEnv.AUTH_DISCORD_SECRET,
+        }
+      : false;
   },
-},
+  id: 'discord',
+  type: 'builtin',
+};
+
+export default provider;
 ```
 
-#### Customize `session` return
+### Step 2: Update Constants File
 
-If you want to carry more information about `profile` and `account` in the `session`, according to the data processing order mentioned above in `Auth.js`, you must first copy this information to the `token`. For example, add the user avatar URL `profile.picture` to the `session`:
-
-```diff
-  callbacks: {
-    async jwt({ token, profile, account }) {
-      if (profile && account) {
-        token.userId = account.providerAccountId;
-+       token.avatar = profile.picture;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.userId ?? session.user.id;
-+       session.user.avatar = token.avatar;
-      }
-      return session;
-    },
-  },
-```
-
-Then supplement the type definition for the new parameters:
+Add to `src/libs/better-auth/constants.ts`:
 
 ```ts
-declare module '@auth/core/jwt' {
-  interface JWT {
-    // ...
-    avatar?: string;
-  }
-}
-
-declare module 'next-auth' {
-  interface User {
-    avatar?: string;
-  }
-}
+export const BUILTIN_BETTER_AUTH_PROVIDERS = [
+  'apple',
+  'google',
+  'github',
+  'cognito',
+  'microsoft',
+  'discord', // Add new provider
+] as const;
 ```
 
-> [More built-in type extensions in Auth.js](https://authjs.dev/getting-started/typescript#module-augmentation)
+## Callback URL Format
 
-#### Differentiate multiple authentication providers in the processing logic
+When configuring OAuth applications, use these callback URL formats:
 
-If you have configured multiple authentication providers and their `userId` mappings are different, you can use the `account.provider` parameter in the `jwt` method to get the default id of the identity provider and enter different processing logic.
+- **Built-in providers**: `https://yourdomain.com/api/auth/callback/{providerId}`
+- **Generic OIDC**: `https://yourdomain.com/api/auth/callback/{providerId}`
 
-```ts
-  callbacks: {
-    async jwt({ token, profile, account }) {
-      if (profile && account) {
-        if (account.provider === 'authing')
-          token.userId = account.providerAccountId ?? token.sub;
-        else if (acount.provider === 'auth0')
-          token.userId = profile.sub ?? token.sub;
-        else
-          // other providers
-      }
-      return token;
-    },
-  }
+## Using the New Provider
+
+After configuring environment variables, enable in `AUTH_SSO_PROVIDERS`:
+
+```bash
+AUTH_SSO_PROVIDERS=google,github,okta
+AUTH_OKTA_ID=your-client-id
+AUTH_OKTA_SECRET=your-client-secret
+AUTH_OKTA_ISSUER=https://your-domain.okta.com
 ```
 
-Now, you can use Okta as your provider to implement the authentication feature in LobeChat.
+## Debugging Tips
+
+1. **Environment variable check fails**: Ensure all required environment variables are set
+2. **Callback URL errors**: Verify the callback URL configured in your OAuth application
+3. **User profile mapping**: Use `mapProfileToUser` to customize the mapping from OAuth profile to user info
+
+## Related Files
+
+| File                                      | Description                      |
+| ----------------------------------------- | -------------------------------- |
+| `src/libs/better-auth/sso/providers/*.ts` | Provider definitions             |
+| `src/libs/better-auth/sso/index.ts`       | Provider registration            |
+| `src/libs/better-auth/sso/types.ts`       | Type definitions                 |
+| `src/libs/better-auth/sso/helpers.ts`     | Helper functions                 |
+| `src/libs/better-auth/constants.ts`       | Built-in provider constants      |
+| `src/envs/auth.ts`                        | Environment variable definitions |
+| `src/libs/better-auth/define-config.ts`   | Better Auth configuration        |

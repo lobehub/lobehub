@@ -1,32 +1,18 @@
 import { IoRedisRedisProvider } from './redis';
 import { type BaseRedisProvider, type RedisConfig } from './types';
-import { UpstashRedisProvider } from './upstash';
 
 /**
  * Create a Redis provider instance based on config
  *
  * @param config - Redis config
  * @param prefix - Optional custom prefix to override config.prefix
- * @returns Provider instance or null if disabled/unsupported
+ * @returns Provider instance or null if disabled
  */
 const createProvider = (config: RedisConfig, prefix?: string): BaseRedisProvider | null => {
   if (!config.enabled) return null;
 
   const actualPrefix = prefix ?? config.prefix;
-
-  if (config.provider === 'redis') {
-    return new IoRedisRedisProvider({ ...config, prefix: actualPrefix });
-  }
-
-  if (config.provider === 'upstash') {
-    return new UpstashRedisProvider({
-      prefix: actualPrefix,
-      token: config.token,
-      url: config.url,
-    });
-  }
-
-  return null;
+  return new IoRedisRedisProvider({ ...config, prefix: actualPrefix });
 };
 
 class RedisManager {
