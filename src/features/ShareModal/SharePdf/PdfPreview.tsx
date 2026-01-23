@@ -7,10 +7,9 @@ import { createStaticStyles, cx } from 'antd-style';
 import { ChevronLeft, ChevronRight, Expand, FileText } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Document, Page } from 'react-pdf';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
-import '@/libs/pdfjs/worker';
+import { Document, Page } from '@/libs/pdfjs';
 
 import { containerStyles } from '../style';
 
