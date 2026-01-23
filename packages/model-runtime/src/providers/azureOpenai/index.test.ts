@@ -4,6 +4,7 @@ import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as openaiCompatibleFactoryModule from '../../core/openaiCompatibleFactory';
 import * as debugStreamModule from '../../utils/debugStream';
+import * as modelPricingModule from '../../utils/getModelPricing';
 import { LobeAzureOpenAI } from './index';
 
 const bizErrorType = 'ProviderBizError';
@@ -484,6 +485,227 @@ describe('LobeAzureOpenAI', () => {
 
       const arg = vi.mocked(generateSpy).mock.calls[0][0] as any;
       expect(arg).not.toHaveProperty('image');
+    });
+  });
+
+  describe('Responses API', () => {
+    beforeEach(() => {
+      vi.spyOn(modelPricingModule, 'getModelPricing').mockResolvedValue(undefined);
+    });
+
+    it('should use Responses API for gpt-5-pro model', async () => {
+      const mockResponsesCreate = vi.fn().mockResolvedValue(
+        new ReadableStream({
+          start(controller) {
+            controller.close();
+          },
+        }),
+      );
+
+      vi.spyOn(instance['client'], 'responses', 'get').mockReturnValue({
+        create: mockResponsesCreate,
+      } as any);
+
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'gpt-5-pro',
+        temperature: 0.7,
+      });
+
+      expect(mockResponsesCreate).toHaveBeenCalled();
+      const callArgs = mockResponsesCreate.mock.calls[0][0];
+      expect(callArgs).toHaveProperty('input');
+      expect(callArgs.model).toBe('gpt-5-pro');
+    });
+
+    it('should use Responses API for gpt-5-pro-2025-10-06 model', async () => {
+      const mockResponsesCreate = vi.fn().mockResolvedValue(
+        new ReadableStream({
+          start(controller) {
+            controller.close();
+          },
+        }),
+      );
+
+      vi.spyOn(instance['client'], 'responses', 'get').mockReturnValue({
+        create: mockResponsesCreate,
+      } as any);
+
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'gpt-5-pro-2025-10-06',
+        temperature: 0.7,
+      });
+
+      expect(mockResponsesCreate).toHaveBeenCalled();
+    });
+
+    it('should handle streaming Responses API response', async () => {
+      const mockStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue({
+            type: 'response.output_text.delta',
+            delta: 'Hello',
+          });
+          controller.close();
+        },
+      });
+
+      const mockResponsesCreate = vi.fn().mockResolvedValue(mockStream);
+
+      vi.spyOn(instance['client'], 'responses', 'get').mockReturnValue({
+        create: mockResponsesCreate,
+      } as any);
+
+      const result = await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'gpt-5-pro',
+        stream: true,
+      });
+
+      expect(result).toBeInstanceOf(Response);
+      expect(mockResponsesCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stream: true,
+        }),
+        expect.any(Object),
+      );
+    });
+
+    it('should handle non-streaming Responses API response', async () => {
+      const mockResponse = {
+        id: 'resp_123',
+        model: 'gpt-5-pro',
+        output_text: 'Hello, world!',
+      };
+
+      const mockResponsesCreate = vi.fn().mockResolvedValue(mockResponse);
+
+      vi.spyOn(instance['client'], 'responses', 'get').mockReturnValue({
+        create: mockResponsesCreate,
+      } as any);
+
+      vi.spyOn(openaiCompatibleFactoryModule, 'transformResponseAPIToStream').mockReturnValue(
+        new ReadableStream(),
+      );
+
+      const result = await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'gpt-5-pro',
+        stream: false,
+      });
+
+      expect(result).toBeInstanceOf(Response);
+      expect(openaiCompatibleFactoryModule.transformResponseAPIToStream).toHaveBeenCalledWith(
+        mockResponse,
+      );
+    });
+
+    it('should handle reasoning_effort parameter', async () => {
+      const mockResponsesCreate = vi.fn().mockResolvedValue(
+        new ReadableStream({
+          start(controller) {
+            controller.close();
+          },
+        }),
+      );
+
+      vi.spyOn(instance['client'], 'responses', 'get').mockReturnValue({
+        create: mockResponsesCreate,
+      } as any);
+
+      await instance.chat({
+        messages: [{ content: 'Solve this problem', role: 'user' }],
+        model: 'gpt-5-pro',
+        reasoning_effort: 'high',
+      });
+
+      expect(mockResponsesCreate).toHaveBeenCalled();
+      const callArgs = mockResponsesCreate.mock.calls[0][0];
+      expect(callArgs).toHaveProperty('reasoning');
+      expect(callArgs.reasoning).toEqual({ effort: 'high' });
+    });
+
+    it('should remove unsupported params for Responses API', async () => {
+      const mockResponsesCreate = vi.fn().mockResolvedValue(
+        new ReadableStream({
+          start(controller) {
+            controller.close();
+          },
+        }),
+      );
+
+      vi.spyOn(instance['client'], 'responses', 'get').mockReturnValue({
+        create: mockResponsesCreate,
+      } as any);
+
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'gpt-5-pro',
+        frequency_penalty: 0.5,
+        presence_penalty: 0.5,
+      });
+
+      expect(mockResponsesCreate).toHaveBeenCalled();
+      const callArgs = mockResponsesCreate.mock.calls[0][0];
+      expect(callArgs).not.toHaveProperty('frequency_penalty');
+      expect(callArgs).not.toHaveProperty('presence_penalty');
+    });
+
+    it('should call debugStream when DEBUG_AZURE_RESPONSES is 1', async () => {
+      const mockProdStream = new ReadableStream() as any;
+      const mockDebugStream = new ReadableStream({
+        start(controller) {
+          controller.enqueue('Debug stream content');
+          controller.close();
+        },
+      }) as any;
+      mockDebugStream.toReadableStream = () => mockDebugStream;
+
+      const mockResponsesCreate = vi.fn().mockResolvedValue({
+        tee: () => [mockProdStream, { toReadableStream: () => mockDebugStream }],
+      });
+
+      vi.spyOn(instance['client'], 'responses', 'get').mockReturnValue({
+        create: mockResponsesCreate,
+      } as any);
+
+      process.env.DEBUG_AZURE_RESPONSES = '1';
+      vi.spyOn(debugStreamModule, 'debugStream').mockImplementation(() => Promise.resolve());
+
+      await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'gpt-5-pro',
+      });
+
+      expect(debugStreamModule.debugStream).toHaveBeenCalled();
+
+      delete process.env.DEBUG_AZURE_RESPONSES;
+    });
+
+    it('should return JSON response when responseMode is json', async () => {
+      const mockResponse = {
+        id: 'resp_123',
+        model: 'gpt-5-pro',
+        output_text: 'Hello, world!',
+      };
+
+      const mockResponsesCreate = vi.fn().mockResolvedValue(mockResponse);
+
+      vi.spyOn(instance['client'], 'responses', 'get').mockReturnValue({
+        create: mockResponsesCreate,
+      } as any);
+
+      const result = await instance.chat({
+        messages: [{ content: 'Hello', role: 'user' }],
+        model: 'gpt-5-pro',
+        stream: false,
+        responseMode: 'json',
+      });
+
+      expect(result).toBeInstanceOf(Response);
+      const json = await result.json();
+      expect(json).toEqual(mockResponse);
     });
   });
 

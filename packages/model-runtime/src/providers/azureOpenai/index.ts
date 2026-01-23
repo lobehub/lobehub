@@ -3,11 +3,18 @@ import { ModelProvider } from 'model-bank';
 import OpenAI, { AzureOpenAI } from 'openai';
 import type { Stream } from 'openai/streaming';
 
-import { systemToUserModels } from '../../const/models';
+import { responsesAPIModels, systemToUserModels } from '../../const/models';
 import { LobeRuntimeAI } from '../../core/BaseAI';
-import { convertImageUrlToFile, convertOpenAIMessages } from '../../core/contextBuilders/openai';
-import { transformResponseToStream } from '../../core/openaiCompatibleFactory';
-import { OpenAIStream } from '../../core/streams';
+import {
+  convertImageUrlToFile,
+  convertOpenAIMessages,
+  convertOpenAIResponseInputs,
+} from '../../core/contextBuilders/openai';
+import {
+  transformResponseAPIToStream,
+  transformResponseToStream,
+} from '../../core/openaiCompatibleFactory';
+import { OpenAIResponsesStream, OpenAIStream } from '../../core/streams';
 import {
   ChatMethodOptions,
   ChatStreamPayload,
@@ -19,6 +26,7 @@ import { AgentRuntimeErrorType } from '../../types/error';
 import { CreateImagePayload, CreateImageResponse } from '../../types/image';
 import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
+import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
 import { sanitizeError } from '../../utils/sanitizeError';
 
@@ -44,6 +52,12 @@ export class LobeAzureOpenAI implements LobeRuntimeAI {
 
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
     const { messages, model, ...params } = payload;
+
+    // Check if model should use Responses API
+    if (responsesAPIModels.has(model)) {
+      return this.handleResponseAPIMode(payload, options);
+    }
+
     // o1 series models on Azure OpenAI does not support streaming currently
     const enableStreaming = model.includes('o1') ? false : (params.stream ?? true);
 
@@ -299,4 +313,78 @@ export class LobeAzureOpenAI implements LobeRuntimeAI {
       return `${protocol}***${rest}`;
     });
   };
+
+  private async handleResponseAPIMode(
+    payload: ChatStreamPayload,
+    options?: ChatMethodOptions,
+  ): Promise<Response> {
+    const { messages, model, reasoning_effort, tools, reasoning, ...params } = payload;
+    const inputStartAt = Date.now();
+
+    // Remove penalty params (not supported by Responses API)
+    delete (params as any).frequency_penalty;
+    delete (params as any).presence_penalty;
+
+    const input = await convertOpenAIResponseInputs(messages as any);
+
+    const isStreaming = payload.stream !== false;
+
+    const postPayload = {
+      ...params,
+      ...(reasoning || reasoning_effort
+        ? {
+            reasoning: {
+              ...reasoning,
+              ...(reasoning_effort && { effort: reasoning_effort }),
+            },
+          }
+        : {}),
+      input,
+      model,
+      store: false,
+      stream: !isStreaming ? undefined : isStreaming,
+      tools: tools?.map((tool) => ({ type: tool.type, ...tool.function }) as any),
+    } as OpenAI.Responses.ResponseCreateParamsStreaming | OpenAI.Responses.ResponseCreateParams;
+
+    const response = await this.client.responses.create(postPayload, {
+      headers: options?.requestHeaders,
+      signal: options?.signal,
+    });
+
+    const streamOptions = {
+      callbacks: options?.callback,
+      payload: {
+        model,
+        pricing: await getModelPricing(model, ModelProvider.Azure),
+        provider: ModelProvider.Azure,
+      },
+    };
+
+    if (isStreaming) {
+      const stream = response as Stream<OpenAI.Responses.ResponseStreamEvent>;
+      const [prod, debug] = stream.tee();
+
+      if (process.env.DEBUG_AZURE_RESPONSES === '1') {
+        debugStream(debug.toReadableStream()).catch(console.error);
+      }
+
+      return StreamingResponse(OpenAIResponsesStream(prod, { ...streamOptions, inputStartAt }), {
+        headers: options?.headers,
+      });
+    }
+
+    // Handle non-streaming response
+    if (payload.responseMode === 'json') {
+      return Response.json(response);
+    }
+
+    const stream = transformResponseAPIToStream(response as OpenAI.Responses.Response);
+
+    return StreamingResponse(
+      OpenAIResponsesStream(stream, { ...streamOptions, enableStreaming: false, inputStartAt }),
+      {
+        headers: options?.headers,
+      },
+    );
+  }
 }
