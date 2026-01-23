@@ -10,7 +10,8 @@
   "main": "./src/index.ts",
   "dependencies": {
     "@lobechat/prompts": "workspace:*",
-    "mathjs": "^12.4.3"
+    "mathjs": "^15.1.0",
+    "nerdamer": "1.1.13"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"

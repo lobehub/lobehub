@@ -737,3 +737,165 @@ describe('Calculator Sorting', () => {
     });
   });
 });
+
+describe('Calculator Equation Solver', () => {
+  describe('solve', () => {
+    it('should solve linear equations', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['3*x + 5 = 20'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('5');
+      expect(result.state?.equation).toEqual(['3*x + 5 = 20']);
+    });
+
+    it('should solve quadratic equations', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['x^2 - 5*x + 6 = 0'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('2');
+      expect(result.content).toContain('3');
+      expect(result.state?.equation).toEqual(['x^2 - 5*x + 6 = 0']);
+    });
+
+    it('should solve perfect square equations', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['x^2 + 2*x + 1 = 0'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('-1');
+      expect(result.state?.equation).toEqual(['x^2 + 2*x + 1 = 0']);
+    });
+
+    it('should solve equations with custom variable', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['y^2 - 9 = 0'],
+        variable: ['y'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('3');
+      expect(result.content).toContain('-3');
+      expect(result.state?.variable).toEqual(['y']);
+    });
+
+    it('should solve simple equations', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['x - 5 = 0'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('5');
+    });
+
+    it('should handle equations with fractions', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['2*x = 10'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('5');
+    });
+
+    it('should handle cubic equations', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['x^3 - 8 = 0'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('2');
+    });
+
+    it('should handle invalid equations gracefully', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['invalid equation'],
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.type).toBe('SolveError');
+    });
+
+    it('should preserve state information', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['x^2 - 4 = 0'],
+        variable: ['x'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.state?.equation).toEqual(['x^2 - 4 = 0']);
+      expect(result.state?.variable).toEqual(['x']);
+      expect(result.state?.result).toBeDefined();
+    });
+
+    it('should solve system of two equations', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['2*x+y=5', 'x-y=1'],
+        variable: ['x', 'y'],
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parsed.x).toBe('2');
+      expect(parsed.y).toBe('1');
+    });
+
+    it('should solve system of two equations with default variables', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['3*x+2*y=7', 'x-y=1'],
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parseFloat(parsed.x)).toBeCloseTo(1.8, 1);
+      expect(parseFloat(parsed.y)).toBeCloseTo(0.8, 1);
+    });
+
+    it('should solve system of three equations', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['x+y+z=6', '2*x-y+z=3', 'x+2*y-z=2'],
+        variable: ['x', 'y', 'z'],
+      });
+
+      expect(result.success).toBe(true);
+      const parsed = JSON.parse(result.content || '{}');
+      expect(parsed.x).toBe('1');
+      expect(parsed.y).toBe('2');
+      expect(parsed.z).toBe('3');
+    });
+
+    it('should handle system with no solution', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['x+y=5', 'x+y=7'],
+        variable: ['x', 'y'],
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error?.type).toBe('SolveError');
+      expect(result.content).toContain('distinct solution');
+    });
+
+    it('should handle single equation with extra variables in array', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['x+y=5'],
+        variable: ['x', 'y'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBeDefined();
+    });
+
+    it('should solve equation with complex solutions', async () => {
+      const result = await calculatorExecutor.solve({
+        equation: ['x^2 + 1 = 0'],
+        variable: ['x'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('i');
+    });
+  });
+});

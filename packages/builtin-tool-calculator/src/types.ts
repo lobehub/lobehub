@@ -4,6 +4,7 @@ export const CalculatorApiName = {
   calculate: 'calculate',
   convertBase: 'convertBase',
   evaluateExpression: 'evaluateExpression',
+  solve: 'solve',
   sort: 'sort',
 } as const;
 
@@ -67,4 +68,16 @@ export interface SortState {
   result?: any;
   smallest?: number | string;
   sorted?: (string | number)[];
+}
+
+// Nerdamer Equation Solver API
+export interface SolveParams {
+  equation: string[];
+  variable?: string[];
+}
+
+export interface SolveState {
+  equation?: string[];
+  result?: string | string[];
+  variable?: string[];
 }

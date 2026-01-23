@@ -6,7 +6,7 @@ import { CalculatorApiName, CalculatorIdentifier } from './types';
 export const CalculatorManifest: BuiltinToolManifest = {
   api: [
     {
-      description: 'Calculate the result of a mathematical expression.',
+      description: 'Calculate result of a mathematical expression.',
       name: CalculatorApiName.calculate,
       parameters: {
         additionalProperties: false,
@@ -17,7 +17,7 @@ export const CalculatorManifest: BuiltinToolManifest = {
             type: 'string',
           },
           precision: {
-            description: 'Number of decimal places for the result (optional, defaults to 10)',
+            description: 'Number of decimal places for result (optional, defaults to 10)',
             maximum: 20,
             minimum: 0,
             type: 'number',
@@ -39,14 +39,14 @@ export const CalculatorManifest: BuiltinToolManifest = {
             type: 'string',
           },
           precision: {
-            description: 'Number of decimal places for the result (optional, defaults to 10)',
+            description: 'Number of decimal places for result (optional, defaults to 10)',
             maximum: 20,
             minimum: 0,
             type: 'number',
           },
           variables: {
             description:
-              'Key-value pairs of variables to substitute in the expression (e.g., {"x": 5, "r": 3})',
+              'Key-value pairs of variables to substitute in expression (e.g., {"x": 5, "r": 3})',
             type: 'object',
           },
         },
@@ -118,6 +118,33 @@ export const CalculatorManifest: BuiltinToolManifest = {
           },
         },
         required: ['number', 'fromBase', 'toBase'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Solve algebraic equations or systems of equations symbolically.',
+      name: CalculatorApiName.solve,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          equation: {
+            description:
+              'The equation(s) to solve. Single equation (e.g., ["x^2 + 2*x + 1 = 0"]) or system of equations (e.g., ["2*x+y=5", "x-y=1"])',
+            items: {
+              type: 'string',
+            },
+            type: 'array',
+          },
+          variable: {
+            description:
+              'Variable(s) to solve for. For single equation: array with one variable (optional, defaults to ["x"], e.g., ["x"]). For system of equations: array of variables (e.g., ["x", "y"])',
+            items: {
+              type: 'string',
+            },
+            type: 'array',
+          },
+        },
+        required: ['equation'],
         type: 'object',
       },
     },

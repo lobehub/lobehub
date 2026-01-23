@@ -1,5 +1,7 @@
 import { BaseExecutor, type BuiltinToolResult, type IBuiltinToolExecutor } from '@lobechat/types';
 import { all, create } from 'mathjs';
+// @ts-ignore - nerdamer doesn't have TypeScript definitions
+import nerdamer from 'nerdamer/all';
 
 import {
   type CalculateParams,
@@ -7,6 +9,7 @@ import {
   CalculatorIdentifier,
   type ConvertBaseParams,
   type EvaluateExpressionParams,
+  type SolveParams,
   type SortParams,
 } from '../types';
 
@@ -308,6 +311,88 @@ class CalculatorExecutor
         error: {
           message: err.message,
           type: 'ConversionError',
+        },
+        success: false,
+      };
+    }
+  };
+
+  /**
+   * Solve equation or system of equations using nerdamer
+   */
+  solve = async (params: SolveParams): Promise<BuiltinToolResult> => {
+    try {
+      const { equation, variable } = params;
+
+      let resultText: string;
+
+      if (equation.length === 1) {
+        const solveVariable = variable && variable.length > 0 ? variable[0] : 'x';
+        const result = nerdamer.solve(equation[0], solveVariable);
+        const rawResult = result.toString();
+
+        if (rawResult === '[]') {
+          return {
+            content: 'No solution found for the given equation',
+            error: {
+              message: 'No solution found',
+              type: 'SolveError',
+            },
+            success: false,
+          };
+        }
+        resultText = rawResult;
+      } else {
+        let solveVariables: string[];
+
+        if (variable && variable.length > 0) {
+          solveVariables = variable;
+        } else {
+          const allVars = new Set<string>();
+          for (const eq of equation) {
+            const nerdamerEq = nerdamer(eq);
+            const vars = nerdamerEq.variables() as string[];
+            for (const v of vars) {
+              if (v !== '') {
+                allVars.add(v);
+              }
+            }
+          }
+          solveVariables = Array.from(allVars);
+          if (solveVariables.length === 0) {
+            solveVariables = ['x'];
+          }
+        }
+
+        const result = nerdamer.solveEquations(equation, solveVariables);
+        const rawResult = result.toString();
+
+        const pairs = rawResult.split(',');
+        const solution: Record<string, string> = {};
+        for (let i = 0; i < pairs.length; i += 2) {
+          if (i + 1 < pairs.length) {
+            solution[pairs[i]] = pairs[i + 1];
+          }
+        }
+        resultText = JSON.stringify(solution, null, 2);
+      }
+
+      return {
+        content: resultText,
+        state: {
+          equation,
+          result: resultText,
+          variable,
+        },
+        success: true,
+      };
+    } catch (error) {
+      const err = error as Error;
+      return {
+        content: `Equation solver error: ${err.message}`,
+        error: {
+          message: err.message,
+          type: 'SolveError',
         },
         success: false,
       };
