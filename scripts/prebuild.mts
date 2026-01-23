@@ -25,7 +25,6 @@ if (isDesktop) {
 // Better Auth is the default auth solution when NextAuth is not explicitly enabled
 const enableNextAuth = process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1';
 const enableBetterAuth = !enableNextAuth;
-const enableAuth = true;
 
 const getCommandVersion = (command: string): string | null => {
   try {
@@ -66,7 +65,6 @@ const printEnvInfo = () => {
   console.log('\n  Auth Flags:');
   console.log(`    enableBetterAuth: ${enableBetterAuth}`);
   console.log(`    enableNextAuth: ${enableNextAuth}`);
-  console.log(`    enableAuth: ${enableAuth}`);
 
   console.log('─'.repeat(50));
 };

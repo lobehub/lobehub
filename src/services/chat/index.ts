@@ -24,7 +24,6 @@ import { merge } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
-import { enableAuth } from '@/envs/auth';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { getAgentStoreState } from '@/store/agent';
@@ -542,7 +541,7 @@ class ChatService {
      * if enable login and not signed in, return unauthorized error
      */
     const userStore = useUserStore.getState();
-    if (enableAuth && !userStore.isSignedIn) {
+    if (!userStore.isSignedIn) {
       throw AgentRuntimeError.createError(ChatErrorType.InvalidAccessCode);
     }
 

@@ -378,7 +378,6 @@ export const authEnv = getAuthConfig();
 // Better Auth is the default auth solution when NextAuth is not explicitly enabled
 export const enableNextAuth = process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1';
 export const enableBetterAuth = !enableNextAuth;
-export const enableAuth = true;
 
 // Auth headers and constants
 export const LOBE_CHAT_AUTH_HEADER = 'X-lobe-chat-auth';

@@ -16,10 +16,9 @@ vi.mock('@/libs/swr', async () => {
 });
 
 // Use vi.hoisted to ensure variables exist before vi.mock factory executes
-const { enableNextAuth, enableBetterAuth, enableAuth } = vi.hoisted(() => ({
+const { enableNextAuth, enableBetterAuth } = vi.hoisted(() => ({
   enableNextAuth: { value: false },
   enableBetterAuth: { value: false },
-  enableAuth: { value: true },
 }));
 
 vi.mock('@/envs/auth', () => ({
@@ -28,9 +27,6 @@ vi.mock('@/envs/auth', () => ({
   },
   get enableBetterAuth() {
     return enableBetterAuth.value;
-  },
-  get enableAuth() {
-    return enableAuth.value;
   },
 }));
 
@@ -56,7 +52,6 @@ afterEach(() => {
 
   enableNextAuth.value = false;
   enableBetterAuth.value = false;
-  enableAuth.value = true;
 
   // Reset store state
   useUserStore.setState({
@@ -207,22 +202,6 @@ describe('createAuthSlice', () => {
         value: originalLocation,
         writable: true,
       });
-    });
-  });
-
-  describe('enableAuth', () => {
-    it('should return true when auth is enabled', () => {
-      enableAuth.value = true;
-      const { result } = renderHook(() => useUserStore());
-
-      expect(result.current.enableAuth()).toBe(true);
-    });
-
-    it('should return false when auth is disabled', () => {
-      enableAuth.value = false;
-      const { result } = renderHook(() => useUserStore());
-
-      expect(result.current.enableAuth()).toBe(false);
     });
   });
 

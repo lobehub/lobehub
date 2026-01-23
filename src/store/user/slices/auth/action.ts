@@ -1,7 +1,7 @@
 import { type SSOProvider } from '@lobechat/types';
 import { type StateCreator } from 'zustand/vanilla';
 
-import { enableAuth, enableBetterAuth, enableNextAuth } from '@/envs/auth';
+import { enableBetterAuth, enableNextAuth } from '@/envs/auth';
 import { userService } from '@/services/user';
 
 import type { UserStore } from '../../store';
@@ -12,7 +12,6 @@ interface AuthProvidersData {
 }
 
 export interface UserAuthAction {
-  enableAuth: () => boolean;
   /**
    * Fetch auth providers (SSO accounts) for the current user
    */
@@ -66,9 +65,6 @@ export const createAuthSlice: StateCreator<
   [],
   UserAuthAction
 > = (set, get) => ({
-  enableAuth: () => {
-    return enableAuth;
-  },
   fetchAuthProviders: async () => {
     // Skip if already loaded
     if (get().isLoadedAuthProviders) return;

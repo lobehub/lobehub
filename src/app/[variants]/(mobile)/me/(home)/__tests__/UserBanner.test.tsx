@@ -31,37 +31,12 @@ vi.mock('@/const/version', () => ({
   isDesktop: false,
 }));
 
-// Use vi.hoisted to ensure variables exist before vi.mock factory executes
-const { enableAuth } = vi.hoisted(() => ({
-  enableAuth: { value: true },
-}));
-
-vi.mock('@/envs/auth', () => ({
-  get enableAuth() {
-    return enableAuth.value;
-  },
-}));
-
 afterEach(() => {
-  enableAuth.value = true;
   mockNavigate.mockReset();
 });
 
 describe('UserBanner', () => {
-  it('should render UserInfo and DataStatistics when auth is disabled', () => {
-    act(() => {
-      useUserStore.setState({ isSignedIn: false });
-    });
-    enableAuth.value = false;
-
-    render(<UserBanner />);
-
-    expect(screen.getByText('Mocked UserInfo')).toBeInTheDocument();
-    expect(screen.getByText('Mocked DataStatistics')).toBeInTheDocument();
-    expect(screen.queryByText('Mocked UserLoginOrSignup')).not.toBeInTheDocument();
-  });
-
-  it('should render UserInfo and DataStatistics when user is logged in with auth enabled', () => {
+  it('should render UserInfo and DataStatistics when user is logged in', () => {
     act(() => {
       useUserStore.setState({ isSignedIn: true });
     });
@@ -73,7 +48,7 @@ describe('UserBanner', () => {
     expect(screen.queryByText('Mocked UserLoginOrSignup')).not.toBeInTheDocument();
   });
 
-  it('should render UserLoginOrSignup when user is not logged in with auth enabled', () => {
+  it('should render UserLoginOrSignup when user is not logged in', () => {
     act(() => {
       useUserStore.setState({ isSignedIn: false });
     });

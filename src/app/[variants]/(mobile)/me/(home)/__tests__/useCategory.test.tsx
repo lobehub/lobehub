@@ -22,17 +22,6 @@ vi.mock('react-i18next', () => ({
   })),
 }));
 
-// Use vi.hoisted to ensure variables exist before vi.mock factory executes
-const { enableAuth } = vi.hoisted(() => ({
-  enableAuth: { value: true },
-}));
-
-vi.mock('@/envs/auth', () => ({
-  get enableAuth() {
-    return enableAuth.value;
-  },
-}));
-
 // Mock version constants
 vi.mock('@/const/version', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/const/version')>();
@@ -43,7 +32,6 @@ vi.mock('@/const/version', async (importOriginal) => {
 });
 
 afterEach(() => {
-  enableAuth.value = true;
   mockNavigate.mockReset();
 });
 
@@ -52,7 +40,6 @@ describe('useCategory', () => {
     act(() => {
       useUserStore.setState({ isSignedIn: true });
     });
-    enableAuth.value = true;
 
     const mockOpenChangelogModal = vi.fn();
     const { result } = renderHook(() => useCategory(mockOpenChangelogModal), { wrapper });
@@ -71,7 +58,6 @@ describe('useCategory', () => {
     act(() => {
       useUserStore.setState({ isSignedIn: false });
     });
-    enableAuth.value = true;
 
     const mockOpenChangelogModal = vi.fn();
     const { result } = renderHook(() => useCategory(mockOpenChangelogModal), { wrapper });

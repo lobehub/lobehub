@@ -7,7 +7,6 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { fetchErrorNotification } from '@/components/Error/fetchErrorNotification';
-import { enableAuth } from '@/envs/auth';
 import UserAvatar from '@/features/User/UserAvatar';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
@@ -54,7 +53,7 @@ const AvatarRow = ({ mobile }: AvatarRowProps) => {
     [updateAvatar],
   );
 
-  const canUpload = !enableAuth || isLogin;
+  const canUpload = isLogin;
 
   const avatarContent = canUpload ? (
     <Spin indicator={<LoadingOutlined spin />} spinning={uploading}>
