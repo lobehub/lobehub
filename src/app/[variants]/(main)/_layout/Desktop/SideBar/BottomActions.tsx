@@ -8,6 +8,8 @@ import { Flexbox } from 'react-layout-kit';
 import { GITHUB } from '@/const/url';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
+import PHLaunch from './PHLaunch';
+
 const ICON_SIZE: ActionIconProps['size'] = {
   blockSize: 36,
   size: 20,
@@ -39,6 +41,7 @@ const BottomActions = memo(() => {
           tooltipProps={{ placement: 'right' }}
         />
       </Link>
+      <PHLaunch />
     </Flexbox>
   );
 });

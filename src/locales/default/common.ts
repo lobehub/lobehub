@@ -287,6 +287,11 @@ export default {
   },
   oauth: 'SSO 登录',
   officialSite: '官方网站',
+  phLaunch: {
+    action: '前往支持',
+    body: '我们正在 Product Hunt 上发布！如果你喜欢 LobeChat，请给我们投票支持！',
+    title: 'LobeChat 正在 Product Hunt 上发布！',
+  },
   ok: '确定',
   password: '密码',
   pin: '置顶',
