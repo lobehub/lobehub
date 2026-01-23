@@ -184,7 +184,9 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId, isHovered }) => {
 
   const [toggleRightPanel] = useGlobalStore((s) => [s.toggleRightPanel]);
 
-  const hideHistory = !topics || topics.length === 0;
+  // topics === undefined means still loading, topics.length === 0 means confirmed empty
+  const isLoadingTopics = topics === undefined;
+  const hideHistory = !isLoadingTopics && topics.length === 0;
 
   return (
     <NavHeader
@@ -227,7 +229,7 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId, isHovered }) => {
                   </Flexbox>
                 }
                 onOpenChange={setTopicPopoverOpen}
-                open={topicPopoverOpen}
+                open={isLoadingTopics ? false : topicPopoverOpen}
                 placement="bottomRight"
                 styles={{
                   content: {
@@ -237,7 +239,12 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId, isHovered }) => {
                 }}
                 trigger="click"
               >
-                <ActionIcon icon={Clock3Icon} size={DESKTOP_HEADER_ICON_SIZE} />
+                <ActionIcon
+                  disabled={isLoadingTopics}
+                  icon={Clock3Icon}
+                  loading={isLoadingTopics}
+                  size={DESKTOP_HEADER_ICON_SIZE}
+                />
               </Popover>
             )}
           </div>
