@@ -90,6 +90,32 @@ const printEnvInfo = () => {
   console.log(`    AUTH_EMAIL_VERIFICATION: ${process.env.AUTH_EMAIL_VERIFICATION ?? '(not set)'}`);
   console.log(`    ENABLE_MAGIC_LINK: ${process.env.ENABLE_MAGIC_LINK ?? '(not set)'}`);
 
+  // Check SSO providers configuration
+  const ssoProviders = process.env.AUTH_SSO_PROVIDERS;
+  console.log(`    AUTH_SSO_PROVIDERS: ${ssoProviders ?? '(not set)'}`);
+
+  if (ssoProviders) {
+    const getEnvPrefix = (provider: string) => `AUTH_${provider.toUpperCase().replaceAll('-', '_')}`;
+
+    const providers = ssoProviders.split(/[,，]/).map(p => p.trim()).filter(Boolean);
+    const missingProviders: string[] = [];
+
+    for (const provider of providers) {
+      const envPrefix = getEnvPrefix(provider);
+      const hasEnvVar = Object.keys(process.env).some(key => key.startsWith(envPrefix));
+      if (!hasEnvVar) {
+        missingProviders.push(provider);
+      }
+    }
+
+    if (missingProviders.length > 0) {
+      console.log('\n  ⚠️  SSO Provider Configuration Warning:');
+      for (const provider of missingProviders) {
+        console.log(`    - "${provider}" is configured but no ${getEnvPrefix(provider)}_* env vars found`);
+      }
+    }
+  }
+
   console.log('─'.repeat(50));
 };
 
