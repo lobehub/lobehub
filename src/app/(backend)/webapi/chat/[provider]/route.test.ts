@@ -23,6 +23,14 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   createTraceOptions: vi.fn().mockReturnValue({}),
 }));
 
+vi.mock('@/envs/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/envs/auth')>();
+  return {
+    ...actual,
+    enableBetterAuth: false,
+  };
+});
+
 // 模拟请求和响应
 let request: Request;
 beforeEach(() => {
