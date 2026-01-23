@@ -48,6 +48,31 @@ describe('resolveAgentConfig', () => {
       expect(result.isBuiltinAgent).toBe(false);
     });
 
+    it('should treat agent with non-builtin slug as regular agent', () => {
+      // Agent has a random slug that is NOT a valid builtin agent slug
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
+        () => 'sister-religious-mostly-effort',
+      );
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.isBuiltinAgent).toBe(false);
+      expect(result.slug).toBeUndefined();
+      expect(result.plugins).toEqual(['plugin-a', 'plugin-b']);
+    });
+
+    it('should treat agent with random slug as regular agent', () => {
+      // Another example of random/custom slug
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
+        () => 'my-custom-agent-slug',
+      );
+
+      const result = resolveAgentConfig({ agentId: 'test-agent' });
+
+      expect(result.isBuiltinAgent).toBe(false);
+      expect(result.slug).toBeUndefined();
+    });
+
     it('should return empty array when agent config has no plugins', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
         () =>
@@ -701,7 +726,7 @@ describe('resolveAgentConfig', () => {
       it('should use group-supervisor slug even when agent has its own slug in group scope', () => {
         // Supervisor agent has its own slug (e.g., from being a builtin agent)
         vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
-          () => 'some-agent-slug',
+          () => 'agent-builder',
         );
 
         // Mock: groupById returns the group
@@ -736,7 +761,7 @@ describe('resolveAgentConfig', () => {
       });
 
       it('should use agent own slug when scope is not group', () => {
-        // Supervisor agent has its own slug
+        // Supervisor agent has its own valid builtin slug (e.g., agent-builder)
         vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
           () => 'some-agent-slug',
         );
@@ -759,13 +784,13 @@ describe('resolveAgentConfig', () => {
 
         // Should use agent's own slug since scope is not 'group'
         expect(result.isBuiltinAgent).toBe(true);
-        expect(result.slug).toBe('some-agent-slug');
+        expect(result.slug).toBe('agent-builder');
       });
 
       it('should use agent own slug when groupId is not provided', () => {
-        // Supervisor agent has its own slug
+        // Supervisor agent has its own valid builtin slug
         vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
-          () => 'some-agent-slug',
+          () => 'agent-builder',
         );
 
         vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
@@ -780,7 +805,29 @@ describe('resolveAgentConfig', () => {
 
         // Should use agent's own slug since no groupId
         expect(result.isBuiltinAgent).toBe(true);
-        expect(result.slug).toBe('some-agent-slug');
+        expect(result.slug).toBe('agent-builder');
+      });
+
+      it('should treat supervisor agent with non-builtin slug as regular agent when not in group scope', () => {
+        // Supervisor agent has a random non-builtin slug
+        vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
+          () => 'random-custom-slug',
+        );
+
+        // Mock: groupById returns the group
+        vi.spyOn(agentGroupSelectors.agentGroupByIdSelectors, 'groupById').mockReturnValue(
+          () => mockGroupWithSupervisor as any,
+        );
+
+        const result = resolveAgentConfig({
+          agentId: 'supervisor-agent-id',
+          groupId: 'group-123',
+          scope: 'main', // Not 'group' scope
+        });
+
+        // Should be treated as regular agent since slug is not a valid builtin slug
+        expect(result.isBuiltinAgent).toBe(false);
+        expect(result.slug).toBeUndefined();
       });
     });
 
@@ -1016,7 +1063,7 @@ describe('resolveAgentConfig', () => {
 
     it('should filter lobe-gtd for builtin agent when isSubTask is true', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
-        () => 'some-builtin-slug',
+        () => 'agent-builder',
       );
       vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
         plugins: ['lobe-gtd', 'runtime-plugin'],
@@ -1034,7 +1081,7 @@ describe('resolveAgentConfig', () => {
 
     it('should keep lobe-gtd for builtin agent when isSubTask is false', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
-        () => 'some-builtin-slug',
+        () => 'agent-builder',
       );
       vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
         plugins: ['lobe-gtd', 'runtime-plugin'],
@@ -1089,7 +1136,7 @@ describe('resolveAgentConfig', () => {
 
     it('should return empty plugins for builtin agent when disableTools is true', () => {
       vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
-        () => 'some-builtin-slug',
+        () => 'agent-builder',
       );
       vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
         plugins: ['runtime-plugin-1', 'runtime-plugin-2'],

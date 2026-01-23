@@ -1,6 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
+import debug from 'debug';
 import { Suspense, memo, useMemo } from 'react';
 
 import ChatMiniMap from '@/features/ChatMiniMap';
@@ -17,6 +18,8 @@ import MessageFromUrl from './MainChatInput/MessageFromUrl';
 import ThreadHydration from './ThreadHydration';
 import { useActionsBarConfig } from './useActionsBarConfig';
 import { useAgentContext } from './useAgentContext';
+
+const log = debug('lobe-render:agent:ConversationArea');
 
 /**
  * ConversationArea
@@ -35,6 +38,7 @@ const Conversation = memo(() => {
   );
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
+  log('contextKey %s: %o', chatKey, messages);
 
   // Get operation state from ChatStore for reactive updates
   const operationState = useOperationState(context);

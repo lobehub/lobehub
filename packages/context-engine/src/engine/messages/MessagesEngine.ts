@@ -9,7 +9,6 @@ import {
   GroupMessageFlattenProcessor,
   GroupOrchestrationFilterProcessor,
   GroupRoleTransformProcessor,
-  HistoryTruncateProcessor,
   InputTemplateProcessor,
   MessageCleanupProcessor,
   MessageContentProcessor,
@@ -113,8 +112,6 @@ export class MessagesEngine {
       provider,
       systemRole,
       inputTemplate,
-      enableHistoryCount,
-      historyCount,
       historySummary,
       formatHistorySummary,
       knowledge,
@@ -145,16 +142,6 @@ export class MessagesEngine {
     const isGTDTodoEnabled = gtd?.enabled && gtd?.todos;
 
     return [
-      // =============================================
-      // Phase 1: History Management
-      // =============================================
-
-      // 1. History truncation (MUST be first, before any message injection)
-      new HistoryTruncateProcessor({
-        enableHistoryCount,
-        historyCount,
-      }),
-
       // =============================================
       // Phase 2: System Role Injection
       // =============================================
