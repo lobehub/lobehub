@@ -12,6 +12,7 @@ import DebugInspector, {
   AT_BOTTOM_THRESHOLD,
   OPEN_DEV_INSPECTOR,
 } from './AutoScroll/DebugInspector';
+import BackBottom from './BackBottom';
 
 interface VirtualizedListProps {
   dataSource: string[];
@@ -132,6 +133,9 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     }
   }, []);
 
+  const atBottom = useConversationStore(virtuaListSelectors.atBottom);
+  const scrollToBottom = useConversationStore((s) => s.scrollToBottom);
+
   return (
     <div style={{ height: '100%', position: 'relative' }}>
       {/* Debug Inspector - 放在 VList 外面，不会被虚拟列表回收 */}
@@ -146,6 +150,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
       >
         {(messageId, index): ReactElement => {
           const isAgentCouncil = messageId.includes('agentCouncil');
+          const isLastItem = index === dataSource.length - 1;
           const content = itemContent(index, messageId);
 
           if (isAgentCouncil) {
@@ -153,6 +158,8 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
             return (
               <div key={messageId} style={{ position: 'relative', width: '100%' }}>
                 {content}
+                {/* AutoScroll 放在最后一个 Item 里面，这样只有当最后一个 Item 可见时才会触发自动滚动 */}
+                {isLastItem && <AutoScroll />}
               </div>
             );
           }
@@ -160,13 +167,14 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
           return (
             <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
               {content}
+              {/* AutoScroll 放在最后一个 Item 里面，这样只有当最后一个 Item 可见时才会触发自动滚动 */}
+              {isLastItem && <AutoScroll />}
             </WideScreenContainer>
           );
         }}
       </VList>
-      {/* AutoScroll 放在 VList 外面，不会被虚拟列表回收 */}
-      {/* 这样当用户向上滚动时，BackBottom 按钮仍然可见 */}
-      <AutoScroll />
+      {/* BackBottom 放在 VList 外面，这样无论滚动到哪里都能看到 */}
+      <BackBottom atBottom={atBottom} onScrollToBottom={() => scrollToBottom(true)} visible={!atBottom} />
     </div>
   );
 }, isEqual);

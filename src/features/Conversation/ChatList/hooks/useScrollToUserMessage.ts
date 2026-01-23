@@ -12,7 +12,9 @@ interface UseScrollToUserMessageOptions {
   /**
    * Function to scroll to a specific index
    */
-  scrollToIndex: ((index: number, options?: { align?: string; smooth?: boolean }) => void) | null;
+  scrollToIndex:
+    | ((index: number, options?: { align?: 'start' | 'center' | 'end'; smooth?: boolean }) => void)
+    | null;
 }
 
 /**
