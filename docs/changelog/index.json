@@ -3,6 +3,66 @@
   "cloud": [],
   "community": [
     {
+      "image": "https://placeholder.com/mcp",
+      "id": "2025-12-08-mcp",
+      "date": "2025-12-08",
+      "versionRange": ["2.0.0", "2.1.0"]
+    },
+    {
+      "image": "https://placeholder.com/comfy-ui",
+      "id": "2025-11-08-comfy-ui",
+      "date": "2025-11-08",
+      "versionRange": ["2.0.0", "2.1.0"]
+    },
+    {
+      "image": "https://placeholder.com/python",
+      "id": "2025-10-08-python",
+      "date": "2025-10-08",
+      "versionRange": ["2.0.0", "2.1.0"]
+    },
+    {
+      "image": "https://placeholder.com/gemini",
+      "id": "2025-09-08-gemini",
+      "date": "2025-09-08",
+      "versionRange": ["2.0.0", "2.1.0"]
+    },
+    {
+      "image": "https://placeholder.com/image-generation",
+      "id": "2025-08-08-image-generation",
+      "date": "2025-08-08",
+      "versionRange": ["2.0.0", "2.1.0"]
+    },
+    {
+      "image": "https://placeholder.com/mcp-market",
+      "id": "2025-07-08-mcp-market",
+      "date": "2025-07-08",
+      "versionRange": ["2.0.0", "2.1.0"]
+    },
+    {
+      "image": "https://placeholder.com/claude-4",
+      "id": "2025-06-08-claude-4",
+      "date": "2025-06-08",
+      "versionRange": ["2.0.0", "2.1.0"]
+    },
+    {
+      "image": "https://placeholder.com/desktop-app",
+      "id": "2025-05-08-desktop-app",
+      "date": "2025-05-08",
+      "versionRange": ["2.0.0", "2.1.0"]
+    },
+    {
+      "image": "https://placeholder.com/exports",
+      "id": "2025-04-06-exports",
+      "date": "2025-04-06",
+      "versionRange": ["1.67.2", "1.77.17"]
+    },
+    {
+      "image": "https://placeholder.com/new-models",
+      "id": "2025-03-02-new-models",
+      "date": "2025-03-02",
+      "versionRange": ["1.49.13", "1.67.2"]
+    },
+    {
       "image": "https://github.com/user-attachments/assets/5fe4c373-ebd0-42a9-bdca-0ab7e0a2e747",
       "id": "2025-02-02-deepseek-r1",
       "date": "2025-02-02",
