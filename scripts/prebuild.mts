@@ -1,10 +1,15 @@
 import { execSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+// Use createRequire for CommonJS module compatibility
+const require = createRequire(import.meta.url);
+const { checkDeprecatedClerkEnv } = require('./_shared/checkDeprecatedClerkEnv.js');
 
 const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP_APP === '1';
 const isBundleAnalyzer = process.env.ANALYZE === 'true' && process.env.CI === 'true';
@@ -17,13 +22,9 @@ if (isDesktop) {
 }
 
 // Auth flags - use process.env directly for build-time dead code elimination
-const enableClerk =
-  process.env.NEXT_PUBLIC_ENABLE_CLERK_AUTH === '1'
-    ? true
-    : !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-const enableBetterAuth = process.env.NEXT_PUBLIC_ENABLE_BETTER_AUTH === '1';
+// Better Auth is the default auth solution when NextAuth is not explicitly enabled
 const enableNextAuth = process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1';
-const enableAuth = enableClerk || enableBetterAuth || enableNextAuth || false;
+const enableBetterAuth = !enableNextAuth;
 
 const getCommandVersion = (command: string): string | null => {
   try {
@@ -62,10 +63,8 @@ const printEnvInfo = () => {
 
   // Auth flags
   console.log('\n  Auth Flags:');
-  console.log(`    enableClerk: ${enableClerk}`);
   console.log(`    enableBetterAuth: ${enableBetterAuth}`);
   console.log(`    enableNextAuth: ${enableNextAuth}`);
-  console.log(`    enableAuth: ${enableAuth}`);
 
   console.log('─'.repeat(50));
 };
@@ -161,6 +160,9 @@ export const runPrebuild = async (targetDir: string = 'src') => {
 const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);
 
 if (isMainModule) {
+  // Check for deprecated Clerk env vars first - fail fast if found
+  checkDeprecatedClerkEnv();
+
   printEnvInfo();
   // 执行删除操作
   console.log('\nStarting prebuild cleanup...');

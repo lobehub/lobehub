@@ -189,7 +189,7 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId, isHovered }) => {
           <div className={cx(styles.fadeContainer, isHovered ? styles.fadeIn : styles.fadeOut)}>
             <ActionIcon
               icon={PlusIcon}
-              onClick={() => switchTopic()}
+              onClick={() => switchTopic(null, { scope: 'page' })}
               size={DESKTOP_HEADER_ICON_SIZE}
               title={t('actions.addNewTopic')}
             />

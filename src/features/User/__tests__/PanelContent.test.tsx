@@ -68,19 +68,11 @@ vi.mock('@/const/version', () => ({
 }));
 
 // Use vi.hoisted to ensure variables exist before vi.mock factory executes
-const { enableAuth, enableClerk, enableNextAuth } = vi.hoisted(() => ({
-  enableAuth: { value: true },
-  enableClerk: { value: false },
+const { enableNextAuth } = vi.hoisted(() => ({
   enableNextAuth: { value: false },
 }));
 
 vi.mock('@/envs/auth', () => ({
-  get enableAuth() {
-    return enableAuth.value;
-  },
-  get enableClerk() {
-    return enableClerk.value;
-  },
   get enableNextAuth() {
     return enableNextAuth.value;
   },
@@ -130,32 +122,6 @@ describe('PanelContent', () => {
     });
 
     it('should render BrandWatermark when user is not signed in', () => {
-      act(() => {
-        useUserStore.setState({ isSignedIn: false });
-      });
-
-      renderWithRouter(<PanelContent closePopover={closePopover} />);
-
-      expect(screen.getByText('Mocked BrandWatermark')).toBeInTheDocument();
-    });
-  });
-
-  describe('disable auth', () => {
-    it('should render UserInfo', () => {
-      act(() => {
-        useUserStore.setState({ isSignedIn: true });
-      });
-
-      renderWithRouter(<PanelContent closePopover={closePopover} />);
-
-      expect(screen.getByText('Mocked UserInfo')).toBeInTheDocument();
-      expect(screen.getByText('Mocked DataStatistics')).toBeInTheDocument();
-      expect(screen.queryByText('Mocked SignInBlock')).not.toBeInTheDocument();
-    });
-
-    it('should render BrandWatermark when disable auth', () => {
-      enableAuth.value = false;
-
       act(() => {
         useUserStore.setState({ isSignedIn: false });
       });

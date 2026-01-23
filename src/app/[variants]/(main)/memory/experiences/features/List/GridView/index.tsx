@@ -1,15 +1,15 @@
+import type { ExperienceListItem } from '@lobechat/types';
 import { memo } from 'react';
 
-import { type DisplayExperienceMemory } from '@/database/repositories/userMemory';
 import { useUserMemoryStore } from '@/store/userMemory';
 
 import { GridView } from '../../../../features/GridView';
 import ExperienceCard from './ExperienceCard';
 
 interface GridViewProps {
-  experiences: DisplayExperienceMemory[];
+  experiences: ExperienceListItem[];
   isLoading?: boolean;
-  onClick: (experience: DisplayExperienceMemory) => void;
+  onClick: (experience: ExperienceListItem) => void;
 }
 
 const ExperiencesGridView = memo<GridViewProps>(({ experiences, isLoading, onClick }) => {

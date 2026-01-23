@@ -1,15 +1,15 @@
+import type { IdentityListItem } from '@lobechat/types';
 import { memo } from 'react';
 
-import { type DisplayIdentityMemory } from '@/database/repositories/userMemory';
 import { useUserMemoryStore } from '@/store/userMemory';
 
 import { GridView } from '../../../../features/GridView';
 import IdentityCard from './IdentityCard';
 
 interface GridViewProps {
-  identities: DisplayIdentityMemory[];
+  identities: IdentityListItem[];
   isLoading?: boolean;
-  onClick?: (identity: DisplayIdentityMemory) => void;
+  onClick?: (identity: IdentityListItem) => void;
 }
 
 const IdentityGridView = memo<GridViewProps>(({ identities, isLoading, onClick }) => {

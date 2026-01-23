@@ -1,5 +1,4 @@
 // @vitest-environment node
-import { getAuth } from '@clerk/nextjs/server';
 import { LobeRuntimeAI, ModelRuntime } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { getXorPayload } from '@lobechat/utils/server';
@@ -10,10 +9,6 @@ import { LOBE_CHAT_AUTH_HEADER, OAUTH_AUTHORIZED } from '@/envs/auth';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { POST } from './route';
-
-vi.mock('@clerk/nextjs/server', () => ({
-  getAuth: vi.fn(),
-}));
 
 vi.mock('@/app/(backend)/middleware/auth/utils', () => ({
   checkAuthMethod: vi.fn(),
@@ -28,17 +23,11 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   createTraceOptions: vi.fn().mockReturnValue({}),
 }));
 
-// Use vi.hoisted to ensure mockState is initialized before mocks are set up
-const mockState = vi.hoisted(() => ({ enableClerk: false }));
-
-// 模拟 @/const/auth 模块
 vi.mock('@/envs/auth', async (importOriginal) => {
-  const modules = await importOriginal();
+  const actual = await importOriginal<typeof import('@/envs/auth')>();
   return {
-    ...(modules as any),
-    get enableClerk() {
-      return mockState.enableClerk;
-    },
+    ...actual,
+    enableBetterAuth: false,
   };
 });
 
@@ -58,7 +47,6 @@ beforeEach(() => {
 afterEach(() => {
   // 清除模拟调用历史
   vi.clearAllMocks();
-  mockState.enableClerk = false;
 });
 
 describe('POST handler', () => {
@@ -105,42 +93,6 @@ describe('POST handler', () => {
           provider: 'test-provider',
         },
         errorType: 401,
-      });
-    });
-
-    it('should have pass clerk Auth when enable clerk', async () => {
-      mockState.enableClerk = true;
-
-      vi.mocked(getXorPayload).mockReturnValueOnce({
-        apiKey: 'test-api-key',
-        azureApiVersion: 'v1',
-      });
-
-      const mockParams = Promise.resolve({ provider: 'test-provider' });
-      vi.mocked(getAuth).mockReturnValue({} as any);
-      vi.mocked(checkAuthMethod).mockReset();
-
-      const mockRuntime: LobeRuntimeAI = { baseURL: 'abc', chat: vi.fn() };
-
-      // Mock initModelRuntimeFromDB
-      vi.mocked(initModelRuntimeFromDB).mockResolvedValue(new ModelRuntime(mockRuntime));
-
-      const request = new Request(new URL('https://test.com'), {
-        method: 'POST',
-        body: JSON.stringify({ model: 'test-model' }),
-        headers: {
-          [LOBE_CHAT_AUTH_HEADER]: 'some-valid-token',
-          [OAUTH_AUTHORIZED]: '1',
-        },
-      });
-
-      await POST(request, { params: mockParams });
-
-      expect(checkAuthMethod).toBeCalledWith({
-        apiKey: 'test-api-key',
-        betterAuthAuthorized: false,
-        clerkAuth: {},
-        nextAuthAuthorized: true,
       });
     });
 

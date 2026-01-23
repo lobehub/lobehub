@@ -6,7 +6,6 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 
-import { enableAuth } from '@/envs/auth';
 import { useShowMobileWorkspace } from '@/hooks/useShowMobileWorkspace';
 import { type SettingsTabs } from '@/store/global/initialState';
 import { useSessionStore } from '@/store/session';
@@ -16,7 +15,7 @@ const Header = memo(() => {
   const { t } = useTranslation('setting');
   const showMobileWorkspace = useShowMobileWorkspace();
   const navigate = useNavigate();
-  const params = useParams<{ providerId?: string, tab?: string; }>();
+  const params = useParams<{ providerId?: string; tab?: string }>();
 
   const isSessionActive = useSessionStore((s) => !!s.activeId);
   const isProvider = params.providerId && params.providerId !== 'all';
@@ -27,7 +26,7 @@ const Header = memo(() => {
     } else if (isProvider) {
       navigate('/settings/provider/all');
     } else {
-      navigate(enableAuth ? '/me/settings' : '/me');
+      navigate('/me/settings');
     }
   };
 

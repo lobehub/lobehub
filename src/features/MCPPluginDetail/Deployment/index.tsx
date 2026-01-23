@@ -23,12 +23,12 @@ import {
   Package,
   TerminalIcon,
 } from 'lucide-react';
-import { markdownToTxt } from 'markdown-to-txt';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Descriptions from '@/components/Descriptions';
 import InlineTable from '@/components/InlineTable';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import Title from '../../../app/[variants]/(main)/community/features/Title';
 import InstallationIcon from '../../../components/MCPDepsIcon';

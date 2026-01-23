@@ -1,8 +1,8 @@
 'use client';
 
+import type { ExperienceListItem } from '@lobechat/types';
 import { memo } from 'react';
 
-import { type DisplayExperienceMemory } from '@/database/repositories/userMemory';
 import { useUserMemoryStore } from '@/store/userMemory';
 
 import { TimelineView as GenericTimelineView } from '../../../../features/TimeLineView';
@@ -10,9 +10,9 @@ import { PeriodHeader, TimelineItemWrapper } from '../../../../features/TimeLine
 import ExperienceCard from './ExperienceCard';
 
 interface ExperienceTimelineViewProps {
-  experiences: DisplayExperienceMemory[];
+  experiences: ExperienceListItem[];
   isLoading?: boolean;
-  onCardClick: (experience: DisplayExperienceMemory) => void;
+  onCardClick: (experience: ExperienceListItem) => void;
 }
 
 const ExperienceTimelineView = memo<ExperienceTimelineViewProps>(

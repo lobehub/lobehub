@@ -1,7 +1,4 @@
 {
-  "clerkAuth.loginSuccess.action": "Continuer la session",
-  "clerkAuth.loginSuccess.desc": "{{greeting}}, ravi de vous retrouver. Reprenons là où nous nous étions arrêtés.",
-  "clerkAuth.loginSuccess.title": "Bon retour, {{nickName}}",
   "error.backHome": "Retour à l'accueil",
   "error.desc": "Réessayez plus tard ou revenez dans un territoire connu.",
   "error.retry": "Recharger",
@@ -87,7 +84,6 @@
   "response.InsufficientQuota": "Désolé, le quota de cette clé a été atteint. Veuillez vérifier votre solde ou augmenter le quota.",
   "response.InvalidAccessCode": "Code d'accès invalide ou vide. Veuillez entrer le bon code ou ajouter une clé API personnalisée.",
   "response.InvalidBedrockCredentials": "Échec de l'authentification Bedrock. Veuillez vérifier vos identifiants et réessayer.",
-  "response.InvalidClerkUser": "Désolé, vous n'êtes pas connecté. Veuillez vous connecter ou créer un compte.",
   "response.InvalidComfyUIArgs": "Configuration ComfyUI invalide. Veuillez vérifier les paramètres et réessayer.",
   "response.InvalidGithubToken": "Le jeton GitHub est incorrect ou vide. Veuillez le vérifier et réessayer.",
   "response.InvalidOllamaArgs": "Configuration Ollama invalide. Veuillez vérifier et réessayer.",

@@ -27,7 +27,6 @@ const userMemoryProcedure = authedProcedure.use(serverDatabase).use(async (opts)
 
 export const userMemoryRouter = router({
   // ============ Identity CRUD ============
-
   createIdentity: userMemoryProcedure
     .input(CreateUserMemoryIdentitySchema)
     .mutation(async ({ ctx, input }) => {
@@ -81,6 +80,11 @@ export const userMemoryRouter = router({
 
   getIdentities: userMemoryProcedure.query(async ({ ctx }) => {
     return ctx.userMemoryModel.getAllIdentities();
+  }),
+
+  // ============ Persona ============
+  getPersona: userMemoryProcedure.query(async () => {
+    return { content: '', summary: '' };
   }),
 
   getPreferences: userMemoryProcedure.query(async ({ ctx }) => {

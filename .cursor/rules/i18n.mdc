@@ -79,6 +79,6 @@ t('common:save')
 
 ## Available Namespaces
 
-auth, authError, changelog, chat, clerk, color, **common**, components, discover, editor, electron, error, file, home, hotkey, image, knowledgeBase, labs, marketAuth, memory, metadata, migration, modelProvider, models, oauth, onboarding, plugin, portal, providers, ragEval, **setting**, subscription, thread, tool, topic, welcome
+auth, authError, changelog, chat, color, **common**, components, discover, editor, electron, error, file, home, hotkey, image, knowledgeBase, labs, marketAuth, memory, metadata, migration, modelProvider, models, oauth, onboarding, plugin, portal, providers, ragEval, **setting**, subscription, thread, tool, topic, welcome
 
 **Most used:** `common` (shared UI), `chat` (chat features), `setting` (settings)

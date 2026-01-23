@@ -60,7 +60,7 @@ describe('RemoteServerConfigCtr', () => {
     ipcMainHandleMock.mockClear();
     mockStoreManager.get.mockReturnValue({
       active: false,
-      storageMode: 'local',
+      storageMode: 'cloud',
     });
     controller = new RemoteServerConfigCtr(mockApp);
   });
@@ -85,7 +85,7 @@ describe('RemoteServerConfigCtr', () => {
     it('should update configuration', async () => {
       const prevConfig: DataSyncConfig = {
         active: false,
-        storageMode: 'local',
+        storageMode: 'cloud',
       };
       mockStoreManager.get.mockReturnValue(prevConfig);
 
@@ -195,7 +195,7 @@ describe('RemoteServerConfigCtr', () => {
             refreshToken: Buffer.from('stored-refresh-token').toString('base64'),
           };
         }
-        return { active: false, storageMode: 'local' };
+        return { active: false, storageMode: 'cloud' };
       });
 
       // Create new controller to test loading from store
@@ -210,7 +210,7 @@ describe('RemoteServerConfigCtr', () => {
         if (key === 'encryptedTokens') {
           return null;
         }
-        return { active: false, storageMode: 'local' };
+        return { active: false, storageMode: 'cloud' };
       });
 
       const newController = new RemoteServerConfigCtr(mockApp);
@@ -243,7 +243,7 @@ describe('RemoteServerConfigCtr', () => {
             refreshToken: 'invalid-encrypted-token',
           };
         }
-        return { active: false, storageMode: 'local' };
+        return { active: false, storageMode: 'cloud' };
       });
 
       const newController = new RemoteServerConfigCtr(mockApp);
@@ -273,7 +273,7 @@ describe('RemoteServerConfigCtr', () => {
         if (key === 'encryptedTokens') {
           return null;
         }
-        return { active: false, storageMode: 'local' };
+        return { active: false, storageMode: 'cloud' };
       });
 
       const newController = new RemoteServerConfigCtr(mockApp);
@@ -417,7 +417,7 @@ describe('RemoteServerConfigCtr', () => {
     it('should return error when remote server is not active', async () => {
       mockStoreManager.get.mockImplementation((key) => {
         if (key === 'dataSyncConfig') {
-          return { active: false, storageMode: 'local' };
+          return { active: false, storageMode: 'cloud' };
         }
         return null;
       });
@@ -648,7 +648,7 @@ describe('RemoteServerConfigCtr', () => {
             refreshToken: 'stored-refresh',
           };
         }
-        return { active: false, storageMode: 'local' };
+        return { active: false, storageMode: 'cloud' };
       });
 
       const newController = new RemoteServerConfigCtr(mockApp);

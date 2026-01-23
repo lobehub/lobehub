@@ -1,7 +1,4 @@
 {
-  "clerkAuth.loginSuccess.action": "繼續會話",
-  "clerkAuth.loginSuccess.desc": "{{greeting}}，很高興能夠繼續為你服務。讓我們接著剛剛的話題聊下去吧",
-  "clerkAuth.loginSuccess.title": "歡迎回來， {{nickName}}",
   "error.backHome": "返回首頁",
   "error.desc": "待會再試試，或者回到已知的世界",
   "error.retry": "重新加載",
@@ -87,7 +84,6 @@
   "response.InsufficientQuota": "很抱歉，該金鑰的配額已達上限，請檢查帳戶餘額是否充足，或提升金鑰配額後再試",
   "response.InvalidAccessCode": "密碼不正確或為空，請輸入正確的訪問密碼，或添加自定義 API 金鑰",
   "response.InvalidBedrockCredentials": "Bedrock 驗證未通過，請檢查 AccessKeyId/SecretAccessKey 後重試",
-  "response.InvalidClerkUser": "很抱歉，你當前尚未登錄，請先登錄或註冊帳號後繼續操作",
   "response.InvalidComfyUIArgs": "ComfyUI 設定不正確，請檢查 ComfyUI 設定後重試",
   "response.InvalidGithubToken": "Github 個人存取權杖不正確或為空，請檢查 Github 個人存取權杖後再試一次",
   "response.InvalidOllamaArgs": "Ollama 配置不正確，請檢查 Ollama 配置後重試",

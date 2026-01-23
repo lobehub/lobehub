@@ -23,6 +23,7 @@ export interface GlobalGeneralAction {
   updateResourceManagerColumnWidth: (column: 'name' | 'date' | 'size', width: number) => void;
   updateSystemStatus: (status: Partial<SystemStatus>, action?: any) => void;
   useCheckLatestVersion: (enabledCheck?: boolean) => SWRResponse<string>;
+  useCheckServerVersion: (enabledCheck?: boolean) => SWRResponse<string | null>;
   useInitSystemStatus: () => SWRResponse;
 }
 
@@ -155,6 +156,51 @@ export const generalActionSlice: StateCreator<
 
           if (gt(latestMajorMinor, currentMajorMinor)) {
             set({ hasNewVersion: true, latestVersion: data }, false, n('checkLatestVersion'));
+          }
+        },
+      },
+    ),
+
+  useCheckServerVersion: (enabledCheck = true) =>
+    useOnlyFetchOnceSWR(
+      enabledCheck ? 'checkServerVersion' : null,
+      async () => globalService.getServerVersion(),
+      {
+        onSuccess: (data: string | null) => {
+          if (data === null) {
+            set({ isServerVersionOutdated: true }, false);
+            return;
+          }
+
+          set({ serverVersion: data }, false);
+
+          if (!valid(CURRENT_VERSION) || !valid(data)) return;
+
+          const clientVersion = parse(CURRENT_VERSION);
+          const serverVersion = parse(data);
+
+          if (!clientVersion || !serverVersion) return;
+
+          const DIFF_THRESHOLD = 5;
+          //         版本差异计算规则
+          // ┌─────────────────┬────────┬─────────┐
+          // │ 客户端 → 服务端 │ 差异值 │  结果   │
+          // ├─────────────────┼────────┼─────────┤
+          // │ 1.0.5 → 1.0.0   │ 5      │ ⚠️ 过旧 │
+          // ├─────────────────┼────────┼─────────┤
+          // │ 1.1.0 → 1.0.5   │ 5      │ ⚠️ 过旧 │
+          // ├─────────────────┼────────┼─────────┤
+          // │ 2.0.0 → 1.9.9   │ 91     │ ⚠️ 过旧 │
+          // ├─────────────────┼────────┼─────────┤
+          // │ 1.0.4 → 1.0.0   │ 4      │ ✅ 正常 │
+          // └─────────────────┴────────┴─────────┘
+          const versionDiff =
+            (clientVersion.major - serverVersion.major) * 100 +
+            (clientVersion.minor - serverVersion.minor) * 10 +
+            (clientVersion.patch - serverVersion.patch);
+
+          if (versionDiff >= DIFF_THRESHOLD) {
+            set({ isServerVersionOutdated: true }, false);
           }
         },
       },

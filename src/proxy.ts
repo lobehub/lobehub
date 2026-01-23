@@ -31,7 +31,6 @@ export const config = {
     '/desktop-onboarding(.*)',
     '/onboarding',
 
-    '/login(.*)',
     '/signup(.*)',
     '/signin(.*)',
     '/verify-email(.*)',

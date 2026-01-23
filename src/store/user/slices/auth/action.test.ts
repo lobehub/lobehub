@@ -16,25 +16,17 @@ vi.mock('@/libs/swr', async () => {
 });
 
 // Use vi.hoisted to ensure variables exist before vi.mock factory executes
-const { enableClerk, enableNextAuth, enableBetterAuth, enableAuth } = vi.hoisted(() => ({
-  enableClerk: { value: false },
+const { enableNextAuth, enableBetterAuth } = vi.hoisted(() => ({
   enableNextAuth: { value: false },
   enableBetterAuth: { value: false },
-  enableAuth: { value: true },
 }));
 
 vi.mock('@/envs/auth', () => ({
-  get enableClerk() {
-    return enableClerk.value;
-  },
   get enableNextAuth() {
     return enableNextAuth.value;
   },
   get enableBetterAuth() {
     return enableBetterAuth.value;
-  },
-  get enableAuth() {
-    return enableAuth.value;
   },
 }));
 
@@ -59,9 +51,7 @@ afterEach(() => {
   vi.clearAllMocks();
 
   enableNextAuth.value = false;
-  enableClerk.value = false;
   enableBetterAuth.value = false;
-  enableAuth.value = true;
 
   // Reset store state
   useUserStore.setState({
@@ -95,34 +85,6 @@ describe('createAuthSlice', () => {
   });
 
   describe('logout', () => {
-    it('should call clerkSignOut when Clerk is enabled', async () => {
-      enableClerk.value = true;
-
-      const clerkSignOutMock = vi.fn();
-      useUserStore.setState({ clerkSignOut: clerkSignOutMock });
-
-      const { result } = renderHook(() => useUserStore());
-
-      await act(async () => {
-        await result.current.logout();
-      });
-
-      expect(clerkSignOutMock).toHaveBeenCalled();
-    });
-
-    it('should not call clerkSignOut when Clerk is disabled', async () => {
-      const clerkSignOutMock = vi.fn();
-      useUserStore.setState({ clerkSignOut: clerkSignOutMock });
-
-      const { result } = renderHook(() => useUserStore());
-
-      await act(async () => {
-        await result.current.logout();
-      });
-
-      expect(clerkSignOutMock).not.toHaveBeenCalled();
-    });
-
     it('should call next-auth signOut when NextAuth is enabled', async () => {
       enableNextAuth.value = true;
 
@@ -152,32 +114,6 @@ describe('createAuthSlice', () => {
   });
 
   describe('openLogin', () => {
-    it('should call clerkSignIn when Clerk is enabled', async () => {
-      enableClerk.value = true;
-      const clerkSignInMock = vi.fn();
-      useUserStore.setState({ clerkSignIn: clerkSignInMock });
-
-      const { result } = renderHook(() => useUserStore());
-
-      await act(async () => {
-        await result.current.openLogin();
-      });
-
-      expect(clerkSignInMock).toHaveBeenCalled();
-    });
-    it('should not call clerkSignIn when Clerk is disabled', async () => {
-      const clerkSignInMock = vi.fn();
-      useUserStore.setState({ clerkSignIn: clerkSignInMock });
-
-      const { result } = renderHook(() => useUserStore());
-
-      await act(async () => {
-        await result.current.openLogin();
-      });
-
-      expect(clerkSignInMock).not.toHaveBeenCalled();
-    });
-
     it('should call next-auth signIn when NextAuth is enabled', async () => {
       enableNextAuth.value = true;
 
@@ -266,22 +202,6 @@ describe('createAuthSlice', () => {
         value: originalLocation,
         writable: true,
       });
-    });
-  });
-
-  describe('enableAuth', () => {
-    it('should return true when auth is enabled', () => {
-      enableAuth.value = true;
-      const { result } = renderHook(() => useUserStore());
-
-      expect(result.current.enableAuth()).toBe(true);
-    });
-
-    it('should return false when auth is disabled', () => {
-      enableAuth.value = false;
-      const { result } = renderHook(() => useUserStore());
-
-      expect(result.current.enableAuth()).toBe(false);
     });
   });
 

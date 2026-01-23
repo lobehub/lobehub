@@ -7,6 +7,10 @@ import { VList, type VListHandle } from 'virtua';
 import WideScreenContainer from '../../../WideScreenContainer';
 import { useConversationStore, virtuaListSelectors } from '../../store';
 import AutoScroll from './AutoScroll';
+import DebugInspector, {
+  AT_BOTTOM_THRESHOLD,
+  OPEN_DEV_INSPECTOR,
+} from './AutoScroll/DebugInspector';
 
 interface VirtualizedListProps {
   dataSource: string[];
@@ -23,15 +27,11 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
   const prevDataLengthRef = useRef(dataSource.length);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const atBottomThreshold = 200;
-
   // Store actions
   const registerVirtuaScrollMethods = useConversationStore((s) => s.registerVirtuaScrollMethods);
   const setScrollState = useConversationStore((s) => s.setScrollState);
   const resetVisibleItems = useConversationStore((s) => s.resetVisibleItems);
-  const scrollToBottom = useConversationStore((s) => s.scrollToBottom);
   const setActiveIndex = useConversationStore((s) => s.setActiveIndex);
-  const atBottom = useConversationStore(virtuaListSelectors.atBottom);
   const activeIndex = useConversationStore(virtuaListSelectors.activeIndex);
 
   // Check if at bottom based on scroll position
@@ -43,8 +43,8 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     const scrollSize = ref.scrollSize;
     const viewportSize = ref.viewportSize;
 
-    return scrollSize - scrollOffset - viewportSize <= atBottomThreshold;
-  }, [atBottomThreshold]);
+    return scrollSize - scrollOffset - viewportSize <= AT_BOTTOM_THRESHOLD;
+  }, [AT_BOTTOM_THRESHOLD]);
 
   // Handle scroll events
   const handleScroll = useCallback(() => {
@@ -131,6 +131,8 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
 
   return (
     <>
+      {/* Debug Inspector - 放在 VList 外面，不会被虚拟列表回收 */}
+      {OPEN_DEV_INSPECTOR && <DebugInspector />}
       <VList
         bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
         data={dataSource}
@@ -142,12 +144,14 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
         {(messageId, index): ReactElement => {
           const isAgentCouncil = messageId.includes('agentCouncil');
           const content = itemContent(index, messageId);
+          const isLast = index === dataSource.length - 1;
 
           if (isAgentCouncil) {
             // AgentCouncil needs full width for horizontal scroll
             return (
               <div key={messageId} style={{ position: 'relative', width: '100%' }}>
                 {content}
+                {isLast && <AutoScroll />}
               </div>
             );
           }
@@ -155,21 +159,11 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
           return (
             <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
               {content}
+              {isLast && <AutoScroll />}
             </WideScreenContainer>
           );
         }}
       </VList>
-      <WideScreenContainer
-        onChange={() => {
-          if (!atBottom) return;
-          setTimeout(() => scrollToBottom(true), 100);
-        }}
-        style={{
-          position: 'relative',
-        }}
-      >
-        <AutoScroll />
-      </WideScreenContainer>
     </>
   );
 }, isEqual);

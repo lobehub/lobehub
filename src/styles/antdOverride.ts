@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import { type Theme, css } from 'antd-style';
 import { rgba } from 'polished';
 
@@ -16,4 +17,12 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
     background: ${rgba(token.colorBgLayout, 0.5)} !important;
     backdrop-filter: blur(2px);
   }
+
+  ${isDesktop &&
+  css`
+    .${token.prefixCls}-modal-mask.${token.prefixCls}-modal-mask-blur {
+      background: ${rgba(token.colorBgLayout, 0.8)} !important;
+      backdrop-filter: none !important;
+    }
+  `}
 `;

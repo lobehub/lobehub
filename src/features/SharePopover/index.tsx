@@ -1,7 +1,15 @@
 'use client';
 
-import { Button, Flexbox, Popover, copyToClipboard, usePopoverContext } from '@lobehub/ui';
-import { App, Divider, Select, Skeleton, Typography } from 'antd';
+import {
+  Button,
+  Flexbox,
+  Popover,
+  Skeleton,
+  Text,
+  copyToClipboard,
+  usePopoverContext,
+} from '@lobehub/ui';
+import { App, Divider, Select } from 'antd';
 import { ExternalLinkIcon, LinkIcon, LockIcon } from 'lucide-react';
 import { type ReactNode, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +20,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
 
-import { useStyles } from './style';
+import { styles } from './style';
 
 type Visibility = 'private' | 'link';
 
@@ -23,7 +31,6 @@ interface SharePopoverContentProps {
 const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => {
   const { t } = useTranslation('chat');
   const { message, modal } = App.useApp();
-  const { styles } = useStyles();
   const [updating, setUpdating] = useState(false);
   const { close } = usePopoverContext();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -103,7 +110,7 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
   if (isLoading || !shareInfo) {
     return (
       <Flexbox className={styles.container} gap={16}>
-        <Typography.Text strong>{t('share', { ns: 'common' })}</Typography.Text>
+        <Text strong>{t('share', { ns: 'common' })}</Text>
         <Skeleton active paragraph={{ rows: 2 }} />
       </Flexbox>
     );
@@ -135,10 +142,10 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
 
   return (
     <Flexbox className={styles.container} gap={12} ref={containerRef}>
-      <Typography.Text strong>{t('shareModal.popover.title')}</Typography.Text>
+      <Text strong>{t('shareModal.popover.title')}</Text>
 
       <Flexbox gap={4}>
-        <Typography.Text type="secondary">{t('shareModal.popover.visibility')}</Typography.Text>
+        <Text type="secondary">{t('shareModal.popover.visibility')}</Text>
         <Select
           disabled={updating}
           getPopupContainer={() => containerRef.current || document.body}
@@ -164,9 +171,9 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
         />
       </Flexbox>
 
-      <Typography.Text className={styles.hint} type="secondary">
+      <Text className={styles.hint} type="secondary">
         {getVisibilityHint()}
-      </Typography.Text>
+      </Text>
 
       <Divider style={{ margin: '4px 0' }} />
 

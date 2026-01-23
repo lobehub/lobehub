@@ -1,6 +1,6 @@
 import { type StateCreator } from 'zustand/vanilla';
 
-import { type ResouceManagerMode } from '@/features/ResourceManager';
+import { type ResourceManagerMode } from '@/features/ResourceManager';
 
 import { type State, initialState } from './initialState';
 
@@ -12,7 +12,7 @@ export interface Action {
   /**
    * Set the view mode
    */
-  setMode: (mode: ResouceManagerMode) => void;
+  setMode: (mode: ResourceManagerMode) => void;
   /**
    * Set selected file IDs
    */

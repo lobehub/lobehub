@@ -10,7 +10,6 @@ import {
 import { AgentRuntimeError, type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import {
   ChatErrorType,
-  type MessageMapScope,
   type RuntimeInitialContext,
   type RuntimeStepContext,
   type TracePayload,
@@ -25,7 +24,6 @@ import { merge } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
-import { enableAuth } from '@/envs/auth';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { getAgentStoreState } from '@/store/agent';
@@ -75,7 +73,6 @@ interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'mess
    * Required to ensure config consistency and proper isSubTask filtering.
    */
   resolvedAgentConfig: ResolvedAgentConfig;
-  scope?: MessageMapScope;
   topicId?: string;
 }
 
@@ -349,6 +346,8 @@ class ChatService {
     // Get the chat config to check streaming preference
     const chatConfig = agentChatConfigSelectors.currentChatConfig(getAgentStoreState());
 
+    delete (res as any).scope;
+
     const payload = merge(
       {
         model: DEFAULT_AGENT_CONFIG.model,
@@ -542,7 +541,7 @@ class ChatService {
      * if enable login and not signed in, return unauthorized error
      */
     const userStore = useUserStore.getState();
-    if (enableAuth && !userStore.isSignedIn) {
+    if (!userStore.isSignedIn) {
       throw AgentRuntimeError.createError(ChatErrorType.InvalidAccessCode);
     }
 

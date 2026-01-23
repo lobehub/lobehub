@@ -2,6 +2,196 @@
 
 # Changelog
 
+## [Version 2.0.0-next.346](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.345...v2.0.0-next.346)
+
+<sup>Released on **2026-01-23**</sup>
+
+#### 🐛 Bug Fixes
+
+- **pdf**: Upgrade pdfjs-dist and react-pdf to v5.x.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **pdf**: Upgrade pdfjs-dist and react-pdf to v5.x, closes [#11686](https://github.com/lobehub/lobe-chat/issues/11686) ([2b620df](https://github.com/lobehub/lobe-chat/commit/2b620df))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.345](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.344...v2.0.0-next.345)
+
+<sup>Released on **2026-01-23**</sup>
+
+#### ✨ Features
+
+- **misc**: Remove Clerk authentication code.
+
+#### 🐛 Bug Fixes
+
+- **misc**: Slove the agents header switch agents the lobeAI not show problem.
+
+#### 💄 Styles
+
+- **misc**: Improve auto scroll and group profile.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Remove Clerk authentication code, closes [#11711](https://github.com/lobehub/lobe-chat/issues/11711) ([395595a](https://github.com/lobehub/lobe-chat/commit/395595a))
+
+#### What's fixed
+
+- **misc**: Slove the agents header switch agents the lobeAI not show problem, closes [#11726](https://github.com/lobehub/lobe-chat/issues/11726) ([f45f508](https://github.com/lobehub/lobe-chat/commit/f45f508))
+
+#### Styles
+
+- **misc**: Improve auto scroll and group profile, closes [#11725](https://github.com/lobehub/lobe-chat/issues/11725) ([550acc2](https://github.com/lobehub/lobe-chat/commit/550acc2))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.344](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.343...v2.0.0-next.344)
+
+<sup>Released on **2026-01-23**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fixed the sandbox tools call when error should use right callback.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fixed the sandbox tools call when error should use right callback, closes [#11721](https://github.com/lobehub/lobe-chat/issues/11721) ([e8fce68](https://github.com/lobehub/lobe-chat/commit/e8fce68))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.343](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.342...v2.0.0-next.343)
+
+<sup>Released on **2026-01-23**</sup>
+
+#### ♻ Code Refactoring
+
+- **misc**: Improve memory data with experience and identity.
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix scope issue.
+
+#### 💄 Styles
+
+- **misc**: Update share style.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **misc**: Improve memory data with experience and identity, closes [#11717](https://github.com/lobehub/lobe-chat/issues/11717) ([bdb3eb4](https://github.com/lobehub/lobe-chat/commit/bdb3eb4))
+
+#### What's fixed
+
+- **misc**: Fix scope issue, closes [#11719](https://github.com/lobehub/lobe-chat/issues/11719) ([17adde8](https://github.com/lobehub/lobe-chat/commit/17adde8))
+
+#### Styles
+
+- **misc**: Update share style, closes [#11716](https://github.com/lobehub/lobe-chat/issues/11716) ([3c70dfa](https://github.com/lobehub/lobe-chat/commit/3c70dfa))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.342](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.341...v2.0.0-next.342)
+
+<sup>Released on **2026-01-22**</sup>
+
+#### ♻ Code Refactoring
+
+- **userMemories**: Removed un-used code.
+
+#### 🐛 Bug Fixes
+
+- **copilot**: Pass correct scope when creating new session in PageEditor.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **userMemories**: Removed un-used code, closes [#11713](https://github.com/lobehub/lobe-chat/issues/11713) ([89750fc](https://github.com/lobehub/lobe-chat/commit/89750fc))
+
+#### What's fixed
+
+- **copilot**: Pass correct scope when creating new session in PageEditor, closes [#11714](https://github.com/lobehub/lobe-chat/issues/11714) ([0259270](https://github.com/lobehub/lobe-chat/commit/0259270))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.341](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.340...v2.0.0-next.341)
+
+<sup>Released on **2026-01-22**</sup>
+
+#### ✨ Features
+
+- **misc**: Add server version check for desktop app.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Add server version check for desktop app, closes [#11710](https://github.com/lobehub/lobe-chat/issues/11710) ([0cf2723](https://github.com/lobehub/lobe-chat/commit/0cf2723))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.340](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.339...v2.0.0-next.340)
 
 <sup>Released on **2026-01-22**</sup>

@@ -1,7 +1,4 @@
 {
-  "clerkAuth.loginSuccess.action": "続ける",
-  "clerkAuth.loginSuccess.desc": "{{greeting}}、{{nickName}} さん。前回のトピックに戻ります。いつでも新しいトピックに切り替えられます",
-  "clerkAuth.loginSuccess.title": "おかえりなさい、{{nickName}}",
   "error.backHome": "ホームに戻る",
   "error.desc": "ページが一時的に利用できません。ホームに戻るか、時間を置いて再試行してください（設定は失われません）",
   "error.retry": "再読み込み",
@@ -87,7 +84,6 @@
   "response.InsufficientQuota": "クォータが使い果たされました。残高/クォータ設定を確認するか、使用可能な API キーに切り替えてから再試行してください",
   "response.InvalidAccessCode": "アクセスパスワードが空または正しくありません。正しいパスワードを再入力するか、カスタム API キーを使用してください",
   "response.InvalidBedrockCredentials": "Bedrock 認証に失敗しました。AccessKeyId/SecretAccessKey を確認してから再試行してください",
-  "response.InvalidClerkUser": "ログインが必要です。先にログインまたは登録してください",
   "response.InvalidComfyUIArgs": "ComfyUI 設定が正しくありません。設定を確認してから再試行してください",
   "response.InvalidGithubToken": "GitHub PAT が空または正しくありません。確認してから再試行してください",
   "response.InvalidOllamaArgs": "Ollama 設定が正しくありません。設定を確認してから再試行してください",

@@ -2,30 +2,32 @@
 
 import { Button, Icon } from '@lobehub/ui';
 import { Store } from 'lucide-react';
-import { useState } from 'react';
+import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/app/[variants]/(main)/settings/features/SettingHeader';
-import SkillStore from '@/features/SkillStore';
+import { createSkillStoreModal } from '@/features/SkillStore';
 
 import SkillList from './features/SkillList';
 
 const Page = () => {
   const { t } = useTranslation('setting');
-  const [open, setOpen] = useState(false);
+
+  const handleOpenStore = useCallback(() => {
+    createSkillStoreModal();
+  }, []);
 
   return (
     <>
       <SettingHeader
         extra={
-          <Button icon={<Icon icon={Store} />} onClick={() => setOpen(true)}>
+          <Button icon={<Icon icon={Store} />} onClick={handleOpenStore}>
             {t('skillStore.button')}
           </Button>
         }
         title={t('tab.skill')}
       />
       <SkillList />
-      <SkillStore open={open} setOpen={setOpen} />
     </>
   );
 };

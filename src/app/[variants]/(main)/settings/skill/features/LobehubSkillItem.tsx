@@ -3,12 +3,12 @@
 import { type LobehubSkillProviderType } from '@lobechat/const';
 import { ActionIcon, Avatar, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { App, Button } from 'antd';
-import { createStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { Loader2, MoreVerticalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import IntegrationDetailModal from '@/features/IntegrationDetailModal';
+import { createIntegrationDetailModal } from '@/features/IntegrationDetailModal';
 import { useToolStore } from '@/store/tool';
 import {
   type LobehubSkillServer,
@@ -18,10 +18,10 @@ import {
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   connected: css`
     font-size: 14px;
-    color: ${token.colorSuccess};
+    color: ${cssVar.colorSuccess};
   `,
   container: css`
     padding-block: 12px;
@@ -29,17 +29,17 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   disconnected: css`
     font-size: 14px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   disconnectedIcon: css`
     opacity: 0.5;
   `,
   disconnectedTitle: css`
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
   `,
   error: css`
     font-size: 14px;
-    color: ${token.colorError};
+    color: ${cssVar.colorError};
   `,
   icon: css`
     display: flex;
@@ -51,16 +51,16 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 48px;
     border-radius: 12px;
 
-    background: ${token.colorFillTertiary};
+    background: ${cssVar.colorFillTertiary};
   `,
   title: css`
     cursor: pointer;
     font-size: 15px;
     font-weight: 500;
-    color: ${token.colorText};
+    color: ${cssVar.colorText};
 
     &:hover {
-      color: ${token.colorPrimary};
+      color: ${cssVar.colorPrimary};
     }
   `,
 }));
@@ -72,11 +72,9 @@ interface LobehubSkillItemProps {
 
 const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
   const { t } = useTranslation('setting');
-  const { styles } = useStyles();
   const { modal } = App.useApp();
   const [isConnecting, setIsConnecting] = useState(false);
   const [isWaitingAuth, setIsWaitingAuth] = useState(false);
-  const [detailOpen, setDetailOpen] = useState(false);
 
   const oauthWindowRef = useRef<Window | null>(null);
   const windowCheckIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -300,8 +298,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
   const isConnected = server?.status === LobehubSkillStatus.CONNECTED;
 
   return (
-    <>
-      <Flexbox
+    <Flexbox
         align="center"
         className={styles.container}
         gap={16}
@@ -315,7 +312,12 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
           <Flexbox gap={4} style={{ overflow: 'hidden' }}>
             <span
               className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}
-              onClick={() => setDetailOpen(true)}
+              onClick={() =>
+                createIntegrationDetailModal({
+                  identifier: provider.id,
+                  type: 'lobehub',
+                })
+              }
             >
               {provider.label}
             </span>
@@ -327,15 +329,6 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
           {renderAction()}
         </Flexbox>
       </Flexbox>
-      <IntegrationDetailModal
-        identifier={provider.id}
-        isConnecting={isConnecting || isWaitingAuth}
-        onClose={() => setDetailOpen(false)}
-        onConnect={handleConnect}
-        open={detailOpen}
-        type="lobehub"
-      />
-    </>
   );
 });
 

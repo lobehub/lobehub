@@ -1,7 +1,4 @@
 {
-  "clerkAuth.loginSuccess.action": "继续会话",
-  "clerkAuth.loginSuccess.desc": "{{greeting}}，{{nickName}}，我们从上次的话题继续；你也可以随时切换到新话题",
-  "clerkAuth.loginSuccess.title": "欢迎回来，{{nickName}}",
   "error.backHome": "返回首页",
   "error.desc": "页面暂时不可用。你可以返回首页，或稍后重试（你的设置不会因此丢失）",
   "error.retry": "重新加载",
@@ -87,7 +84,6 @@
   "response.InsufficientQuota": "配额已用尽。请检查余额/配额设置，或更换可用的 API Key 后重试",
   "response.InvalidAccessCode": "访问密码为空或不正确。请重新输入，或改用自定义 API Key",
   "response.InvalidBedrockCredentials": "Bedrock 鉴权失败。请检查 AccessKeyId/SecretAccessKey 后重试",
-  "response.InvalidClerkUser": "需要登录后继续。请先登录或注册",
   "response.InvalidComfyUIArgs": "ComfyUI 配置不正确。请检查配置后重试",
   "response.InvalidGithubToken": "GitHub PAT 为空或不正确。请检查后重试",
   "response.InvalidOllamaArgs": "Ollama 配置不正确。请检查配置后重试",

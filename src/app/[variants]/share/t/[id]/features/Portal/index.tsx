@@ -1,7 +1,7 @@
 'use client';
 
 import { DraggablePanel } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import { CHAT_PORTAL_TOOL_UI_WIDTH } from '@/const/layoutTokens';
@@ -9,7 +9,7 @@ import { PortalContent } from '@/features/Portal/router';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ cssVar, css }) => ({
   body: css`
     overflow: hidden;
     display: flex;
@@ -30,17 +30,16 @@ const useStyles = createStyles(({ css, token }) => ({
     min-height: 100%;
     max-height: 100%;
 
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
   drawer: css`
     z-index: 10;
     height: 100%;
-    background: ${token.colorBgContainer};
+    background: ${cssVar.colorBgContainer};
   `,
 }));
 
 const SharePortal = memo(() => {
-  const { styles } = useStyles();
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
 
   return (

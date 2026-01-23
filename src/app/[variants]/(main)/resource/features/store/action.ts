@@ -1,6 +1,6 @@
 import { type StateCreator } from 'zustand/vanilla';
 
-import { type ResouceManagerMode } from '@/features/ResourceManager';
+import { type ResourceManagerMode } from '@/features/ResourceManager';
 import { type FilesTabs, SortType } from '@/types/files';
 
 import { type State, type ViewMode, initialState } from './initialState';
@@ -67,7 +67,7 @@ export interface Action {
   /**
    * Set the view mode
    */
-  setMode: (mode: ResouceManagerMode) => void;
+  setMode: (mode: ResourceManagerMode) => void;
   /**
    * Set the pending rename item ID
    */

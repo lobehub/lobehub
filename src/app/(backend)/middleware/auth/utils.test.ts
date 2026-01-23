@@ -1,9 +1,7 @@
-import { type AuthObject } from '@clerk/backend';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { checkAuthMethod } from './utils';
 
-let enableClerkMock = false;
 let enableNextAuthMock = false;
 let enableBetterAuthMock = false;
 
@@ -12,9 +10,6 @@ vi.mock('@/envs/auth', async (importOriginal) => {
 
   return {
     ...(data as any),
-    get enableClerk() {
-      return enableClerkMock;
-    },
     get enableBetterAuth() {
       return enableBetterAuthMock;
     },
@@ -27,29 +22,6 @@ vi.mock('@/envs/auth', async (importOriginal) => {
 describe('checkAuthMethod', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('should pass with valid Clerk auth', () => {
-    enableClerkMock = true;
-    expect(() =>
-      checkAuthMethod({
-        clerkAuth: { userId: 'someUserId' } as AuthObject,
-      }),
-    ).not.toThrow();
-
-    enableClerkMock = false;
-  });
-
-  it('should throw error with invalid Clerk auth', () => {
-    enableClerkMock = true;
-    try {
-      checkAuthMethod({
-        clerkAuth: {} as any,
-      });
-    } catch (e) {
-      expect(e).toEqual({ errorType: 'InvalidClerkUser' });
-    }
-    enableClerkMock = false;
   });
 
   it('should pass with valid Next auth', () => {

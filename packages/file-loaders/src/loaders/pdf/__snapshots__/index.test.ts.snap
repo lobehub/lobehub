@@ -52,7 +52,7 @@ exports[`PdfLoader > should attach document metadata correctly 1`] = `
     "Title": "test",
   },
   "pdfMetadata": null,
-  "pdfVersion": "4.10.38",
+  "pdfVersion": "5.4.530",
 }
 `;
 

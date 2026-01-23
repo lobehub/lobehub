@@ -1,4 +1,3 @@
-import { type AuthObject } from '@clerk/backend';
 import {
   AgentRuntimeError,
   type ChatCompletionErrorPayload,
@@ -6,7 +5,6 @@ import {
 } from '@lobechat/model-runtime';
 import { ChatErrorType, type ClientSecretPayload } from '@lobechat/types';
 import { getXorPayload } from '@lobechat/utils/server';
-import { type NextRequest } from 'next/server';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { type LobeChatDatabase } from '@/database/type';
@@ -15,9 +13,7 @@ import {
   LOBE_CHAT_OIDC_AUTH_HEADER,
   OAUTH_AUTHORIZED,
   enableBetterAuth,
-  enableClerk,
 } from '@/envs/auth';
-import { ClerkAuth } from '@/libs/clerk-auth';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { createErrorResponse } from '@/utils/errorResponse';
 
@@ -77,16 +73,6 @@ export const checkAuth =
 
       if (!authorization) throw AgentRuntimeError.createError(ChatErrorType.Unauthorized);
 
-      // check the Auth With payload and clerk auth
-      let clerkAuth = {} as AuthObject;
-
-      // TODO: V2 完整移除 client 模式下的 clerk 集成代码
-      if (enableClerk) {
-        const auth = new ClerkAuth();
-        const data = auth.getAuthFromRequest(req as NextRequest);
-        clerkAuth = data.clerkAuth;
-      }
-
       jwtPayload = getXorPayload(authorization);
 
       const oidcAuthorization = req.headers.get(LOBE_CHAT_OIDC_AUTH_HEADER);
@@ -106,7 +92,6 @@ export const checkAuth =
         checkAuthMethod({
           apiKey: jwtPayload.apiKey,
           betterAuthAuthorized,
-          clerkAuth,
           nextAuthAuthorized: oauthAuthorized,
         });
     } catch (e) {

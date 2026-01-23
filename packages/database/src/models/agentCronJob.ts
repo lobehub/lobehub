@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import {
   type AgentCronJob,
@@ -25,8 +25,8 @@ export class AgentCronJobModel {
       .values({
         ...data,
         // Initialize remaining executions to match max executions
-remainingExecutions: data.maxExecutions,
-        
+        remainingExecutions: data.maxExecutions,
+
         userId: this.userId,
       } as NewAgentCronJob)
       .returning();
@@ -149,11 +149,11 @@ remainingExecutions: data.maxExecutions,
       .set({
         enabled: true,
         // Re-enable job when resetting
-lastExecutedAt: null,
-        
-maxExecutions: newMaxExecutions,
-        
-remainingExecutions: newMaxExecutions, 
+        lastExecutedAt: null,
+
+        maxExecutions: newMaxExecutions,
+
+        remainingExecutions: newMaxExecutions,
         totalExecutions: 0,
         updatedAt: new Date(),
       })
@@ -227,7 +227,7 @@ remainingExecutions: newMaxExecutions,
         enabled,
         updatedAt: new Date(),
       })
-      .where(and(sql`${agentCronJobs.id} = ANY(${ids})`, eq(agentCronJobs.userId, this.userId)))
+      .where(and(inArray(agentCronJobs.id, ids), eq(agentCronJobs.userId, this.userId)))
       .returning();
 
     return result.length;

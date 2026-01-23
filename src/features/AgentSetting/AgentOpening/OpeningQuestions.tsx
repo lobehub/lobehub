@@ -86,13 +86,14 @@ const OpeningQuestions = memo(() => {
   const isRepeat = openingQuestions.includes(questionInput.trim());
 
   return (
-    <Flexbox gap={8}>
-      <Flexbox gap={4}>
-        <Space.Compact>
+    <Flexbox gap={8} width={'100%'}>
+      <Flexbox gap={4} width={'100%'}>
+        <Space.Compact style={{ width: '100%' }}>
           <Input
             onChange={(e) => setQuestionInput(e.target.value)}
             onPressEnter={addQuestion}
             placeholder={t('settingOpening.openingQuestions.placeholder')}
+            style={{ flex: 1 }}
             value={questionInput}
           />
           <Button

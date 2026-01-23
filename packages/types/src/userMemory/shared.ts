@@ -76,3 +76,33 @@ export enum ContextStatusEnum {
   Planned = 'planned',
 }
 export const CONTEXT_STATUS = Object.values(ContextStatusEnum);
+
+/**
+ * Shared types for memory list queries
+ */
+
+export interface BaseListParams {
+  order?: 'asc' | 'desc';
+  page?: number;
+  pageSize?: number;
+  q?: string;
+  tags?: string[];
+  types?: string[];
+}
+
+export interface BaseListResult<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  total: number;
+}
+
+export interface BaseListItem {
+  capturedAt: Date;
+  createdAt: Date;
+  id: string;
+  tags: string[] | null;
+  title: string | null;
+  type: string | null;
+  updatedAt: Date;
+}

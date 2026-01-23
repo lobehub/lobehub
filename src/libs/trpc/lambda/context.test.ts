@@ -8,7 +8,6 @@ describe('createContextInner', () => {
 
     expect(context).toMatchObject({
       authorizationHeader: undefined,
-      clerkAuth: undefined,
       marketAccessToken: undefined,
       nextAuth: undefined,
       oidcAuth: undefined,
@@ -57,18 +56,6 @@ describe('createContextInner', () => {
     const context = await createContextInner({ oidcAuth });
 
     expect(context.oidcAuth).toEqual(oidcAuth);
-  });
-
-  it('should create context with Clerk auth data', async () => {
-    const clerkAuth = {
-      userId: 'clerk-user-id',
-      sessionId: 'session-id',
-      getToken: async () => 'clerk-token',
-    } as any;
-
-    const context = await createContextInner({ clerkAuth });
-
-    expect(context.clerkAuth).toBe(clerkAuth);
   });
 
   it('should create context with NextAuth user data', async () => {

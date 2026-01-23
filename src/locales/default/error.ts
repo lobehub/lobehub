@@ -1,10 +1,6 @@
 import { businessErrorsLocales } from '@/business/locales/errors';
 
 export default {
-  'clerkAuth.loginSuccess.action': 'Continue Session',
-  'clerkAuth.loginSuccess.desc':
-    "{{greeting}}, it's great to continue serving you. Let's pick up where we left off.",
-  'clerkAuth.loginSuccess.title': 'Welcome back, {{nickName}}',
   'error.backHome': 'Back to Home',
   'error.desc': 'Give it a try later, or go back to the known world.',
   'error.retry': 'Reload',
@@ -143,8 +139,6 @@ export default {
     'Invalid access code or empty. Please enter the correct access code or add a custom API Key.',
   'response.InvalidBedrockCredentials':
     'Bedrock authentication failed. Please check the AccessKeyId/SecretAccessKey and retry.',
-  'response.InvalidClerkUser':
-    'Sorry, you are not currently logged in. Please log in or register an account to continue.',
   'response.InvalidComfyUIArgs':
     'Invalid ComfyUI configuration. Please check the settings and try again.',
   'response.InvalidGithubToken':

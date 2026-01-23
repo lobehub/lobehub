@@ -7,11 +7,10 @@ import { type NextRequest } from 'next/server';
 import {
   LOBE_CHAT_AUTH_HEADER,
   LOBE_CHAT_OIDC_AUTH_HEADER,
+  authEnv,
   enableBetterAuth,
-  enableClerk,
   enableNextAuth,
- authEnv } from '@/envs/auth';
-import { ClerkAuth, type IClerkAuth } from '@/libs/clerk-auth';
+} from '@/envs/auth';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 
 // Create context logger namespace
@@ -41,7 +40,6 @@ export interface OIDCAuth {
 
 export interface AuthContext {
   authorizationHeader?: string | null;
-  clerkAuth?: IClerkAuth;
   clientIp?: string | null;
   jwtPayload?: ClientSecretPayload | null;
   marketAccessToken?: string;
@@ -59,7 +57,6 @@ export interface AuthContext {
  */
 export const createContextInner = async (params?: {
   authorizationHeader?: string | null;
-  clerkAuth?: IClerkAuth;
   clientIp?: string | null;
   marketAccessToken?: string;
   nextAuth?: User;
@@ -72,7 +69,6 @@ export const createContextInner = async (params?: {
 
   return {
     authorizationHeader: params?.authorizationHeader,
-    clerkAuth: params?.clerkAuth,
     clientIp: params?.clientIp,
     marketAccessToken: params?.marketAccessToken,
     nextAuth: params?.nextAuth,
@@ -163,22 +159,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
     }
   }
 
-  // If OIDC is not enabled or validation fails, try LobeChat custom Header and other authentication methods
-  if (enableClerk) {
-    log('Attempting Clerk authentication');
-    const clerkAuth = new ClerkAuth();
-    const result = clerkAuth.getAuthFromRequest(request);
-    auth = result.clerkAuth;
-    userId = result.userId;
-    log('Clerk authentication result, userId: %s', userId || 'not authenticated');
-
-    return createContextInner({
-      clerkAuth: auth,
-      ...commonContext,
-      userId,
-    });
-  }
-
+  // If OIDC is not enabled or validation fails, try other authentication methods
   if (enableBetterAuth) {
     log('Attempting Better Auth authentication');
     try {

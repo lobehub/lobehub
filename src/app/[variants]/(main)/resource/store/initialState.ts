@@ -1,8 +1,8 @@
-import { type ResouceManagerMode } from '@/features/ResourceManager';
+import { type ResourceManagerMode } from '@/features/ResourceManager';
 
 export interface State {
   currentViewItemId?: string;
-  mode: ResouceManagerMode;
+  mode: ResourceManagerMode;
   selectedFileIds: string[];
 }
 

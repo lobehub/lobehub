@@ -41,7 +41,6 @@ const styles = createStaticStyles(({ css }) => {
       cursor: pointer;
       min-width: 800px;
 
-      /* Hover effect for individual rows */
       &:hover {
         background: ${cssVar.colorFillTertiary};
       }
@@ -194,7 +193,6 @@ const FileListItem = memo<FileListItemProps>(
     const [isDragging, setIsDragging] = useState(false);
     const [isOver, setIsOver] = useState(false);
 
-    // Memoize computed values that don't change
     const computedValues = useMemo(() => {
       const isPDF = fileType?.toLowerCase() === 'pdf' || name?.toLowerCase().endsWith('.pdf');
       return {
@@ -208,7 +206,6 @@ const FileListItem = memo<FileListItemProps>(
 
     const { isSupportedForChunking, isPage, isFolder, emoji } = computedValues;
 
-    // Memoize drag data to prevent recreation
     const dragData = useMemo(
       () => ({
         fileType,
@@ -219,7 +216,6 @@ const FileListItem = memo<FileListItemProps>(
       [fileType, isFolder, name, sourceType],
     );
 
-    // Native HTML5 drag event handlers
     const handleDragStart = useCallback(
       (e: DragEvent) => {
         if (!resourceManagerState.libraryId) {
@@ -264,7 +260,6 @@ const FileListItem = memo<FileListItemProps>(
     }, []);
 
     const handleDrop = useCallback(() => {
-      // Clear the highlight after drop
       setIsOver(false);
     }, []);
 
@@ -359,7 +354,6 @@ const FileListItem = memo<FileListItemProps>(
           { replace: true },
         );
       } else {
-        // Set mode to file and store the file ID
         resourceManagerState.setCurrentViewItemId(id);
         resourceManagerState.setMode('editor');
         // Also update URL query parameter for shareable links
@@ -378,7 +372,6 @@ const FileListItem = memo<FileListItemProps>(
     useEffect(() => {
       if (pendingRenameItemId === id && isFolder && !isRenaming) {
         handleRenameStart();
-        // Clear the pending rename item after triggering
         resourceManagerState.setPendingRenameItemId(null);
       }
     }, [pendingRenameItemId, id, isFolder, resourceManagerState]);
@@ -575,7 +568,6 @@ const FileListItem = memo<FileListItemProps>(
   },
   // Custom comparison function to prevent unnecessary re-renders
   (prevProps, nextProps) => {
-    // Only re-render if these critical props change
     return (
       prevProps.id === nextProps.id &&
       prevProps.name === nextProps.name &&

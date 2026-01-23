@@ -1,13 +1,13 @@
 import dayjs from 'dayjs';
 import { template } from 'es-toolkit/compat';
 import matter from 'gray-matter';
-import { markdownToTxt } from 'markdown-to-txt';
 import semver from 'semver';
 import urlJoin from 'url-join';
 
 import { FetchCacheTag } from '@/const/cacheControl';
 import { type Locales } from '@/locales/resources';
 import { type ChangelogIndexItem } from '@/types/changelog';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 const URL_TEMPLATE = 'https://raw.githubusercontent.com/{{user}}/{{repo}}/{{branch}}/{{path}}';
 const LAST_MODIFIED = new Date().toISOString();

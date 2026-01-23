@@ -1,7 +1,4 @@
 {
-  "clerkAuth.loginSuccess.action": "Продолжить сессию",
-  "clerkAuth.loginSuccess.desc": "{{greeting}}, рады снова быть вам полезными. Давайте продолжим с того места, на котором остановились.",
-  "clerkAuth.loginSuccess.title": "С возвращением, {{nickName}}",
   "error.backHome": "Вернуться на главную",
   "error.desc": "Попробуйте позже или вернитесь в знакомый мир.",
   "error.retry": "Перезагрузить",
@@ -87,7 +84,6 @@
   "response.InsufficientQuota": "Извините, достигнут лимит по ключу. Проверьте баланс аккаунта или увеличьте квоту ключа.",
   "response.InvalidAccessCode": "Неверный или пустой код доступа. Введите корректный код или добавьте пользовательский API-ключ.",
   "response.InvalidBedrockCredentials": "Ошибка аутентификации Bedrock. Проверьте AccessKeyId/SecretAccessKey и повторите попытку.",
-  "response.InvalidClerkUser": "Извините, вы не вошли в систему. Пожалуйста, войдите или зарегистрируйтесь.",
   "response.InvalidComfyUIArgs": "Некорректная конфигурация ComfyUI. Проверьте настройки и повторите попытку.",
   "response.InvalidGithubToken": "Неверный или пустой GitHub Personal Access Token. Проверьте токен и повторите попытку.",
   "response.InvalidOllamaArgs": "Некорректная конфигурация Ollama. Проверьте настройки и повторите попытку.",

@@ -1,5 +1,46 @@
 [
   {
+    "children": {},
+    "date": "2026-01-23",
+    "version": "2.0.0-next.346"
+  },
+  {
+    "children": {
+      "features": ["Remove Clerk authentication code."],
+      "fixes": ["Slove the agents header switch agents the lobeAI not show problem."],
+      "improvements": ["Improve auto scroll and group profile."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.345"
+  },
+  {
+    "children": {
+      "fixes": ["Fixed the sandbox tools call when error should use right callback."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.344"
+  },
+  {
+    "children": {
+      "improvements": ["Update share style."],
+      "fixes": ["Fix scope issue."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.343"
+  },
+  {
+    "children": {},
+    "date": "2026-01-22",
+    "version": "2.0.0-next.342"
+  },
+  {
+    "children": {
+      "features": ["Add server version check for desktop app."]
+    },
+    "date": "2026-01-22",
+    "version": "2.0.0-next.341"
+  },
+  {
     "children": {
       "improvements": ["Update og."]
     },

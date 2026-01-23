@@ -24,15 +24,15 @@ This guide helps you migrate your existing Clerk-based LobeChat deployment to Be
   - **Always backup your database first!** For Neon users, create a backup via [Fork Branch](https://neon.tech/docs/manage/branches#create-a-branch)
   - LobeChat is not responsible for any data loss or issues that may occur during the migration process
   - This guide is intended for users with development experience; not recommended for users without technical background
-  - If you have any questions, feel free to ask in our [Discord](https://discord.com/invite/AYFPHvv2jT) community
+  - If you have any questions, feel free to ask in our [Discord](https://discord.com/invite/AYFPHvv2jT) community or [GitHub Issue](https://github.com/lobehub/lobe-chat/issues/11707)
 </Callout>
 
 ## Choose Your Migration Path
 
-| Method                                | Best For                         | User Impact           | Data Preserved                 |
-| ------------------------------------- | -------------------------------- | --------------------- | ------------------------------ |
-| [Simple Migration](#simple-migration) | Small deployments (\< 100 users) | Users reset passwords | Chat history, settings         |
-| [Full Migration](#full-migration)     | Large deployments                | Seamless for users    | Everything including passwords |
+| Method                                | Best For                       | User Impact           | Data Preserved                 |
+| ------------------------------------- | ------------------------------ | --------------------- | ------------------------------ |
+| [Simple Migration](#simple-migration) | Small deployments (≤ 10 users) | Users reset passwords | Chat history, settings         |
+| [Full Migration](#full-migration)     | Large deployments              | Seamless for users    | Everything including passwords |
 
 ## Simple Migration
 
@@ -40,6 +40,8 @@ For small self-hosted deployments, the simplest approach is to let users reset t
 
 <Callout type={'warning'}>
   **Limitation**: This method loses SSO connection data. Use [Full Migration](#full-migration) to preserve SSO connections.
+
+  Although SSO connections are lost, users can manually re-link their social accounts from the Profile page after logging in with email and password.
 
   **Example scenario**: If your previous account had two SSO accounts linked:
 
@@ -118,17 +120,11 @@ For larger deployments or when you need to preserve user passwords and SSO conne
 <Callout type={'error'}>
   **Important Notice**:
 
+  - **Always backup your database first!** For Neon users, create a backup via [Fork Branch](https://neon.tech/docs/manage/branches#create-a-branch)
   - Migration scripts must be **run locally after cloning the repository**, not in the deployment environment
   - Due to the high-risk nature of user data migration, **we do not provide automatic migration during deployment**
+  - Always use dry-run mode first to verify the script runs successfully before executing
   - Always verify in a test environment before operating on production database
-</Callout>
-
-<Callout type={'warning'}>
-  **Before Migration**:
-
-  - Use a [Neon Fork Branch](https://neon.tech/docs/manage/branches#create-a-branch) to create a test database
-  - Use Clerk Development environment API keys
-  - Verify in test mode first, then switch to prod mode after confirming success
 </Callout>
 
 ### Prerequisites
@@ -288,37 +284,10 @@ npx tsx scripts/clerk-to-betterauth/verify.ts
 
 ### Step 7: Configure Better Auth and Redeploy
 
-After migration is complete, configure Better Auth environment variables and redeploy:
-
-1. **Remove Clerk environment variables**:
-
-   ```bash
-   # Remove these
-   # NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=xxx
-   # CLERK_SECRET_KEY=xxx
-   ```
-
-2. **Add Better Auth environment variables**:
-
-   ```bash
-   # Required
-   AUTH_SECRET=your-secret-key  # openssl rand -base64 32
-
-   # Optional: Configure SSO providers (example)
-   AUTH_SSO_PROVIDERS=google,github
-   AUTH_GOOGLE_ID=your-google-client-id
-   AUTH_GOOGLE_SECRET=your-google-client-secret
-   AUTH_GITHUB_ID=your-github-client-id
-   AUTH_GITHUB_SECRET=your-github-client-secret
-
-   # Optional: Configure email service (for password reset, email verification, etc.)
-   # See Authentication Service Configuration documentation for details
-   ```
-
-3. **Redeploy LobeChat**
+After migration is complete, follow [Simple Migration - Step 2](#steps) to configure Better Auth environment variables and redeploy.
 
 <Callout type={'tip'}>
-  For complete Better Auth configuration, see [Authentication Service Configuration](/docs/self-hosting/advanced/auth), including all supported SSO providers and email service configuration.
+  For complete Better Auth configuration, see [Authentication Service Configuration](/docs/self-hosting/advanced/auth).
 </Callout>
 
 ## What Gets Migrated

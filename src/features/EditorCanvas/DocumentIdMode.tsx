@@ -1,8 +1,7 @@
 'use client';
 
 import { type IEditor } from '@lobehub/editor';
-import { Alert } from '@lobehub/ui';
-import { Skeleton } from 'antd';
+import { Alert, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';

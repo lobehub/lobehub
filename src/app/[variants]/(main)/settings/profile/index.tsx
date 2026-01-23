@@ -1,8 +1,8 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, FormGroup, Text } from '@lobehub/ui';
-import { Skeleton as AntSkeleton, Divider } from 'antd';
+import { Flexbox, FormGroup, Skeleton, Text } from '@lobehub/ui';
+import { Divider } from 'antd';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -28,20 +28,20 @@ const SkeletonRow = ({ mobile }: { mobile?: boolean }) => {
     return (
       <Flexbox gap={12} style={rowStyle}>
         <Flexbox align="center" horizontal justify="space-between">
-          <AntSkeleton.Input active size="small" style={{ height: 22, width: 60 }} />
-          <AntSkeleton.Input active size="small" style={{ height: 22, width: 80 }} />
+          <Skeleton.Button active size="small" style={{ height: 22, width: 60 }} />
+          <Skeleton.Button active size="small" style={{ height: 22, width: 80 }} />
         </Flexbox>
-        <AntSkeleton.Input active size="small" style={{ height: 22, width: 120 }} />
+        <Skeleton.Button active size="small" style={{ height: 22, width: 120 }} />
       </Flexbox>
     );
   }
   return (
     <Flexbox align="center" gap={24} horizontal justify="space-between" style={rowStyle}>
       <Flexbox align="center" gap={24} horizontal style={{ flex: 1 }}>
-        <AntSkeleton.Input active size="small" style={{ ...labelStyle, height: 22 }} />
-        <AntSkeleton.Input active size="small" style={{ height: 22, minWidth: 120, width: 160 }} />
+        <Skeleton.Button active size="small" style={{ ...labelStyle, height: 22 }} />
+        <Skeleton.Button active size="small" style={{ height: 22, minWidth: 120, width: 160 }} />
       </Flexbox>
-      <AntSkeleton.Input active size="small" style={{ height: 22, width: 100 }} />
+      <Skeleton.Button active size="small" style={{ height: 22, width: 100 }} />
     </Flexbox>
   );
 };

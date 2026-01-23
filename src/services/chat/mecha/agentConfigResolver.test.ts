@@ -444,6 +444,49 @@ describe('resolveAgentConfig', () => {
         expect(result.plugins).toContain(NotebookIdentifier);
         expect(result.plugins).toContain('user-plugin');
       });
+
+      it('should use basePlugins from agentConfig when ctx.plugins is not provided', () => {
+        // This test verifies the fix for the issue where INBOX agent lost user-configured plugins
+        // when resolveAgentConfig was called without the plugins parameter.
+        // The runtime function should receive basePlugins (from agentConfig) as fallback.
+        const userConfiguredPlugins = ['web-search', 'memory', 'custom-tool'];
+
+        vi.spyOn(agentSelectors.agentSelectors, 'getAgentConfigById').mockReturnValue(
+          () =>
+            ({
+              ...mockAgentConfig,
+              plugins: userConfiguredPlugins,
+            }) as any,
+        );
+
+        // Simulate INBOX runtime behavior: merges builtin tools with ctx.plugins
+        const getAgentRuntimeConfigSpy = vi
+          .spyOn(builtinAgents, 'getAgentRuntimeConfig')
+          .mockImplementation((slug, ctx) => ({
+            // This simulates the actual INBOX runtime: [GTDIdentifier, NotebookIdentifier, ...(ctx.plugins || [])]
+            plugins: [GTDIdentifier, NotebookIdentifier, ...(ctx.plugins || [])],
+            systemRole: 'Inbox system role',
+          }));
+
+        // Call WITHOUT plugins parameter - this is how internal_createAgentState calls it
+        const result = resolveAgentConfig({ agentId: 'inbox-agent' });
+
+        // Verify getAgentRuntimeConfig received basePlugins as fallback
+        expect(getAgentRuntimeConfigSpy).toHaveBeenCalledWith(
+          'inbox',
+          expect.objectContaining({
+            plugins: userConfiguredPlugins,
+          }),
+        );
+
+        // Verify final plugins include both builtin tools AND user-configured plugins
+        expect(result.plugins).toContain(GTDIdentifier);
+        expect(result.plugins).toContain(NotebookIdentifier);
+        expect(result.plugins).toContain('web-search');
+        expect(result.plugins).toContain('memory');
+        expect(result.plugins).toContain('custom-tool');
+        expect(result.plugins).toHaveLength(5); // 2 builtin + 3 user plugins
+      });
     });
   });
 

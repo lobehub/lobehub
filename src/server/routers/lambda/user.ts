@@ -1,4 +1,3 @@
-import { type UserJSON } from '@clerk/backend';
 import { isDesktop } from '@lobechat/const';
 import {
   NextAuthAccountSchame,
@@ -24,17 +23,13 @@ import {
 } from '@/business/server/user';
 import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
-import { UserModel, UserNotFoundError } from '@/database/models/user';
-import { enableClerk } from '@/envs/auth';
-import { ClerkAuth } from '@/libs/clerk-auth';
-import { pino } from '@/libs/logger';
+import { UserModel } from '@/database/models/user';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { FileS3 } from '@/server/modules/S3';
 import { FileService } from '@/server/services/file';
 import { NextAuthUserService } from '@/server/services/nextAuthUser';
-import { UserService } from '@/server/services/user';
 
 const usernameSchema = z
   .string()
@@ -45,7 +40,6 @@ const usernameSchema = z
 const userProcedure = authedProcedure.use(serverDatabase).use(async ({ ctx, next }) => {
   return next({
     ctx: {
-      clerkAuth: new ClerkAuth(),
       fileService: new FileService(ctx.serverDB, ctx.userId),
       messageModel: new MessageModel(ctx.serverDB, ctx.userId),
       nextAuthUserService: new NextAuthUserService(ctx.serverDB),
@@ -77,61 +71,10 @@ export const userRouter = router({
       // `after` may fail outside request scope (e.g., in tests), ignore silently
     }
 
-    // Helper function to get or create user state
-    const getOrCreateUserState = async () => {
-      let state: Awaited<ReturnType<UserModel['getUserState']>> | undefined;
-
-      // get or create first-time user
-      while (!state) {
-        try {
-          state = await ctx.userModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults);
-        } catch (error) {
-          // user not create yet
-          if (error instanceof UserNotFoundError) {
-            // if in clerk auth mode
-            if (enableClerk) {
-              const user = await ctx.clerkAuth.getCurrentUser();
-              if (user) {
-                const userService = new UserService(ctx.serverDB);
-
-                await userService.createUser(user.id, {
-                  created_at: user.createdAt,
-                  email_addresses: user.emailAddresses.map((e) => ({
-                    email_address: e.emailAddress,
-                    id: e.id,
-                  })),
-                  first_name: user.firstName,
-                  id: user.id,
-                  image_url: user.imageUrl,
-                  last_name: user.lastName,
-                  phone_numbers: user.phoneNumbers.map((e) => ({
-                    id: e.id,
-                    phone_number: e.phoneNumber,
-                  })),
-                  primary_email_address_id: user.primaryEmailAddressId,
-                  primary_phone_number_id: user.primaryPhoneNumberId,
-                  username: user.username,
-                } as UserJSON);
-
-                continue;
-              }
-            }
-
-            // if in desktop mode, make sure desktop user exist
-            else if (isDesktop) {
-              await UserModel.makeSureUserExist(ctx.serverDB, ctx.userId);
-              pino.info('create desktop user');
-              continue;
-            }
-          }
-
-          console.error('getUserState:', error);
-          throw error;
-        }
-      }
-
-      return state;
-    };
+    // For desktop mode, ensure user exists before getting state
+    if (isDesktop) {
+      await UserModel.makeSureUserExist(ctx.serverDB, ctx.userId);
+    }
 
     // Run user state fetch and count queries in parallel
     const [
@@ -143,7 +86,7 @@ export const userRouter = router({
       isInWaitList,
       isInviteCodeRequired,
     ] = await Promise.all([
-      getOrCreateUserState(),
+      ctx.userModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults),
       ctx.messageModel.countUpTo(5),
       ctx.sessionModel.hasMoreThanN(1),
       getReferralStatus(ctx.userId),

@@ -11,7 +11,7 @@ import {
   getLobehubSkillProviderById,
 } from '@lobechat/const';
 import { Divider } from 'antd';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,7 +33,7 @@ import McpSkillItem from './McpSkillItem';
 import KlavisSkillItem from './KlavisSkillItem';
 import LobehubSkillItem from './LobehubSkillItem';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
     display: flex;
     flex-direction: column;
@@ -41,18 +41,17 @@ const useStyles = createStyles(({ css, token }) => ({
   `,
   description: css`
     margin-block-end: 8px;
-    color: ${token.colorTextSecondary};
+    color: ${cssVar.colorTextSecondary};
   `,
   empty: css`
     padding: 24px;
-    color: ${token.colorTextTertiary};
+    color: ${cssVar.colorTextTertiary};
     text-align: center;
   `,
 }));
 
 const SkillList = memo(() => {
   const { t } = useTranslation('setting');
-  const { styles } = useStyles();
 
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);

@@ -5,7 +5,6 @@ import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
 import { UserModel, UserNotFoundError } from '@/database/models/user';
 import { serverDB } from '@/database/server';
-import { enableClerk } from '@/envs/auth';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { NextAuthUserService } from '@/server/services/nextAuthUser';
 import { UserService } from '@/server/services/user';
@@ -13,10 +12,6 @@ import { UserService } from '@/server/services/user';
 import { userRouter } from '../user';
 
 // Mock modules
-vi.mock('@clerk/nextjs/server', () => ({
-  currentUser: vi.fn(),
-}));
-
 vi.mock('@/database/server', () => ({
   serverDB: {},
 }));
@@ -30,7 +25,6 @@ vi.mock('@/server/services/user');
 vi.mock('@/server/services/nextAuthUser');
 vi.mock('@/envs/auth', () => ({
   enableBetterAuth: false,
-  enableClerk: true,
   enableNextAuth: false,
 }));
 
@@ -129,71 +123,6 @@ describe('userRouter', () => {
       });
     });
 
-    it('should create new user when user not found (clerk enabled)', async () => {
-      const mockClerkUser = {
-        id: mockUserId,
-        createdAt: new Date(),
-        emailAddresses: [{ id: 'email-1', emailAddress: 'test@example.com' }],
-        firstName: 'Test',
-        lastName: 'User',
-        imageUrl: 'avatar.jpg',
-        phoneNumbers: [],
-        primaryEmailAddressId: 'email-1',
-        primaryPhoneNumberId: null,
-        username: 'testuser',
-      };
-
-      const { currentUser } = await import('@clerk/nextjs/server');
-      vi.mocked(currentUser).mockResolvedValue(mockClerkUser as any);
-
-      vi.mocked(UserService).mockImplementation(
-        () =>
-          ({
-            createUser: vi.fn().mockResolvedValue({ success: true }),
-          }) as any,
-      );
-
-      vi.mocked(UserModel).mockImplementation(
-        () =>
-          ({
-            getUserState: vi
-              .fn()
-              .mockRejectedValueOnce(new UserNotFoundError())
-              .mockResolvedValueOnce({
-                isOnboarded: false,
-                preference: { telemetry: null },
-                settings: {},
-              }),
-            updateUser: vi.fn().mockResolvedValue({ rowCount: 1 }),
-          }) as any,
-      );
-
-      vi.mocked(MessageModel).mockImplementation(
-        () =>
-          ({
-            countUpTo: vi.fn().mockResolvedValue(0),
-          }) as any,
-      );
-
-      vi.mocked(SessionModel).mockImplementation(
-        () =>
-          ({
-            hasMoreThanN: vi.fn().mockResolvedValue(false),
-          }) as any,
-      );
-
-      const result = await userRouter.createCaller({ ...mockCtx } as any).getUserState();
-
-      expect(result).toMatchObject({
-        isOnboard: false,
-        preference: { telemetry: null },
-        settings: {},
-        hasConversation: false,
-        canEnablePWAGuide: false,
-        canEnableTrace: false,
-        userId: mockUserId,
-      });
-    });
   });
 
   describe('makeUserOnboarded', () => {

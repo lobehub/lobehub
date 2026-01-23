@@ -20,7 +20,6 @@ import {
   Mic2,
   PaletteIcon,
   PieChart,
-  ShieldCheck,
   Sparkles,
   UserCircle,
 } from 'lucide-react';
@@ -32,7 +31,7 @@ import { electronSyncSelectors } from '@/store/electron/selectors';
 import { SettingsTabs } from '@/store/global/initialState';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
-import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
+import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 export enum SettingsGroupKey {
   AIConfig = 'ai-config',
@@ -61,8 +60,7 @@ export const useCategory = () => {
   const mobile = useServerConfigStore((s) => s.isMobile);
   const { enableSTT, hideDocs, showAiImage, showApiKeyManage } =
     useServerConfigStore(featureFlagsSelectors);
-  const [isLoginWithClerk, avatar, username] = useUserStore((s) => [
-    authSelectors.isLoginWithClerk(s),
+  const [avatar, username] = useUserStore((s) => [
     userProfileSelectors.userAvatar(s),
     userProfileSelectors.nickName(s),
   ]);
@@ -86,11 +84,6 @@ export const useCategory = () => {
         icon: avatarUrl ? <Avatar avatar={avatarUrl} shape={'square'} size={26} /> : UserCircle,
         key: SettingsTabs.Profile,
         label: username ? username : tAuth('tab.profile'),
-      },
-      isLoginWithClerk && {
-        icon: ShieldCheck,
-        key: SettingsTabs.Security,
-        label: tAuth('tab.security'),
       },
       {
         icon: ChartColumnBigIcon,
@@ -237,18 +230,7 @@ export const useCategory = () => {
     });
 
     return groups;
-  }, [
-    t,
-    tAuth,
-    enableSTT,
-    hideDocs,
-    mobile,
-    showAiImage,
-    showApiKeyManage,
-    isLoginWithClerk,
-    avatarUrl,
-    username,
-  ]);
+  }, [t, tAuth, enableSTT, hideDocs, mobile, showAiImage, showApiKeyManage, avatarUrl, username]);
 
   return categoryGroups;
 };

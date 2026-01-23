@@ -64,7 +64,6 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
           setSettingsOpen(true);
         }
       }}
-      type="default"
     >
       {t('store.actions.configure')}
     </Button>

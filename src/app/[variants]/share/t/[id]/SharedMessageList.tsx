@@ -1,6 +1,5 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 
 import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversation';
@@ -44,9 +43,7 @@ const SharedMessageList = memo<SharedMessageListProps>(({ agentId, groupId, shar
         replaceMessages(messages, { context: ctx });
       }}
     >
-      <Flexbox flex={1}>
-        <ChatList disableActionsBar itemContent={itemContent} />
-      </Flexbox>
+      <ChatList disableActionsBar itemContent={itemContent} />
     </ConversationProvider>
   );
 });

@@ -1,7 +1,4 @@
 {
-  "clerkAuth.loginSuccess.action": "متابعة الجلسة",
-  "clerkAuth.loginSuccess.desc": "{{greeting}}، يسعدنا الاستمرار في خدمتك. لنكمل من حيث توقفنا.",
-  "clerkAuth.loginSuccess.title": "مرحبًا بعودتك، {{nickName}}",
   "error.backHome": "العودة إلى الصفحة الرئيسية",
   "error.desc": "حاول مرة أخرى لاحقًا، أو عد إلى العالم المعروف.",
   "error.retry": "إعادة التحميل",
@@ -87,7 +84,6 @@
   "response.InsufficientQuota": "عذرًا، تم استهلاك الحصة المخصصة لهذا المفتاح. يرجى التحقق من رصيد حسابك أو زيادة الحصة والمحاولة مجددًا.",
   "response.InvalidAccessCode": "رمز الوصول غير صالح أو فارغ. يرجى إدخال رمز الوصول الصحيح أو إضافة مفتاح API مخصص.",
   "response.InvalidBedrockCredentials": "فشل التوثيق مع Bedrock. يرجى التحقق من AccessKeyId/SecretAccessKey والمحاولة مجددًا.",
-  "response.InvalidClerkUser": "عذرًا، لم تقم بتسجيل الدخول حاليًا. يرجى تسجيل الدخول أو إنشاء حساب للمتابعة.",
   "response.InvalidComfyUIArgs": "إعدادات ComfyUI غير صالحة. يرجى التحقق من الإعدادات والمحاولة مجددًا.",
   "response.InvalidGithubToken": "رمز GitHub الشخصي غير صحيح أو فارغ. يرجى التحقق من الرمز والمحاولة مجددًا.",
   "response.InvalidOllamaArgs": "إعدادات Ollama غير صالحة، يرجى التحقق منها والمحاولة مجددًا.",

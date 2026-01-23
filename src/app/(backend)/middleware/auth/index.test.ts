@@ -8,10 +8,6 @@ import { createErrorResponse } from '@/utils/errorResponse';
 import { RequestHandler, checkAuth } from './index';
 import { checkAuthMethod } from './utils';
 
-vi.mock('@clerk/nextjs/server', () => ({
-  getAuth: vi.fn(),
-}));
-
 vi.mock('@/utils/errorResponse', () => ({
   createErrorResponse: vi.fn(),
 }));
@@ -23,6 +19,14 @@ vi.mock('./utils', () => ({
 vi.mock('@lobechat/utils/server', () => ({
   getXorPayload: vi.fn(),
 }));
+
+vi.mock('@/envs/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/envs/auth')>();
+  return {
+    ...actual,
+    enableBetterAuth: false,
+  };
+});
 
 describe('checkAuth', () => {
   const mockHandler: RequestHandler = vi.fn();

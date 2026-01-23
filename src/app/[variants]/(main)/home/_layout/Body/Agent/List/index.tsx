@@ -42,7 +42,7 @@ const AgentList = memo<{ onMoreClick?: () => void }>(({ onMoreClick }) => {
 
   return (
     <>
-      <InboxItem />
+      <InboxItem style={{ minHeight: 36 }} />
       {showPinned && <SessionList dataSource={pinnedList!} />}
       {showCustom && <Group dataSource={customList!} />}
       {showDefault && (
