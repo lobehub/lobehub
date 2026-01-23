@@ -1,7 +1,5 @@
 import { headers } from 'next/headers';
 
-import { auth } from '@/auth';
-
 import type { TrustedClientUserInfo } from './index';
 
 /**
@@ -11,6 +9,8 @@ import type { TrustedClientUserInfo } from './index';
  */
 export const getSessionUser = async (): Promise<TrustedClientUserInfo | undefined> => {
   try {
+    // Dynamic import to avoid validator ESM/CJS issue during sitemap generation
+    const { auth } = await import('@/auth');
     const headersList = await headers();
     const session = await auth.api.getSession({
       headers: headersList,
