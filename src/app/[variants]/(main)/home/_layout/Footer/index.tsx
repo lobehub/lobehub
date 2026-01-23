@@ -29,13 +29,10 @@ import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfi
 
 const PRODUCT_HUNT_NOTIFICATION = {
   actionHref: 'https://www.producthunt.com/posts/lobehub',
-  actionLabel: 'Support us',
-  description: 'Support us on Product Hunt. Your support means a lot to us!',
   endTime: new Date('2026-02-01T00:00:00Z'),
-  image: 'https://file.rene.wang/clipboard-1769069508675-4576fadc5abe.png',
-  slug: 'product-hunt-2025',
-  startTime: new Date('2026-01-27T00:00:00Z'),
-  title: "We're on Product Hunt!",
+  image: 'https://hub-apac-1.lobeobjects.space/og/lobehub-ph.png',
+  slug: 'product-hunt-2026',
+  startTime: new Date('2026-01-27T08:00:00Z'),
 };
 
 const Footer = memo(() => {
@@ -186,12 +183,12 @@ const Footer = memo(() => {
       />
       <HighlightNotification
         actionHref={PRODUCT_HUNT_NOTIFICATION.actionHref}
-        actionLabel={PRODUCT_HUNT_NOTIFICATION.actionLabel}
-        description={PRODUCT_HUNT_NOTIFICATION.description}
+        actionLabel={t('productHunt.actionLabel')}
+        description={t('productHunt.description')}
         image={PRODUCT_HUNT_NOTIFICATION.image}
         onClose={handleCloseProductHuntCard}
         open={isProductHuntCardOpen}
-        title={PRODUCT_HUNT_NOTIFICATION.title}
+        title={t('productHunt.title')}
       />
     </>
   );
