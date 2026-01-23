@@ -1,7 +1,7 @@
 import { ActionIcon, Block, Flexbox, Popover } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronsUpDownIcon, Clock3Icon, PanelRightCloseIcon, PlusIcon } from 'lucide-react';
-import { Suspense, memo, useMemo, useState } from 'react';
+import { Suspense, memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/app/[variants]/(main)/home/_layout/Body/Agent/List/AgentItem/Avatar';
@@ -164,6 +164,15 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId, isHovered }) => {
   const setActiveAgentId = useAgentStore((s) => s.setActiveAgentId);
   const [topicPopoverOpen, setTopicPopoverOpen] = useState(false);
 
+  const handleAgentChange = useCallback(
+    (id: string) => {
+      setActiveAgentId(id);
+      // Sync chatStore's activeAgentId to ensure topic selectors work correctly
+      useChatStore.setState({ activeAgentId: id });
+    },
+    [setActiveAgentId],
+  );
+
   // Fetch topics for the agent builder
   useChatStore((s) => s.useFetchTopics)(true, { agentId });
 
@@ -181,7 +190,7 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId, isHovered }) => {
     <NavHeader
       left={
         <Flexbox align="center" gap={8} horizontal>
-          <AgentSelector agentId={agentId} onAgentChange={setActiveAgentId} />
+          <AgentSelector agentId={agentId} onAgentChange={handleAgentChange} />
         </Flexbox>
       }
       right={
