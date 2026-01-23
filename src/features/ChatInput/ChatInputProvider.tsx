@@ -1,5 +1,8 @@
 import { useEditor } from '@lobehub/editor/react';
-import { type ReactNode, memo, useRef } from 'react';
+import { type MutableRefObject, type ReactNode, memo, useRef } from 'react';
+
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
 import StoreUpdater, { type StoreUpdaterProps } from './StoreUpdater';
 import { Provider, createStore } from './store';
@@ -8,10 +11,16 @@ interface ChatInputProviderProps extends StoreUpdaterProps {
   children: ReactNode;
 }
 
-export const ChatInputProvider = memo<ChatInputProviderProps>(
+interface ChatInputProviderInnerProps extends StoreUpdaterProps {
+  children: ReactNode;
+  contentRef: MutableRefObject<string>;
+}
+
+const ChatInputProviderInner = memo<ChatInputProviderInnerProps>(
   ({
     agentId,
     children,
+    contentRef,
     leftActions,
     rightActions,
     mobile,
@@ -31,6 +40,7 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
         createStore={() =>
           createStore({
             allowExpand,
+            contentRef,
             editor,
             leftActions,
             mentionItems,
@@ -60,3 +70,13 @@ export const ChatInputProvider = memo<ChatInputProviderProps>(
     );
   },
 );
+
+export const ChatInputProvider = (props: ChatInputProviderProps) => {
+  const enableRichRender = useUserStore(labPreferSelectors.enableInputMarkdown);
+  // Ref to persist content across re-mounts when enableRichRender changes
+  const contentRef = useRef<string>('');
+
+  return (
+    <ChatInputProviderInner contentRef={contentRef} key={`editor-${enableRichRender}`} {...props} />
+  );
+};

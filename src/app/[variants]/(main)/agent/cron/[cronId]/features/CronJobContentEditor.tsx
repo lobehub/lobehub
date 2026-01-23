@@ -11,7 +11,7 @@ import { Editor, useEditor } from '@lobehub/editor/react';
 import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { Card } from 'antd';
 import { Clock } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef } from 'react';
+import { type RefObject, memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 interface CronJobContentEditorProps {
@@ -20,8 +20,12 @@ interface CronJobContentEditorProps {
   onChange: (value: string) => void;
 }
 
-const CronJobContentEditor = memo<CronJobContentEditorProps>(
-  ({ enableRichRender, initialValue, onChange }) => {
+interface CronJobContentEditorInnerProps extends CronJobContentEditorProps {
+  contentRef: RefObject<string>;
+}
+
+const CronJobContentEditorInner = memo<CronJobContentEditorInnerProps>(
+  ({ enableRichRender, initialValue, onChange, contentRef }) => {
     const { t } = useTranslation('setting');
     const editor = useEditor();
     const currentValueRef = useRef(initialValue);
@@ -30,23 +34,6 @@ const CronJobContentEditor = memo<CronJobContentEditorProps>(
     useEffect(() => {
       currentValueRef.current = initialValue;
     }, [initialValue]);
-
-    // Initialize editor content when editor is ready
-    useEffect(() => {
-      if (!editor) return;
-      try {
-        setTimeout(() => {
-          if (initialValue) {
-            editor.setDocument(enableRichRender ? 'markdown' : 'text', initialValue);
-          }
-        }, 100);
-      } catch (error) {
-        console.error('[CronJobContentEditor] Failed to initialize editor content:', error);
-        setTimeout(() => {
-          editor.setDocument(enableRichRender ? 'markdown' : 'text', initialValue);
-        }, 100);
-      }
-    }, [editor, enableRichRender, initialValue]);
 
     // Handle content changes
     const handleContentChange = useCallback(
@@ -57,13 +44,18 @@ const CronJobContentEditor = memo<CronJobContentEditorProps>(
 
         const finalContent = nextContent || '';
 
+        // Save to parent ref for restoration
+        if (contentRef) {
+          (contentRef as { current: string }).current = finalContent;
+        }
+
         // Only call onChange if content actually changed
         if (finalContent !== currentValueRef.current) {
           currentValueRef.current = finalContent;
           onChange(finalContent);
         }
       },
-      [enableRichRender, onChange],
+      [enableRichRender, onChange, contentRef],
     );
 
     return (
@@ -82,6 +74,14 @@ const CronJobContentEditor = memo<CronJobContentEditorProps>(
               content={''}
               editor={editor}
               lineEmptyPlaceholder={t('agentCronJobs.form.content.placeholder')}
+              onInit={(editor) => {
+                // Restore content from parent ref when editor re-initializes
+                if (contentRef?.current) {
+                  editor.setDocument(enableRichRender ? 'markdown' : 'text', contentRef.current);
+                } else if (initialValue) {
+                  editor.setDocument(enableRichRender ? 'markdown' : 'text', initialValue);
+                }
+              }}
               onTextChange={handleContentChange}
               placeholder={t('agentCronJobs.form.content.placeholder')}
               plugins={
@@ -107,5 +107,18 @@ const CronJobContentEditor = memo<CronJobContentEditorProps>(
     );
   },
 );
+
+const CronJobContentEditor = (props: CronJobContentEditorProps) => {
+  // Ref to persist content across re-mounts when enableRichRender changes
+  const contentRef = useRef<string>(props.initialValue);
+
+  return (
+    <CronJobContentEditorInner
+      contentRef={contentRef}
+      key={`editor-${props.enableRichRender}`}
+      {...props}
+    />
+  );
+};
 
 export default CronJobContentEditor;
