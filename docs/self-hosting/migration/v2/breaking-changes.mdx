@@ -40,15 +40,15 @@ LobeHub 2.0 only supports Better Auth authentication system. The following envir
 
 ## New Optional Environment Variables
 
-| Environment Variable                  | Description                                         |
-| ------------------------------------- | --------------------------------------------------- |
-| `AUTH_SSO_PROVIDERS`                  | Comma-separated list of enabled SSO providers       |
-| `INTERNAL_JWT_EXPIRATION`             | Internal JWT token expiration time (default: `30s`) |
-| `NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION` | Set to `1` to require email verification            |
-| `SMTP_HOST`                           | SMTP server hostname for email features             |
-| `SMTP_PORT`                           | SMTP server port                                    |
-| `SMTP_USER`                           | SMTP authentication username                        |
-| `SMTP_PASS`                           | SMTP authentication password                        |
+| Environment Variable      | Description                                         |
+| ------------------------- | --------------------------------------------------- |
+| `AUTH_SSO_PROVIDERS`      | Comma-separated list of enabled SSO providers       |
+| `INTERNAL_JWT_EXPIRATION` | Internal JWT token expiration time (default: `30s`) |
+| `AUTH_EMAIL_VERIFICATION` | Set to `1` to require email verification            |
+| `SMTP_HOST`               | SMTP server hostname for email features             |
+| `SMTP_PORT`               | SMTP server port                                    |
+| `SMTP_USER`               | SMTP authentication username                        |
+| `SMTP_PASS`               | SMTP authentication password                        |
 
 For detailed configuration, see [Authentication Environment Variables](/docs/self-hosting/environment-variables/auth).
 

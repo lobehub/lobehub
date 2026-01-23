@@ -284,11 +284,11 @@ async function isServerRunning(port: number): Promise<boolean> {
 
 function getServerEnv(port: number): Record<string, string> {
   return {
+    AUTH_EMAIL_VERIFICATION: '0',
     AUTH_SECRET: CONFIG.secrets.betterAuthSecret,
     DATABASE_DRIVER: CONFIG.databaseDriver,
     DATABASE_URL: CONFIG.databaseUrl,
     KEY_VAULTS_SECRET: CONFIG.secrets.keyVaultsSecret,
-    NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION: '0',
     NODE_OPTIONS: '--max-old-space-size=6144',
     PORT: String(port),
     S3_ACCESS_KEY_ID: CONFIG.s3Mock.accessKeyId,

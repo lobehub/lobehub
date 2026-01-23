@@ -19,30 +19,24 @@ const MIGRATION_DOC_BASE = 'https://lobehub.com/docs/self-hosting/advanced/auth'
  */
 const DEPRECATED_CHECKS = [
   {
-    name: 'NextAuth',
+    docUrl: `${MIGRATION_DOC_BASE}/nextauth-to-betterauth`,
     getVars: () =>
       Object.keys(process.env).filter(
-        (key) => key.startsWith('NEXT_AUTH') || key.startsWith('NEXTAUTH')
+        (key) => key.startsWith('NEXT_AUTH') || key.startsWith('NEXTAUTH'),
       ),
     message: 'NextAuth has been removed from LobeChat. Please migrate to Better Auth.',
-    docUrl: `${MIGRATION_DOC_BASE}/nextauth-to-betterauth`,
+    name: 'NextAuth',
   },
   {
-    name: 'Clerk',
+    docUrl: `${MIGRATION_DOC_BASE}/clerk-to-betterauth`,
     getVars: () =>
       ['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'CLERK_SECRET_KEY', 'CLERK_WEBHOOK_SECRET'].filter(
-        (key) => process.env[key]
+        (key) => process.env[key],
       ),
     message: 'Clerk has been removed from LobeChat. Please migrate to Better Auth.',
-    docUrl: `${MIGRATION_DOC_BASE}/clerk-to-betterauth`,
+    name: 'Clerk',
   },
   {
-    name: 'Deprecated Auth',
-    getVars: () =>
-      ['NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION', 'NEXT_PUBLIC_ENABLE_MAGIC_LINK'].filter(
-        (key) => process.env[key]
-      ),
-    message: 'Please update to the new environment variable names.',
     formatVar: (envVar) => {
       const mapping = {
         NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION: 'AUTH_EMAIL_VERIFICATION',
@@ -50,6 +44,12 @@ const DEPRECATED_CHECKS = [
       };
       return `${envVar} → Please use ${mapping[envVar]} instead`;
     },
+    getVars: () =>
+      ['NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION', 'NEXT_PUBLIC_ENABLE_MAGIC_LINK'].filter(
+        (key) => process.env[key],
+      ),
+    message: 'Please update to the new environment variable names.',
+    name: 'Deprecated Auth',
   },
 ];
 
@@ -84,7 +84,14 @@ function checkDeprecatedAuth(options = {}) {
   for (const check of DEPRECATED_CHECKS) {
     const foundVars = check.getVars();
     if (foundVars.length > 0) {
-      printErrorAndExit(check.name, foundVars, check.message, action, check.docUrl, check.formatVar);
+      printErrorAndExit(
+        check.name,
+        foundVars,
+        check.message,
+        action,
+        check.docUrl,
+        check.formatVar,
+      );
     }
   }
 }

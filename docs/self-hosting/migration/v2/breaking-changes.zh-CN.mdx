@@ -38,15 +38,15 @@ LobeHub 2.0 仅支持 Better Auth 认证系统。以下环境变量现在是必�
 
 ## 新增的可选环境变量
 
-| 环境变量                                  | 说明                      |
-| ------------------------------------- | ----------------------- |
-| `AUTH_SSO_PROVIDERS`                  | 启用的 SSO 提供商列表，以逗号分隔     |
-| `INTERNAL_JWT_EXPIRATION`             | 内部 JWT 令牌过期时间（默认：`30s`） |
-| `NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION` | 设置为 `1` 以要求邮箱验证         |
-| `SMTP_HOST`                           | 邮件功能的 SMTP 服务器主机名       |
-| `SMTP_PORT`                           | SMTP 服务器端口              |
-| `SMTP_USER`                           | SMTP 认证用户名              |
-| `SMTP_PASS`                           | SMTP 认证密码               |
+| 环境变量                      | 说明                      |
+| ------------------------- | ----------------------- |
+| `AUTH_SSO_PROVIDERS`      | 启用的 SSO 提供商列表，以逗号分隔     |
+| `INTERNAL_JWT_EXPIRATION` | 内部 JWT 令牌过期时间（默认：`30s`） |
+| `AUTH_EMAIL_VERIFICATION` | 设置为 `1` 以要求邮箱验证         |
+| `SMTP_HOST`               | 邮件功能的 SMTP 服务器主机名       |
+| `SMTP_PORT`               | SMTP 服务器端口              |
+| `SMTP_USER`               | SMTP 认证用户名              |
+| `SMTP_PASS`               | SMTP 认证密码               |
 
 详细配置请参阅[身份验证环境变量](/docs/self-hosting/environment-variables/auth)。
 
