@@ -130,7 +130,7 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
           forkedFromIdentifier: identifier, // Store the source group identifier
         },
         // Group content is the supervisor's systemRole (for backward compatibility)
-        content: supervisorConfig?.systemRole || config.systemRole,
+        content: config.systemRole || supervisorConfig?.systemRole,
         ...meta,
       };
 
