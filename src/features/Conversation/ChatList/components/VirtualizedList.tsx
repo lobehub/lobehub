@@ -5,12 +5,14 @@ import { type ReactElement, type ReactNode, memo, useCallback, useEffect, useRef
 import { VList, type VListHandle } from 'virtua';
 
 import WideScreenContainer from '../../../WideScreenContainer';
-import { useConversationStore, virtuaListSelectors } from '../../store';
+import { dataSelectors, useConversationStore, virtuaListSelectors } from '../../store';
+import { useScrollToUserMessage } from '../hooks/useScrollToUserMessage';
 import AutoScroll from './AutoScroll';
 import DebugInspector, {
   AT_BOTTOM_THRESHOLD,
   OPEN_DEV_INSPECTOR,
 } from './AutoScroll/DebugInspector';
+import BackBottom from './BackBottom';
 
 interface VirtualizedListProps {
   dataSource: string[];
@@ -24,7 +26,6 @@ interface VirtualizedListProps {
  */
 const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent }) => {
   const virtuaRef = useRef<VListHandle>(null);
-  const prevDataLengthRef = useRef(dataSource.length);
   const scrollEndTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Store actions
@@ -112,15 +113,18 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     };
   }, [resetVisibleItems]);
 
-  // Auto scroll to bottom when new messages arrive
-  useEffect(() => {
-    const shouldScroll = dataSource.length > prevDataLengthRef.current;
-    prevDataLengthRef.current = dataSource.length;
+  // Get the last message to check if it's a user message
+  const displayMessages = useConversationStore(dataSelectors.displayMessages);
+  const lastMessage = displayMessages.at(-1);
+  const isLastMessageFromUser = lastMessage?.role === 'user';
 
-    if (shouldScroll && virtuaRef.current) {
-      virtuaRef.current.scrollToIndex(dataSource.length - 2, { align: 'start', smooth: true });
-    }
-  }, [dataSource.length]);
+  // Auto scroll to user message when user sends a new message
+  // Only scroll when the new message is from the user, not when AI/agent responds
+  useScrollToUserMessage({
+    dataSourceLength: dataSource.length,
+    isLastMessageFromUser,
+    scrollToIndex: virtuaRef.current?.scrollToIndex ?? null,
+  });
 
   // Scroll to bottom on initial render
   useEffect(() => {
@@ -129,8 +133,11 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     }
   }, []);
 
+  const atBottom = useConversationStore(virtuaListSelectors.atBottom);
+  const scrollToBottom = useConversationStore((s) => s.scrollToBottom);
+
   return (
-    <>
+    <div style={{ height: '100%', position: 'relative' }}>
       {/* Debug Inspector - 放在 VList 外面，不会被虚拟列表回收 */}
       {OPEN_DEV_INSPECTOR && <DebugInspector />}
       <VList
@@ -143,15 +150,16 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
       >
         {(messageId, index): ReactElement => {
           const isAgentCouncil = messageId.includes('agentCouncil');
+          const isLastItem = index === dataSource.length - 1;
           const content = itemContent(index, messageId);
-          const isLast = index === dataSource.length - 1;
 
           if (isAgentCouncil) {
             // AgentCouncil needs full width for horizontal scroll
             return (
               <div key={messageId} style={{ position: 'relative', width: '100%' }}>
                 {content}
-                {isLast && <AutoScroll />}
+                {/* AutoScroll 放在最后一个 Item 里面，这样只有当最后一个 Item 可见时才会触发自动滚动 */}
+                {isLastItem && <AutoScroll />}
               </div>
             );
           }
@@ -159,12 +167,15 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
           return (
             <WideScreenContainer key={messageId} style={{ position: 'relative' }}>
               {content}
-              {isLast && <AutoScroll />}
+              {/* AutoScroll 放在最后一个 Item 里面，这样只有当最后一个 Item 可见时才会触发自动滚动 */}
+              {isLastItem && <AutoScroll />}
             </WideScreenContainer>
           );
         }}
       </VList>
-    </>
+      {/* BackBottom 放在 VList 外面，这样无论滚动到哪里都能看到 */}
+      <BackBottom atBottom={atBottom} onScrollToBottom={() => scrollToBottom(true)} visible={!atBottom} />
+    </div>
   );
 }, isEqual);
 

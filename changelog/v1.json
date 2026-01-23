@@ -1,5 +1,17 @@
 [
   {
+    "children": {},
+    "date": "2026-01-23",
+    "version": "2.0.0-next.350"
+  },
+  {
+    "children": {
+      "fixes": ["When use market group, the group sys role was not used."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.349"
+  },
+  {
     "children": {
       "fixes": [
         "Fixed the agent group builder tools excaution edge case crash, fixed the group topic copy not right."
