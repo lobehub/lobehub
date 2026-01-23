@@ -35,6 +35,7 @@ import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/s
 
 import PluginTag from './PluginTag';
 
+
 const WEB_BROWSING_IDENTIFIER = 'lobe-web-browsing';
 
 type TabType = 'all' | 'installed';
@@ -46,11 +47,6 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
 
     width: 100%;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
-
-    background: ${cssVar.colorBgElevated};
-    box-shadow: ${cssVar.boxShadowSecondary};
 
     .${prefixCls}-dropdown-menu {
       border-radius: 0 !important;
@@ -339,7 +335,7 @@ const AgentTool = memo<AgentToolProps>(
       () => [
         // 原有的 builtin 工具
         ...filteredBuiltinList.map((item) => ({
-          icon: <Avatar avatar={item.meta.avatar} size={20} style={{ flex: 'none' }} />,
+          icon: <Avatar avatar={item.meta.avatar} size={20} style={{ flex: 'none', marginRight: 0 }} />,
           key: item.identifier,
           label: (
             <ToolItem
@@ -411,18 +407,6 @@ const AgentTool = memo<AgentToolProps>(
             </Flexbox>
           ),
           type: 'group',
-        },
-        {
-          type: 'divider',
-        },
-        {
-          extra: <Icon icon={ArrowRight} />,
-          icon: Store,
-          key: 'plugin-store',
-          label: t('tools.plugins.store'),
-          onClick: () => {
-            createSkillStoreModal();
-          },
         },
       ],
       [builtinItems, pluginItems, enablePluginCount, t],
@@ -557,7 +541,6 @@ const AgentTool = memo<AgentToolProps>(
           {/* Plugin Selector Dropdown - Using Action component pattern */}
           <Suspense fallback={button}>
             <ActionDropdown
-              maxHeight={500}
               maxWidth={400}
               menu={{
                 items: currentItems,
@@ -567,11 +550,10 @@ const AgentTool = memo<AgentToolProps>(
                   overflowY: 'visible',
                 },
               }}
-              minHeight={isKlavisEnabledInEnv || isLobehubSkillEnabled ? 500 : undefined}
               minWidth={400}
               placement={'bottomLeft'}
               popupRender={(menu) => (
-                <div className={styles.dropdown}>
+                <Flexbox className={styles.dropdown} style={{ maxHeight: 500 }}>
                   {/* stopPropagation prevents dropdown's onClick from calling preventDefault on Segmented */}
                   <div className={styles.header} onClick={(e) => e.stopPropagation()}>
                     <Segmented
@@ -591,16 +573,26 @@ const AgentTool = memo<AgentToolProps>(
                       value={effectiveTab}
                     />
                   </div>
-                  <div
-                    className={styles.scroller}
-                    style={{
-                      maxHeight: 500,
-                      minHeight: isKlavisEnabledInEnv || isLobehubSkillEnabled ? 500 : undefined,
-                    }}
-                  >
+                  <div className={styles.scroller} style={{ flex: 1 }}>
                     {menu}
                   </div>
-                </div>
+                  <Flexbox
+                    align="center"
+                    gap={8}
+                    horizontal
+                    onClick={() => createSkillStoreModal()}
+                    style={{
+                      borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}`,
+                      cursor: 'pointer',
+                      flex: 'none',
+                      padding: cssVar.paddingSM,
+                    }}
+                  >
+                    <Icon icon={Store} />
+                    <span style={{ flex: 1 }}>{t('tools.plugins.store')}</span>
+                    <Icon icon={ArrowRight} />
+                  </Flexbox>
+                </Flexbox>
               )}
               trigger={'click'}
             >
