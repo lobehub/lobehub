@@ -1,7 +1,8 @@
-import { correctOIDCUrl, getUserAuth } from '@lobechat/utils/server';
+import { getUserAuth } from '@lobechat/utils/server';
 import debug from 'debug';
 import { type NextRequest, NextResponse } from 'next/server';
 
+import { appEnv } from '@/envs/app';
 import { OIDCService } from '@/server/services/oidc';
 
 const log = debug('lobe-oidc:consent');
@@ -113,15 +114,23 @@ export async function POST(request: NextRequest) {
     const internalRedirectUrlString = await oidcService.getInteractionResult(uid, result);
     log('OIDC Provider internal redirect URL string: %s', internalRedirectUrlString);
 
-    let finalRedirectUrl;
-    try {
-      finalRedirectUrl = correctOIDCUrl(request, new URL(internalRedirectUrlString));
-    } catch {
-      finalRedirectUrl = new URL(internalRedirectUrlString);
-      log('Warning: Could not parse redirect URL, using as-is: %s', internalRedirectUrlString);
+    // 直接使用 APP_URL 作为基础
+    if (appEnv.APP_URL) {
+      const baseUrl = new URL(appEnv.APP_URL);
+      const internalUrl = new URL(internalRedirectUrlString);
+      baseUrl.pathname = internalUrl.pathname;
+      baseUrl.search = internalUrl.search;
+      baseUrl.hash = internalUrl.hash;
+      const finalRedirectUrl = baseUrl;
+      log('Using APP_URL as base for redirect: %s', finalRedirectUrl.toString());
+      return NextResponse.redirect(finalRedirectUrl, {
+        status: 303,
+      });
     }
 
-    return NextResponse.redirect(finalRedirectUrl, {
+    // 后备方案：使用原始内部URL
+    log('Using internal redirect URL directly: %s', internalRedirectUrlString);
+    return NextResponse.redirect(new URL(internalRedirectUrlString), {
       status: 303,
     });
   } catch (error) {
