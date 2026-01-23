@@ -225,7 +225,8 @@ class CalculatorExecutor
       };
 
       const sorted = sortedParsed.map(formatNumber);
-      const largest = formatNumber(sortedParsed.at(-1));
+      // prettier-ignore
+      const largest = formatNumber(sortedParsed[sortedParsed.length - 1]);
       const smallest = formatNumber(sortedParsed[0]);
 
       let result: any;
