@@ -7,11 +7,11 @@ const { existsSync } = require('node:fs');
 // Resolve shared module path for both local dev and Docker environments
 // Local: scripts/serverLauncher/startServer.js -> scripts/_shared/...
 // Docker: /app/startServer.js -> /app/scripts/_shared/...
-const localPath = path.join(__dirname, '..', '_shared', 'checkDeprecatedClerkEnv.js');
-const dockerPath = '/app/scripts/_shared/checkDeprecatedClerkEnv.js';
+const localPath = path.join(__dirname, '..', '_shared', 'checkDeprecatedAuth.js');
+const dockerPath = '/app/scripts/_shared/checkDeprecatedAuth.js';
 const sharedModulePath = existsSync(localPath) ? localPath : dockerPath;
 
-const { checkDeprecatedClerkEnv } = require(sharedModulePath);
+const { checkDeprecatedAuth } = require(sharedModulePath);
 
 // Set file paths
 const DB_MIGRATION_SCRIPT_PATH = '/app/docker.cjs';
@@ -139,8 +139,8 @@ const runServer = async () => {
 
 // Main execution block
 (async () => {
-  // Check for deprecated Clerk env vars first - fail fast if found
-  checkDeprecatedClerkEnv({ action: 'restart' });
+  // Check for deprecated auth env vars first - fail fast if found
+  checkDeprecatedAuth({ action: 'restart' });
 
   console.log('🌐 DNS Server:', dns.getServers());
   console.log('-------------------------------------');

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 // Use createRequire for CommonJS module compatibility
 const require = createRequire(import.meta.url);
-const { checkDeprecatedClerkEnv } = require('./_shared/checkDeprecatedClerkEnv.js');
+const { checkDeprecatedAuth } = require('./_shared/checkDeprecatedAuth.js');
 
 const isDesktop = process.env.NEXT_PUBLIC_IS_DESKTOP_APP === '1';
 const isBundleAnalyzer = process.env.ANALYZE === 'true' && process.env.CI === 'true';
@@ -151,8 +151,8 @@ export const runPrebuild = async (targetDir: string = 'src') => {
 const isMainModule = process.argv[1] === fileURLToPath(import.meta.url);
 
 if (isMainModule) {
-  // Check for deprecated Clerk env vars first - fail fast if found
-  checkDeprecatedClerkEnv();
+  // Check for deprecated auth env vars first - fail fast if found
+  checkDeprecatedAuth();
 
   printEnvInfo();
   // 执行删除操作
