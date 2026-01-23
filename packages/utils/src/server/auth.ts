@@ -1,6 +1,6 @@
 import { headers } from 'next/headers';
 
-import { enableBetterAuth, enableNextAuth } from '@/envs/auth';
+import { enableBetterAuth } from '@/envs/auth';
 
 export const getUserAuth = async () => {
   if (enableBetterAuth) {
@@ -16,16 +16,6 @@ export const getUserAuth = async () => {
     const userId = session?.user?.id;
 
     return { betterAuth: session, userId };
-  }
-
-  if (enableNextAuth) {
-    const { default: NextAuth } = await import('@/libs/next-auth');
-
-    const session = await NextAuth.auth();
-
-    const userId = session?.user.id;
-
-    return { nextAuth: session, userId };
   }
 
   throw new Error('Auth method is not enabled');

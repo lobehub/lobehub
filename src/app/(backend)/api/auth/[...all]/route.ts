@@ -1,6 +1,6 @@
 import type { NextRequest } from 'next/server';
 
-import { enableBetterAuth, enableNextAuth } from '@/envs/auth';
+import { enableBetterAuth } from '@/envs/auth';
 
 const createHandler = async () => {
   if (enableBetterAuth) {
@@ -9,11 +9,6 @@ const createHandler = async () => {
       import('@/auth'),
     ]);
     return toNextJsHandler(auth);
-  }
-
-  if (enableNextAuth) {
-    const NextAuthNode = await import('@/libs/next-auth');
-    return NextAuthNode.default.handlers;
   }
 
   return { GET: undefined, POST: undefined };

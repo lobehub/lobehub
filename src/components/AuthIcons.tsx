@@ -8,12 +8,10 @@ import {
   Github,
   Logto,
   MicrosoftEntra,
-  NextAuth,
   Zitadel,
 } from '@lobehub/ui/icons';
-import React from 'react';
+import { User } from 'lucide-react';
 
-// TODO: check this
 const iconComponents: { [key: string]: any } = {
   'apple': Apple,
   'auth0': Auth0,
@@ -22,7 +20,6 @@ const iconComponents: { [key: string]: any } = {
   'casdoor': Casdoor.Color,
   'cloudflare': Cloudflare.Color,
   'cognito': Aws.Color,
-  'default': NextAuth.Color,
   'github': Github,
   'google': Google.Color,
   'logto': Logto.Color,
@@ -32,14 +29,15 @@ const iconComponents: { [key: string]: any } = {
 };
 
 /**
- * Get the auth icons component for the given id
- * @param id
- * @param size default is 36
- * @returns
+ * Get the auth icons component for the given provider id
  */
 const AuthIcons = (id: string, size = 36) => {
-  const IconComponent = iconComponents[id] || iconComponents.default;
-  return <IconComponent size={size} />;
+  const IconComponent = iconComponents[id];
+  if (IconComponent) {
+    return <IconComponent size={size} />;
+  }
+  // Fallback to generic user icon for unknown providers
+  return <User size={size} />;
 };
 
 export default AuthIcons;
