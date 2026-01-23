@@ -259,6 +259,7 @@ export const conversationLifecycle: StateCreator<
       if (data?.topics) {
         const pageSize = systemStatusSelectors.topicPageSize(useGlobalStore.getState());
         get().internal_updateTopics(operationContext.agentId, {
+          groupId: operationContext.groupId,
           items: data.topics.items,
           pageSize,
           total: data.topics.total,
