@@ -10,7 +10,6 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { StyleSheet } from '@/utils/styles';
 
-import AgentSettings from './features/AgentSettings';
 import Header from './features/Header';
 import ProfileEditor from './features/ProfileEditor';
 import ProfileHydration from './features/ProfileHydration';
@@ -60,7 +59,6 @@ const ProfileArea = memo(() => {
       <Suspense fallback={null}>
         <ProfileHydration />
       </Suspense>
-      <AgentSettings />
     </>
   );
 });

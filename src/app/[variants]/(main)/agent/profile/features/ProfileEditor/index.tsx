@@ -17,6 +17,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import AgentCronJobs from '../AgentCronJobs';
+import AgentSettings from '../AgentSettings';
 import EditorCanvas from '../EditorCanvas';
 import AgentPublishButton from '../Header/AgentPublishButton';
 import AgentHeader from './AgentHeader';
@@ -104,6 +105,8 @@ const ProfileEditor = memo(() => {
       <EditorCanvas />
       {/* Agent Cron Jobs Display (only show if jobs exist) */}
       {ENABLE_BUSINESS_FEATURES && <AgentCronJobs />}
+      {/* Advanced Settings Modal */}
+      <AgentSettings />
     </>
   );
 });

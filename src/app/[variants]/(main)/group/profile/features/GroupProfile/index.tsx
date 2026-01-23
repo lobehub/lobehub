@@ -2,8 +2,9 @@
 
 import { Button, Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { PlayIcon } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { useTheme } from 'antd-style';
+import { PlayIcon, Settings2Icon } from 'lucide-react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
@@ -13,12 +14,15 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
+import AgentSettings from '../AgentSettings';
 import AutoSaveHint from '../Header/AutoSaveHint';
 import GroupPublishButton from '../Header/GroupPublishButton';
 import GroupHeader from './GroupHeader';
 
 const GroupProfile = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
+  const theme = useTheme();
+  const [showAgentSetting, setShowAgentSetting] = useState(false);
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
   const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup);
   const updateGroup = useAgentGroupStore((s) => s.updateGroup);
@@ -86,6 +90,15 @@ const GroupProfile = memo(() => {
             {t('startConversation')}
           </Button>
           <GroupPublishButton />
+          <Button
+            icon={Settings2Icon}
+            onClick={() => setShowAgentSetting(true)}
+            size={'small'}
+            style={{ color: theme.colorTextSecondary }}
+            type={'text'}
+          >
+            {t('advancedSettings')}
+          </Button>
         </Flexbox>
       </Flexbox>
       <Divider />
@@ -97,6 +110,8 @@ const GroupProfile = memo(() => {
         onContentChange={onContentChange}
         placeholder={t('group.profile.contentPlaceholder', { ns: 'chat' })}
       />
+      {/* Advanced Settings Modal */}
+      <AgentSettings onCancel={() => setShowAgentSetting(false)} open={showAgentSetting} />
     </>
   );
 });
