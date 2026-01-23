@@ -1,185 +1,195 @@
 ---
-title: 新身份验证方式开发指南
+title: 新身份验证提供商开发指南
 ---
 
-# 新身份验证方式开发指南
+# 新身份验证提供商开发指南
 
-LobeChat 使用 [Auth.js v5](https://authjs.dev/) 作为外部身份验证服务。Auth.js 是一个开源的身份验证库，它提供了一种简单的方式来实现身份验证和授权功能。本文档将介绍如何使用 Auth.js 来实现新的身份验证方式。
+LobeChat 使用 [Better Auth](https://www.better-auth.com) 作为身份验证服务。本文档介绍如何添加新的 SSO 身份验证提供商。
 
-## 添加新的身份验证提供者
+## 架构概述
 
-为了在 LobeChat 中添加新的身份验证提供者（例如添加 Okta)，你需要完成以下步骤：
+Better Auth SSO 提供商分为两类：
 
-### 准备工作：查阅官方的提供者列表
+| 类型        | 说明                         | 示例                            |
+| --------- | -------------------------- | ----------------------------- |
+| `builtin` | Better Auth 内置支持的提供商       | Google、GitHub、Microsoft、Apple |
+| `generic` | 通过 Generic OIDC/OAuth 插件实现 | Okta、Auth0、Keycloak 等         |
 
-首先，你需要查阅 [Auth.js 提供者列表](https://authjs.dev/reference/core/providers) 来了解是否你的提供者已经被支持。如果你的提供者已经被支持，你可以直接使用 Auth.js 提供的 SDK 来实现身份验证功能。
+## 添加新的 SSO 提供商
 
-接下来我会以 [Okta](https://authjs.dev/reference/core/providers/okta) 为例来介绍如何添加新的身份验证提供者
+以添加 **Okta** 为例，介绍添加 `generic` 类型提供商的完整步骤。
 
-### 步骤 1: 新增关键代码
+### 步骤 1: 创建提供商定义文件
 
-打开 `src/app/api/auth/next-auth.ts` 文件，引入 `next-auth/providers/okta`
-
-```ts
-import { NextAuth } from 'next-auth';
-import Auth0 from 'next-auth/providers/auth0';
-import Okta from 'next-auth/providers/okta';
-
-// 引入 Okta 提供者
-```
-
-新增预定义的服务端配置
+在 `src/libs/better-auth/sso/providers/` 目录下创建 `okta.ts`：
 
 ```ts
-// 导入服务器配置
-const { OKTA_CLIENT_ID, OKTA_CLIENT_SECRET, OKTA_ISSUER } = getServerConfig();
+import { authEnv } from '@/envs/auth';
 
-const nextAuth = NextAuth({
-  providers: [
-    // ... 其他提供者
+import { buildOidcConfig } from '../helpers';
+import type { GenericProviderDefinition } from '../types';
 
-    Okta({
-      clientId: OKTA_CLIENT_ID,
-      clientSecret: OKTA_CLIENT_SECRET,
-      issuer: OKTA_ISSUER,
+const provider: GenericProviderDefinition<{
+  AUTH_OKTA_ID: string;
+  AUTH_OKTA_ISSUER: string;
+  AUTH_OKTA_SECRET: string;
+}> = {
+  // 构建 OIDC 配置
+  build: (env) =>
+    buildOidcConfig({
+      clientId: env.AUTH_OKTA_ID,
+      clientSecret: env.AUTH_OKTA_SECRET,
+      issuer: env.AUTH_OKTA_ISSUER,
+      overrides: {
+        // 可选：自定义用户信息映射
+        mapProfileToUser: (profile) => ({
+          email: profile.email,
+          name: profile.name ?? profile.preferred_username ?? profile.email ?? profile.sub,
+        }),
+      },
+      providerId: 'okta',
     }),
-  ],
-});
-```
 
-### 步骤 2: 更新服务端配置代码
+  // 环境变量检查
+  checkEnvs: () => {
+    return !!(authEnv.AUTH_OKTA_ID && authEnv.AUTH_OKTA_SECRET && authEnv.AUTH_OKTA_ISSUER)
+      ? {
+          AUTH_OKTA_ID: authEnv.AUTH_OKTA_ID,
+          AUTH_OKTA_ISSUER: authEnv.AUTH_OKTA_ISSUER,
+          AUTH_OKTA_SECRET: authEnv.AUTH_OKTA_SECRET,
+        }
+      : false;
+  },
 
-打开 `src/config/server/app.ts` 文件，在 `getAppConfig` 函数中新增 Okta 相关的环境变量
-
-```ts
-export const getAppConfig = () => {
-  // ... 其他代码
-
-  return {
-    // ... 其他环境变量
-
-    OKTA_CLIENT_ID: process.env.OKTA_CLIENT_ID || '',
-    OKTA_CLIENT_SECRET: process.env.OKTA_CLIENT_SECRET || '',
-    OKTA_ISSUER: process.env.OKTA_ISSUER || '',
-  };
+  // 提供商 ID（用于 AUTH_SSO_PROVIDERS 配置）
+  id: 'okta',
+  type: 'generic',
 };
+
+export default provider;
 ```
 
-### 步骤 3: 修改前端页面
+### 步骤 2: 注册提供商
 
-修改在 `src/features/Conversation/Error/OAuthForm.tsx` 及 `src/app/settings/common/Common.tsx` 中的 `signIn` 函数参数
-
-默认为 `auth0`，你可以将其修改为 `okta` 以切换到 Okta 提供者，或删除该参数以支持所有已添加的身份验证服务
-
-该值为 Auth.js 提供者 的 id，你可以阅读相应的 `next-auth/providers` 模块源码以读取默认 ID
-
-### 步骤 4: 配置环境变量
-
-在部署时新增 Okta 相关的环境变量 `OKTA_CLIENT_ID`、`OKTA_CLIENT_SECRET`、`OKTA_ISSUER`，并填入相应的值，即可使用
-
-### 步骤 5: 修改服务端用户信息处理逻辑
-
-#### 在前端获取用户信息
-
-在前端页面中使用 `useOAuthSession()` 方法获取后端返回的用户信息 `user`：
+在 `src/libs/better-auth/sso/index.ts` 中导入并注册：
 
 ```ts
-import { useOAuthSession } from '@/hooks/useOAuthSession';
+// 导入提供商
+import Okta from './providers/okta';
 
-const { user, isOAuthLoggedIn } = useOAuthSession();
+// 添加到 providerDefinitions 数组
+const providerDefinitions = [
+  // ... 其他提供商
+  Okta,
+] as const;
 ```
 
-默认的 `user` 类型为 `User`，类型定义为：
+### 步骤 3: 添加环境变量类型声明
+
+在 `src/envs/auth.ts` 中添加类型声明：
 
 ```ts
-interface User {
-  id?: string;
-  name?: string | null;
-  email?: string | null;
-  image?: string | null;
-}
+// ProcessEnv 接口中添加
+AUTH_OKTA_ID?: string;
+AUTH_OKTA_SECRET?: string;
+AUTH_OKTA_ISSUER?: string;
+
+// getAuthConfig server schema 中添加
+AUTH_OKTA_ID: z.string().optional(),
+AUTH_OKTA_SECRET: z.string().optional(),
+AUTH_OKTA_ISSUER: z.string().optional(),
+
+// runtimeEnv 中添加
+AUTH_OKTA_ID: process.env.AUTH_OKTA_ID,
+AUTH_OKTA_SECRET: process.env.AUTH_OKTA_SECRET,
+AUTH_OKTA_ISSUER: process.env.AUTH_OKTA_ISSUER,
 ```
 
-#### 修改用户 `id` 处理逻辑
+### 步骤 4: 更新文档（可选）
 
-`user.id` 用于标识用户。当引入新身份 OAuth 提供者后，您需要在 `src/app/api/auth/next-auth.ts` 中处理 OAuth 回调所携带的信息。您需要从中选取用户的 `id`。在此之前，我们需要了解 `Auth.js` 的数据处理顺序：
+在 `docs/self-hosting/advanced/auth.mdx` 和 `docs/self-hosting/advanced/auth.zh-CN.mdx` 中添加提供商文档。
 
-```txt
-authorize --> jwt --> session
-```
+## 添加内置提供商
 
-默认情况下，在 `jwt --> session` 过程中，`Auth.js` 会[自动根据登陆类型](https://authjs.dev/reference/core/types#provideraccountid)将用户 `id` 赋值到 `account.providerAccountId` 中。 如果您需要选取其他值作为用户 `id` ，您需要实现以下处理逻辑。
+如果要添加 Better Auth 内置支持的提供商（如 Discord），步骤略有不同：
+
+### 步骤 1: 创建提供商定义文件
 
 ```ts
-  callbacks: {
-    async jwt({ token, account, profile }) {
-      if (account) {
-        // 您可以从 `account` 或 `profile` 中选取其他值
-        token.userId = account.providerAccountId;
-      }
-      return token;
-    },
+import { authEnv } from '@/envs/auth';
+
+import type { BuiltinProviderDefinition } from '../types';
+
+const provider: BuiltinProviderDefinition<{
+  AUTH_DISCORD_ID: string;
+  AUTH_DISCORD_SECRET: string;
+}> = {
+  build: (env) => ({
+    clientId: env.AUTH_DISCORD_ID,
+    clientSecret: env.AUTH_DISCORD_SECRET,
+  }),
+  checkEnvs: () => {
+    return !!(authEnv.AUTH_DISCORD_ID && authEnv.AUTH_DISCORD_SECRET)
+      ? {
+          AUTH_DISCORD_ID: authEnv.AUTH_DISCORD_ID,
+          AUTH_DISCORD_SECRET: authEnv.AUTH_DISCORD_SECRET,
+        }
+      : false;
   },
+  id: 'discord',
+  type: 'builtin',
+};
+
+export default provider;
 ```
 
-#### 自定义 `session` 返回
+### 步骤 2: 更新常量文件
 
-如果您想在 `session` 中携带更多关于 `profile` 及 `account` 的信息，根据上面提到的 `Auth.js` 数据处理顺序，那必须先将该信息复制到 `token` 上。示例：把用户头像 URL：`profile.picture` 添加到`session` 中：
-
-```diff
-  callbacks: {
-    async jwt({ token, profile, account }) {
-      if (profile && account) {
-        token.userId = account.providerAccountId;
-+       token.avatar = profile.picture;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.userId ?? session.user.id;
-+       session.user.avatar = token.avatar;
-      }
-      return session;
-    },
-  },
-```
-
-然后补充对新增参数的类型定义：
+在 `src/libs/better-auth/constants.ts` 中添加：
 
 ```ts
-declare module '@auth/core/jwt' {
-  interface JWT {
-    // ...
-    avatar?: string;
-  }
-}
-
-declare module 'next-auth' {
-  interface User {
-    avatar?: string;
-  }
-}
+export const BUILTIN_BETTER_AUTH_PROVIDERS = [
+  'apple',
+  'google',
+  'github',
+  'cognito',
+  'microsoft',
+  'discord', // 新增
+] as const;
 ```
 
-> [更多`Auth.js`内置类型拓展](https://authjs.dev/getting-started/typescript#module-augmentation)
+## 回调 URL 格式
 
-#### 在处理逻辑中区分多个身份验证提供者
+配置 OAuth 应用时，回调 URL 格式为：
 
-如果您配置了多个身份验证提供者，并且他们的 `userId` 映射各不相同，可以在 `jwt` 方法中的 `account.provider` 参数获取身份提供者的默认 id ，从而进入不同的处理逻辑。
+- **内置提供商**：`https://yourdomain.com/api/auth/callback/{providerId}`
+- **Generic OIDC**：`https://yourdomain.com/api/auth/callback/{providerId}`
 
-```ts
-  callbacks: {
-    async jwt({ token, profile, account }) {
-      if (profile && account) {
-        if (account.provider === 'Authing')
-          token.userId = account.providerAccountId ?? token.sub;
-        else if (acount.provider === 'Okta')
-          token.userId = profile.sub ?? token.sub;
-        else
-          // other providers
-      }
-      return token;
-    },
-  }
+## 使用新提供商
+
+配置环境变量后，在 `AUTH_SSO_PROVIDERS` 中启用：
+
+```bash
+AUTH_SSO_PROVIDERS=google,github,okta
+AUTH_OKTA_ID=your-client-id
+AUTH_OKTA_SECRET=your-client-secret
+AUTH_OKTA_ISSUER=https://your-domain.okta.com
 ```
+
+## 调试技巧
+
+1. **环境变量检查失败**：确保所有必需的环境变量都已设置
+2. **回调 URL 错误**：检查 OAuth 应用配置的回调 URL 是否正确
+3. **用户信息映射**：通过 `mapProfileToUser` 自定义从 OAuth profile 到用户信息的映射
+
+## 相关文件
+
+| 文件                                        | 说明             |
+| ----------------------------------------- | -------------- |
+| `src/libs/better-auth/sso/providers/*.ts` | 提供商定义          |
+| `src/libs/better-auth/sso/index.ts`       | 提供商注册          |
+| `src/libs/better-auth/sso/types.ts`       | 类型定义           |
+| `src/libs/better-auth/sso/helpers.ts`     | 辅助函数           |
+| `src/libs/better-auth/constants.ts`       | 内置提供商常量        |
+| `src/envs/auth.ts`                        | 环境变量定义         |
+| `src/libs/better-auth/define-config.ts`   | Better Auth 配置 |
