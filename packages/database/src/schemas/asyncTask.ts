@@ -34,4 +34,4 @@ export const asyncTasks = pgTable(
 );
 
 export type NewAsyncTaskItem = typeof asyncTasks.$inferInsert;
-export type AsyncTaskSelectItem = typeof asyncTasks.$inferSelect;
+export type AsyncTaskSelectItem = Omit<typeof asyncTasks.$inferSelect, 'metadata' | 'parentId'> & Partial<Pick<typeof asyncTasks.$inferSelect, 'metadata' | 'parentId'>>;
