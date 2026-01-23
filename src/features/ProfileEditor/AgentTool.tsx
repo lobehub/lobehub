@@ -556,20 +556,7 @@ const AgentTool = memo<AgentToolProps>(
       <>
         {/* Plugin Selector and Tags */}
         <Flexbox align="center" gap={8} horizontal wrap={'wrap'}>
-          {/* Second Row: Selected Plugins as Tags */}
-          {allEnabledTools.map((pluginId) => {
-            return (
-              <PluginTag
-                key={pluginId}
-                onRemove={handleRemovePlugin(pluginId)}
-                pluginId={pluginId}
-                showDesktopOnlyLabel={filterAvailableInWeb}
-                useAllMetaList={useAllMetaList}
-              />
-            );
-          })}
           {/* Plugin Selector Dropdown - Using Action component pattern */}
-
           <Suspense fallback={button}>
             <ActionDropdown
               maxHeight={500}
@@ -622,6 +609,18 @@ const AgentTool = memo<AgentToolProps>(
               {button}
             </ActionDropdown>
           </Suspense>
+          {/* Selected Plugins as Tags */}
+          {allEnabledTools.map((pluginId) => {
+            return (
+              <PluginTag
+                key={pluginId}
+                onRemove={handleRemovePlugin(pluginId)}
+                pluginId={pluginId}
+                showDesktopOnlyLabel={filterAvailableInWeb}
+                useAllMetaList={useAllMetaList}
+              />
+            );
+          })}
         </Flexbox>
 
         {/* PluginStore Modal - rendered outside Flexbox to avoid event interference */}
