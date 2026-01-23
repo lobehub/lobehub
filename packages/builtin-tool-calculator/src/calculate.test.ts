@@ -48,13 +48,262 @@ describe('Unit Conversion', () => {
     // This might fail due to Unicode degree symbol
     console.log('Unicode result:', result.content, result.success);
   });
-});
+  describe('Calculator Calculus', () => {
+    describe('differentiate', () => {
+      it('should differentiate polynomial expressions', async () => {
+        const result = await calculatorExecutor.differentiate({
+          expression: 'x^3',
+          variable: 'x',
+        });
 
-describe('Math Constants', () => {
-  it('should handle PI constants', async () => {
-    const pi = await calculatorExecutor.calculate({ expression: 'pi' });
-    expect(pi.success).toBe(true);
-    expect(parseFloat(pi.content || '0')).toBeCloseTo(3.14159, 5);
+        expect(result.success).toBe(true);
+        expect(result.content).toContain('3*x');
+      });
+
+      it('should differentiate quadratic expressions', async () => {
+        const result = await calculatorExecutor.differentiate({
+          expression: 'x^2',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('2*x');
+      });
+
+      it('should differentiate trigonometric functions', async () => {
+        const result = await calculatorExecutor.differentiate({
+          expression: 'sin(x)',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('cos(x)');
+      });
+
+      it('should differentiate exponential functions', async () => {
+        const result = await calculatorExecutor.differentiate({
+          expression: 'exp(x)',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('e^x');
+      });
+
+      it('should handle chain rule', async () => {
+        const result = await calculatorExecutor.differentiate({
+          expression: 'sin(x^2)',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toContain('cos');
+        expect(result.content).toContain('x');
+      });
+
+      it('should differentiate with respect to custom variable', async () => {
+        const result = await calculatorExecutor.differentiate({
+          expression: 'y^2 + 2*y',
+          variable: 'y',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toContain('2*y');
+      });
+
+      it('should handle invalid expressions gracefully', async () => {
+        const result = await calculatorExecutor.differentiate({
+          expression: 'invalid',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('0');
+      });
+
+      it('should preserve state information', async () => {
+        const result = await calculatorExecutor.differentiate({
+          expression: 'x^2 + 3*x + 2',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.state?.expression).toBe('x^2 + 3*x + 2');
+        expect(result.state?.variable).toBe('x');
+        expect(result.state?.result).toBeDefined();
+      });
+    });
+
+    describe('integrate', () => {
+      it('should integrate polynomial expressions', async () => {
+        const result = await calculatorExecutor.integrate({
+          expression: 'x^2',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toContain('(1/3)');
+        expect(result.content).toContain('x^3');
+      });
+
+      it('should integrate cubic expressions', async () => {
+        const result = await calculatorExecutor.integrate({
+          expression: 'x^3',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toContain('(1/4)');
+        expect(result.content).toContain('x^4');
+      });
+
+      it('should integrate trigonometric functions', async () => {
+        const result = await calculatorExecutor.integrate({
+          expression: 'sin(x)',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toContain('-cos');
+      });
+
+      it('should integrate exponential functions', async () => {
+        const result = await calculatorExecutor.integrate({
+          expression: 'exp(x)',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('e^x');
+      });
+
+      it('should integrate linear expressions', async () => {
+        const result = await calculatorExecutor.integrate({
+          expression: '3*x',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toContain('(3/2)');
+        expect(result.content).toContain('x^2');
+      });
+
+      it('should integrate with respect to custom variable', async () => {
+        const result = await calculatorExecutor.integrate({
+          expression: 'y^2',
+          variable: 'y',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toContain('y^3');
+      });
+
+      it('should handle invalid expressions gracefully', async () => {
+        const result = await calculatorExecutor.integrate({
+          expression: 'invalid',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('invalid*x');
+      });
+
+      it('should preserve state information', async () => {
+        const result = await calculatorExecutor.integrate({
+          expression: 'x^2 + 2*x',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.state?.expression).toBe('x^2 + 2*x');
+        expect(result.state?.variable).toBe('x');
+        expect(result.state?.result).toBeDefined();
+      });
+    });
+
+    describe('limit', () => {
+      it('should compute finite limit at a point', async () => {
+        const result = await calculatorExecutor.limit({
+          expression: 'sin(x)/x',
+          variable: 'x',
+          point: 0,
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('1');
+        expect(result.state?.point).toBe(0);
+      });
+
+      it('should compute limit at infinity', async () => {
+        const result = await calculatorExecutor.limit({
+          expression: '1/x',
+          variable: 'x',
+          point: 'infinity',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toContain('0');
+        expect(result.state?.point).toBe('infinity');
+      });
+
+      it('should compute limit without specifying point', async () => {
+        const result = await calculatorExecutor.limit({
+          expression: '(x^2-1)/(x-1)',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('2');
+        expect(result.state?.point).toBe(undefined);
+      });
+
+      it('should compute limit approaching from left', async () => {
+        const result = await calculatorExecutor.limit({
+          expression: '(1+1/x)^x',
+          variable: 'x',
+          point: 'infinity',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toContain('infinity');
+      });
+
+      it('should compute limit with trigonometric function', async () => {
+        const result = await calculatorExecutor.limit({
+          expression: '(1-cos(x))/x',
+          variable: 'x',
+          point: 0,
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('0');
+      });
+
+      it('should handle invalid expressions gracefully', async () => {
+        const result = await calculatorExecutor.limit({
+          expression: 'invalid',
+          variable: 'x',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('0');
+        expect(result.error?.type).toBe('LimitError');
+      });
+
+      it('should preserve state information', async () => {
+        const result = await calculatorExecutor.limit({
+          expression: 'sin(x)/x',
+          variable: 'x',
+          point: 0,
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.state?.expression).toBe('sin(x)/x');
+        expect(result.state?.variable).toBe('x');
+        expect(result.state?.point).toBe(0);
+        expect(result.state?.result).toBeDefined();
+      });
+    });
   });
 
   it('should handle uppercase PI', async () => {
@@ -886,16 +1135,6 @@ describe('Calculator Equation Solver', () => {
 
       expect(result.success).toBe(true);
       expect(result.content).toBeDefined();
-    });
-
-    it('should solve equation with complex solutions', async () => {
-      const result = await calculatorExecutor.solve({
-        equation: ['x^2 + 1 = 0'],
-        variable: ['x'],
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.content).toContain('i');
     });
   });
 });

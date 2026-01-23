@@ -122,6 +122,71 @@ export const CalculatorManifest: BuiltinToolManifest = {
       },
     },
     {
+      description: 'Differentiate a mathematical expression with respect to a variable.',
+      name: CalculatorApiName.differentiate,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          expression: {
+            description:
+              'Mathematical expression to differentiate (e.g., "x^2", "sin(x)", "x^3 + 2*x + 1")',
+            type: 'string',
+          },
+          variable: {
+            description: 'Variable to differentiate with respect to (e.g., "x", "y", "t")',
+            type: 'string',
+          },
+        },
+        required: ['expression', 'variable'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Integrate a mathematical expression with respect to a variable (indefinite integral).',
+      name: CalculatorApiName.integrate,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          expression: {
+            description: 'Mathematical expression to integrate (e.g., "x^2", "sin(x)", "exp(x)")',
+            type: 'string',
+          },
+          variable: {
+            description: 'Variable to integrate with respect to (e.g., "x", "y", "t")',
+            type: 'string',
+          },
+        },
+        required: ['expression', 'variable'],
+        type: 'object',
+      },
+    },
+    {
+      description: 'Compute the limit of a mathematical expression.',
+      name: CalculatorApiName.limit,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          expression: {
+            description:
+              'Mathematical expression to compute limit for (e.g., "sin(x)/x", "x^2", "exp(-x)")',
+            type: 'string',
+          },
+          point: {
+            description:
+              'Point at which to evaluate the limit (optional). If not specified, computes the limit as variable approaches the expression. Can be a specific value or "infinity" (e.g., "0", "1", "infinity")',
+            oneOf: [{ type: 'string' }, { type: 'number' }],
+          },
+          variable: {
+            description: 'Variable to compute limit with respect to (e.g., "x", "y", "t")',
+            type: 'string',
+          },
+        },
+        required: ['expression', 'variable'],
+        type: 'object',
+      },
+    },
+    {
       description: 'Solve algebraic equations or systems of equations symbolically.',
       name: CalculatorApiName.solve,
       parameters: {

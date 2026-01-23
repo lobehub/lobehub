@@ -3,7 +3,10 @@ export const CalculatorIdentifier = 'lobe-calculator';
 export const CalculatorApiName = {
   calculate: 'calculate',
   convertBase: 'convertBase',
+  differentiate: 'differentiate',
   evaluateExpression: 'evaluateExpression',
+  integrate: 'integrate',
+  limit: 'limit',
   solve: 'solve',
   sort: 'sort',
 } as const;
@@ -80,4 +83,42 @@ export interface SolveState {
   equation?: string[];
   result?: string | string[];
   variable?: string[];
+}
+
+// Nerdamer Differentiate API
+export interface DifferentiateParams {
+  expression: string;
+  variable: string;
+}
+
+export interface DifferentiateState {
+  expression?: string;
+  result?: string;
+  variable?: string;
+}
+
+// Nerdamer Integrate API
+export interface IntegrateParams {
+  expression: string;
+  variable: string;
+}
+
+export interface IntegrateState {
+  expression?: string;
+  result?: string;
+  variable?: string;
+}
+
+// Nerdamer Limit API
+export interface LimitParams {
+  expression: string;
+  point?: string | number;
+  variable: string;
+}
+
+export interface LimitState {
+  expression?: string;
+  point?: string | number;
+  result?: string;
+  variable?: string;
 }

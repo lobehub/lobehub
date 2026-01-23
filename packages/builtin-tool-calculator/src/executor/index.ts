@@ -8,7 +8,10 @@ import {
   CalculatorApiName,
   CalculatorIdentifier,
   type ConvertBaseParams,
+  type DifferentiateParams,
   type EvaluateExpressionParams,
+  type IntegrateParams,
+  type LimitParams,
   type SolveParams,
   type SortParams,
 } from '../types';
@@ -393,6 +396,108 @@ class CalculatorExecutor
         error: {
           message: err.message,
           type: 'SolveError',
+        },
+        success: false,
+      };
+    }
+  };
+
+  /**
+   * Differentiate an expression using nerdamer
+   */
+  differentiate = async (params: DifferentiateParams): Promise<BuiltinToolResult> => {
+    try {
+      const { expression, variable } = params;
+      const result = nerdamer(`diff(${expression}, ${variable})`);
+      const resultText = result.toString();
+
+      return {
+        content: resultText,
+        state: {
+          expression,
+          result: resultText,
+          variable,
+        },
+        success: true,
+      };
+    } catch (error) {
+      const err = error as Error;
+      return {
+        content: `Differentiation error: ${err.message}`,
+        error: {
+          message: err.message,
+          type: 'DifferentiationError',
+        },
+        success: false,
+      };
+    }
+  };
+
+  /**
+   * Integrate an expression using nerdamer
+   */
+  integrate = async (params: IntegrateParams): Promise<BuiltinToolResult> => {
+    try {
+      const { expression, variable } = params;
+      const result = nerdamer(`integrate(${expression}, ${variable})`);
+      const resultText = result.toString();
+
+      return {
+        content: resultText,
+        state: {
+          expression,
+          result: resultText,
+          variable,
+        },
+        success: true,
+      };
+    } catch (error) {
+      const err = error as Error;
+      return {
+        content: `Integration error: ${err.message}`,
+        error: {
+          message: err.message,
+          type: 'IntegrationError',
+        },
+        success: false,
+      };
+    }
+  };
+
+  /**
+   * Compute the limit of a mathematical expression using nerdamer
+   */
+  limit = async (params: LimitParams): Promise<BuiltinToolResult> => {
+    try {
+      const { expression, variable, point } = params;
+      let limitExpr: string;
+
+      if (point !== undefined) {
+        limitExpr = `limit(${expression}, ${variable}, ${point})`;
+      } else {
+        limitExpr = `limit(${expression}, ${variable})`;
+      }
+
+      const result = nerdamer(limitExpr);
+      const resultText = result.toString();
+
+      return {
+        content: resultText,
+        state: {
+          expression,
+          point,
+          result: resultText,
+          variable,
+        },
+        success: true,
+      };
+    } catch (error) {
+      const err = error as Error;
+      return {
+        content: `Limit computation error: ${err.message}`,
+        error: {
+          message: err.message,
+          type: 'LimitError',
         },
         success: false,
       };

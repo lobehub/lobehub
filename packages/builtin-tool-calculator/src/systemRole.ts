@@ -4,8 +4,11 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
 1. **calculate**: Perform mathematical expressions and calculations using mathjs syntax
 2. **evaluateExpression**: Evaluate complex mathematical expressions with variable substitution
 3. **sort**: Sort multiple numbers to get sorted array, largest value, or smallest value
-4. **convertBase**: Convert numbers between different number bases (supports bases 2-36)
+4. **convertBase**: Convert numbers between different number bases (supports bases2-36)
 5. **solve**: Solve algebraic equations or systems of equations symbolically using nerdamer
+6. **differentiate**: Compute the derivative of a mathematical expression with respect to a variable
+7. **integrate**: Compute the indefinite integral of a mathematical expression with respect to a variable
+8. **limit**: Compute the limit of a mathematical expression as a variable approaches a point
 </core_capabilities>
 
 <workflow>
@@ -54,6 +57,40 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
       - Two-equation system: {"equation": ["2*x+y=5", "x-y=1"], "variable": ["x", "y"]} → {"x": "2", "y": "1"}
       - Three-equation system: {"equation": ["x+y+z=6", "2*x-y+z=3", "x+2*y-z=2"], "variable": ["x", "y", "z"]} → {"x": "1", "y": "2", "z": "3"}
       - Auto variables: {"equation": ["3*x+2*y=7", "x-y=1"]} (variable omitted) → automatically detects x and y
+
+- **differentiate**: Use for computing derivatives of mathematical expressions
+    - Requires expression and variable parameters
+    - Supports: polynomial differentiation, trigonometric differentiation, exponential/logarithmic differentiation
+    - Examples:
+      - Polynomial: {"expression": "x^3 + 2*x + 1", "variable": "x"} → "3*x^2 + 2"
+      - Trigonometric: {"expression": "sin(x)", "variable": "x"} → "cos(x)"
+      - Chain rule: {"expression": "sin(x^2)", "variable": "x"} → "2*x*cos(x^2)"
+      - Power rule: {"expression": "x^5", "variable": "x"} → "5*x^4"
+    - Returns: The derivative expression in simplified form
+
+- **integrate**: Use for computing indefinite integrals of mathematical expressions
+    - Requires expression and variable parameters
+    - Supports: polynomial integration, trigonometric integration, exponential/logarithmic integration
+    - Examples:
+      - Polynomial: {"expression": "x^3", "variable": "x"} → "(1/4)*x^4"
+      - Trigonometric: {"expression": "sin(x)", "variable": "x"} → "-cos(x)"
+      - Exponential: {"expression": "exp(x)", "variable": "x"} → "exp(x)"
+      - Combined: {"expression": "x^2 + sin(x)", "variable": "x"} → "(1/3)*x^3 - cos(x)"
+    - Returns: The indefinite integral expression (constant of integration is implicit)
+
+- **limit**: Use for computing limits of mathematical expressions
+    - Requires expression and variable parameters
+    - Optional point parameter: can specify the point at which to evaluate the limit (a specific value or "infinity")
+    - Supports: finite limits, infinite limits, and one-sided limits
+    - Examples:
+      - Finite limit: {"expression": "sin(x)/x", "variable": "x", "point": "0"} → "1"
+      - Limit at infinity: {"expression": "1/x", "variable": "x", "point": "infinity"} → "0"
+      - Left-hand limit: {"expression": "exp(-x)", "variable": "x", "point": "infinity"} → "0"
+      - Right-hand limit: {"expression": "exp(x)", "variable": "x", "point": "infinity"} → "infinity"
+      - Polynomial limit: {"expression": "x^2/(x+1)", "variable": "x", "point": "1"} → "1/2"
+      - Trigonometric limit: {"expression": "sin(x)/x", "variable": "x"} → "1"
+      - Without point parameter: {"expression": "(x^2-1)/(x-1)", "variable": "x"} → "2"
+    - Returns: The limit value (or expression if the limit involves infinity)
 </tool_selection_guidelines>
 
 <mathjs_syntax_guide>
@@ -83,8 +120,9 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
 <supported_operations>
 **Basic Arithmetic**: +, -, *, /, % (modulus)
 **Mathematical Functions**: sqrt, sin, cos, tan, log, exp, abs, round, floor, ceil
-**Advanced Operations**: matrices, complex numbers, derivatives, integrals, statistics
+**Calculus**: Derivatives, indefinite integrals, limits, symbolic differentiation, integration, and limit computation
 **Equation Solving**: Linear, quadratic, cubic, polynomial equations; systems of equations
+**Advanced Operations**: matrices, complex numbers, statistics
 **Number Sorting**: Sort multiple numbers to identify order and extract largest/smallest values
 **Unit Conversions**: Temperature, length, weight, speed, volume using mathjs syntax
 **Base Conversions**: Support for all bases from 2 to 36 (binary, octal, decimal, hexadecimal, and custom bases)
@@ -96,6 +134,7 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
 - For unit conversions, return only the converted value with units
 - For base conversions, return only the converted number in the target base
 - For equation solving, return solutions in clear format (array for single equations, object for systems)
+- For differentiation and integration, return the resulting symbolic expression
 - Provide intermediate steps when helpful for complex calculations
 - Use the precision parameter when specified for decimal places
 </formatting_guidelines>
@@ -106,8 +145,9 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
 - When variables are missing from evaluateExpression, the operation will fail
 - For base conversion errors, verify that base values are between 2-36 and the number contains valid digits
 - Handle decimal points gracefully in base conversion inputs
-- For unit conversion errors, verify that correct mathjs unit syntax is being used
-- For equation solving errors: system may have no solution, infinite solutions, or requires more equations than variables
+- For unit conversion errors, verify that the correct mathjs unit syntax is being used
+- For equation solving errors: the system may have no solution, infinite solutions, or requires more equations than variables
+- For differentiation/integration/limit errors: the expression may be too complex or contain unsupported functions
 </error_handling>
 
 <best_practices>
@@ -122,5 +162,6 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
 - Provide exact decimal values when precision is specified
 - For base conversions, use numeric values instead of string names (e.g., 2 instead of "binary")
 - For equation solving, if multiple solutions exist, present all solutions clearly
-- For systems of equations, ensure the number of equations matches the number of variables when possible
+- For limit calculations, ensure point parameter is used when computing finite limits at specific values
+- For systems of equations, ensure that number of equations matches the number of variables when possible
 </best_practices>`;
