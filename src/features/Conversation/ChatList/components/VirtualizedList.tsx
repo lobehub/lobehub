@@ -7,7 +7,10 @@ import { VList, type VListHandle } from 'virtua';
 import WideScreenContainer from '../../../WideScreenContainer';
 import { useConversationStore, virtuaListSelectors } from '../../store';
 import AutoScroll from './AutoScroll';
-import DebugInspector, { AT_BOTTOM_THRESHOLD } from './AutoScroll/DebugInspector';
+import DebugInspector, {
+  AT_BOTTOM_THRESHOLD,
+  OPEN_DEV_INSPECTOR,
+} from './AutoScroll/DebugInspector';
 
 interface VirtualizedListProps {
   dataSource: string[];
@@ -129,7 +132,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
   return (
     <>
       {/* Debug Inspector - 放在 VList 外面，不会被虚拟列表回收 */}
-      <DebugInspector />
+      {OPEN_DEV_INSPECTOR && <DebugInspector />}
       <VList
         bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
         data={dataSource}

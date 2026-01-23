@@ -11,6 +11,12 @@ import { messageStateSelectors, useConversationStore, virtuaListSelectors } from
  */
 export const AT_BOTTOM_THRESHOLD = 300;
 
+/**
+ * 是否开启调试面板
+ * 设为 true 可以显示滚动位置调试信息
+ */
+export const OPEN_DEV_INSPECTOR = false;
+
 const DebugInspector = memo(() => {
   const atBottom = useConversationStore(virtuaListSelectors.atBottom);
   const isScrolling = useConversationStore(virtuaListSelectors.isScrolling);
