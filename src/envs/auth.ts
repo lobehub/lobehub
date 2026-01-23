@@ -228,12 +228,8 @@ export const getAuthConfig = () => {
     },
 
     runtimeEnv: {
-      // Fallback to NEXT_PUBLIC_* for seamless migration
-      AUTH_EMAIL_VERIFICATION:
-        process.env.AUTH_EMAIL_VERIFICATION === '1' ||
-        process.env.NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION === '1',
-      ENABLE_MAGIC_LINK:
-        process.env.ENABLE_MAGIC_LINK === '1' || process.env.NEXT_PUBLIC_ENABLE_MAGIC_LINK === '1',
+      AUTH_EMAIL_VERIFICATION: process.env.AUTH_EMAIL_VERIFICATION === '1',
+      ENABLE_MAGIC_LINK: process.env.ENABLE_MAGIC_LINK === '1',
       AUTH_SECRET: process.env.AUTH_SECRET,
       AUTH_SSO_PROVIDERS: process.env.AUTH_SSO_PROVIDERS,
       AUTH_TRUSTED_ORIGINS: process.env.AUTH_TRUSTED_ORIGINS,

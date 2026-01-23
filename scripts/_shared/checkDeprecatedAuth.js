@@ -5,24 +5,73 @@
  * IMPORTANT: Keep this file as CommonJS (.js) for compatibility with startServer.js
  */
 
-const NEXTAUTH_MIGRATION_DOC_URL =
-  'https://lobehub.com/docs/self-hosting/advanced/auth/nextauth-to-betterauth';
+const MIGRATION_DOC_BASE = 'https://lobehub.com/docs/self-hosting/advanced/auth';
 
-const CLERK_MIGRATION_DOC_URL =
-  'https://lobehub.com/docs/self-hosting/advanced/auth/clerk-to-betterauth';
-
-const NEXTAUTH_ENV_VARS = [
-  'NEXT_PUBLIC_ENABLE_NEXT_AUTH',
-  'NEXT_AUTH_SECRET',
-  'NEXT_AUTH_SSO_PROVIDERS',
-  'NEXTAUTH_URL',
+/**
+ * Deprecated environment variable checks configuration
+ * @type {Array<{
+ *   name: string;
+ *   getVars: () => string[];
+ *   message: string;
+ *   docUrl?: string;
+ *   formatVar?: (envVar: string) => string;
+ * }>}
+ */
+const DEPRECATED_CHECKS = [
+  {
+    name: 'NextAuth',
+    getVars: () =>
+      Object.keys(process.env).filter(
+        (key) => key.startsWith('NEXT_AUTH') || key.startsWith('NEXTAUTH')
+      ),
+    message: 'NextAuth has been removed from LobeChat. Please migrate to Better Auth.',
+    docUrl: `${MIGRATION_DOC_BASE}/nextauth-to-betterauth`,
+  },
+  {
+    name: 'Clerk',
+    getVars: () =>
+      ['NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY', 'CLERK_SECRET_KEY', 'CLERK_WEBHOOK_SECRET'].filter(
+        (key) => process.env[key]
+      ),
+    message: 'Clerk has been removed from LobeChat. Please migrate to Better Auth.',
+    docUrl: `${MIGRATION_DOC_BASE}/clerk-to-betterauth`,
+  },
+  {
+    name: 'Deprecated Auth',
+    getVars: () =>
+      ['NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION', 'NEXT_PUBLIC_ENABLE_MAGIC_LINK'].filter(
+        (key) => process.env[key]
+      ),
+    message: 'Please update to the new environment variable names.',
+    formatVar: (envVar) => {
+      const mapping = {
+        NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION: 'AUTH_EMAIL_VERIFICATION',
+        NEXT_PUBLIC_ENABLE_MAGIC_LINK: 'ENABLE_MAGIC_LINK',
+      };
+      return `${envVar} → Please use ${mapping[envVar]} instead`;
+    },
+  },
 ];
 
-const CLERK_ENV_VARS = [
-  'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-  'CLERK_SECRET_KEY',
-  'CLERK_WEBHOOK_SECRET',
-];
+/**
+ * Print error message and exit
+ */
+function printErrorAndExit(name, vars, message, action, docUrl, formatVar) {
+  console.error('\n' + '═'.repeat(70));
+  console.error(`❌ ERROR: ${name} environment variables are deprecated!`);
+  console.error('═'.repeat(70));
+  console.error('\nDetected deprecated environment variables:');
+  for (const envVar of vars) {
+    console.error(`  • ${formatVar ? formatVar(envVar) : envVar}`);
+  }
+  console.error(`\n${message}`);
+  if (docUrl) {
+    console.error(`\n📖 Migration guide: ${docUrl}`);
+  }
+  console.error(`\nPlease update your environment variables and ${action}.`);
+  console.error('═'.repeat(70) + '\n');
+  process.exit(1);
+}
 
 /**
  * Check for deprecated authentication environment variables and exit if found
@@ -32,37 +81,11 @@ const CLERK_ENV_VARS = [
 function checkDeprecatedAuth(options = {}) {
   const { action = 'redeploy' } = options;
 
-  const foundNextAuthEnvVars = NEXTAUTH_ENV_VARS.filter((envVar) => process.env[envVar]);
-  const foundClerkEnvVars = CLERK_ENV_VARS.filter((envVar) => process.env[envVar]);
-
-  if (foundNextAuthEnvVars.length > 0) {
-    console.error('\n' + '═'.repeat(70));
-    console.error('❌ ERROR: NextAuth authentication is no longer supported!');
-    console.error('═'.repeat(70));
-    console.error('\nDetected deprecated NextAuth environment variables:');
-    for (const envVar of foundNextAuthEnvVars) {
-      console.error(`  • ${envVar}`);
+  for (const check of DEPRECATED_CHECKS) {
+    const foundVars = check.getVars();
+    if (foundVars.length > 0) {
+      printErrorAndExit(check.name, foundVars, check.message, action, check.docUrl, check.formatVar);
     }
-    console.error('\nNextAuth has been removed from LobeChat. Please migrate to Better Auth.');
-    console.error(`\n📖 Migration guide: ${NEXTAUTH_MIGRATION_DOC_URL}`);
-    console.error(`\nAfter migration, remove the NextAuth environment variables and ${action}.`);
-    console.error('═'.repeat(70) + '\n');
-    process.exit(1);
-  }
-
-  if (foundClerkEnvVars.length > 0) {
-    console.error('\n' + '═'.repeat(70));
-    console.error('❌ ERROR: Clerk authentication is no longer supported!');
-    console.error('═'.repeat(70));
-    console.error('\nDetected deprecated Clerk environment variables:');
-    for (const envVar of foundClerkEnvVars) {
-      console.error(`  • ${envVar}`);
-    }
-    console.error('\nClerk has been removed from LobeChat. Please migrate to Better Auth.');
-    console.error(`\n📖 Migration guide: ${CLERK_MIGRATION_DOC_URL}`);
-    console.error(`\nAfter migration, remove the Clerk environment variables and ${action}.`);
-    console.error('═'.repeat(70) + '\n');
-    process.exit(1);
   }
 }
 
