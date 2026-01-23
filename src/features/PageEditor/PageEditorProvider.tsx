@@ -30,6 +30,12 @@ export const PageEditorProvider = memo<PageEditorProviderProps>(
   }) => {
     const editor = useEditor();
 
+    // Debug: 打印 PageEditorProvider 的 editor
+    console.log('[PageEditorProvider] render', {
+      pageId,
+      editorKey: editor?.getLexicalEditor()?._key,
+    });
+
     return (
       <Provider
         createStore={() =>

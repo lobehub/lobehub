@@ -127,12 +127,31 @@ export const createEditorSlice: StateCreator<
   },
 
   onEditorInit: async (editor) => {
-    const { activeDocumentId, documents } = get();
-    if (!editor || !activeDocumentId) return;
+    const { activeDocumentId, documents, editor: storeEditor } = get();
+
+    // Debug: 打印 onEditorInit 调用
+    console.log('[DocumentStore] onEditorInit called', {
+      activeDocumentId,
+      newEditorKey: editor?.getLexicalEditor()?._key,
+      storeEditorKey: storeEditor?.getLexicalEditor()?._key,
+      editorIsSame: editor === storeEditor,
+      hasDoc: !!documents[activeDocumentId || ''],
+    });
+
+    if (!editor || !activeDocumentId) {
+      console.log('[DocumentStore] onEditorInit early return', {
+        hasEditor: !!editor,
+        hasActiveDocId: !!activeDocumentId,
+      });
+      return;
+    }
 
     const doc = documents[activeDocumentId];
 
-    if (!doc) return;
+    if (!doc) {
+      console.log('[DocumentStore] onEditorInit: doc not found for', activeDocumentId);
+      return;
+    }
 
     // Check if editorData is valid and non-empty
     const hasValidEditorData =
@@ -140,10 +159,18 @@ export const createEditorSlice: StateCreator<
       typeof doc.editorData === 'object' &&
       Object.keys(doc.editorData).length > 0;
 
+    console.log('[DocumentStore] onEditorInit loading content', {
+      activeDocumentId,
+      hasValidEditorData,
+      hasContent: !!doc.content?.trim(),
+      contentLength: doc.content?.length,
+    });
+
     // Set content from document state
     if (hasValidEditorData) {
       try {
         editor.setDocument('json', JSON.stringify(doc.editorData));
+        console.log('[DocumentStore] onEditorInit: loaded editorData for', activeDocumentId);
         return;
       } catch {
         // Fallback to markdown if JSON fails
@@ -156,12 +183,16 @@ export const createEditorSlice: StateCreator<
     if (doc.content?.trim()) {
       try {
         editor.setDocument('markdown', doc.content);
+        console.log('[DocumentStore] onEditorInit: loaded markdown for', activeDocumentId);
       } catch (err) {
         console.error('[DocumentStore] Failed to load markdown content:', err);
       }
     }
 
     set({ editor });
+    console.log('[DocumentStore] onEditorInit: set editor in store', {
+      editorKey: editor?.getLexicalEditor()?._key,
+    });
   },
 
   performSave: async (documentId, metadata) => {

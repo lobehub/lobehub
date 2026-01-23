@@ -59,9 +59,26 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
   }) => {
     const { t } = useTranslation('file');
 
+    // Debug: 打印 DocumentIdMode 收到的 props
+    console.log('[DocumentIdMode] render', {
+      documentId,
+      editorKey: editor?.getLexicalEditor()?._key,
+    });
+
     const storeUpdater = createStoreUpdater(useDocumentStore);
     storeUpdater('activeDocumentId', documentId);
     storeUpdater('editor', editor);
+
+    // Debug: 验证 store 同步后的状态
+    const [storeActiveDocId, storeEditor] = useDocumentStore((s) => [s.activeDocumentId, s.editor]);
+    console.log('[DocumentIdMode] after storeUpdater', {
+      storeActiveDocId,
+      storeEditorKey: storeEditor?.getLexicalEditor()?._key,
+      propsDocId: documentId,
+      propsEditorKey: editor?.getLexicalEditor()?._key,
+      activeDocIdMatch: storeActiveDocId === documentId,
+      editorMatch: storeEditor === editor,
+    });
 
     // Get document store actions
     const [onEditorInit, handleContentChangeStore, useFetchDocument, flushSave] = useDocumentStore(
