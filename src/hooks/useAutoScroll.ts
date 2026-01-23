@@ -67,6 +67,7 @@ export function useAutoScroll<T extends HTMLElement = HTMLDivElement>(
   const ref = useRef<T | null>(null);
   const [userHasScrolled, setUserHasScrolled] = useState(false);
   const isAutoScrollingRef = useRef(false);
+  const prevEnabledRef = useRef(enabled);
 
   // Handle user scroll detection
   const handleScroll = useCallback(() => {
@@ -90,6 +91,28 @@ export function useAutoScroll<T extends HTMLElement = HTMLDivElement>(
   const resetScrollLock = useCallback(() => {
     setUserHasScrolled(false);
   }, []);
+
+  // Preserve scroll position when enabled transitions from true to false (streaming ends)
+  // This prevents scroll position from being lost when DOM re-renders after streaming
+  useEffect(() => {
+    const container = ref.current;
+    if (!container) return;
+
+    // Detect enabled transition from true to false
+    if (prevEnabledRef.current && !enabled) {
+      const currentScrollTop = container.scrollTop;
+      isAutoScrollingRef.current = true;
+      requestAnimationFrame(() => {
+        // Restore scroll position in case DOM changes reset it
+        container.scrollTop = currentScrollTop;
+        requestAnimationFrame(() => {
+          isAutoScrollingRef.current = false;
+        });
+      });
+    }
+
+    prevEnabledRef.current = enabled;
+  }, [enabled]);
 
   // Auto scroll to bottom when deps change (unless user has scrolled or disabled)
   useEffect(() => {

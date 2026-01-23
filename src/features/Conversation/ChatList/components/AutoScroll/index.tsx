@@ -32,9 +32,17 @@ const AutoScroll = memo(() => {
   }, [shouldAutoScroll, scrollToBottom, dbMessages.length, lastMessageContentLength]);
 
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
+    <>
       {OPEN_DEV_INSPECTOR && (
-        <>
+        <div
+          style={{
+            bottom: 0,
+            left: 0,
+            pointerEvents: 'none',
+            position: 'absolute',
+            right: 0,
+          }}
+        >
           {/* Threshold 区域顶部边界线 */}
           <div
             style={{
@@ -42,7 +50,6 @@ const AutoScroll = memo(() => {
               height: 2,
               left: 0,
               opacity: 0.5,
-              pointerEvents: 'none',
               position: 'absolute',
               right: 0,
               top: -AT_BOTTOM_THRESHOLD,
@@ -57,7 +64,6 @@ const AutoScroll = memo(() => {
                 : 'linear-gradient(to top, rgba(239, 68, 68, 0.1), transparent)',
               height: AT_BOTTOM_THRESHOLD,
               left: 0,
-              pointerEvents: 'none',
               position: 'absolute',
               right: 0,
               top: -AT_BOTTOM_THRESHOLD,
@@ -69,15 +75,14 @@ const AutoScroll = memo(() => {
             style={{
               background: atBottom ? '#22c55e' : '#ef4444',
               height: 2,
-              position: 'relative',
               width: '100%',
             }}
           />
-        </>
+        </div>
       )}
 
       <BackBottom onScrollToBottom={() => scrollToBottom(true)} visible={!atBottom} />
-    </div>
+    </>
   );
 });
 

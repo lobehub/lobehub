@@ -40,7 +40,7 @@ const DebugInspector = memo(() => {
       style={{
         background: 'rgba(0,0,0,0.9)',
         borderRadius: 8,
-        bottom: 80,
+        bottom: 135,
         display: 'flex',
         fontFamily: 'monospace',
         fontSize: 11,
