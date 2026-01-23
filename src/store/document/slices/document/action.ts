@@ -144,18 +144,7 @@ export const createDocumentSlice: StateCreator<
     initDocumentWithEditor: (params) => {
       const { documentId, sourceType, content, editorData, topicId, autoSave, editor } = params;
 
-      const { internal_dispatchDocument, activeDocumentId: prevActiveDocId, editor: prevEditor } =
-        get();
-
-      // Debug: 打印 initDocumentWithEditor 调用
-      console.log('[DocumentStore] initDocumentWithEditor', {
-        newDocId: documentId,
-        prevActiveDocId,
-        newEditorKey: editor?.getLexicalEditor()?._key,
-        prevEditorKey: prevEditor?.getLexicalEditor()?._key,
-        editorChanged: prevEditor !== editor,
-        docIdChanged: prevActiveDocId !== documentId,
-      });
+      const { internal_dispatchDocument } = get();
 
       // Add or update document via reducer
       internal_dispatchDocument({
@@ -173,11 +162,6 @@ export const createDocumentSlice: StateCreator<
 
       // Update activeDocumentId and editor
       set({ activeDocumentId: documentId, editor }, false, n('initDocumentWithEditor:setActive'));
-
-      console.log('[DocumentStore] initDocumentWithEditor completed', {
-        activeDocumentId: documentId,
-        editorKey: editor?.getLexicalEditor()?._key,
-      });
     },
 
     triggerDebouncedSave: (documentId) => {
@@ -205,34 +189,14 @@ export const createDocumentSlice: StateCreator<
           focusThrottleInterval: 20_000,
           onData: (document) => {
             // Both documentId and editor are guaranteed to be defined when this callback is called
-            if (!document || !documentId || !editor) {
-              console.log('[useFetchDocument] onData: early return', {
-                hasDocument: !!document,
-                documentId,
-                hasEditor: !!editor,
-              });
-              return;
-            }
+            if (!document || !documentId || !editor) return;
 
             // Check if this response is still for the current active document
             // This prevents race conditions when quickly switching between documents
             const currentActiveId = get().activeDocumentId;
-            const currentEditor = get().editor;
-
-            console.log('[useFetchDocument] onData', {
-              fetchedDocId: documentId,
-              currentActiveId,
-              isStale: currentActiveId && currentActiveId !== documentId,
-              fetchedEditorKey: editor?.getLexicalEditor()?._key,
-              currentEditorKey: currentEditor?.getLexicalEditor()?._key,
-            });
 
             if (currentActiveId && currentActiveId !== documentId) {
               // User has already switched to another document, discard this stale response
-              console.warn('[useFetchDocument] DISCARDING stale response', {
-                fetchedDocId: documentId,
-                currentActiveId,
-              });
               return;
             }
 

@@ -59,12 +59,6 @@ const PageEditorCanvas = memo(() => {
   const editor = usePageEditorStore((s) => s.editor);
   const documentId = usePageEditorStore((s) => s.documentId);
 
-  // Debug: 打印 PageEditorCanvas 中的 editor 和 documentId
-  console.log('[PageEditorCanvas] render', {
-    documentId,
-    editorKey: editor?.getLexicalEditor()?._key,
-  });
-
   // Get isDirty from DocumentStore
   const isDirty = useDocumentStore((s) =>
     documentId ? editorSelectors.isDirty(documentId)(s) : false,

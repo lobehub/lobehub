@@ -42,7 +42,6 @@ const useIsEditorInit = (editor: IEditor) => {
     if (!editor) return;
 
     const onInit = () => {
-      console.log('init: id', editor.getLexicalEditor()?._key);
       setEditInit(true);
     };
     editor.on('initialized', onInit);
@@ -58,14 +57,6 @@ const useEditorHasPendingDiffs = (editor: IEditor) => {
   const [hasPendingDiffs, setHasPendingDiffs] = useState(false);
   const isEditInit = useIsEditorInit(editor);
 
-  // Debug: 打印 editor 变化
-  const editorKey = editor?.getLexicalEditor()?._key;
-  console.log('[useEditorHasPendingDiffs] editor changed', {
-    editorKey,
-    isEditInit,
-    hasPendingDiffs,
-  });
-
   // Listen to editor state changes to detect diff nodes
   useEffect(() => {
     if (!editor) return;
@@ -74,28 +65,17 @@ const useEditorHasPendingDiffs = (editor: IEditor) => {
 
     if (!lexicalEditor || !isEditInit) return;
 
-    console.log('[useEditorHasPendingDiffs] registering listener for editor:', lexicalEditor._key);
-
     const checkForDiffNodes = () => {
       const editorState = lexicalEditor.getEditorState();
       editorState.read(() => {
         // Get all nodes and check if any is a diff node
         const nodeMap = editorState._nodeMap;
         let hasDiffs = false;
-        let diffCount = 0;
         nodeMap.forEach((node) => {
           if (node.getType() === 'diff') {
             hasDiffs = true;
-            diffCount++;
           }
         });
-        if (hasDiffs !== hasPendingDiffs) {
-          console.log('[useEditorHasPendingDiffs] diff status changed', {
-            editorKey: lexicalEditor._key,
-            hasDiffs,
-            diffCount,
-          });
-        }
         setHasPendingDiffs(hasDiffs);
       });
     };
@@ -108,7 +88,6 @@ const useEditorHasPendingDiffs = (editor: IEditor) => {
     });
     // Register update listener
     return () => {
-      console.log('[useEditorHasPendingDiffs] unregistering listener for editor:', lexicalEditor._key);
       unregister();
     };
   }, [editor, isEditInit]);
@@ -120,43 +99,18 @@ interface DiffAllToolbarProps {
   documentId: string;
   editor: IEditor;
 }
-const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId, editor: propsEditor }) => {
+const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId }) => {
   const { t } = useTranslation('editor');
   const isDarkMode = useIsDark();
-  const [storeEditor, activeDocumentId, performSave, markDirty] = useDocumentStore((s) => [
+  const [storeEditor, performSave, markDirty] = useDocumentStore((s) => [
     s.editor!,
-    s.activeDocumentId,
     s.performSave,
     s.markDirty,
   ]);
 
-  // Debug: 检查 editor 实例一致性
-  const editorMismatch = propsEditor !== storeEditor;
-  const docIdMismatch = documentId !== activeDocumentId;
-
-  console.log('[DiffAllToolbar] render', {
-    propsDocId: documentId,
-    storeActiveDocId: activeDocumentId,
-    docIdMismatch,
-    propsEditorKey: propsEditor?.getLexicalEditor()?._key,
-    storeEditorKey: storeEditor?.getLexicalEditor()?._key,
-    editorMismatch,
-  });
-
   const hasPendingDiffs = useEditorHasPendingDiffs(storeEditor);
 
-  // Debug: 日志打印 diff 状态
-  console.log('[DiffAllToolbar] hasPendingDiffs:', hasPendingDiffs, 'for docId:', documentId);
-
   if (!hasPendingDiffs) return null;
-
-  // 警告：如果 documentId 与 activeDocumentId 不匹配，可能是 bug
-  if (docIdMismatch) {
-    console.warn('[DiffAllToolbar] WARNING: documentId mismatch!', {
-      propsDocId: documentId,
-      storeActiveDocId: activeDocumentId,
-    });
-  }
 
   const handleSave = async () => {
     markDirty(documentId);
