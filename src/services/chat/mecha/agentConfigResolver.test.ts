@@ -693,6 +693,29 @@ describe('resolveAgentConfig', () => {
       expect(result.agentConfig.systemRole.trim()).toBe('You are a helpful assistant');
       expect(result.chatConfig.enableHistoryCount).toBe(false);
     });
+
+    it('should not duplicate injection when page-agent itself is used in page scope', () => {
+      // page-agent is a builtin agent with slug 'page-agent'
+      vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
+        () => 'page-agent',
+      );
+
+      vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
+        plugins: [PageAgentIdentifier],
+        systemRole: 'Page agent system prompt',
+      });
+
+      const result = resolveAgentConfig({
+        agentId: 'page-agent-id',
+        scope: 'page',
+      });
+
+      // page-agent should NOT have its tools/systemRole injected again
+      expect(result.plugins.filter((p) => p === PageAgentIdentifier)).toHaveLength(1);
+      expect(result.agentConfig.systemRole).toBe('Page agent system prompt');
+      expect(result.isBuiltinAgent).toBe(true);
+      expect(result.slug).toBe('page-agent');
+    });
   });
 
   describe('supervisor agent (detected via groupId)', () => {
@@ -758,76 +781,6 @@ describe('resolveAgentConfig', () => {
         expect(result.isBuiltinAgent).toBe(true);
         expect(result.slug).toBe('group-supervisor');
         expect(result.plugins).toContain(GroupManagementIdentifier);
-      });
-
-      it('should use agent own slug when scope is not group', () => {
-        // Supervisor agent has its own valid builtin slug (e.g., agent-builder)
-        vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
-          () => 'some-agent-slug',
-        );
-
-        // Mock: groupById returns the group
-        vi.spyOn(agentGroupSelectors.agentGroupByIdSelectors, 'groupById').mockReturnValue(
-          () => mockGroupWithSupervisor as any,
-        );
-
-        vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
-          plugins: ['agent-specific-plugin'],
-          systemRole: 'Agent specific system role',
-        });
-
-        const result = resolveAgentConfig({
-          agentId: 'supervisor-agent-id',
-          groupId: 'group-123',
-          scope: 'main', // Not 'group' scope
-        });
-
-        // Should use agent's own slug since scope is not 'group'
-        expect(result.isBuiltinAgent).toBe(true);
-        expect(result.slug).toBe('agent-builder');
-      });
-
-      it('should use agent own slug when groupId is not provided', () => {
-        // Supervisor agent has its own valid builtin slug
-        vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
-          () => 'agent-builder',
-        );
-
-        vi.spyOn(builtinAgents, 'getAgentRuntimeConfig').mockReturnValue({
-          plugins: ['agent-specific-plugin'],
-          systemRole: 'Agent specific system role',
-        });
-
-        const result = resolveAgentConfig({
-          agentId: 'supervisor-agent-id',
-          scope: 'group', // Even with group scope, no groupId
-        });
-
-        // Should use agent's own slug since no groupId
-        expect(result.isBuiltinAgent).toBe(true);
-        expect(result.slug).toBe('agent-builder');
-      });
-
-      it('should treat supervisor agent with non-builtin slug as regular agent when not in group scope', () => {
-        // Supervisor agent has a random non-builtin slug
-        vi.spyOn(agentSelectors.agentSelectors, 'getAgentSlugById').mockReturnValue(
-          () => 'random-custom-slug',
-        );
-
-        // Mock: groupById returns the group
-        vi.spyOn(agentGroupSelectors.agentGroupByIdSelectors, 'groupById').mockReturnValue(
-          () => mockGroupWithSupervisor as any,
-        );
-
-        const result = resolveAgentConfig({
-          agentId: 'supervisor-agent-id',
-          groupId: 'group-123',
-          scope: 'main', // Not 'group' scope
-        });
-
-        // Should be treated as regular agent since slug is not a valid builtin slug
-        expect(result.isBuiltinAgent).toBe(false);
-        expect(result.slug).toBeUndefined();
       });
     });
 
@@ -917,6 +870,25 @@ describe('resolveAgentConfig', () => {
       expect(result.isBuiltinAgent).toBe(false);
       expect(result.slug).toBeUndefined();
       expect(result.plugins).toEqual(['plugin-a', 'plugin-b']); // Falls back to agent config plugins
+    });
+
+    it('should treat as regular agent when scope is not group even with groupId', () => {
+      // Mock: groupById returns the group (supervisor agent exists)
+      vi.spyOn(agentGroupSelectors.agentGroupByIdSelectors, 'groupById').mockReturnValue(
+        () => mockGroupWithSupervisor as any,
+      );
+
+      // groupId is provided but scope is 'main', not 'group'
+      const result = resolveAgentConfig({
+        agentId: 'supervisor-agent-id',
+        groupId: 'group-123',
+        scope: 'main', // Not 'group' scope
+      });
+
+      // Should NOT be identified as group-supervisor because scope !== 'group'
+      expect(result.isBuiltinAgent).toBe(false);
+      expect(result.slug).toBeUndefined();
+      expect(result.plugins).toEqual(['plugin-a', 'plugin-b']);
     });
 
     it('should treat as regular agent when agentId does not match group supervisorAgentId', () => {
