@@ -20,6 +20,14 @@ vi.mock('@lobechat/utils/server', () => ({
   getXorPayload: vi.fn(),
 }));
 
+vi.mock('@/envs/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/envs/auth')>();
+  return {
+    ...actual,
+    enableBetterAuth: false,
+  };
+});
+
 describe('checkAuth', () => {
   const mockHandler: RequestHandler = vi.fn();
   const mockRequest = new Request('https://example.com');
