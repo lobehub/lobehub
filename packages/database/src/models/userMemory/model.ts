@@ -89,8 +89,8 @@ export interface BaseCreateUserMemoryParams {
   capturedAt?: Date;
   details: string;
   detailsEmbedding?: number[];
-  memoryCategory: string;
-  memoryLayer?: LayersEnum;
+  memoryCategory?: string | null;
+  memoryLayer: LayersEnum;
   memoryType: TypesEnum;
   summary: string;
   summaryEmbedding?: number[];

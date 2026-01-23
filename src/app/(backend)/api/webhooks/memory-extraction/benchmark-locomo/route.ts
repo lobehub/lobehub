@@ -58,10 +58,10 @@ interface SessionExtractionResult {
 
 export const POST = async (req: Request) => {
   try {
-    const { webhookHeaders } = parseMemoryExtractionConfig();
+    const { webhook } = parseMemoryExtractionConfig();
 
-    if (webhookHeaders && Object.keys(webhookHeaders).length > 0) {
-      for (const [key, value] of Object.entries(webhookHeaders)) {
+    if (webhook.headers && Object.keys(webhook.headers).length > 0) {
+      for (const [key, value] of Object.entries(webhook.headers)) {
         const headerValue = req.headers.get(key);
         if (headerValue !== value) {
           return NextResponse.json(

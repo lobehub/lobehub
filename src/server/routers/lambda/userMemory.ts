@@ -6,6 +6,7 @@ import {
   CreateUserMemoryIdentitySchema,
   MemorySourceType,
   UpdateUserMemoryIdentitySchema,
+  UserMemoryExtractionMetadata,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
@@ -49,6 +50,12 @@ const userMemoryExtractionInputSchema = z.object({
   fromDate: z.coerce.date().optional(),
   toDate: z.coerce.date().optional(),
 });
+
+const userMemoryExtractionTaskInputSchema = z
+  .object({
+    taskId: z.string().uuid().optional(),
+  })
+  .optional();
 
 export const userMemoryRouter = router({
   requestMemoryFromChatTopic: userMemoryProcedure
@@ -107,8 +114,8 @@ export const userMemoryRouter = router({
         };
       }
 
-      const baseUrl = appEnv.INTERNAL_APP_URL || appEnv.APP_URL;
-      const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
+      const { webhook, upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
+      const baseUrl = webhook.baseUrl || appEnv.INTERNAL_APP_URL || appEnv.APP_URL;
 
       try {
         await MemoryExtractionWorkflowService.triggerProcessUsers(
@@ -148,6 +155,25 @@ export const userMemoryRouter = router({
         id: taskId,
         metadata,
         status: AsyncTaskStatus.Pending,
+      };
+    }),
+
+  getMemoryExtractionTask: userMemoryProcedure
+    .input(userMemoryExtractionTaskInputSchema)
+    .query(async ({ ctx, input }) => {
+      const task = input?.taskId
+        ? await ctx.asyncTaskModel.findById(input.taskId)
+        : await ctx.asyncTaskModel.findActiveByType(
+            AsyncTaskType.UserMemoryExtractionWithChatTopic,
+          );
+
+      if (!task || task.userId !== ctx.userId) return null;
+
+      return {
+        error: task.error,
+        id: task.id,
+        metadata: initUserMemoryExtractionMetadata(task.metadata as UserMemoryExtractionMetadata | undefined),
+        status: task.status as AsyncTaskStatus,
       };
     }),
 
