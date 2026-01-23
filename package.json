@@ -361,7 +361,7 @@
     "@ast-grep/napi": "^0.40.5",
     "@commitlint/cli": "^19.8.1",
     "@edge-runtime/vm": "^5.0.0",
-    "@huggingface/tasks": "^0.19.74",
+    "@huggingface/tasks": "^0.19.80",
     "@lobechat/types": "workspace:*",
     "@lobehub/i18n-cli": "^1.26.0",
     "@lobehub/lint": "^1.26.3",
