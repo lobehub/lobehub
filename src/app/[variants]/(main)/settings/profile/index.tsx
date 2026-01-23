@@ -51,10 +51,7 @@ interface ProfileSettingProps {
 }
 
 const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
-  const [isLoginWithNextAuth, isLoginWithBetterAuth] = useUserStore((s) => [
-    authSelectors.isLoginWithNextAuth(s),
-    authSelectors.isLoginWithBetterAuth(s),
-  ]);
+  const isLoginWithBetterAuth = useUserStore(authSelectors.isLoginWithBetterAuth);
   const [userProfile, isUserLoaded] = useUserStore((s) => [
     userProfileSelectors.userProfile(s),
     s.isLoaded,
@@ -72,7 +69,7 @@ const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
   // Fetch Klavis servers
   useFetchUserKlavisServers(enableKlavis);
 
-  const isLoginWithAuth = isLoginWithNextAuth || isLoginWithBetterAuth;
+  const isLoginWithAuth = isLoginWithBetterAuth;
   const isLoading =
     !isUserLoaded ||
     (isLoginWithAuth && !isLoadedAuthProviders) ||

@@ -1,27 +1,14 @@
+import { toNextJsHandler } from 'better-auth/next-js';
 import type { NextRequest } from 'next/server';
 
-import { enableBetterAuth } from '@/envs/auth';
+import { auth } from '@/auth';
 
-const createHandler = async () => {
-  if (enableBetterAuth) {
-    const [{ toNextJsHandler }, { auth }] = await Promise.all([
-      import('better-auth/next-js'),
-      import('@/auth'),
-    ]);
-    return toNextJsHandler(auth);
-  }
-
-  return { GET: undefined, POST: undefined };
-};
-
-const handler = createHandler();
+const handler = toNextJsHandler(auth);
 
 export const GET = async (req: NextRequest) => {
-  const { GET } = await handler;
-  return GET?.(req);
+  return handler.GET(req);
 };
 
 export const POST = async (req: NextRequest) => {
-  const { POST } = await handler;
-  return POST?.(req);
+  return handler.POST(req);
 };

@@ -21,10 +21,6 @@ if (isDesktop) {
   dotenvExpand.expand(dotenv.config());
 }
 
-// Auth flags - use process.env directly for build-time dead code elimination
-// Better Auth is the default auth solution when NextAuth is not explicitly enabled
-const enableNextAuth = process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1';
-const enableBetterAuth = !enableNextAuth;
 
 const getCommandVersion = (command: string): string | null => {
   try {
@@ -60,11 +56,6 @@ const printEnvInfo = () => {
   console.log(`    ENABLE_MAGIC_LINK: ${process.env.ENABLE_MAGIC_LINK ?? '(not set)'}`);
   console.log(`    AUTH_SECRET: ${process.env.AUTH_SECRET ? '✓ set' : '✗ not set'}`);
   console.log(`    KEY_VAULTS_SECRET: ${process.env.KEY_VAULTS_SECRET ? '✓ set' : '✗ not set'}`);
-
-  // Auth flags
-  console.log('\n  Auth Flags:');
-  console.log(`    enableBetterAuth: ${enableBetterAuth}`);
-  console.log(`    enableNextAuth: ${enableNextAuth}`);
 
   console.log('─'.repeat(50));
 };

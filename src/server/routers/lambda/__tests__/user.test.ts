@@ -21,9 +21,6 @@ vi.mock('@/database/models/user');
 vi.mock('@/server/modules/KeyVaultsEncrypt');
 vi.mock('@/server/modules/S3');
 vi.mock('@/server/services/user');
-vi.mock('@/envs/auth', () => ({
-  enableBetterAuth: true,
-}));
 
 describe('userRouter', () => {
   const mockUserId = 'test-user-id';

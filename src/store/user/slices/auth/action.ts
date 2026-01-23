@@ -1,9 +1,6 @@
 import { type SSOProvider } from '@lobechat/types';
 import { type StateCreator } from 'zustand/vanilla';
 
-import { enableBetterAuth, enableNextAuth } from '@/envs/auth';
-import { userService } from '@/services/user';
-
 import type { UserStore } from '../../store';
 
 interface AuthProvidersData {
@@ -31,32 +28,26 @@ export interface UserAuthAction {
 }
 
 const fetchAuthProvidersData = async (): Promise<AuthProvidersData> => {
-  if (enableBetterAuth) {
-    const { accountInfo, listAccounts } = await import('@/libs/better-auth/auth-client');
-    const result = await listAccounts();
-    const accounts = result.data || [];
-    const hasPasswordAccount = accounts.some((account) => account.providerId === 'credential');
-    const providers = await Promise.all(
-      accounts
-        .filter((account) => account.providerId !== 'credential')
-        .map(async (account) => {
-          // In theory, the id_token could be decrypted from the accounts table, but I found that better-auth on GitHub does not save the id_token
-          const info = await accountInfo({
-            query: { accountId: account.accountId },
-          });
-          return {
-            email: info.data?.user?.email ?? undefined,
-            provider: account.providerId,
-            providerAccountId: account.accountId,
-          };
-        }),
-    );
-    return { hasPasswordAccount, providers };
-  }
-
-  // Fallback for NextAuth
-  const providers = await userService.getUserSSOProviders();
-  return { hasPasswordAccount: false, providers };
+  const { accountInfo, listAccounts } = await import('@/libs/better-auth/auth-client');
+  const result = await listAccounts();
+  const accounts = result.data || [];
+  const hasPasswordAccount = accounts.some((account) => account.providerId === 'credential');
+  const providers = await Promise.all(
+    accounts
+      .filter((account) => account.providerId !== 'credential')
+      .map(async (account) => {
+        // In theory, the id_token could be decrypted from the accounts table, but I found that better-auth on GitHub does not save the id_token
+        const info = await accountInfo({
+          query: { accountId: account.accountId },
+        });
+        return {
+          email: info.data?.user?.email ?? undefined,
+          provider: account.providerId,
+          providerAccountId: account.accountId,
+        };
+      }),
+  );
+  return { hasPasswordAccount, providers };
 };
 
 export const createAuthSlice: StateCreator<
@@ -78,50 +69,26 @@ export const createAuthSlice: StateCreator<
     }
   },
   logout: async () => {
-    if (enableBetterAuth) {
-      const { signOut } = await import('@/libs/better-auth/auth-client');
-      await signOut({
-        fetchOptions: {
-          onSuccess: () => {
-            // Use window.location.href to trigger a full page reload
-            // This ensures all client-side state (React, Zustand, cache) is cleared
-            window.location.href = '/signin';
-          },
+    const { signOut } = await import('@/libs/better-auth/auth-client');
+    await signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          // Use window.location.href to trigger a full page reload
+          // This ensures all client-side state (React, Zustand, cache) is cleared
+          window.location.href = '/signin';
         },
-      });
-
-      return;
-    }
-
-    if (enableNextAuth) {
-      const { signOut } = await import('next-auth/react');
-      signOut();
-    }
+      },
+    });
   },
   openLogin: async () => {
-    // Skip if already on a Better Auth login page (/signin, /signup)
+    // Skip if already on a login page (/signin, /signup)
     const pathname = location.pathname;
     if (pathname.startsWith('/signin') || pathname.startsWith('/signup')) {
       return;
     }
 
-    if (enableBetterAuth) {
-      const currentUrl = location.toString();
-      window.location.href = `/signin?callbackUrl=${encodeURIComponent(currentUrl)}`;
-
-      return;
-    }
-
-    if (enableNextAuth) {
-      const { signIn } = await import('next-auth/react');
-      // Check if only one provider is available
-      const providers = get()?.oAuthSSOProviders;
-      if (providers && providers.length === 1) {
-        signIn(providers[0]);
-        return;
-      }
-      signIn();
-    }
+    const currentUrl = location.toString();
+    window.location.href = `/signin?callbackUrl=${encodeURIComponent(currentUrl)}`;
   },
   refreshAuthProviders: async () => {
     try {

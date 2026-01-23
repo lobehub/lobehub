@@ -3,12 +3,7 @@ import { parse } from 'cookie';
 import debug from 'debug';
 import { type NextRequest } from 'next/server';
 
-import {
-  LOBE_CHAT_AUTH_HEADER,
-  LOBE_CHAT_OIDC_AUTH_HEADER,
-  authEnv,
-  enableBetterAuth,
-} from '@/envs/auth';
+import { LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER, authEnv } from '@/envs/auth';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 
 // Create context logger namespace
@@ -153,31 +148,29 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
     }
   }
 
-  // If OIDC is not enabled or validation fails, try other authentication methods
-  if (enableBetterAuth) {
-    log('Attempting Better Auth authentication');
-    try {
-      const { auth: betterAuth } = await import('@/auth');
+  // If OIDC is not enabled or validation fails, try Better Auth authentication
+  log('Attempting Better Auth authentication');
+  try {
+    const { auth: betterAuth } = await import('@/auth');
 
-      const session = await betterAuth.api.getSession({
-        headers: request.headers,
-      });
+    const session = await betterAuth.api.getSession({
+      headers: request.headers,
+    });
 
-      if (session && session?.user?.id) {
-        userId = session.user.id;
-        log('Better Auth authentication successful, userId: %s', userId);
-      } else {
-        log('Better Auth authentication failed, no valid session');
-      }
-
-      return createContextInner({
-        ...commonContext,
-        userId,
-      });
-    } catch (e) {
-      log('Better Auth authentication error: %O', e);
-      console.error('better auth err', e);
+    if (session && session?.user?.id) {
+      userId = session.user.id;
+      log('Better Auth authentication successful, userId: %s', userId);
+    } else {
+      log('Better Auth authentication failed, no valid session');
     }
+
+    return createContextInner({
+      ...commonContext,
+      userId,
+    });
+  } catch (e) {
+    log('Better Auth authentication error: %O', e);
+    console.error('better auth err', e);
   }
 
   // Final return, userId may be undefined

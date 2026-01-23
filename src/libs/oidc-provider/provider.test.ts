@@ -4,10 +4,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock dependencies
-vi.mock('@/envs/auth', () => ({
-  enableBetterAuth: false,
-  enableNextAuth: false,
-}));
 
 vi.mock('@/envs/app', () => ({
   appEnv: {
