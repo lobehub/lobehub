@@ -162,6 +162,15 @@ export class MessagesEngine {
       // 2. System role injection (agent's system role)
       new SystemRoleInjector({ systemRole }),
 
+      // =============================================
+      // Phase 2.5: First User Message Context Injection
+      // These providers inject content before the first user message
+      // Order matters: first executed = first in content
+      // =============================================
+
+      // 4. User memory injection (conditionally added, injected first)
+      ...(isUserMemoryEnabled ? [new UserMemoryInjector(userMemory)] : []),
+
       // 3. Group context injection (agent identity and group info for multi-agent chat)
       new GroupContextInjector({
         currentAgentId: agentGroup?.currentAgentId,
@@ -172,15 +181,6 @@ export class MessagesEngine {
         members: agentGroup?.members,
         systemPrompt: agentGroup?.systemPrompt,
       }),
-
-      // =============================================
-      // Phase 2.5: First User Message Context Injection
-      // These providers inject content before the first user message
-      // Order matters: first executed = first in content
-      // =============================================
-
-      // 4. User memory injection (conditionally added, injected first)
-      ...(isUserMemoryEnabled ? [new UserMemoryInjector(userMemory)] : []),
 
       // 4.5. GTD Plan injection (conditionally added, after user memory, before knowledge)
       ...(isGTDPlanEnabled ? [new GTDPlanInjector({ enabled: true, plan: gtd.plan })] : []),
