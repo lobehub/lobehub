@@ -191,7 +191,7 @@ class CalculatorExecutor
    */
   compare = async (params: CompareParams): Promise<BuiltinToolResult> => {
     try {
-      const { numbers, mode = 'sorted', precision } = params;
+      const { numbers, mode, precision } = params;
 
       if (numbers.length < 2) {
         return {
@@ -232,33 +232,26 @@ class CalculatorExecutor
       let result: any;
 
       switch (mode) {
-        case 'sorted': {
-          result = sorted;
-          break;
-        }
-        case 'largest': {
+        case 'largest':
           result = largest;
           break;
-        }
-        case 'smallest': {
+        case 'smallest':
           result = smallest;
           break;
-        }
-        default: {
-          result = { largest, smallest, sorted };
-        }
+        default:
+          result = sorted;
       }
 
       return {
         content: JSON.stringify(result),
         state: {
-          largest,
-          mode,
-          originalNumbers: numbers,
-          precision,
           result,
+          largest,
           smallest,
           sorted,
+          originalNumbers: numbers,
+          mode,
+          precision,
         },
         success: true,
       };

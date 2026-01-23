@@ -31,10 +31,10 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
   
 - **compare**: Use for comparing multiple numbers with flexible output modes
   - Requires an array of at least 2 numbers (strings or numbers)
-  - Mode options: "sorted" returns only sorted array; "largest" returns only largest value; "smallest" returns only smallest value
-  - Examples: compare({"numbers": [3.14, 2.718, 1.618], "mode": "sorted"}), compare({"numbers": [5, 3, 8], "mode": "largest"})
+  - Optional mode: "largest" returns only largest value; "smallest" returns only smallest value; if not specified, returns sorted array
+  - Examples: compare({"numbers": [3.14, 2.718, 1.618]}), compare({"numbers": [5, 3, 8], "mode": "largest"})
   - Response formats: 
-    - sorted mode: ["1.618", "2.718", "3.14"]
+    - default (no mode): ["1.618", "2.718", "3.14"]
     - largest mode: "3.14"
     - smallest mode: "1.618"
 </tool_selection_guidelines>

@@ -52,14 +52,14 @@ export interface ConvertBaseState {
 
 // Compare API
 export interface CompareParams {
-  mode?: 'sorted' | 'largest' | 'smallest';
+  mode?: 'largest' | 'smallest';
   numbers: (string | number)[];
   precision?: number;
 }
 
 export interface CompareState {
   // Can be array, string, or object based on mode
-  largest?: number | string; 
+  largest?: number | string;
   mode?: string;
   originalNumbers?: (string | number)[];
   precision?: number;

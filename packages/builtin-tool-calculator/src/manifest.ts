@@ -63,8 +63,8 @@ export const CalculatorManifest: BuiltinToolManifest = {
         properties: {
           mode: {
             description:
-              'Output mode: "sorted" returns only sorted array; "largest" returns only largest value; "smallest" returns only smallest value',
-            enum: ['sorted', 'largest', 'smallest'],
+              'Optional mode: "largest" returns only largest value; "smallest" returns only smallest value; if not specified, returns sorted array',
+            enum: ['largest', 'smallest'],
             type: 'string',
           },
           numbers: {

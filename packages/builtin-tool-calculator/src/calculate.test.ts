@@ -495,7 +495,7 @@ describe('Calculator Core Functions', () => {
 
 describe('Calculator Comparison', () => {
   describe('compare', () => {
-    it('should default to sorted mode', async () => {
+    it('should default to sorted array when no mode provided', async () => {
       const result = await calculatorExecutor.compare({
         numbers: [3.14, 2.718],
       });
@@ -506,10 +506,9 @@ describe('Calculator Comparison', () => {
       expect(parsed).toEqual(['2.718', '3.14']);
     });
 
-    it('should return sorted array in sorted mode', async () => {
+    it('should return sorted array when no mode provided', async () => {
       const result = await calculatorExecutor.compare({
         numbers: [3.14, 2.718, 1.618, 4.669],
-        mode: 'sorted',
       });
 
       expect(result.success).toBe(true);
@@ -543,11 +542,11 @@ describe('Calculator Comparison', () => {
     it('should compare string numbers', async () => {
       const result = await calculatorExecutor.compare({
         numbers: ['3.14', '2.718', '1.618'],
-        mode: 'sorted',
       });
 
       expect(result.success).toBe(true);
       const parsed = JSON.parse(result.content || '{}');
+      expect(Array.isArray(parsed)).toBe(true);
       expect(parsed).toEqual(['1.618', '2.718', '3.14']);
     });
 
@@ -565,12 +564,12 @@ describe('Calculator Comparison', () => {
     it('should handle precision formatting', async () => {
       const result = await calculatorExecutor.compare({
         numbers: [3.1415926535, 2.7182818284, 1.6180339887],
-        mode: 'sorted',
         precision: 3,
       });
 
       expect(result.success).toBe(true);
       const parsed = JSON.parse(result.content || '{}');
+      expect(Array.isArray(parsed)).toBe(true);
       expect(parsed).toEqual(['1.618', '2.718', '3.142']);
     });
 
@@ -589,11 +588,11 @@ describe('Calculator Comparison', () => {
     it('should handle duplicate values', async () => {
       const result = await calculatorExecutor.compare({
         numbers: [5, 3, 5, 2],
-        mode: 'sorted',
       });
 
       expect(result.success).toBe(true);
       const parsed = JSON.parse(result.content || '{}');
+      expect(Array.isArray(parsed)).toBe(true);
       expect(parsed).toEqual(['2', '3', '5', '5']);
     });
 
