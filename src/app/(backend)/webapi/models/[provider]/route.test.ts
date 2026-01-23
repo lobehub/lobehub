@@ -17,6 +17,14 @@ vi.mock('@lobechat/utils/server', () => ({
   getXorPayload: vi.fn(),
 }));
 
+vi.mock('@/envs/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/envs/auth')>();
+  return {
+    ...actual,
+    enableBetterAuth: false,
+  };
+});
+
 vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(),
 }));
