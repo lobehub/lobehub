@@ -69,6 +69,7 @@ export interface SortState {
   originalNumbers?: (string | number)[];
   precision?: number;
   result?: any;
+  reverse?: boolean;
   smallest?: number | string;
   sorted?: (string | number)[];
 }
