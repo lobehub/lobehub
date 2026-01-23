@@ -95,6 +95,13 @@ These settings are required for email verification and password reset features.
 - Default: `-`
 - Example: `your-app-specific-password`
 
+#### `SMTP_FROM`
+
+- Type: Optional
+- Description: Sender email address. Required for AWS SES where `SMTP_USER` is not a valid email address. If not set, defaults to `SMTP_USER`.
+- Default: Value of `SMTP_USER`
+- Example: `noreply@example.com`
+
 ### Google
 
 #### `AUTH_GOOGLE_ID`

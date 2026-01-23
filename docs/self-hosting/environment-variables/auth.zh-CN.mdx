@@ -93,6 +93,13 @@ LobeChat 在部署时提供了完善的身份验证服务能力，以下是相�
 - 默认值：`-`
 - 示例：`your-app-specific-password`
 
+#### `SMTP_FROM`
+
+- 类型：可选
+- 描述：发件人邮箱地址。AWS SES 等服务需要此配置（因为 `SMTP_USER` 不是有效邮箱地址）。若未设置，默认使用 `SMTP_USER`。
+- 默认值：`SMTP_USER` 的值
+- 示例：`noreply@example.com`
+
 ### Google
 
 #### `AUTH_GOOGLE_ID`
