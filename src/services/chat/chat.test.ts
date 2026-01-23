@@ -296,7 +296,7 @@ describe('ChatService', () => {
           expect.objectContaining({
             thinkingBudget: 5000,
           }),
-          undefined,
+          expect.anything(),
         );
       });
     });
@@ -1464,7 +1464,7 @@ describe('ChatService private methods', () => {
         expect.objectContaining({
           thinkingBudget: 5000,
         }),
-        undefined,
+        expect.anything(),
       );
     });
   });
