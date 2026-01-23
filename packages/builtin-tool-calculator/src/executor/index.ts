@@ -5,9 +5,9 @@ import {
   type CalculateParams,
   CalculatorApiName,
   CalculatorIdentifier,
-  type CompareParams,
   type ConvertBaseParams,
   type EvaluateExpressionParams,
+  type SortParams,
 } from '../types';
 
 // Create a mathjs instance with all functions
@@ -187,9 +187,9 @@ class CalculatorExecutor
   };
 
   /**
-   * Compare multiple numbers with flexible output options
+   * Sort multiple numbers with flexible output options
    */
-  compare = async (params: CompareParams): Promise<BuiltinToolResult> => {
+  sort = async (params: SortParams): Promise<BuiltinToolResult> => {
     try {
       const { numbers, mode, precision } = params;
 

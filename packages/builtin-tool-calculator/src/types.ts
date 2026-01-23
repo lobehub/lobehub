@@ -2,9 +2,9 @@ export const CalculatorIdentifier = 'lobe-calculator';
 
 export const CalculatorApiName = {
   calculate: 'calculate',
-  compare: 'compare',
   convertBase: 'convertBase',
   evaluateExpression: 'evaluateExpression',
+  sort: 'sort',
 } as const;
 
 export type CalculatorApiNameType = (typeof CalculatorApiName)[keyof typeof CalculatorApiName];
@@ -50,14 +50,14 @@ export interface ConvertBaseState {
   targetBase?: string;
 }
 
-// Compare API
-export interface CompareParams {
+// Sort API
+export interface SortParams {
   mode?: 'largest' | 'smallest';
   numbers: (string | number)[];
   precision?: number;
 }
 
-export interface CompareState {
+export interface SortState {
   // Can be array, string, or object based on mode
   largest?: number | string;
   mode?: string;

@@ -56,8 +56,8 @@ export const CalculatorManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Compare multiple numbers with flexible output options (sorted array, largest value, or smallest value).',
-      name: CalculatorApiName.compare,
+        'Sort multiple numbers with flexible output options (sorted array, largest value, or smallest value).',
+      name: CalculatorApiName.sort,
       parameters: {
         additionalProperties: false,
         properties: {
