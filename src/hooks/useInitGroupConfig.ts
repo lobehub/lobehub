@@ -19,7 +19,7 @@ export const useInitGroupConfig = () => {
     data,
     error: rest.error || (!shouldFetch ? undefined : rest.error),
     isLoading: (rest.isLoading && isLogin) || !shouldFetch,
-    // isRevalidating: 有缓存数据，后台正在更新
+    // isRevalidating: has cached data, updating in background
     isRevalidating: isValidating && !!data,
   };
 };
