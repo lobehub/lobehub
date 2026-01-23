@@ -347,6 +347,8 @@ class ChatService {
     // Get the chat config to check streaming preference
     const chatConfig = agentChatConfigSelectors.currentChatConfig(getAgentStoreState());
 
+    delete (res as any).scope;
+
     const payload = merge(
       {
         model: DEFAULT_AGENT_CONFIG.model,
