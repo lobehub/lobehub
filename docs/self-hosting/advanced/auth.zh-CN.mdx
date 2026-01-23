@@ -178,4 +178,14 @@ Better Auth 支持内置提供商（Google、GitHub、Microsoft、Apple、AWS Co
 
 ### Casdoor 用户只有 username 没有 email 怎么办？
 
-当前身份验证方案强依赖 email。请在 Casdoor 中为用户配置有效的 email 地址。强烈建议使用真实有效的邮箱，否则密码重置、魔法链接登录等功能将无法使用。
+当前身份验证方案强依赖 email。请在 Casdoor 中为用户配置有效的 email 地址。
+强烈建议使用真实有效的邮箱，否则密码重置、魔法链接登录等功能将无法使用。
+
+### 如何限制只允许特定邮箱或域名注册？
+
+设置 `AUTH_ALLOWED_EMAILS` 环境变量，支持完整邮箱地址或域名，以逗号分隔。例如：
+
+- 只允许 `example.com` 域名：`AUTH_ALLOWED_EMAILS=example.com`
+- 允许多个域名和特定邮箱：`AUTH_ALLOWED_EMAILS=example.com,company.org,admin@other.com`
+
+留空表示允许所有邮箱注册。此限制对邮箱注册和 SSO 登录均有效。

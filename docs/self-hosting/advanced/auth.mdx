@@ -182,3 +182,12 @@ Set the `AUTH_SSO_PROVIDERS` environment variable with a comma-separated list, e
 ### What if Casdoor users only have username without email?
 
 The current authentication system requires email. Please configure a valid email address for users in Casdoor. Using a real, valid email is strongly recommended, otherwise features like password reset and magic link login will not work.
+
+### How do I restrict registration to specific emails or domains?
+
+Set the `AUTH_ALLOWED_EMAILS` environment variable with a comma-separated list of allowed emails or domains. For example:
+
+- Allow only `example.com` domain: `AUTH_ALLOWED_EMAILS=example.com`
+- Allow multiple domains and specific emails: `AUTH_ALLOWED_EMAILS=example.com,company.org,admin@other.com`
+
+Leave empty to allow all emails. This restriction applies to both email registration and SSO login.
