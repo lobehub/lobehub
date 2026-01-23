@@ -668,6 +668,69 @@ describe('anthropicHelpers', () => {
         ]);
       });
 
+      it('should handle tool message with array content', async () => {
+        const messages: OpenAIChatMessage[] = [
+          {
+            content: '搜索人员',
+            role: 'user',
+          },
+          {
+            content: '正在搜索...',
+            role: 'assistant',
+            tool_calls: [
+              {
+                function: {
+                  arguments: '{"location": "Singapore"}',
+                  name: 'search_people',
+                },
+                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                type: 'function',
+              },
+            ],
+          },
+          {
+            content: [
+              { type: 'text', text: 'Found 5 candidates' },
+              { type: 'text', text: 'Result details here' },
+            ] as any,
+            name: 'search_people',
+            role: 'tool',
+            tool_call_id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+          },
+        ];
+
+        const contents = await buildAnthropicMessages(messages);
+
+        expect(contents).toEqual([
+          { content: '搜索人员', role: 'user' },
+          {
+            content: [
+              { text: '正在搜索...', type: 'text' },
+              {
+                id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                input: { location: 'Singapore' },
+                name: 'search_people',
+                type: 'tool_use',
+              },
+            ],
+            role: 'assistant',
+          },
+          {
+            content: [
+              {
+                content: [
+                  { type: 'text', text: 'Found 5 candidates' },
+                  { type: 'text', text: 'Result details here' },
+                ],
+                tool_use_id: 'toolu_01CnXPcBEqsGGbvRriem3Rth',
+                type: 'tool_result',
+              },
+            ],
+            role: 'user',
+          },
+        ]);
+      });
+
       it('should work well starting with tool message', async () => {
         const messages: OpenAIChatMessage[] = [
           {
