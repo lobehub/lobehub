@@ -3,61 +3,61 @@
   "cloud": [],
   "community": [
     {
-      "image": "https://placeholder.com/mcp",
+      "image": "https://file.rene.wang/clipboard-1769155711708-710967bee57bc.png",
       "id": "2025-12-08-mcp",
       "date": "2025-12-08",
       "versionRange": ["2.0.0", "2.1.0"]
     },
     {
-      "image": "https://placeholder.com/comfy-ui",
+      "image": "https://file.rene.wang/clipboard-1769155737647-1b4fc6558f029.png",
       "id": "2025-11-08-comfy-ui",
       "date": "2025-11-08",
-      "versionRange": ["2.0.0", "2.1.0"]
+      "versionRange": ["1.133.5", "1.142.8"]
     },
     {
-      "image": "https://placeholder.com/python",
+      "image": "https://file.rene.wang/clipboard-1769155791342-7f43b72cc6b42.png",
       "id": "2025-10-08-python",
       "date": "2025-10-08",
-      "versionRange": ["2.0.0", "2.1.0"]
+      "versionRange": ["1.120.7", "1.133.5"]
     },
     {
-      "image": "https://placeholder.com/gemini",
+      "image": "https://file.rene.wang/clipboard-1769155818070-7eb403550b6c7.png",
       "id": "2025-09-08-gemini",
       "date": "2025-09-08",
-      "versionRange": ["2.0.0", "2.1.0"]
+      "versionRange": ["1.109.1", "1.120.7"]
     },
     {
-      "image": "https://placeholder.com/image-generation",
+      "image": "https://file.rene.wang/clipboard-1769155880302-272fbd2c5290b.png",
       "id": "2025-08-08-image-generation",
       "date": "2025-08-08",
-      "versionRange": ["2.0.0", "2.1.0"]
+      "versionRange": ["1.97.10", "1.109.1"]
     },
     {
-      "image": "https://placeholder.com/mcp-market",
+      "image": "https://file.rene.wang/clipboard-1769155935435-93dab92dd0f44.png",
       "id": "2025-07-08-mcp-market",
       "date": "2025-07-08",
-      "versionRange": ["2.0.0", "2.1.0"]
+      "versionRange": ["1.93.3", "1.97.10"]
     },
     {
-      "image": "https://placeholder.com/claude-4",
+      "image": "https://file.rene.wang/clipboard-1769155973881-ff1ee142d5b8f.png",
       "id": "2025-06-08-claude-4",
       "date": "2025-06-08",
-      "versionRange": ["2.0.0", "2.1.0"]
+      "versionRange": ["1.84.27", "1.93.3"]
     },
     {
-      "image": "https://placeholder.com/desktop-app",
+      "image": "https://file.rene.wang/clipboard-1769156005535-c2e79e11f4b56.png",
       "id": "2025-05-08-desktop-app",
       "date": "2025-05-08",
-      "versionRange": ["2.0.0", "2.1.0"]
+      "versionRange": ["1.77.17", "1.84.27"]
     },
     {
-      "image": "https://placeholder.com/exports",
+      "image": "https://file.rene.wang/clipboard-1769156036607-2b4fe37c4b56c.png",
       "id": "2025-04-06-exports",
       "date": "2025-04-06",
       "versionRange": ["1.67.2", "1.77.17"]
     },
     {
-      "image": "https://placeholder.com/new-models",
+      "image": "https://file.rene.wang/clipboard-1769156050787-ecf4f48474ae2.png",
       "id": "2025-03-02-new-models",
       "date": "2025-03-02",
       "versionRange": ["1.49.13", "1.67.2"]
