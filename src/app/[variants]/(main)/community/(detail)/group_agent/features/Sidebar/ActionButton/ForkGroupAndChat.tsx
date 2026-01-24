@@ -132,6 +132,7 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
         // Group content is the supervisor's systemRole (for backward compatibility)
         content: config.systemRole || supervisorConfig?.systemRole,
         ...meta,
+        marketIdentifier: forkResult.group.identifier, // Store the new market identifier
       };
 
       // Step 5: Prepare member agents from market data
