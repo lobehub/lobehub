@@ -495,6 +495,7 @@
   "skillStore.networkError": "Грешка в мрежата, моля опитайте отново",
   "skillStore.search": "Търсете умения по име или ключова дума, натиснете Enter за търсене…",
   "skillStore.tabs.community": "Общност",
+  "skillStore.tabs.custom": "Персонализирано",
   "skillStore.tabs.lobehub": "LobeHub",
   "skillStore.title": "Магазин за умения",
   "startConversation": "Започни разговор",

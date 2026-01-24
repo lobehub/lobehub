@@ -47,9 +47,6 @@ const Actions = memo<ActionsProps>(({ identifier, type, isMCP }) => {
   const [showModal, setModal] = useState(false);
   const [mcpSettingsOpen, setMcpSettingsOpen] = useState(false);
 
-  // 自定义插件（包括自定义 MCP）使用 EditCustomPlugin
-  // 社区 MCP 使用 McpSettingsModal
-  // 传统插件使用 PluginDetailModal
   const isCommunityMCP = !isCustomPlugin && isMCP;
   const showConfigureButton = isCustomPlugin || isMCP || hasSettings;
 

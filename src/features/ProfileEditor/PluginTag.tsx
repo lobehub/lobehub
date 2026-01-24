@@ -9,7 +9,7 @@ import {
 import { Avatar, Icon, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { AlertCircle, X } from 'lucide-react';
+import { AlertCircle, Loader2, X } from 'lucide-react';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -51,6 +51,21 @@ const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
 );
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  loadingIcon: css`
+    flex-shrink: 0;
+    color: ${cssVar.colorTextSecondary};
+    animation: spin 1s linear infinite;
+
+    @keyframes spin {
+      from {
+        transform: rotate(0deg);
+      }
+
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  `,
   notInstalledTag: css`
     border-color: ${cssVar.colorWarningBorder};
     background: ${cssVar.colorWarningBg};
@@ -196,11 +211,18 @@ const PluginTag = memo<PluginTagProps>(
       type: 'plugin' as const,
     };
 
-    const displayTitle = isLoading ? 'Loading...' : meta.title;
+    // Use identifier as title when loading, otherwise use meta.title
+    const displayTitle = meta.title;
     const isDesktopOnly = showDesktopOnlyLabel && !meta.availableInWeb;
 
     // Render icon based on type
     const renderIcon = () => {
+      // Show loading spinner when loading
+      if (isLoading) {
+        return <Loader2 className={styles.loadingIcon} size={14} />;
+      }
+
+      // Show warning icon when not installed
       if (!meta.isInstalled) {
         return <AlertCircle className={styles.warningIcon} size={14} />;
       }
@@ -234,24 +256,28 @@ const PluginTag = memo<PluginTagProps>(
       if (isDesktopOnly) {
         text += ` (${t('tools.desktopOnly', { defaultValue: 'Desktop Only' })})`;
       }
-      if (!meta.isInstalled) {
+      // Don't show "Not Installed" when loading
+      if (!meta.isInstalled && !isLoading) {
         text += ` (${t('tools.notInstalled', { defaultValue: 'Not Installed' })})`;
       }
       return text;
     };
+
+    // Only show error state when not installed and not loading
+    const showErrorState = !meta.isInstalled && !isLoading;
 
     return (
       <Tag
         className={styles.tag}
         closable
         closeIcon={<X size={12} />}
-        color={meta.isInstalled ? undefined : 'error'}
+        color={showErrorState ? 'error' : undefined}
         icon={renderIcon()}
         onClose={onRemove}
         title={
-          meta.isInstalled
-            ? undefined
-            : t('tools.notInstalledWarning', { defaultValue: 'This tool is not installed' })
+          showErrorState
+            ? t('tools.notInstalledWarning', { defaultValue: 'This tool is not installed' })
+            : undefined
         }
         variant={isDarkMode ? 'filled' : 'outlined'}
       >

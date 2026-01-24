@@ -6,10 +6,10 @@ import {
   LOBEHUB_SKILL_PROVIDERS,
   type LobehubSkillProviderType,
 } from '@lobechat/const';
-import { Avatar, Button, Flexbox, Icon, type ItemType, Segmented } from '@lobehub/ui';
+import { Avatar, Button, Flexbox, Icon, type ItemType } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { ArrowRight, PlusIcon, Store, ToyBrick } from 'lucide-react';
+import { PlusIcon, ToyBrick } from 'lucide-react';
 import React, { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -34,29 +34,13 @@ import {
 import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
 
 import PluginTag from './PluginTag';
+import PopoverContent from './PopoverContent';
 
 const WEB_BROWSING_IDENTIFIER = 'lobe-web-browsing';
 
 type TabType = 'all' | 'installed';
 
-const prefixCls = 'ant';
-
 const styles = createStaticStyles(({ css }) => ({
-  dropdown: css`
-    overflow: hidden;
-    width: 100%;
-
-    .${prefixCls}-dropdown-menu {
-      border-radius: 0 !important;
-      background: transparent !important;
-      box-shadow: none !important;
-    }
-  `,
-  header: css`
-    padding: ${cssVar.paddingXS};
-    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
-    background: transparent;
-  `,
   icon: css`
     flex: none;
     width: 18px;
@@ -152,6 +136,7 @@ const AgentTool = memo<AgentToolProps>(
     const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
 
     const [updating, setUpdating] = useState(false);
+    const [dropdownOpen, setDropdownOpen] = useState(false);
 
     // Tab state for dual-column layout
     const [activeTab, setActiveTab] = useState<TabType | null>(null);
@@ -227,10 +212,11 @@ const AgentTool = memo<AgentToolProps>(
     );
 
     // Set default tab based on installed plugins (only on first load)
+    // Only show 'installed' tab by default if more than 5 plugins are enabled
     useEffect(() => {
       if (!isInitializedRef.current && plugins.length >= 0) {
         isInitializedRef.current = true;
-        setActiveTab(plugins.length > 0 ? 'installed' : 'all');
+        setActiveTab(plugins.length > 5 ? 'installed' : 'all');
       }
     }, [plugins.length]);
 
@@ -323,11 +309,6 @@ const AgentTool = memo<AgentToolProps>(
         }
       };
 
-    // Build dropdown menu items (adapted from useControls)
-    const enablePluginCount = plugins.filter(
-      (id) => !builtinList.some((b) => b.identifier === id),
-    ).length;
-
     // 合并 builtin 工具、LobeHub Skill Providers 和 Klavis 服务器
     const builtinItems = useMemo(
       () => [
@@ -358,58 +339,85 @@ const AgentTool = memo<AgentToolProps>(
       [filteredBuiltinList, klavisServerItems, lobehubSkillItems, isToolEnabled, handleToggleTool],
     );
 
-    // Plugin items for dropdown
-    const pluginItems = useMemo(
-      () =>
-        installedPluginList.map((item) => ({
-          icon: item?.avatar ? (
-            <PluginAvatar avatar={item.avatar} size={20} />
-          ) : (
-            <Icon icon={ToyBrick} size={20} />
-          ),
-          key: item.identifier,
-          label: (
-            <ToolItem
-              checked={plugins.includes(item.identifier)}
-              id={item.identifier}
-              label={item.title}
-              onUpdate={async () => {
-                setUpdating(true);
-                await togglePlugin(item.identifier);
-                setUpdating(false);
-              }}
-            />
-          ),
-        })),
-      [installedPluginList, plugins, togglePlugin],
+    // 区分社区插件和自定义插件
+    const communityPlugins = installedPluginList.filter((item) => item.type !== 'customPlugin');
+    const customPlugins = installedPluginList.filter((item) => item.type === 'customPlugin');
+
+    // 生成插件列表项的函数
+    const mapPluginToItem = useCallback(
+      (item: (typeof installedPluginList)[0]) => ({
+        icon: item?.avatar ? (
+          <PluginAvatar avatar={item.avatar} size={20} />
+        ) : (
+          <Icon icon={ToyBrick} size={20} />
+        ),
+        key: item.identifier,
+        label: (
+          <ToolItem
+            checked={plugins.includes(item.identifier)}
+            id={item.identifier}
+            label={item.title}
+            onUpdate={async () => {
+              setUpdating(true);
+              await togglePlugin(item.identifier);
+              setUpdating(false);
+            }}
+          />
+        ),
+      }),
+      [plugins, togglePlugin],
+    );
+
+    // Community 插件列表项
+    const communityPluginItems = useMemo(
+      () => communityPlugins.map(mapPluginToItem),
+      [communityPlugins, mapPluginToItem],
+    );
+
+    // Custom 插件列表项
+    const customPluginItems = useMemo(
+      () => customPlugins.map(mapPluginToItem),
+      [customPlugins, mapPluginToItem],
     );
 
     // All tab items (市场 tab)
     const allTabItems: ItemType[] = useMemo(
       () => [
-        {
-          children: builtinItems,
-          key: 'builtins',
-          label: t('tools.builtins.groupName'),
-          type: 'group',
-        },
-        {
-          children: pluginItems,
-          key: 'plugins',
-          label: (
-            <Flexbox align={'center'} gap={40} horizontal justify={'space-between'}>
-              {t('tools.plugins.groupName')}
-              {enablePluginCount === 0 ? null : (
-                <div style={{ fontSize: 12, marginInlineEnd: 4 }}>
-                  {t('tools.plugins.enabled', { num: enablePluginCount })}
-                </div>
-              )}
-            </Flexbox>
-          ),
-          type: 'group',
-        },
+        // LobeHub 分组
+        ...(builtinItems.length > 0
+          ? [
+              {
+                children: builtinItems,
+                key: 'lobehub',
+                label: t('skillStore.tabs.lobehub'),
+                type: 'group' as const,
+              },
+            ]
+          : []),
+        // Community 分组
+        ...(communityPluginItems.length > 0
+          ? [
+              {
+                children: communityPluginItems,
+                key: 'community',
+                label: t('skillStore.tabs.community'),
+                type: 'group' as const,
+              },
+            ]
+          : []),
+        // Custom 分组
+        ...(customPluginItems.length > 0
+          ? [
+              {
+                children: customPluginItems,
+                key: 'custom',
+                label: t('skillStore.tabs.custom'),
+                type: 'group' as const,
+              },
+            ]
+          : []),
       ],
-      [builtinItems, pluginItems, enablePluginCount, t],
+      [builtinItems, communityPluginItems, customPluginItems, t],
     );
 
     // Installed tab items - 只显示已启用的
@@ -446,24 +454,24 @@ const AgentTool = memo<AgentToolProps>(
         plugins.includes(item.key as string),
       );
 
-      // 合并 builtin、LobeHub Skill 和 Klavis
-      const allBuiltinItems = [
+      // LobeHub 分组（builtin + LobeHub Skill + Klavis）
+      const lobehubGroupItems = [
         ...enabledBuiltinItems,
-        ...connectedKlavisItems,
         ...connectedLobehubSkillItems,
+        ...connectedKlavisItems,
       ];
 
-      if (allBuiltinItems.length > 0) {
+      if (lobehubGroupItems.length > 0) {
         items.push({
-          children: allBuiltinItems,
-          key: 'installed-builtins',
-          label: t('tools.builtins.groupName'),
+          children: lobehubGroupItems,
+          key: 'installed-lobehub',
+          label: t('skillStore.tabs.lobehub'),
           type: 'group',
         });
       }
 
-      // 已启用的插件
-      const installedPlugins = installedPluginList
+      // 已启用的社区插件
+      const enabledCommunityPlugins = communityPlugins
         .filter((item) => plugins.includes(item.identifier))
         .map((item) => ({
           icon: item?.avatar ? (
@@ -486,11 +494,44 @@ const AgentTool = memo<AgentToolProps>(
           ),
         }));
 
-      if (installedPlugins.length > 0) {
+      if (enabledCommunityPlugins.length > 0) {
         items.push({
-          children: installedPlugins,
-          key: 'installed-plugins',
-          label: t('tools.plugins.groupName'),
+          children: enabledCommunityPlugins,
+          key: 'installed-community',
+          label: t('skillStore.tabs.community'),
+          type: 'group',
+        });
+      }
+
+      // 已启用的自定义插件
+      const enabledCustomPlugins = customPlugins
+        .filter((item) => plugins.includes(item.identifier))
+        .map((item) => ({
+          icon: item?.avatar ? (
+            <PluginAvatar avatar={item.avatar} size={20} />
+          ) : (
+            <Icon icon={ToyBrick} size={20} />
+          ),
+          key: item.identifier,
+          label: (
+            <ToolItem
+              checked={true}
+              id={item.identifier}
+              label={item.title}
+              onUpdate={async () => {
+                setUpdating(true);
+                await togglePlugin(item.identifier);
+                setUpdating(false);
+              }}
+            />
+          ),
+        }));
+
+      if (enabledCustomPlugins.length > 0) {
+        items.push({
+          children: enabledCustomPlugins,
+          key: 'installed-custom',
+          label: t('skillStore.tabs.custom'),
           type: 'group',
         });
       }
@@ -500,7 +541,8 @@ const AgentTool = memo<AgentToolProps>(
       filteredBuiltinList,
       klavisServerItems,
       lobehubSkillItems,
-      installedPluginList,
+      communityPlugins,
+      customPlugins,
       plugins,
       isToolEnabled,
       handleToggleTool,
@@ -538,8 +580,8 @@ const AgentTool = memo<AgentToolProps>(
       <>
         {/* Plugin Selector and Tags */}
         <Flexbox align="center" gap={8} horizontal wrap={'wrap'}>
-          {/* Plugin Selector Dropdown - Using Action component pattern */}
           <Suspense fallback={button}>
+          {/* Plugin Selector Dropdown - Using Action component pattern */}
             <ActionDropdown
               maxWidth={400}
               menu={{
@@ -551,48 +593,21 @@ const AgentTool = memo<AgentToolProps>(
                 },
               }}
               minWidth={400}
+              onOpenChange={setDropdownOpen}
+              open={dropdownOpen}
               placement={'bottomLeft'}
               popupRender={(menu) => (
-                <Flexbox className={styles.dropdown} style={{ maxHeight: 500 }}>
-                  {/* stopPropagation prevents dropdown's onClick from calling preventDefault on Segmented */}
-                  <div className={styles.header} onClick={(e) => e.stopPropagation()}>
-                    <Segmented
-                      block
-                      onChange={(v) => setActiveTab(v as TabType)}
-                      options={[
-                        {
-                          label: t('tools.tabs.all', { defaultValue: 'All' }),
-                          value: 'all',
-                        },
-                        {
-                          label: t('tools.tabs.installed', { defaultValue: 'Installed' }),
-                          value: 'installed',
-                        },
-                      ]}
-                      size="small"
-                      value={effectiveTab}
-                    />
-                  </div>
-                  <div className={styles.scroller} style={{ flex: 1 }}>
-                    {menu}
-                  </div>
-                  <Flexbox
-                    align="center"
-                    gap={8}
-                    horizontal
-                    onClick={() => createSkillStoreModal()}
-                    style={{
-                      borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}`,
-                      cursor: 'pointer',
-                      flex: 'none',
-                      padding: cssVar.paddingSM,
-                    }}
-                  >
-                    <Icon icon={Store} />
-                    <span style={{ flex: 1 }}>{t('tools.plugins.store')}</span>
-                    <Icon icon={ArrowRight} />
-                  </Flexbox>
-                </Flexbox>
+                <PopoverContent
+                  activeTab={effectiveTab}
+                  installedTabItems={installedTabItems}
+                  menu={menu}
+                  onClose={() => setDropdownOpen(false)}
+                  onOpenStore={() => {
+                    setDropdownOpen(false);
+                    createSkillStoreModal()
+                  }}
+                  onTabChange={setActiveTab}
+                />
               )}
               positionerProps={{
                 collisionAvoidance: { align: 'flip', fallbackAxisSide: 'end', side: 'flip' },
