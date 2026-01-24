@@ -157,6 +157,8 @@ export default {
   'cmdk.search.loading': 'Searching...',
   'cmdk.search.market': 'Community',
   'cmdk.search.mcp': 'MCP Server',
+  'cmdk.search.memories': 'Memories',
+  'cmdk.search.memory': 'Memory',
   'cmdk.search.mcps': 'MCP Servers',
   'cmdk.search.message': 'Message',
   'cmdk.search.messages': 'Messages',

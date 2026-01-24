@@ -52,6 +52,7 @@ export const searchRouter = router({
             'folder',
             'message',
             'page',
+            'memory',
             'mcp',
             'plugin',
             'communityAgent',
@@ -68,8 +69,8 @@ export const searchRouter = router({
       // Build search promises based on type filter
       const searchPromises: Promise<any>[] = [];
 
-      // Database searches (agent, topic, file, folder, message, page)
-      if (!type || ['agent', 'topic', 'file', 'folder', 'message', 'page'].includes(type)) {
+      // Database searches (agent, topic, file, folder, message, page, memory)
+      if (!type || ['agent', 'topic', 'file', 'folder', 'message', 'page', 'memory'].includes(type)) {
         searchPromises.push(ctx.searchRepo.search(input));
       }
 
