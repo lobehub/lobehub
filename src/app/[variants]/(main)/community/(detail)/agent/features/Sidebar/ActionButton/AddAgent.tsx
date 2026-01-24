@@ -90,9 +90,7 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
       });
     }
 
-    if (shouldNavigate) {
-      console.log(shouldNavigate);
-    }
+    void shouldNavigate;
 
     return result;
   };

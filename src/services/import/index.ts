@@ -4,7 +4,7 @@ import { lambdaClient } from '@/libs/trpc/client';
 import { uploadService } from '@/services/upload';
 import { useUserStore } from '@/store/user';
 import { type ImportPgDataStructure } from '@/types/export';
-import { type ImporterEntryData, ImportStage, type OnImportCallbacks } from '@/types/importer';
+import { ImportStage, type ImporterEntryData, type OnImportCallbacks } from '@/types/importer';
 import { type UserSettings } from '@/types/user/settings';
 import { uuid } from '@/utils/uuid';
 
@@ -113,7 +113,6 @@ class ImportService {
         pathname: `import_config/${filename}`,
       });
       pathname = result.data.path;
-      console.log(pathname);
     } catch {
       throw new Error('Upload Error');
     }

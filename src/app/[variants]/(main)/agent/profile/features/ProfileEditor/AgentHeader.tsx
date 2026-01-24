@@ -63,7 +63,6 @@ const AgentHeader = memo(() => {
       setUploading(true);
       try {
         const result = await uploadWithProgress({ file });
-        console.log('result', result);
         if (result?.url) {
           updateMeta({ avatar: result.url });
         }
