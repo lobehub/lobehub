@@ -5,7 +5,7 @@ const isVercel = !!process.env.VERCEL_ENV;
 const nextConfig = defineConfig({
   experimental: {
     webpackBuildWorker: true,
-    webpackMemoryOptimizations: false,
+    webpackMemoryOptimizations: true,
   },
   // Vercel serverless optimization: exclude musl binaries
   // Vercel uses Amazon Linux (glibc), not Alpine Linux (musl)
