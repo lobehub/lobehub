@@ -583,10 +583,15 @@ export class MessageModel {
             role: m.role,
           }));
 
+        // Get the last message ID for parent-child linking in conversation-flow
+        // Messages created after compression will have parentId pointing to this message
+        const lastMessageId = groupMsgs.at(-1)?.id;
+
         return {
           content: group.content,
           createdAt: group.createdAt,
           id: group.id,
+          lastMessageId,
           metadata: group.metadata,
           pinnedMessages,
           role: 'compressedGroup',

@@ -257,6 +257,21 @@ export class MessageService {
       messages: (result.messages || []) as unknown as UIChatMessage[],
     };
   };
+
+  /**
+   * Update message group metadata (e.g., expanded state)
+   */
+  updateMessageGroupMetadata = async (params: {
+    agentId: string;
+    expanded?: boolean;
+    messageGroupId: string;
+    topicId: string;
+  }): Promise<{ messages: UIChatMessage[] }> => {
+    const result = await lambdaClient.message.updateMessageGroupMetadata.mutate(params);
+    return {
+      messages: (result.messages || []) as unknown as UIChatMessage[],
+    };
+  };
 }
 
 export const messageService = new MessageService();

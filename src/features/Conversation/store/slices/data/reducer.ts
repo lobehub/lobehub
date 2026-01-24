@@ -84,6 +84,12 @@ interface UpdateMessageMetadata {
   value: Partial<UIChatMessage['metadata']>;
 }
 
+interface UpdateMessageGroupMetadata {
+  id: string;
+  type: 'updateMessageGroupMetadata';
+  value: Record<string, unknown>;
+}
+
 export type MessageDispatch =
   | CreateMessage
   | UpdateMessage
@@ -91,6 +97,7 @@ export type MessageDispatch =
   | UpdatePluginState
   | UpdateMessageExtra
   | UpdateMessageMetadata
+  | UpdateMessageGroupMetadata
   | DeleteMessage
   | UpdateMessagePlugin
   | UpdateMessageTools

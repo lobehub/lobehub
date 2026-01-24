@@ -110,7 +110,11 @@ export const createAgentExecutors = (context: {
 
       let assistantMessageId: string;
 
-      if (shouldSkipCreateMessage) {
+      // Check if we should skip message creation:
+      // - shouldSkipCreateMessage is true (e.g., regenerate mode)
+      // - BUT if createAssistantMessage is explicitly true, always create new message
+      //   (e.g., after compression we need a new assistant message)
+      if (shouldSkipCreateMessage && !llmPayload.createAssistantMessage) {
         // Skip first creation, subsequent calls will not skip
         assistantMessageId = context.parentId;
         shouldSkipCreateMessage = false;
@@ -2322,6 +2326,13 @@ export const createAgentExecutors = (context: {
         const compressionPayload = chainCompressContext(messagesToSummarize);
         let summaryContent = '';
 
+        // Start generateSummary operation attached to the compressed group message
+        const { operationId: summaryOperationId } = context.get().startOperation({
+          context: { ...getOperationContext(), messageId: messageGroupId },
+          type: 'generateSummary',
+          parentOperationId: compressOperationId,
+        });
+
         await chatService.fetchPresetTaskResult({
           params: { ...compressionPayload, model, provider },
           onMessageHandle: (chunk) => {
@@ -2332,12 +2343,15 @@ export const createAgentExecutors = (context: {
                 .get()
                 .internal_dispatchMessage(
                   { id: messageGroupId, type: 'updateMessage', value: { content: summaryContent } },
-                  { operationId: compressOperationId },
+                  { operationId: summaryOperationId },
                 );
             }
           },
           onError: (e) => {
             console.error(e);
+            context.get().completeOperation(summaryOperationId, {
+              error: { message: String(e), type: 'summary_generation_failed' },
+            });
           },
         });
 
@@ -2350,16 +2364,27 @@ export const createAgentExecutors = (context: {
           messageGroupId,
           topicId,
         });
+        // Complete the generateSummary operation
+        context.get().completeOperation(summaryOperationId);
 
         const compressedMessages = finalResult.messages || initialCompressedMessages;
         const groupId = messageGroupId;
+        // Use the latest assistant message ID (before compression) as parentMessageId for next call_llm
+        const parentMessageId = assistantMessageId;
 
-        log(`${stagePrefix} Compression complete. groupId=%s`, groupId);
+        // 6. Update UI with finalized messages (includes compressedGroup with summary)
+        context.get().replaceMessages(compressedMessages, { context: opContext });
+
+        log(
+          `${stagePrefix} Compression complete. groupId=%s, parentMessageId=%s`,
+          groupId,
+          parentMessageId,
+        );
 
         // Complete the compress_context operation
-        context.get().completeOperation(compressOperationId, { groupId });
+        context.get().completeOperation(compressOperationId, { groupId, parentMessageId });
 
-        events.push({ type: 'compression_complete', groupId });
+        events.push({ type: 'compression_complete', groupId, parentMessageId });
 
         // Calculate new token count
         const compressedTokenCount = calculateMessageTokens(compressedMessages);
@@ -2373,6 +2398,7 @@ export const createAgentExecutors = (context: {
               compressedTokenCount,
               groupId,
               originalTokenCount: currentTokenCount,
+              parentMessageId,
             } as GeneralAgentCompressionResultPayload,
             phase: 'compression_result',
             session: {
@@ -2403,9 +2429,6 @@ export const createAgentExecutors = (context: {
           nextContext: {
             payload: {
               compressedMessages: messages,
-              compressedTokenCount: currentTokenCount,
-              groupId: '',
-              originalTokenCount: currentTokenCount,
               skipped: true,
             } as GeneralAgentCompressionResultPayload,
             phase: 'compression_result',

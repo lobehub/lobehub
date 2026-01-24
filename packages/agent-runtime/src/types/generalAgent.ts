@@ -1,6 +1,8 @@
 import { ChatToolPayload, MessageToolCall } from '@lobechat/types';
 
 export interface GeneralAgentCallLLMInstructionPayload {
+  /** Force create a new assistant message (e.g., after compression) */
+  createAssistantMessage?: boolean;
   isFirstMessage?: boolean;
   messages: any[];
   model: string;
@@ -96,12 +98,10 @@ export interface GeneralAgentConfig {
 export interface GeneralAgentCompressionResultPayload {
   /** Compressed messages (summary + pinned + recent) */
   compressedMessages: any[];
-  /** Token count after compression */
-  compressedTokenCount: number;
   /** Compression group ID in database */
   groupId: string;
-  /** Token count before compression */
-  originalTokenCount: number;
+  /** Parent message ID for subsequent LLM call (last assistant message before compression) */
+  parentMessageId?: string;
   /** Whether compression was skipped (no messages to compress) */
   skipped?: boolean;
 }

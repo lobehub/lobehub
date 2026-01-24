@@ -6,6 +6,7 @@ import type { OpenAIChatMessage } from '@/types/index';
 import { ContextEngine } from '../../pipeline';
 import {
   AgentCouncilFlattenProcessor,
+  CompressedGroupRoleTransformProcessor,
   GroupMessageFlattenProcessor,
   GroupOrchestrationFilterProcessor,
   GroupRoleTransformProcessor,
@@ -265,6 +266,9 @@ export class MessagesEngine {
 
       // 19. Supervisor role restore (convert role=supervisor back to role=assistant for model)
       new SupervisorRoleRestoreProcessor(),
+
+      // 19b. Compressed group role transform (convert role=compressedGroup to role=user for model)
+      new CompressedGroupRoleTransformProcessor(),
 
       // 20. Group orchestration filter (remove supervisor's orchestration messages like broadcast/speak)
       // This must be BEFORE GroupRoleTransformProcessor so we filter based on original agentId/tools

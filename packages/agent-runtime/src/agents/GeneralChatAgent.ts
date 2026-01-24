@@ -540,10 +540,14 @@ export class GeneralChatAgent implements Agent {
 
         // If compression was skipped (no messages to compress), just call LLM
         // Otherwise, messages have been updated with compressed content
+        // Pass parentMessageId and createAssistantMessage=true to force new message creation
         return {
           payload: {
-            messages: compressionPayload.compressedMessages ?? state.messages,
+            // Force create new assistant message after compression
+            createAssistantMessage: true,
+            messages: compressionPayload.compressedMessages,
             model: this.config.modelRuntimeConfig?.model,
+            parentMessageId: compressionPayload.parentMessageId,
             provider: this.config.modelRuntimeConfig?.provider,
             tools: state.tools,
           } as GeneralAgentCallLLMInstructionPayload,

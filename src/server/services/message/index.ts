@@ -1,4 +1,5 @@
 import { CompressionRepository, type LobeChatDatabase } from '@lobechat/database';
+import { LOADING_FLAT } from '@lobechat/const';
 import {
   type CreateMessageParams,
   type UIChatMessage,
@@ -321,17 +322,30 @@ export class MessageService {
    *
    * @param messageGroupId - The compression group ID
    * @param content - The generated summary content
-   * @param options - Query options for returning updated messages
+   * @param params - Parameters for querying messages
    */
   async finalizeCompression(
     messageGroupId: string,
     content: string,
-    options?: QueryOptions,
+    params: {
+      agentId: string;
+      groupId?: string | null;
+      threadId?: string | null;
+      topicId: string;
+    },
   ): Promise<{ messages?: UIChatMessage[]; success: boolean }> {
-    // Update compression group with actual content
+    const { agentId, groupId, threadId, topicId } = params;
+
+    // 1. Update compression group with actual content
     await this.compressionRepository.updateCompressionContent(messageGroupId, content);
 
-    // Return updated messages
-    return this.queryWithSuccess(options);
+    // 2. Query final messages
+    const queryOptions = { agentId, groupId, threadId, topicId };
+    const finalMessages = await this.messageModel.query(queryOptions, this.getQueryOptions());
+
+    return {
+      messages: finalMessages,
+      success: true,
+    };
   }
 }

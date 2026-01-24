@@ -244,18 +244,29 @@ export const streamingExecutor: StateCreator<
       allowList: toolInterventionSelectors.allowList(userStore),
     };
 
+    // Build modelRuntimeConfig for compression and other runtime features
+    const modelRuntimeConfig = {
+      compressionModel: {
+        model: agentConfigData.model,
+        provider: agentConfigData.provider!,
+      },
+      model: agentConfigData.model,
+      provider: agentConfigData.provider!,
+    };
+
     // Create initial state or use provided state
     const state =
       initialState ||
       AgentRuntime.createInitialState({
-        operationId: operationId ?? agentId,
-        messages,
         maxSteps: 400,
+        messages,
         metadata: {
           sessionId: agentId,
-          topicId,
           threadId,
+          topicId,
         },
+        modelRuntimeConfig,
+        operationId: operationId ?? agentId,
         toolManifestMap,
         userInterventionConfig,
       });
@@ -670,18 +681,21 @@ export const streamingExecutor: StateCreator<
     const model = agentConfigData.model;
     const provider = agentConfigData.provider;
 
+    const modelRuntimeConfig = {
+      model,
+      provider: provider!,
+      // TODO: Support dedicated compression model from chatConfig.compressionModelId
+      compressionModel: { model, provider: provider! },
+    };
     // ===========================================
     // Step 2: Create and Execute Agent Runtime
     // ===========================================
-    log('[internal_execAgentRuntime] Creating agent runtime');
+    log('[internal_execAgentRuntime] Creating agent runtime with config', modelRuntimeConfig);
 
     const agent = new GeneralChatAgent({
       agentConfig: { maxSteps: 1000 },
       operationId: `${messageKey}/${params.parentMessageId}`,
-      modelRuntimeConfig: {
-        model,
-        provider: provider!,
-      },
+      modelRuntimeConfig,
     });
 
     const runtime = new AgentRuntime(agent, {

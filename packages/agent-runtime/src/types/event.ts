@@ -101,6 +101,7 @@ export interface AgentEventResumed {
 export interface AgentEventCompressionComplete {
   type: 'compression_complete';
   groupId: string;
+  parentMessageId?: string;
 }
 
 export interface AgentEventCompressionError {
