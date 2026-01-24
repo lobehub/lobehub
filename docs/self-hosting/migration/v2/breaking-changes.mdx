@@ -18,18 +18,18 @@ This document outlines the breaking changes introduced in LobeHub 2.0 and provid
 
 The following environment variables have been removed in LobeHub 2.0:
 
-| Environment Variable                | Removal Reason                                                    |
-| ----------------------------------- | ----------------------------------------------------------------- |
-| `ACCESS_CODE`                       | No longer supported, use Better Auth authentication system        |
-| `NEXT_PUBLIC_SERVICE_MODE`          | 2.0 only supports Server DB mode, Client DB (PGlite) removed      |
-| `NEXT_PUBLIC_ENABLE_BETTER_AUTH`    | Automatically detected via `AUTH_SECRET` presence                 |
-| `NEXT_PUBLIC_AUTH_URL` / `AUTH_URL` | Automatically detected from request headers                       |
-| `NEXT_PUBLIC_ENABLE_NEXT_AUTH`      | NextAuth removed                                                  |
-| `NEXT_AUTH_SECRET`                  | NextAuth removed                                                  |
-| `NEXT_AUTH_SSO_PROVIDERS`           | NextAuth removed                                                  |
-| `NEXTAUTH_URL`                      | NextAuth removed                                                  |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk removed                                                     |
-| `CLERK_SECRET_KEY`                  | Clerk removed                                                     |
+| Environment Variable                | Removal Reason                                               |
+| ----------------------------------- | ------------------------------------------------------------ |
+| `ACCESS_CODE`                       | No longer supported, use Better Auth authentication system   |
+| `NEXT_PUBLIC_SERVICE_MODE`          | 2.0 only supports Server DB mode, Client DB (PGlite) removed |
+| `NEXT_PUBLIC_ENABLE_BETTER_AUTH`    | Automatically detected via `AUTH_SECRET` presence            |
+| `NEXT_PUBLIC_AUTH_URL` / `AUTH_URL` | Automatically detected from request headers                  |
+| `NEXT_PUBLIC_ENABLE_NEXT_AUTH`      | NextAuth removed                                             |
+| `NEXT_AUTH_SECRET`                  | NextAuth removed                                             |
+| `NEXT_AUTH_SSO_PROVIDERS`           | NextAuth removed                                             |
+| `NEXTAUTH_URL`                      | NextAuth removed                                             |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk removed                                                |
+| `CLERK_SECRET_KEY`                  | Clerk removed                                                |
 
 ## New Required Environment Variables
 
@@ -40,15 +40,15 @@ LobeHub 2.0 only supports Better Auth authentication system. The following envir
 
 ## New Optional Environment Variables
 
-| Environment Variable               | Description                                                      |
-| ---------------------------------- | ---------------------------------------------------------------- |
-| `AUTH_SSO_PROVIDERS`               | Comma-separated list of enabled SSO providers                    |
-| `INTERNAL_JWT_EXPIRATION`          | Internal JWT token expiration time (default: `30s`)              |
-| `NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION` | Set to `1` to require email verification                      |
-| `SMTP_HOST`                        | SMTP server hostname for email features                          |
-| `SMTP_PORT`                        | SMTP server port                                                 |
-| `SMTP_USER`                        | SMTP authentication username                                     |
-| `SMTP_PASS`                        | SMTP authentication password                                     |
+| Environment Variable      | Description                                         |
+| ------------------------- | --------------------------------------------------- |
+| `AUTH_SSO_PROVIDERS`      | Comma-separated list of enabled SSO providers       |
+| `INTERNAL_JWT_EXPIRATION` | Internal JWT token expiration time (default: `30s`) |
+| `AUTH_EMAIL_VERIFICATION` | Set to `1` to require email verification            |
+| `SMTP_HOST`               | SMTP server hostname for email features             |
+| `SMTP_PORT`               | SMTP server port                                    |
+| `SMTP_USER`               | SMTP authentication username                        |
+| `SMTP_PASS`               | SMTP authentication password                        |
 
 For detailed configuration, see [Authentication Environment Variables](/docs/self-hosting/environment-variables/auth).
 
@@ -60,11 +60,11 @@ LobeHub 2.0 only supports Better Auth authentication system. NextAuth and Clerk 
 
 ### Migrating from NextAuth
 
-Detailed migration guide coming soon.
+See the [NextAuth Migration Guide](/docs/self-hosting/advanced/auth/nextauth-to-betterauth).
 
 ### Migrating from Clerk
 
-Detailed migration guide coming soon.
+See the [Clerk Migration Guide](/docs/self-hosting/advanced/auth/clerk-to-betterauth).
 
 ## Database Mode Changes
 

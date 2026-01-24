@@ -43,10 +43,10 @@ tags:
 
   **示例场景**：假设你之前的账户绑定了两个 SSO 账户：
 
-  - 主邮箱（Google）：`mail1@google.com`
-  - 副邮箱（Microsoft）：`mail2@outlook.com`
+  - 主邮箱（Google）：`a@google.com`
+  - 副邮箱（Microsoft）：`b@outlook.com`
 
-  迁移后使用 `mail1@google.com` 重置密码，之后再用 `mail2@outlook.com` 登录将会**创建新用户**，而非关联到原有账户。
+  迁移后使用 `a@google.com` 重置密码，之后再用 `b@outlook.com` 登录将会**创建新用户**，而非关联到原有账户。
 </Callout>
 
 ![个人资料页 - 关联账号信息](https://hub-apac-1.lobeobjects.space/docs/43dfa498b82a58c9f99e805e88ea711a.png)
@@ -297,6 +297,16 @@ npx tsx scripts/clerk-to-betterauth/verify.ts
 
 ## 常见问题
 
+### 访问前清除浏览器数据
+
+迁移完成后，如果遇到登录问题，请先尝试清除浏览器的站点数据：
+
+1. 打开浏览器开发者工具（F12 或右键 → 检查）
+2. 进入 Application 标签页 → Storage → Clear site data
+3. 刷新页面后重试
+
+![清除浏览器站点数据](https://hub-apac-1.lobeobjects.space/docs/733c50ee2302e5daa3d99dc0739238c8.png)
+
 ### 迁移后用户无法登录
 
 - 确保邮件服务已配置用于密码重置
@@ -321,6 +331,8 @@ npx tsx scripts/clerk-to-betterauth/verify.ts
 ## 相关阅读
 
 <Cards>
+  <Card href={'/zh/docs/self-hosting/advanced/auth/migration-internals'} title={'迁移技术原理'} />
+
   <Card href={'/zh/docs/self-hosting/advanced/auth'} title={'身份验证服务配置'} />
 
   <Card href={'/zh/docs/self-hosting/environment-variables/auth'} title={'认证相关环境变量'} />

@@ -16,18 +16,18 @@ tags:
 
 以下环境变量在 LobeHub 2.0 中已被移除：
 
-| 环境变量                             | 移除原因                                                 |
-| ----------------------------------- | ------------------------------------------------------- |
-| `ACCESS_CODE`                       | 不再支持，请使用 Better Auth 认证系统                      |
-| `NEXT_PUBLIC_SERVICE_MODE`          | 2.0 仅支持 Server DB 模式，不再支持 Client DB (PGlite)    |
-| `NEXT_PUBLIC_ENABLE_BETTER_AUTH`    | 通过 `AUTH_SECRET` 是否存在自动检测                       |
-| `NEXT_PUBLIC_AUTH_URL` / `AUTH_URL` | 从请求头中自动检测                                        |
-| `NEXT_PUBLIC_ENABLE_NEXT_AUTH`      | NextAuth 已移除                                          |
-| `NEXT_AUTH_SECRET`                  | NextAuth 已移除                                          |
-| `NEXT_AUTH_SSO_PROVIDERS`           | NextAuth 已移除                                          |
-| `NEXTAUTH_URL`                      | NextAuth 已移除                                          |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk 已移除                                             |
-| `CLERK_SECRET_KEY`                  | Clerk 已移除                                             |
+| 环境变量                                | 移除原因                                         |
+| ----------------------------------- | -------------------------------------------- |
+| `ACCESS_CODE`                       | 不再支持，请使用 Better Auth 认证系统                    |
+| `NEXT_PUBLIC_SERVICE_MODE`          | 2.0 仅支持 Server DB 模式，不再支持 Client DB (PGlite) |
+| `NEXT_PUBLIC_ENABLE_BETTER_AUTH`    | 通过 `AUTH_SECRET` 是否存在自动检测                    |
+| `NEXT_PUBLIC_AUTH_URL` / `AUTH_URL` | 从请求头中自动检测                                    |
+| `NEXT_PUBLIC_ENABLE_NEXT_AUTH`      | NextAuth 已移除                                 |
+| `NEXT_AUTH_SECRET`                  | NextAuth 已移除                                 |
+| `NEXT_AUTH_SSO_PROVIDERS`           | NextAuth 已移除                                 |
+| `NEXTAUTH_URL`                      | NextAuth 已移除                                 |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Clerk 已移除                                    |
+| `CLERK_SECRET_KEY`                  | Clerk 已移除                                    |
 
 ## 新增的必需环境变量
 
@@ -38,15 +38,15 @@ LobeHub 2.0 仅支持 Better Auth 认证系统。以下环境变量现在是必�
 
 ## 新增的可选环境变量
 
-| 环境变量                               | 说明                                    |
-| ------------------------------------- | -------------------------------------- |
-| `AUTH_SSO_PROVIDERS`                  | 启用的 SSO 提供商列表，以逗号分隔          |
-| `INTERNAL_JWT_EXPIRATION`             | 内部 JWT 令牌过期时间（默认：`30s`）       |
-| `NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION` | 设置为 `1` 以要求邮箱验证                 |
-| `SMTP_HOST`                           | 邮件功能的 SMTP 服务器主机名              |
-| `SMTP_PORT`                           | SMTP 服务器端口                          |
-| `SMTP_USER`                           | SMTP 认证用户名                          |
-| `SMTP_PASS`                           | SMTP 认证密码                            |
+| 环境变量                      | 说明                      |
+| ------------------------- | ----------------------- |
+| `AUTH_SSO_PROVIDERS`      | 启用的 SSO 提供商列表，以逗号分隔     |
+| `INTERNAL_JWT_EXPIRATION` | 内部 JWT 令牌过期时间（默认：`30s`） |
+| `AUTH_EMAIL_VERIFICATION` | 设置为 `1` 以要求邮箱验证         |
+| `SMTP_HOST`               | 邮件功能的 SMTP 服务器主机名       |
+| `SMTP_PORT`               | SMTP 服务器端口              |
+| `SMTP_USER`               | SMTP 认证用户名              |
+| `SMTP_PASS`               | SMTP 认证密码               |
 
 详细配置请参阅[身份验证环境变量](/docs/self-hosting/environment-variables/auth)。
 
@@ -58,11 +58,11 @@ LobeHub 2.0 仅支持 Better Auth 认证系统，不再支持 NextAuth 和 Clerk
 
 ### 从 NextAuth 迁移
 
-详细迁移指南即将推出。
+请参阅 [NextAuth 迁移指南](/zh/docs/self-hosting/advanced/auth/nextauth-to-betterauth)。
 
 ### 从 Clerk 迁移
 
-详细迁移指南即将推出。
+请参阅 [Clerk 迁移指南](/zh/docs/self-hosting/advanced/auth/clerk-to-betterauth)。
 
 ## 数据库模式变更
 

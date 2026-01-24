@@ -25,7 +25,7 @@ LobeChat 在部署时提供了完善的身份验证服务能力，以下是相�
 - 默认值：`-`
 - 示例：`Tfhi2t2pelSMEA8eaV61KaqPNEndFFdMIxDaJnS1CUI=`
 
-#### `NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION`
+#### `AUTH_EMAIL_VERIFICATION`
 
 - 类型：可选
 - 描述：设置为 `1` 以要求用户在登录前验证邮箱。用户注册后必须验证邮箱地址。
@@ -38,6 +38,13 @@ LobeChat 在部署时提供了完善的身份验证服务能力，以下是相�
 - 描述：启用的 SSO 提供商列表，以逗号分隔。顺序决定了登录页面上提供商的显示顺序。
 - 默认值：`-`
 - 示例：`google,github,microsoft,cognito`
+
+#### `AUTH_ALLOWED_EMAILS`
+
+- 类型：可选
+- 描述：允许注册的邮箱或域名白名单，以逗号分隔。支持完整邮箱地址（如 `user@example.com`）或域名（如 `example.com`）。留空表示允许所有邮箱。
+- 默认值：`-`
+- 示例：`example.com,admin@other.com`
 
 #### `JWKS_KEY`
 
@@ -92,6 +99,13 @@ LobeChat 在部署时提供了完善的身份验证服务能力，以下是相�
 - 描述：SMTP 认证密码。Gmail 需使用应用专用密码。
 - 默认值：`-`
 - 示例：`your-app-specific-password`
+
+#### `SMTP_FROM`
+
+- 类型：可选
+- 描述：发件人邮箱地址。AWS SES 等服务需要此配置（因为 `SMTP_USER` 不是有效邮箱地址）。若未设置，默认使用 `SMTP_USER`。
+- 默认值：`SMTP_USER` 的值
+- 示例：`noreply@example.com`
 
 ### Google
 

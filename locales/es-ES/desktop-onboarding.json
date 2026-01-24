@@ -73,6 +73,7 @@
   "screen5.badge": "Iniciar sesión",
   "screen5.description": "Inicia sesión para sincronizar Agentes, Grupos, configuración y Contexto en todos tus dispositivos.",
   "screen5.errors.desktopOnlyOidc": "La autorización OIDC solo está disponible en la aplicación de escritorio.",
+  "screen5.errors.timedOut": "La autorización expiró, por favor intente de nuevo",
   "screen5.legacyLocalDb.link": "Migrar base de datos local heredada",
   "screen5.methods.cloud.description": "Inicia sesión con tu cuenta de LobeHub Cloud para sincronizar todo sin problemas",
   "screen5.methods.cloud.name": "LobeHub Cloud",

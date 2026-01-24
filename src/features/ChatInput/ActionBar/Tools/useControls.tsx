@@ -6,7 +6,7 @@ import {
   RECOMMENDED_SKILLS,
   RecommendedSkillType,
 } from '@lobechat/const';
-import { Avatar, Flexbox, Icon, Image, type ItemType } from '@lobehub/ui';
+import { Avatar, Icon, Image, type ItemType } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ToyBrick } from 'lucide-react';
@@ -72,12 +72,6 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     s.togglePlugin,
   ]);
   const builtinList = useToolStore(builtinToolSelectors.metaList, isEqual);
-  const enablePluginCount = useAgentStore(
-    (s) =>
-      agentByIdSelectors
-        .getAgentPluginsById(agentId)(s)
-        .filter((i) => !builtinList.some((b) => b.identifier === i)).length,
-  );
   const plugins = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
 
   // Klavis 相关状态
@@ -219,10 +213,21 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   );
 
   // Skills 列表项（包含 LobeHub Skill 和 Klavis）
-  const skillItems = useMemo(
-    () => [...lobehubSkillItems, ...klavisServerItems],
-    [lobehubSkillItems, klavisServerItems],
-  );
+  // 已连接的排在前面
+  const skillItems = useMemo(() => {
+    const allItems = [...lobehubSkillItems, ...klavisServerItems];
+
+    return allItems.sort((a, b) => {
+      const isConnectedA =
+        installedLobehubIds.has(a.key as string) || installedKlavisIds.has(a.key as string);
+      const isConnectedB =
+        installedLobehubIds.has(b.key as string) || installedKlavisIds.has(b.key as string);
+
+      if (isConnectedA && !isConnectedB) return -1;
+      if (!isConnectedA && isConnectedB) return 1;
+      return 0;
+    });
+  }, [lobehubSkillItems, klavisServerItems, installedLobehubIds, installedKlavisIds]);
 
   // 区分社区插件和自定义插件
   const communityPlugins = list.filter((item) => item.type !== 'customPlugin');
@@ -250,47 +255,55 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     ),
   });
 
-  // 构建 Skills 分组的 children
-  const skillGroupChildren: ItemType[] = [
-    // 1. LobeHub Skill 和 Klavis
+  // 构建 LobeHub 分组的 children（包含内置工具和 LobeHub Skill/Klavis）
+  const lobehubGroupChildren: ItemType[] = [
+    // 1. 内置工具
+    ...builtinItems,
+    // 2. LobeHub Skill 和 Klavis（作为内置技能）
     ...skillItems,
-    // 2. divider (如果有 skillItems 且有社区插件)
-    ...(skillItems.length > 0 && communityPlugins.length > 0
-      ? [{ key: 'divider-skill-community', type: 'divider' as const }]
-      : []),
-    // 3. 社区插件
-    ...communityPlugins.map(mapPluginToItem),
-    // 4. divider (如果有自定义插件)
-    ...(customPlugins.length > 0
-      ? [{ key: 'divider-community-custom', type: 'divider' as const }]
-      : []),
-    // 5. 自定义插件
-    ...customPlugins.map(mapPluginToItem),
   ];
+
+  // 构建 Community 分组的 children（只包含社区插件）
+  const communityGroupChildren: ItemType[] = communityPlugins.map(mapPluginToItem);
+
+  // 构建 Custom 分组的 children（只包含自定义插件）
+  const customGroupChildren: ItemType[] = customPlugins.map(mapPluginToItem);
 
   // 市场 tab 的 items
   const marketItems: ItemType[] = [
-    {
-      children: builtinItems,
-      key: 'builtins',
-      label: t('tools.builtins.groupName'),
-      type: 'group',
-    },
-    {
-      children: skillGroupChildren,
-      key: 'plugins',
-      label: (
-        <Flexbox align={'center'} gap={40} horizontal justify={'space-between'}>
-          {t('tools.plugins.groupName')}
-          {enablePluginCount === 0 ? null : (
-            <div style={{ fontSize: 12, marginInlineEnd: 4 }}>
-              {t('tools.plugins.enabled', { num: enablePluginCount })}
-            </div>
-          )}
-        </Flexbox>
-      ),
-      type: 'group',
-    },
+    // LobeHub 分组
+    ...(lobehubGroupChildren.length > 0
+      ? [
+          {
+            children: lobehubGroupChildren,
+            key: 'lobehub',
+            label: t('skillStore.tabs.lobehub'),
+            type: 'group' as const,
+          },
+        ]
+      : []),
+    // Community 分组
+    ...(communityGroupChildren.length > 0
+      ? [
+          {
+            children: communityGroupChildren,
+            key: 'community',
+            label: t('skillStore.tabs.community'),
+            type: 'group' as const,
+          },
+        ]
+      : []),
+    // Custom 分组（只有在有自定义插件时才显示）
+    ...(customGroupChildren.length > 0
+      ? [
+          {
+            children: customGroupChildren,
+            key: 'custom',
+            label: t('skillStore.tabs.custom'),
+            type: 'group' as const,
+          },
+        ]
+      : []),
   ];
 
   // 已安装 tab 的 items - 只显示已安装的插件
@@ -319,15 +332,6 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         ),
       }));
 
-    if (enabledBuiltinItems.length > 0) {
-      installedItems.push({
-        children: enabledBuiltinItems,
-        key: 'installed-builtins',
-        label: t('tools.builtins.groupName'),
-        type: 'group',
-      });
-    }
-
     // 已连接的 Klavis 服务器
     const connectedKlavisItems = klavisServerItems.filter((item) =>
       checked.includes(item.key as string),
@@ -338,8 +342,29 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
       checked.includes(item.key as string),
     );
 
-    // 合并已启用的 LobeHub Skill 和 Klavis
+    // 合并已启用的 LobeHub Skill 和 Klavis（作为内置技能）
     const enabledSkillItems = [...connectedLobehubSkillItems, ...connectedKlavisItems];
+
+    // 构建内置工具分组的 children（包含内置工具和 LobeHub Skill/Klavis）
+    const allBuiltinItems: ItemType[] = [
+      // 1. 内置工具
+      ...enabledBuiltinItems,
+      // 2. divider (如果有内置工具且有 skill items)
+      ...(enabledBuiltinItems.length > 0 && enabledSkillItems.length > 0
+        ? [{ key: 'installed-divider-builtin-skill', type: 'divider' as const }]
+        : []),
+      // 3. LobeHub Skill 和 Klavis
+      ...enabledSkillItems,
+    ];
+
+    if (allBuiltinItems.length > 0) {
+      installedItems.push({
+        children: allBuiltinItems,
+        key: 'installed-lobehub',
+        label: t('skillStore.tabs.lobehub'),
+        type: 'group',
+      });
+    }
 
     // 已启用的社区插件
     const enabledCommunityPlugins = communityPlugins
@@ -389,29 +414,22 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         ),
       }));
 
-    // 构建 Skills 分组的 children（带 divider）
-    const allSkillItems: ItemType[] = [
-      // 1. LobeHub Skill 和 Klavis
-      ...enabledSkillItems,
-      // 2. divider (如果有 skillItems 且有社区插件)
-      ...(enabledSkillItems.length > 0 && enabledCommunityPlugins.length > 0
-        ? [{ key: 'installed-divider-skill-community', type: 'divider' as const }]
-        : []),
-      // 3. 社区插件
-      ...enabledCommunityPlugins,
-      // 4. divider (如果有自定义插件)
-      ...(enabledCustomPlugins.length > 0
-        ? [{ key: 'installed-divider-community-custom', type: 'divider' as const }]
-        : []),
-      // 5. 自定义插件
-      ...enabledCustomPlugins,
-    ];
-
-    if (allSkillItems.length > 0) {
+    // Community 分组（只包含社区插件）
+    if (enabledCommunityPlugins.length > 0) {
       installedItems.push({
-        children: allSkillItems,
-        key: 'installed-plugins',
-        label: t('tools.plugins.groupName'),
+        children: enabledCommunityPlugins,
+        key: 'installed-community',
+        label: t('skillStore.tabs.community'),
+        type: 'group',
+      });
+    }
+
+    // Custom 分组（只包含自定义插件）
+    if (enabledCustomPlugins.length > 0) {
+      installedItems.push({
+        children: enabledCustomPlugins,
+        key: 'installed-custom',
+        label: t('skillStore.tabs.custom'),
         type: 'group',
       });
     }

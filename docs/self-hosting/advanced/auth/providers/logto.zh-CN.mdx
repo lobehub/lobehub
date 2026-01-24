@@ -39,17 +39,30 @@ tags:
 
   在部署 LobeChat 时，你需要配置以下环境变量：
 
-  | 环境变量                             | 类型 | 描述                                                        |
-  | -------------------------------- | -- | --------------------------------------------------------- |
-  | `AUTH_SECRET`                    | 必选 | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`            |
-  | `AUTH_SSO_PROVIDERS`             | 必选 | SSO 提供商。使用 Logto 请填写 `logto`                              |
-  | `AUTH_LOGTO_ID`                  | 必选 | Logto 应用的 App ID                                          |
-  | `AUTH_LOGTO_SECRET`              | 必选 | Logto 应用的 App Secret                                      |
-  | `AUTH_LOGTO_ISSUER`              | 必选 | Logto Issuer URL（例如 `https://your-tenant.logto.app/oidc`） |
+  | 环境变量                        | 类型 | 描述                                                        |
+  | --------------------------- | -- | --------------------------------------------------------- |
+  | `AUTH_SECRET`               | 必选 | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`            |
+  | `AUTH_SSO_PROVIDERS`        | 必选 | SSO 提供商。使用 Logto 请填写 `logto`                              |
+  | `AUTH_LOGTO_ID`             | 必选 | Logto 应用的 App ID                                          |
+  | `AUTH_LOGTO_SECRET`         | 必选 | Logto 应用的 App Secret                                      |
+  | `AUTH_LOGTO_ISSUER`         | 必选 | Logto Issuer URL（例如 `https://your-tenant.logto.app/oidc`） |
+  | `LOGTO_WEBHOOK_SIGNING_KEY` | 可选 | 用于验证 Logto 发送的 Webhook 请求是否合法的密钥                          |
 
   <Callout type={'tip'}>
     前往 [📘 环境变量](/zh/docs/self-hosting/environment-variables/auth#logto) 可查阅相关变量详情。
   </Callout>
+
+  ### 配置 Webhook（可选）
+
+  配置 Logto 的 Webhook，以便在用户信息更新时 LobeChat 可以接收到通知并同步数据。
+
+  1. 前往 Logto 控制台的 `Webhooks`，创建一个 Webhook
+  2. 填写以下字段：
+     - 端点 URL：`https://your-domain.com/api/webhooks/logto`
+     - 事件：
+       - `User.Data.Updated`：同步用户资料信息的更新
+       - `User.SuspensionStatus.Updated`：同步用户暂停状态
+  3. 创建后，复制 `签名密钥` 填写到环境变量 `LOGTO_WEBHOOK_SIGNING_KEY`
 </Steps>
 
 <Callout type={'info'}>部署成功后，用户将可以通过 Logto 身份认证并使用 LobeChat。</Callout>

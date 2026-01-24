@@ -495,6 +495,7 @@
   "skillStore.networkError": "Błąd sieci, spróbuj ponownie",
   "skillStore.search": "Szukaj umiejętności po nazwie lub słowie kluczowym, naciśnij Enter, aby wyszukać…",
   "skillStore.tabs.community": "Społeczność",
+  "skillStore.tabs.custom": "Niestandardowe",
   "skillStore.tabs.lobehub": "LobeHub",
   "skillStore.title": "Sklep z Umiejętnościami",
   "startConversation": "Rozpocznij rozmowę",

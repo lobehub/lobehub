@@ -583,7 +583,7 @@ describe('contextEngineering', () => {
   });
 
   describe('Message preprocessing processors', () => {
-    it('should truncate message history when enabled', async () => {
+    it('should keep all messages (no history truncation)', async () => {
       const messages: UIChatMessage[] = [
         {
           role: 'user',
@@ -626,13 +626,12 @@ describe('contextEngineering', () => {
         messages,
         model: 'gpt-4',
         provider: 'openai',
-        enableHistoryCount: true,
-        historyCount: 4, // Should keep last 2 messages
       });
 
-      // Should only keep the last 2 messages
-      expect(result).toHaveLength(4);
+      // Should keep all messages
+      expect(result).toHaveLength(5);
       expect(result).toEqual([
+        { content: 'Message 1', role: 'user' },
         { content: 'Response 1', role: 'assistant' },
         { content: 'Message 2', role: 'user' },
         { content: 'Response 2', role: 'assistant' },
@@ -704,7 +703,7 @@ describe('contextEngineering', () => {
       ]);
     });
 
-    it('should combine all preprocessing steps correctly', async () => {
+    it('should combine system role and input template correctly', async () => {
       const messages: UIChatMessage[] = [
         {
           role: 'user',
@@ -735,15 +734,17 @@ describe('contextEngineering', () => {
         provider: 'openai',
         systemRole: 'System instructions.',
         inputTemplate: 'Processed: {{text}}',
-        enableHistoryCount: true,
-        historyCount: 2, // Should keep last 1 message
       });
 
-      // System role should be first
+      // System role should be first, followed by all messages with input template applied to user messages
       expect(result).toEqual([
         {
           content: 'System instructions.',
           role: 'system',
+        },
+        {
+          content: 'Processed: Old message 1',
+          role: 'user',
         },
         {
           role: 'assistant',
@@ -782,7 +783,7 @@ describe('contextEngineering', () => {
       ]);
     });
 
-    it('should handle history truncation with system role injection correctly', async () => {
+    it('should handle system role injection with all messages (no history truncation)', async () => {
       const messages: UIChatMessage[] = [
         {
           role: 'user',
@@ -812,18 +813,24 @@ describe('contextEngineering', () => {
         model: 'gpt-4',
         provider: 'openai',
         systemRole: 'System role here.',
-        enableHistoryCount: true,
-        historyCount: 1, // Should keep only 1 message
       });
 
-      // Should have system role + 1 truncated message
+      // Should have system role + all messages
       expect(result).toEqual([
         {
           content: 'System role here.',
           role: 'system',
         },
         {
-          content: 'Message 3', // Only the last message should remain
+          content: 'Message 1',
+          role: 'user',
+        },
+        {
+          content: 'Message 2',
+          role: 'user',
+        },
+        {
+          content: 'Message 3',
           role: 'user',
         },
       ]);

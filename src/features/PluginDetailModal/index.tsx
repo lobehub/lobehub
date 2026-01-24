@@ -36,6 +36,7 @@ const PluginDetailModal = memo<PluginDetailModalProps>(
     return (
       <Modal
         allowFullscreen
+        destroyOnHidden
         footer={null}
         onCancel={onClose}
         onOk={() => {

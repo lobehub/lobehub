@@ -2,8 +2,8 @@
 
 import { DEFAULT_INBOX_AVATAR, SESSION_CHAT_URL } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui';
-import { type CSSProperties, memo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { type CSSProperties, memo } from 'react';
+import { Link } from 'react-router-dom';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useAgentStore } from '@/store/agent';
@@ -17,38 +17,28 @@ interface InboxItemProps {
 }
 
 const InboxItem = memo<InboxItemProps>(({ className, style }) => {
-  const navigate = useNavigate();
-
   const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
-  const activeAgentId = useAgentStore((s) => s.activeAgentId);
-  const isActive = !!inboxAgentId && activeAgentId === inboxAgentId;
 
-  const isLoading = useChatStore(
-    useCallback(
-      (s) => (isActive ? operationSelectors.isAgentRuntimeRunning(s) : false),
-      [isActive],
-    ),
-  );
+  const isLoading = useChatStore(operationSelectors.isAgentRuntimeRunning);
   const inboxAgentTitle = 'Lobe AI';
 
-  const handleClick = useCallback(() => {
-    if (inboxAgentId) {
-      navigate(SESSION_CHAT_URL(inboxAgentId, false));
-    }
-  }, [inboxAgentId, navigate]);
-
   return (
-    <NavItem
-      active={isActive}
-      className={className}
-      icon={
-        <Avatar avatar={DEFAULT_INBOX_AVATAR} emojiScaleWithBackground shape={'square'} size={24} />
-      }
-      loading={isLoading}
-      onClick={handleClick}
-      style={style}
-      title={inboxAgentTitle}
-    />
+    <Link aria-label={inboxAgentTitle} to={SESSION_CHAT_URL(inboxAgentId, false)}>
+      <NavItem
+        className={className}
+        icon={
+          <Avatar
+            avatar={DEFAULT_INBOX_AVATAR}
+            emojiScaleWithBackground
+            shape={'square'}
+            size={24}
+          />
+        }
+        loading={isLoading}
+        style={style}
+        title={inboxAgentTitle}
+      />
+    </Link>
   );
 });
 

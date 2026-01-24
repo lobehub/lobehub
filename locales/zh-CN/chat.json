@@ -209,6 +209,8 @@
   "owner": "群主",
   "pageCopilot.title": "文稿助理",
   "pageCopilot.welcome": "**让文字更清晰、更到位**\n\n起草、改写、润色都可以。你把意图说清楚，其余交给我打磨",
+  "pageSelection.lines": "第 {{start}}-{{end}} 行",
+  "pageSelection.reference": "选中文本",
   "pin": "置顶",
   "pinOff": "取消置顶",
   "prompts.summaryExpert": "作为一名总结专家，请结合以上系统提示词，将以下内容进行总结：",

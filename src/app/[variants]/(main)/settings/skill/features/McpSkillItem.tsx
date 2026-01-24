@@ -1,13 +1,14 @@
 'use client';
 
-import { Block, Flexbox, Modal } from '@lobehub/ui';
+import { Flexbox, Modal, Block } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { memo, useState } from 'react';
+import { Suspense, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import PluginTag from '@/components/Plugins/PluginTag';
 import McpDetail from '@/features/MCP/MCPDetail';
+import McpDetailLoading from '@/features/MCP/MCPDetail/Loading';
 import PluginDetailModal from '@/features/PluginDetailModal';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
@@ -28,6 +29,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: 40px;
     height: 40px;
+    border-radius: 12px;
+
+    background: ${cssVar.colorFillTertiary};
   `,
   title: css`
     cursor: pointer;
@@ -91,7 +95,9 @@ const McpSkillItem = memo<McpSkillItemProps>(
             title={t('dev.title.skillDetails')}
             width={800}
           >
-            <McpDetail identifier={identifier} noSettings />
+            <Suspense fallback={<McpDetailLoading />}>
+              <McpDetail identifier={identifier} noSettings />
+            </Suspense>
           </Modal>
         )}
         {isCustomPlugin && (

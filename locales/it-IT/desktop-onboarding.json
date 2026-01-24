@@ -73,6 +73,7 @@
   "screen5.badge": "Accesso",
   "screen5.description": "Accedi per sincronizzare Agenti, Gruppi, impostazioni e Contesto su tutti i dispositivi.",
   "screen5.errors.desktopOnlyOidc": "L'autorizzazione OIDC è disponibile solo nell'app desktop.",
+  "screen5.errors.timedOut": "Autorizzazione scaduta, riprova",
   "screen5.legacyLocalDb.link": "Migra il database locale legacy",
   "screen5.methods.cloud.description": "Accedi con il tuo account LobeHub Cloud per sincronizzare tutto senza problemi",
   "screen5.methods.cloud.name": "LobeHub Cloud",

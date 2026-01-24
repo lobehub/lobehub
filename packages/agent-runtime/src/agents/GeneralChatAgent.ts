@@ -469,10 +469,22 @@ export class GeneralChatAgent implements Agent {
         // Async tasks batch completed, continue to call LLM with results
         const { parentMessageId } = context.payload as TasksBatchResultPayload;
 
+        // Inject a virtual user message to force the model to summarize or continue
+        // This fixes an issue where some models (e.g., Kimi K2) return empty content
+        // when the last message is a task result, thinking the task is already done
+        const messagesWithPrompt = [
+          ...state.messages,
+          {
+            content:
+              'All tasks above have been completed. Please summarize the results or continue with your response following user query language.',
+            role: 'user' as const,
+          },
+        ];
+
         // Continue to call LLM with updated messages (task messages are already in state)
         return {
           payload: {
-            messages: state.messages,
+            messages: messagesWithPrompt,
             model: this.config.modelRuntimeConfig?.model,
             parentMessageId,
             provider: this.config.modelRuntimeConfig?.provider,

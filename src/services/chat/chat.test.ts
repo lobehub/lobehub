@@ -155,7 +155,7 @@ describe('ChatService', () => {
           ]),
           messages: expect.anything(),
         }),
-        undefined,
+        expect.anything(),
       );
     });
 
@@ -185,7 +185,7 @@ describe('ChatService', () => {
               type: 'enabled',
             },
           }),
-          undefined,
+          expect.anything(),
         );
       });
 
@@ -214,7 +214,7 @@ describe('ChatService', () => {
               type: 'disabled',
             },
           }),
-          undefined,
+          expect.anything(),
         );
       });
 
@@ -244,7 +244,7 @@ describe('ChatService', () => {
               type: 'enabled',
             },
           }),
-          undefined,
+          expect.anything(),
         );
       });
 
@@ -270,7 +270,7 @@ describe('ChatService', () => {
           expect.objectContaining({
             reasoning_effort: 'high',
           }),
-          undefined,
+          expect.anything(),
         );
       });
 
@@ -296,7 +296,7 @@ describe('ChatService', () => {
           expect.objectContaining({
             thinkingBudget: 5000,
           }),
-          undefined,
+          expect.anything(),
         );
       });
     });
@@ -370,7 +370,7 @@ describe('ChatService', () => {
             enabledSearch: undefined,
             tools: undefined,
           },
-          undefined,
+          expect.anything(),
         );
       });
 
@@ -396,7 +396,7 @@ describe('ChatService', () => {
             stream: true,
             tools: undefined,
           },
-          undefined,
+          expect.anything(),
         );
       });
     });
@@ -494,7 +494,7 @@ describe('ChatService', () => {
             enabledSearch: undefined,
             tools: undefined,
           },
-          undefined,
+          expect.anything(),
         );
       });
 
@@ -583,7 +583,7 @@ describe('ChatService', () => {
             enabledSearch: undefined,
             tools: undefined,
           },
-          undefined,
+          expect.anything(),
         );
       });
 
@@ -781,7 +781,7 @@ describe('ChatService', () => {
               { content: 'https://vercel.com/ 请分析 chatGPT 关键词\n\n', role: 'user' },
             ],
           },
-          undefined,
+          expect.anything(),
         );
       });
 
@@ -888,7 +888,7 @@ describe('ChatService', () => {
               { content: 'https://vercel.com/ 请分析 chatGPT 关键词\n\n', role: 'user' },
             ],
           },
-          undefined,
+          expect.anything(),
         );
       });
 
@@ -926,7 +926,7 @@ describe('ChatService', () => {
               { content: 'https://vercel.com/ 请分析 chatGPT 关键词\n\n', role: 'user' },
             ],
           },
-          undefined,
+          expect.anything(),
         );
       });
     });
@@ -985,7 +985,7 @@ describe('ChatService', () => {
               }),
             ]),
           }),
-          undefined,
+          expect.anything(),
         );
       });
 
@@ -1036,7 +1036,7 @@ describe('ChatService', () => {
           expect.objectContaining({
             enabledSearch: true,
           }),
-          undefined,
+          expect.anything(),
         );
       });
 
@@ -1087,7 +1087,7 @@ describe('ChatService', () => {
           expect.objectContaining({
             enabledSearch: undefined,
           }),
-          undefined,
+          expect.anything(),
         );
       });
     });
@@ -1385,7 +1385,7 @@ describe('ChatService private methods', () => {
         expect.objectContaining({
           enabledContextCaching: false,
         }),
-        undefined,
+        expect.anything(),
       );
     });
 
@@ -1438,7 +1438,7 @@ describe('ChatService private methods', () => {
         expect.objectContaining({
           reasoning_effort: 'high',
         }),
-        undefined,
+        expect.anything(),
       );
     });
 
@@ -1464,7 +1464,7 @@ describe('ChatService private methods', () => {
         expect.objectContaining({
           thinkingBudget: 5000,
         }),
-        undefined,
+        expect.anything(),
       );
     });
   });

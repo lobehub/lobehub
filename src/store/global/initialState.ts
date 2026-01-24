@@ -137,6 +137,7 @@ export interface SystemStatus {
    */
   pagePageSize?: number;
   portalWidth: number;
+  readNotificationSlugs?: string[];
   /**
    * Resource Manager column widths
    */
@@ -222,6 +223,7 @@ export const INITIAL_STATUS = {
   pageAgentPanelWidth: 360,
   pagePageSize: 20,
   portalWidth: 400,
+  readNotificationSlugs: [],
   resourceManagerColumnWidths: {
     date: 160,
     name: 574,

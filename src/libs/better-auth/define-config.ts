@@ -22,6 +22,7 @@ import {
   getVerificationEmailTemplate,
   getVerificationOTPEmailTemplate,
 } from '@/libs/better-auth/email-templates';
+import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
 import { createSecondaryStorage, getTrustedOrigins } from '@/libs/better-auth/utils/config';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
@@ -60,7 +61,7 @@ const getPasskeyOrigins = (): string[] | undefined => {
 const MAGIC_LINK_EXPIRES_IN = 900;
 // OTP expiration time (in seconds) - 5 minutes for mobile OTP verification
 const OTP_EXPIRES_IN = 300;
-const enableMagicLink = authEnv.ENABLE_MAGIC_LINK;
+const enableMagicLink = authEnv.AUTH_ENABLE_MAGIC_LINK;
 const enabledSSOProviders = parseSSOProviders(authEnv.AUTH_SSO_PROVIDERS);
 
 const { socialProviders, genericOAuthProviders } = initBetterAuthSSOProviders();
@@ -222,6 +223,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     },
     plugins: [
       ...customOptions.plugins,
+      emailWhitelist(),
       expo(),
       emailHarmony({ allowNormalizedSignin: false, validator: customEmailValidator }),
       admin(),

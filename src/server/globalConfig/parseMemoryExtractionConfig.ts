@@ -8,7 +8,13 @@ import {
   type MemoryLayerExtractorPublicConfig,
 } from '@/types/serverConfig';
 
-const MEMORY_LAYERS: GlobalMemoryLayer[] = ['context', 'experience', 'identity', 'preference'];
+const MEMORY_LAYERS: GlobalMemoryLayer[] = [
+  'activity',
+  'context',
+  'experience',
+  'identity',
+  'preference',
+];
 
 const parseTokenLimitEnv = (value?: string) => {
   if (value === undefined) return undefined;
@@ -54,7 +60,10 @@ export interface MemoryExtractionPrivateConfig {
     secretAccessKey?: string;
   };
   upstashWorkflowExtraHeaders?: Record<string, string>;
-  webhookHeaders?: Record<string, string>;
+  webhook: {
+    headers?: Record<string, string>;
+    baseUrl?: string;
+  }
   whitelistUsers?: string[];
 }
 
@@ -247,7 +256,10 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
     featureFlags,
     observabilityS3: extractorObservabilityS3,
     upstashWorkflowExtraHeaders,
-    webhookHeaders,
+    webhook: {
+      headers: webhookHeaders,
+      baseUrl: process.env.MEMORY_USER_MEMORY_WEBHOOK_BASE_URL,
+    },
     whitelistUsers,
   };
 };

@@ -79,7 +79,6 @@ const CustomPluginInstallModal = memo<CustomPluginInstallModalProps>(
             description: schema.description,
           },
         };
-        console.log('testParams:', testParams);
 
         const testResult = await testMcpConnection(testParams);
 

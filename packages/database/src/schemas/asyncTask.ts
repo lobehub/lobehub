@@ -17,11 +17,21 @@ export const asyncTasks = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     duration: integer('duration'),
+    parentId: uuid('parent_id'),
+    metadata: jsonb('metadata').notNull().default('{}'),
 
     ...timestamps,
   },
-  (t) => [index('async_tasks_user_id_idx').on(t.userId)],
+  (t) => [
+    index('async_tasks_user_id_idx').on(t.userId),
+    index('async_tasks_parent_id_idx').on(t.parentId),
+    index('async_tasks_type_status_idx').on(t.type, t.status),
+    index('async_tasks_metadata_idx').using(
+      'gin',
+      t.metadata,
+    )
+  ],
 );
 
 export type NewAsyncTaskItem = typeof asyncTasks.$inferInsert;
-export type AsyncTaskSelectItem = typeof asyncTasks.$inferSelect;
+export type AsyncTaskSelectItem = Omit<typeof asyncTasks.$inferSelect, 'metadata' | 'parentId'> & Partial<Pick<typeof asyncTasks.$inferSelect, 'metadata' | 'parentId'>>;

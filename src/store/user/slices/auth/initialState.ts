@@ -1,4 +1,3 @@
-import { type Session, type User } from '@auth/core/types';
 import { type SSOProvider } from '@lobechat/types';
 
 import { type LobeUser } from '@/types/user';
@@ -13,8 +12,6 @@ export interface UserAuthState {
   isLoadedAuthProviders?: boolean;
 
   isSignedIn?: boolean;
-  nextSession?: Session;
-  nextUser?: User;
   oAuthSSOProviders?: string[];
   user?: LobeUser;
 }

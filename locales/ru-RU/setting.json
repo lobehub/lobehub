@@ -495,6 +495,7 @@
   "skillStore.networkError": "Ошибка сети, пожалуйста, попробуйте снова",
   "skillStore.search": "Ищите навыки по названию или ключевому слову, нажмите Enter для поиска…",
   "skillStore.tabs.community": "Сообщество",
+  "skillStore.tabs.custom": "Пользовательский",
   "skillStore.tabs.lobehub": "LobeHub",
   "skillStore.title": "Магазин навыков",
   "startConversation": "Начать разговор",

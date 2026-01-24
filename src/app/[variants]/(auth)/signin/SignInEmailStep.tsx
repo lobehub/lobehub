@@ -7,7 +7,7 @@ import { ChevronRight, Mail } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
-import AuthIcons from '@/components/NextAuth/AuthIcons';
+import AuthIcons from '@/components/AuthIcons';
 import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 
 import AuthCard from '../../../../features/AuthCard';

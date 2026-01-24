@@ -67,17 +67,6 @@ vi.mock('@/const/version', () => ({
   isDesktop: false,
 }));
 
-// Use vi.hoisted to ensure variables exist before vi.mock factory executes
-const { enableNextAuth } = vi.hoisted(() => ({
-  enableNextAuth: { value: false },
-}));
-
-vi.mock('@/envs/auth', () => ({
-  get enableNextAuth() {
-    return enableNextAuth.value;
-  },
-}));
-
 describe('PanelContent', () => {
   const closePopover = vi.fn();
 

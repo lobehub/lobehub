@@ -19,6 +19,19 @@ LobeChat provides some additional configuration options during deployment, which
 
 ## Common Variables
 
+### `KEY_VAULTS_SECRET`
+
+- Type: Required (server database mode)
+- Description: Used to encrypt sensitive information stored by users in the database (such as API Keys, baseURL, etc.), preventing exposure of critical information in case of database breach
+- Default: -
+- Example: `Kix2wcUONd4CX51E/ZPAd36BqM4wzJgKjPtz2sGztqQ=`
+
+<Callout type={'warning'}>
+  This key is used to encrypt sensitive data. Once set, do not change it, otherwise encrypted data cannot be decrypted.
+</Callout>
+
+<GenerateSecret envName="KEY_VAULTS_SECRET" />
+
 ### `API_KEY_SELECT_MODE`
 
 - Type：Optional

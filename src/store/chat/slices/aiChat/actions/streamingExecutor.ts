@@ -757,20 +757,24 @@ export const streamingExecutor: StateCreator<
       nextContext = { ...nextContext, stepContext };
 
       log(
-        '[internal_execAgentRuntime][step-%d]: phase=%s, status=%s, stepContext=%O',
+        '[internal_execAgentRuntime][step-%d]: phase=%s, status=%s, state.messages=%d, dbMessagesMap[%s]=%d, stepContext=%O',
         stepCount,
         nextContext.phase,
         state.status,
+        state.messages.length,
+        messageKey,
+        currentDBMessages.length,
         stepContext,
       );
 
       const result = await runtime.step(state, nextContext);
 
       log(
-        '[internal_execAgentRuntime] Step %d completed, events: %d, newStatus=%s',
+        '[internal_execAgentRuntime] Step %d completed, events: %d, newStatus=%s, newState.messages=%d',
         stepCount,
         result.events.length,
         result.newState.status,
+        result.newState.messages.length,
       );
 
       // After parallel tool batch completes, refresh messages to ensure all tool results are synced

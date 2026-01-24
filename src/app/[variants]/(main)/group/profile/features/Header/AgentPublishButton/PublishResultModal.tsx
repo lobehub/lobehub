@@ -19,7 +19,6 @@ const PublishResultModal = memo<PublishResultModalProps>(({ identifier, onCancel
 
   const handleGoToMarket = () => {
     if (identifier) {
-      console.log('identifier', identifier);
       navigate(`/community/group_agent/${identifier}`);
     }
     onCancel();

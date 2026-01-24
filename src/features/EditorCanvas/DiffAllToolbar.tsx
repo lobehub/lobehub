@@ -42,7 +42,6 @@ const useIsEditorInit = (editor: IEditor) => {
     if (!editor) return;
 
     const onInit = () => {
-      console.log('init: id', editor.getLexicalEditor()?._key);
       setEditInit(true);
     };
     editor.on('initialized', onInit);
@@ -103,13 +102,13 @@ interface DiffAllToolbarProps {
 const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId }) => {
   const { t } = useTranslation('editor');
   const isDarkMode = useIsDark();
-  const [editor, performSave, markDirty] = useDocumentStore((s) => [
+  const [storeEditor, performSave, markDirty] = useDocumentStore((s) => [
     s.editor!,
     s.performSave,
     s.markDirty,
   ]);
 
-  const hasPendingDiffs = useEditorHasPendingDiffs(editor);
+  const hasPendingDiffs = useEditorHasPendingDiffs(storeEditor);
 
   if (!hasPendingDiffs) return null;
 
@@ -131,7 +130,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId }) => {
         <Space>
           <Button
             onClick={async () => {
-              editor?.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
+              storeEditor?.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
                 action: DiffAction.Reject,
               });
               await handleSave();
@@ -145,7 +144,7 @@ const DiffAllToolbar = memo<DiffAllToolbarProps>(({ documentId }) => {
           <Button
             color={'default'}
             onClick={async () => {
-              editor?.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
+              storeEditor?.dispatchCommand(LITEXML_DIFFNODE_ALL_COMMAND, {
                 action: DiffAction.Accept,
               });
               await handleSave();

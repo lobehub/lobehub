@@ -41,17 +41,30 @@ tags:
 
   When deploying LobeChat, you need to configure the following environment variables:
 
-  | Environment Variable             | Type     | Description                                                                   |
-  | -------------------------------- | -------- | ----------------------------------------------------------------------------- |
-  | `AUTH_SECRET`                    | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32` |
-  | `AUTH_SSO_PROVIDERS`             | Required | SSO provider for LobeChat. Use `logto` for Logto                              |
-  | `AUTH_LOGTO_ID`                  | Required | App ID from Logto application                                                 |
-  | `AUTH_LOGTO_SECRET`              | Required | App Secret from Logto application                                             |
-  | `AUTH_LOGTO_ISSUER`              | Required | Logto issuer URL (e.g., `https://your-tenant.logto.app/oidc`)                 |
+  | Environment Variable        | Type     | Description                                                                   |
+  | --------------------------- | -------- | ----------------------------------------------------------------------------- |
+  | `AUTH_SECRET`               | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS`        | Required | SSO provider for LobeChat. Use `logto` for Logto                              |
+  | `AUTH_LOGTO_ID`             | Required | App ID from Logto application                                                 |
+  | `AUTH_LOGTO_SECRET`         | Required | App Secret from Logto application                                             |
+  | `AUTH_LOGTO_ISSUER`         | Required | Logto issuer URL (e.g., `https://your-tenant.logto.app/oidc`)                 |
+  | `LOGTO_WEBHOOK_SIGNING_KEY` | Optional | Secret key for validating Webhook requests from Logto                         |
 
   <Callout type={'tip'}>
     Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#logto) for detailed information on these variables.
   </Callout>
+
+  ### Configure Webhook (Optional)
+
+  Configure Logto Webhook to sync user data updates to LobeChat.
+
+  1. Go to **Webhooks** in Logto Console and create a Webhook
+  2. Fill in the following fields:
+     - Endpoint URL: `https://your-domain.com/api/webhooks/logto`
+     - Events:
+       - `User.Data.Updated`: Sync user profile updates
+       - `User.SuspensionStatus.Updated`: Sync user suspension status
+  3. After creation, copy the `Signing Key` and set it in the `LOGTO_WEBHOOK_SIGNING_KEY` environment variable
 </Steps>
 
 <Callout type={'info'}>

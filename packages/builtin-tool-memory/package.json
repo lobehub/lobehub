@@ -2,18 +2,23 @@
   "name": "@lobechat/builtin-tool-memory",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
     "./executor": "./src/executor/index.ts"
   },
   "main": "./src/index.ts",
+  "scripts": {
+    "build:gen-tool-call": "tsx scripts/generate-tool-call.ts"
+  },
   "dependencies": {
     "@lobechat/memory-user-memory": "workspace:*",
     "@lobechat/prompts": "workspace:*"
   },
   "devDependencies": {
-    "@lobechat/types": "workspace:*"
+    "@lobechat/types": "workspace:*",
+    "promptfoo": "^0.120.17"
   },
   "peerDependencies": {
     "@lobehub/ui": "^4",

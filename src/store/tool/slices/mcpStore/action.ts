@@ -731,6 +731,7 @@ export const createMCPPluginStoreSlice: StateCreator<
         draft.mcpPluginItems = [];
         draft.currentPage = 1;
         draft.mcpSearchKeywords = keywords;
+        draft.isMcpListInit = false;
       }),
       false,
       n('resetMCPPluginList'),

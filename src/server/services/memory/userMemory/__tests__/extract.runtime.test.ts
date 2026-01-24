@@ -1,6 +1,6 @@
 import type { AiProviderRuntimeState } from '@lobechat/types';
 import type { EnabledAiModel } from 'model-bank';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { MemoryExtractionPrivateConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 
@@ -26,6 +26,7 @@ const createExecutor = (privateOverrides?: Partial<MemoryExtractionPrivateConfig
     agentLayerExtractor: {
       contextLimit: 2048,
       layers: {
+        activity: 'layer-act',
         context: 'layer-ctx',
         experience: 'layer-exp',
         identity: 'layer-id',
@@ -38,6 +39,7 @@ const createExecutor = (privateOverrides?: Partial<MemoryExtractionPrivateConfig
     embedding: { model: 'embed-1', provider: 'provider-e' },
     featureFlags: { enableBenchmarkLoCoMo: false },
     observabilityS3: { enabled: false },
+    webhook: {},
   };
 
   const serverConfig = {
@@ -68,6 +70,7 @@ describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
         { abilities: {}, id: 'gate-2', providerId: 'provider-b', type: 'chat' },
         { abilities: {}, id: 'embed-1', providerId: 'provider-e', type: 'embedding' },
         { abilities: {}, id: 'layer-ctx', providerId: 'provider-l', type: 'chat' },
+        { abilities: {}, id: 'layer-act', providerId: 'provider-l', type: 'chat' },
         { abilities: {}, id: 'layer-exp', providerId: 'provider-l', type: 'chat' },
         { abilities: {}, id: 'layer-id', providerId: 'provider-l', type: 'chat' },
         { abilities: {}, id: 'layer-pref', providerId: 'provider-l', type: 'chat' },
@@ -96,6 +99,7 @@ describe('MemoryExtractionExecutor.resolveRuntimeKeyVaults', () => {
     const runtimeState = createRuntimeState(
       [
         { abilities: {}, id: 'gate-2', providerId: 'provider-b', type: 'chat' },
+        { abilities: {}, id: 'layer-act', providerId: 'provider-l', type: 'chat' },
         { abilities: {}, id: 'layer-ctx', providerId: 'provider-l', type: 'chat' },
         { abilities: {}, id: 'layer-exp', providerId: 'provider-l', type: 'chat' },
         { abilities: {}, id: 'layer-id', providerId: 'provider-l', type: 'chat' },

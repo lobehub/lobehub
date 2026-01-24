@@ -32,6 +32,7 @@ export const chatGroups = pgTable(
     description: text('description'),
     avatar: text('avatar'),
     backgroundColor: text('background_color'),
+    marketIdentifier: text('market_identifier'),
     content: text('content'),
     editorData: jsonb('editor_data').$type<Record<string, any>>(),
 

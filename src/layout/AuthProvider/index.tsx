@@ -5,7 +5,6 @@ import { authEnv } from '@/envs/auth';
 
 import BetterAuth from './BetterAuth';
 import Desktop from './Desktop';
-import NextAuth from './NextAuth';
 import NoAuth from './NoAuth';
 
 const AuthProvider = ({ children }: PropsWithChildren) => {
@@ -13,12 +12,8 @@ const AuthProvider = ({ children }: PropsWithChildren) => {
     return <Desktop>{children}</Desktop>;
   }
 
-  if (authEnv.NEXT_PUBLIC_ENABLE_BETTER_AUTH) {
+  if (authEnv.AUTH_SECRET) {
     return <BetterAuth>{children}</BetterAuth>;
-  }
-
-  if (authEnv.NEXT_PUBLIC_ENABLE_NEXT_AUTH) {
-    return <NextAuth>{children}</NextAuth>;
   }
 
   return <NoAuth>{children}</NoAuth>;

@@ -6,23 +6,15 @@ declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace NodeJS {
     interface ProcessEnv {
-      // ===== Auth (shared by Better Auth / Next Auth) ===== //
+      // ===== Better Auth ===== //
       AUTH_SECRET?: string;
       AUTH_EMAIL_VERIFICATION?: string;
-      ENABLE_MAGIC_LINK?: string;
+      AUTH_ENABLE_MAGIC_LINK?: string;
       AUTH_SSO_PROVIDERS?: string;
       AUTH_TRUSTED_ORIGINS?: string;
+      AUTH_ALLOWED_EMAILS?: string;
 
-      // ===== Next Auth ===== //
-      NEXT_AUTH_SECRET?: string;
-
-      NEXT_AUTH_SSO_PROVIDERS?: string;
-
-      NEXT_AUTH_DEBUG?: string;
-
-      NEXT_AUTH_SSO_SESSION_STRATEGY?: string;
-
-      // ===== Next Auth Provider Credentials ===== //
+      // ===== Auth Provider Credentials ===== //
       AUTH_GOOGLE_ID?: string;
       AUTH_GOOGLE_SECRET?: string;
 
@@ -78,11 +70,6 @@ declare global {
       AUTH_LOGTO_SECRET?: string;
       AUTH_LOGTO_ISSUER?: string;
 
-      AUTH_MICROSOFT_ENTRA_ID_ID?: string;
-      AUTH_MICROSOFT_ENTRA_ID_SECRET?: string;
-      AUTH_MICROSOFT_ENTRA_ID_TENANT_ID?: string;
-      AUTH_MICROSOFT_ENTRA_ID_BASE_URL?: string;
-
       AUTH_OKTA_ID?: string;
       AUTH_OKTA_SECRET?: string;
       AUTH_OKTA_ISSUER?: string;
@@ -93,19 +80,6 @@ declare global {
       AUTH_ZITADEL_ID?: string;
       AUTH_ZITADEL_SECRET?: string;
       AUTH_ZITADEL_ISSUER?: string;
-
-      AUTH_AZURE_AD_ID?: string;
-      AUTH_AZURE_AD_SECRET?: string;
-      AUTH_AZURE_AD_TENANT_ID?: string;
-
-      AZURE_AD_CLIENT_ID?: string;
-      AZURE_AD_CLIENT_SECRET?: string;
-      AZURE_AD_TENANT_ID?: string;
-
-      // ZITADEL
-      ZITADEL_CLIENT_ID?: string;
-      ZITADEL_CLIENT_SECRET?: string;
-      ZITADEL_ISSUER?: string;
 
       // ===== JWKS Key ===== //
       /**
@@ -130,26 +104,14 @@ declare global {
 
 export const getAuthConfig = () => {
   return createEnv({
-    client: {
-      // ---------------------------------- better auth ----------------------------------
-      NEXT_PUBLIC_ENABLE_BETTER_AUTH: z.boolean().optional(),
-
-      // ---------------------------------- next auth ----------------------------------
-      NEXT_PUBLIC_ENABLE_NEXT_AUTH: z.boolean().optional(),
-    },
+    client: {},
     server: {
-      // ---------------------------------- better auth ----------------------------------
       AUTH_SECRET: z.string().optional(),
       AUTH_SSO_PROVIDERS: z.string().optional().default(''),
       AUTH_TRUSTED_ORIGINS: z.string().optional(),
       AUTH_EMAIL_VERIFICATION: z.boolean().optional().default(false),
-      ENABLE_MAGIC_LINK: z.boolean().optional().default(false),
-
-      // ---------------------------------- next auth ----------------------------------
-      NEXT_AUTH_SECRET: z.string().optional(),
-      NEXT_AUTH_SSO_PROVIDERS: z.string().optional().default('auth0'),
-      NEXT_AUTH_DEBUG: z.boolean().optional().default(false),
-      NEXT_AUTH_SSO_SESSION_STRATEGY: z.enum(['jwt', 'database']).optional().default('jwt'),
+      AUTH_ENABLE_MAGIC_LINK: z.boolean().optional().default(false),
+      AUTH_ALLOWED_EMAILS: z.string().optional(),
 
       AUTH_GOOGLE_ID: z.string().optional(),
       AUTH_GOOGLE_SECRET: z.string().optional(),
@@ -206,11 +168,6 @@ export const getAuthConfig = () => {
       AUTH_LOGTO_SECRET: z.string().optional(),
       AUTH_LOGTO_ISSUER: z.string().optional(),
 
-      AUTH_MICROSOFT_ENTRA_ID_ID: z.string().optional(),
-      AUTH_MICROSOFT_ENTRA_ID_SECRET: z.string().optional(),
-      AUTH_MICROSOFT_ENTRA_ID_TENANT_ID: z.string().optional(),
-      AUTH_MICROSOFT_ENTRA_ID_BASE_URL: z.string().optional(),
-
       AUTH_OKTA_ID: z.string().optional(),
       AUTH_OKTA_SECRET: z.string().optional(),
       AUTH_OKTA_ISSUER: z.string().optional(),
@@ -221,18 +178,6 @@ export const getAuthConfig = () => {
       AUTH_ZITADEL_ID: z.string().optional(),
       AUTH_ZITADEL_SECRET: z.string().optional(),
       AUTH_ZITADEL_ISSUER: z.string().optional(),
-
-      AUTH_AZURE_AD_ID: z.string().optional(),
-      AUTH_AZURE_AD_SECRET: z.string().optional(),
-      AUTH_AZURE_AD_TENANT_ID: z.string().optional(),
-
-      AZURE_AD_CLIENT_ID: z.string().optional(),
-      AZURE_AD_CLIENT_SECRET: z.string().optional(),
-      AZURE_AD_TENANT_ID: z.string().optional(),
-
-      ZITADEL_CLIENT_ID: z.string().optional(),
-      ZITADEL_CLIENT_SECRET: z.string().optional(),
-      ZITADEL_ISSUER: z.string().optional(),
 
       LOGTO_WEBHOOK_SIGNING_KEY: z.string().optional(),
 
@@ -248,33 +193,19 @@ export const getAuthConfig = () => {
     },
 
     runtimeEnv: {
-      // ---------------------------------- better auth ----------------------------------
-      NEXT_PUBLIC_ENABLE_BETTER_AUTH: process.env.NEXT_PUBLIC_ENABLE_BETTER_AUTH === '1',
-      // Fallback to NEXT_PUBLIC_* for seamless migration
-      AUTH_EMAIL_VERIFICATION:
-        process.env.AUTH_EMAIL_VERIFICATION === '1' ||
-        process.env.NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION === '1',
-      ENABLE_MAGIC_LINK:
-        process.env.ENABLE_MAGIC_LINK === '1' || process.env.NEXT_PUBLIC_ENABLE_MAGIC_LINK === '1',
-      // Fallback to NEXT_AUTH_SECRET for seamless migration from next-auth
-      AUTH_SECRET: process.env.AUTH_SECRET || process.env.NEXT_AUTH_SECRET,
-      // Fallback to NEXT_AUTH_SSO_PROVIDERS for seamless migration from next-auth
-      AUTH_SSO_PROVIDERS: process.env.AUTH_SSO_PROVIDERS || process.env.NEXT_AUTH_SSO_PROVIDERS,
+      AUTH_EMAIL_VERIFICATION: process.env.AUTH_EMAIL_VERIFICATION === '1',
+      AUTH_ENABLE_MAGIC_LINK: process.env.AUTH_ENABLE_MAGIC_LINK === '1',
+      AUTH_SECRET: process.env.AUTH_SECRET,
+      AUTH_SSO_PROVIDERS: process.env.AUTH_SSO_PROVIDERS,
       AUTH_TRUSTED_ORIGINS: process.env.AUTH_TRUSTED_ORIGINS,
+      AUTH_ALLOWED_EMAILS: process.env.AUTH_ALLOWED_EMAILS,
 
-      // better-auth env for Cognito provider is different from next-auth's one
+      // Cognito provider specific env vars
       AUTH_COGNITO_DOMAIN: process.env.AUTH_COGNITO_DOMAIN,
       AUTH_COGNITO_REGION: process.env.AUTH_COGNITO_REGION,
       AUTH_COGNITO_USERPOOL_ID: process.env.AUTH_COGNITO_USERPOOL_ID,
 
-      // ---------------------------------- next auth ----------------------------------
-      NEXT_PUBLIC_ENABLE_NEXT_AUTH: process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1',
-      NEXT_AUTH_SSO_PROVIDERS: process.env.NEXT_AUTH_SSO_PROVIDERS,
-      NEXT_AUTH_SECRET: process.env.NEXT_AUTH_SECRET,
-      NEXT_AUTH_DEBUG: !!process.env.NEXT_AUTH_DEBUG,
-      NEXT_AUTH_SSO_SESSION_STRATEGY: process.env.NEXT_AUTH_SSO_SESSION_STRATEGY || 'jwt',
-
-      // Next Auth Provider Credentials
+      // Auth Provider Credentials
       AUTH_GOOGLE_ID: process.env.AUTH_GOOGLE_ID,
       AUTH_GOOGLE_SECRET: process.env.AUTH_GOOGLE_SECRET,
 
@@ -327,11 +258,6 @@ export const getAuthConfig = () => {
       AUTH_LOGTO_SECRET: process.env.AUTH_LOGTO_SECRET,
       AUTH_LOGTO_ISSUER: process.env.AUTH_LOGTO_ISSUER,
 
-      AUTH_MICROSOFT_ENTRA_ID_ID: process.env.AUTH_MICROSOFT_ENTRA_ID_ID,
-      AUTH_MICROSOFT_ENTRA_ID_SECRET: process.env.AUTH_MICROSOFT_ENTRA_ID_SECRET,
-      AUTH_MICROSOFT_ENTRA_ID_TENANT_ID: process.env.AUTH_MICROSOFT_ENTRA_ID_TENANT_ID,
-      AUTH_MICROSOFT_ENTRA_ID_BASE_URL: process.env.AUTH_MICROSOFT_ENTRA_ID_BASE_URL,
-
       AUTH_OKTA_ID: process.env.AUTH_OKTA_ID,
       AUTH_OKTA_SECRET: process.env.AUTH_OKTA_SECRET,
       AUTH_OKTA_ISSUER: process.env.AUTH_OKTA_ISSUER,
@@ -343,28 +269,14 @@ export const getAuthConfig = () => {
       AUTH_ZITADEL_SECRET: process.env.AUTH_ZITADEL_SECRET,
       AUTH_ZITADEL_ISSUER: process.env.AUTH_ZITADEL_ISSUER,
 
-      AUTH_AZURE_AD_ID: process.env.AUTH_AZURE_AD_ID,
-      AUTH_AZURE_AD_SECRET: process.env.AUTH_AZURE_AD_SECRET,
-      AUTH_AZURE_AD_TENANT_ID: process.env.AUTH_AZURE_AD_TENANT_ID,
-
-      // legacy Azure AD envs for backward compatibility
-      AZURE_AD_CLIENT_ID: process.env.AZURE_AD_CLIENT_ID,
-      AZURE_AD_CLIENT_SECRET: process.env.AZURE_AD_CLIENT_SECRET,
-      AZURE_AD_TENANT_ID: process.env.AZURE_AD_TENANT_ID,
-
-      ZITADEL_CLIENT_ID: process.env.ZITADEL_CLIENT_ID,
-      ZITADEL_CLIENT_SECRET: process.env.ZITADEL_CLIENT_SECRET,
-      ZITADEL_ISSUER: process.env.ZITADEL_ISSUER,
-
       // LOGTO
       LOGTO_WEBHOOK_SIGNING_KEY: process.env.LOGTO_WEBHOOK_SIGNING_KEY,
 
       // Casdoor
       CASDOOR_WEBHOOK_SECRET: process.env.CASDOOR_WEBHOOK_SECRET,
 
-      // Generic JWKS key (fallback to OIDC_JWKS_KEY for backward compatibility)
-      JWKS_KEY: process.env.JWKS_KEY || process.env.OIDC_JWKS_KEY,
-      ENABLE_OIDC: !!(process.env.JWKS_KEY || process.env.OIDC_JWKS_KEY),
+      JWKS_KEY: process.env.JWKS_KEY,
+      ENABLE_OIDC: !!process.env.JWKS_KEY,
 
       // Internal JWT expiration time
       INTERNAL_JWT_EXPIRATION: process.env.INTERNAL_JWT_EXPIRATION,
@@ -373,11 +285,6 @@ export const getAuthConfig = () => {
 };
 
 export const authEnv = getAuthConfig();
-
-// Auth flags - use process.env directly for build-time dead code elimination
-// Better Auth is the default auth solution when NextAuth is not explicitly enabled
-export const enableNextAuth = process.env.NEXT_PUBLIC_ENABLE_NEXT_AUTH === '1';
-export const enableBetterAuth = !enableNextAuth;
 
 // Auth headers and constants
 export const LOBE_CHAT_AUTH_HEADER = 'X-lobe-chat-auth';

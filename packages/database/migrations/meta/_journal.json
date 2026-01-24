@@ -497,6 +497,20 @@
       "when": 1768999498635,
       "tag": "0070_add_user_memory_activities",
       "breakpoints": true
+    },
+    {
+      "idx": 71,
+      "version": "7",
+      "when": 1769093425330,
+      "tag": "0071_add_async_task_extend",
+      "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1769251608013,
+      "tag": "0072_add_market_identifier_chat_group",
+      "breakpoints": true
     }
   ],
   "version": "6"

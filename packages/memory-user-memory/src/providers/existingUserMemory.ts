@@ -1,5 +1,6 @@
 import type {
   IdentityMemoryDetail,
+  UserMemoryActivityWithoutVectors,
   UserMemoryContextWithoutVectors,
   UserMemoryExperienceWithoutVectors,
   UserMemoryPreferenceWithoutVectors,
@@ -12,6 +13,7 @@ import { x } from 'xastscript';
 import type { BuiltContext, MemoryContextProvider, MemoryExtractionJob } from '../types';
 
 interface RetrievedMemories {
+  activities: UserMemoryActivityWithoutVectors[];
   contexts: UserMemoryContextWithoutVectors[];
   experiences: UserMemoryExperienceWithoutVectors[];
   preferences: UserMemoryPreferenceWithoutVectors[];
@@ -31,12 +33,122 @@ export class RetrievalUserMemoryContextProvider implements MemoryContextProvider
     this.fetchedAt = options.fetchedAt;
   }
 
+  private formatTags(tags?: unknown) {
+    return Array.isArray(tags) && tags.length ? `tags: ${tags.join(', ')}` : '';
+  }
+
+  private formatLocation(location: any) {
+    if (!location || typeof location !== 'object') return '';
+    const parts: string[] = [];
+
+    if (typeof location.name === 'string' && location.name) parts.push(location.name);
+    if (typeof location.type === 'string' && location.type) parts.push(`type: ${location.type}`);
+    if (typeof location.address === 'string' && location.address) parts.push(location.address);
+
+    const tags = this.formatTags(location.tags);
+    if (tags) parts.push(tags);
+
+    return parts.join(' | ');
+  }
+
+  private formatAssociation(value: any) {
+    if (!value || typeof value !== 'object') return '';
+    const parts: string[] = [];
+
+    if (typeof value.name === 'string' && value.name) parts.push(value.name);
+    if (typeof value.type === 'string' && value.type) parts.push(`type: ${value.type}`);
+
+    if (value.extra && typeof value.extra === 'object') {
+      try {
+        parts.push(`extra: ${JSON.stringify(value.extra)}`);
+      } catch {
+        parts.push('extra: [unserializable]');
+      }
+    }
+
+    return parts.join(' | ');
+  }
+
   async buildContext(job: MemoryExtractionJob): Promise<BuiltContext> {
+    const activities = this.retrievedMemories.activities || [];
     const contexts = this.retrievedMemories.contexts || [];
     const experiences = this.retrievedMemories.experiences || [];
     const preferences = this.retrievedMemories.preferences || [];
 
+
+
     const userMemoriesChildren: Child[] = [];
+
+    activities.forEach((activity) => {
+      const attributes: Record<string, string> = { id: activity.id ?? '' };
+      const similarity = (activity as { similarity?: number }).similarity;
+
+      if (typeof similarity === 'number') {
+        attributes.similarity = similarity.toFixed(3);
+      }
+      if (activity.type) {
+        attributes.activity_type = activity.type;
+      }
+      if (activity.status) {
+        attributes.status = activity.status;
+      }
+      if (activity.timezone) {
+        attributes.timezone = activity.timezone;
+      }
+      if (activity.startsAt) {
+        attributes.starts_at = new Date(activity.startsAt).toISOString();
+      }
+      if (activity.endsAt) {
+        attributes.ends_at = new Date(activity.endsAt).toISOString();
+      }
+
+      const children: Child[] = [];
+      const legacyLocation = (activity as { location?: unknown }).location;
+      const associatedLocations = Array.isArray(activity.associatedLocations)
+        ? activity.associatedLocations
+        : legacyLocation
+          ? [legacyLocation]
+          : [];
+      const associatedObjects = Array.isArray(activity.associatedObjects)
+        ? activity.associatedObjects
+        : [];
+      const associatedSubjects = Array.isArray(activity.associatedSubjects)
+        ? activity.associatedSubjects
+        : [];
+
+      if (activity.narrative) {
+        children.push(x('activity_narrative', activity.narrative));
+      }
+      if (activity.notes) {
+        children.push(x('activity_notes', activity.notes));
+      }
+      if (activity.feedback) {
+        children.push(x('activity_feedback', activity.feedback));
+      }
+      associatedLocations.forEach((location) => {
+        const value = this.formatLocation(location);
+        if (value) {
+          children.push(x('activity_associated_location', value));
+        }
+      });
+      associatedObjects.forEach((object) => {
+        const value = this.formatAssociation(object);
+        if (value) {
+          children.push(x('activity_associated_object', value));
+        }
+      });
+      associatedSubjects.forEach((subject) => {
+        const value = this.formatAssociation(subject);
+        if (value) {
+          children.push(x('activity_associated_subject', value));
+        }
+      });
+      if (Array.isArray(activity.tags) && activity.tags.length > 0) {
+        children.push(x('activity_tags', activity.tags.join(', ')));
+      }
+
+      userMemoriesChildren.push(x('user_memories_activity', attributes, ...children));
+    });
 
     contexts.forEach((context) => {
       const attributes: Record<string, string> = { id: context.id ?? '' };
@@ -126,6 +238,7 @@ export class RetrievalUserMemoryContextProvider implements MemoryContextProvider
         x(
           'user_memories',
           {
+            activities: activities.length.toString(),
             contexts: contexts.length.toString(),
             experiences: experiences.length.toString(),
             memory_fetched_at: new Date(this.fetchedAt ?? Date.now()).toISOString(),

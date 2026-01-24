@@ -6,7 +6,6 @@ import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
 
 import { isDesktop } from '@/const/version';
-import { enableNextAuth } from '@/envs/auth';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -25,9 +24,8 @@ const StoreInitialization = memo(() => {
   // prefetch error ns to avoid don't show error content correctly
   useTranslation('error');
 
-  const [isLogin, isSignedIn, useInitUserState] = useUserStore((s) => [
+  const [isLogin, useInitUserState] = useUserStore((s) => [
     authSelectors.isLogin(s),
-    s.isSignedIn,
     s.useInitUserState,
   ]);
 
@@ -65,7 +63,7 @@ const StoreInitialization = memo(() => {
    * IMPORTANT: Explicitly convert to boolean to avoid passing null/undefined downstream,
    * which would cause unnecessary API requests with invalid login state.
    */
-  const isLoginOnInit = Boolean(enableNextAuth ? isSignedIn : isLogin);
+  const isLoginOnInit = Boolean(isLogin);
 
   // init inbox agent via builtin agent mechanism
   useInitBuiltinAgent(INBOX_SESSION_ID, { isLogin: isLoginOnInit });

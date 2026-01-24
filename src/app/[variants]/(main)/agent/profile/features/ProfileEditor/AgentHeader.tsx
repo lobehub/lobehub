@@ -17,6 +17,9 @@ import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
+import AgentForkTag from '../Header/AgentForkTag';
+import AgentStatusTag from '../Header/AgentStatusTag';
+
 const MAX_AVATAR_SIZE = 1024 * 1024; // 1MB limit for server actions
 
 const AgentHeader = memo(() => {
@@ -63,7 +66,6 @@ const AgentHeader = memo(() => {
       setUploading(true);
       try {
         const result = await uploadWithProgress({ file });
-        console.log('result', result);
         if (result?.url) {
           updateMeta({ avatar: result.url });
         }
@@ -89,6 +91,7 @@ const AgentHeader = memo(() => {
   return (
     <Flexbox
       gap={16}
+      horizontal
       onClick={(e) => {
         e.stopPropagation();
         e.preventDefault();
@@ -98,6 +101,7 @@ const AgentHeader = memo(() => {
         cursor: 'default',
       }}
     >
+      {/* Avatar Section */}
       <EmojiPicker
         allowDelete={!!meta.avatar}
         allowUpload
@@ -148,21 +152,28 @@ const AgentHeader = memo(() => {
         size={72}
         value={meta.avatar}
       />
-      <Input
-        onChange={(e) => {
-          setLocalTitle(e.target.value);
-          debouncedSaveTitle(e.target.value);
-        }}
-        placeholder={t('settingAgent.name.placeholder', { ns: 'setting' })}
-        style={{
-          fontSize: 36,
-          fontWeight: 600,
-          padding: 0,
-          width: '100%',
-        }}
-        value={localTitle}
-        variant={'borderless'}
-      />
+      {/* Title and Tags Section */}
+      <Flexbox flex={1} gap={8} style={{ minWidth: 0 }}>
+        <Input
+          onChange={(e) => {
+            setLocalTitle(e.target.value);
+            debouncedSaveTitle(e.target.value);
+          }}
+          placeholder={t('settingAgent.name.placeholder', { ns: 'setting' })}
+          style={{
+            fontSize: 36,
+            fontWeight: 600,
+            padding: 0,
+            width: '100%',
+          }}
+          value={localTitle}
+          variant={'borderless'}
+        />
+        <Flexbox gap={8} horizontal>
+          <AgentStatusTag />
+          <AgentForkTag />
+        </Flexbox>
+      </Flexbox>
     </Flexbox>
   );
 });

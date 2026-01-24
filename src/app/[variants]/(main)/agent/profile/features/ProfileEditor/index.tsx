@@ -56,6 +56,7 @@ const ProfileEditor = memo(() => {
           style={{ marginBottom: 12 }}
         >
           <ModelSelect
+            initialWidth
             onChange={updateConfig}
             value={{
               model: config.model,

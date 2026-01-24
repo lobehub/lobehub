@@ -1,0 +1,200 @@
+{
+  "description": "Create a preference memory that encodes durable directives or choices the assistant should follow. Include conclusionDirectives, scopes, and context.",
+  "name": "addPreferenceMemory",
+  "parameters": {
+    "additionalProperties": false,
+    "properties": {
+      "details": {
+        "description": "Optional detailed information",
+        "type": "string"
+      },
+      "memoryCategory": {
+        "description": "Memory category",
+        "type": "string"
+      },
+      "memoryType": {
+        "description": "Memory type",
+        "enum": [
+          "activity",
+          "context",
+          "event",
+          "fact",
+          "location",
+          "other",
+          "people",
+          "preference",
+          "technology",
+          "topic"
+        ],
+        "type": "string"
+      },
+      "summary": {
+        "description": "Concise overview of this specific memory",
+        "type": "string"
+      },
+      "tags": {
+        "description": "Model generated tags that summarize the preference facets",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "title": {
+        "description": "Brief descriptive title",
+        "type": "string"
+      },
+      "withPreference": {
+        "additionalProperties": false,
+        "properties": {
+          "appContext": {
+            "additionalProperties": false,
+            "description": "Application/surface specific preference, if any",
+            "properties": {
+              "app": {
+                "description": "App or product name this applies to",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "feature": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "route": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "surface": {
+                "description": "e.g., chat, emails, code review, notes",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "app",
+              "feature",
+              "route",
+              "surface"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "conclusionDirectives": {
+            "description": "Direct, self-contained instruction to the assistant from the user's perspective (what to do, not how to implement)",
+            "type": "string"
+          },
+          "extractedLabels": {
+            "description": "Model generated tags that summarize the preference facets",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "extractedScopes": {
+            "description": "Array of JSON strings describing preference facets and applicable scopes",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "originContext": {
+            "additionalProperties": false,
+            "description": "Context of how/why this preference was expressed",
+            "properties": {
+              "actor": {
+                "description": "Who stated the preference; use 'User' for the user",
+                "type": "string"
+              },
+              "applicableWhen": {
+                "description": "Conditions where this preference applies",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "notApplicableWhen": {
+                "description": "Conditions where it does not apply",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "scenario": {
+                "description": "Applicable scenario or use case",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "trigger": {
+                "description": "What prompted this preference",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "actor",
+              "applicableWhen",
+              "notApplicableWhen",
+              "scenario",
+              "trigger"
+            ],
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "scorePriority": {
+            "description": "Numeric prioritization weight (0-1 (0% to 100%)) where higher means more critical to respect",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "suggestions": {
+            "description": "Follow-up actions or assistant guidance derived from the preference",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "type": {
+            "description": "High level preference classification (e.g., 'lifestyle', 'communication')",
+            "type": "string"
+          }
+        },
+        "required": [
+          "appContext",
+          "conclusionDirectives",
+          "extractedLabels",
+          "extractedScopes",
+          "originContext",
+          "scorePriority",
+          "suggestions",
+          "type"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "title",
+      "summary",
+      "tags",
+      "details",
+      "memoryCategory",
+      "memoryType",
+      "withPreference"
+    ],
+    "type": "object"
+  }
+}

@@ -73,6 +73,7 @@
   "screen5.badge": "Вход",
   "screen5.description": "Влез, за да синхронизираш Агенти, Групи, настройки и Контекст на всички устройства.",
   "screen5.errors.desktopOnlyOidc": "OIDC удостоверяване е налично само в десктоп версията на приложението.",
+  "screen5.errors.timedOut": "Времето за оторизация изтече, моля опитайте отново",
   "screen5.legacyLocalDb.link": "Мигрирай остаряла локална база данни",
   "screen5.methods.cloud.description": "Влез с твоя LobeHub Cloud акаунт за безпроблемна синхронизация",
   "screen5.methods.cloud.name": "LobeHub Cloud",

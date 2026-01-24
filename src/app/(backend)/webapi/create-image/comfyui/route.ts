@@ -21,7 +21,6 @@ const handler = async (req: Request, { jwtPayload }: { jwtPayload?: any }) => {
 
     const caller = createCaller({
       jwtPayload,
-      nextAuth: undefined, // WebAPI routes don't have nextAuth session
       userId: jwtPayload?.userId, // Required for userAuth middleware
     });
 

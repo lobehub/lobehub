@@ -495,6 +495,7 @@
   "skillStore.networkError": "네트워크 오류입니다. 다시 시도해 주세요",
   "skillStore.search": "스킬 이름 또는 키워드로 검색하세요. Enter 키를 눌러 검색…",
   "skillStore.tabs.community": "커뮤니티",
+  "skillStore.tabs.custom": "사용자 정의",
   "skillStore.tabs.lobehub": "LobeHub",
   "skillStore.title": "스킬 스토어",
   "startConversation": "대화를 시작하기",

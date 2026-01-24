@@ -17,7 +17,7 @@ const SearchResult = memo(() => {
   const batchToggleAiModels = useAiInfraStore((s) => s.batchToggleAiModels);
 
   const filteredModels = useAiInfraStore(aiModelSelectors.filteredAiProviderModelList, isEqual);
-  console.log('filteredModels:', filteredModels);
+
   const [batchLoading, setBatchLoading] = useState(false);
 
   const isEmpty = filteredModels.length === 0;

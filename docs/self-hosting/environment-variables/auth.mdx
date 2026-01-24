@@ -27,7 +27,7 @@ LobeChat provides a complete authentication service capability when deployed. Th
 - Default: `-`
 - Example: `Tfhi2t2pelSMEA8eaV61KaqPNEndFFdMIxDaJnS1CUI=`
 
-#### `NEXT_PUBLIC_AUTH_EMAIL_VERIFICATION`
+#### `AUTH_EMAIL_VERIFICATION`
 
 - Type: Optional
 - Description: Set to `1` to require email verification before users can sign in. Users must verify their email address after registration.
@@ -40,6 +40,13 @@ LobeChat provides a complete authentication service capability when deployed. Th
 - Description: Comma-separated list of enabled SSO providers. The order determines the display order of providers on the login page.
 - Default: `-`
 - Example: `google,github,microsoft,cognito`
+
+#### `AUTH_ALLOWED_EMAILS`
+
+- Type: Optional
+- Description: Comma-separated list of allowed emails or domains for registration. Supports full email addresses (e.g., `user@example.com`) or domain names (e.g., `example.com`). Leave empty to allow all emails.
+- Default: `-`
+- Example: `example.com,admin@other.com`
 
 #### `JWKS_KEY`
 
@@ -94,6 +101,13 @@ These settings are required for email verification and password reset features.
 - Description: SMTP authentication password. For Gmail, use an app-specific password.
 - Default: `-`
 - Example: `your-app-specific-password`
+
+#### `SMTP_FROM`
+
+- Type: Optional
+- Description: Sender email address. Required for AWS SES where `SMTP_USER` is not a valid email address. If not set, defaults to `SMTP_USER`.
+- Default: Value of `SMTP_USER`
+- Example: `noreply@example.com`
 
 ### Google
 

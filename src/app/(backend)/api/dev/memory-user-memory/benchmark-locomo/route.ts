@@ -23,13 +23,13 @@ const bodySchema = z.object({
 });
 
 export const POST = async (req: Request) => {
-  const { webhookHeaders, featureFlags } = parseMemoryExtractionConfig();
+  const { webhook, featureFlags } = parseMemoryExtractionConfig();
   if (!featureFlags.enableBenchmarkLoCoMo) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
-  if (webhookHeaders && Object.keys(webhookHeaders).length > 0) {
-    for (const [key, value] of Object.entries(webhookHeaders)) {
+  if (webhook?.headers && Object.keys(webhook?.headers).length > 0) {
+    for (const [key, value] of Object.entries(webhook?.headers)) {
       const headerValue = req.headers.get(key);
       if (headerValue !== value) {
         return NextResponse.json(

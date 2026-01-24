@@ -6,14 +6,10 @@ import {
 import { ChatErrorType, type ClientSecretPayload } from '@lobechat/types';
 import { getXorPayload } from '@lobechat/utils/server';
 
+import { auth } from '@/auth';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { type LobeChatDatabase } from '@/database/type';
-import {
-  LOBE_CHAT_AUTH_HEADER,
-  LOBE_CHAT_OIDC_AUTH_HEADER,
-  OAUTH_AUTHORIZED,
-  enableBetterAuth,
-} from '@/envs/auth';
+import { LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER, OAUTH_AUTHORIZED } from '@/envs/auth';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 import { createErrorResponse } from '@/utils/errorResponse';
 
@@ -58,18 +54,13 @@ export const checkAuth =
       // get Authorization from header
       const authorization = req.headers.get(LOBE_CHAT_AUTH_HEADER);
       const oauthAuthorized = !!req.headers.get(OAUTH_AUTHORIZED);
-      let betterAuthAuthorized = false;
 
       // better auth handler
-      if (enableBetterAuth) {
-        const { auth: betterAuth } = await import('@/auth');
+      const session = await auth.api.getSession({
+        headers: req.headers,
+      });
 
-        const session = await betterAuth.api.getSession({
-          headers: req.headers,
-        });
-
-        betterAuthAuthorized = !!session?.user?.id;
-      }
+      const betterAuthAuthorized = !!session?.user?.id;
 
       if (!authorization) throw AgentRuntimeError.createError(ChatErrorType.Unauthorized);
 

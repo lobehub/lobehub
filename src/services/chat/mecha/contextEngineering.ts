@@ -394,6 +394,18 @@ export const contextEngineering = async ({
     ...(gtdConfig && { gtd: gtdConfig }),
   });
 
+  log('Input messages count: %d', messages.length);
+
   const result = await engine.process();
+
+  log('Output messages count: %d', result.messages.length);
+
+  if (messages.length > 0 && result.messages.length === 0) {
+    log(
+      'WARNING: Messages were reduced to 0! Input messages: %o',
+      messages.map((m) => ({ id: m.id, role: m.role })),
+    );
+  }
+
   return result.messages;
 };

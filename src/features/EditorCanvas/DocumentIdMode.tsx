@@ -2,7 +2,7 @@
 
 import { type IEditor } from '@lobehub/editor';
 import { Alert, Skeleton } from '@lobehub/ui';
-import { memo } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
 
@@ -81,6 +81,26 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
       handleContentChangeStore();
       onContentChange?.();
     };
+
+    const isEditorInitialized = !!editor?.getLexicalEditor();
+
+    // 追踪已经为哪个 documentId 调用过 onEditorInit
+    const initializedDocIdRef = useRef<string | null>(null);
+
+    // 关键修复：如果 editor 已经初始化，需要主动调用 onEditorInit
+    // 因为 onInit 回调只在 editor 首次初始化时触发
+    useEffect(() => {
+      // 避免重复调用：只在 documentId 变化且 editor 已初始化时调用
+      if (
+        editor &&
+        isEditorInitialized &&
+        !isLoading &&
+        initializedDocIdRef.current !== documentId
+      ) {
+        initializedDocIdRef.current = documentId;
+        onEditorInit(editor);
+      }
+    }, [documentId, editor, isEditorInitialized, isLoading, onEditorInit]);
 
     // Show loading state
     if (isLoading) {

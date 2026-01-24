@@ -14,6 +14,7 @@ export type LayerDecision = z.infer<typeof LayerDecisionSchema>;
  * Gatekeeper result schema for memory layers
  */
 export const GatekeeperResultSchema = z.object({
+  activity: LayerDecisionSchema,
   context: LayerDecisionSchema,
   experience: LayerDecisionSchema,
   identity: LayerDecisionSchema,

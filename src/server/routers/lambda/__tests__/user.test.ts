@@ -6,7 +6,6 @@ import { SessionModel } from '@/database/models/session';
 import { UserModel, UserNotFoundError } from '@/database/models/user';
 import { serverDB } from '@/database/server';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { NextAuthUserService } from '@/server/services/nextAuthUser';
 import { UserService } from '@/server/services/user';
 
 import { userRouter } from '../user';
@@ -22,11 +21,6 @@ vi.mock('@/database/models/user');
 vi.mock('@/server/modules/KeyVaultsEncrypt');
 vi.mock('@/server/modules/S3');
 vi.mock('@/server/services/user');
-vi.mock('@/server/services/nextAuthUser');
-vi.mock('@/envs/auth', () => ({
-  enableBetterAuth: false,
-  enableNextAuth: false,
-}));
 
 describe('userRouter', () => {
   const mockUserId = 'test-user-id';
@@ -122,7 +116,6 @@ describe('userRouter', () => {
         userId: mockUserId,
       });
     });
-
   });
 
   describe('makeUserOnboarded', () => {
@@ -137,47 +130,6 @@ describe('userRouter', () => {
       await userRouter.createCaller({ ...mockCtx }).makeUserOnboarded();
 
       expect(UserModel).toHaveBeenCalledWith(serverDB, mockUserId);
-    });
-  });
-
-  describe('unlinkSSOProvider', () => {
-    it('should unlink SSO provider successfully', async () => {
-      const mockInput = {
-        provider: 'google',
-        providerAccountId: '123',
-      };
-
-      const mockAccount = {
-        userId: mockUserId,
-        provider: 'google',
-        providerAccountId: '123',
-        type: 'oauth',
-      };
-
-      vi.mocked(NextAuthUserService).mockReturnValue({
-        getAccount: vi.fn().mockResolvedValue(mockAccount),
-        unlinkAccount: vi.fn().mockResolvedValue(undefined),
-      } as any);
-
-      await expect(
-        userRouter.createCaller({ ...mockCtx }).unlinkSSOProvider(mockInput),
-      ).resolves.not.toThrow();
-    });
-
-    it('should throw error if account does not exist', async () => {
-      const mockInput = {
-        provider: 'google',
-        providerAccountId: '123',
-      };
-
-      vi.mocked(NextAuthUserService).mockReturnValue({
-        getAccount: vi.fn().mockResolvedValue(null),
-        unlinkAccount: vi.fn(),
-      } as any);
-
-      await expect(
-        userRouter.createCaller({ ...mockCtx }).unlinkSSOProvider(mockInput),
-      ).rejects.toThrow('The account does not exist');
     });
   });
 

@@ -188,7 +188,7 @@ const SortButton = memo(() => {
     // If "My Own" is selected, add ownerId to query
     if (config === AssistantSorts.MyOwn) {
       const userInfo = getCurrentUserInfo();
-      console.log('userInfo', userInfo);
+
       if (userInfo?.accountId) {
         query.ownerId = userInfo.accountId;
       }

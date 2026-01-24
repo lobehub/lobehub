@@ -1213,7 +1213,14 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual({
         type: 'call_llm',
         payload: {
-          messages: state.messages,
+          messages: [
+            ...state.messages,
+            {
+              content:
+                'All tasks above have been completed. Please summarize the results or continue with your response following user query language.',
+              role: 'user',
+            },
+          ],
           model: 'gpt-4o-mini',
           parentMessageId: 'task-parent-msg',
           provider: 'openai',
@@ -1256,7 +1263,14 @@ describe('GeneralChatAgent', () => {
       expect(result).toEqual({
         type: 'call_llm',
         payload: {
-          messages: state.messages,
+          messages: [
+            ...state.messages,
+            {
+              content:
+                'All tasks above have been completed. Please summarize the results or continue with your response following user query language.',
+              role: 'user',
+            },
+          ],
           model: 'gpt-4o-mini',
           parentMessageId: 'task-parent-msg',
           provider: 'openai',

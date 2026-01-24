@@ -130,8 +130,9 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
           forkedFromIdentifier: identifier, // Store the source group identifier
         },
         // Group content is the supervisor's systemRole (for backward compatibility)
-        content: supervisorConfig?.systemRole || config.systemRole,
+        content: config.systemRole || supervisorConfig?.systemRole,
         ...meta,
+        marketIdentifier: forkResult.group.identifier, // Store the new market identifier
       };
 
       // Step 5: Prepare member agents from market data

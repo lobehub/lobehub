@@ -2,12 +2,11 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { Fragment, memo, useCallback, useState } from 'react';
-import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
-import '@/libs/pdfjs/worker';
+import { Document, Page, pdfjs } from '@/libs/pdfjs';
 import { lambdaQuery } from '@/libs/trpc/client';
 
 import HighlightLayer from './HighlightLayer';
@@ -71,7 +70,7 @@ const PDFViewer = memo<PDFViewerProps>(({ url, fileId }) => {
           onLoadSuccess={onDocumentLoadSuccess}
           options={options}
         >
-          {Array.from({ length: numPages }, (el, index) => {
+          {Array.from({ length: numPages }, (_, index) => {
             const width = containerWidth ? Math.min(containerWidth, maxWidth) : maxWidth;
 
             return (

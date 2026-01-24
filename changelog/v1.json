@@ -1,5 +1,157 @@
 [
   {
+    "children": {
+      "features": ["Add the agent/group profiles page the states and forked by tag."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.369"
+  },
+  {
+    "children": {
+      "features": ["Optimize profile editor."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.368"
+  },
+  {
+    "children": {
+      "fixes": ["Add cron pages enables change should reload the state."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.367"
+  },
+  {
+    "children": {
+      "fixes": ["Prevent recently viewed items from shrinking."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.366"
+  },
+  {
+    "children": {
+      "fixes": ["Docker deploy REDIS_URL check, fix sub task issue."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.365"
+  },
+  {
+    "children": {
+      "fixes": ["Fixed when windows withd low the protal will resize."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.364"
+  },
+  {
+    "children": {},
+    "date": "2026-01-24",
+    "version": "2.0.0-next.363"
+  },
+  {
+    "children": {
+      "fixes": ["Fix page selection not display correctly."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.362"
+  },
+  {
+    "children": {},
+    "date": "2026-01-24",
+    "version": "2.0.0-next.361"
+  },
+  {
+    "children": {
+      "fixes": ["Login success callback url error."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.360"
+  },
+  {
+    "children": {
+      "fixes": ["Surface streaming errors during mid-stream pulls."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.359"
+  },
+  {
+    "children": {},
+    "date": "2026-01-23",
+    "version": "2.0.0-next.358"
+  },
+  {
+    "children": {
+      "fixes": ["Page content switch mismatch."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.357"
+  },
+  {
+    "children": {
+      "features": ["Remove NextAuth."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.356"
+  },
+  {
+    "children": {
+      "fixes": ["Fix favorite refresh bug and group topic refresh issue."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.355"
+  },
+  {
+    "children": {
+      "improvements": ["Migrate AI Rules to Claude Code Skills."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.354"
+  },
+  {
+    "children": {},
+    "date": "2026-01-23",
+    "version": "2.0.0-next.353"
+  },
+  {
+    "children": {},
+    "date": "2026-01-23",
+    "version": "2.0.0-next.352"
+  },
+  {
+    "children": {
+      "fixes": ["Fix auto scroll."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.351"
+  },
+  {
+    "children": {},
+    "date": "2026-01-23",
+    "version": "2.0.0-next.350"
+  },
+  {
+    "children": {
+      "fixes": ["When use market group, the group sys role was not used."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.349"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Fixed the agent group builder tools excaution edge case crash, fixed the group topic copy not right."
+      ]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.348"
+  },
+  {
+    "children": {
+      "fixes": ["Add advace config back in agent/group profiles."],
+      "improvements": ["Move plugin store button outside scroll container."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.347"
+  },
+  {
     "children": {},
     "date": "2026-01-23",
     "version": "2.0.0-next.346"

@@ -34,6 +34,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     cursor: pointer;
 
     overflow: hidden;
+    flex-shrink: 0;
 
     padding-block: 6px;
     padding-inline: 8px;

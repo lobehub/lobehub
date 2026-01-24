@@ -53,8 +53,6 @@ const UserAvatar = memo(() => {
   // 检查是否需要完善资料
   const needsProfileSetup = checkNeedsProfileSetup(enableMarketTrustedClient, userProfile);
 
-  console.log('needsProfileSetup', needsProfileSetup);
-
   const handleSignIn = useCallback(async () => {
     setLoading(true);
     try {

@@ -323,7 +323,7 @@ export const pluginTypes: StateCreator<
 
       if (!!result) data = result;
     } catch (error) {
-      console.log(error);
+      console.error(error);
       const err = error as Error;
 
       // ignore the aborted request error
@@ -459,7 +459,7 @@ export const pluginTypes: StateCreator<
         await messageService.updateMessage(id, { traceId: res.traceId });
       }
     } catch (error) {
-      console.log(error);
+      console.error(error);
       const err = error as Error;
 
       // ignore the aborted request error
