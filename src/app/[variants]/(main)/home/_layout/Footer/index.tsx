@@ -28,7 +28,7 @@ import { systemStatusSelectors } from '@/store/global/selectors/systemStatus';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 const PRODUCT_HUNT_NOTIFICATION = {
-  actionHref: 'https://www.producthunt.com/posts/lobehub',
+  actionHref: 'https://www.producthunt.com/products/lobehub?launch=lobehub',
   endTime: new Date('2026-02-01T00:00:00Z'),
   image: 'https://hub-apac-1.lobeobjects.space/og/lobehub-ph.png',
   slug: 'product-hunt-2026',
