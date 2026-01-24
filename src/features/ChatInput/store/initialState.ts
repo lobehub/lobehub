@@ -1,7 +1,6 @@
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import type { ChatInputProps } from '@lobehub/editor/react';
 import type { MenuProps } from '@lobehub/ui';
-import type { MutableRefObject } from 'react';
 
 import { type ActionKeys } from '@/features/ChatInput';
 
@@ -40,7 +39,6 @@ export interface PublicState {
 }
 
 export interface State extends PublicState {
-  contentRef?: MutableRefObject<string>;
   editor?: IEditor;
   isContentEmpty: boolean;
   markdownContent: string;
