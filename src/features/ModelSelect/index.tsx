@@ -12,7 +12,12 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
+type ModelAbilities = EnabledProviderWithModels['children'][number]['abilities'];
+
 interface ModelOption {
+  abilities?: ModelAbilities;
+  displayName?: string;
+  id: string;
   label: ReactNode;
   provider: string;
   value: string;
@@ -95,9 +100,21 @@ const ModelSelect = memo<ModelSelectProps>(
             const model = (value as string).split('/').slice(1).join('/');
             onChange?.({ model, provider: (option as unknown as ModelOption).provider });
           }}
+          optionRender={(option) => {
+            const data = option as unknown as ModelOption;
+            return (
+              <ModelItemRender
+                displayName={data.displayName}
+                id={data.id}
+                showInfoTag
+                {...data.abilities}
+              />
+            );
+          }}
           options={options}
           popupClassName={styles.popup}
           popupMatchSelectWidth={false}
+          selectedIndicatorVariant="bold"
           size={size}
           style={{
             minWidth: 200,
