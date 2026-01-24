@@ -562,8 +562,8 @@ export class TopicModel {
             clientId: null,
             id: newId,
             parentId: newParentId,
-            topicId: duplicatedTopic.id,
             tools: newTools,
+            topicId: duplicatedTopic.id,
           })
           .returning()) as DBMessageItem[];
 
@@ -576,8 +576,8 @@ export class TopicModel {
 
           await tx.insert(messagePlugins).values({
             ...plugin,
-            id: newId,
             clientId: null,
+            id: newId,
             toolCallId: newToolCallId,
           });
         }
@@ -739,7 +739,7 @@ export class TopicModel {
           ? undefined
           : or(
               isNull(topics.metadata),
-              sql`(${topics.metadata}->'memory_user_memory_extract'->>'extract_status') IS DISTINCT FROM 'completed'`,
+              sql`(${topics.metadata}->>'userMemoryExtractStatus') IS DISTINCT FROM 'completed'`,
             ),
         cursorCondition,
       ),
@@ -761,10 +761,10 @@ export class TopicModel {
           options.endDate ? lte(topics.createdAt, options.endDate) : undefined,
           options.ignoreExtracted
             ? undefined
-            : or(
-                isNull(topics.metadata),
-                sql`(${topics.metadata}->'memory_user_memory_extract'->>'extract_status') IS DISTINCT FROM 'completed'`,
-              ),
+          : or(
+              isNull(topics.metadata),
+              sql`(${topics.metadata}->>'userMemoryExtractStatus') IS DISTINCT FROM 'completed'`,
+            ),
         ),
       );
 

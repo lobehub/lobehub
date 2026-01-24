@@ -39,6 +39,7 @@ import {
 import { attributesCommon } from '@lobechat/observability-otel/node';
 import type {
   AiProviderRuntimeState,
+  ChatTopicMetadata,
   IdentityMemoryDetail,
   MemoryExtractionAgentCallTrace,
   MemoryExtractionTraceError,
@@ -54,7 +55,7 @@ import type { ListTopicsForMemoryExtractorCursor } from '@/database/models/topic
 import { TopicModel } from '@/database/models/topic';
 import type { ListUsersForMemoryExtractorCursor } from '@/database/models/user';
 import { UserModel } from '@/database/models/user';
-import { AsyncTaskModel, initUserMemoryExtractionMetadata } from '@/database/models/asyncTask';
+import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { UserMemoryModel } from '@/database/models/userMemory';
 import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemory/sources/benchmarkLoCoMo';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
@@ -73,7 +74,6 @@ import {
   AsyncTaskError,
   AsyncTaskErrorType,
   AsyncTaskStatus,
-  type UserMemoryExtractionMetadata,
 } from '@/types/asyncTask';
 import { encodeAsync } from '@/utils/tokenizer';
 
@@ -109,10 +109,10 @@ export interface TopicWorkflowCursor extends MemoryExtractionWorkflowCursor {
 }
 
 export interface MemoryExtractionNormalizedPayload {
+  asyncTaskId?: string;
   baseUrl: string;
   forceAll: boolean;
   forceTopics: boolean;
-  asyncTaskId?: string;
   from?: Date;
   identityCursor: number;
   layers: LayersEnum[];
@@ -339,12 +339,11 @@ const initRuntimeForAgent = async (agent: MemoryAgentConfig, keyVaults?: Provide
   });
 };
 
-const isTopicExtracted = (metadata: any): boolean => {
-  const extractStatus = metadata?.memory_user_memory_extract?.extract_status;
+const isTopicExtracted = (metadata?: ChatTopicMetadata | null): boolean => {
+  const extractStatus = metadata?.userMemoryExtractStatus;
   if (extractStatus) return extractStatus === 'completed';
 
-  const state = metadata?.memoryExtraction?.sources?.chat_topic;
-  return state?.status === 'completed' && !!state?.lastRunAt;
+  return metadata?.userMemoryExtractStatus === 'completed' && !!metadata?.userMemoryExtractRunState?.lastRunAt;
 };
 
 type RuntimeBundle = {
