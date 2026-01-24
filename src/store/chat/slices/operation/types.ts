@@ -57,11 +57,13 @@ export type OperationType =
   | 'execClientTask' // Execute single async sub-agent task on desktop client
   | 'execClientTasks' // Execute multiple async sub-agent tasks on desktop client
 
+  // === Context Compression ===
+  // Context compression (compress old messages into summary)
+  | 'contextCompression'
+  | 'createMessageGroup'
+  | 'generateSummary'
   // === Others ===
-  | 'translate' // Translate message
-  | 'topicSummary' // Topic summary
-  | 'historySummary' // History summary
-  | 'contextCompression'; // Context compression (compress old messages into summary)
+  | 'translate'; // Translate message
 
 /**
  * Operation status
