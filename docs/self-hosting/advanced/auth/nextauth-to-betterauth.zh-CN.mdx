@@ -322,6 +322,32 @@ npx tsx scripts/nextauth-to-betterauth/verify.ts
 
 这是因为数据库 schema 未更新。请先运行 `pnpm db:migrate` 更新数据库结构，然后再执行迁移脚本。
 
+### email\_not\_found 错误
+
+如果登录时跳转到 `signin?callbackUrl=...&error=email_not_found`，说明 LobeChat 无法获取用户邮箱。
+
+<Callout type={'warning'}>
+  **重要提示**：Better Auth 目前**强依赖用户邮箱**进行身份认证。所有 SSO 提供商必须配置为返回邮箱信息，否则用户无法登录。
+</Callout>
+
+常见原因：
+
+**原因 1：SSO 连接未请求邮箱权限**
+
+配置 SSO 连接时（如 Auth0 中的 GitHub 连接），务必在 **Attributes** 部分勾选 **Email Address** 权限。LobeChat 需要用户邮箱进行身份认证。
+
+**原因 2：用户在身份提供商中未配置邮箱**
+
+对于 Casdoor、Logto 等身份提供商，用户可能没有配置邮箱。
+
+解决方案：
+
+1. 先在 LobeChat 中配置身份提供商的 Webhook 以同步用户数据：
+   - [Casdoor Webhook 配置](/zh/docs/self-hosting/advanced/auth/providers/casdoor)
+   - [Logto Webhook 配置](/zh/docs/self-hosting/advanced/auth/providers/logto)
+2. 然后在身份提供商的管理后台为用户配置邮箱
+3. 用户数据通过 Webhook 同步到 LobeChat 后即可正常登录
+
 ## 相关阅读
 
 <Cards>

@@ -37,17 +37,34 @@ tags:
 
   在部署 LobeChat 时，你需要配置以下环境变量：
 
-  | 环境变量                             | 类型 | 描述                                                |
-  | -------------------------------- | -- | ------------------------------------------------- |
-  | `AUTH_SECRET`                    | 必选 | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`    |
-  | `AUTH_SSO_PROVIDERS`             | 必选 | SSO 提供商。使用 Casdoor 请填写 `casdoor`                  |
-  | `AUTH_CASDOOR_ID`                | 必选 | Casdoor 应用的 Client ID                             |
-  | `AUTH_CASDOOR_SECRET`            | 必选 | Casdoor 应用的 Client Secret                         |
-  | `AUTH_CASDOOR_ISSUER`            | 必选 | Casdoor 服务器 URL（例如 `https://your-casdoor-domain`） |
+  | 环境变量                     | 类型 | 描述                                                |
+  | ------------------------ | -- | ------------------------------------------------- |
+  | `AUTH_SECRET`            | 必选 | 用于加密会话令牌的密钥。使用以下命令生成：`openssl rand -base64 32`    |
+  | `AUTH_SSO_PROVIDERS`     | 必选 | SSO 提供商。使用 Casdoor 请填写 `casdoor`                  |
+  | `AUTH_CASDOOR_ID`        | 必选 | Casdoor 应用的 Client ID                             |
+  | `AUTH_CASDOOR_SECRET`    | 必选 | Casdoor 应用的 Client Secret                         |
+  | `AUTH_CASDOOR_ISSUER`    | 必选 | Casdoor 服务器 URL（例如 `https://your-casdoor-domain`） |
+  | `CASDOOR_WEBHOOK_SECRET` | 可选 | 用于验证 Casdoor 发送的 Webhook 请求是否合法的密钥                |
 
   <Callout type={'tip'}>
     前往 [📘 环境变量](/zh/docs/self-hosting/environment-variables/auth#casdoor) 可查阅相关变量详情。
   </Callout>
+
+  ### 配置 Webhook（可选）
+
+  > 在 Casdoor `>=1.843.0` 上可用。
+
+  配置 Casdoor 的 Webhook 以便在用户信息更新时同步到 LobeChat。
+
+  1. 前往 `管理工具` -> `Webhooks`，创建一个 Webhook
+  2. 填写以下字段：
+     - 链接：`https://your-domain.com/api/webhooks/casdoor`
+     - 方法：`POST`
+     - 内容类型：`application/json`
+     - 协议头：`casdoor-secret`: `你的Webhook密钥`
+     - 事件：`update-user`
+  3. 密钥可前往 [generate-secret.vercel.app/10](https://generate-secret.vercel.app/10) 生成
+  4. 将密钥填写到环境变量 `CASDOOR_WEBHOOK_SECRET`
 </Steps>
 
 <Callout type={'info'}>部署成功后，用户将可以通过 Casdoor 身份认证并使用 LobeChat。</Callout>

@@ -327,6 +327,32 @@ After migration, if you encounter login issues, try clearing your browser's site
 
 This error occurs because the database schema is outdated. Run `pnpm db:migrate` to update the database structure before running the migration script.
 
+### email\_not\_found error
+
+If you see a redirect to `signin?callbackUrl=...&error=email_not_found`, it means LobeChat cannot get the user's email.
+
+<Callout type={'warning'}>
+  **Important**: Better Auth currently **requires user email** for authentication. All SSO providers must be configured to return email information, otherwise users cannot log in.
+</Callout>
+
+Common causes:
+
+**Cause 1: SSO connection not requesting email permission**
+
+When configuring SSO connections (e.g., GitHub in Auth0), make sure to enable **Email Address** permission in the Attributes section. LobeChat requires user email for authentication.
+
+**Cause 2: User email not configured in identity provider**
+
+For identity providers like Casdoor or Logto, users may not have an email configured.
+
+Solution:
+
+1. First configure the Webhook in LobeChat to sync user data from the identity provider:
+   - [Casdoor Webhook Configuration](/docs/self-hosting/advanced/auth/providers/casdoor)
+   - [Logto Webhook Configuration](/docs/self-hosting/advanced/auth/providers/logto)
+2. Then configure the user's email in the identity provider's admin console
+3. The user data will be synced to LobeChat via Webhook, and the user can then log in
+
 ## Related Reading
 
 <Cards>
