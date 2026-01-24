@@ -6,9 +6,10 @@ interface UseScrollToUserMessageOptions {
    */
   dataSourceLength: number;
   /**
-   * Whether the last message is from the user
+   * Whether the second-to-last message is from the user
+   * (When sending a message, user + assistant messages are created as a pair)
    */
-  isLastMessageFromUser: boolean;
+  isSecondLastMessageFromUser: boolean;
   /**
    * Function to scroll to a specific index
    */
@@ -19,26 +20,27 @@ interface UseScrollToUserMessageOptions {
 
 /**
  * Hook to handle scrolling to user message when user sends a new message.
- * Only triggers scroll when the new message is from the user, not when AI/agent responds.
+ * Only triggers scroll when user sends a new message (detected by checking if
+ * 2 new messages were added and the second-to-last is from user).
  *
  * This ensures that in group chat scenarios, when multiple agents are responding,
  * the view doesn't jump around as each agent starts speaking.
  */
 export function useScrollToUserMessage({
   dataSourceLength,
-  isLastMessageFromUser,
+  isSecondLastMessageFromUser,
   scrollToIndex,
 }: UseScrollToUserMessageOptions): void {
   const prevLengthRef = useRef(dataSourceLength);
 
   useEffect(() => {
-    const hasNewMessage = dataSourceLength > prevLengthRef.current;
+    const newMessageCount = dataSourceLength - prevLengthRef.current;
     prevLengthRef.current = dataSourceLength;
 
-    // Only scroll when user sends a new message
-    if (hasNewMessage && isLastMessageFromUser && scrollToIndex) {
+    // Only scroll when user sends a new message (2 messages added: user + assistant pair)
+    if (newMessageCount === 2 && isSecondLastMessageFromUser && scrollToIndex) {
       // Scroll to the second-to-last message (user's message) with the start aligned
       scrollToIndex(dataSourceLength - 2, { align: 'start', smooth: true });
     }
-  }, [dataSourceLength, isLastMessageFromUser, scrollToIndex]);
+  }, [dataSourceLength, isSecondLastMessageFromUser, scrollToIndex]);
 }

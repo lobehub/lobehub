@@ -9,25 +9,28 @@ import {
   type AgentInstructionExecTask,
   type AgentInstructionExecTasks,
   type AgentRuntimeContext,
-  calculateMessageTokens,
   type GeneralAgentCallLLMInstructionPayload,
   type GeneralAgentCallLLMResultPayload,
-  type GeneralAgentCompressionResultPayload,
   type GeneralAgentCallToolResultPayload,
   type GeneralAgentCallingToolInstructionPayload,
+  type GeneralAgentCompressionResultPayload,
   type InstructionExecutor,
   type TaskResultPayload,
   type TasksBatchResultPayload,
   UsageCounter,
+  calculateMessageTokens,
 } from '@lobechat/agent-runtime';
 import { isDesktop } from '@lobechat/const';
+import { chainCompressContext } from '@lobechat/prompts';
 import type { ChatToolPayload, ConversationContext, CreateMessageParams } from '@lobechat/types';
 import debug from 'debug';
 import pMap from 'p-map';
 
 import { LOADING_FLAT } from '@/const/message';
 import { aiAgentService } from '@/services/aiAgent';
+import { chatService } from '@/services/chat';
 import type { ResolvedAgentConfig } from '@/services/chat/mecha';
+import { messageService } from '@/services/message';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { getAgentStoreState } from '@/store/agent/store';
 import type { ChatStore } from '@/store/chat/store';
@@ -2214,31 +2217,37 @@ export const createAgentExecutors = (context: {
 
     /**
      * Context compression executor
-     * Compresses old messages into a summary to reduce token usage
+     * Compresses ALL messages into a single MessageGroup summary to reduce token usage
      */
     compress_context: async (instruction, state) => {
       const sessionLogId = `${state.operationId}:${state.stepCount}`;
       const stagePrefix = `[${sessionLogId}][compress_context]`;
 
-      const { messages, keepRecentCount, currentTokenCount, existingSummary } = (
-        instruction as AgentInstructionCompressContext
-      ).payload;
+      const { messages, currentTokenCount } = (instruction as AgentInstructionCompressContext)
+        .payload;
 
       // Get topicId from operation context (same as agentId)
       const { topicId } = getOperationContext();
 
-      log(`${stagePrefix} Starting compression. messages=%d, keepRecent=%d, tokens=%d`,
-        messages.length, keepRecentCount, currentTokenCount);
+      log(
+        `${stagePrefix} Starting compression. displayMessages=%d, tokens=%d`,
+        messages.length,
+        currentTokenCount,
+      );
 
       const events: AgentEvent[] = [];
 
-      // 1. Split messages: keep recent N, compress the rest
-      const recent = messages.slice(-keepRecentCount);
-      const toCompress = messages.slice(0, -keepRecentCount);
+      // Get message IDs from dbMessagesMap (raw db messages)
+      const dbMessages = context.get().dbMessagesMap[context.messageKey] || [];
+      const messageIds = dbMessages.map((m) => m.id).filter(Boolean);
 
-      if (toCompress.length === 0 || !topicId) {
-        // No messages to compress or no topicId, skip
-        log(`${stagePrefix} Skipping compression: toCompress=%d, topicId=%s`, toCompress.length, topicId);
+      if (!topicId || messageIds.length === 0) {
+        // No topicId or no messages, skip compression
+        log(
+          `${stagePrefix} Skipping compression: topicId=%s, messageIds=%d`,
+          topicId,
+          messageIds.length,
+        );
         return {
           events: [],
           newState: state,
@@ -2261,21 +2270,94 @@ export const createAgentExecutors = (context: {
         };
       }
 
-      const messageIds = toCompress.map((m) => m.id).filter(Boolean);
+      // Find the latest assistant message to attach the compression operation
+      const latestAssistantMessage = dbMessages.findLast((m) => m.role === 'assistant');
+      const assistantMessageId = latestAssistantMessage?.id;
 
-      log(`${stagePrefix} Compressing %d messages, keeping %d recent`, toCompress.length, recent.length);
+      log(
+        `${stagePrefix} Compressing %d db messages (display: %d), assistantMsgId=%s`,
+        messageIds.length,
+        messages.length,
+        assistantMessageId,
+      );
+
+      // Create compress_context operation and attach to the assistant message
+      const { operationId: compressOperationId } = context.get().startOperation({
+        context: { ...getOperationContext(), messageId: assistantMessageId },
+        metadata: {
+          messageCount: messageIds.length,
+          startTime: Date.now(),
+        },
+        parentOperationId: state.operationId,
+        type: 'contextCompression',
+      });
 
       try {
-        // 2. Create compression group and generate summary
-        // topicId is guaranteed to be non-null here (checked above)
-        const { groupId, compressedMessages } = await context.get().internal_compressContextMessages({
-          existingSummary,
+        const opContext = getOperationContext();
+        // agentId is guaranteed to exist in compression context
+        const agentId = getEffectiveAgentId()!;
+
+        // 1. Create compression group with placeholder content
+        const result = await messageService.createCompressionGroup({
+          agentId,
           messageIds,
-          messagesToCompress: toCompress,
-          topicId: topicId!,
+          topicId,
+        });
+        const { messageGroupId, messages: initialCompressedMessages, messagesToSummarize } = result;
+
+        // 2. Update UI with compressed messages immediately
+        context.get().replaceMessages(initialCompressedMessages, { context: opContext });
+
+        // 3. Get model/provider from compressionModel config
+        const { model, provider } = state.modelRuntimeConfig?.compressionModel || {};
+
+        log(
+          `${stagePrefix} Created group=%s, generating summary for %d messages by %s`,
+          messageGroupId,
+          messagesToSummarize.length,
+          `${provider}/${model}`,
+        );
+
+        // 4. Build compression prompt and generate summary with streaming UI updates
+        const compressionPayload = chainCompressContext(messagesToSummarize);
+        let summaryContent = '';
+
+        await chatService.fetchPresetTaskResult({
+          params: { ...compressionPayload, model, provider },
+          onMessageHandle: (chunk) => {
+            if (chunk.type === 'text') {
+              summaryContent += chunk.text || '';
+              // Stream update the compression group message content
+              context
+                .get()
+                .internal_dispatchMessage(
+                  { id: messageGroupId, type: 'updateMessage', value: { content: summaryContent } },
+                  { operationId: compressOperationId },
+                );
+            }
+          },
+          onError: (e) => {
+            console.error(e);
+          },
         });
 
+        log(`${stagePrefix} Generated summary: %d chars`, summaryContent.length);
+
+        // 5. Finalize compression with actual content
+        const finalResult = await messageService.finalizeCompression({
+          agentId,
+          content: summaryContent,
+          messageGroupId,
+          topicId,
+        });
+
+        const compressedMessages = finalResult.messages || initialCompressedMessages;
+        const groupId = messageGroupId;
+
         log(`${stagePrefix} Compression complete. groupId=%s`, groupId);
+
+        // Complete the compress_context operation
+        context.get().completeOperation(compressOperationId, { groupId });
 
         events.push({ type: 'compression_complete', groupId });
 
@@ -2303,6 +2385,14 @@ export const createAgentExecutors = (context: {
         };
       } catch (error) {
         log(`${stagePrefix} Compression failed: %O`, error);
+
+        // Complete the compress_context operation with error
+        context.get().completeOperation(compressOperationId, {
+          error: {
+            message: error instanceof Error ? error.message : String(error),
+            type: 'compression_failed',
+          },
+        });
 
         // On error, continue without compression
         events.push({ type: 'compression_error', error });

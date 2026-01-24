@@ -5,56 +5,57 @@ import { useScrollToUserMessage } from './useScrollToUserMessage';
 
 describe('useScrollToUserMessage', () => {
   describe('when user sends a new message', () => {
-    it('should scroll to user message when new message is from user', () => {
+    it('should scroll to user message when 2 new messages are added (user + assistant pair)', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
-        ({ dataSourceLength, isLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
           useScrollToUserMessage({
             dataSourceLength,
-            isLastMessageFromUser,
+            isSecondLastMessageFromUser,
             scrollToIndex,
           }),
         {
           initialProps: {
             dataSourceLength: 2,
-            isLastMessageFromUser: false,
+            isSecondLastMessageFromUser: false,
           },
         },
       );
 
-      // User sends a new message (length increases, last message is from user)
+      // User sends a new message (2 messages added: user + assistant, second-to-last is user)
       rerender({
-        dataSourceLength: 3,
-        isLastMessageFromUser: true,
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
       });
 
       expect(scrollToIndex).toHaveBeenCalledTimes(1);
-      expect(scrollToIndex).toHaveBeenCalledWith(1, { align: 'start', smooth: true });
+      // Should scroll to index 2 (dataSourceLength - 2 = 4 - 2 = 2, the user message)
+      expect(scrollToIndex).toHaveBeenCalledWith(2, { align: 'start', smooth: true });
     });
 
     it('should scroll to correct index when multiple user messages are sent', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
-        ({ dataSourceLength, isLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
           useScrollToUserMessage({
             dataSourceLength,
-            isLastMessageFromUser,
+            isSecondLastMessageFromUser,
             scrollToIndex,
           }),
         {
           initialProps: {
-            dataSourceLength: 5,
-            isLastMessageFromUser: false,
+            dataSourceLength: 4,
+            isSecondLastMessageFromUser: false,
           },
         },
       );
 
-      // User sends a new message
+      // User sends a new message (2 messages added)
       rerender({
         dataSourceLength: 6,
-        isLastMessageFromUser: true,
+        isSecondLastMessageFromUser: true,
       });
 
       // Should scroll to index 4 (dataSourceLength - 2 = 6 - 2 = 4)
@@ -63,28 +64,28 @@ describe('useScrollToUserMessage', () => {
   });
 
   describe('when AI/agent responds', () => {
-    it('should NOT scroll when new message is from AI', () => {
+    it('should NOT scroll when only 1 new message is added (AI response)', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
-        ({ dataSourceLength, isLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
           useScrollToUserMessage({
             dataSourceLength,
-            isLastMessageFromUser,
+            isSecondLastMessageFromUser,
             scrollToIndex,
           }),
         {
           initialProps: {
-            dataSourceLength: 2,
-            isLastMessageFromUser: true,
+            dataSourceLength: 4,
+            isSecondLastMessageFromUser: true,
           },
         },
       );
 
-      // AI responds (length increases, but last message is NOT from user)
+      // AI adds another message (only 1 message added, not 2)
       rerender({
-        dataSourceLength: 3,
-        isLastMessageFromUser: false,
+        dataSourceLength: 5,
+        isSecondLastMessageFromUser: false,
       });
 
       expect(scrollToIndex).not.toHaveBeenCalled();
@@ -94,32 +95,59 @@ describe('useScrollToUserMessage', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
-        ({ dataSourceLength, isLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
           useScrollToUserMessage({
             dataSourceLength,
-            isLastMessageFromUser,
+            isSecondLastMessageFromUser,
             scrollToIndex,
           }),
         {
           initialProps: {
-            dataSourceLength: 3,
-            isLastMessageFromUser: false,
+            dataSourceLength: 4,
+            isSecondLastMessageFromUser: true,
           },
         },
       );
 
-      // First agent responds
+      // First agent responds (1 message added)
       rerender({
-        dataSourceLength: 4,
-        isLastMessageFromUser: false,
+        dataSourceLength: 5,
+        isSecondLastMessageFromUser: false,
       });
 
       expect(scrollToIndex).not.toHaveBeenCalled();
 
-      // Second agent responds
+      // Second agent responds (1 message added)
       rerender({
-        dataSourceLength: 5,
-        isLastMessageFromUser: false,
+        dataSourceLength: 6,
+        isSecondLastMessageFromUser: false,
+      });
+
+      expect(scrollToIndex).not.toHaveBeenCalled();
+    });
+
+    it('should NOT scroll when 2 messages added but second-to-last is not user', () => {
+      const scrollToIndex = vi.fn();
+
+      const { rerender } = renderHook(
+        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
+          useScrollToUserMessage({
+            dataSourceLength,
+            isSecondLastMessageFromUser,
+            scrollToIndex,
+          }),
+        {
+          initialProps: {
+            dataSourceLength: 4,
+            isSecondLastMessageFromUser: false,
+          },
+        },
+      );
+
+      // 2 messages added but both are from AI (e.g., system messages)
+      rerender({
+        dataSourceLength: 6,
+        isSecondLastMessageFromUser: false,
       });
 
       expect(scrollToIndex).not.toHaveBeenCalled();
@@ -131,16 +159,16 @@ describe('useScrollToUserMessage', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
-        ({ dataSourceLength, isLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
           useScrollToUserMessage({
             dataSourceLength,
-            isLastMessageFromUser,
+            isSecondLastMessageFromUser,
             scrollToIndex,
           }),
         {
           initialProps: {
-            dataSourceLength: 5,
-            isLastMessageFromUser: true,
+            dataSourceLength: 6,
+            isSecondLastMessageFromUser: true,
           },
         },
       );
@@ -148,7 +176,7 @@ describe('useScrollToUserMessage', () => {
       // Message deleted (length decreases)
       rerender({
         dataSourceLength: 4,
-        isLastMessageFromUser: true,
+        isSecondLastMessageFromUser: true,
       });
 
       expect(scrollToIndex).not.toHaveBeenCalled();
@@ -158,24 +186,24 @@ describe('useScrollToUserMessage', () => {
       const scrollToIndex = vi.fn();
 
       const { rerender } = renderHook(
-        ({ dataSourceLength, isLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
           useScrollToUserMessage({
             dataSourceLength,
-            isLastMessageFromUser,
+            isSecondLastMessageFromUser,
             scrollToIndex,
           }),
         {
           initialProps: {
-            dataSourceLength: 3,
-            isLastMessageFromUser: true,
+            dataSourceLength: 4,
+            isSecondLastMessageFromUser: true,
           },
         },
       );
 
       // Length stays the same (content update, not new message)
       rerender({
-        dataSourceLength: 3,
-        isLastMessageFromUser: true,
+        dataSourceLength: 4,
+        isSecondLastMessageFromUser: true,
       });
 
       expect(scrollToIndex).not.toHaveBeenCalled();
@@ -183,16 +211,16 @@ describe('useScrollToUserMessage', () => {
 
     it('should handle null scrollToIndex gracefully', () => {
       const { rerender } = renderHook(
-        ({ dataSourceLength, isLastMessageFromUser }) =>
+        ({ dataSourceLength, isSecondLastMessageFromUser }) =>
           useScrollToUserMessage({
             dataSourceLength,
-            isLastMessageFromUser,
+            isSecondLastMessageFromUser,
             scrollToIndex: null,
           }),
         {
           initialProps: {
             dataSourceLength: 2,
-            isLastMessageFromUser: false,
+            isSecondLastMessageFromUser: false,
           },
         },
       );
@@ -200,8 +228,8 @@ describe('useScrollToUserMessage', () => {
       // Should not throw when scrollToIndex is null
       expect(() => {
         rerender({
-          dataSourceLength: 3,
-          isLastMessageFromUser: true,
+          dataSourceLength: 4,
+          isSecondLastMessageFromUser: true,
         });
       }).not.toThrow();
     });
@@ -211,13 +239,13 @@ describe('useScrollToUserMessage', () => {
 
       renderHook(() =>
         useScrollToUserMessage({
-          dataSourceLength: 5,
-          isLastMessageFromUser: true,
+          dataSourceLength: 6,
+          isSecondLastMessageFromUser: true,
           scrollToIndex,
         }),
       );
 
-      // Should not scroll on initial render even if last message is from user
+      // Should not scroll on initial render even if second-to-last message is from user
       expect(scrollToIndex).not.toHaveBeenCalled();
     });
   });

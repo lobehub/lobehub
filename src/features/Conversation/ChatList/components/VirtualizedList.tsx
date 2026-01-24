@@ -113,16 +113,17 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
     };
   }, [resetVisibleItems]);
 
-  // Get the last message to check if it's a user message
+  // Get the second-to-last message to check if it's a user message
+  // (When sending a message, user + assistant messages are created as a pair)
   const displayMessages = useConversationStore(dataSelectors.displayMessages);
-  const lastMessage = displayMessages.at(-1);
-  const isLastMessageFromUser = lastMessage?.role === 'user';
+  const secondLastMessage = displayMessages.at(-2);
+  const isSecondLastMessageFromUser = secondLastMessage?.role === 'user';
 
   // Auto scroll to user message when user sends a new message
-  // Only scroll when the new message is from the user, not when AI/agent responds
+  // Only scroll when 2 new messages are added and second-to-last is from user
   useScrollToUserMessage({
     dataSourceLength: dataSource.length,
-    isLastMessageFromUser,
+    isSecondLastMessageFromUser,
     scrollToIndex: virtuaRef.current?.scrollToIndex ?? null,
   });
 
@@ -174,7 +175,11 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
         }}
       </VList>
       {/* BackBottom 放在 VList 外面，这样无论滚动到哪里都能看到 */}
-      <BackBottom atBottom={atBottom} onScrollToBottom={() => scrollToBottom(true)} visible={!atBottom} />
+      <BackBottom
+        atBottom={atBottom}
+        onScrollToBottom={() => scrollToBottom(true)}
+        visible={!atBottom}
+      />
     </div>
   );
 }, isEqual);
