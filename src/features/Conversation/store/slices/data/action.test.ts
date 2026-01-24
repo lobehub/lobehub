@@ -175,7 +175,7 @@ describe('DataSlice', () => {
         role: 'compressedGroup' as any,
         createdAt: 1000,
         updatedAt: 1000,
-        metadata: { expanded: false },
+        metadata: { expanded: false } as any,
       };
 
       // Manually set displayMessages to include compressedGroup

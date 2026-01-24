@@ -1,4 +1,4 @@
-import { CompressionGroupMetadata, UIChatMessage } from '@lobechat/types';
+import { UIChatMessage } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
@@ -31,10 +31,10 @@ vi.mock('@/libs/swr', () => ({
   useClientDataSWRWithSync: vi.fn(() => ({ data: undefined, isLoading: true })),
 }));
 
-const createTestStore = (options?: { agentId?: string | null; topicId?: string | null }) =>
+const createTestStore = (options?: { agentId?: string; topicId?: string | null }) =>
   createStore({
     context: {
-      agentId: options?.agentId === null ? null : (options?.agentId ?? 'test-agent'),
+      agentId: options?.agentId ?? 'test-agent',
       threadId: null,
       topicId: options?.topicId === null ? null : (options?.topicId ?? 'test-topic'),
     },
@@ -56,13 +56,13 @@ describe('MessageStateAction', () => {
         role: 'compressedGroup' as any,
         createdAt: 1000,
         updatedAt: 1000,
-        metadata: { expanded: false } as CompressionGroupMetadata as CompressionGroupMetadata,
+        metadata: { expanded: false } as any,
       };
       store.setState({ displayMessages: [compressedGroup] });
 
       // Mock API response
       const updatedMessages: UIChatMessage[] = [
-        { ...compressedGroup, metadata: { expanded: true } as CompressionGroupMetadata as CompressionGroupMetadata },
+        { ...compressedGroup, metadata: { expanded: true } as any },
       ];
       vi.mocked(messageService.updateMessageGroupMetadata).mockResolvedValue({
         messages: updatedMessages,
@@ -90,13 +90,13 @@ describe('MessageStateAction', () => {
         role: 'compressedGroup' as any,
         createdAt: 1000,
         updatedAt: 1000,
-        metadata: { expanded: true } as CompressionGroupMetadata,
+        metadata: { expanded: true } as any,
       };
       store.setState({ displayMessages: [compressedGroup] });
 
       // Mock API response
       const updatedMessages: UIChatMessage[] = [
-        { ...compressedGroup, metadata: { expanded: false } as CompressionGroupMetadata },
+        { ...compressedGroup, metadata: { expanded: false } as any },
       ];
       vi.mocked(messageService.updateMessageGroupMetadata).mockResolvedValue({
         messages: updatedMessages,
@@ -124,12 +124,12 @@ describe('MessageStateAction', () => {
         role: 'compressedGroup' as any,
         createdAt: 1000,
         updatedAt: 1000,
-        metadata: { expanded: false } as CompressionGroupMetadata,
+        metadata: { expanded: false } as any,
       };
       store.setState({ displayMessages: [compressedGroup] });
 
       vi.mocked(messageService.updateMessageGroupMetadata).mockResolvedValue({
-        messages: [{ ...compressedGroup, metadata: { expanded: true } as CompressionGroupMetadata }],
+        messages: [{ ...compressedGroup, metadata: { expanded: true } as any }],
       });
 
       // Act: explicitly set to true
@@ -184,7 +184,7 @@ describe('MessageStateAction', () => {
         role: 'compressedGroup' as any,
         createdAt: 1000,
         updatedAt: 1000,
-        metadata: { expanded: false } as CompressionGroupMetadata,
+        metadata: { expanded: false } as any,
       };
       // Use shallow merge (default zustand behavior)
       store.setState({ displayMessages: [compressedGroup] });
@@ -209,12 +209,12 @@ describe('MessageStateAction', () => {
         role: 'compressedGroup' as any,
         createdAt: 1000,
         updatedAt: 1000,
-        metadata: {} as CompressionGroupMetadata,
+        metadata: {} as any,
       };
       store.setState({ displayMessages: [compressedGroup] });
 
       vi.mocked(messageService.updateMessageGroupMetadata).mockResolvedValue({
-        messages: [{ ...compressedGroup, metadata: { expanded: true } as CompressionGroupMetadata }],
+        messages: [{ ...compressedGroup, metadata: { expanded: true } as any }],
       });
 
       // Act: toggle from undefined (treated as false) to true
@@ -239,7 +239,7 @@ describe('MessageStateAction', () => {
         role: 'compressedGroup' as any,
         createdAt: 1000,
         updatedAt: 1000,
-        metadata: { expanded: false } as CompressionGroupMetadata,
+        metadata: { expanded: false } as any,
       };
       store.setState({ displayMessages: [compressedGroup] });
 

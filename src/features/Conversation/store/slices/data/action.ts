@@ -67,7 +67,7 @@ export const dataSlice: StateCreator<
       '[dispatchMessage] start | contextKey=%s | type=%s | id=%s',
       contextKey,
       payload.type,
-      payload.id,
+      'id' in payload ? payload.id : 'ids' in payload ? payload.ids.join(',') : 'N/A',
     );
 
     // Special handling for messageGroup metadata updates
