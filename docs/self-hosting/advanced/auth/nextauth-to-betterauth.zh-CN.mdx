@@ -291,6 +291,16 @@ npx tsx scripts/nextauth-to-betterauth/verify.ts
 
 ## 常见问题
 
+### 访问前清除浏览器数据
+
+迁移完成后，如果遇到登录问题，请先尝试清除浏览器的站点数据：
+
+1. 打开浏览器开发者工具（F12 或右键 → 检查）
+2. 进入 Application 标签页 → Storage → Clear site data
+3. 刷新页面后重试
+
+![清除浏览器站点数据](https://hub-apac-1.lobeobjects.space/docs/733c50ee2302e5daa3d99dc0739238c8.png)
+
 ### 迁移后用户无法登录
 
 - 检查 `AUTH_SECRET` 是否正确设置
