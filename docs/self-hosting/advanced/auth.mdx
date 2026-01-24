@@ -110,15 +110,15 @@ Used by email verification, password reset, and magic-link delivery. Two provide
 
 Send emails via SMTP protocol, suitable for users with existing email services. See [Nodemailer SMTP docs](https://nodemailer.com/smtp/).
 
-| Environment Variable     | Type     | Description                                                       | Example                |
-| ------------------------ | -------- | ----------------------------------------------------------------- | ---------------------- |
-| `EMAIL_SERVICE_PROVIDER` | Optional | Set to `nodemailer` (default)                                     | `nodemailer`           |
-| `SMTP_HOST`              | Required | SMTP server hostname                                              | `smtp.gmail.com`       |
-| `SMTP_PORT`              | Required | SMTP server port (`587` for TLS, `465` for SSL)                   | `587`                  |
-| `SMTP_SECURE`            | Optional | `true` for SSL (port 465), `false` for TLS (port 587)             | `false`                |
-| `SMTP_USER`              | Required | SMTP auth username                                                | `user@gmail.com`       |
-| `SMTP_PASS`              | Required | SMTP auth password                                                | `your-app-password`    |
-| `SMTP_FROM`              | Optional | Sender address (required for AWS SES), defaults to `SMTP_USER`    | `noreply@example.com`  |
+| Environment Variable     | Type     | Description                                                    | Example               |
+| ------------------------ | -------- | -------------------------------------------------------------- | --------------------- |
+| `EMAIL_SERVICE_PROVIDER` | Optional | Set to `nodemailer` (default)                                  | `nodemailer`          |
+| `SMTP_HOST`              | Required | SMTP server hostname                                           | `smtp.gmail.com`      |
+| `SMTP_PORT`              | Required | SMTP server port (`587` for TLS, `465` for SSL)                | `587`                 |
+| `SMTP_SECURE`            | Optional | `true` for SSL (port 465), `false` for TLS (port 587)          | `false`               |
+| `SMTP_USER`              | Required | SMTP auth username                                             | `user@gmail.com`      |
+| `SMTP_PASS`              | Required | SMTP auth password                                             | `your-app-password`   |
+| `SMTP_FROM`              | Optional | Sender address (required for AWS SES), defaults to `SMTP_USER` | `noreply@example.com` |
 
 <Callout type={'warning'}>
   When using Gmail, you must use an App Password instead of your account password. Generate one at [Google App Passwords](https://myaccount.google.com/apppasswords).
@@ -148,9 +148,9 @@ Send emails via SMTP protocol, suitable for users with existing email services. 
 
 Enable magic-link login (depends on a working email provider above, off by default):
 
-| Environment Variable | Type     | Description                                                         |
-| -------------------- | -------- | ------------------------------------------------------------------- |
-| `ENABLE_MAGIC_LINK`  | Optional | Set to `1` to enable passwordless magic-link login (off by default) |
+| Environment Variable     | Type     | Description                                                         |
+| ------------------------ | -------- | ------------------------------------------------------------------- |
+| `AUTH_ENABLE_MAGIC_LINK` | Optional | Set to `1` to enable passwordless magic-link login (off by default) |
 
 <Callout type={'tip'}>
   Go to [Environment Variables](/docs/self-hosting/environment-variables/auth#better-auth) for detailed information on all Better Auth variables.
