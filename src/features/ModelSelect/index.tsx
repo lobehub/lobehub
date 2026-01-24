@@ -6,15 +6,9 @@ import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
-const prefixCls = 'ant';
-
 const styles = createStaticStyles(({ css }) => ({
   popup: css`
-    width: 360px;
-
-    &.${prefixCls}-select-dropdown .${prefixCls}-select-item-option-grouped {
-      padding-inline-start: 12px;
-    }
+    width: max(360px, var(--anchor-width));
   `,
 }));
 
@@ -26,14 +20,26 @@ interface ModelOption {
 
 interface ModelSelectProps extends Pick<LobeSelectProps, 'loading' | 'size' | 'style' | 'variant'> {
   defaultValue?: { model: string; provider?: string };
+  initialWidth?: boolean;
   onChange?: (props: { model: string; provider: string }) => void;
   requiredAbilities?: (keyof EnabledProviderWithModels['children'][number]['abilities'])[];
   showAbility?: boolean;
+
   value?: { model: string; provider?: string };
 }
 
 const ModelSelect = memo<ModelSelectProps>(
-  ({ value, onChange, showAbility = true, requiredAbilities, loading, size, style, variant }) => {
+  ({
+    value,
+    onChange,
+    initialWidth = false,
+    showAbility = true,
+    requiredAbilities,
+    loading,
+    size,
+    style,
+    variant,
+  }) => {
     const enabledList = useEnabledChatModels();
 
     const options = useMemo<LobeSelectProps['options']>(() => {
@@ -85,6 +91,7 @@ const ModelSelect = memo<ModelSelectProps>(
           defaultValue={`${value?.provider}/${value?.model}`}
           loading={loading}
           onChange={(value, option) => {
+            if (!value) return;
             const model = (value as string).split('/').slice(1).join('/');
             onChange?.({ model, provider: (option as unknown as ModelOption).provider });
           }}
@@ -94,11 +101,12 @@ const ModelSelect = memo<ModelSelectProps>(
           size={size}
           style={{
             minWidth: 200,
-            width: 'initial',
+            width: initialWidth ? 'initial' : undefined,
             ...style,
           }}
           value={`${value?.provider}/${value?.model}`}
           variant={variant}
+          virtual
         />
       </TooltipGroup>
     );

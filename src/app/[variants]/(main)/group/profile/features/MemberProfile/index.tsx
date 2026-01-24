@@ -114,6 +114,7 @@ const MemberProfile = memo(() => {
           style={{ marginBottom: 12 }}
         >
           <ModelSelect
+            initialWidth
             onChange={updateAgentConfig}
             value={{
               model: config?.model,
