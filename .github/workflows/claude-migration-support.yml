@@ -29,13 +29,14 @@ jobs:
           cp .claude/prompts/security-rules.md /tmp/claude-prompts/
 
       - name: Run Claude Code for Migration Support
+        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           github_token: ${{ secrets.GH_TOKEN }}
           allowed_non_write_users: "*"
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: |
-            --allowedTools "Bash(gh issue:*),Bash(cat docs/*),Read"
+            --allowedTools "Bash(gh issue:*),Bash(cat docs/*),Bash(echo *),Read,Write"
             --append-system-prompt "$(cat /tmp/claude-prompts/security-rules.md)"
           prompt: |
             **Task-specific security rules:**
@@ -81,10 +82,34 @@ jobs:
             - If enough information: Provide a helpful solution
             - If it's a known issue: Give the specific fix
             - If complex/unknown: Acknowledge and suggest next steps
+            - **If success feedback**: Create a marker file (see step 5)
 
-            5. Post your response as a comment:
+            5. If the comment is success feedback (issue resolved, deployment succeeded, etc.):
+            ```bash
+            echo "HIDE_COMMENT=true" >> /tmp/claude-output
+            ```
+            Do NOT post a reply for success feedback.
+
+            6. Otherwise, post your response as a comment:
             ```bash
             gh issue comment ${{ github.event.issue.number }} --body "YOUR_RESPONSE_HERE"
             ```
 
             **Start the support process now.**
+
+      - name: Minimize resolved comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+          if [ -f /tmp/claude-output ] && grep -q "HIDE_COMMENT=true" /tmp/claude-output; then
+            echo "Minimizing resolved comment..."
+            COMMENT_NODE_ID=$(gh api repos/${{ github.repository }}/issues/comments/${{ github.event.comment.id }} --jq '.node_id')
+            gh api graphql -f query='
+              mutation($id: ID!) {
+                minimizeComment(input: {subjectId: $id, classifier: RESOLVED}) {
+                  minimizedComment { isMinimized }
+                }
+              }
+            ' -f id="$COMMENT_NODE_ID"
+          fi
