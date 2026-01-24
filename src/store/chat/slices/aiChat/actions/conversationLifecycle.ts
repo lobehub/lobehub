@@ -81,6 +81,7 @@ export const conversationLifecycle: StateCreator<
     context,
     messages: inputMessages,
     parentId: inputParentId,
+    pageSelections,
   }) => {
     const { internal_execAgentRuntime, mainInputEditor } = get();
 
@@ -221,7 +222,7 @@ export const conversationLifecycle: StateCreator<
       const topicId = operationContext.topicId;
       data = await aiChatService.sendMessageInServer(
         {
-          newUserMessage: { content: message, files: fileIdList, parentId },
+          newUserMessage: { content: message, files: fileIdList, pageSelections, parentId },
           // if there is topicId，then add topicId to message
           topicId: topicId ?? undefined,
           threadId: operationContext.threadId ?? undefined,

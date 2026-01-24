@@ -79,6 +79,10 @@ export interface ChatContextContent {
   format?: 'xml' | 'text' | 'markdown';
   id: string;
   /**
+   * Page ID the selection belongs to (for page editor selections)
+   */
+  pageId?: string;
+  /**
    * Optional short preview for displaying in UI.
    */
   preview?: string;
@@ -147,8 +151,14 @@ export interface SendMessageParams {
   parentId?: string;
   /**
    * Additional contextual snippets (e.g., text selections) attached to the request.
+   * @deprecated Use pageSelections instead for page editor selections
    */
   contexts?: ChatContextContent[];
+  /**
+   * Page selections attached to the message (for Ask AI functionality)
+   * These will be persisted to the database and injected via context-engine
+   */
+  pageSelections?: PageSelection[];
 }
 
 export interface SendGroupMessageParams {

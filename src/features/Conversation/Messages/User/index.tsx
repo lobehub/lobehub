@@ -29,7 +29,7 @@ interface UserMessageProps {
 const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
   const actionsConfig = useConversationStore((s) => s.actionsBar?.user);
-  const { content, createdAt, error, role, extra, targetId, metadata } = item;
+  const { content, createdAt, error, role, extra, targetId } = item;
 
   const { t } = useTranslation('chat');
   const avatar = useUserAvatar();
@@ -91,9 +91,7 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       editing={editing}
       id={id}
       message={content}
-      messageExtra={
-        <UserMessageExtra content={content} extra={extra} id={id} metadata={metadata} />
-      }
+      messageExtra={<UserMessageExtra content={content} extra={extra} id={id} />}
       onDoubleClick={onDoubleClick}
       onMouseEnter={onMouseEnter}
       placement={'right'}

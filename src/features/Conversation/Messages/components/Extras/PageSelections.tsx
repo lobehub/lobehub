@@ -2,22 +2,22 @@ import type { PageSelection } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { Typography } from 'antd';
 import { createStyles } from 'antd-style';
-import { FileText } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const useStyles = createStyles(({ css, token }) => ({
   container: css`
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: ${token.borderRadius}px;
-    background: ${token.colorFillQuaternary};
+    padding-inline: 8px;
+    border-inline-start: 3px solid ${token.colorBorderSecondary};
+    border-radius: 0;
   `,
   content: css`
     overflow: hidden;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 3;
+
+    margin-block-start: 0;
 
     font-size: 12px;
     line-height: 1.5;
@@ -48,11 +48,9 @@ const PageSelections = memo<PageSelectionsProps>(({ selections }) => {
     <Flexbox gap={8}>
       {selections.map((selection) => (
         <Flexbox className={styles.container} gap={8} key={selection.id}>
-          <Flexbox align="center" gap={4} horizontal>
-            <FileText className={styles.icon} size={14} />
-            <Typography.Text className={styles.header}>
-              {t('pageSelection.reference')}
-              {selection.startLine !== undefined && (
+          {selection.startLine && (
+            <Flexbox align="center" gap={4} horizontal>
+              <Typography.Text className={styles.header}>
                 <span>
                   {' '}
                   (
@@ -62,9 +60,9 @@ const PageSelections = memo<PageSelectionsProps>(({ selections }) => {
                   })}
                   )
                 </span>
-              )}
-            </Typography.Text>
-          </Flexbox>
+              </Typography.Text>
+            </Flexbox>
+          )}
           <div className={styles.content}>{selection.content}</div>
         </Flexbox>
       ))}

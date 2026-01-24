@@ -110,8 +110,16 @@ const ChatInput = memo<ChatInputProps>(
         fileStore.clearChatUploadFileList();
         fileStore.clearChatContextSelections();
 
+        // Convert ChatContextContent to PageSelection for persistence
+        const pageSelections = currentContextList.map((ctx) => ({
+          content: ctx.preview || '',
+          id: ctx.id,
+          pageId: ctx.pageId || '',
+          xml: ctx.content,
+        }));
+
         // Fire and forget - send with captured message
-        await sendMessage({ contexts: currentContextList, files: currentFileList, message });
+        await sendMessage({ files: currentFileList, message, pageSelections });
       },
       [isAIGenerating, sendMessage],
     );
