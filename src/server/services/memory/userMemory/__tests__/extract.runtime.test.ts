@@ -26,6 +26,7 @@ const createExecutor = (privateOverrides?: Partial<MemoryExtractionPrivateConfig
     agentLayerExtractor: {
       contextLimit: 2048,
       layers: {
+        activity: 'layer-act',
         context: 'layer-ctx',
         experience: 'layer-exp',
         identity: 'layer-id',
@@ -38,6 +39,7 @@ const createExecutor = (privateOverrides?: Partial<MemoryExtractionPrivateConfig
     embedding: { model: 'embed-1', provider: 'provider-e' },
     featureFlags: { enableBenchmarkLoCoMo: false },
     observabilityS3: { enabled: false },
+    webhookHeaders: {},
   };
 
   const serverConfig = {
