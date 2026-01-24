@@ -8,6 +8,12 @@ import { z } from 'zod';
 export interface PageSelection {
   /** Selection unique identifier */
   id: string;
+  anchor?: {
+    startNodeId: string;
+    endNodeId: string;
+    startOffset: number;
+    endOffset: number;
+  };
   /** Selected content (plain text or markdown) */
   content: string;
   /** XML structure of the selected content (for positioning edits) */
