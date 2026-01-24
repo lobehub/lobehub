@@ -594,6 +594,12 @@ const AgentTool = memo<AgentToolProps>(
                   </Flexbox>
                 </Flexbox>
               )}
+              positionerProps={{
+                collisionAvoidance: { align: 'flip', fallbackAxisSide: 'end', side: 'flip' },
+                collisionBoundary:
+                  typeof document === 'undefined' ? undefined : document.documentElement,
+                positionMethod: 'fixed',
+              }}
               trigger={'click'}
             >
               {button}
