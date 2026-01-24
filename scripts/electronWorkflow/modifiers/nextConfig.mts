@@ -40,7 +40,7 @@ export const modifyNextConfig = async (TEMP_DIR: string) => {
         throw new Error('[modifyNextConfig] nextConfig declaration not found');
       }
 
-      // 1. Remove redirects
+      // 1. Remove redirects (can be pair or method_definition)
       const redirectsPair = nextConfigDecl
         .findAll({
           rule: {
@@ -51,9 +51,22 @@ export const modifyNextConfig = async (TEMP_DIR: string) => {
           const text = node.text();
           return text.startsWith('redirects:') || text.startsWith('redirects :');
         });
-      invariant(redirectsPair, '[modifyNextConfig] redirects pair not found');
+
+      const redirectsMethod = nextConfigDecl
+        .findAll({
+          rule: {
+            kind: 'method_definition',
+          },
+        })
+        .find((node) => {
+          const text = node.text();
+          return text.startsWith('redirects') || text.startsWith('async redirects');
+        });
+
+      const redirectsNode = redirectsPair || redirectsMethod;
+      invariant(redirectsNode, '[modifyNextConfig] redirects pair/method not found');
       {
-        const range = redirectsPair!.range();
+        const range = redirectsNode!.range();
         edits.push({ end: range.end.index, start: range.start.index, text: '' });
       }
 
@@ -74,7 +87,7 @@ export const modifyNextConfig = async (TEMP_DIR: string) => {
         edits.push({ end: range.end.index, start: range.start.index, text: '' });
       }
 
-      // 3. Remove webVitalsAttribution
+      // 3. Remove webVitalsAttribution (optional - may not exist in new config)
       const webVitalsPair = nextConfigDecl
         .findAll({
           rule: {
@@ -87,9 +100,8 @@ export const modifyNextConfig = async (TEMP_DIR: string) => {
             text.startsWith('webVitalsAttribution:') || text.startsWith('webVitalsAttribution :')
           );
         });
-      invariant(webVitalsPair, '[modifyNextConfig] webVitalsAttribution pair not found');
-      {
-        const range = webVitalsPair!.range();
+      if (webVitalsPair) {
+        const range = webVitalsPair.range();
         edits.push({ end: range.end.index, start: range.start.index, text: '' });
       }
 

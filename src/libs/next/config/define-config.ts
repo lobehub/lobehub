@@ -337,7 +337,7 @@ export function defineConfig(config: CustomNextConfig) {
     // pdfjs-dist uses @napi-rs/canvas for DOMMatrix polyfill in Node.js environment
     serverExternalPackages: config.serverExternalPackages
       ? config.serverExternalPackages
-      : ['pdfkit', '@napi-rs/canvas', 'pdfjs-dist'],
+      : ['pdfkit', '@napi-rs/canvas', 'pdfjs-dist', 'oidc-provider'],
 
     transpilePackages: ['mermaid', 'better-auth-harmony'],
     turbopack: {
