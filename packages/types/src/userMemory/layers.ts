@@ -24,20 +24,20 @@ export const CONTEXT_SUBJECT_TYPES = Object.values(UserMemoryContextSubjectType)
 
 export interface UserMemoryAssociatedLocation {
   address?: string | null;
-  extra?: string | null;
+  extra?: Record<string, unknown> | null;
   name?: string | null;
   tags?: string[] | null;
   type?: string | null;
 }
 
 export interface UserMemoryAssociatedObject {
-  extra?: string | null;
+  extra?: Record<string, unknown> | null;
   name?: string;
   type?: string | null;
 }
 
 export interface UserMemoryAssociatedSubject {
-  extra?: string | null;
+  extra?: Record<string, unknown> | null;
   name?: string;
   type?: string | null;
 }
