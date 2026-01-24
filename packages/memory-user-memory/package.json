@@ -32,7 +32,7 @@
     "@lobechat/types": "workspace:*",
     "@types/json-schema": "^7.0.15",
     "@types/xast": "^2.0.4",
-    "promptfoo": "^0.118.17",
+    "promptfoo": "^0.120.17",
     "tsx": "^4.20.6"
   },
   "peerDependencies": {
