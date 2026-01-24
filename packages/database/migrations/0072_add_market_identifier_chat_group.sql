@@ -1,0 +1,1 @@
+ALTER TABLE "chat_groups" ADD COLUMN "market_identifier" text;

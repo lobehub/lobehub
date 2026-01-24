@@ -274,6 +274,7 @@ table chat_groups {
   description text
   avatar text
   background_color text
+  market_identifier text
   content text
   editor_data jsonb
   config jsonb
