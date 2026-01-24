@@ -30,18 +30,20 @@ const DallE = memo<BuiltinRenderProps<DallEImageItem[]>>(({ content, messageId }
       {/* 没想好工具条的作用 */}
       {/*<ToolBar content={content} messageId={messageId} />*/}
       <PreviewGroup
-        preview={{
-          // 切换图片时设置
-          onChange: (current: number) => {
-            currentRef.current = current;
-          },
-          // 点击预览显示时设置
+        preview={
+          {
+            // 切换图片时设置
+            onChange: (current: number) => {
+              currentRef.current = current;
+            },
+            // 点击预览显示时设置
 
-          onVisibleChange: (visible: boolean, _prevVisible: boolean, current: number) => {
-            currentRef.current = current;
-          },
-          toolbarAddon: <ActionIcon color={'#fff'} icon={Download} onClick={handleDownload} />,
-        }}
+            onVisibleChange: (visible: boolean, _prevVisible: boolean, current: number) => {
+              currentRef.current = current;
+            },
+            toolbarAddon: <ActionIcon color={'#fff'} icon={Download} onClick={handleDownload} />,
+          } as any
+        }
       >
         <GalleyGrid items={content.map((c) => ({ ...c, messageId }))} renderItem={ImageItem} />
       </PreviewGroup>
