@@ -186,6 +186,8 @@ export const conversationLifecycle: StateCreator<
         threadId: operationContext.threadId ?? undefined,
         imageList: tempImages.length > 0 ? tempImages : undefined,
         videoList: tempVideos.length > 0 ? tempVideos : undefined,
+        // Pass pageSelections metadata for immediate display
+        metadata: pageSelections?.length ? { pageSelections } : undefined,
       },
       { operationId, tempMessageId: tempId },
     );

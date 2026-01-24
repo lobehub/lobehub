@@ -5,6 +5,8 @@ import { ConversationContext } from '../../conversation';
 import { UploadFileItem } from '../../files';
 import { MessageSemanticSearchChunk } from '../../rag';
 import { ChatMessageError, ChatMessageErrorSchema } from '../common/base';
+// Import for local use
+import type { PageSelection } from '../common/pageSelection';
 import { ChatPluginPayload, ToolInterventionSchema } from '../common/tools';
 import { UIChatMessage } from './chat';
 import { SemanticSearchChunkSchema } from './rag';
@@ -90,33 +92,9 @@ export interface ChatContextContent {
   type: 'text';
 }
 
-/**
- * Page selection represents a user-selected text region in a page/document.
- * Used for Ask AI functionality to persist selection context with user messages.
- */
-export interface PageSelection {
-  /** Selection unique identifier */
-  id: string;
-  /** Selected content (plain text or markdown) */
-  content: string;
-  /** XML structure of the selected content (for positioning edits) */
-  xml?: string;
-  /** Page ID the selection belongs to */
-  pageId: string;
-  /** Start line number */
-  startLine?: number;
-  /** End line number */
-  endLine?: number;
-}
-
-export const PageSelectionSchema = z.object({
-  id: z.string(),
-  content: z.string(),
-  xml: z.string().optional(),
-  pageId: z.string(),
-  startLine: z.number().optional(),
-  endLine: z.number().optional(),
-});
+// Re-export PageSelection from common for backwards compatibility
+export type { PageSelection } from '../common/pageSelection';
+export { PageSelectionSchema } from '../common/pageSelection';
 
 export interface SendMessageParams {
   /**
