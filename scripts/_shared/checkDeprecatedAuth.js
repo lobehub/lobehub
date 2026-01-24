@@ -128,6 +128,13 @@ const DEPRECATED_CHECKS = [
     name: 'OIDC JWKS',
   },
   {
+    formatVar: () => 'APP_URL should not end with a trailing slash',
+    getVars: () => (process.env['APP_URL']?.endsWith('/') ? ['APP_URL'] : []),
+    message:
+      'APP_URL ends with a trailing slash which causes double slashes in redirect URLs (e.g., https://example.com//). Please remove the trailing slash.',
+    name: 'APP_URL Trailing Slash',
+  },
+  {
     docUrl: `${MIGRATION_DOC_BASE}/nextauth-to-betterauth`,
     formatVar: (envVar) => {
       const mapping = {
@@ -185,7 +192,9 @@ function checkDeprecatedAuth(options = {}) {
 
   if (foundIssues.length > 0) {
     console.error('\n' + '═'.repeat(70));
-    console.error(`❌ ERROR: Found ${foundIssues.length} deprecated environment variable issue(s)!`);
+    console.error(
+      `❌ ERROR: Found ${foundIssues.length} deprecated environment variable issue(s)!`,
+    );
     console.error('═'.repeat(70));
 
     for (const issue of foundIssues) {
