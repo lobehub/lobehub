@@ -511,6 +511,13 @@
       "when": 1769251608013,
       "tag": "0072_add_market_identifier_chat_group",
       "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1769272397744,
+      "tag": "0073_add_message_group_metadata",
+      "breakpoints": true
     }
   ],
   "version": "6"

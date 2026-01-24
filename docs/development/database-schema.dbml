@@ -492,6 +492,7 @@ table message_groups {
   type text
   content text
   editor_data jsonb
+  metadata jsonb
   client_id varchar(255)
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]

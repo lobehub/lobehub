@@ -29,7 +29,9 @@ export interface CompressionGroupMetadata {
   // Compression info
   compressionStrategy?: 'summarize';
   compressedAt?: string;
-  modelId?: string;
+
+  // UI state
+  expanded?: boolean;
 }
 
 /**

@@ -587,6 +587,7 @@ export class MessageModel {
           content: group.content,
           createdAt: group.createdAt,
           id: group.id,
+          metadata: group.metadata,
           pinnedMessages,
           role: 'compressedGroup',
           topicId: group.topicId,

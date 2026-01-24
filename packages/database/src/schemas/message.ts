@@ -62,6 +62,7 @@ export const messageGroups = pgTable(
     type: text('type', { enum: ['parallel', 'compression'] }),
     content: text('content'), // compression summary (plain text)
     editorData: jsonb('editor_data'), // rich text editor data (future extension)
+    metadata: jsonb('metadata'), // UI state (expanded, etc.)
 
     clientId: varchar255('client_id'),
 
