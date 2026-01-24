@@ -9,6 +9,8 @@ import { HardDriveDownload, HardDriveUpload } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AccountDeletion from '@/business/client/features/AccountDeletion';
+
 import { FORM_STYLE } from '@/const/layoutTokens';
 import DataImporter from '@/features/DataImporter';
 import { configService } from '@/services/config';
@@ -142,16 +144,19 @@ const AdvancedActions = () => {
     title: t('storage.actions.title'),
   };
   return (
-    <Form
-      collapsible={false}
-      form={form}
-      initialValues={settings}
-      items={[analytics, system]}
-      itemsType={'group'}
-      onValuesChange={setSettings}
-      variant={'filled'}
-      {...FORM_STYLE}
-    />
+    <>
+      <Form
+        collapsible={false}
+        form={form}
+        initialValues={settings}
+        items={[analytics, system]}
+        itemsType={'group'}
+        onValuesChange={setSettings}
+        variant={'filled'}
+        {...FORM_STYLE}
+      />
+      {ENABLE_BUSINESS_FEATURES && <AccountDeletion />}
+    </>
   );
 };
 
