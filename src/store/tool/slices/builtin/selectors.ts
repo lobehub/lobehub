@@ -32,13 +32,13 @@ const getKlavisMetas = (s: ToolStoreState): LobeToolMeta[] =>
     .filter((server) => server.status === KlavisServerStatus.CONNECTED && server.tools?.length)
     .map((server) => ({
       author: 'Klavis',
-      // 使用 identifier 作为存储标识符（如 'google-calendar'）
+      // Use identifier as storage identifier (e.g., 'google-calendar')
       identifier: server.identifier,
       meta: {
         avatar: '☁️',
         description: `LobeHub Mcp Server: ${server.serverName}`,
         tags: ['klavis', 'mcp'],
-        // title 仍然使用 serverName 显示友好名称
+        // title still uses serverName to display friendly name
         title: server.serverName,
       },
       type: 'builtin' as const,
