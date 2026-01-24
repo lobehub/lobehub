@@ -6,13 +6,14 @@ import { useTranslation } from 'react-i18next';
 interface CronJobHeaderProps {
   enabled?: boolean;
   isNewJob?: boolean;
+  isTogglingEnabled?: boolean;
   name: string;
   onNameChange: (name: string) => void;
   onToggleEnabled?: (enabled: boolean) => void;
 }
 
 const CronJobHeader = memo<CronJobHeaderProps>(
-  ({ enabled, isNewJob, name, onNameChange, onToggleEnabled }) => {
+  ({ enabled, isNewJob, isTogglingEnabled, name, onNameChange, onToggleEnabled }) => {
     const { t } = useTranslation(['setting', 'common']);
 
     return (
@@ -34,7 +35,11 @@ const CronJobHeader = memo<CronJobHeaderProps>(
         {!isNewJob && (
           <Flexbox align="center" gap={12} horizontal>
             {/* Enable/Disable Switch */}
-            <Switch checked={enabled ?? false} onChange={onToggleEnabled} />
+            <Switch
+              checked={enabled ?? false}
+              loading={isTogglingEnabled}
+              onChange={onToggleEnabled}
+            />
           </Flexbox>
         )}
       </Flexbox>
