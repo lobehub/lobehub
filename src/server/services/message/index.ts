@@ -1,4 +1,4 @@
-import { type LobeChatDatabase } from '@lobechat/database';
+import { CompressionRepository, type LobeChatDatabase } from '@lobechat/database';
 import {
   type CreateMessageParams,
   type UIChatMessage,
@@ -31,10 +31,12 @@ interface CreateMessageResult {
 export class MessageService {
   private messageModel: MessageModel;
   private fileService: FileService;
+  private compressionRepository: CompressionRepository;
 
   constructor(db: LobeChatDatabase, userId: string) {
     this.messageModel = new MessageModel(db, userId);
     this.fileService = new FileService(db, userId);
+    this.compressionRepository = new CompressionRepository(db, userId);
   }
 
   /**
@@ -259,6 +261,77 @@ export class MessageService {
     if (!result.success) {
       return { success: false };
     }
+    return this.queryWithSuccess(options);
+  }
+
+  // =============== Compression Methods ===============
+
+  /**
+   * Create a compression group for messages
+   * Creates a placeholder group, marks messages as compressed, and returns updated messages
+   *
+   * @param topicId - The topic ID
+   * @param messageIds - IDs of messages to compress
+   * @param options - Query options for returning updated messages
+   */
+  async createCompressionGroup(
+    topicId: string,
+    messageIds: string[],
+    options?: QueryOptions,
+  ): Promise<{
+    messageGroupId: string;
+    messages?: UIChatMessage[];
+    messagesToSummarize: UIChatMessage[];
+    success: boolean;
+  }> {
+    // 1. Get messages that need to be summarized (before marking them as compressed)
+    const allMessages = await this.messageModel.query(
+      { topicId, ...options },
+      this.getQueryOptions(),
+    );
+
+    const messagesToSummarize = allMessages.filter((msg) => messageIds.includes(msg.id));
+
+    // 2. Create compression group with placeholder content
+    const messageGroupId = await this.compressionRepository.createCompressionGroup({
+      content: '...', // Placeholder content
+      messageIds,
+      metadata: {
+        originalMessageCount: messageIds.length,
+      },
+      topicId,
+    });
+
+    // 3. Query updated messages (compressed messages will be grouped)
+    const messages = await this.messageModel.query(
+      { topicId, ...options },
+      this.getQueryOptions(),
+    );
+
+    return {
+      messageGroupId,
+      messages,
+      messagesToSummarize,
+      success: true,
+    };
+  }
+
+  /**
+   * Finalize compression by updating the group with actual summary content
+   *
+   * @param messageGroupId - The compression group ID
+   * @param content - The generated summary content
+   * @param options - Query options for returning updated messages
+   */
+  async finalizeCompression(
+    messageGroupId: string,
+    content: string,
+    options?: QueryOptions,
+  ): Promise<{ messages?: UIChatMessage[]; success: boolean }> {
+    // Update compression group with actual content
+    await this.compressionRepository.updateCompressionContent(messageGroupId, content);
+
+    // Return updated messages
     return this.queryWithSuccess(options);
   }
 }

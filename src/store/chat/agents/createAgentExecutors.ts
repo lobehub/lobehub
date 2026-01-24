@@ -3,13 +3,16 @@ import {
   type AgentInstruction,
   type AgentInstructionCallLlm,
   type AgentInstructionCallTool,
+  type AgentInstructionCompressContext,
   type AgentInstructionExecClientTask,
   type AgentInstructionExecClientTasks,
   type AgentInstructionExecTask,
   type AgentInstructionExecTasks,
   type AgentRuntimeContext,
+  calculateMessageTokens,
   type GeneralAgentCallLLMInstructionPayload,
   type GeneralAgentCallLLMResultPayload,
+  type GeneralAgentCompressionResultPayload,
   type GeneralAgentCallToolResultPayload,
   type GeneralAgentCallingToolInstructionPayload,
   type InstructionExecutor,
@@ -2207,6 +2210,124 @@ export const createAgentExecutors = (context: {
           },
         } as AgentRuntimeContext,
       };
+    },
+
+    /**
+     * Context compression executor
+     * Compresses old messages into a summary to reduce token usage
+     */
+    compress_context: async (instruction, state) => {
+      const sessionLogId = `${state.operationId}:${state.stepCount}`;
+      const stagePrefix = `[${sessionLogId}][compress_context]`;
+
+      const { messages, keepRecentCount, currentTokenCount, existingSummary } = (
+        instruction as AgentInstructionCompressContext
+      ).payload;
+
+      // Get topicId from operation context (same as agentId)
+      const { topicId } = getOperationContext();
+
+      log(`${stagePrefix} Starting compression. messages=%d, keepRecent=%d, tokens=%d`,
+        messages.length, keepRecentCount, currentTokenCount);
+
+      const events: AgentEvent[] = [];
+
+      // 1. Split messages: keep recent N, compress the rest
+      const recent = messages.slice(-keepRecentCount);
+      const toCompress = messages.slice(0, -keepRecentCount);
+
+      if (toCompress.length === 0 || !topicId) {
+        // No messages to compress or no topicId, skip
+        log(`${stagePrefix} Skipping compression: toCompress=%d, topicId=%s`, toCompress.length, topicId);
+        return {
+          events: [],
+          newState: state,
+          nextContext: {
+            payload: {
+              compressedMessages: messages,
+              compressedTokenCount: currentTokenCount,
+              groupId: '',
+              originalTokenCount: currentTokenCount,
+              skipped: true,
+            } as GeneralAgentCompressionResultPayload,
+            phase: 'compression_result',
+            session: {
+              messageCount: state.messages.length,
+              sessionId: state.operationId,
+              status: 'running',
+              stepCount: state.stepCount + 1,
+            },
+          } as AgentRuntimeContext,
+        };
+      }
+
+      const messageIds = toCompress.map((m) => m.id).filter(Boolean);
+
+      log(`${stagePrefix} Compressing %d messages, keeping %d recent`, toCompress.length, recent.length);
+
+      try {
+        // 2. Create compression group and generate summary
+        // topicId is guaranteed to be non-null here (checked above)
+        const { groupId, compressedMessages } = await context.get().internal_compressContextMessages({
+          existingSummary,
+          messageIds,
+          messagesToCompress: toCompress,
+          topicId: topicId!,
+        });
+
+        log(`${stagePrefix} Compression complete. groupId=%s`, groupId);
+
+        events.push({ type: 'compression_complete', groupId });
+
+        // Calculate new token count
+        const compressedTokenCount = calculateMessageTokens(compressedMessages);
+
+        return {
+          events,
+          newState: { ...state, messages: compressedMessages },
+          nextContext: {
+            payload: {
+              compressedMessages,
+              compressedTokenCount,
+              groupId,
+              originalTokenCount: currentTokenCount,
+            } as GeneralAgentCompressionResultPayload,
+            phase: 'compression_result',
+            session: {
+              messageCount: compressedMessages.length,
+              sessionId: state.operationId,
+              status: 'running',
+              stepCount: state.stepCount + 1,
+            },
+          } as AgentRuntimeContext,
+        };
+      } catch (error) {
+        log(`${stagePrefix} Compression failed: %O`, error);
+
+        // On error, continue without compression
+        events.push({ type: 'compression_error', error });
+
+        return {
+          events,
+          newState: state,
+          nextContext: {
+            payload: {
+              compressedMessages: messages,
+              compressedTokenCount: currentTokenCount,
+              groupId: '',
+              originalTokenCount: currentTokenCount,
+              skipped: true,
+            } as GeneralAgentCompressionResultPayload,
+            phase: 'compression_result',
+            session: {
+              messageCount: state.messages.length,
+              sessionId: state.operationId,
+              status: 'running',
+              stepCount: state.stepCount + 1,
+            },
+          } as AgentRuntimeContext,
+        };
+      }
     },
   };
 

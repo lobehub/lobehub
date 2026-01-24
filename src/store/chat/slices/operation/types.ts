@@ -60,7 +60,8 @@ export type OperationType =
   // === Others ===
   | 'translate' // Translate message
   | 'topicSummary' // Topic summary
-  | 'historySummary'; // History summary
+  | 'historySummary' // History summary
+  | 'contextCompression'; // Context compression (compress old messages into summary)
 
 /**
  * Operation status

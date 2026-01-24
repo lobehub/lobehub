@@ -220,8 +220,6 @@ export interface AgentInstructionCompressContext {
     keepRecentCount: number;
     /** Messages to compress */
     messages: any[];
-    /** Topic ID for the conversation */
-    topicId: string;
   };
   type: 'compress_context';
 }

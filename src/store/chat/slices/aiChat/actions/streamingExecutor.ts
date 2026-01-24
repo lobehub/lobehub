@@ -26,10 +26,13 @@ import debug from 'debug';
 import { t } from 'i18next';
 import { type StateCreator } from 'zustand/vanilla';
 
+import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { chatService } from '@/services/chat';
 import { type ResolvedAgentConfig, resolveAgentConfig } from '@/services/chat/mecha';
 import { messageService } from '@/services/message';
+import { getAgentStoreState } from '@/store/agent';
+import { agentByIdSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
 import { type ChatStore } from '@/store/chat/store';
 import { getFileStoreState } from '@/store/file/store';
@@ -154,6 +157,20 @@ export interface StreamingExecutorAction {
      */
     isSubTask?: boolean;
   }) => Promise<{ cost?: Cost; usage?: Usage } | void>;
+
+  /**
+   * Compress context messages by creating a compression group
+   * Called by compress_context executor
+   */
+  internal_compressContextMessages: (params: {
+    topicId: string;
+    messageIds: string[];
+    messagesToCompress: UIChatMessage[];
+    existingSummary?: string;
+  }) => Promise<{
+    groupId: string;
+    compressedMessages: UIChatMessage[];
+  }>;
 }
 
 export const streamingExecutor: StateCreator<
@@ -929,5 +946,67 @@ export const streamingExecutor: StateCreator<
 
     // Return usage and cost data for caller to use
     return { cost: state.cost, usage: state.usage };
+  },
+
+  internal_compressContextMessages: async ({ topicId, messageIds, messagesToCompress }) => {
+    const { activeAgentId } = get();
+    const agentId = activeAgentId;
+
+    log('[internal_compressContextMessages] Starting compression, topicId=%s, messageIds=%d', topicId, messageIds.length);
+
+    // 1. Create compression group with placeholder content
+    const result = await messageService.createCompressionGroup({
+      agentId,
+      messageIds,
+      topicId,
+    });
+
+    const { messageGroupId, messages: compressedMessages, messagesToSummarize } = result;
+
+    log('[internal_compressContextMessages] Created group=%s, generating summary for %d messages', messageGroupId, messagesToSummarize.length);
+
+    // 2. Get compression model config
+    const agentState = getAgentStoreState();
+    const chatConfig = chatConfigByIdSelectors.getChatConfigById(agentId)(agentState);
+    const agentConfigData = agentByIdSelectors.getAgentConfigById(agentId)(agentState);
+
+    const model = chatConfig?.compressionModelId || agentConfigData?.model || DEFAULT_AGENT_CONFIG.model!;
+    const provider = agentConfigData?.provider || DEFAULT_AGENT_CONFIG.provider!;
+
+    // 3. Build compression prompt using chainCompressContext
+    const { chainCompressContext } = await import('@lobechat/prompts');
+    const compressionPayload = chainCompressContext(messagesToSummarize);
+
+    // 4. Generate summary using fetchPresetTaskResult
+    let summaryContent = '';
+    await chatService.fetchPresetTaskResult({
+      params: {
+        ...compressionPayload,
+        model,
+        provider,
+      },
+      onMessageHandle: (chunk) => {
+        if (chunk.type === 'text') {
+          summaryContent += chunk.text || '';
+        }
+      },
+    });
+
+    log('[internal_compressContextMessages] Generated summary: %d chars', summaryContent.length);
+
+    // 5. Finalize compression with actual content
+    const finalResult = await messageService.finalizeCompression({
+      agentId,
+      content: summaryContent,
+      messageGroupId,
+      topicId,
+    });
+
+    log('[internal_compressContextMessages] Compression complete');
+
+    return {
+      compressedMessages: finalResult.messages || compressedMessages,
+      groupId: messageGroupId,
+    };
   },
 });

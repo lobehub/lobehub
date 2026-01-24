@@ -390,4 +390,57 @@ export const messageRouter = router({
 
       return ctx.messageModel.updateTranslate(input.id, input.value);
     }),
+
+  // =============== Compression ===============
+
+  /**
+   * Create a compression group for old messages
+   * Creates a placeholder group, marks messages as compressed
+   * Returns messages to summarize for frontend AI generation
+   */
+  createCompressionGroup: messageProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        groupId: z.string().nullable().optional(),
+        messageIds: z.array(z.string()),
+        threadId: z.string().nullable().optional(),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { topicId, messageIds, agentId, groupId, threadId } = input;
+
+      return ctx.messageService.createCompressionGroup(topicId, messageIds, {
+        agentId,
+        groupId,
+        threadId,
+        topicId,
+      });
+    }),
+
+  /**
+   * Finalize compression by updating the group with generated summary
+   */
+  finalizeCompression: messageProcedure
+    .input(
+      z.object({
+        agentId: z.string(),
+        content: z.string(),
+        groupId: z.string().nullable().optional(),
+        messageGroupId: z.string(),
+        threadId: z.string().nullable().optional(),
+        topicId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { messageGroupId, content, agentId, topicId, groupId, threadId } = input;
+
+      return ctx.messageService.finalizeCompression(messageGroupId, content, {
+        agentId,
+        groupId,
+        threadId,
+        topicId,
+      });
+    }),
 });
