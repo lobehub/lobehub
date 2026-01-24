@@ -8,6 +8,7 @@ import ReactComponentName from 'react-scan/react-component-name/webpack';
 interface CustomNextConfig {
   experimental?: NextConfig['experimental'];
   headers?: Header[];
+  outputFileTracingExcludes?: NextConfig['outputFileTracingExcludes'];
   redirects?: Redirect[];
   serverExternalPackages?: NextConfig['serverExternalPackages'];
   turbopack?: NextConfig['turbopack'];
@@ -31,22 +32,10 @@ export function defineConfig(config: CustomNextConfig) {
     outputFileTracingIncludes: { '*': ['public/**/*', '.next/static/**/*'] },
   };
 
-  // Vercel serverless optimization: exclude musl binaries
-  // Vercel uses Amazon Linux (glibc), not Alpine Linux (musl)
-  // This saves ~45MB (29MB canvas-musl + 16MB sharp-musl)
-  const vercelConfig: NextConfig = {
-    outputFileTracingExcludes: {
-      '*': [
-        'node_modules/.pnpm/@napi-rs+canvas-*-musl*',
-        'node_modules/.pnpm/@img+sharp-libvips-*musl*',
-      ],
-    },
-  };
-
   const assetPrefix = process.env.NEXT_PUBLIC_ASSET_PREFIX;
 
   const nextConfig: NextConfig = {
-    ...(isStandaloneMode ? standaloneConfig : vercelConfig),
+    ...(isStandaloneMode ? standaloneConfig : {}),
     assetPrefix,
 
     compiler: {
@@ -250,6 +239,9 @@ export function defineConfig(config: CustomNextConfig) {
         hmrRefreshes: true,
       },
     },
+    ...(config.outputFileTracingExcludes && {
+      outputFileTracingExcludes: config.outputFileTracingExcludes,
+    }),
     reactStrictMode: true,
     redirects: async () => [
       {
