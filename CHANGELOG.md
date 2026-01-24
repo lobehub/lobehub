@@ -2,6 +2,31 @@
 
 # Changelog
 
+## [Version 2.0.0-next.362](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.361...v2.0.0-next.362)
+
+<sup>Released on **2026-01-24**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix page selection not display correctly.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fix page selection not display correctly, closes [#11765](https://github.com/lobehub/lobe-chat/issues/11765) ([7ae5f68](https://github.com/lobehub/lobe-chat/commit/7ae5f68))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.361](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.360...v2.0.0-next.361)
 
 <sup>Released on **2026-01-24**</sup>

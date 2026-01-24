@@ -5,6 +5,8 @@ import { ConversationContext } from '../../conversation';
 import { UploadFileItem } from '../../files';
 import { MessageSemanticSearchChunk } from '../../rag';
 import { ChatMessageError, ChatMessageErrorSchema } from '../common/base';
+// Import for local use
+import type { PageSelection } from '../common/pageSelection';
 import { ChatPluginPayload, ToolInterventionSchema } from '../common/tools';
 import { UIChatMessage } from './chat';
 import { SemanticSearchChunkSchema } from './rag';
@@ -79,12 +81,20 @@ export interface ChatContextContent {
   format?: 'xml' | 'text' | 'markdown';
   id: string;
   /**
+   * Page ID the selection belongs to (for page editor selections)
+   */
+  pageId?: string;
+  /**
    * Optional short preview for displaying in UI.
    */
   preview?: string;
   title?: string;
   type: 'text';
 }
+
+// Re-export PageSelection from common for backwards compatibility
+export type { PageSelection } from '../common/pageSelection';
+export { PageSelectionSchema } from '../common/pageSelection';
 
 export interface SendMessageParams {
   /**
@@ -119,8 +129,14 @@ export interface SendMessageParams {
   parentId?: string;
   /**
    * Additional contextual snippets (e.g., text selections) attached to the request.
+   * @deprecated Use pageSelections instead for page editor selections
    */
   contexts?: ChatContextContent[];
+  /**
+   * Page selections attached to the message (for Ask AI functionality)
+   * These will be persisted to the database and injected via context-engine
+   */
+  pageSelections?: PageSelection[];
 }
 
 export interface SendGroupMessageParams {

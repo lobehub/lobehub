@@ -51,6 +51,7 @@ const checkRequiredEnvVars = () => {
       console.error(`    📖 Documentation: ${docUrl}\n`);
     }
     console.error('Please configure these environment variables and redeploy.');
+    console.error('\n💡 TIP: If you previously used NEXT_AUTH_SECRET, simply rename it to AUTH_SECRET.');
     console.error('═'.repeat(70) + '\n');
     process.exit(1);
   }

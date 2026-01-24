@@ -1,5 +1,12 @@
 [
   {
+    "children": {
+      "fixes": ["Fix page selection not display correctly."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.362"
+  },
+  {
     "children": {},
     "date": "2026-01-24",
     "version": "2.0.0-next.361"

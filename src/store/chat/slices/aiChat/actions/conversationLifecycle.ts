@@ -77,11 +77,11 @@ export const conversationLifecycle: StateCreator<
   sendMessage: async ({
     message,
     files,
-    contexts,
     onlyAddUserMessage,
     context,
     messages: inputMessages,
     parentId: inputParentId,
+    pageSelections,
   }) => {
     const { internal_execAgentRuntime, mainInputEditor } = get();
 
@@ -186,6 +186,8 @@ export const conversationLifecycle: StateCreator<
         threadId: operationContext.threadId ?? undefined,
         imageList: tempImages.length > 0 ? tempImages : undefined,
         videoList: tempVideos.length > 0 ? tempVideos : undefined,
+        // Pass pageSelections metadata for immediate display
+        metadata: pageSelections?.length ? { pageSelections } : undefined,
       },
       { operationId, tempMessageId: tempId },
     );
@@ -222,7 +224,7 @@ export const conversationLifecycle: StateCreator<
       const topicId = operationContext.topicId;
       data = await aiChatService.sendMessageInServer(
         {
-          newUserMessage: { content: message, files: fileIdList, parentId },
+          newUserMessage: { content: message, files: fileIdList, pageSelections, parentId },
           // if there is topicId，then add topicId to message
           topicId: topicId ?? undefined,
           threadId: operationContext.threadId ?? undefined,
@@ -372,26 +374,10 @@ export const conversationLifecycle: StateCreator<
       messageMapKey(execContext),
     )(get());
 
-    const contextMessages =
-      contexts?.map((item, index) => {
-        const now = Date.now();
-        const title = item.title ? `${item.title}\n` : '';
-        return {
-          content: `Context ${index + 1}:\n${title}${item.content}`,
-          createdAt: now,
-          id: `ctx_${tempId}_${index}`,
-          role: 'system' as const,
-          updatedAt: now,
-        };
-      }) ?? [];
-
-    const runtimeMessages =
-      contextMessages.length > 0 ? [...displayMessages, ...contextMessages] : displayMessages;
-
     try {
       await internal_execAgentRuntime({
         context: execContext,
-        messages: runtimeMessages,
+        messages: displayMessages,
         parentMessageId: data.assistantMessageId,
         parentMessageType: 'assistant',
         parentOperationId: operationId, // Pass as parent operation
