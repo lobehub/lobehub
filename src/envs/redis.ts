@@ -34,7 +34,7 @@ export const getRedisEnv = () => {
       REDIS_PASSWORD: z.string().optional(),
       REDIS_PREFIX: z.string(),
       REDIS_TLS: z.boolean().default(false),
-      REDIS_URL: z.string().url().optional(),
+      REDIS_URL: z.string().optional(),
       REDIS_USERNAME: z.string().optional(),
     },
   });
