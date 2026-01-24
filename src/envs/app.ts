@@ -6,16 +6,16 @@ const isInVercel = process.env.VERCEL === '1';
 
 // Vercel URL fallback order (by stability):
 // 1. VERCEL_PROJECT_PRODUCTION_URL - project level, most stable
-// 2. VERCEL_BRANCH_URL - branch level, stable across deployments on same branch
-// 3. VERCEL_URL - deployment level, changes every deployment
+// 2. VERCEL_URL - deployment level, changes every deployment
+// 3. VERCEL_BRANCH_URL - branch level, stable across deployments on same branch
 const getVercelUrl = () => {
   if (process.env.VERCEL_ENV === 'production' && process.env.VERCEL_PROJECT_PRODUCTION_URL) {
     return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`;
   }
-  if (process.env.VERCEL_BRANCH_URL) {
-    return `https://${process.env.VERCEL_BRANCH_URL}`;
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
   }
-  return `https://${process.env.VERCEL_URL}`;
+  return `https://${process.env.VERCEL_BRANCH_URL}`;
 };
 
 const APP_URL = process.env.APP_URL
