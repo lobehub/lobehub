@@ -1,4 +1,9 @@
-import { type PageContentContext, formatPageContentContext } from '@lobechat/prompts';
+import {
+  type PageContentContext,
+  formatPageContentContext,
+  formatPageSelections,
+} from '@lobechat/prompts';
+import type { PageSelection } from '@lobechat/types';
 import debug from 'debug';
 
 import { BaseLastUserContentProvider } from '../base/BaseLastUserContentProvider';
@@ -14,6 +19,11 @@ export interface PageEditorContextInjectorConfig {
    * Contains markdown, xml, and metadata for the current page
    */
   pageContentContext?: PageContentContext;
+  /**
+   * Page selections to inject (from user message metadata)
+   * Contains selected text regions for Ask AI functionality
+   */
+  pageSelections?: PageSelection[];
 }
 
 /**
@@ -34,23 +44,17 @@ export class PageEditorContextInjector extends BaseLastUserContentProvider {
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
     log('doProcess called');
     log('config.enabled:', this.config.enabled);
+    log('config.pageSelections:', this.config.pageSelections?.length ?? 0);
 
     const clonedContext = this.cloneContext(context);
 
-    // Skip if Page Editor is not enabled or no page content context
-    if (!this.config.enabled || !this.config.pageContentContext) {
-      log('Page Editor not enabled or no pageContentContext, skipping injection');
-      return this.markAsExecuted(clonedContext);
-    }
+    // Check if we have any content to inject
+    const hasPageContent = this.config.enabled && this.config.pageContentContext;
+    const hasPageSelections = this.config.pageSelections && this.config.pageSelections.length > 0;
 
-    // Format page content context
-    const formattedContent = formatPageContentContext(this.config.pageContentContext);
-
-    log('Formatted content length:', formattedContent.length);
-
-    // Skip if no content to inject
-    if (!formattedContent) {
-      log('No content to inject after formatting');
+    // Skip if neither page content nor page selections
+    if (!hasPageContent && !hasPageSelections) {
+      log('No pageContentContext and no pageSelections, skipping injection');
       return this.markAsExecuted(clonedContext);
     }
 
@@ -64,17 +68,49 @@ export class PageEditorContextInjector extends BaseLastUserContentProvider {
       return this.markAsExecuted(clonedContext);
     }
 
+    // Build content sections to inject
+    const contentSections: string[] = [];
+
+    // Add page selections if present
+    if (hasPageSelections) {
+      const formattedSelections = formatPageSelections(this.config.pageSelections!);
+      if (formattedSelections) {
+        contentSections.push(formattedSelections);
+        log('Page selections formatted, length:', formattedSelections.length);
+      }
+    }
+
+    // Add page content context if present
+    if (hasPageContent) {
+      const formattedContent = formatPageContentContext(this.config.pageContentContext!);
+      if (formattedContent) {
+        contentSections.push(formattedContent);
+        log('Page content formatted, length:', formattedContent.length);
+      }
+    }
+
+    // Skip if no content to inject
+    if (contentSections.length === 0) {
+      log('No content to inject after formatting');
+      return this.markAsExecuted(clonedContext);
+    }
+
+    const combinedContent = contentSections.join('\n\n');
+
     // Check if system context wrapper already exists
     // If yes, only insert context block; if no, use full wrapper
     const hasExistingWrapper = this.hasExistingSystemContext(clonedContext);
     const contentToAppend = hasExistingWrapper
-      ? this.createContextBlock(formattedContent, 'current_page_context')
-      : this.wrapWithSystemContext(formattedContent, 'current_page_context');
+      ? this.createContextBlock(combinedContent, 'current_page_context')
+      : this.wrapWithSystemContext(combinedContent, 'current_page_context');
 
     this.appendToLastUserMessage(clonedContext, contentToAppend);
 
     // Update metadata
     clonedContext.metadata.pageEditorContextInjected = true;
+    if (hasPageSelections) {
+      clonedContext.metadata.pageSelectionsInjected = true;
+    }
 
     log('Page Editor context appended to last user message');
 

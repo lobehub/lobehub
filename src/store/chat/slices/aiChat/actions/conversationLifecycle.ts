@@ -77,7 +77,6 @@ export const conversationLifecycle: StateCreator<
   sendMessage: async ({
     message,
     files,
-    contexts,
     onlyAddUserMessage,
     context,
     messages: inputMessages,
@@ -372,26 +371,10 @@ export const conversationLifecycle: StateCreator<
       messageMapKey(execContext),
     )(get());
 
-    const contextMessages =
-      contexts?.map((item, index) => {
-        const now = Date.now();
-        const title = item.title ? `${item.title}\n` : '';
-        return {
-          content: `Context ${index + 1}:\n${title}${item.content}`,
-          createdAt: now,
-          id: `ctx_${tempId}_${index}`,
-          role: 'system' as const,
-          updatedAt: now,
-        };
-      }) ?? [];
-
-    const runtimeMessages =
-      contextMessages.length > 0 ? [...displayMessages, ...contextMessages] : displayMessages;
-
     try {
       await internal_execAgentRuntime({
         context: execContext,
-        messages: runtimeMessages,
+        messages: displayMessages,
         parentMessageId: data.assistantMessageId,
         parentMessageType: 'assistant',
         parentOperationId: operationId, // Pass as parent operation
