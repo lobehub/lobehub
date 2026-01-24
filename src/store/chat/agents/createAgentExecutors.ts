@@ -322,6 +322,7 @@ export const createAgentExecutors = (context: {
         context: {
           agentId: opContext.agentId!,
           topicId: opContext.topicId,
+          threadId: opContext.threadId,
         },
         parentOperationId: context.operationId,
         metadata: {
@@ -367,6 +368,7 @@ export const createAgentExecutors = (context: {
             context: {
               agentId: opContext.agentId!,
               topicId: opContext.topicId,
+              threadId: opContext.threadId,
             },
             parentOperationId: toolOperationId,
             metadata: {

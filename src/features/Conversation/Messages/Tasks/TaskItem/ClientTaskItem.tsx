@@ -3,50 +3,85 @@
 import { AccordionItem, Block, Text } from '@lobehub/ui';
 import { memo, useMemo, useState } from 'react';
 
+import { useChatStore } from '@/store/chat';
+import { displayMessageSelectors } from '@/store/chat/selectors';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { ThreadStatus } from '@/types/index';
 import type { UIChatMessage } from '@/types/index';
 
-import {
-  CompletedState,
-  ErrorState,
-  InitializingState,
-  ProcessingState,
-  isProcessingStatus,
-} from '../shared';
+import ClientTaskDetailCompletedState from '../../Task/ClientTaskDetail/CompletedState';
+import ClientTaskDetailProcessingState from '../../Task/ClientTaskDetail/ProcessingState';
+import { ErrorState, InitializingState, isProcessingStatus } from '../shared';
 import TaskTitle, { type TaskMetrics } from './TaskTitle';
-import { useClientTaskStats } from './useClientTaskStats';
 
 interface ClientTaskItemProps {
   item: UIChatMessage;
 }
 
 const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
-  const { id, content, metadata, taskDetail } = item;
+  const { id, metadata, taskDetail } = item;
   const [expanded, setExpanded] = useState(false);
 
   const title = taskDetail?.title || metadata?.taskTitle;
   const instruction = metadata?.instruction;
   const status = taskDetail?.status;
+  const threadId = taskDetail?.threadId;
 
   const isProcessing = isProcessingStatus(status);
   const isCompleted = status === ThreadStatus.Completed;
   const isError = status === ThreadStatus.Failed || status === ThreadStatus.Cancel;
   const isInitializing = !taskDetail || !status;
 
-  // Fetch client task stats when processing
-  const clientStats = useClientTaskStats({
-    enabled: isProcessing,
-    threadId: taskDetail?.threadId,
-  });
+  // Fetch thread messages for client mode (like Task/ClientTaskDetail)
+  const [activeAgentId, activeTopicId, useFetchMessages] = useChatStore((s) => [
+    s.activeAgentId,
+    s.activeTopicId,
+    s.useFetchMessages,
+  ]);
 
-  // Build metrics for TaskTitle
+  const threadContext = useMemo(
+    () => ({
+      agentId: activeAgentId,
+      scope: 'thread' as const,
+      threadId,
+      topicId: activeTopicId,
+    }),
+    [activeAgentId, activeTopicId, threadId],
+  );
+
+  const threadMessageKey = useMemo(
+    () => (threadId ? messageMapKey(threadContext) : null),
+    [threadId, threadContext],
+  );
+
+  // Fetch thread messages (skip when executing - messages come from real-time updates)
+  useFetchMessages(threadContext, isProcessing);
+
+  // Get thread messages from store using selector
+  const threadMessages = useChatStore((s) =>
+    threadMessageKey
+      ? displayMessageSelectors.getDisplayMessagesByKey(threadMessageKey)(s)
+      : undefined,
+  );
+
+  // Find the assistantGroup message which contains the children blocks
+  const assistantGroupMessage = threadMessages?.find((item) => item.role === 'assistantGroup');
+  const blocks = assistantGroupMessage?.children;
+  const childrenCount = blocks?.length ?? 0;
+
+  // Get model/provider from assistantGroup message
+  const model = assistantGroupMessage?.model;
+  const provider = assistantGroupMessage?.provider;
+
+  // Build metrics for TaskTitle based on blocks data
   const metrics: TaskMetrics | undefined = useMemo(() => {
-    if (isProcessing) {
+    if (isProcessing && blocks) {
+      const toolCalls = blocks.reduce((sum, block) => sum + (block.tools?.length || 0), 0);
       return {
-        isLoading: clientStats.isLoading,
-        startTime: clientStats.startTime,
-        steps: clientStats.steps,
-        toolCalls: clientStats.toolCalls,
+        isLoading: false,
+        startTime: assistantGroupMessage?.createdAt,
+        steps: blocks.length,
+        toolCalls,
       };
     }
     if (isCompleted || isError) {
@@ -61,11 +96,15 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
     isProcessing,
     isCompleted,
     isError,
-    clientStats,
+    blocks,
+    assistantGroupMessage?.createdAt,
     taskDetail?.duration,
     taskDetail?.totalSteps,
     taskDetail?.totalToolCalls,
   ]);
+
+  // Check if we have blocks to show (for Processing and Completed states)
+  const hasBlocks = blocks && childrenCount > 0;
 
   return (
     <AccordionItem
@@ -85,24 +124,34 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
           </Block>
         )}
 
-        {/* Initializing State - no taskDetail yet */}
-        {isInitializing && <InitializingState />}
+        {/* Initializing State - no taskDetail yet or no blocks */}
+        {(isInitializing || (isProcessing && !hasBlocks)) && <InitializingState />}
 
-        {/* Processing State */}
-        {!isInitializing && isProcessing && taskDetail && (
-          <ProcessingState messageId={id} taskDetail={taskDetail} variant="compact" />
+        {/* Processing State - show streaming blocks */}
+        {!isInitializing && isProcessing && hasBlocks && (
+          <ClientTaskDetailProcessingState
+            assistantId={assistantGroupMessage!.id}
+            blocks={blocks!}
+            model={model ?? undefined}
+            provider={provider ?? undefined}
+            startTime={assistantGroupMessage?.createdAt}
+          />
         )}
 
         {/* Error State */}
         {!isInitializing && isError && taskDetail && <ErrorState taskDetail={taskDetail} />}
 
-        {/* Completed State */}
-        {!isInitializing && isCompleted && taskDetail && (
-          <CompletedState
-            content={content}
-            expanded={expanded}
-            taskDetail={taskDetail}
-            variant="compact"
+        {/* Completed State - show blocks with final result */}
+        {!isInitializing && isCompleted && taskDetail && hasBlocks && (
+          <ClientTaskDetailCompletedState
+            assistantId={assistantGroupMessage!.id}
+            blocks={blocks!}
+            duration={taskDetail.duration}
+            model={model ?? undefined}
+            provider={provider ?? undefined}
+            totalCost={taskDetail.totalCost}
+            totalTokens={taskDetail.totalTokens}
+            totalToolCalls={taskDetail.totalToolCalls}
           />
         )}
       </Block>
