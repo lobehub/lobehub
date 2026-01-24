@@ -33,10 +33,11 @@ const ExperiencesList = memo<ExperiencesListProps>(({ isLoading, searchValue, vi
   if (isEmpty) {
     return (
       <MemoryEmpty
-        extra={<MemoryAnalysis />}
         search={Boolean(searchValue)}
         title={t('experience.empty')}
-      />
+      >
+        <MemoryAnalysis />
+      </MemoryEmpty>
     );
   }
 

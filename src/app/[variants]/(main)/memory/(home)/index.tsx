@@ -25,9 +25,9 @@ const Home: FC = () => {
 
   if (!roles || roles.length === 0) {
     return (
-      <>
-        <MemoryEmpty extra={<MemoryAnalysis />} />
-      </>
+      <MemoryEmpty>
+        <MemoryAnalysis />
+      </MemoryEmpty>
     );
   }
 

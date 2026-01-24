@@ -39,7 +39,7 @@ const createExecutor = (privateOverrides?: Partial<MemoryExtractionPrivateConfig
     embedding: { model: 'embed-1', provider: 'provider-e' },
     featureFlags: { enableBenchmarkLoCoMo: false },
     observabilityS3: { enabled: false },
-    webhookHeaders: {},
+    webhook: {},
   };
 
   const serverConfig = {

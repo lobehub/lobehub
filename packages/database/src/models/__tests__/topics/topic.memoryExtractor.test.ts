@@ -31,9 +31,7 @@ describe('TopicModel - countTopicsForMemoryExtractor', () => {
         id: 't2',
         createdAt: new Date('2023-02-01'),
         metadata: {
-          memory_user_memory_extract: {
-            extract_status: 'completed',
-          },
+          userMemoryExtractStatus: 'completed',
         },
         userId,
       },
@@ -64,9 +62,7 @@ describe('TopicModel - countTopicsForMemoryExtractor', () => {
         id: 't2',
         createdAt: new Date('2023-02-01'),
         metadata: {
-          memory_user_memory_extract: {
-            extract_status: 'completed',
-          },
+          userMemoryExtractStatus: 'completed',
         },
         userId,
       },

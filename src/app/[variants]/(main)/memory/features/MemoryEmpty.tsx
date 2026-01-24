@@ -1,11 +1,11 @@
 import { Center, Empty, Flexbox, type EmptyProps } from '@lobehub/ui';
 import { BrainCircuitIcon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const MemoryEmpty = memo<
-  EmptyProps & { search?: boolean; extra?: React.ReactNode }
->(({ search, title, extra, ...rest }) => {
+  EmptyProps & { children?: ReactNode | ReactNode[], search?: boolean; }
+>(({ search, title, children, ...rest }) => {
     const { t } = useTranslation('memory');
     return (
       <Center height="100%" style={{ minHeight: '50vh' }} width="100%">
@@ -24,7 +24,7 @@ const MemoryEmpty = memo<
             {...rest}
           >
           <Flexbox>
-            {extra}
+            {children}
           </Flexbox>
           </Empty>
         </Flexbox>

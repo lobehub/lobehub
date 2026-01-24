@@ -34,10 +34,11 @@ const ContextsList = memo<ContextsListProps>(({ isLoading, searchValue, viewMode
   if (isEmpty) {
     return (
       <MemoryEmpty
-        extra={<MemoryAnalysis />}
         search={Boolean(searchValue)}
         title={t('context.empty')}
-      />
+      >
+        <MemoryAnalysis />
+      </MemoryEmpty>
     );
   }
 

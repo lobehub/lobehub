@@ -33,10 +33,11 @@ const PreferencesList = memo<PreferencesListProps>(({ isLoading, searchValue, vi
   if (isEmpty) {
     return (
       <MemoryEmpty
-        extra={<MemoryAnalysis />}
         search={Boolean(searchValue)}
         title={t('preference.empty')}
-      />
+      >
+        <MemoryAnalysis />
+      </MemoryEmpty>
     );
   }
 

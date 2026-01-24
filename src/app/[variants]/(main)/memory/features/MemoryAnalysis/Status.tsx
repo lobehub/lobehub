@@ -2,30 +2,15 @@
 
 import { Alert, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Progress } from 'antd';
-import dayjs from 'dayjs';
 import { Loader2Icon, TriangleAlertIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AsyncTaskStatus } from '@lobechat/types';
 
-import type { TFunction } from 'i18next';
-
 import type { MemoryExtractionTask } from '@/services/userMemory/extraction';
 
 import { useMemoryAnalysisAsyncTask } from './useTask';
-
-const formatRangeLabel = (
-  t: TFunction<'memory', undefined>,
-  range?: { from?: string; to?: string },
-) => {
-  if (!range?.from && !range?.to) return t('analysis.range.all');
-
-  const from = range?.from ? dayjs(range.from).format('YYYY/MM/DD') : t('analysis.range.start');
-  const to = range?.to ? dayjs(range.to).format('YYYY/MM/DD') : t('analysis.range.end');
-
-  return `${from}  →  ${to}`;
-};
 
 interface StatusProps {
   task?: MemoryExtractionTask | null;
@@ -42,13 +27,12 @@ export const MemoryAnalysisStatus = memo<StatusProps>(({ task }) => {
 
   if (!data || (!isRunning && !isError)) return null;
 
-  const { progress, range } = data.metadata;
+  const { progress } = data.metadata;
   const percent =
     progress.totalTopics && progress.totalTopics > 0
       ? Math.min(100, Math.round((progress.completedTopics / progress.totalTopics) * 100))
       : undefined;
 
-  const rangeLabel = formatRangeLabel(t, range);
   const progressText = progress.totalTopics
     ? t('analysis.status.progress', {
         completed: progress.completedTopics,
