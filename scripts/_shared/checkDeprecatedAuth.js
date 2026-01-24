@@ -152,23 +152,19 @@ const DEPRECATED_CHECKS = [
 ];
 
 /**
- * Print error message and exit
+ * Print a single deprecation error block
  */
-function printErrorAndExit(name, vars, message, action, docUrl, formatVar) {
-  console.error('\n' + '═'.repeat(70));
-  console.error(`❌ ERROR: ${name} environment variables are deprecated!`);
-  console.error('═'.repeat(70));
-  console.error('\nDetected deprecated environment variables:');
+function printErrorBlock(name, vars, message, docUrl, formatVar) {
+  console.error(`\n❌ ${name}`);
+  console.error('─'.repeat(50));
+  console.error('Detected deprecated environment variables:');
   for (const envVar of vars) {
     console.error(`  • ${formatVar ? formatVar(envVar) : envVar}`);
   }
   console.error(`\n${message}`);
   if (docUrl) {
-    console.error(`\n📖 Migration guide: ${docUrl}`);
+    console.error(`📖 Migration guide: ${docUrl}`);
   }
-  console.error(`\nPlease update your environment variables and ${action}.`);
-  console.error('═'.repeat(70) + '\n');
-  process.exit(1);
 }
 
 /**
@@ -179,18 +175,27 @@ function printErrorAndExit(name, vars, message, action, docUrl, formatVar) {
 function checkDeprecatedAuth(options = {}) {
   const { action = 'redeploy' } = options;
 
+  const foundIssues = [];
   for (const check of DEPRECATED_CHECKS) {
     const foundVars = check.getVars();
     if (foundVars.length > 0) {
-      printErrorAndExit(
-        check.name,
-        foundVars,
-        check.message,
-        action,
-        check.docUrl,
-        check.formatVar,
-      );
+      foundIssues.push({ ...check, foundVars });
     }
+  }
+
+  if (foundIssues.length > 0) {
+    console.error('\n' + '═'.repeat(70));
+    console.error(`❌ ERROR: Found ${foundIssues.length} deprecated environment variable issue(s)!`);
+    console.error('═'.repeat(70));
+
+    for (const issue of foundIssues) {
+      printErrorBlock(issue.name, issue.foundVars, issue.message, issue.docUrl, issue.formatVar);
+    }
+
+    console.error('\n' + '═'.repeat(70));
+    console.error(`Please update your environment variables and ${action}.`);
+    console.error('═'.repeat(70) + '\n');
+    process.exit(1);
   }
 }
 
