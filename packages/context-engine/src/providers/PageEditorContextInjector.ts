@@ -7,7 +7,7 @@ import type { PageSelection } from '@lobechat/types';
 import debug from 'debug';
 
 import { BaseLastUserContentProvider } from '../base/BaseLastUserContentProvider';
-import type { PipelineContext, ProcessorOptions } from '../types';
+import type { Message, PipelineContext, ProcessorOptions } from '../types';
 
 const log = debug('context-engine:provider:PageEditorContextInjector');
 
@@ -20,8 +20,9 @@ export interface PageEditorContextInjectorConfig {
    */
   pageContentContext?: PageContentContext;
   /**
-   * Page selections to inject (from user message metadata)
-   * Contains selected text regions for Ask AI functionality
+   * Page selections to inject (optional, from external source)
+   * If provided, takes precedence over extracting from messages
+   * If not provided, will be extracted from the last user message's metadata
    */
   pageSelections?: PageSelection[];
 }
@@ -41,6 +42,23 @@ export class PageEditorContextInjector extends BaseLastUserContentProvider {
     super(options);
   }
 
+  /**
+   * Extract pageSelections from the last user message's metadata
+   * Used for Ask AI functionality to inject user-selected text into context
+   */
+  private extractPageSelectionsFromMessages(messages: Message[]): PageSelection[] | undefined {
+    // Find the last user message
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === 'user') {
+        // Return pageSelections from metadata if available
+        // Message type has [key: string]: any, so metadata.pageSelections is accessible
+        return msg.metadata?.pageSelections as PageSelection[] | undefined;
+      }
+    }
+    return undefined;
+  }
+
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
     log('doProcess called');
     log('config.enabled:', this.config.enabled);
@@ -48,9 +66,14 @@ export class PageEditorContextInjector extends BaseLastUserContentProvider {
 
     const clonedContext = this.cloneContext(context);
 
+    // Use config.pageSelections first, fallback to extracting from last user message's metadata
+    const pageSelections =
+      this.config.pageSelections ?? this.extractPageSelectionsFromMessages(context.messages);
+    log('final pageSelections:', pageSelections?.length ?? 0);
+
     // Check if we have any content to inject
     const hasPageContent = this.config.enabled && this.config.pageContentContext;
-    const hasPageSelections = this.config.pageSelections && this.config.pageSelections.length > 0;
+    const hasPageSelections = pageSelections && pageSelections.length > 0;
 
     // Skip if neither page content nor page selections
     if (!hasPageContent && !hasPageSelections) {
@@ -71,21 +94,21 @@ export class PageEditorContextInjector extends BaseLastUserContentProvider {
     // Build content sections to inject
     const contentSections: string[] = [];
 
-    // Add page selections if present
-    if (hasPageSelections) {
-      const formattedSelections = formatPageSelections(this.config.pageSelections!);
-      if (formattedSelections) {
-        contentSections.push(formattedSelections);
-        log('Page selections formatted, length:', formattedSelections.length);
-      }
-    }
-
-    // Add page content context if present
+    // Add page content context if present (first)
     if (hasPageContent) {
       const formattedContent = formatPageContentContext(this.config.pageContentContext!);
       if (formattedContent) {
         contentSections.push(formattedContent);
         log('Page content formatted, length:', formattedContent.length);
+      }
+    }
+
+    // Add page selections if present (last, closer to user's question)
+    if (hasPageSelections) {
+      const formattedSelections = formatPageSelections(pageSelections!);
+      if (formattedSelections) {
+        contentSections.push(formattedSelections);
+        log('Page selections formatted, length:', formattedSelections.length);
       }
     }
 

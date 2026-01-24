@@ -16,8 +16,8 @@ export const formatPageSelections = (selections: PageSelection[]): string => {
           ? ` lines="${sel.startLine}-${sel.endLine ?? sel.startLine}"`
           : '';
 
-      return `<selection id="${sel.id}" page="${sel.pageId}"${lineInfo}>
-${sel.content}
+      return `<selection ${lineInfo}>
+${sel.xml}
 </selection>`;
     })
     .join('\n');
