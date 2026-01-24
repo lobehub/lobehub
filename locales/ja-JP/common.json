@@ -286,6 +286,11 @@
   "officialSite": "公式サイト",
   "ok": "OK",
   "password": "パスワード",
+  "phLaunch": {
+    "action": "サポートする",
+    "body": "私たちは現在 Product Hunt で公開中です！LobeChat を気に入っていただけたら、ぜひ投票をお願いします！",
+    "title": "LobeChat が Product Hunt に登場！"
+  },
   "pin": "ピン留め",
   "pinOff": "ピン留め解除",
   "privacy": "プライバシーポリシー",

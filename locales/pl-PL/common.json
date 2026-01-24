@@ -286,6 +286,11 @@
   "officialSite": "Oficjalna strona internetowa",
   "ok": "OK",
   "password": "Hasło",
+  "phLaunch": {
+    "action": "Przejdź do wsparcia",
+    "body": "Właśnie debiutujemy na Product Hunt! Jeśli podoba Ci się LobeChat, zagłosuj na nas!",
+    "title": "LobeChat debiutuje na Product Hunt!"
+  },
   "pin": "Przypnij",
   "pinOff": "Odepnij",
   "privacy": "Polityka prywatności",

@@ -286,6 +286,11 @@
   "officialSite": "공식 웹사이트",
   "ok": "확인",
   "password": "비밀번호",
+  "phLaunch": {
+    "action": "지원하러 가기",
+    "body": "우리는 지금 Product Hunt에 출시되었습니다! LobeChat이 마음에 드신다면 투표로 응원해 주세요!",
+    "title": "LobeChat이 Product Hunt에 출시되었습니다!"
+  },
   "pin": "상단 고정",
   "pinOff": "고정 해제",
   "privacy": "개인정보 보호정책",

@@ -286,6 +286,11 @@
   "officialSite": "Site officiel",
   "ok": "OK",
   "password": "Mot de passe",
+  "phLaunch": {
+    "action": "Aller au soutien",
+    "body": "Nous lançons LobeChat sur Product Hunt ! Si vous aimez LobeChat, votez pour nous soutenir !",
+    "title": "LobeChat est lancé sur Product Hunt !"
+  },
   "pin": "Épingler",
   "pinOff": "Désactiver l'épinglage",
   "privacy": "Politique de confidentialité",

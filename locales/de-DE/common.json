@@ -286,6 +286,11 @@
   "officialSite": "Offizielle Website",
   "ok": "OK",
   "password": "Passwort",
+  "phLaunch": {
+    "action": "Zur Unterstützung",
+    "body": "Wir starten gerade auf Product Hunt! Wenn dir LobeChat gefällt, gib uns bitte deine Stimme!",
+    "title": "LobeChat startet jetzt auf Product Hunt!"
+  },
   "pin": "Anheften",
   "pinOff": "Anheften aufheben",
   "privacy": "Datenschutzrichtlinie",

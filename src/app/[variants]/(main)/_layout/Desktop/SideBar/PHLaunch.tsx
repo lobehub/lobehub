@@ -10,7 +10,7 @@ import { Flexbox } from 'react-layout-kit';
 
 import { useGlobalStore } from '@/store/global';
 
-const PH_LAUNCH_URL = 'https://www.producthunt.com/products/lobehub?launch=lobehub';
+const PH_LAUNCH_URL = 'https://lobe.li/ph';
 const PH_IMAGE_URL = 'https://hub-apac-1.lobeobjects.space/og/lobehub-ph.png';
 
 // Configure the date range for showing the PH launch card

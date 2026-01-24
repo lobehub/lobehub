@@ -286,6 +286,11 @@
   "officialSite": "官方網站",
   "ok": "確定",
   "password": "密碼",
+  "phLaunch": {
+    "action": "前往支持",
+    "body": "我們正在 Product Hunt 上發布！如果你喜歡 LobeChat，請為我們投票支持！",
+    "title": "LobeChat 正在 Product Hunt 上發布！"
+  },
   "pin": "置頂",
   "pinOff": "取消置頂",
   "privacy": "隱私政策",
