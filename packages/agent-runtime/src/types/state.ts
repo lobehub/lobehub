@@ -27,6 +27,14 @@ export interface AgentState {
   modelRuntimeConfig?: {
     model: string;
     provider: string;
+    /**
+     * Compression model configuration
+     * Used for context compression tasks
+     */
+    compressionModel?: {
+      model: string;
+      provider: string;
+    };
   };
 
   /**

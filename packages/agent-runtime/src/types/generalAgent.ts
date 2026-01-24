@@ -68,17 +68,23 @@ export interface GeneralAgentConfig {
   /**
    * Context compression configuration
    * Note: Compression checking is always enabled to prevent context overflow.
-   * This config only controls the compression parameters.
+   * When triggered, ALL messages are compressed into a single MessageGroup summary.
    */
   compressionConfig?: {
-    /** Number of recent messages to keep uncompressed (default: 10) */
-    keepRecentCount?: number;
     /** Model's max context window token count (default: 128k) */
     maxWindowToken?: number;
   };
   modelRuntimeConfig?: {
     model: string;
     provider: string;
+    /**
+     * Compression model configuration
+     * Used for context compression tasks
+     */
+    compressionModel?: {
+      model: string;
+      provider: string;
+    };
   };
   operationId: string;
   userId?: string;

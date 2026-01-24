@@ -14,6 +14,7 @@ import { dataSelectors, messageStateSelectors, useConversationStore } from '../s
 import AgentCouncilMessage from './AgentCouncil';
 import AssistantMessage from './Assistant';
 import AssistantGroupMessage from './AssistantGroup';
+import CompressedGroupMessage from './CompressedGroup';
 import SupervisorMessage from './Supervisor';
 import TaskMessage from './Task';
 import TasksMessage from './Tasks';
@@ -155,6 +156,10 @@ const MessageItem = memo<MessageItemProps>(
 
         case 'agentCouncil': {
           return <AgentCouncilMessage id={id} index={index} />;
+        }
+
+        case 'compressedGroup': {
+          return <CompressedGroupMessage id={id} index={index} />;
         }
 
         case 'tool': {

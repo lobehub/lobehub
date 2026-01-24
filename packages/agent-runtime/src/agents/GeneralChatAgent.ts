@@ -289,14 +289,11 @@ export class GeneralChatAgent implements Agent {
         });
 
         if (compressionCheck.needsCompression) {
-          // Context exceeds threshold, trigger compression
-          const keepRecentCount = this.config.compressionConfig?.keepRecentCount ?? 10;
-
+          // Context exceeds threshold, compress ALL messages into a single summary
           return {
             payload: {
               currentTokenCount: compressionCheck.currentTokenCount,
               existingSummary: this.findExistingSummary(state.messages),
-              keepRecentCount,
               messages: state.messages,
             },
             type: 'compress_context',
