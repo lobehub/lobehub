@@ -31,6 +31,8 @@ export const useNavigationHistory = () => {
   const canGoBackFn = useElectronStore((s) => s.canGoBack);
   const canGoForwardFn = useElectronStore((s) => s.canGoForward);
   const getCurrentEntry = useElectronStore((s) => s.getCurrentEntry);
+  const addRecentPage = useElectronStore((s) => s.addRecentPage);
+  const updateRecentPageTitle = useElectronStore((s) => s.updateRecentPageTitle);
 
   // Track previous location to avoid duplicate entries
   const prevLocationRef = useRef<string | null>(null);
@@ -99,6 +101,12 @@ export const useNavigationHistory = () => {
       url: currentUrl,
     });
 
+    // Also track in recent pages (separate from navigation history)
+    addRecentPage({
+      title: presetTitle,
+      url: currentUrl,
+    });
+
     prevLocationRef.current = currentUrl;
   }, [
     location.pathname,
@@ -107,6 +115,7 @@ export const useNavigationHistory = () => {
     setIsNavigatingHistory,
     getCurrentEntry,
     pushHistory,
+    addRecentPage,
     t,
   ]);
 
@@ -129,7 +138,10 @@ export const useNavigationHistory = () => {
       ...currentEntry,
       title: currentPageTitle,
     });
-  }, [currentPageTitle, getCurrentEntry, replaceHistory, location.pathname]);
+
+    // Also update in recent pages
+    updateRecentPageTitle(currentEntry.url, currentPageTitle);
+  }, [currentPageTitle, getCurrentEntry, replaceHistory, updateRecentPageTitle, location.pathname]);
 
   // Listen to broadcast events from main process (Electron menu)
   useWatchBroadcast('historyGoBack', () => {
