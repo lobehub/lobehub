@@ -25,22 +25,43 @@ export const MemoryManifest: BuiltinToolManifest = {
       parameters: {
         additionalProperties: false,
         properties: {
-          query: { type: 'string' },
+          query: {
+            description: 'The search query to find relevant memories',
+            type: 'string',
+          },
           topK: {
             additionalProperties: false,
             description:
-              'Limits on number of memories to return per layer, default to search 3 activities, 0 contexts, 0 experiences, and 0 preferences if not specified.',
+              'Optional. Limits on number of memories to return per layer. If omitted entirely, uses defaults (3 activities, 3 preferences). Set a layer to 0 to exclude it.',
             properties: {
-              activities: { minimum: 0, type: 'integer' },
-              contexts: { minimum: 0, type: 'integer' },
-              experiences: { minimum: 0, type: 'integer' },
-              preferences: { minimum: 0, type: 'integer' },
+              activities: {
+                description: 'Number of activity memories (what happened, when, where). Default: 3',
+                minimum: 0,
+                type: 'integer',
+              },
+              contexts: {
+                description:
+                  'Number of context memories (ongoing situations, projects). Default: 0',
+                minimum: 0,
+                type: 'integer',
+              },
+              experiences: {
+                description:
+                  'Number of experience memories (lessons learned, insights). Default: 0',
+                minimum: 0,
+                type: 'integer',
+              },
+              preferences: {
+                description:
+                  'Number of preference memories (user preferences, directives). Default: 3',
+                minimum: 0,
+                type: 'integer',
+              },
             },
-            required: ['contexts', 'experiences', 'preferences'],
             type: 'object',
           },
         },
-        required: ['query', 'topK'],
+        required: ['query'],
         type: 'object',
       } satisfies JSONSchema7,
     },

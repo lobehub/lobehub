@@ -8,16 +8,24 @@ import {
 } from './layers';
 
 export const searchMemorySchema = z.object({
-  // TODO: we need to dynamically fetch the available categories/types from the backend
-  // memoryCategory: z.string().optional(),
-  // memoryType: z.string().optional(),
   query: z.string(),
-  topK: z.object({
-    activities: z.coerce.number().int().min(0),
-    contexts: z.coerce.number().int().min(0),
-    experiences: z.coerce.number().int().min(0),
-    preferences: z.coerce.number().int().min(0),
-  }),
+  /**
+   * Optional limits for each memory layer. If omitted, server defaults are used.
+   * Each field is optional - only specify layers you want to customize.
+   * Set a layer to 0 to exclude it from search results.
+   */
+  topK: z
+    .object({
+      /** Number of activity memories to return */
+      activities: z.number().int().min(0).optional(),
+      /** Number of context memories to return */
+      contexts: z.number().int().min(0).optional(),
+      /** Number of experience memories to return */
+      experiences: z.number().int().min(0).optional(),
+      /** Number of preference memories to return */
+      preferences: z.number().int().min(0).optional(),
+    })
+    .optional(),
 });
 
 export type SearchMemoryParams = z.infer<typeof searchMemorySchema>;

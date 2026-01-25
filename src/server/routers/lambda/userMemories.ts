@@ -146,10 +146,10 @@ const searchUserMemories = async (
   });
 
   const limits = {
-    activities: input.topK?.activities,
-    contexts: input.topK?.contexts,
-    experiences: input.topK?.experiences,
-    preferences: input.topK?.preferences,
+    activities: input.topK?.activities ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.activities,
+    contexts: input.topK?.contexts ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.contexts,
+    experiences: input.topK?.experiences ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.experiences,
+    preferences: input.topK?.preferences ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.preferences,
   };
 
   const layeredResults = await ctx.memoryModel.searchWithEmbedding({
