@@ -24,6 +24,7 @@ function getTargetPlatform() {
   return process.env.npm_config_platform || os.platform();
 }
 const isDarwin = getTargetPlatform() === 'darwin';
+
 /**
  * List of native modules that need special handling
  * Only add the top-level native modules here - dependencies are resolved automatically
@@ -53,20 +54,30 @@ function resolveDependencies(
     return visited;
   }
 
+  // Always add the module name first (important for workspace dependencies
+  // that may not be in local node_modules but are declared in nativeModules)
+  visited.add(moduleName);
+
   const packageJsonPath = path.join(nodeModulesPath, moduleName, 'package.json');
 
-  // Check if module exists
+  // If module doesn't exist locally, still keep it in visited but skip dependency resolution
   if (!fs.existsSync(packageJsonPath)) {
     return visited;
   }
 
-  visited.add(moduleName);
-
   try {
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
     const dependencies = packageJson.dependencies || {};
+    const optionalDependencies = packageJson.optionalDependencies || {};
 
+    // Resolve regular dependencies
     for (const dep of Object.keys(dependencies)) {
+      resolveDependencies(dep, visited, nodeModulesPath);
+    }
+
+    // Also resolve optional dependencies (important for native modules like @napi-rs/canvas
+    // which have platform-specific binaries in optional deps)
+    for (const dep of Object.keys(optionalDependencies)) {
       resolveDependencies(dep, visited, nodeModulesPath);
     }
   } catch {
@@ -115,4 +126,80 @@ export function getAsarUnpackPatterns() {
  */
 export function getExternalDependencies() {
   return getAllDependencies();
+}
+
+/**
+ * Copy native modules to destination, resolving symlinks
+ * This is used in afterPack hook to handle pnpm symlinks correctly
+ * @param {string} destNodeModules - Destination node_modules path
+ */
+export async function copyNativeModules(destNodeModules) {
+  const fsPromises = await import('node:fs/promises');
+  const deps = getAllDependencies();
+  const sourceNodeModules = path.join(__dirname, 'node_modules');
+
+  console.log(`📦 Copying ${deps.length} native modules to unpacked directory...`);
+
+  for (const dep of deps) {
+    const sourcePath = path.join(sourceNodeModules, dep);
+    const destPath = path.join(destNodeModules, dep);
+
+    try {
+      // Check if source exists (might be a symlink)
+      const stat = await fsPromises.lstat(sourcePath);
+
+      if (stat.isSymbolicLink()) {
+        // Resolve the symlink to get the real path
+        const realPath = await fsPromises.realpath(sourcePath);
+        console.log(`  📎 ${dep} (symlink -> ${path.relative(sourceNodeModules, realPath)})`);
+
+        // Create destination directory
+        await fsPromises.mkdir(path.dirname(destPath), { recursive: true });
+
+        // Copy the actual directory content (not the symlink)
+        await copyDir(realPath, destPath);
+      } else if (stat.isDirectory()) {
+        console.log(`  📁 ${dep}`);
+        await fsPromises.mkdir(path.dirname(destPath), { recursive: true });
+        await copyDir(sourcePath, destPath);
+      }
+    } catch (err) {
+      // Module might not exist (optional dependency for different platform)
+      console.log(`  ⏭️  ${dep} (skipped: ${err.code || err.message})`);
+    }
+  }
+
+  console.log(`✅ Native modules copied successfully`);
+}
+
+/**
+ * Recursively copy a directory
+ * @param {string} src - Source directory
+ * @param {string} dest - Destination directory
+ */
+async function copyDir(src, dest) {
+  const fsPromises = await import('node:fs/promises');
+
+  await fsPromises.mkdir(dest, { recursive: true });
+  const entries = await fsPromises.readdir(src, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+
+    if (entry.isDirectory()) {
+      await copyDir(srcPath, destPath);
+    } else if (entry.isSymbolicLink()) {
+      // For symlinks within the module, resolve and copy the actual file
+      const realPath = await fsPromises.realpath(srcPath);
+      const realStat = await fsPromises.stat(realPath);
+      if (realStat.isDirectory()) {
+        await copyDir(realPath, destPath);
+      } else {
+        await fsPromises.copyFile(realPath, destPath);
+      }
+    } else {
+      await fsPromises.copyFile(srcPath, destPath);
+    }
+  }
 }

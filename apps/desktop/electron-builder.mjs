@@ -4,7 +4,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { getAsarUnpackPatterns, getFilesPatterns } from './native-deps.config.mjs';
+import {
+  copyNativeModules,
+  getAsarUnpackPatterns,
+  getFilesPatterns,
+} from './native-deps.config.mjs';
 
 dotenv.config();
 
@@ -86,30 +90,46 @@ const getIconFileName = () => {
  */
 const config = {
   /**
-   * AfterPack hook to copy pre-generated Liquid Glass Assets.car for macOS 26+
+   * AfterPack hook for post-processing:
+   * 1. Copy native modules to asar.unpacked (resolving pnpm symlinks)
+   * 2. Copy Liquid Glass Assets.car for macOS 26+
+   * 3. Remove unused Electron Framework localizations
+   *
    * @see https://github.com/electron-userland/electron-builder/issues/9254
    * @see https://github.com/MultiboxLabs/flow-browser/pull/159
    * @see https://github.com/electron/packager/pull/1806
    */
   afterPack: async (context) => {
-    // Only process macOS builds
-    if (!['darwin', 'mas'].includes(context.electronPlatformName)) {
+    const isMac = ['darwin', 'mas'].includes(context.electronPlatformName);
+
+    // Determine resources path based on platform
+    let resourcesPath;
+    if (isMac) {
+      resourcesPath = path.join(
+        context.appOutDir,
+        `${context.packager.appInfo.productFilename}.app`,
+        'Contents',
+        'Resources',
+      );
+    } else {
+      // Windows and Linux: resources is directly in appOutDir
+      resourcesPath = path.join(context.appOutDir, 'resources');
+    }
+
+    // Copy native modules to asar.unpacked, resolving pnpm symlinks
+    const unpackedNodeModules = path.join(resourcesPath, 'app.asar.unpacked', 'node_modules');
+    await copyNativeModules(unpackedNodeModules);
+
+    // macOS-specific post-processing
+    if (!isMac) {
       return;
     }
 
     const iconFileName = getIconFileName();
     const assetsCarSource = path.join(__dirname, 'build', `${iconFileName}.Assets.car`);
-    const resourcesPath = path.join(
-      context.appOutDir,
-      `${context.packager.appInfo.productFilename}.app`,
-      'Contents',
-      'Resources',
-    );
     const assetsCarDest = path.join(resourcesPath, 'Assets.car');
 
     // Remove unused Electron Framework localizations to reduce app size
-    // Equivalent to:
-    // ../../Frameworks/Electron Framework.framework/Versions/A/Resources/*.lproj
     const frameworkResourcePath = path.join(
       context.appOutDir,
       `${context.packager.appInfo.productFilename}.app`,
@@ -155,7 +175,7 @@ const config = {
   appImage: {
     artifactName: '${productName}-${version}.${ext}',
   },
-  asar: true,
+
   // Native modules must be unpacked from asar to work correctly
   asarUnpack: getAsarUnpackPatterns(),
 
