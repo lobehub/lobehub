@@ -518,6 +518,13 @@
       "when": 1769272397744,
       "tag": "0073_add_message_group_metadata",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1769341100106,
+      "tag": "0074_add_fk_indexes_for_cascade_delete",
+      "breakpoints": true
     }
   ],
   "version": "6"
