@@ -1,4 +1,4 @@
-import { AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
+import { AUTH_REQUIRED_HEADER, TRPC_ERROR_CODE_UNAUTHORIZED } from '@lobechat/desktop-bridge';
 import { TRPCError } from '@trpc/server';
 import { describe, expect, it } from 'vitest';
 
@@ -22,7 +22,7 @@ describe('createResponseMeta', () => {
   });
 
   it('should set AUTH_REQUIRED_HEADER header for UNAUTHORIZED error', () => {
-    const error = new TRPCError({ code: 'UNAUTHORIZED' });
+    const error = new TRPCError({ code: TRPC_ERROR_CODE_UNAUTHORIZED });
     const result = createResponseMeta({
       ctx: undefined,
       errors: [error],
@@ -34,7 +34,7 @@ describe('createResponseMeta', () => {
 
   it('should set AUTH_REQUIRED_HEADER and preserve resHeaders for UNAUTHORIZED error', () => {
     const resHeaders = new Headers({ 'X-Custom': 'value' });
-    const error = new TRPCError({ code: 'UNAUTHORIZED' });
+    const error = new TRPCError({ code: TRPC_ERROR_CODE_UNAUTHORIZED });
     const result = createResponseMeta({
       ctx: { resHeaders },
       errors: [error],
@@ -56,7 +56,7 @@ describe('createResponseMeta', () => {
   });
 
   it('should handle context without resHeaders property', () => {
-    const error = new TRPCError({ code: 'UNAUTHORIZED' });
+    const error = new TRPCError({ code: TRPC_ERROR_CODE_UNAUTHORIZED });
     const result = createResponseMeta({
       ctx: { userId: 'test-user' },
       errors: [error],
@@ -69,7 +69,7 @@ describe('createResponseMeta', () => {
   it('should handle multiple errors where one is UNAUTHORIZED', () => {
     const errors = [
       new TRPCError({ code: 'BAD_REQUEST' }),
-      new TRPCError({ code: 'UNAUTHORIZED' }),
+      new TRPCError({ code: TRPC_ERROR_CODE_UNAUTHORIZED }),
     ];
     const result = createResponseMeta({
       ctx: undefined,

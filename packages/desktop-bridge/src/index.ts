@@ -25,3 +25,10 @@ export const APP_WINDOW_MIN_SIZE = {
  * re-authentication flow.
  */
 export const AUTH_REQUIRED_HEADER = 'X-Auth-Required';
+
+// TRPC error codes (mirrors @trpc/server internal codes)
+/**
+ * TRPC error code for unauthorized requests.
+ * Used to identify authentication failures in TRPC responses.
+ */
+export const TRPC_ERROR_CODE_UNAUTHORIZED = 'UNAUTHORIZED' as const;

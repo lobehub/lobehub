@@ -1,4 +1,4 @@
-import { AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
+import { AUTH_REQUIRED_HEADER, TRPC_ERROR_CODE_UNAUTHORIZED } from '@lobechat/desktop-bridge';
 import type { TRPCError } from '@trpc/server';
 
 interface ResponseMetaParams {
@@ -27,7 +27,7 @@ export function createResponseMeta({ ctx, errors }: ResponseMetaParams): {
       : undefined;
   const headers = resHeaders ? new Headers(resHeaders) : new Headers();
 
-  const hasUnauthorizedError = errors.some((error) => error.code === 'UNAUTHORIZED');
+  const hasUnauthorizedError = errors.some((error) => error.code === TRPC_ERROR_CODE_UNAUTHORIZED);
   if (hasUnauthorizedError) {
     headers.set(AUTH_REQUIRED_HEADER, 'true');
   }
