@@ -10,7 +10,6 @@
 - **@nekomeowww**: Memory, backend, deployment, DevOps
 - **@sudongyuer**: Mobile app (React Native)
 - **@sxjeru**: Model providers and configuration
-- **@cy948**: (inactive)
 - **@rdmclin2**: Team workspace
 - **@tcmonster**: Subscription, refund, recharge, business cooperation
 
