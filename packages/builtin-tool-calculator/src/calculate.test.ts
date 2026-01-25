@@ -544,7 +544,7 @@ describe('Calculator Nerdamer Execute', () => {
       });
 
       expect(result.success).toBe(true);
-      expect(result.content).toContain('x^3');
+      expect(result.content).toContain('[4,3,2,1]');
     });
 
     it('should execute roots expression', async () => {

@@ -2,7 +2,7 @@ import { BaseExecutor, type BuiltinToolResult, type IBuiltinToolExecutor } from 
 import { defBase } from '@thi.ng/base-n/base';
 import { all, create } from 'mathjs';
 // @ts-ignore - nerdamer doesn't have TypeScript definitions
-import nerdamer from 'nerdamer/all';
+import nerdamer from 'nerdamer-prime/all';
 
 import {
   type BaseParams,

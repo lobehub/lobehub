@@ -154,11 +154,11 @@ export const CalculatorManifest: BuiltinToolManifest = {
           },
           lowerBound: {
             description: 'Lower bound of integration (can be number, "0", "-infinity", etc.)',
-            type: 'number | string',
+            oneOf: [{ type: 'string' }, { type: 'number' }],
           },
           upperBound: {
             description: 'Upper bound of integration (can be number, "pi", "infinity", etc.)',
-            type: 'number | string',
+            oneOf: [{ type: 'string' }, { type: 'number' }],
           },
           variable: {
             description: 'Variable to integrate with respect to (e.g., "x", "y", "t")',
