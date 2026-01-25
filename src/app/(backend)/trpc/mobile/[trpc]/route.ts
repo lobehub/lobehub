@@ -1,7 +1,6 @@
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import type { NextRequest } from 'next/server';
 
-import { pino } from '@/libs/logger';
 import { createLambdaContext } from '@/libs/trpc/lambda/context';
 import { prepareRequestForTRPC } from '@/libs/trpc/utils/request-adapter';
 import { createResponseMeta } from '@/libs/trpc/utils/responseMeta';
@@ -21,7 +20,7 @@ const handler = (req: NextRequest) => {
     endpoint: '/trpc/mobile',
 
     onError: ({ error, path, type }) => {
-      pino.info(`Error in tRPC handler (mobile) on path: ${path}, type: ${type}`);
+      console.log(`Error in tRPC handler (mobile) on path: ${path}, type: ${type}`);
       console.error(error);
     },
 

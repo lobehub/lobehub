@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server';
 
 import { serverDB } from '@/database/server';
 import { authEnv } from '@/envs/auth';
-import { pino } from '@/libs/logger';
 import { WebhookUserService } from '@/server/services/webhookUser';
 
 import { validateRequest } from './validateRequest';
@@ -36,7 +35,7 @@ export const POST = async (req: Request): Promise<NextResponse> => {
     }
 
     default: {
-      pino.warn(
+      console.warn(
         `${req.url} received event type "${action}", but no handler is defined for this type`,
       );
       return NextResponse.json({ error: `unrecognised payload type: ${action}` }, { status: 400 });

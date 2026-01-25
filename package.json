@@ -299,7 +299,6 @@
     "pdfjs-dist": "5.4.530",
     "pdfkit": "^0.17.2",
     "pg": "^8.17.2",
-    "pino": "^10.3.0",
     "plaiceholder": "^3.0.0",
     "polished": "^4.3.1",
     "posthog-js": "~1.278.0",
