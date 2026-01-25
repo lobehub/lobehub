@@ -341,6 +341,8 @@ export default {
   'shareModal.withPluginInfo': 'Include Skill Information',
   'shareModal.withRole': 'Include Message Role',
   'shareModal.withSystemRole': 'Include Agent Profile',
+  'sharePage.actions.findMord': 'Find more',
+  'sharePage.actions.tryItYourself': 'Try it yourself',
   'sharePage.error.forbidden.subtitle': 'This share is private and not accessible.',
   'sharePage.error.forbidden.title': 'Access Denied',
   'sharePage.error.notFound.subtitle': 'This topic does not exist or has been removed.',

@@ -13,6 +13,7 @@ import Loading from '@/components/Loading/BrandTextLoading';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import SharedMessageList from './SharedMessageList';
+import ActionBar from './features/ActionBar';
 
 const styles = createStaticStyles(({ css }) => ({
   errorContainer: css`
@@ -93,12 +94,17 @@ const ShareTopicPage = memo(() => {
   if (!data) return null;
 
   return (
-    <SharedMessageList
-      agentId={data.agentId}
-      groupId={data.groupId}
-      shareId={data.shareId}
-      topicId={data.topicId}
-    />
+    <>
+      <SharedMessageList
+        agentId={data.agentId}
+        groupId={data.groupId}
+        shareId={data.shareId}
+        topicId={data.topicId}
+      />
+      <Center padding={8}>
+        <ActionBar data={data} />
+      </Center>
+    </>
   );
 });
 
