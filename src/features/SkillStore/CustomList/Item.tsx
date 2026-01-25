@@ -109,6 +109,7 @@ const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
                   onClick: handleDelete,
                 },
               ]}
+              nativeButton={false}
               placement="bottomRight"
             >
               <ActionIcon icon={MoreVerticalIcon} />

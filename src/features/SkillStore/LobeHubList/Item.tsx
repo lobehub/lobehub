@@ -76,6 +76,7 @@ const Item = memo<ItemProps>(
                 onClick: confirmDisconnect,
               },
             ]}
+            nativeButton={false}
             placement="bottomRight"
           >
             <ActionIcon icon={MoreVerticalIcon} />

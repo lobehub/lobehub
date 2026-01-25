@@ -9,8 +9,8 @@ import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import McpDetail from '@/features/MCP/MCPDetail';
-import MCPInstallProgress from '@/features/MCP/MCPInstallProgress';
 import McpDetailLoading from '@/features/MCP/MCPDetail/Loading';
+import MCPInstallProgress from '@/features/MCP/MCPInstallProgress';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -95,6 +95,7 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
               },
             },
           ]}
+          nativeButton={false}
           placement="bottomRight"
         >
           <ActionIcon icon={MoreVerticalIcon} />
