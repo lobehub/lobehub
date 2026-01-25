@@ -600,20 +600,71 @@ export class MessageModel {
 
     if (result.length === 0) return [];
 
-    // 2. Get related files
-    const rawRelatedFileList = await this.db
-      .select({
-        fileType: files.fileType,
-        id: messagesFiles.fileId,
-        messageId: messagesFiles.messageId,
-        name: files.name,
-        size: files.size,
-        url: files.url,
-      })
-      .from(messagesFiles)
-      .leftJoin(files, eq(files.id, messagesFiles.fileId))
-      .where(inArray(messagesFiles.messageId, messageIds));
+    // 2. Run parallel queries for better performance
+    const taskMessageIds = result.filter((m) => m.role === 'task').map((m) => m.id as string);
 
+    const [rawRelatedFileList, chunksList, messageQueriesList, threadData] = await Promise.all([
+      // 2a. Get related files
+      this.db
+        .select({
+          fileType: files.fileType,
+          id: messagesFiles.fileId,
+          messageId: messagesFiles.messageId,
+          name: files.name,
+          size: files.size,
+          url: files.url,
+        })
+        .from(messagesFiles)
+        .leftJoin(files, eq(files.id, messagesFiles.fileId))
+        .where(inArray(messagesFiles.messageId, messageIds)),
+
+      // 2b. Get related file chunks
+      this.db
+        .select({
+          fileId: files.id,
+          fileType: files.fileType,
+          fileUrl: files.url,
+          filename: files.name,
+          id: chunks.id,
+          messageId: messageQueryChunks.messageId,
+          similarity: messageQueryChunks.similarity,
+          text: chunks.text,
+        })
+        .from(messageQueryChunks)
+        .leftJoin(chunks, eq(chunks.id, messageQueryChunks.chunkId))
+        .leftJoin(fileChunks, eq(fileChunks.chunkId, chunks.id))
+        .innerJoin(files, eq(fileChunks.fileId, files.id))
+        .where(inArray(messageQueryChunks.messageId, messageIds)),
+
+      // 2c. Get related message queries (RAG)
+      this.db
+        .select({
+          id: messageQueries.id,
+          messageId: messageQueries.messageId,
+          rewriteQuery: messageQueries.rewriteQuery,
+          userQuery: messageQueries.userQuery,
+        })
+        .from(messageQueries)
+        .where(inArray(messageQueries.messageId, messageIds)),
+
+      // 2d. Get thread info for task messages
+      taskMessageIds.length > 0
+        ? this.db
+            .select({
+              metadata: threads.metadata,
+              sourceMessageId: threads.sourceMessageId,
+              status: threads.status,
+              threadId: threads.id,
+              title: threads.title,
+            })
+            .from(threads)
+            .where(
+              and(eq(threads.userId, this.userId), inArray(threads.sourceMessageId, taskMessageIds)),
+            )
+        : Promise.resolve([]),
+    ]);
+
+    // 3. Process file results
     const relatedFileList = await Promise.all(
       rawRelatedFileList.map(async (file) => ({
         ...file,
@@ -650,74 +701,26 @@ export class MessageModel {
       (i) => !(i.fileType || '').startsWith('image') && !(i.fileType || '').startsWith('video'),
     );
 
-    // 3. Get related file chunks
-    const chunksList = await this.db
-      .select({
-        fileId: files.id,
-        fileType: files.fileType,
-        fileUrl: files.url,
-        filename: files.name,
-        id: chunks.id,
-        messageId: messageQueryChunks.messageId,
-        similarity: messageQueryChunks.similarity,
-        text: chunks.text,
-      })
-      .from(messageQueryChunks)
-      .leftJoin(chunks, eq(chunks.id, messageQueryChunks.chunkId))
-      .leftJoin(fileChunks, eq(fileChunks.chunkId, chunks.id))
-      .innerJoin(files, eq(fileChunks.fileId, files.id))
-      .where(inArray(messageQueryChunks.messageId, messageIds));
-
-    // 4. Get related message queries (RAG)
-    const messageQueriesList = await this.db
-      .select({
-        id: messageQueries.id,
-        messageId: messageQueries.messageId,
-        rewriteQuery: messageQueries.rewriteQuery,
-        userQuery: messageQueries.userQuery,
-      })
-      .from(messageQueries)
-      .where(inArray(messageQueries.messageId, messageIds));
-
-    // 5. Get thread info for task messages
-    const taskMessageIds = result.filter((m) => m.role === 'task').map((m) => m.id as string);
-
-    let threadMap = new Map<string, TaskDetail>();
-
-    if (taskMessageIds.length > 0) {
-      const threadData = await this.db
-        .select({
-          metadata: threads.metadata,
-          sourceMessageId: threads.sourceMessageId,
-          status: threads.status,
-          threadId: threads.id,
-          title: threads.title,
-        })
-        .from(threads)
-        .where(
-          and(eq(threads.userId, this.userId), inArray(threads.sourceMessageId, taskMessageIds)),
-        );
-
-      threadMap = new Map(
-        threadData.map((t) => {
-          const metadata = t.metadata as Record<string, unknown> | null;
-          return [
-            t.sourceMessageId!,
-            {
-              clientMode: metadata?.clientMode as boolean | undefined,
-              duration: metadata?.duration as number | undefined,
-              status: t.status as ThreadStatus,
-              threadId: t.threadId,
-              title: t.title ?? undefined,
-              totalCost: metadata?.totalCost as number | undefined,
-              totalMessages: metadata?.totalMessages as number | undefined,
-              totalTokens: metadata?.totalTokens as number | undefined,
-              totalToolCalls: metadata?.totalToolCalls as number | undefined,
-            },
-          ];
-        }),
-      );
-    }
+    // 4. Build thread map
+    const threadMap = new Map(
+      threadData.map((t) => {
+        const metadata = t.metadata as Record<string, unknown> | null;
+        return [
+          t.sourceMessageId!,
+          {
+            clientMode: metadata?.clientMode as boolean | undefined,
+            duration: metadata?.duration as number | undefined,
+            status: t.status as ThreadStatus,
+            threadId: t.threadId,
+            title: t.title ?? undefined,
+            totalCost: metadata?.totalCost as number | undefined,
+            totalMessages: metadata?.totalMessages as number | undefined,
+            totalTokens: metadata?.totalTokens as number | undefined,
+            totalToolCalls: metadata?.totalToolCalls as number | undefined,
+          },
+        ];
+      }),
+    );
 
     // 6. Transform messages to UIChatMessage format
     return result.map(
