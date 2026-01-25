@@ -44,7 +44,11 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
   const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
   const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
-  const newScreen = useNewScreen({ creating: generating || creating, isLatestItem });
+  const { minHeight } = useNewScreen({
+    creating: generating || creating,
+    isLatestItem,
+    messageId: id,
+  });
 
   const errorContent = useErrorContent(error);
 
@@ -84,7 +88,7 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
       id={id}
       loading={generating}
       message={message}
-      newScreen={newScreen}
+      newScreenMinHeight={minHeight}
       onAvatarClick={onAvatarClick}
       onDoubleClick={onDoubleClick}
       placement={'left'}
