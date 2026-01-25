@@ -94,7 +94,6 @@ describe('useNewScreen', () => {
       };
       const mockCurrentWrapper = {
         dataset: { index: '1' },
-        querySelector: vi.fn().mockReturnValue({ getBoundingClientRect: () => ({ height: 100 }) }),
       };
       const mockMessageEl = {
         closest: vi.fn().mockReturnValue(mockCurrentWrapper),
@@ -166,7 +165,6 @@ describe('useNewScreen', () => {
       };
       const mockCurrentWrapper = {
         dataset: { index: '1' },
-        querySelector: vi.fn().mockReturnValue({ getBoundingClientRect: () => ({ height: 100 }) }),
       };
       const mockMessageEl = {
         closest: vi.fn().mockReturnValue(mockCurrentWrapper),
@@ -292,7 +290,6 @@ describe('useNewScreen', () => {
       };
       const mockCurrentWrapper = {
         dataset: { index: '1' },
-        querySelector: vi.fn().mockReturnValue({ getBoundingClientRect: () => ({ height: 100 }) }),
       };
       const mockMessageEl = {
         closest: vi.fn().mockReturnValue(mockCurrentWrapper),

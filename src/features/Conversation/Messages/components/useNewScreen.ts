@@ -6,12 +6,12 @@ import { useConversationStore } from '../../store';
 const log = debug('lobe-render:Conversation:newScreen');
 
 /**
- * 额外的 padding（如果需要的话）
+ * Extra padding if needed
  */
 const EXTRA_PADDING = 0;
 
 /**
- * 默认的 userMessage 高度（fallback）
+ * Default user message height (fallback)
  */
 const DEFAULT_USER_MESSAGE_HEIGHT = 200;
 
@@ -28,62 +28,53 @@ export const useNewScreen = ({
   const virtuaScrollMethods = useConversationStore((s) => s.virtuaScrollMethods);
 
   useEffect(() => {
-    // 不再是最后一条消息时，清除 minHeight
+    // Clear minHeight when no longer the latest item
     if (!isLatestItem) {
       setMinHeight(undefined);
       return;
     }
 
-    // 只在 creating 时计算并设置 minHeight，creating 结束后保留
+    // Only calculate and set minHeight when creating, preserve after creating ends
     if (!creating) {
       return;
     }
 
-    // 通过 data-message-id 找到当前消息元素
+    // Find current message element by data-message-id
     const messageEl = document.querySelector(`[data-message-id="${messageId}"]`);
-    // 找到 VList item 容器 (有 data-index 属性)
+    // Find VList item container (has data-index attribute)
     const currentWrapper = messageEl?.closest('[data-index]') as HTMLElement | null;
-    // 获取当前 index
+    // Get current index
     const currentIndex = currentWrapper?.dataset.index;
 
-    // 通过 data-index 找到前一个 VList item（避免虚拟滚动导致 sibling 不存在）
+    // Find previous VList item by data-index (avoid sibling not existing due to virtualization)
     const prevIndex = currentIndex ? Number(currentIndex) - 1 : -1;
     const prevWrapper =
       prevIndex >= 0 ? document.querySelector(`[data-index="${prevIndex}"]`) : null;
-    // 获取前一个消息的 .message-wrapper
+    // Get previous message's .message-wrapper
     const prevMessageEl = prevWrapper?.querySelector('.message-wrapper');
 
-    // 从 VList 获取真实的 viewport 高度
+    // Get real viewport height from VList
     const viewportHeight = virtuaScrollMethods?.getViewportSize?.() || window.innerHeight;
-
-    // 获取当前 assistant message 的高度
-    const currentMessageEl = currentWrapper?.querySelector('.message-wrapper');
-    const currentHeight = currentMessageEl?.getBoundingClientRect().height || 0;
 
     if (prevMessageEl) {
       const prevHeight = prevMessageEl.getBoundingClientRect().height;
 
-      // 期望：userMessage 在顶部，所以 assistantMinHeight = viewportHeight - userMessageHeight
+      // Goal: userMessage at top, so assistantMinHeight = viewportHeight - userMessageHeight
       const calculatedHeight = viewportHeight - prevHeight - EXTRA_PADDING;
 
       log(
-        '计算 minHeight: messageId=%s, currentIndex=%s, prevIndex=%d',
+        'calculate minHeight: messageId=%s, index=%s, viewportHeight=%d, prevHeight=%d, result=%d',
         messageId,
         currentIndex,
-        prevIndex,
-      );
-      log(
-        'viewportHeight=%d, prevHeight=%d, currentHeight=%d',
         viewportHeight,
         prevHeight,
-        currentHeight,
+        calculatedHeight,
       );
-      log('calculatedHeight=%d (viewport - prev - padding)', calculatedHeight);
 
-      // 如果计算出的高度小于等于 0，则不需要设置 minHeight
+      // Don't set minHeight if calculated height <= 0
       setMinHeight(calculatedHeight > 0 ? `${calculatedHeight}px` : undefined);
     } else {
-      // fallback: 使用默认值
+      // Fallback: use default value
       const fallbackHeight = viewportHeight - DEFAULT_USER_MESSAGE_HEIGHT - EXTRA_PADDING;
       log(
         'fallback minHeight: messageId=%s, viewportHeight=%d, fallbackHeight=%d',
@@ -91,7 +82,7 @@ export const useNewScreen = ({
         viewportHeight,
         fallbackHeight,
       );
-      // 如果计算出的高度小于等于 0，则不需要设置 minHeight
+      // Don't set minHeight if calculated height <= 0
       setMinHeight(fallbackHeight > 0 ? `${fallbackHeight}px` : undefined);
     }
   }, [isLatestItem, creating, messageId, virtuaScrollMethods]);
