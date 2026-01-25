@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 import { pino } from '@/libs/logger';
 import { createAsyncRouteContext } from '@/libs/trpc/async/context';
 import { prepareRequestForTRPC } from '@/libs/trpc/utils/request-adapter';
+import { createResponseMeta } from '@/libs/trpc/utils/responseMeta';
 import { asyncRouter } from '@/server/routers/async';
 
 const handler = (req: NextRequest) => {
@@ -29,6 +30,7 @@ const handler = (req: NextRequest) => {
     },
 
     req: preparedReq,
+    responseMeta: createResponseMeta,
     router: asyncRouter,
   });
 };

@@ -15,3 +15,13 @@ export const APP_WINDOW_MIN_SIZE = {
   height: 600,
   width: 1000,
 } as const;
+
+// HTTP Headers for desktop-server communication
+/**
+ * Header to indicate that a 401 response is due to a real authentication failure
+ * (e.g., token expired) rather than other 401 causes (e.g., invalid API keys).
+ *
+ * When the server sets this header to 'true', the desktop app should trigger
+ * re-authentication flow.
+ */
+export const AUTH_REQUIRED_HEADER = 'X-Auth-Required';
