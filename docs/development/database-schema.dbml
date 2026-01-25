@@ -49,8 +49,6 @@ table agents_files {
   indexes {
     (file_id, agent_id, user_id) [pk]
     agent_id [name: 'agents_files_agent_id_idx']
-    file_id [name: 'agents_files_file_id_idx']
-    user_id [name: 'agents_files_user_id_idx']
   }
 }
 
@@ -66,8 +64,6 @@ table agents_knowledge_bases {
   indexes {
     (agent_id, knowledge_base_id) [pk]
     agent_id [name: 'agents_knowledge_bases_agent_id_idx']
-    knowledge_base_id [name: 'agents_knowledge_bases_knowledge_base_id_idx']
-    user_id [name: 'agents_knowledge_bases_user_id_idx']
   }
 }
 
@@ -292,7 +288,6 @@ table chat_groups {
 
   indexes {
     (client_id, user_id) [name: 'chat_groups_client_id_user_id_unique', unique]
-    user_id [name: 'chat_groups_user_id_idx']
     group_id [name: 'chat_groups_group_id_idx']
   }
 }
@@ -310,7 +305,6 @@ table chat_groups_agents {
 
   indexes {
     (chat_group_id, agent_id) [pk]
-    user_id [name: 'chat_groups_agents_user_id_idx']
   }
 }
 
@@ -373,8 +367,6 @@ table files {
     file_hash [name: 'file_hash_idx']
     user_id [name: 'files_user_id_idx']
     parent_id [name: 'files_parent_id_idx']
-    chunk_task_id [name: 'files_chunk_task_id_idx']
-    embedding_task_id [name: 'files_embedding_task_id_idx']
     (client_id, user_id) [name: 'files_client_id_user_id_unique', unique]
   }
 }
@@ -403,8 +395,6 @@ table knowledge_base_files {
   indexes {
     (knowledge_base_id, file_id) [pk]
     knowledge_base_id [name: 'knowledge_base_files_kb_id_idx']
-    user_id [name: 'knowledge_base_files_user_id_idx']
-    file_id [name: 'knowledge_base_files_file_id_idx']
   }
 }
 
@@ -478,7 +468,6 @@ table generations {
   indexes {
     user_id [name: 'generations_user_id_idx']
     generation_batch_id [name: 'generations_batch_id_idx']
-    file_id [name: 'generations_file_id_idx']
   }
 }
 
@@ -489,8 +478,6 @@ table message_chunks {
 
   indexes {
     (chunk_id, message_id) [pk]
-    user_id [name: 'message_chunks_user_id_idx']
-    message_id [name: 'message_chunks_message_id_idx']
   }
 }
 
@@ -513,11 +500,8 @@ table message_groups {
 
   indexes {
     (client_id, user_id) [name: 'message_groups_client_id_user_id_unique', unique]
-    user_id [name: 'message_groups_user_id_idx']
     topic_id [name: 'message_groups_topic_id_idx']
     type [name: 'message_groups_type_idx']
-    parent_group_id [name: 'message_groups_parent_group_id_idx']
-    parent_message_id [name: 'message_groups_parent_message_id_idx']
   }
 }
 
@@ -536,7 +520,6 @@ table message_plugins {
 
   indexes {
     (client_id, user_id) [name: 'message_plugins_client_id_user_id_unique', unique]
-    user_id [name: 'message_plugins_user_id_idx']
     tool_call_id [name: 'message_plugins_tool_call_id_idx']
   }
 }
@@ -552,9 +535,6 @@ table message_queries {
 
   indexes {
     (client_id, user_id) [name: 'message_queries_client_id_user_id_unique', unique]
-    user_id [name: 'message_queries_user_id_idx']
-    message_id [name: 'message_queries_message_id_idx']
-    embeddings_id [name: 'message_queries_embeddings_id_idx']
   }
 }
 
@@ -567,9 +547,6 @@ table message_query_chunks {
 
   indexes {
     (chunk_id, id, query_id) [pk]
-    user_id [name: 'message_query_chunks_user_id_idx']
-    id [name: 'message_query_chunks_message_id_idx']
-    query_id [name: 'message_query_chunks_query_id_idx']
   }
 }
 
@@ -583,7 +560,6 @@ table message_tts {
 
   indexes {
     (client_id, user_id) [name: 'message_tts_client_id_user_id_unique', unique]
-    user_id [name: 'message_tts_user_id_idx']
   }
 }
 
@@ -597,7 +573,6 @@ table message_translates {
 
   indexes {
     (client_id, user_id) [name: 'message_translates_client_id_user_id_unique', unique]
-    user_id [name: 'message_translates_user_id_idx']
   }
 }
 
@@ -653,8 +628,6 @@ table messages_files {
 
   indexes {
     (file_id, message_id) [pk]
-    user_id [name: 'messages_files_user_id_idx']
-    message_id [name: 'messages_files_message_id_idx']
   }
 }
 
@@ -673,7 +646,6 @@ table nextauth_accounts {
 
   indexes {
     (provider, providerAccountId) [pk]
-    user_id [name: 'nextauth_accounts_user_id_idx']
   }
 }
 
@@ -696,10 +668,6 @@ table nextauth_sessions {
   expires timestamp [not null]
   sessionToken text [pk, not null]
   user_id text [not null]
-
-  indexes {
-    user_id [name: 'nextauth_sessions_user_id_idx']
-  }
 }
 
 table nextauth_verificationtokens {
@@ -732,10 +700,6 @@ table oidc_access_tokens {
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    user_id [name: 'oidc_access_tokens_user_id_idx']
-  }
 }
 
 table oidc_authorization_codes {
@@ -749,10 +713,6 @@ table oidc_authorization_codes {
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    user_id [name: 'oidc_authorization_codes_user_id_idx']
-  }
 }
 
 table oidc_clients {
@@ -802,10 +762,6 @@ table oidc_device_codes {
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    user_id [name: 'oidc_device_codes_user_id_idx']
-  }
 }
 
 table oidc_grants {
@@ -818,10 +774,6 @@ table oidc_grants {
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    user_id [name: 'oidc_grants_user_id_idx']
-  }
 }
 
 table oidc_interactions {
@@ -844,10 +796,6 @@ table oidc_refresh_tokens {
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    user_id [name: 'oidc_refresh_tokens_user_id_idx']
-  }
 }
 
 table oidc_sessions {
@@ -858,10 +806,6 @@ table oidc_sessions {
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    user_id [name: 'oidc_sessions_user_id_idx']
-  }
 }
 
 table chunks {
@@ -894,7 +838,6 @@ table document_chunks {
     (document_id, chunk_id) [pk]
     document_id [name: 'document_chunks_document_id_idx']
     chunk_id [name: 'document_chunks_chunk_id_idx']
-    user_id [name: 'document_chunks_user_id_idx']
   }
 }
 
@@ -930,9 +873,6 @@ table unstructured_chunks {
 
   indexes {
     (client_id, user_id) [name: 'unstructured_chunks_client_id_user_id_unique', unique]
-    user_id [name: 'unstructured_chunks_user_id_idx']
-    composite_id [name: 'unstructured_chunks_composite_id_idx']
-    file_id [name: 'unstructured_chunks_file_id_idx']
   }
 }
 
@@ -947,10 +887,6 @@ table rag_eval_dataset_records {
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    user_id [name: 'rag_eval_dataset_records_user_id_idx']
-  }
 }
 
 table rag_eval_datasets {
@@ -962,10 +898,6 @@ table rag_eval_datasets {
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    user_id [name: 'rag_eval_datasets_user_id_idx']
-  }
 }
 
 table rag_eval_evaluations {
@@ -983,10 +915,6 @@ table rag_eval_evaluations {
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    user_id [name: 'rag_eval_evaluations_user_id_idx']
-  }
 }
 
 table rag_eval_evaluation_records {
@@ -1007,10 +935,6 @@ table rag_eval_evaluation_records {
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
-
-  indexes {
-    user_id [name: 'rag_eval_evaluation_records_user_id_idx']
-  }
 }
 
 table rbac_permissions {
@@ -1072,7 +996,6 @@ table agents_to_sessions {
     (agent_id, session_id) [pk]
     session_id [name: 'agents_to_sessions_session_id_idx']
     agent_id [name: 'agents_to_sessions_agent_id_idx']
-    user_id [name: 'agents_to_sessions_user_id_idx']
   }
 }
 
@@ -1084,9 +1007,6 @@ table file_chunks {
 
   indexes {
     (file_id, chunk_id) [pk]
-    user_id [name: 'file_chunks_user_id_idx']
-    file_id [name: 'file_chunks_file_id_idx']
-    chunk_id [name: 'file_chunks_chunk_id_idx']
   }
 }
 
@@ -1097,9 +1017,6 @@ table files_to_sessions {
 
   indexes {
     (file_id, session_id) [pk]
-    user_id [name: 'files_to_sessions_user_id_idx']
-    file_id [name: 'files_to_sessions_file_id_idx']
-    session_id [name: 'files_to_sessions_session_id_idx']
   }
 }
 
@@ -1115,7 +1032,6 @@ table session_groups {
 
   indexes {
     (client_id, user_id) [name: 'session_groups_client_id_user_id_unique', unique]
-    user_id [name: 'session_groups_user_id_idx']
   }
 }
 
@@ -1167,11 +1083,9 @@ table threads {
 
   indexes {
     (client_id, user_id) [name: 'threads_client_id_user_id_unique', unique]
-    user_id [name: 'threads_user_id_idx']
     topic_id [name: 'threads_topic_id_idx']
     agent_id [name: 'threads_agent_id_idx']
     group_id [name: 'threads_group_id_idx']
-    parent_thread_id [name: 'threads_parent_thread_id_idx']
   }
 }
 
@@ -1183,9 +1097,6 @@ table topic_documents {
 
   indexes {
     (document_id, topic_id) [pk]
-    user_id [name: 'topic_documents_user_id_idx']
-    topic_id [name: 'topic_documents_topic_id_idx']
-    document_id [name: 'topic_documents_document_id_idx']
   }
 }
 
