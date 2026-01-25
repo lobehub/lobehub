@@ -19,7 +19,6 @@ import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { downloadFile } from '@/utils/client/downloadFile';
 
 import FileContent from './FileContent';
-import FileCopilot from './FileCopilot';
 
 interface FileEditorProps {
   onBack?: () => void;
@@ -81,7 +80,7 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
             <FileContent fileId={currentViewItemId} />
           </Flexbox>
         </Flexbox>
-        <FileCopilot />
+        {/* <FileCopilot /> */}
       </Flexbox>
 
       <Modal

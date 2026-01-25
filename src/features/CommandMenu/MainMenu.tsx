@@ -7,7 +7,6 @@ import {
   FilePen,
   Github,
   LibraryBig,
-  MailIcon,
   MessageSquarePlusIcon,
   Monitor,
   Star,
@@ -86,23 +85,24 @@ const MainMenu = memo(() => {
           {t('cmdk.newLibrary')}
         </CommandItem>
 
-        {menuContext !== 'settings' && (() => {
-          const settingsRoute = getRouteById('settings');
-          const SettingsIcon = settingsRoute?.icon;
-          const keywords = settingsRoute?.keywordsKey
-            ? t(settingsRoute.keywordsKey as any).split(' ')
-            : settingsRoute?.keywords;
-          return (
-            <CommandItem
-              icon={SettingsIcon && <SettingsIcon />}
-              keywords={keywords}
-              onSelect={() => handleNavigate(settingsRoute?.path || '/settings')}
-              value="settings"
-            >
-              {t('cmdk.settings')}
-            </CommandItem>
-          );
-        })()}
+        {menuContext !== 'settings' &&
+          (() => {
+            const settingsRoute = getRouteById('settings');
+            const SettingsIcon = settingsRoute?.icon;
+            const keywords = settingsRoute?.keywordsKey
+              ? t(settingsRoute.keywordsKey as any).split(' ')
+              : settingsRoute?.keywords;
+            return (
+              <CommandItem
+                icon={SettingsIcon && <SettingsIcon />}
+                keywords={keywords}
+                onSelect={() => handleNavigate(settingsRoute?.path || '/settings')}
+                value="settings"
+              >
+                {t('cmdk.settings')}
+              </CommandItem>
+            );
+          })()}
 
         <CommandItem
           icon={<Monitor />}
