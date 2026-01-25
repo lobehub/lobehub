@@ -577,6 +577,8 @@ export class DiscoverService {
             role: example.role || 'user',
           }))
           : [],
+        forkCount: (data as any).forkCount,
+        forkedFromAgentId: (data as any).forkedFromAgentId,
         homepage:
           (data as any).homepage ||
           `https://lobehub.com/discover/assistant/${(data as any).identifier}`,
