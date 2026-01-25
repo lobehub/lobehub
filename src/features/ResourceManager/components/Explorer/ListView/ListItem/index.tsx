@@ -189,12 +189,23 @@ const FileListItem = memo<FileListItemProps>(
     const [isOver, setIsOver] = useState(false);
 
     const computedValues = useMemo(() => {
-      const isPDF = fileType?.toLowerCase() === 'pdf' || name?.toLowerCase().endsWith('.pdf');
+      const lowerFileType = fileType?.toLowerCase();
+      const lowerName = name?.toLowerCase();
+      const isPDF = lowerFileType === 'pdf' || lowerName?.endsWith('.pdf');
+      // Office files should use the MSDoc viewer, not the page editor
+      const isOfficeFile =
+        lowerName?.endsWith('.xls') ||
+        lowerName?.endsWith('.xlsx') ||
+        lowerName?.endsWith('.doc') ||
+        lowerName?.endsWith('.docx') ||
+        lowerName?.endsWith('.ppt') ||
+        lowerName?.endsWith('.pptx') ||
+        lowerName?.endsWith('.odt');
       return {
         emoji: sourceType === 'document' || fileType === PAGE_FILE_TYPE ? metadata?.emoji : null,
         isFolder: fileType === 'custom/folder',
-        // PDF files should not be treated as pages, even if they have sourceType='document'
-        isPage: !isPDF && (sourceType === 'document' || fileType === PAGE_FILE_TYPE),
+        // PDF and Office files should not be treated as pages, even if they have sourceType='document'
+        isPage: !isPDF && !isOfficeFile && (sourceType === 'document' || fileType === PAGE_FILE_TYPE),
         isSupportedForChunking: !isChunkingUnsupported(fileType),
       };
     }, [fileType, sourceType, metadata?.emoji, name]);

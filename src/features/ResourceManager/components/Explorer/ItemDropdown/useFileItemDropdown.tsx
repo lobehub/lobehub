@@ -77,7 +77,18 @@ export const useFileItemDropdown = ({
 
   const isInLibrary = !!libraryId;
   const isFolder = fileType === 'custom/folder';
-  const isPage = sourceType === 'document' || fileType === PAGE_FILE_TYPE;
+  // PDF and Office files should not be treated as pages
+  const lowerFilename = filename?.toLowerCase();
+  const isPDF = fileType?.toLowerCase() === 'pdf' || lowerFilename?.endsWith('.pdf');
+  const isOfficeFile =
+    lowerFilename?.endsWith('.xls') ||
+    lowerFilename?.endsWith('.xlsx') ||
+    lowerFilename?.endsWith('.doc') ||
+    lowerFilename?.endsWith('.docx') ||
+    lowerFilename?.endsWith('.ppt') ||
+    lowerFilename?.endsWith('.pptx') ||
+    lowerFilename?.endsWith('.odt');
+  const isPage = !isPDF && !isOfficeFile && (sourceType === 'document' || fileType === PAGE_FILE_TYPE);
 
   const menuItems = useCallback(() => {
     // Filter out current knowledge base and create submenu items

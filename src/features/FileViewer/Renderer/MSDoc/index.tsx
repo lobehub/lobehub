@@ -2,7 +2,10 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { css, cx } from 'antd-style';
+import debug from 'debug';
 import { memo } from 'react';
+
+const logger = debug('resource:msdoc');
 
 const container = css`
   position: relative;
@@ -27,6 +30,8 @@ interface MSDocViewerProps {
 
 const MSDocViewer = memo<MSDocViewerProps>(({ url }) => {
   if (!url) return null;
+
+  console.log(url);
 
   return (
     <Flexbox className={cx(container)} height={'100%'} id="msdoc-renderer" width={'100%'}>

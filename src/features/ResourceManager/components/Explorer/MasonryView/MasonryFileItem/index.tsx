@@ -44,10 +44,19 @@ const isMarkdownFile = (name: string, fileType?: string) => {
 };
 
 // Helper to check if it's a custom page that should be rendered
-// PDF files should not be treated as pages even if they have fileType='custom/document'
+// PDF and Office files should not be treated as pages even if they have fileType='custom/document'
 const isCustomPage = (fileType?: string, name?: string) => {
-  const isPDF = fileType?.toLowerCase() === 'pdf' || name?.toLowerCase().endsWith('.pdf');
-  return !isPDF && fileType === CUSTOM_NOTE_TYPE;
+  const lowerName = name?.toLowerCase();
+  const isPDF = fileType?.toLowerCase() === 'pdf' || lowerName?.endsWith('.pdf');
+  const isOfficeFile =
+    lowerName?.endsWith('.xls') ||
+    lowerName?.endsWith('.xlsx') ||
+    lowerName?.endsWith('.doc') ||
+    lowerName?.endsWith('.docx') ||
+    lowerName?.endsWith('.ppt') ||
+    lowerName?.endsWith('.pptx') ||
+    lowerName?.endsWith('.odt');
+  return !isPDF && !isOfficeFile && fileType === CUSTOM_NOTE_TYPE;
 };
 
 // Helper function to extract text from editor's JSON format for preview
