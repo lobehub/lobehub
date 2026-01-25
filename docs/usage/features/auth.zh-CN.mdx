@@ -1,51 +1,74 @@
 ---
-title: 多用户管理支持
-description: LobeChat 提供了多种用户认证和管理方案，以满足不同用户的需求。
+title: 用户认证与账号管理
+description: 了解 LobeChat 基于 Better Auth 的用户认证方案，支持邮箱密码、魔法链接、SSO 登录及账号注销等功能。
 tags:
-  - LobeChat
-  - 用户管理
-  - next-auth
-  - Clerk
-  - 身份验证
-  - 多因素认证
+  - 用户认证
+  - Better Auth
+  - SSO
+  - 账号管理
+  - 会话管理
 ---
 
-# 身份验证系统 / 多用户管理支持
+# 用户认证与账号管理
 
 <Image alt={'身份验证系统'} cover src={'https://github.com/user-attachments/assets/80bb232e-19d1-4f97-98d6-e291f3585e6d'} />
 
-在现代应用中，用户管理和身份验证是至关重要的功能。为满足不同用户的多样化需求，LobeChat 提供了两种主要的用户认证和管理方案：`next-auth` 和 `Clerk`。无论您是追求简便的用户注册登录，还是需要更高级的多因素认证和用户管理，LobeChat 都可以灵活实现。
+LobeChat 使用 [Better Auth](https://www.better-auth.com) 作为身份验证解决方案，提供全面、安全、灵活的身份验证服务。
 
-## next-auth：灵活且强大的身份验证库
+## 认证方式
 
-LobeChat 集成了 `next-auth`，一个灵活且强大的身份验证库，支持多种身份验证方式，包括 OAuth、邮件登录、凭证登录等。通过 `next-auth`，您可以轻松实现以下功能：
+LobeChat 支持多种认证方式，满足不同用户的需求：
 
-- **用户注册和登录**：支持多种认证方式，满足不同用户的需求。
-- **会话管理**：高效管理用户会话，确保安全性。
-- **社交登录**：支持多种社交平台的快捷登录。
-- **数据安全**：保障用户数据的安全性和隐私性。
+### 邮箱 / 密码
 
-<Callout type={'info'}>
-  关于 Next-Auth 的使用，可以查阅 [身份验证服务 - Next
-  Auth](/zh/docs/self-hosting/advanced/authentication#next-auth)。
+传统的邮箱和密码登录方式，采用安全的密码哈希算法。您可以使用邮箱地址注册新账号并设置密码。
+
+### 魔法链接
+
+通过邮件魔法链接实现无密码认证。只需输入邮箱，点击收件箱中的链接即可登录，无需记忆密码。
+
+### 社交登录 (SSO)
+
+通过主流身份提供商快速登录：
+
+- **Google** - 使用 Google 账号登录
+- **GitHub** - 使用 GitHub 账号登录
+- **Microsoft** - 使用 Microsoft 账号登录
+- **Apple** - 使用 Apple ID 登录
+- 更多...
+
+## 账号管理
+
+### 个人资料设置
+
+您可以在 **设置 > 个人资料** 中管理您的账号资料：
+
+![个人资料页面](https://hub-apac-1.lobeobjects.space/docs/d9b41a1607d49319fd670e88529199cf.png)
+
+- 更新头像
+- 修改显示名称
+- 设置用户名
+- 管理已连接的 SSO 提供商
+- 修改密码（如果使用邮箱密码登录）
+
+### 账号注销
+
+如果您希望注销账号，可以在 **设置 > 数据存储** 中申请注销：
+
+1. 点击 **申请注销账号**
+2. 填写注销原因
+3. 勾选确认复选框
+4. 提交申请
+
+<Callout type={'warning'}>
+  提交后将进入 **72 小时冷静期**，期间可随时取消。冷静期结束后：
+
+  - 您的账号数据将被永久删除
+  - 未支付的账单将立即取消
+  - 已支付的费用不予退还
+  - 您的注册和注销记录将被保留以满足合规要求
 </Callout>
 
-## Clerk：现代化用户管理平台
-
-对于需要更高级用户管理功能的用户，LobeChat 还支持 [Clerk](https://clerk.com) ，一个现代化的用户管理平台。Clerk 提供了更丰富的功能，帮助您实现更高的安全性和灵活性：
-
-- **多因素认证 (MFA)**：提供更高的安全保障。
-- **用户配置文件管理**：便捷管理用户信息和配置。
-- **登录活动监控**：实时监控用户登录活动，确保账户安全。
-- **扩展性**：支持复杂的用户管理需求。
-
 <Callout type={'info'}>
-  关于 Clerk 的使用，可以查阅 [身份验证服务 -
-  Clerk](/zh/docs/self-hosting/advanced/authentication#clerk)。
-</Callout>
-
-<Callout type={'tip'}>
-  如果需要在服务端数据库中搭配使用 Clerk 的使用，可以查阅
-  [使用服务端数据库部署](/zh/docs/self-hosting/advanced/server-database)
-  中的「配置身份验证服务」部分。
+  如需自托管部署，请参阅 [身份验证服务](/zh/docs/self-hosting/advanced/auth) 了解配置详情。
 </Callout>

@@ -1,55 +1,76 @@
 ---
-title: Support Multi-User Management - Identity Verification Solutions
+title: User Authentication and Account Management
 description: >-
-  Explore LobeChat's user authentication solutions with next-auth and Clerk for flexible and secure user management. Learn about features like user registration, session management, multi-factor authentication, and more.
+  Explore LobeChat's user authentication solutions with Better Auth for flexible and secure user management. Learn about features like email/password login, magic link, SSO, and account deletion.
 
 tags:
-  - Multi-User Management
-  - Identity Verification
-  - next-auth
-  - Clerk
   - User Authentication
+  - Better Auth
+  - SSO
+  - Account Management
   - Session Management
-  - Multi-Factor Authentication
-  - User Management
 ---
 
-# Support Multi-User Management
+# User Authentication and Account Management
 
 <Image alt={'Identity Verification System'} cover src={'https://github.com/user-attachments/assets/80bb232e-19d1-4f97-98d6-e291f3585e6d'} />
 
-In modern applications, user management and identity verification are essential functions. To meet the diverse needs of different users, LobeChat provides two main user authentication and management solutions: `next-auth` and `Clerk`. Whether you are looking for simple user registration and login or need advanced multi-factor authentication and user management, LobeChat can flexibly accommodate your requirements.
+LobeChat uses [Better Auth](https://www.better-auth.com) as its authentication solution, providing comprehensive, secure, and flexible identity verification services.
 
-## next-auth: Flexible and Powerful Identity Verification Library
+## Authentication Methods
 
-LobeChat integrates `next-auth`, a flexible and powerful identity verification library that supports various authentication methods, including OAuth, email login, and credential login. With `next-auth`, you can easily achieve the following functions:
+LobeChat supports multiple authentication methods to meet diverse user needs:
 
-- **User Registration and Login**: Support various authentication methods to meet different user needs.
-- **Session Management**: Efficiently manage user sessions to ensure security.
-- **Social Login**: Support quick login via various social platforms.
-- **Data Security**: Ensure the security and privacy of user data.
+### Email / Password
 
-<Callout type={'info'}>
-  For information on using Next-Auth, you can refer to [Authentication Services - Next
-  Auth](/docs/self-hosting/advanced/authentication#next-auth).
+Traditional email and password login with secure password hashing. You can register a new account with your email address and set a password.
+
+### Magic Link
+
+Passwordless authentication via email magic link. Simply enter your email, click the link sent to your inbox, and you're logged in - no password required.
+
+### Social Login (SSO)
+
+Quick login via popular identity providers:
+
+- **Google** - Sign in with your Google account
+- **GitHub** - Sign in with your GitHub account
+- **Microsoft** - Sign in with your Microsoft account
+- **Apple** - Sign in with your Apple ID
+- And more...
+
+## Account Management
+
+### Profile Settings
+
+You can manage your account profile in **Settings > Profile**:
+
+![Profile Page](https://hub-apac-1.lobeobjects.space/docs/d9b41a1607d49319fd670e88529199cf.png)
+
+- Update your avatar
+- Change your display name
+- Set your username
+- Manage connected SSO providers
+- Change your password (if using email/password login)
+
+### Account Deletion
+
+If you wish to delete your account, you can request account deletion in **Settings > Data Storage**:
+
+1. Click **Request Account Deletion**
+2. Enter the reason for deletion
+3. Check the confirmation box
+4. Submit your request
+
+<Callout type={'warning'}>
+  After submission, there is a **72-hour cooling-off period** during which you can cancel at any time. Once the period ends:
+
+  - Your account data will be permanently deleted
+  - Unpaid invoices will be canceled immediately
+  - Paid fees will not be refunded
+  - Your registration and deletion records will be retained for compliance purposes
 </Callout>
 
-## Clerk: Modern User Management Platform
-
-For users requiring advanced user management features, LobeChat also supports [Clerk](https://clerk.com), a modern user management platform. Clerk offers richer functionality to help you achieve higher security and flexibility:
-
-- **Multi-Factor Authentication (MFA)**: Provides higher security protection.
-- **User Profile Management**: Conveniently manage user information and configurations.
-- **Login Activity Monitoring**: Real-time monitoring of user login activities to ensure account security.
-- **Scalability**: Supports complex user management requirements.
-
 <Callout type={'info'}>
-  For information on using Clerk, you can refer to [Authentication Services -
-  Clerk](/docs/self-hosting/advanced/authentication#clerk) .
-</Callout>
-
-<Callout type={'tip'}>
-  If you need to use Clerk in conjunction with a server-side database, you can refer to the
-  "Configuring Authentication Services" section in [Deploying with a Server-Side
-  Database](/docs/self-hosting/advanced/server-database).
+  For self-hosting deployment, please refer to [Authentication Services](/docs/self-hosting/advanced/auth) for configuration details.
 </Callout>
