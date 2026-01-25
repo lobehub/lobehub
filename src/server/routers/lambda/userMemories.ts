@@ -19,9 +19,9 @@ import pMap from 'p-map';
 import { z } from 'zod';
 
 import {
-  UserMemoryActivityModel,
   type IdentityEntryBasePayload,
   type IdentityEntryPayload,
+  UserMemoryActivityModel,
   UserMemoryExperienceModel,
   UserMemoryIdentityModel,
   UserMemoryModel,
@@ -68,6 +68,8 @@ const mapMemorySearchResult = (layeredResults: MemorySearchResult): SearchMemory
       feedback: activity.feedback,
       id: activity.id,
       metadata: activity.metadata,
+      narrative: activity.narrative,
+      notes: activity.notes,
       startsAt: activity.startsAt,
       status: activity.status,
       tags: activity.tags,
