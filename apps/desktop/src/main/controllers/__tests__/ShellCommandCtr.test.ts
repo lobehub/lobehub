@@ -193,6 +193,42 @@ describe('ShellCommandCtr', () => {
         expect(result.stderr).toBe('error message\n');
       });
 
+      it('should truncate long output to prevent context explosion', async () => {
+        let exitCallback: (code: number) => void;
+        let stdoutCallback: (data: Buffer) => void;
+
+        mockChildProcess.on.mockImplementation((event: string, callback: any) => {
+          if (event === 'exit') {
+            exitCallback = callback;
+            setTimeout(() => exitCallback(0), 10);
+          }
+          return mockChildProcess;
+        });
+
+        mockChildProcess.stdout.on.mockImplementation((event: string, callback: any) => {
+          if (event === 'data') {
+            stdoutCallback = callback;
+            // Simulate very long output (15k characters)
+            const longOutput = 'x'.repeat(15_000);
+            setTimeout(() => stdoutCallback(Buffer.from(longOutput)), 5);
+          }
+          return mockChildProcess.stdout;
+        });
+
+        mockChildProcess.stderr.on.mockImplementation(() => mockChildProcess.stderr);
+
+        const result = await shellCommandCtr.handleRunCommand({
+          command: 'command-with-long-output',
+          description: 'long output command',
+        });
+
+        expect(result.success).toBe(true);
+        // Output should be truncated to ~10k + truncation message
+        expect(result.stdout!.length).toBeLessThan(15_000);
+        expect(result.stdout).toContain('truncated');
+        expect(result.stdout).toContain('more characters');
+      });
+
       it('should enforce timeout limits', async () => {
         mockChildProcess.on.mockImplementation(() => mockChildProcess);
         mockChildProcess.stdout.on.mockImplementation(() => mockChildProcess.stdout);
