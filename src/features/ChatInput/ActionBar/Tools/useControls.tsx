@@ -39,7 +39,15 @@ const SKILL_ICON_SIZE = 20;
  */
 const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
   if (typeof icon === 'string') {
-    return <Avatar alt={label} avatar={icon} size={SKILL_ICON_SIZE} style={{ flex: 'none' }} />;
+    return (
+      <Avatar
+        alt={label}
+        avatar={icon}
+        shape={'square'}
+        size={SKILL_ICON_SIZE}
+        style={{ flex: 'none' }}
+      />
+    );
   }
 
   return <Icon fill={cssVar.colorText} icon={icon} size={SKILL_ICON_SIZE} />;
@@ -53,7 +61,15 @@ KlavisIcon.displayName = 'KlavisIcon';
 const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
   ({ icon, label }) => {
     if (typeof icon === 'string') {
-      return <Avatar alt={label} avatar={icon} size={SKILL_ICON_SIZE} style={{ flex: 'none' }} />;
+      return (
+        <Avatar
+          alt={label}
+          avatar={icon}
+          shape={'square'}
+          size={SKILL_ICON_SIZE}
+          style={{ flex: 'none' }}
+        />
+      );
     }
 
     return <Icon fill={cssVar.colorText} icon={icon} size={SKILL_ICON_SIZE} />;

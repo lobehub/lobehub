@@ -9,6 +9,7 @@ import Empty from './Empty';
 
 type TabType = 'all' | 'installed';
 
+const SKILL_ICON_SIZE = 20;
 const prefixCls = 'ant';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -111,7 +112,7 @@ const PopoverContent = memo<PopoverContentProps>(
         >
           <div className={styles.footerItem} onClick={onOpenStore} role="button" tabIndex={0}>
             <div className={styles.footerItemIcon}>
-              <Icon icon={Store} size={20} />
+              <Icon icon={Store} size={SKILL_ICON_SIZE} />
             </div>
             <div className={styles.footerItemContent}>{t('skillStore.title')}</div>
             <Icon className={styles.trailingIcon} icon={ArrowRight} size={16} />
@@ -126,7 +127,7 @@ const PopoverContent = memo<PopoverContentProps>(
             tabIndex={0}
           >
             <div className={styles.footerItemIcon}>
-              <Icon icon={Settings} size={20} />
+              <Icon icon={Settings} size={SKILL_ICON_SIZE} />
             </div>
             <div className={styles.footerItemContent}>{t('tools.plugins.management')}</div>
             <Icon className={styles.trailingIcon} icon={ExternalLink} size={16} />
