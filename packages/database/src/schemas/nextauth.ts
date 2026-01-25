@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, index, integer, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { users } from './user';
 
@@ -33,6 +33,7 @@ export const nextauthAccounts = pgTable(
     compositePk: primaryKey({
       columns: [account.provider, account.providerAccountId],
     }),
+    userIdIdx: index('nextauth_accounts_user_id_idx').on(account.userId),
   }),
 );
 
@@ -42,13 +43,19 @@ export const nextauthAccounts = pgTable(
  * which will enable remote logout and other features.
  * @see {@link https://authjs.dev/guides/creating-a-database-adapter#database-session-management | NextAuth Doc}
  */
-export const nextauthSessions = pgTable(`nextauth_sessions`, {
-  expires: timestamp('expires', { mode: 'date' }).notNull(),
-  sessionToken: text('sessionToken').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-});
+export const nextauthSessions = pgTable(
+  `nextauth_sessions`,
+  {
+    expires: timestamp('expires', { mode: 'date' }).notNull(),
+    sessionToken: text('sessionToken').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+  },
+  (t) => ({
+    userIdIdx: index('nextauth_sessions_user_id_idx').on(t.userId),
+  }),
+);
 
 /**
  * @description This table stores nextauth verification tokens.
