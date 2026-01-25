@@ -6,6 +6,7 @@ export const CalculatorApiName = {
   defintegrate: 'defintegrate',
   differentiate: 'differentiate',
   evaluate: 'evaluate',
+  execute: 'execute',
   integrate: 'integrate',
   limit: 'limit',
   solve: 'solve',
@@ -139,4 +140,14 @@ export interface LimitState {
   point?: string | number;
   result?: string;
   variable?: string;
+}
+
+// Generic Nerdamer Execute API
+export interface ExecuteParams {
+  expression: string;
+}
+
+export interface ExecuteState {
+  expression?: string;
+  result?: string;
 }

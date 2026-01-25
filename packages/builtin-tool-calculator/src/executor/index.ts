@@ -12,6 +12,7 @@ import {
   type DefintegrateParams,
   type DifferentiateParams,
   type EvaluateParams,
+  type ExecuteParams,
   type IntegrateParams,
   type LimitParams,
   type SolveParams,
@@ -504,6 +505,36 @@ class CalculatorExecutor
         error: {
           message: err.message,
           type: 'DefintegrationError',
+        },
+        success: false,
+      };
+    }
+  };
+
+  /**
+   * Execute a generic nerdamer expression
+   */
+  execute = async (params: ExecuteParams): Promise<BuiltinToolResult> => {
+    try {
+      const { expression } = params;
+      const result = nerdamer(expression);
+      const resultText = result.toString();
+
+      return {
+        content: resultText,
+        state: {
+          expression,
+          result: resultText,
+        },
+        success: true,
+      };
+    } catch (error) {
+      const err = error as Error;
+      return {
+        content: `Nerdamer execution error: ${err.message}`,
+        error: {
+          message: err.message,
+          type: 'NerdamerError',
         },
         success: false,
       };

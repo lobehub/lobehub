@@ -12,6 +12,8 @@ import {
   type DifferentiateState,
   type EvaluateParams,
   type EvaluateState,
+  type ExecuteParams,
+  type ExecuteState,
   type IntegrateParams,
   type IntegrateState,
   type LimitParams,
@@ -170,6 +172,30 @@ export class CalculatorExecutionRuntime {
         expression: result.state?.expression,
         result: result.state?.result as string | undefined,
         variable: result.state?.variable,
+      };
+
+      return {
+        content: result.content || '',
+        state,
+        success: result.success,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        content: errorMessage,
+        error,
+        success: false,
+      };
+    }
+  }
+
+  async execute(args: ExecuteParams): Promise<BuiltinServerRuntimeOutput> {
+    try {
+      const result = await calculatorExecutor.execute(args);
+
+      const state: ExecuteState = {
+        expression: result.state?.expression,
+        result: result.state?.result as string | undefined,
       };
 
       return {

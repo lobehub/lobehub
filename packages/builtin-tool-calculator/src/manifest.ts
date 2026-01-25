@@ -190,6 +190,22 @@ export const CalculatorManifest: BuiltinToolManifest = {
       },
     },
     {
+      description: 'Execute a generic nerdamer expression for symbolic math computations.',
+      name: CalculatorApiName.execute,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          expression: {
+            description:
+              'Nerdamer expression to execute (e.g., "expand((x+1)^2)", "factor(x^2-1)", "partfrac(1/(x^2-1))")',
+            type: 'string',
+          },
+        },
+        required: ['expression'],
+        type: 'object',
+      },
+    },
+    {
       description: 'Compute the limit of a mathematical expression.',
       name: CalculatorApiName.limit,
       parameters: {

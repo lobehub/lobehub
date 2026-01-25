@@ -489,6 +489,94 @@ describe('Calculator Definite Integration', () => {
   });
 });
 
+describe('Calculator Nerdamer Execute', () => {
+  describe('execute', () => {
+    it('should execute expand expression', async () => {
+      const result = await calculatorExecutor.execute({
+        expression: 'expand((x+1)^2)',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('1+2*x+x^2');
+      expect(result.state?.expression).toBe('expand((x+1)^2)');
+      expect(result.state?.result).toBeDefined();
+    });
+
+    it('should execute factor expression', async () => {
+      const result = await calculatorExecutor.execute({
+        expression: 'factor(x^2-1)',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('(-1+x)*(1+x)');
+    });
+
+    it('should execute partfrac expression', async () => {
+      const result = await calculatorExecutor.execute({
+        expression: 'partfrac(1/(x^2-1))',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('1/2');
+    });
+
+    it('should execute simplify expression', async () => {
+      const result = await calculatorExecutor.execute({
+        expression: 'simplify(x^2+2*x-x)',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('(1+x)*x');
+    });
+
+    it('should execute toTeX expression', async () => {
+      const result = await calculatorExecutor.execute({
+        expression: 'toTeX(x^2+2*x+1)',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('(1+2*x+x^2)*toTeX');
+    });
+
+    it('should execute coefficients expression', async () => {
+      const result = await calculatorExecutor.execute({
+        expression: 'coeffs(x^3+2*x^2+3*x+4)',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('x^3');
+    });
+
+    it('should execute roots expression', async () => {
+      const result = await calculatorExecutor.execute({
+        expression: 'roots(x^2-4)',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('[2,-2]');
+    });
+
+    it('should handle invalid expressions gracefully', async () => {
+      const result = await calculatorExecutor.execute({
+        expression: 'invalid_function(x)',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('invalid_function');
+    });
+
+    it('should preserve state information', async () => {
+      const result = await calculatorExecutor.execute({
+        expression: 'expand(x*y)',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.state?.expression).toBe('expand(x*y)');
+      expect(result.state?.result).toBeDefined();
+    });
+  });
+});
+
 describe('Calculator Base Conversion', () => {
   it('should base binary to decimal', async () => {
     const result = await calculatorExecutor.base({

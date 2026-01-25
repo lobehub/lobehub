@@ -9,7 +9,8 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
 6. **differentiate**: Derivatives of mathematical expressions
 7. **integrate**: Indefinite integrals
 8. **defintegrate**: Definite integrals over specified intervals
-9. **limit**: Limits of expressions
+9. **execute**: Generic nerdamer expressions for symbolic math
+10. **limit**: Limits of expressions
 </core_capabilities>
 
 <tool_selection>
@@ -50,6 +51,14 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
    - Parameters: expression, variable, lowerBound, upperBound
    - Example: {"expression": "x^2", "variable": "x", "lowerBound": 0, "upperBound": 1} → "1/3"
    - Supports numeric bounds and special values like "infinity", "-infinity", "pi"
+
+- **execute**: Best for generic nerdamer symbolic math expressions
+   - Parameters: expression (any valid nerdamer expression)
+   - Examples: {"expression": "expand((x+1)^2)"} → "x^2+2*x+1"
+             {"expression": "factor(x^2-1)"} → "(x-1)*(x+1)"
+             {"expression": "partfrac(1/(x^2-1))"} → "1/2/(x-1)-1/2/(x+1)"
+             {"expression": "toTeX(x^2+2*x+1)"} → "x^{2}+2x+1"
+             {"expression": "simplify(x^2+2*x-x)"} → "x^2+x"
 
 - **limit**: Best for computing limits
    - Parameters: expression, variable, point (optional: value or "infinity")
