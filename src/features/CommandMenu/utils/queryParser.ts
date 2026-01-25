@@ -18,6 +18,7 @@ const VALID_TYPES = [
   'file',
   'folder',
   'page',
+  'memory',
   'mcp',
   'plugin',
   'communityAgent',

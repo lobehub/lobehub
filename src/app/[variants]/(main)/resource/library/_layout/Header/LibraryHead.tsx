@@ -33,6 +33,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+/**
+ * Quickly switch between libraries
+ */
 const Head = memo<{ id: string }>(({ id }) => {
   const navigate = useNavigate();
   const name = useKnowledgeBaseStore(knowledgeBaseSelectors.getKnowledgeBaseNameById(id));

@@ -2,6 +2,74 @@
 
 # Changelog
 
+## [Version 2.0.0-next.375](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.374...v2.0.0-next.375)
+
+<sup>Released on **2026-01-25**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Broadcast tools calling and improve auto scroll.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Broadcast tools calling and improve auto scroll, closes [#11804](https://github.com/lobehub/lobe-chat/issues/11804) ([c352915](https://github.com/lobehub/lobe-chat/commit/c352915))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.0.0-next.374](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.373...v2.0.0-next.374)
+
+<sup>Released on **2026-01-25**</sup>
+
+#### ✨ Features
+
+- **misc**: Update the discover page sort, add haveSkill、mostUsage params.
+
+#### 🐛 Bug Fixes
+
+- **deps**: Lock better-auth to 1.4.6 and better-call to 1.1.8.
+- **userMemories**: Should log out more errors for extraction.
+
+#### 💄 Styles
+
+- **misc**: Update share action bar.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Update the discover page sort, add haveSkill、mostUsage params, closes [#11807](https://github.com/lobehub/lobe-chat/issues/11807) ([01c641e](https://github.com/lobehub/lobe-chat/commit/01c641e))
+
+#### What's fixed
+
+- **deps**: Lock better-auth to 1.4.6 and better-call to 1.1.8, closes [#11809](https://github.com/lobehub/lobe-chat/issues/11809) ([b2409a5](https://github.com/lobehub/lobe-chat/commit/b2409a5))
+- **userMemories**: Should log out more errors for extraction, closes [#11810](https://github.com/lobehub/lobe-chat/issues/11810) ([e45c529](https://github.com/lobehub/lobe-chat/commit/e45c529))
+
+#### Styles
+
+- **misc**: Update share action bar, closes [#11811](https://github.com/lobehub/lobe-chat/issues/11811) ([0a856bc](https://github.com/lobehub/lobe-chat/commit/0a856bc))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ## [Version 2.0.0-next.373](https://github.com/lobehub/lobe-chat/compare/v2.0.0-next.372...v2.0.0-next.373)
 
 <sup>Released on **2026-01-25**</sup>

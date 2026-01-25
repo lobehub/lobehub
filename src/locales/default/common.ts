@@ -118,7 +118,7 @@ export default {
   'cmdk.askLobeAI': 'Ask Lobe AI',
   'cmdk.community': 'Community',
   'cmdk.communitySupport': 'Community Support',
-  'cmdk.contactViaEmail': 'Contact Us',
+  'cmdk.contactUs': 'Contact Us',
   'cmdk.context.agent': 'Agent',
   'cmdk.context.community': 'Community',
   'cmdk.context.general': 'General',
@@ -132,32 +132,109 @@ export default {
   'cmdk.keyboard.ESC': 'ESC',
   'cmdk.keyboard.Enter': 'Enter',
   'cmdk.keyboard.Tab': 'Tab',
+
+  'cmdk.keywords.about': 'about version info',
+
+  'cmdk.keywords.apikey': 'apikey api key token',
+
+  'cmdk.keywords.appearance': 'common appearance theme display',
+
+  'cmdk.keywords.billing': 'billing payment invoice transaction',
+
+  'cmdk.keywords.community': 'discover market assistant model provider mcp',
+
+  // CMDK search keywords (space-separated for i18n)
+  'cmdk.keywords.contactUs': 'feedback issue bug problem',
+
+  'cmdk.keywords.discord': 'discord help support customer service',
+
+  'cmdk.keywords.funds': 'funds balance credit money',
+
+  'cmdk.keywords.hotkey': 'hotkey shortcut keyboard',
+
+  'cmdk.keywords.image': 'image picture photo',
+
+  'cmdk.keywords.memory': 'identities contexts preferences experiences',
+
+  'cmdk.keywords.pages': 'documents write notes',
+
+  'cmdk.keywords.painting': 'painting art generate draw',
+
+  'cmdk.keywords.plans': 'subscription plan upgrade pricing',
+
+  'cmdk.keywords.profile': 'profile user account personal',
+
+  'cmdk.keywords.provider': 'provider llm model ai',
+
+  'cmdk.keywords.proxy': 'proxy network connection',
+
+  'cmdk.keywords.referral': 'referral rewards invite bonus',
+
+  'cmdk.keywords.resources': 'knowledge files library documents',
+
+  'cmdk.keywords.settings': 'settings preferences configuration options',
+
+  'cmdk.keywords.starGitHub': 'github star favorite like',
+
+  'cmdk.keywords.stats': 'stats statistics analytics',
+
+  'cmdk.keywords.submitIssue': 'issue bug problem feedback',
+
+  'cmdk.keywords.usage': 'usage statistics consumption quota',
+
   'cmdk.memory': 'Memory',
+
   'cmdk.mentionAgent': 'Mention Agent',
+
   'cmdk.navigate': 'Navigate',
+
   'cmdk.newAgent': 'Create New Agent',
+
   'cmdk.newAgentTeam': 'Create New Group',
+
   'cmdk.newLibrary': 'Create New Library',
+
   'cmdk.newPage': 'Create New Page',
-  'cmdk.newTopic': 'New topic in current Agent',
-  'cmdk.noResults': 'No results found',
+
+  'cmdk.newTopic': 'New Topic in Current Agent',
+
+  'cmdk.noResults': 'No Results found',
+
   'cmdk.openSettings': 'Open Settings',
+
   'cmdk.pages': 'Pages',
+
   'cmdk.painting': 'Painting',
+
   'cmdk.resource': 'Resources',
+
   'cmdk.search.agent': 'Agent',
+
   'cmdk.search.agents': 'Agents',
+
   'cmdk.search.assistant': 'Agent',
+
   'cmdk.search.assistants': 'Agents',
+
   'cmdk.search.communityAgent': 'Community Agent',
+
   'cmdk.search.file': 'File',
+
   'cmdk.search.files': 'Files',
+
   'cmdk.search.folder': 'Folder',
+
   'cmdk.search.folders': 'Folders',
+
   'cmdk.search.loading': 'Searching...',
+
   'cmdk.search.market': 'Community',
+
   'cmdk.search.mcp': 'MCP Server',
+
   'cmdk.search.mcps': 'MCP Servers',
+  'cmdk.search.memories': 'Memories',
+  'cmdk.search.memory': 'Memory',
   'cmdk.search.message': 'Message',
   'cmdk.search.messages': 'Messages',
   'cmdk.search.page': 'Page',
@@ -179,11 +256,12 @@ export default {
   'cmdk.themeLight': 'Light',
   'cmdk.toOpen': 'Open',
   'cmdk.toSelect': 'Select',
+
   'confirm': 'Confirm',
   'contact': 'Contact Us',
   'copy': 'Copy',
   'copyFail': 'Copy failed',
-  'copySuccess': 'Copied successfully',
+  'copySuccess': 'Copied',
   'dataStatistics.messages': 'Messages',
   'dataStatistics.sessions': 'Agents',
   'dataStatistics.today': "Today's New",

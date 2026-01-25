@@ -266,6 +266,10 @@ export interface CreateAgentState {
 
 export interface InviteAgentState {
   /**
+   * Agent avatar (emoji or URL)
+   */
+  agentAvatar?: string;
+  /**
    * Agent identifier that was invited
    */
   agentId: string;
@@ -280,6 +284,10 @@ export interface InviteAgentState {
 }
 
 export interface RemoveAgentState {
+  /**
+   * Agent avatar (emoji or URL)
+   */
+  agentAvatar?: string;
   /**
    * Agent identifier that was removed
    */

@@ -267,6 +267,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     inset: 0;
 
     display: flex;
+    align-items: flex-start;
     justify-content: center;
 
     padding-block-start: 15vh;

@@ -1,48 +1,26 @@
 'use client';
 
-import { Alert, Center, Flexbox, Text } from '@lobehub/ui';
+import { Alert, Center, Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import NextLink from 'next/link';
-import { PropsWithChildren, memo, useEffect } from 'react';
+import { PropsWithChildren, Suspense, memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, Outlet, useParams } from 'react-router-dom';
-import useSWR from 'swr';
+import { Link, Outlet } from 'react-router-dom';
 
 import { ProductLogo } from '@/components/Branding';
-import UserAvatar from '@/features/User/UserAvatar';
+import Loading from '@/components/Loading/BrandTextLoading';
 import { useIsDark } from '@/hooks/useIsDark';
-import { lambdaClient } from '@/libs/trpc/client';
-import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import SharePortal from '../features/Portal';
+import Title from './Title';
 import { styles } from './style';
 
 const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
   const { t } = useTranslation('chat');
   const isDarkMode = useIsDark();
-  const { id } = useParams<{ id: string }>();
-  const dispatchAgentMap = useAgentStore((s) => s.internal_dispatchAgentMap);
   const isLogin = useUserStore(authSelectors.isLogin);
-
-  const { data } = useSWR(
-    id ? ['shared-topic', id] : null,
-    () => lambdaClient.share.getSharedTopic.query({ shareId: id! }),
-    { revalidateOnFocus: false },
-  );
-
-  // Set agent meta to agentStore for avatar display
-  useEffect(() => {
-    if (data?.agentId && data.agentMeta) {
-      const meta = {
-        avatar: data.agentMeta.avatar ?? undefined,
-        backgroundColor: data.agentMeta.backgroundColor ?? undefined,
-        title: data.agentMeta.title ?? undefined,
-      };
-      dispatchAgentMap(data.agentId, meta);
-    }
-  }, [data?.agentId, data?.agentMeta, dispatchAgentMap]);
 
   return (
     <Flexbox className={styles.outerContainer} height={'100%'} padding={8} width={'100%'}>
@@ -61,27 +39,27 @@ const ShareTopicLayout = memo<PropsWithChildren>(({ children }) => {
         >
           <Flexbox align="center" flex={1} gap={12} horizontal>
             {isLogin ? (
-              <Link to="/">
-                <UserAvatar size={32} />
+              <Link style={{ color: 'inherit' }} to="/">
+                <ProductLogo size={32} />
               </Link>
             ) : (
-              <NextLink href="/signin">
+              <NextLink href="/signin" style={{ color: 'inherit' }}>
                 <ProductLogo size={32} />
               </NextLink>
             )}
           </Flexbox>
           <Center flex={2} gap={12} horizontal>
-            {data?.title && (
-              <Text align={'center'} ellipsis style={{ textAlign: 'center' }} weight={500}>
-                {data.title}
-              </Text>
-            )}
+            <Suspense>
+              <Title />
+            </Suspense>
           </Center>
           <Flexbox align="center" flex={1} gap={12} horizontal justify={'flex-end'} />
         </Flexbox>
         <Flexbox className={styles.content} horizontal style={{ overflow: 'hidden' }}>
           <Flexbox flex={1} style={{ overflow: 'hidden' }}>
-            {children ?? <Outlet />}
+            <Suspense fallback={<Loading debugId="share layout" />}>
+              {children ?? <Outlet />}
+            </Suspense>
           </Flexbox>
           <SharePortal />
         </Flexbox>

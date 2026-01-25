@@ -53,6 +53,7 @@ export const MultipleProvidersModelItem = memo<MultipleProvidersModelItemProps>(
       <DropdownMenuSubmenuRoot onOpenChange={setSubmenuOpen} open={submenuOpen}>
         <DropdownMenuSubmenuTrigger
           className={cx(menuSharedStyles.item, isActive && styles.menuItemActive)}
+          style={{ paddingBlock: 8, paddingInline: 8 }}
         >
           <ModelItemRender
             {...data.model}

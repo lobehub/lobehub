@@ -10,7 +10,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import { message } from '@/components/AntdStaticMethods';
-import DragUpload from '@/components/DragUpload';
 import GuideModal from '@/components/GuideModal';
 import GuideVideo from '@/components/GuideVideo';
 import { useFileStore } from '@/store/file';
@@ -226,10 +225,6 @@ const AddButton = () => {
         onOk={handleStartNotionImport}
         open={notionGuideOpen}
         title={t('header.actions.notionGuide.title')}
-      />
-      <DragUpload
-        enabledFiles
-        onUploadFiles={(files) => pushDockFileList(files, libraryId, currentFolderId ?? undefined)}
       />
       <input
         id="folder-upload-input"

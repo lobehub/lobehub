@@ -59,6 +59,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   imageWrapper: css`
     position: relative;
     width: 100%;
+    min-height: 120px;
     background: ${cssVar.colorFillQuaternary};
 
     img {

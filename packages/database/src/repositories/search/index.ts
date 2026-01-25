@@ -1,6 +1,14 @@
 import { sql } from 'drizzle-orm';
 
-import { agents, documents, files, knowledgeBaseFiles, messages, topics } from '../../schemas';
+import {
+  agents,
+  documents,
+  files,
+  knowledgeBaseFiles,
+  messages,
+  topics,
+  userMemories,
+} from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 
 export type SearchResultType =
@@ -76,6 +84,11 @@ export interface MessageSearchResult extends BaseSearchResult {
   type: 'message';
 }
 
+export interface MemorySearchResult extends BaseSearchResult {
+  memoryLayer: string | null;
+  type: 'memory';
+}
+
 export interface MCPSearchResult extends BaseSearchResult {
   author: string;
   avatar?: string | null;
@@ -115,6 +128,7 @@ export type SearchResult =
   | FileSearchResult
   | FolderSearchResult
   | MessageSearchResult
+  | MemorySearchResult
   | MCPSearchResult
   | PluginSearchResult
   | AssistantSearchResult;
@@ -181,6 +195,9 @@ export class SearchRepo {
     if ((!type || type === 'page') && limits.page > 0) {
       queries.push(this.buildPageQuery(searchTerm, exactQuery, prefixQuery, limits.page));
     }
+    if ((!type || type === 'memory') && limits.memory > 0) {
+      queries.push(this.buildMemoryQuery(searchTerm, exactQuery, prefixQuery, limits.memory));
+    }
 
     if (queries.length === 0) return [];
 
@@ -215,6 +232,7 @@ export class SearchRepo {
     agent: number;
     file: number;
     folder: number;
+    memory: number;
     message: number;
     page: number;
     pageContent: number;
@@ -226,6 +244,7 @@ export class SearchRepo {
         agent: type === 'agent' ? baseLimit : 0,
         file: type === 'file' ? baseLimit : 0,
         folder: type === 'folder' ? baseLimit : 0,
+        memory: type === 'memory' ? baseLimit : 0,
         message: type === 'message' ? baseLimit : 0,
         page: type === 'page' ? baseLimit : 0,
         pageContent: type === 'pageContent' ? baseLimit : 0,
@@ -239,6 +258,7 @@ export class SearchRepo {
         agent: 3,
         file: 3,
         folder: 3,
+        memory: 3,
         message: 3,
         page: 6,
         pageContent: 0, // Not available yet
@@ -252,6 +272,7 @@ export class SearchRepo {
         agent: 3,
         file: 6,
         folder: 6,
+        memory: 3,
         message: 3,
         page: 3,
         pageContent: 0, // Not available yet
@@ -265,6 +286,7 @@ export class SearchRepo {
         agent: 3,
         file: 3,
         folder: 3,
+        memory: 3,
         message: 6,
         page: 3,
         pageContent: 0, // Not available yet
@@ -277,6 +299,7 @@ export class SearchRepo {
       agent: 3,
       file: 3,
       folder: 3,
+      memory: 3,
       message: 3,
       page: 3,
       pageContent: 0, // Not available yet
@@ -757,6 +780,57 @@ export class SearchRepo {
   }
 
   /**
+   * Build memory search query
+   * Searches: title, summary, details
+   */
+  private buildMemoryQuery(
+    searchTerm: string,
+    exactQuery: string,
+    prefixQuery: string,
+    limit: number,
+  ): ReturnType<typeof sql> {
+    return sql`
+      SELECT
+        m.id,
+        'memory' as type,
+        COALESCE(m.title, 'Untitled Memory') as title,
+        CASE
+          WHEN length(COALESCE(m.summary, '')) > 200 THEN substring(COALESCE(m.summary, ''), 1, 200) || '...'
+          ELSE m.summary
+        END as description,
+        NULL::varchar(100) as slug,
+        NULL::text as avatar,
+        NULL::text as background_color,
+        NULL::jsonb as tags,
+        m.created_at,
+        m.updated_at,
+        CASE
+          WHEN COALESCE(m.title, '') ILIKE ${exactQuery} THEN 1
+          WHEN COALESCE(m.title, '') ILIKE ${prefixQuery} THEN 2
+          ELSE 3
+        END as relevance,
+        NULL::boolean as favorite,
+        NULL::text as session_id,
+        NULL::text as agent_id,
+        NULL::text as name,
+        NULL::varchar(255) as file_type,
+        NULL::integer as size,
+        NULL::text as url,
+        NULL::text as knowledge_base_id,
+        m.memory_layer
+      FROM ${userMemories} m
+      WHERE m.user_id = ${this.userId}
+        AND (
+          COALESCE(m.title, '') ILIKE ${searchTerm}
+          OR COALESCE(m.summary, '') ILIKE ${searchTerm}
+          OR COALESCE(m.details, '') ILIKE ${searchTerm}
+        )
+      ORDER BY relevance ASC, m.updated_at DESC
+      LIMIT ${limit}
+    `;
+  }
+
+  /**
    * Map raw SQL results to typed SearchResult objects
    * Parse JSONB strings and convert snake_case to camelCase
    */
@@ -846,6 +920,13 @@ export class SearchRepo {
             role: row.name || 'user',
             topicId: row.session_id,
             type: 'message' as const,
+          };
+        }
+        case 'memory': {
+          return {
+            ...base,
+            memoryLayer: row.memory_layer,
+            type: 'memory' as const,
           };
         }
         default: {

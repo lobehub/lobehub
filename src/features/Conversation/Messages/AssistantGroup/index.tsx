@@ -2,13 +2,13 @@
 
 import type { AssistantContentBlock } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import dynamic from '@/libs/next/dynamic';
 import { type MouseEventHandler, Suspense, memo, useCallback, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
 import { useNewScreen } from '@/features/Conversation/Messages/components/useNewScreen';
 import { useOpenChatSettings } from '@/hooks/useInterceptingRoutes';
+import dynamic from '@/libs/next/dynamic';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -68,7 +68,7 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
   // Get editing state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(contentId || ''));
   const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
-  const newScreen = useNewScreen({ creating, isLatestItem });
+  const { minHeight } = useNewScreen({ creating, isLatestItem, messageId: id });
 
   const setMessageItemActionElementPortialContext = useSetMessageItemActionElementPortialContext();
   const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
@@ -113,7 +113,7 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
         )
       }
       avatar={avatar}
-      newScreen={newScreen}
+      newScreenMinHeight={minHeight}
       onAvatarClick={onAvatarClick}
       onMouseEnter={onMouseEnter}
       placement={'left'}

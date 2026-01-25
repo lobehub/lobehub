@@ -56,7 +56,11 @@ const ContextCommands = memo(() => {
                 label = t(cmd.labelKey, { defaultValue: cmd.label });
               }
             }
-            const searchValue = `${contextName} ${label} ${cmd.keywords.join(' ')}`;
+            // Get localized keywords
+            const keywords = cmd.keywordsKey
+              ? tCommon(cmd.keywordsKey as any, { defaultValue: cmd.keywords.join(' ') })
+              : cmd.keywords.join(' ');
+            const searchValue = `${contextName} ${label} ${keywords}`;
 
             return (
               <CommandItem
@@ -98,7 +102,11 @@ const ContextCommands = memo(() => {
                 label = t(cmd.labelKey, { defaultValue: cmd.label });
               }
             }
-            const searchValue = `${settingsContextName} ${label} ${cmd.keywords.join(' ')}`;
+            // Get localized keywords
+            const keywords = cmd.keywordsKey
+              ? tCommon(cmd.keywordsKey as any, { defaultValue: cmd.keywords.join(' ') })
+              : cmd.keywords.join(' ');
+            const searchValue = `${settingsContextName} ${label} ${keywords}`;
 
             return (
               <CommandItem

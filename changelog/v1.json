@@ -1,6 +1,21 @@
 [
   {
     "children": {
+      "fixes": ["Broadcast tools calling and improve auto scroll."]
+    },
+    "date": "2026-01-25",
+    "version": "2.0.0-next.375"
+  },
+  {
+    "children": {
+      "features": ["Update the discover page sort, add haveSkill、mostUsage params."],
+      "improvements": ["Update share action bar."]
+    },
+    "date": "2026-01-25",
+    "version": "2.0.0-next.374"
+  },
+  {
+    "children": {
       "fixes": ["Slove group member plugin is lost & not use the plugins."]
     },
     "date": "2026-01-25",

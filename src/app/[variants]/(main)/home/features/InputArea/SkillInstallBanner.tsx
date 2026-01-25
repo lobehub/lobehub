@@ -12,6 +12,12 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { useToolStore } from '@/store/tool';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  avatar: css`
+    background: ${cssVar.colorBgContainer};
+    box-shadow:
+      0 0 8px -2px rgba(0, 0, 0, 5%),
+      0 0 0 1px ${cssVar.colorFillTertiary};
+  `,
   banner: css`
     cursor: pointer;
 
@@ -28,17 +34,11 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     margin-block-end: 6px;
     padding-block: 42px 10px;
     padding-inline: 16px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
+    border: 1px solid ${cssVar.colorFillSecondary};
     border-radius: 20px;
 
-    background: ${cssVar.colorFillQuaternary};
+    background: color-mix(in srgb, ${cssVar.colorFillQuaternary} 50%, ${cssVar.colorBgContainer});
     box-shadow: 0 12px 32px rgb(0 0 0 / 4%);
-
-    transition: background 0.2s ease-in-out;
-
-    &:hover {
-      background: ${cssVar.colorFillQuaternary};
-    }
   `,
   icon: css`
     color: ${cssVar.colorTextSecondary};
@@ -120,7 +120,17 @@ const SkillInstallBanner = memo(() => {
         <Icon className={styles.icon} icon={Blocks} size={18} />
         <span className={styles.text}>{t('skillInstallBanner.title')}</span>
       </Flexbox>
-      {avatarItems.length > 0 && <Avatar.Group items={avatarItems} shape="circle" size={24} />}
+      {avatarItems.length > 0 && (
+        <Avatar.Group
+          classNames={{
+            avatar: styles.avatar,
+          }}
+          items={avatarItems}
+          shape="circle"
+          size={24}
+          variant={'outlined'}
+        />
+      )}
     </div>
   );
 });

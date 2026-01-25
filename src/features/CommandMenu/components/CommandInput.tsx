@@ -83,6 +83,7 @@ const CommandInput = memo(() => {
         )}
         <Command.Input
           autoFocus
+          maxLength={500}
           onValueChange={setSearch}
           placeholder={getPlaceholder()}
           value={search}

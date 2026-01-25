@@ -4,7 +4,7 @@ import { Avatar, Button, Empty, Form, type FormGroupItemType, Tag, Tooltip } fro
 import { Center, Flexbox } from '@lobehub/ui';
 import { Space, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
-import { LucideTrash2, Plug2, Store } from 'lucide-react';
+import { BlocksIcon, LucideTrash2, Store } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
@@ -152,7 +152,7 @@ const AgentPlugin = memo(() => {
           </Trans>
         }
         descriptionProps={{ fontSize: 14 }}
-        icon={Plug2}
+        icon={BlocksIcon}
         style={{ maxWidth: 400 }}
       />
     </Center>

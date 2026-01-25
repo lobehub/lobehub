@@ -22,14 +22,10 @@ export enum AssistantCategory {
 }
 
 export enum AssistantSorts {
-  CreatedAt = 'createdAt',
-  Identifier = 'identifier',
-  KnowledgeCount = 'knowledgeCount',
-  MyOwn = 'myown',
-  PluginCount = 'pluginCount',
+  HaveSkills = 'haveSkills',
+  MostUsage = 'mostUsage',
   Recommended = 'recommended',
-  Title = 'title',
-  TokenUsage = 'tokenUsage',
+  UpdatedAt = 'updatedAt',
 }
 
 export enum AssistantNavKey {
@@ -72,6 +68,7 @@ export type AssistantMarketSource = 'legacy' | 'new';
 
 export interface AssistantQueryParams {
   category?: string;
+  haveSkills?: boolean;
   includeAgentGroup?: boolean;
   locale?: string;
   order?: 'asc' | 'desc';
