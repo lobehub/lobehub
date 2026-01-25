@@ -20,6 +20,12 @@ tags:
   [![][docker-pulls-shield]][docker-pulls-link]
 </div>
 
+<Callout type="info">
+  For local development, use the interactive <strong>Development mode</strong> which starts only the infrastructure (PostgreSQL, MinIO, and SearXNG). It stores the <code>.env</code> file at the project root so pnpm scripts auto-load it. Casdoor is not used in this mode.
+
+  See the development guide: <a href="/docs/development/start">/docs/development/start</a>
+</Callout>
+
 <Callout type="warning">
   **Note on Docker Deployment Limitations**
   The Docker and Docker Compose deployment options do not support injecting the `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` through environment variables, which prevents enabling the Clerk authentication service. Recommended alternatives include:

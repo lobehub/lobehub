@@ -72,6 +72,34 @@ bun run dev
 
 Now, you should be able to see the welcome page of LobeChat in your browser. For a detailed environment setup guide, please refer to [Development Environment Setup Guide](/docs/development/basic/setup-development).
 
+### Start local infrastructure with Docker Compose (Development mode)
+
+If you want to run LobeChat against a local database and object storage, we provide a Development mode that launches only the infrastructure you need (PostgreSQL, MinIO, and SearXNG) via Docker:
+
+```bash
+cd docker-compose
+bash ./setup.sh
+# When prompted, choose: (3) Development mode
+# The script will:
+# - copy a .env template to the project root (./.env)
+# - regenerate secrets if you accept the prompt
+# - start Postgres, MinIO and SearXNG
+```
+
+After the infrastructure is up, return to the project root and run:
+
+```bash
+pnpm install
+pnpm run db:migrate
+pnpm run dev
+```
+
+Notes:
+
+- The .env file is stored at the project root so pnpm scripts auto-load it.
+- Casdoor is not used in Development mode.
+- MinIO Console is available at [http://localhost:9001](http://localhost:9001) and SearXNG at [http://localhost:8080](http://localhost:8080).
+
 ## Code Style and Contribution Guide
 
 In the LobeChat project, we place great emphasis on the quality and consistency of the code. For this reason, we have established a series of code style standards and contribution processes to ensure that every developer can smoothly participate in the project. Here are the code style and contribution guidelines you need to follow as a developer.
