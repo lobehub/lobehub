@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
 import { CHANGELOG_URL, MANUAL_UPGRADE_URL, OFFICIAL_SITE } from '@/const/url';
-import { CURRENT_VERSION, isDesktop } from '@/const/version';
+import { CURRENT_VERSION } from '@/const/version';
 import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
 import { useGlobalStore } from '@/store/global';
 
@@ -25,7 +25,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   ]);
   const { t } = useTranslation('common');
 
-  useCheckServerVersion(isDesktop);
+  useCheckServerVersion();
 
   const showServerVersion = serverVersion && serverVersion !== CURRENT_VERSION;
 
