@@ -98,7 +98,7 @@ const Item = memo<ItemProps>(
         paddingBlock={12}
         paddingInline={12}
         style={{ cursor: 'pointer' }}
-        variant={'filled'}
+        variant={'outlined'}
       >
         {renderIcon()}
         <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
