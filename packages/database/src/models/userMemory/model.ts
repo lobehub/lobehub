@@ -36,13 +36,13 @@ import {
 import { merge } from '@/utils/merge';
 
 import {
+  UserMemoryActivitiesWithoutVectors,
+  UserMemoryActivity,
   UserMemoryContext,
   UserMemoryExperience,
   UserMemoryIdentity,
   UserMemoryItem,
   UserMemoryPreference,
-  UserMemoryActivitiesWithoutVectors,
-  UserMemoryActivity,
   userMemories,
   userMemoriesActivities,
   userMemoriesContexts,
@@ -1010,9 +1010,7 @@ export class UserMemoryModel {
       }
       case LayersEnum.Activity: {
         const sortColumn =
-          sort === 'startsAt'
-            ? userMemoriesActivities.startsAt
-            : userMemoriesActivities.capturedAt;
+          sort === 'startsAt' ? userMemoriesActivities.startsAt : userMemoriesActivities.capturedAt;
 
         const orderByClauses = buildOrderBy(
           sortColumn,
@@ -1061,8 +1059,10 @@ export class UserMemoryModel {
                 capturedAt: userMemoriesActivities.capturedAt,
                 createdAt: userMemoriesActivities.createdAt,
                 endsAt: userMemoriesActivities.endsAt,
+                feedback: userMemoriesActivities.feedback,
                 id: userMemoriesActivities.id,
                 metadata: userMemoriesActivities.metadata,
+                narrative: userMemoriesActivities.narrative,
                 startsAt: userMemoriesActivities.startsAt,
                 status: userMemoriesActivities.status,
                 tags: userMemoriesActivities.tags,
