@@ -293,17 +293,14 @@ export const createMCPPluginStoreSlice: StateCreator<
             (!option?.connection?.type && !option?.connection?.url),
         );
 
-        const hasNonHttpDeployment = deploymentOptions.some((option) => {
-          const type = option?.connection?.type;
-          if (!type && option?.connection?.url) return false;
+        // Check if cloudEndPoint is available: stdio type + haveCloudEndpoint exists
+        // Both desktop and web should use cloud endpoint if available
+        const hasCloudEndpoint = stdioOption && haveCloudEndpoint;
 
-          return type && type !== 'http';
-        });
-
-        // Check if cloudEndPoint is available: web + stdio type + haveCloudEndpoint exists
-        const hasCloudEndpoint = !isDesktop && stdioOption && haveCloudEndpoint;
-
-        let shouldUseHttpDeployment = !!httpOption && (!hasNonHttpDeployment || !isDesktop);
+        // Prioritize endpoint (http/cloud) over stdio in all environments
+        // Desktop: endpoint > stdio
+        // Web: endpoint only (stdio not supported)
+        let shouldUseHttpDeployment = !!httpOption;
 
         if (hasCloudEndpoint) {
           // Use cloudEndPoint, create cloud type connection
@@ -664,10 +661,10 @@ export const createMCPPluginStoreSlice: StateCreator<
             errorLog,
             params: connection
               ? {
-                  args: connection.args,
-                  command: connection.command,
-                  type: connection.type,
-                }
+                args: connection.args,
+                command: connection.command,
+                type: connection.type,
+              }
               : undefined,
             step: 'installation_error',
             timestamp: Date.now(),
