@@ -3,13 +3,14 @@
 import {
   Button,
   Flexbox,
+  LobeSelect,
   Popover,
   Skeleton,
   Text,
   copyToClipboard,
   usePopoverContext,
 } from '@lobehub/ui';
-import { App, Divider, Select } from 'antd';
+import { App, Divider } from 'antd';
 import { ExternalLinkIcon, LinkIcon, LockIcon } from 'lucide-react';
 import { type ReactNode, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -146,9 +147,8 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
 
       <Flexbox gap={4}>
         <Text type="secondary">{t('shareModal.popover.visibility')}</Text>
-        <Select
+        <LobeSelect
           disabled={updating}
-          getPopupContainer={() => containerRef.current || document.body}
           labelRender={({ value }) => {
             const option = visibilityOptions.find((o) => o.value === value);
             return (
