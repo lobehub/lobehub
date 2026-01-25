@@ -39,14 +39,18 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
         <Flexbox flex={1} height={'100%'}>
           <NavHeader
             left={
-              <Flexbox align={'center'} gap={12} horizontal style={{ minHeight: 32 }}>
+              <Flexbox align={'center'} gap={12} horizontal style={{ minHeight: 32, minWidth: 0, overflow: 'hidden' }}>
                 <ActionIcon icon={ArrowLeftIcon} onClick={onBack} title={t('back')} />
                 <span
                   style={{
                     color: theme.colorText,
                     fontSize: 14,
                     fontWeight: 500,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
                   }}
+                  title={fileDetail?.name}
                 >
                   {fileDetail?.name}
                 </span>
@@ -73,7 +77,7 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
               borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
             }}
             styles={{
-              left: { padding: 0 },
+              left: { flex: 1, minWidth: 0, overflow: 'hidden', padding: 0 },
             }}
           />
           <Flexbox flex={1} style={{ overflow: 'hidden' }}>
