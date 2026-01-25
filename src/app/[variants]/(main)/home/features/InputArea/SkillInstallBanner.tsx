@@ -16,9 +16,6 @@ const AVATAR_SIZE = 24;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   avatar: css`
-    box-shadow:
-      0 0 8px -2px rgba(0, 0, 0, 5%),
-      0 0 0 1px ${cssVar.colorFillTertiary};
     display: flex;
     flex-shrink: 0;
     align-items: center;
@@ -26,10 +23,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     width: ${AVATAR_SIZE}px;
     height: ${AVATAR_SIZE}px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 50%;
 
     background: ${cssVar.colorBgContainer};
+    box-shadow:
+      0 0 8px -2px rgba(0, 0, 0, 5%),
+      0 0 0 1px ${cssVar.colorFillTertiary};
   `,
   banner: css`
     cursor: pointer;
