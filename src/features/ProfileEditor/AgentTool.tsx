@@ -320,8 +320,9 @@ const AgentTool = memo<AgentToolProps>(
           icon: (
             <Avatar
               avatar={item.meta.avatar}
+              shape={'square'}
               size={SKILL_ICON_SIZE}
-              style={{ flex: 'none', marginRight: 0 }}
+              style={{ flex: 'none' }}
             />
           ),
           key: item.identifier,
@@ -436,7 +437,12 @@ const AgentTool = memo<AgentToolProps>(
         .filter((item) => isToolEnabled(item.identifier))
         .map((item) => ({
           icon: (
-            <Avatar avatar={item.meta.avatar} size={SKILL_ICON_SIZE} style={{ flex: 'none' }} />
+            <Avatar
+              avatar={item.meta.avatar}
+              shape={'square'}
+              size={SKILL_ICON_SIZE}
+              style={{ flex: 'none' }}
+            />
           ),
           key: item.identifier,
           label: (
@@ -561,7 +567,6 @@ const AgentTool = memo<AgentToolProps>(
 
     // Use effective tab for display (default to all while initializing)
     const effectiveTab = activeTab ?? 'all';
-    const currentItems = effectiveTab === 'all' ? allTabItems : installedTabItems;
 
     const button = (
       <Button
@@ -594,7 +599,7 @@ const AgentTool = memo<AgentToolProps>(
             <ActionDropdown
               maxWidth={400}
               menu={{
-                items: currentItems,
+                items: [],
                 style: {
                   // let only the custom scroller scroll
                   maxHeight: 'unset',
@@ -605,11 +610,16 @@ const AgentTool = memo<AgentToolProps>(
               onOpenChange={setDropdownOpen}
               open={dropdownOpen}
               placement={'bottomLeft'}
-              popupRender={(menu) => (
+              popupProps={{
+                style: {
+                  padding: 0,
+                },
+              }}
+              popupRender={() => (
                 <PopoverContent
                   activeTab={effectiveTab}
+                  allTabItems={allTabItems}
                   installedTabItems={installedTabItems}
-                  menu={menu}
                   onClose={() => setDropdownOpen(false)}
                   onOpenStore={() => {
                     setDropdownOpen(false);
