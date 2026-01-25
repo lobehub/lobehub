@@ -41,6 +41,8 @@ export default {
   'chatList.longMessageDetail': 'View Details',
   'clearCurrentMessages': 'Clear current session messages',
   'compressedHistory': 'Compressed History',
+  'compression.history': 'History',
+  'compression.summary': 'Summary',
   'confirmClearCurrentMessages':
     'You are about to clear the current session messages. Once cleared, they cannot be retrieved. Please confirm your action.',
   'confirmRemoveChatGroupItemAlert':

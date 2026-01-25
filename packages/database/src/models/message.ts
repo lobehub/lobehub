@@ -1,4 +1,5 @@
 import { INBOX_SESSION_ID } from '@lobechat/const';
+import { parse } from '@lobechat/conversation-flow';
 import {
   ChatFileItem,
   ChatImageItem,
@@ -859,8 +860,10 @@ export class MessageModel {
           })
           .filter(Boolean);
 
-        // compressedMessages: all messages with full data for expanded view rendering
-        const compressedMessages = groupMsgs;
+        // compressedMessages: parse messages through conversation-flow for proper grouping
+        // This transforms raw messages into displayMessages format (e.g., assistantGroup)
+        const { flatList } = parse(groupMsgs);
+        const compressedMessages = flatList;
 
         // Get the last message ID for parent-child linking in conversation-flow
         const lastMessageId = groupMsgIds.at(-1);
