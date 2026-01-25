@@ -622,7 +622,7 @@ export const createRuntimeExecutors = (
    * Batch tool execution with database sync
    * Executes multiple tools concurrently and refreshes messages from database after completion
    */
-  call_tools_batch: async (instruction, state, runtimeContext) => {
+  call_tools_batch: async (instruction, state) => {
     const { payload } = instruction as Extract<AgentInstruction, { type: 'call_tools_batch' }>;
     const { parentMessageId, toolsCalling } = payload;
     const { operationId, stepIndex, streamManager, toolExecutionService } = ctx;
@@ -746,8 +746,8 @@ export const createRuntimeExecutors = (
 
     // Convert DB messages to LLM format with id
     newState.messages = latestMessages.map((msg: any) => ({
-      id: msg.id,
       content: msg.content,
+      id: msg.id,
       role: msg.role,
       tool_call_id: msg.tool_call_id,
       tool_calls: msg.tool_calls,
