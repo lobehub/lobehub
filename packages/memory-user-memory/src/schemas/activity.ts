@@ -6,10 +6,10 @@ import { z } from 'zod';
 import { MemoryTypeSchema } from './common';
 
 const ActivityAssociatedLocationSchema = z.object({
-  address: z.string().optional(),
+  address: z.string().optional().nullable(),
   extra: z.string().nullable().optional(),
   name: z.string().optional(),
-  tags: z.array(z.string()).optional(),
+  tags: z.array(z.string()).optional().nullable(),
   type: z.string().optional(),
 });
 
@@ -20,18 +20,18 @@ const ActivityAssociationSchema = z.object({
 });
 
 export const WithActivitySchema = z.object({
-  associatedLocations: z.array(ActivityAssociatedLocationSchema).optional(),
-  associatedObjects: z.array(ActivityAssociationSchema).optional(),
-  associatedSubjects: z.array(ActivityAssociationSchema).optional(),
-  endsAt: z.string().optional(),
-  feedback: z.string().optional(),
+  associatedLocations: z.array(ActivityAssociatedLocationSchema).optional().nullable(),
+  associatedObjects: z.array(ActivityAssociationSchema).optional().nullable(),
+  associatedSubjects: z.array(ActivityAssociationSchema).optional().nullable(),
+  endsAt: z.string().optional().nullable(),
+  feedback: z.string().optional().nullable(),
   metadata: z.record(z.unknown()).optional(),
   narrative: z.string(),
-  notes: z.string().optional(),
-  startsAt: z.string().optional(),
-  status: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-  timezone: z.string().optional(),
+  notes: z.string().optional().nullable(),
+  startsAt: z.string().optional().nullable(),
+  status: z.string().optional().nullable(),
+  tags: z.array(z.string()).optional().nullable(),
+  timezone: z.string().optional().nullable(),
   type: z.union([z.nativeEnum(ActivityTypeEnum), z.string()]).optional(),
 });
 

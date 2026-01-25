@@ -422,7 +422,8 @@ export class UserMemoryModel {
           tags?: unknown;
           type?: unknown;
         }[]
-      | Record<string, unknown>,
+      | Record<string, unknown>
+      | null,
   ) {
     if (!value) return [];
 
