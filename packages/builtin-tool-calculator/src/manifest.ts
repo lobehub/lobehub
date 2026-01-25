@@ -143,6 +143,34 @@ export const CalculatorManifest: BuiltinToolManifest = {
     },
     {
       description:
+        'Compute definite integral of a mathematical expression with respect to a variable over a given interval.',
+      name: CalculatorApiName.defintegrate,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          expression: {
+            description: 'Mathematical expression to integrate (e.g., "x^2", "sin(x)", "exp(x)")',
+            type: 'string',
+          },
+          lowerBound: {
+            description: 'Lower bound of integration (can be number, "0", "-infinity", etc.)',
+            type: 'number | string',
+          },
+          upperBound: {
+            description: 'Upper bound of integration (can be number, "pi", "infinity", etc.)',
+            type: 'number | string',
+          },
+          variable: {
+            description: 'Variable to integrate with respect to (e.g., "x", "y", "t")',
+            type: 'string',
+          },
+        },
+        required: ['expression', 'variable', 'lowerBound', 'upperBound'],
+        type: 'object',
+      },
+    },
+    {
+      description:
         'Integrate a mathematical expression with respect to a variable (indefinite integral).',
       name: CalculatorApiName.integrate,
       parameters: {

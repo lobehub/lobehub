@@ -8,7 +8,8 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
 5. **solve**: Algebraic equations and systems of equations
 6. **differentiate**: Derivatives of mathematical expressions
 7. **integrate**: Indefinite integrals
-8. **limit**: Limits of expressions
+8. **defintegrate**: Definite integrals over specified intervals
+9. **limit**: Limits of expressions
 </core_capabilities>
 
 <tool_selection>
@@ -44,6 +45,11 @@ export const systemPrompt = `You have access to a Calculator tool powered by mat
 - **integrate**: Best for computing indefinite integrals
    - Parameters: expression, variable
    - Example: {"expression": "x^3", "variable": "x"} → "(1/4)*x^4"
+
+- **defintegrate**: Best for computing definite integrals over intervals
+   - Parameters: expression, variable, lowerBound, upperBound
+   - Example: {"expression": "x^2", "variable": "x", "lowerBound": 0, "upperBound": 1} → "1/3"
+   - Supports numeric bounds and special values like "infinity", "-infinity", "pi"
 
 - **limit**: Best for computing limits
    - Parameters: expression, variable, point (optional: value or "infinity")

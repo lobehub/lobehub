@@ -3,6 +3,7 @@ export const CalculatorIdentifier = 'lobe-calculator';
 export const CalculatorApiName = {
   base: 'base',
   calculate: 'calculate',
+  defintegrate: 'defintegrate',
   differentiate: 'differentiate',
   evaluate: 'evaluate',
   integrate: 'integrate',
@@ -107,6 +108,22 @@ export interface IntegrateParams {
 export interface IntegrateState {
   expression?: string;
   result?: string;
+  variable?: string;
+}
+
+// Nerdamer Definite Integral API
+export interface DefintegrateParams {
+  expression: string;
+  lowerBound: number | string;
+  upperBound: number | string;
+  variable: string;
+}
+
+export interface DefintegrateState {
+  expression?: string;
+  lowerBound?: number | string;
+  result?: string;
+  upperBound?: number | string;
   variable?: string;
 }
 

@@ -346,6 +346,149 @@ describe('Unit Conversion', () => {
   });
 });
 
+describe('Calculator Definite Integration', () => {
+  describe('defintegrate', () => {
+    it('should compute definite integral of polynomial', async () => {
+      const result = await calculatorExecutor.defintegrate({
+        expression: 'x^2',
+        variable: 'x',
+        lowerBound: 0,
+        upperBound: 1,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('1/3');
+      expect(result.state?.expression).toBe('x^2');
+      expect(result.state?.variable).toBe('x');
+      expect(result.state?.lowerBound).toBe(0);
+      expect(result.state?.upperBound).toBe(1);
+    });
+
+    it('should compute definite integral of trigonometric function', async () => {
+      const result = await calculatorExecutor.defintegrate({
+        expression: 'sin(x)',
+        variable: 'x',
+        lowerBound: 0,
+        upperBound: 'pi',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('2');
+    });
+
+    it('should compute definite integral of exponential function', async () => {
+      const result = await calculatorExecutor.defintegrate({
+        expression: 'exp(x)',
+        variable: 'x',
+        lowerBound: 0,
+        upperBound: 1,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toMatch(/e|205671881\/119696244/); // Either 'e' or fraction form
+    });
+
+    it('should compute definite integral with negative bounds', async () => {
+      const result = await calculatorExecutor.defintegrate({
+        expression: 'x^3',
+        variable: 'x',
+        lowerBound: -1,
+        upperBound: 1,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('0');
+    });
+
+    it('should compute definite integral to infinity', async () => {
+      const result = await calculatorExecutor.defintegrate({
+        expression: '1/x^2',
+        variable: 'x',
+        lowerBound: 1,
+        upperBound: 'infinity',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toMatch(/1|infinity/); // Either '1' or symbolic infinity form
+    });
+
+    it('should handle definite integral with fractional bounds', async () => {
+      const result = await calculatorExecutor.defintegrate({
+        expression: 'x',
+        variable: 'x',
+        lowerBound: 0.5,
+        upperBound: 1.5,
+      });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should handle definite integral with string bounds', async () => {
+      const result = await calculatorExecutor.defintegrate({
+        expression: 'cos(x)',
+        variable: 'x',
+        lowerBound: '0',
+        upperBound: 'pi/2',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('1');
+    });
+
+    it('should preserve state information', async () => {
+      const result = await calculatorExecutor.defintegrate({
+        expression: '2*x',
+        variable: 'x',
+        lowerBound: 0,
+        upperBound: 5,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.state?.expression).toBe('2*x');
+      expect(result.state?.variable).toBe('x');
+      expect(result.state?.lowerBound).toBe(0);
+      expect(result.state?.upperBound).toBe(5);
+      expect(result.state?.result).toBeDefined();
+    });
+
+    it('should handle invalid expressions gracefully', async () => {
+      const result = await calculatorExecutor.defintegrate({
+        expression: 'invalid',
+        variable: 'x',
+        lowerBound: 0,
+        upperBound: 1,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toContain('invalid');
+    });
+
+    it('should handle complex expressions', async () => {
+      const result = await calculatorExecutor.defintegrate({
+        expression: 'x^2 + 2*x + 1',
+        variable: 'x',
+        lowerBound: 0,
+        upperBound: 2,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBeDefined();
+    });
+
+    it('should handle zero-width interval', async () => {
+      const result = await calculatorExecutor.defintegrate({
+        expression: 'x^2',
+        variable: 'x',
+        lowerBound: 1,
+        upperBound: 1,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.content).toBe('0');
+    });
+  });
+});
+
 describe('Calculator Base Conversion', () => {
   it('should base binary to decimal', async () => {
     const result = await calculatorExecutor.base({

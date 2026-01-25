@@ -6,6 +6,8 @@ import {
   type BaseState,
   type CalculateParams,
   type CalculateState,
+  type DefintegrateParams,
+  type DefintegrateState,
   type DifferentiateParams,
   type DifferentiateState,
   type EvaluateParams,
@@ -167,6 +169,33 @@ export class CalculatorExecutionRuntime {
       const state: DifferentiateState = {
         expression: result.state?.expression,
         result: result.state?.result as string | undefined,
+        variable: result.state?.variable,
+      };
+
+      return {
+        content: result.content || '',
+        state,
+        success: result.success,
+      };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return {
+        content: errorMessage,
+        error,
+        success: false,
+      };
+    }
+  }
+
+  async defintegrate(args: DefintegrateParams): Promise<BuiltinServerRuntimeOutput> {
+    try {
+      const result = await calculatorExecutor.defintegrate(args);
+
+      const state: DefintegrateState = {
+        expression: result.state?.expression,
+        lowerBound: result.state?.lowerBound,
+        result: result.state?.result as string | undefined,
+        upperBound: result.state?.upperBound,
         variable: result.state?.variable,
       };
 

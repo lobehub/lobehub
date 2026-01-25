@@ -9,6 +9,7 @@ import {
   type CalculateParams,
   CalculatorApiName,
   CalculatorIdentifier,
+  type DefintegrateParams,
   type DifferentiateParams,
   type EvaluateParams,
   type IntegrateParams,
@@ -461,6 +462,48 @@ class CalculatorExecutor
         error: {
           message: err.message,
           type: 'IntegrationError',
+        },
+        success: false,
+      };
+    }
+  };
+
+  /**
+   * Compute the definite integral of a mathematical expression using nerdamer
+   */
+  defintegrate = async (params: DefintegrateParams): Promise<BuiltinToolResult> => {
+    try {
+      const { expression, variable, lowerBound, upperBound } = params;
+
+      // First compute the indefinite integral
+      const indefiniteIntegral = nerdamer(`integrate(${expression}, ${variable})`);
+
+      // Then evaluate at bounds using the fundamental theorem of calculus
+      const upperResult = indefiniteIntegral.evaluate({ [variable]: upperBound });
+      const lowerResult = indefiniteIntegral.evaluate({ [variable]: lowerBound });
+
+      // Compute the difference
+      const finalResult = nerdamer(`${upperResult} - ${lowerResult}`);
+      const resultText = finalResult.toString();
+
+      return {
+        content: resultText,
+        state: {
+          expression,
+          lowerBound,
+          result: resultText,
+          upperBound,
+          variable,
+        },
+        success: true,
+      };
+    } catch (error) {
+      const err = error as Error;
+      return {
+        content: `Definite integration error: ${err.message}`,
+        error: {
+          message: err.message,
+          type: 'DefintegrationError',
         },
         success: false,
       };
