@@ -104,9 +104,11 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
         const rawConfig = {
           avatar: currentVersion.avatar,
           backgroundColor: currentVersion.backgroundColor,
+          chatConfig: currentVersion.config?.chatConfig || currentVersion.chatConfig,
           description: currentVersion.description,
           model: currentVersion.config?.model || currentVersion.model,
           params: currentVersion.config?.params || currentVersion.params,
+          plugins: currentVersion.config?.plugins || currentVersion.plugins,
           provider: currentVersion.config?.provider || currentVersion.provider,
           systemRole:
             currentVersion.config?.systemRole ||
@@ -149,9 +151,10 @@ const ForkGroupAndChat = memo<{ mobile?: boolean }>(() => {
           return {
             avatar: currentVersion.avatar,
             backgroundColor: currentVersion.backgroundColor,
+            chatConfig: currentVersion.config?.chatConfig || currentVersion.chatConfig,
             description: currentVersion.description,
             model: currentVersion.config?.model || currentVersion.model,
-            plugins: currentVersion.plugins,
+            plugins: currentVersion.config?.plugins || currentVersion.plugins,
             provider: currentVersion.config?.provider || currentVersion.provider,
             systemRole:
               currentVersion.config?.systemRole ||
