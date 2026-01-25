@@ -24,7 +24,7 @@ export type SearchMemoryParams = z.infer<typeof searchMemorySchema>;
 
 export interface SearchMemoryResult {
   activities: Array<
-    Omit<UserMemoryActivity, 'userId' | 'narrativeVector' | 'feedbackVector' | 'notes' | 'narrative'>
+    Omit<UserMemoryActivity, 'userId' | 'narrativeVector' | 'feedbackVector'>
   >;
   contexts: Array<Omit<UserMemoryContext, 'userId' | 'titleVector' | 'descriptionVector'>>;
   experiences: Array<

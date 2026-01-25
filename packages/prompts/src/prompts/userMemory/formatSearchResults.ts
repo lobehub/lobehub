@@ -8,6 +8,12 @@ type ActivityResult = SearchMemoryResult['activities'][number];
 type ExperienceResult = SearchMemoryResult['experiences'][number];
 type PreferenceResult = SearchMemoryResult['preferences'][number];
 
+const formatDate = (value?: string | Date | null) => {
+  if (!value) return value;
+
+  return value instanceof Date ? value.toISOString() : value;
+};
+
 /**
  * Format a single context memory item for search results
  * Format: attributes for metadata, description as text content
@@ -78,11 +84,13 @@ const formatActivityResult = (item: ActivityResult): string => {
   if (item.status) {
     attrs.push(`status="${item.status}"`);
   }
-  if (item.startsAt) {
-    attrs.push(`startsAt="${item.startsAt}"`);
+  const startsAt = formatDate(item.startsAt);
+  if (startsAt) {
+    attrs.push(`startsAt="${startsAt}"`);
   }
-  if (item.endsAt) {
-    attrs.push(`endsAt="${item.endsAt}"`);
+  const endsAt = formatDate(item.endsAt);
+  if (endsAt) {
+    attrs.push(`endsAt="${endsAt}"`);
   }
   if (item.timezone) {
     attrs.push(`timezone="${item.timezone}"`);
@@ -92,6 +100,12 @@ const formatActivityResult = (item: ActivityResult): string => {
 
   if (item.feedback) {
     children.push(`    <feedback>${item.feedback}</feedback>`);
+  }
+  if (item.narrative) {
+    children.push(`    <narrative>${item.narrative}</narrative>`);
+  }
+  if (item.notes) {
+    children.push(`    <notes>${item.notes}</notes>`);
   }
 
   const content = children.length > 0 ? `\n${children.join('\n')}\n  ` : '';
