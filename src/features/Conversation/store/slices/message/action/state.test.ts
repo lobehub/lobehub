@@ -73,10 +73,14 @@ describe('MessageStateAction', () => {
 
       // Assert: optimistic update should have been called
       expect(messageService.updateMessageGroupMetadata).toHaveBeenCalledWith({
-        agentId: 'test-agent',
+        context: {
+          agentId: 'test-agent',
+          groupId: undefined,
+          threadId: null,
+          topicId: 'test-topic',
+        },
         expanded: true,
         messageGroupId: 'group-1',
-        topicId: 'test-topic',
       });
     });
 
@@ -107,10 +111,14 @@ describe('MessageStateAction', () => {
 
       // Assert
       expect(messageService.updateMessageGroupMetadata).toHaveBeenCalledWith({
-        agentId: 'test-agent',
+        context: {
+          agentId: 'test-agent',
+          groupId: undefined,
+          threadId: null,
+          topicId: 'test-topic',
+        },
         expanded: false,
         messageGroupId: 'group-1',
-        topicId: 'test-topic',
       });
     });
 
@@ -137,10 +145,14 @@ describe('MessageStateAction', () => {
 
       // Assert
       expect(messageService.updateMessageGroupMetadata).toHaveBeenCalledWith({
-        agentId: 'test-agent',
+        context: {
+          agentId: 'test-agent',
+          groupId: undefined,
+          threadId: null,
+          topicId: 'test-topic',
+        },
         expanded: true,
         messageGroupId: 'group-1',
-        topicId: 'test-topic',
       });
     });
 
@@ -222,10 +234,14 @@ describe('MessageStateAction', () => {
 
       // Assert: should toggle to true
       expect(messageService.updateMessageGroupMetadata).toHaveBeenCalledWith({
-        agentId: 'test-agent',
+        context: {
+          agentId: 'test-agent',
+          groupId: undefined,
+          threadId: null,
+          topicId: 'test-topic',
+        },
         expanded: true,
         messageGroupId: 'group-1',
-        topicId: 'test-topic',
       });
     });
 

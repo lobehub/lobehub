@@ -17,6 +17,7 @@ import { dataSelectors, useConversationStore } from '../../store';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
+    margin-block-end: 8px;
     padding-block: 8px;
     padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};

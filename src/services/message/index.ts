@@ -262,10 +262,14 @@ export class MessageService {
    * Update message group metadata (e.g., expanded state)
    */
   updateMessageGroupMetadata = async (params: {
-    agentId: string;
+    context: {
+      agentId: string;
+      groupId?: string | null;
+      threadId?: string | null;
+      topicId: string;
+    };
     expanded?: boolean;
     messageGroupId: string;
-    topicId: string;
   }): Promise<{ messages: UIChatMessage[] }> => {
     const result = await lambdaClient.message.updateMessageGroupMetadata.mutate(params);
     return {

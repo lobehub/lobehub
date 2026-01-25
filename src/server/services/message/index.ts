@@ -344,4 +344,19 @@ export class MessageService {
       success: true,
     };
   }
+
+  /**
+   * Update message group metadata (e.g., expanded state)
+   */
+  async updateMessageGroupMetadata(
+    messageGroupId: string,
+    metadata: { expanded?: boolean },
+    context: QueryOptions,
+  ): Promise<{ messages: UIChatMessage[] }> {
+    await this.compressionRepository.updateMetadata(messageGroupId, metadata);
+
+    const messages = await this.messageModel.query(context, this.getQueryOptions());
+
+    return { messages };
+  }
 }

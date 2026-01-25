@@ -135,27 +135,6 @@ export const messageRouter = router({
       return ctx.messageService.finalizeCompression(messageGroupId, content, params);
     }),
 
-  /**
-   * Update message group metadata (e.g., expanded state)
-   */
-  updateMessageGroupMetadata: messageProcedure
-    .input(
-      z.object({
-        agentId: z.string(),
-        expanded: z.boolean().optional(),
-        messageGroupId: z.string(),
-        topicId: z.string(),
-      }),
-    )
-    .mutation(async ({ input, ctx }) => {
-      const { messageGroupId, agentId, topicId, ...metadata } = input;
-      await ctx.compressionRepo.updateMetadata(messageGroupId, metadata);
-
-      // Return updated messages
-      const messages = await ctx.messageModel.query({ agentId, topicId });
-      return { messages };
-    }),
-
   getHeatmaps: messageProcedure.query(async ({ ctx }) => {
     return ctx.messageModel.getHeatmaps();
   }),
@@ -303,6 +282,28 @@ export const messageRouter = router({
       const resolved = await resolveContext({ agentId, ...options }, ctx.serverDB, ctx.userId);
 
       return ctx.messageService.updateMessage(id, value as any, resolved);
+    }),
+
+  /**
+   * Update message group metadata (e.g., expanded state)
+   */
+  updateMessageGroupMetadata: messageProcedure
+    .input(
+      z.object({
+        context: z.object({
+          agentId: z.string(),
+          groupId: z.string().nullable().optional(),
+          threadId: z.string().nullable().optional(),
+          topicId: z.string(),
+        }),
+        expanded: z.boolean().optional(),
+        messageGroupId: z.string(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      const { messageGroupId, expanded, context } = input;
+
+      return ctx.messageService.updateMessageGroupMetadata(messageGroupId, { expanded }, context);
     }),
 
   updateMessagePlugin: messageProcedure

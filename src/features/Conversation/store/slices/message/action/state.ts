@@ -114,10 +114,14 @@ export const messageStateSlice: StateCreator<
 
     // Persist to server and get updated messages
     const { messages } = await messageService.updateMessageGroupMetadata({
-      agentId: context.agentId,
+      context: {
+        agentId: context.agentId,
+        groupId: context.groupId,
+        threadId: context.threadId,
+        topicId: context.topicId,
+      },
       expanded: nextExpanded,
       messageGroupId: id,
-      topicId: context.topicId,
     });
 
     // Sync with server data
