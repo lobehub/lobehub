@@ -2,7 +2,7 @@
 
 import { Center, Icon, Text } from '@lobehub/ui';
 import { ServerCrash } from 'lucide-react';
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VirtuosoGrid } from 'react-virtuoso';
 
@@ -37,11 +37,17 @@ export const CommunityList = memo(() => {
     s.resetMCPPluginList,
   ]);
 
+  const prevKeywordsRef = useRef(keywords);
+
   useEffect(() => {
-    resetMCPPluginList(keywords);
+    // Only reset when keywords actually change, not on initial mount
+    if (prevKeywordsRef.current !== keywords) {
+      prevKeywordsRef.current = keywords;
+      resetMCPPluginList(keywords);
+    }
   }, [keywords, resetMCPPluginList]);
 
-  const { isLoading, error } = useFetchMCPPluginList({
+  const { isLoading, isValidating, error } = useFetchMCPPluginList({
     page: currentPage,
     pageSize: 20,
     q: keywords,
@@ -67,7 +73,7 @@ export const CommunityList = memo(() => {
     return (
       <VirtuosoGrid
         components={{
-          Footer: isLoading ? VirtuosoLoading : () => <div style={{ height: 16 }} />,
+          Footer: isValidating ? VirtuosoLoading : () => <div style={{ height: 16 }} />,
         }}
         data={allItems}
         endReached={loadMoreMCPPlugins}
