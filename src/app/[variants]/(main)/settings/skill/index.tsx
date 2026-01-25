@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, Icon } from '@lobehub/ui';
-import { PlusIcon } from 'lucide-react';
+import { Store } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,7 +21,7 @@ const Page = () => {
     <>
       <SettingHeader
         extra={
-          <Button icon={<Icon icon={PlusIcon} />} onClick={handleOpenStore}>
+          <Button icon={<Icon icon={Store} />} onClick={handleOpenStore}>
             {t('skillStore.button')}
           </Button>
         }
