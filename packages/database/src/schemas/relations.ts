@@ -31,6 +31,7 @@ export const agentsToSessions = pgTable(
     primaryKey({ columns: [t.agentId, t.sessionId] }),
     index('agents_to_sessions_session_id_idx').on(t.sessionId),
     index('agents_to_sessions_agent_id_idx').on(t.agentId),
+    index('agents_to_sessions_user_id_idx').on(t.userId),
   ],
 );
 
@@ -49,6 +50,7 @@ export const filesToSessions = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.fileId, t.sessionId] }),
+    userIdIdx: index('files_to_sessions_user_id_idx').on(t.userId),
   }),
 );
 
@@ -64,6 +66,7 @@ export const fileChunks = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.fileId, t.chunkId] }),
+    userIdIdx: index('file_chunks_user_id_idx').on(t.userId),
   }),
 );
 export type NewFileChunkItem = typeof fileChunks.$inferInsert;

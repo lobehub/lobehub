@@ -70,6 +70,7 @@ export const messageGroups = pgTable(
   },
   (t) => [
     uniqueIndex('message_groups_client_id_user_id_unique').on(t.clientId, t.userId),
+    index('message_groups_user_id_idx').on(t.userId),
     index('message_groups_topic_id_idx').on(t.topicId),
     index('message_groups_type_idx').on(t.type),
   ],
@@ -174,6 +175,7 @@ export const messagePlugins = pgTable(
   },
   (t) => [
     uniqueIndex('message_plugins_client_id_user_id_unique').on(t.clientId, t.userId),
+    index('message_plugins_user_id_idx').on(t.userId),
     index('message_plugins_tool_call_id_idx').on(t.toolCallId),
   ],
 );
@@ -194,6 +196,7 @@ export const messageTTS = pgTable(
   },
   (t) => ({
     clientIdUnique: uniqueIndex('message_tts_client_id_user_id_unique').on(t.clientId, t.userId),
+    userIdIdx: index('message_tts_user_id_idx').on(t.userId),
   }),
 );
 
@@ -216,6 +219,7 @@ export const messageTranslates = pgTable(
       t.clientId,
       t.userId,
     ),
+    userIdIdx: index('message_translates_user_id_idx').on(t.userId),
   }),
 );
 
@@ -236,6 +240,7 @@ export const messagesFiles = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.fileId, t.messageId] }),
+    userIdIdx: index('messages_files_user_id_idx').on(t.userId),
   }),
 );
 
@@ -259,6 +264,7 @@ export const messageQueries = pgTable(
       t.clientId,
       t.userId,
     ),
+    userIdIdx: index('message_queries_user_id_idx').on(t.userId),
   }),
 );
 
@@ -277,6 +283,7 @@ export const messageQueryChunks = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.chunkId, t.messageId, t.queryId] }),
+    userIdIdx: index('message_query_chunks_user_id_idx').on(t.userId),
   }),
 );
 export type NewMessageFileChunk = typeof messageQueryChunks.$inferInsert;
@@ -294,5 +301,6 @@ export const messageChunks = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.chunkId, t.messageId] }),
+    userIdIdx: index('message_chunks_user_id_idx').on(t.userId),
   }),
 );

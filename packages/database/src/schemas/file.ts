@@ -231,5 +231,6 @@ export const knowledgeBaseFiles = pgTable(
   (t) => [
     primaryKey({ columns: [t.knowledgeBaseId, t.fileId] }),
     index('knowledge_base_files_kb_id_idx').on(t.knowledgeBaseId),
+    index('knowledge_base_files_user_id_idx').on(t.userId),
   ],
 );
