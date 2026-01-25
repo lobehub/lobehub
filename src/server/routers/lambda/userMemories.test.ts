@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { LayersEnum } from '@lobechat/types';
+import { LayersEnum, TypesEnum } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getServerDB } from '@/database/core/db-adaptor';
@@ -26,6 +26,9 @@ vi.mock('@/database/models/userMemory', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/database/models/userMemory')>();
   const mockUserMemoryModel: any = vi.fn();
   mockUserMemoryModel.parseDateFromString = actual.UserMemoryModel.parseDateFromString;
+  mockUserMemoryModel.parseAssociatedLocations = actual.UserMemoryModel.parseAssociatedLocations;
+  mockUserMemoryModel.parseAssociatedObjects = actual.UserMemoryModel.parseAssociatedObjects;
+  mockUserMemoryModel.parseAssociatedSubjects = actual.UserMemoryModel.parseAssociatedSubjects;
   return {
     ...actual,
     UserMemoryModel: mockUserMemoryModel,
@@ -378,5 +381,85 @@ describe('userMemories.retrieveMemory', () => {
       id: 'pref-1',
       conclusionDirectives: 'Always provide concise weekly status updates for Project Atlas',
     });
+  });
+});
+
+describe('userMemories.toolAddActivityMemory', () => {
+  it('creates activity memory with embeddings and normalized fields', async () => {
+    const createActivityMemory = vi.fn().mockResolvedValue({
+      activity: { id: 'activity-1' },
+      memory: { id: 'memory-1' },
+    });
+
+    vi.mocked(UserMemoryModel).mockImplementation(
+      () =>
+        ({
+          createActivityMemory,
+        }) as any,
+    );
+
+    vi.mocked(getServerDB).mockResolvedValue({
+      query: {},
+    } as any);
+
+    const caller = userMemoriesRouter.createCaller(mockCtx as any);
+
+    const input = {
+      details: 'Discussed roadmap',
+      memoryCategory: 'work',
+      memoryType: TypesEnum.Activity,
+      summary: 'Roadmap sync with Alice',
+      tags: ['meeting'],
+      title: 'Roadmap sync',
+      withActivity: {
+        associatedLocations: [{ name: 'HQ', type: 'place' }],
+        associatedObjects: [{ name: 'Slides', type: 'item' }],
+        associatedSubjects: [{ name: 'Alice', type: 'person' }],
+        endsAt: '2024-05-01T11:00:00Z',
+        feedback: 'Productive',
+        metadata: { source: 'chat' },
+        narrative: 'We reviewed milestones and risks',
+        notes: 'Follow up with action items',
+        startsAt: '2024-05-01T10:00:00Z',
+        status: 'completed',
+        tags: ['product'],
+        timezone: 'UTC',
+        type: 'meeting',
+      },
+    };
+
+    const result = await caller.toolAddActivityMemory(input as any);
+
+    expect(createActivityMemory).toHaveBeenCalledTimes(1);
+    expect(createActivityMemory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        activity: expect.objectContaining({
+          associatedLocations: [{ name: 'HQ', type: 'place' }],
+          associatedObjects: [{ name: 'Slides' }],
+          associatedSubjects: [{ name: 'Alice' }],
+          endsAt: new Date('2024-05-01T11:00:00Z'),
+          feedback: 'Productive',
+          metadata: { source: 'chat' },
+          narrative: 'We reviewed milestones and risks',
+          notes: 'Follow up with action items',
+          startsAt: new Date('2024-05-01T10:00:00Z'),
+          status: 'completed',
+          tags: ['product'],
+          timezone: 'UTC',
+          type: 'meeting',
+        }),
+        memoryLayer: LayersEnum.Activity,
+        memoryType: TypesEnum.Activity,
+        summaryEmbedding: [1],
+      }),
+    );
+
+    expect(result).toEqual({
+      activityId: 'activity-1',
+      memoryId: 'memory-1',
+      message: 'Memory saved successfully',
+      success: true,
+    });
+    expect(embeddingsMock).toHaveBeenCalledTimes(4);
   });
 });

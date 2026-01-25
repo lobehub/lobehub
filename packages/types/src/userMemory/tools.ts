@@ -23,9 +23,7 @@ export const searchMemorySchema = z.object({
 export type SearchMemoryParams = z.infer<typeof searchMemorySchema>;
 
 export interface SearchMemoryResult {
-  activities: Array<
-    Omit<UserMemoryActivity, 'userId' | 'narrativeVector' | 'feedbackVector'>
-  >;
+  activities: Array<Omit<UserMemoryActivity, 'userId' | 'narrativeVector' | 'feedbackVector'>>;
   contexts: Array<Omit<UserMemoryContext, 'userId' | 'titleVector' | 'descriptionVector'>>;
   experiences: Array<
     Omit<UserMemoryExperience, 'userId' | 'actionVector' | 'situationVector' | 'keyLearningVector'>
@@ -40,6 +38,11 @@ interface MemoryToolBaseResult {
 
 export interface AddContextMemoryResult extends MemoryToolBaseResult {
   contextId?: string;
+  memoryId?: string;
+}
+
+export interface AddActivityMemoryResult extends MemoryToolBaseResult {
+  activityId?: string;
   memoryId?: string;
 }
 

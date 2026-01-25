@@ -6,6 +6,7 @@ import {
 } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
+  ActivityMemoryItemSchema,
   AddIdentityActionSchema,
   ContextMemoryItemSchema,
   ExperienceMemoryItemSchema,
@@ -424,11 +425,6 @@ export const userMemoriesRouter = router({
       }
     }),
 
-  // REVIEW: Extract memories directly from current topic
-  // REVIEW: We need a function implementation that can be triggered both by cron and manually by users for "daily/weekly/periodic" memory extraction/generation
-  // REVIEW: Scheduled task
-  // Don't use tRPC, use server/service directly
-  // Reference: https://github.com/lobehub/lobe-chat-cloud/blob/886ff2fcd44b7b00a3aa8906f84914a6dcaa1815/src/app/(backend)/cron/reset-budgets/route.ts#L214
   reEmbedMemories: memoryProcedure
     .input(reEmbedInputSchema.optional())
     .mutation(async ({ ctx, input }) => {
@@ -926,7 +922,68 @@ export const userMemoriesRouter = router({
     }
   }),
 
-  // REVIEW: Need to implement tool memory api
+  toolAddActivityMemory: memoryProcedure
+    .input(ActivityMemoryItemSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
+          ctx.serverDB,
+          ctx.userId,
+        );
+        const embed = createEmbedder(agentRuntime, embeddingModel);
+
+        const summaryEmbedding = await embed(input.summary);
+        const detailsEmbedding = await embed(input.details);
+        const narrativeVector = await embed(input.withActivity.narrative);
+        const feedbackVector = await embed(input.withActivity.feedback);
+
+        const { activity, memory } = await ctx.memoryModel.createActivityMemory({
+          activity: {
+            associatedLocations:
+              UserMemoryModel.parseAssociatedLocations(input.withActivity.associatedLocations) ??
+              null,
+            associatedObjects:
+              UserMemoryModel.parseAssociatedObjects(input.withActivity.associatedObjects) ?? [],
+            associatedSubjects:
+              UserMemoryModel.parseAssociatedSubjects(input.withActivity.associatedSubjects) ?? [],
+            endsAt: UserMemoryModel.parseDateFromString(input.withActivity.endsAt ?? undefined),
+            feedback: input.withActivity.feedback ?? null,
+            feedbackVector: feedbackVector ?? null,
+            metadata: input.withActivity.metadata ?? null,
+            narrative: input.withActivity.narrative ?? null,
+            narrativeVector: narrativeVector ?? null,
+            notes: input.withActivity.notes ?? null,
+            startsAt: UserMemoryModel.parseDateFromString(input.withActivity.startsAt ?? undefined),
+            status: input.withActivity.status ?? 'pending',
+            tags: input.withActivity.tags ?? input.tags ?? [],
+            timezone: input.withActivity.timezone ?? null,
+            type: input.withActivity.type ?? 'other',
+          },
+          details: input.details || '',
+          detailsEmbedding,
+          memoryCategory: input.memoryCategory,
+          memoryLayer: LayersEnum.Activity,
+          memoryType: input.memoryType,
+          summary: input.summary,
+          summaryEmbedding,
+          title: input.title,
+        });
+
+        return {
+          activityId: activity.id,
+          memoryId: memory.id,
+          message: 'Memory saved successfully',
+          success: true,
+        };
+      } catch (error) {
+        console.error('Failed to save memory:', error);
+        return {
+          message: `Failed to save memory: ${(error as Error).message}`,
+          success: false,
+        };
+      }
+    }),
+
   toolAddContextMemory: memoryProcedure
     .input(ContextMemoryItemSchema)
     .mutation(async ({ input, ctx }) => {

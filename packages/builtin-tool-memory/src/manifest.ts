@@ -1,5 +1,6 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 import {
+  ACTIVITY_TYPES,
   CONTEXT_OBJECT_TYPES,
   CONTEXT_STATUS,
   CONTEXT_SUBJECT_TYPES,
@@ -8,7 +9,7 @@ import {
   MERGE_STRATEGIES,
   RELATIONSHIPS,
 } from '@lobechat/types';
-import { JSONSchema7 } from 'json-schema'
+import { JSONSchema7 } from 'json-schema';
 
 import { systemPrompt } from './systemRole';
 import { MemoryApiName } from './types';
@@ -27,7 +28,8 @@ export const MemoryManifest: BuiltinToolManifest = {
           query: { type: 'string' },
           topK: {
             additionalProperties: false,
-            description: "Limits on number of memories to return per layer, default to search 3 activities, 0 contexts, 0 experiences, and 0 preferences if not specified.",
+            description:
+              'Limits on number of memories to return per layer, default to search 3 activities, 0 contexts, 0 experiences, and 0 preferences if not specified.',
             properties: {
               activities: { minimum: 0, type: 'integer' },
               contexts: { minimum: 0, type: 'integer' },
@@ -189,6 +191,150 @@ export const MemoryManifest: BuiltinToolManifest = {
           'tags',
           'title',
           'withContext',
+        ],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Record an activity memory capturing what happened, when, where, with whom, and how it felt. Include narrative, feedback, timing, associations, and tags.',
+      name: MemoryApiName.addActivityMemory,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          details: {
+            description: 'Optional detailed information or longer notes supporting the summary.',
+            type: 'string',
+          },
+          memoryCategory: {
+            description: 'Memory category best matching the activity (e.g., work, health).',
+            type: 'string',
+          },
+          memoryType: {
+            const: 'activity',
+            description: 'Memory type; always activity.',
+            type: 'string',
+          },
+          summary: {
+            description: 'Concise overview of this activity.',
+            type: 'string',
+          },
+          tags: {
+            description: 'Model generated tags summarizing key facets of the activity.',
+            items: { type: 'string' },
+            type: 'array',
+          },
+          title: {
+            description: 'Brief descriptive title for the activity.',
+            type: 'string',
+          },
+          withActivity: {
+            additionalProperties: false,
+            properties: {
+              associatedLocations: {
+                description: 'Places linked to this activity.',
+                items: {
+                  additionalProperties: false,
+                  properties: {
+                    address: { type: ['string', 'null'] },
+                    extra: { type: ['string', 'null'] },
+                    name: { type: 'string' },
+                    tags: { items: { type: 'string' }, type: ['array', 'null'] },
+                    type: { type: 'string' },
+                  },
+                  required: ['name'],
+                  type: 'object',
+                },
+                type: 'array',
+              },
+              associatedObjects: {
+                description: 'Non-living entities or items tied to the activity.',
+                items: {
+                  additionalProperties: false,
+                  properties: {
+                    extra: { type: ['string', 'null'] },
+                    name: { type: 'string' },
+                    type: { type: 'string' },
+                  },
+                  required: ['name'],
+                  type: 'object',
+                },
+                type: 'array',
+              },
+              associatedSubjects: {
+                description: 'Living beings involved (people, pets, groups).',
+                items: {
+                  additionalProperties: false,
+                  properties: {
+                    extra: { type: ['string', 'null'] },
+                    name: { type: 'string' },
+                    type: { type: 'string' },
+                  },
+                  required: ['name'],
+                  type: 'object',
+                },
+                type: 'array',
+              },
+              endsAt: {
+                description: 'ISO 8601 end time if provided.',
+                format: 'date-time',
+                type: ['string', 'null'],
+              },
+              feedback: {
+                description: 'Subjective feelings or evaluation of how the activity went.',
+                type: ['string', 'null'],
+              },
+              metadata: {
+                additionalProperties: true,
+                description: 'Additional structured metadata to keep raw hints (JSON object).',
+                type: ['object', 'null'],
+              },
+              narrative: {
+                description: 'Factual story of what happened; required for recall.',
+                type: 'string',
+              },
+              notes: {
+                description: 'Short annotations distinct from narrative.',
+                type: ['string', 'null'],
+              },
+              startsAt: {
+                description: 'ISO 8601 start time if provided.',
+                format: 'date-time',
+                type: ['string', 'null'],
+              },
+              status: {
+                description:
+                  'Lifecycle status when mentioned. Use planned/completed/cancelled/ongoing/on_hold/pending. Omit if unclear.',
+                enum: ['planned', 'completed', 'cancelled', 'ongoing', 'on_hold', 'pending'],
+                type: ['string', 'null'],
+              },
+              tags: {
+                description: 'Optional activity-specific tags or facets.',
+                items: { type: 'string' },
+                type: ['array', 'null'],
+              },
+              timezone: {
+                description: 'IANA timezone string for the start/end times when provided.',
+                type: ['string', 'null'],
+              },
+              type: {
+                description: 'Activity type enum; choose the closest match.',
+                enum: ACTIVITY_TYPES,
+                type: 'string',
+              },
+            },
+            required: ['narrative'],
+            type: 'object',
+          },
+        },
+        required: [
+          'title',
+          'summary',
+          'details',
+          'memoryType',
+          'memoryCategory',
+          'tags',
+          'withActivity',
         ],
         type: 'object',
       },

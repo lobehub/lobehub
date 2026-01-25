@@ -1,4 +1,5 @@
 import type {
+  ActivityMemoryItemSchema,
   AddIdentityActionSchema,
   ContextMemoryItemSchema,
   ExperienceMemoryItemSchema,
@@ -7,9 +8,10 @@ import type {
   UpdateIdentityActionSchema,
 } from '@lobechat/memory-user-memory/schemas';
 import {
-  type AddContextMemoryResult,
   type ActivityListParams,
   type ActivityListResult,
+  type AddActivityMemoryResult,
+  type AddContextMemoryResult,
   type AddExperienceMemoryResult,
   type AddIdentityMemoryResult,
   type AddPreferenceMemoryResult,
@@ -29,6 +31,12 @@ import { type z } from 'zod';
 import { lambdaClient } from '@/libs/trpc/client';
 
 class UserMemoryService {
+  addActivityMemory = async (
+    params: z.infer<typeof ActivityMemoryItemSchema>,
+  ): Promise<AddActivityMemoryResult> => {
+    return lambdaClient.userMemories.toolAddActivityMemory.mutate(params);
+  };
+
   addContextMemory = async (
     params: z.infer<typeof ContextMemoryItemSchema>,
   ): Promise<AddContextMemoryResult> => {

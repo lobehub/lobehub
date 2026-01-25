@@ -51,11 +51,11 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import { join } from 'pathe';
 import { z } from 'zod';
 
+import { AsyncTaskModel } from '@/database/models/asyncTask';
 import type { ListTopicsForMemoryExtractorCursor } from '@/database/models/topic';
 import { TopicModel } from '@/database/models/topic';
 import type { ListUsersForMemoryExtractorCursor } from '@/database/models/user';
 import { UserModel } from '@/database/models/user';
-import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { UserMemoryModel } from '@/database/models/userMemory';
 import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemory/sources/benchmarkLoCoMo';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
@@ -67,14 +67,15 @@ import {
 } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { S3 } from '@/server/modules/S3';
+import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import type { GlobalMemoryLayer } from '@/types/serverConfig';
 import type { ProviderConfig } from '@/types/user/settings';
-import { LayersEnum, MemorySourceType, type MergeStrategyEnum, TypesEnum } from '@/types/userMemory';
 import {
-  AsyncTaskError,
-  AsyncTaskErrorType,
-  AsyncTaskStatus,
-} from '@/types/asyncTask';
+  LayersEnum,
+  MemorySourceType,
+  type MergeStrategyEnum,
+  TypesEnum,
+} from '@/types/userMemory';
 import { encodeAsync } from '@/utils/tokenizer';
 
 const SOURCE_ALIAS_MAP: Record<string, MemorySourceType> = {
@@ -344,7 +345,10 @@ const isTopicExtracted = (metadata?: ChatTopicMetadata | null): boolean => {
   const extractStatus = metadata?.userMemoryExtractStatus;
   if (extractStatus) return extractStatus === 'completed';
 
-  return metadata?.userMemoryExtractStatus === 'completed' && !!metadata?.userMemoryExtractRunState?.lastRunAt;
+  return (
+    metadata?.userMemoryExtractStatus === 'completed' &&
+    !!metadata?.userMemoryExtractRunState?.lastRunAt
+  );
 };
 
 type RuntimeBundle = {
@@ -643,7 +647,7 @@ export class MemoryExtractionExecutor {
         details: item.details ?? '',
         detailsEmbedding: detailsVector ?? undefined,
         memoryCategory: item.memoryCategory ?? null,
-        memoryLayer: (item.memoryLayer as LayersEnum) ?? LayersEnum.Activity,
+        memoryLayer: LayersEnum.Activity,
         memoryType: (item.memoryType as TypesEnum) ?? TypesEnum.Activity,
         summary: item.summary ?? '',
         summaryEmbedding: summaryVector ?? undefined,
@@ -1781,7 +1785,9 @@ export class MemoryExtractionExecutor {
     }
 
     if (errors.length) {
-      const detail = errors.map((error) => `${error.message}${error.cause ? `: ${error.cause}` : ''}`).join('; ');
+      const detail = errors
+        .map((error) => `${error.message}${error.cause ? `: ${error.cause}` : ''}`)
+        .join('; ');
       throw new AggregateError(errors, `Memory extraction encountered layer errors: ${detail}`);
     }
 
