@@ -53,17 +53,20 @@ export class ToolsEngine {
    * @returns Processed tools array, or undefined if tools should not be enabled
    */
   generateTools(params: GenerateToolsParams): UniformTool[] | undefined {
-    const { toolIds = [], model, provider, context } = params;
+    const { toolIds = [], model, provider, context, skipDefaultTools } = params;
 
-    // Merge user-provided tool IDs with default tool IDs
-    const allToolIds = [...new Set([...toolIds, ...this.defaultToolIds])];
+    // Merge user-provided tool IDs with default tool IDs (unless skipDefaultTools is true)
+    const allToolIds = skipDefaultTools
+      ? toolIds
+      : [...new Set([...toolIds, ...this.defaultToolIds])];
 
     log(
-      'Generating tools for model=%s, provider=%s, pluginIds=%o (includes %d default tools)',
+      'Generating tools for model=%s, provider=%s, pluginIds=%o (skipDefaultTools=%s, includes %d default tools)',
       model,
       provider,
       allToolIds,
-      this.defaultToolIds.length,
+      skipDefaultTools,
+      skipDefaultTools ? 0 : this.defaultToolIds.length,
     );
 
     // 1. Check if model supports Function Calling
@@ -94,17 +97,20 @@ export class ToolsEngine {
    * @returns Detailed tools generation result
    */
   generateToolsDetailed(params: GenerateToolsParams): ToolsGenerationResult {
-    const { toolIds = [], model, provider, context } = params;
+    const { toolIds = [], model, provider, context, skipDefaultTools } = params;
 
-    // Merge user-provided tool IDs with default tool IDs and deduplicate
-    const allToolIds = [...new Set([...toolIds, ...this.defaultToolIds])];
+    // Merge user-provided tool IDs with default tool IDs and deduplicate (unless skipDefaultTools is true)
+    const allToolIds = skipDefaultTools
+      ? toolIds
+      : [...new Set([...toolIds, ...this.defaultToolIds])];
 
     log(
-      'Generating detailed tools for model=%s, provider=%s, pluginIds=%o (includes %d default tools)',
+      'Generating detailed tools for model=%s, provider=%s, pluginIds=%o (skipDefaultTools=%s, includes %d default tools)',
       model,
       provider,
       allToolIds,
-      this.defaultToolIds.length,
+      skipDefaultTools,
+      skipDefaultTools ? 0 : this.defaultToolIds.length,
     );
 
     // Check if model supports Function Calling
