@@ -62,6 +62,8 @@ export const unstructuredChunks = pgTable(
       t.userId,
     ),
     userIdIdx: index('unstructured_chunks_user_id_idx').on(t.userId),
+    compositeIdIdx: index('unstructured_chunks_composite_id_idx').on(t.compositeId),
+    fileIdIdx: index('unstructured_chunks_file_id_idx').on(t.fileId),
   }),
 );
 

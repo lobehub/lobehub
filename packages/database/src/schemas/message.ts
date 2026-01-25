@@ -73,6 +73,8 @@ export const messageGroups = pgTable(
     index('message_groups_user_id_idx').on(t.userId),
     index('message_groups_topic_id_idx').on(t.topicId),
     index('message_groups_type_idx').on(t.type),
+    index('message_groups_parent_group_id_idx').on(t.parentGroupId),
+    index('message_groups_parent_message_id_idx').on(t.parentMessageId),
   ],
 );
 
@@ -241,6 +243,7 @@ export const messagesFiles = pgTable(
   (t) => ({
     pk: primaryKey({ columns: [t.fileId, t.messageId] }),
     userIdIdx: index('messages_files_user_id_idx').on(t.userId),
+    messageIdIdx: index('messages_files_message_id_idx').on(t.messageId),
   }),
 );
 
@@ -265,6 +268,8 @@ export const messageQueries = pgTable(
       t.userId,
     ),
     userIdIdx: index('message_queries_user_id_idx').on(t.userId),
+    messageIdIdx: index('message_queries_message_id_idx').on(t.messageId),
+    embeddingsIdIdx: index('message_queries_embeddings_id_idx').on(t.embeddingsId),
   }),
 );
 
@@ -284,6 +289,8 @@ export const messageQueryChunks = pgTable(
   (t) => ({
     pk: primaryKey({ columns: [t.chunkId, t.messageId, t.queryId] }),
     userIdIdx: index('message_query_chunks_user_id_idx').on(t.userId),
+    messageIdIdx: index('message_query_chunks_message_id_idx').on(t.messageId),
+    queryIdIdx: index('message_query_chunks_query_id_idx').on(t.queryId),
   }),
 );
 export type NewMessageFileChunk = typeof messageQueryChunks.$inferInsert;
@@ -302,5 +309,6 @@ export const messageChunks = pgTable(
   (t) => ({
     pk: primaryKey({ columns: [t.chunkId, t.messageId] }),
     userIdIdx: index('message_chunks_user_id_idx').on(t.userId),
+    messageIdIdx: index('message_chunks_message_id_idx').on(t.messageId),
   }),
 );

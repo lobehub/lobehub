@@ -111,6 +111,7 @@ export const threads = pgTable(
     index('threads_topic_id_idx').on(t.topicId),
     index('threads_agent_id_idx').on(t.agentId),
     index('threads_group_id_idx').on(t.groupId),
+    index('threads_parent_thread_id_idx').on(t.parentThreadId),
   ],
 );
 
@@ -141,6 +142,8 @@ export const topicDocuments = pgTable(
   (t) => [
     primaryKey({ columns: [t.documentId, t.topicId] }),
     index('topic_documents_user_id_idx').on(t.userId),
+    index('topic_documents_topic_id_idx').on(t.topicId),
+    index('topic_documents_document_id_idx').on(t.documentId),
   ],
 );
 
