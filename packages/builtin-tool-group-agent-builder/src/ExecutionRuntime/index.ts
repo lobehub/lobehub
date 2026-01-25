@@ -256,13 +256,15 @@ export class GroupAgentBuilderExecutionRuntime {
 
       // Check if agent is already in the group
       const existingAgents = group.agents || [];
-      const isAlreadyInGroup = existingAgents.some((a) => a.id === args.agentId);
+      const existingAgent = existingAgents.find((a) => a.id === args.agentId);
 
-      if (isAlreadyInGroup) {
+      if (existingAgent) {
         return {
-          content: `Agent ${args.agentId} is already in the group`,
+          content: `Agent ${existingAgent.title || args.agentId} is already in the group`,
           state: {
+            agentAvatar: existingAgent.avatar,
             agentId: args.agentId,
+            agentName: existingAgent.title,
             success: false,
           } as InviteAgentState,
           success: false,
@@ -277,12 +279,22 @@ export class GroupAgentBuilderExecutionRuntime {
 
       const wasAdded = result.added.length > 0;
 
+      // Get the agent info from the updated group
+      const updatedGroup = agentGroupSelectors.getGroupById(groupId)(getChatGroupStoreState());
+      const addedAgent = updatedGroup?.agents?.find((a) => a.id === args.agentId);
+      const agentName = addedAgent?.title;
+      const agentAvatar = addedAgent?.avatar;
+
+      const agentDisplay = agentName ? `${agentName} (ID: ${args.agentId})` : args.agentId;
+
       return {
         content: wasAdded
-          ? `Successfully invited agent ${args.agentId} to the group`
-          : `Agent ${args.agentId} was already in the group`,
+          ? `Successfully invited agent ${agentDisplay} to the group`
+          : `Agent ${agentDisplay} was already in the group`,
         state: {
+          agentAvatar,
           agentId: args.agentId,
+          agentName,
           success: wasAdded,
         } as InviteAgentState,
         success: wasAdded,
@@ -315,9 +327,9 @@ export class GroupAgentBuilderExecutionRuntime {
 
       // Check if agent is in the group
       const existingAgents = group.agents || [];
-      const isInGroup = existingAgents.some((a) => a.id === args.agentId);
+      const agent = existingAgents.find((a) => a.id === args.agentId);
 
-      if (!isInGroup) {
+      if (!agent) {
         return {
           content: `Agent ${args.agentId} is not in the group`,
           state: {
@@ -328,12 +340,20 @@ export class GroupAgentBuilderExecutionRuntime {
         };
       }
 
+      // Get agent info before removing
+      const agentName = agent.title;
+      const agentAvatar = agent.avatar;
+
+      const agentDisplay = agentName ? `${agentName} (ID: ${args.agentId})` : args.agentId;
+
       // Check if this is the supervisor agent (cannot be removed)
       if (group.supervisorAgentId === args.agentId) {
         return {
-          content: `Cannot remove supervisor agent ${args.agentId} from the group`,
+          content: `Cannot remove supervisor agent ${agentDisplay} from the group`,
           state: {
+            agentAvatar,
             agentId: args.agentId,
+            agentName,
             success: false,
           } as RemoveAgentState,
           success: false,
@@ -347,9 +367,11 @@ export class GroupAgentBuilderExecutionRuntime {
       await state.refreshGroupDetail(groupId);
 
       return {
-        content: `Successfully removed agent ${args.agentId} from the group`,
+        content: `Successfully removed agent ${agentDisplay} from the group`,
         state: {
+          agentAvatar,
           agentId: args.agentId,
+          agentName,
           success: true,
         } as RemoveAgentState,
         success: true,
