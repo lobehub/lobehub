@@ -67,7 +67,7 @@ export const CommunityList = memo(() => {
     return (
       <VirtuosoGrid
         components={{
-          Footer: isLoading ? VirtuosoLoading : undefined,
+          Footer: isLoading ? VirtuosoLoading : () => <div style={{ height: 16 }} />,
         }}
         data={allItems}
         endReached={loadMoreMCPPlugins}
