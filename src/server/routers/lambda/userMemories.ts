@@ -19,6 +19,7 @@ import pMap from 'p-map';
 import { z } from 'zod';
 
 import {
+  UserMemoryActivityModel,
   type IdentityEntryBasePayload,
   type IdentityEntryPayload,
   UserMemoryExperienceModel,
@@ -28,6 +29,7 @@ import {
 import { UserMemoryTopicRepository } from '@/database/repositories/userMemory';
 import {
   userMemories,
+  userMemoriesActivities,
   userMemoriesContexts,
   userMemoriesExperiences,
   userMemoriesIdentities,
@@ -39,6 +41,7 @@ import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 const EMPTY_SEARCH_RESULT: SearchMemoryResult = {
+  activities: [],
   contexts: [],
   experiences: [],
   preferences: [],
@@ -54,6 +57,25 @@ type MemorySearchResult = Awaited<ReturnType<UserMemoryModel['searchWithEmbeddin
 
 const mapMemorySearchResult = (layeredResults: MemorySearchResult): SearchMemoryResult => {
   return {
+    activities: layeredResults.activities.map((activity) => ({
+      accessedAt: activity.accessedAt,
+      associatedLocations: activity.associatedLocations,
+      associatedObjects: activity.associatedObjects,
+      associatedSubjects: activity.associatedSubjects,
+      capturedAt: activity.capturedAt,
+      createdAt: activity.createdAt,
+      endsAt: activity.endsAt,
+      feedback: activity.feedback,
+      id: activity.id,
+      metadata: activity.metadata,
+      startsAt: activity.startsAt,
+      status: activity.status,
+      tags: activity.tags,
+      timezone: activity.timezone,
+      type: activity.type,
+      updatedAt: activity.updatedAt,
+      userMemoryId: activity.userMemoryId,
+    })),
     contexts: layeredResults.contexts.map((context) => ({
       accessedAt: context.accessedAt,
       associatedObjects: context.associatedObjects,
@@ -121,6 +143,7 @@ const searchUserMemories = async (
   });
 
   const limits = {
+    activities: input.topK?.activities,
     contexts: input.topK?.contexts,
     experiences: input.topK?.experiences,
     preferences: input.topK?.preferences,
@@ -167,6 +190,7 @@ const REEMBED_TABLE_KEYS = [
   'preferences',
   'identities',
   'experiences',
+  'activities',
 ] as const;
 type ReEmbedTableKey = (typeof REEMBED_TABLE_KEYS)[number];
 
@@ -204,6 +228,7 @@ const memoryProcedure = authedProcedure.use(serverDatabase).use(async (opts) => 
   const { ctx } = opts;
   return opts.next({
     ctx: {
+      activityModel: new UserMemoryActivityModel(ctx.serverDB, ctx.userId),
       experienceModel: new UserMemoryExperienceModel(ctx.serverDB, ctx.userId),
       identityModel: new UserMemoryIdentityModel(ctx.serverDB, ctx.userId),
       memoryModel: new UserMemoryModel(ctx.serverDB, ctx.userId),
@@ -220,6 +245,34 @@ export const userMemoriesRouter = router({
       } catch (error) {
         console.error('Failed to retrieve memory detail:', error);
         return null;
+      }
+    }),
+
+  queryActivities: memoryProcedure
+    .input(
+      z
+        .object({
+          order: z.enum(['asc', 'desc']).optional(),
+          page: z.coerce.number().int().min(1).optional(),
+          pageSize: z.coerce.number().int().min(1).max(100).optional(),
+          q: z.string().optional(),
+          sort: z.enum(['capturedAt', 'startsAt']).optional(),
+          status: z.array(z.string()).optional(),
+          tags: z.array(z.string()).optional(),
+          types: z.array(z.string()).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const params = input ?? {};
+      const fallbackPage = params.page ?? 1;
+      const fallbackPageSize = params.pageSize ?? 20;
+
+      try {
+        return await ctx.activityModel.queryList(params);
+      } catch (error) {
+        console.error('Failed to query activities:', error);
+        return { items: [], page: fallbackPage, pageSize: fallbackPageSize, total: 0 };
       }
     }),
 
@@ -318,8 +371,16 @@ export const userMemoriesRouter = router({
           pageSize: z.coerce.number().int().min(1).max(100).optional(),
           q: z.string().optional(),
           sort: z
-            .enum(['capturedAt', 'scoreConfidence', 'scoreImpact', 'scorePriority', 'scoreUrgency'])
+            .enum([
+              'capturedAt',
+              'scoreConfidence',
+              'scoreImpact',
+              'scorePriority',
+              'scoreUrgency',
+              'startsAt',
+            ])
             .optional(),
+          status: z.array(z.string()).optional(),
           tags: z.array(z.string()).optional(),
           types: z.array(z.string()).optional(),
         })
@@ -626,6 +687,73 @@ export const userMemoriesRouter = router({
               } catch (err) {
                 failed += 1;
                 console.error(`[memoryRouter.reEmbed] Failed to re-embed identity ${row.id}`, err);
+              }
+            },
+            { concurrency },
+          );
+
+          return {
+            failed,
+            skipped,
+            succeeded,
+            total: rows.length,
+          } satisfies ReEmbedStats;
+        });
+
+        await run('activities', async () => {
+          const where = combineConditions([
+            eq(userMemoriesActivities.userId, ctx.userId),
+            options.startDate
+              ? gte(userMemoriesActivities.createdAt, options.startDate)
+              : undefined,
+            options.endDate ? lte(userMemoriesActivities.createdAt, options.endDate) : undefined,
+          ]);
+
+          const rows = await ctx.serverDB.query.userMemoriesActivities.findMany({
+            columns: { feedback: true, id: true, narrative: true },
+            limit: options.limit,
+            orderBy: [asc(userMemoriesActivities.createdAt)],
+            where,
+          });
+
+          let succeeded = 0;
+          let failed = 0;
+          let skipped = 0;
+
+          await pMap(
+            rows,
+            async (row) => {
+              const narrative = normalizeEmbeddable(row.narrative);
+              const feedback = normalizeEmbeddable(row.feedback);
+
+              try {
+                if (!narrative && !feedback) {
+                  await ctx.memoryModel.updateActivityVectors(row.id, {
+                    feedbackVector: null,
+                    narrativeVector: null,
+                  });
+                  skipped += 1;
+                  return;
+                }
+
+                const inputs: string[] = [];
+                if (narrative) inputs.push(narrative);
+                if (feedback) inputs.push(feedback);
+
+                const embeddings = await embedTexts(inputs);
+                let embedIndex = 0;
+
+                const narrativeVector = narrative ? (embeddings[embedIndex++] ?? null) : null;
+                const feedbackVector = feedback ? (embeddings[embedIndex++] ?? null) : null;
+
+                await ctx.memoryModel.updateActivityVectors(row.id, {
+                  feedbackVector,
+                  narrativeVector,
+                });
+                succeeded += 1;
+              } catch (err) {
+                failed += 1;
+                console.error(`[memoryRouter.reEmbed] Failed to re-embed activity ${row.id}`, err);
               }
             },
             { concurrency },

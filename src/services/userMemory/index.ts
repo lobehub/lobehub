@@ -8,6 +8,8 @@ import type {
 } from '@lobechat/memory-user-memory/schemas';
 import {
   type AddContextMemoryResult,
+  type ActivityListParams,
+  type ActivityListResult,
   type AddExperienceMemoryResult,
   type AddIdentityMemoryResult,
   type AddPreferenceMemoryResult,
@@ -74,6 +76,14 @@ class UserMemoryService {
   };
 
   /**
+   * Query activities with pagination, search, and sorting
+   * Returns flat structure optimized for frontend display
+   */
+  queryActivities = async (params?: ActivityListParams): Promise<ActivityListResult> => {
+    return lambdaClient.userMemories.queryActivities.query(params);
+  };
+
+  /**
    * Query identities with pagination, search, and sorting
    * Returns flat structure optimized for frontend display
    */
@@ -120,7 +130,14 @@ class UserMemoryService {
     page?: number;
     pageSize?: number;
     q?: string;
-    sort?: 'capturedAt' | 'scoreConfidence' | 'scoreImpact' | 'scorePriority' | 'scoreUrgency';
+    sort?:
+      | 'capturedAt'
+      | 'scoreConfidence'
+      | 'scoreImpact'
+      | 'scorePriority'
+      | 'scoreUrgency'
+      | 'startsAt';
+    status?: string[];
     tags?: string[];
     types?: TypesEnum[];
   }) => {

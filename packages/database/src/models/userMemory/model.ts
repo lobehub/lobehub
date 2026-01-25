@@ -331,7 +331,8 @@ export type QueryUserMemoriesSort =
   | 'scoreConfidence' // user_memories_experiences
   | 'scoreImpact' // user_memories_contexts
   | 'scorePriority' // user_memories_preferences
-  | 'scoreUrgency'; // user_memories_contexts
+  | 'scoreUrgency' // user_memories_contexts
+  | 'startsAt'; // user_memories_activities
 
 export interface QueryUserMemoriesParams {
   categories?: string[];
@@ -341,6 +342,7 @@ export interface QueryUserMemoriesParams {
   pageSize?: number;
   q?: string;
   sort?: QueryUserMemoriesSort;
+  status?: string[];
   tags?: string[];
   types?: string[];
 }
@@ -850,6 +852,7 @@ export class UserMemoryModel {
       pageSize = 20,
       q,
       sort,
+      status,
       tags,
       types,
     } = params;
@@ -997,6 +1000,98 @@ export class UserMemoryModel {
             return {
               context: row.context,
               layer: LayersEnum.Context,
+              memory: row.memory,
+            };
+          }),
+          page: normalizedPage,
+          pageSize: normalizedPageSize,
+          total: Number(totalResult[0]?.count ?? 0),
+        };
+      }
+      case LayersEnum.Activity: {
+        const sortColumn =
+          sort === 'startsAt'
+            ? userMemoriesActivities.startsAt
+            : userMemoriesActivities.capturedAt;
+
+        const orderByClauses = buildOrderBy(
+          sortColumn,
+          userMemoriesActivities.updatedAt,
+          userMemoriesActivities.createdAt,
+        );
+        const joinCondition = and(
+          eq(userMemories.id, userMemoriesActivities.userMemoryId),
+          eq(userMemoriesActivities.userId, this.userId),
+        );
+
+        const activityFilters: Array<SQL | undefined> = [
+          whereClause,
+          types && types.length > 0 ? inArray(userMemoriesActivities.type, types) : undefined,
+          status && status.length > 0 ? inArray(userMemoriesActivities.status, status) : undefined,
+          tags && tags.length > 0
+            ? or(
+                ...tags.map(
+                  (tag) =>
+                    sql<boolean>`
+                      COALESCE(${tag} = ANY(${userMemoriesActivities.tags}), false)
+                      OR COALESCE(${tag} = ANY(${userMemories.tags}), false)
+                    `,
+                ),
+              )
+            : undefined,
+        ];
+        const activityWhereClause = activityFilters.some(
+          (condition): condition is SQL => condition !== undefined,
+        )
+          ? and(
+              ...(activityFilters.filter(
+                (condition): condition is SQL => condition !== undefined,
+              ) as SQL[]),
+            )
+          : undefined;
+
+        const [rows, totalResult] = await Promise.all([
+          this.db
+            .select({
+              activity: {
+                accessedAt: userMemoriesActivities.accessedAt,
+                associatedLocations: userMemoriesActivities.associatedLocations,
+                associatedObjects: userMemoriesActivities.associatedObjects,
+                associatedSubjects: userMemoriesActivities.associatedSubjects,
+                capturedAt: userMemoriesActivities.capturedAt,
+                createdAt: userMemoriesActivities.createdAt,
+                endsAt: userMemoriesActivities.endsAt,
+                id: userMemoriesActivities.id,
+                metadata: userMemoriesActivities.metadata,
+                startsAt: userMemoriesActivities.startsAt,
+                status: userMemoriesActivities.status,
+                tags: userMemoriesActivities.tags,
+                timezone: userMemoriesActivities.timezone,
+                type: userMemoriesActivities.type,
+                updatedAt: userMemoriesActivities.updatedAt,
+                userId: userMemoriesActivities.userId,
+                userMemoryId: userMemoriesActivities.userMemoryId,
+              },
+              memory: baseSelection,
+            })
+            .from(userMemories)
+            .innerJoin(userMemoriesActivities, joinCondition)
+            .where(activityWhereClause)
+            .orderBy(...orderByClauses)
+            .limit(normalizedPageSize)
+            .offset(offset),
+          this.db
+            .select({ count: sql<number>`COUNT(*)::int` })
+            .from(userMemories)
+            .innerJoin(userMemoriesActivities, joinCondition)
+            .where(activityWhereClause),
+        ]);
+
+        return {
+          items: rows.map((row) => {
+            return {
+              activity: row.activity,
+              layer: LayersEnum.Activity,
               memory: row.memory,
             };
           }),
@@ -1304,6 +1399,58 @@ export class UserMemoryModel {
 
         return {
           context: context as UserMemoryContextWithoutVectors,
+          layer,
+          memory,
+          source,
+          sourceType,
+        };
+      }
+      case LayersEnum.Activity: {
+        const [activity] = await this.db
+          .select({
+            accessedAt: userMemoriesActivities.accessedAt,
+            associatedLocations: userMemoriesActivities.associatedLocations,
+            associatedObjects: userMemoriesActivities.associatedObjects,
+            associatedSubjects: userMemoriesActivities.associatedSubjects,
+            capturedAt: userMemoriesActivities.capturedAt,
+            createdAt: userMemoriesActivities.createdAt,
+            endsAt: userMemoriesActivities.endsAt,
+            feedback: userMemoriesActivities.feedback,
+            id: userMemoriesActivities.id,
+            metadata: userMemoriesActivities.metadata,
+            narrative: userMemoriesActivities.narrative,
+            notes: userMemoriesActivities.notes,
+            startsAt: userMemoriesActivities.startsAt,
+            status: userMemoriesActivities.status,
+            tags: userMemoriesActivities.tags,
+            timezone: userMemoriesActivities.timezone,
+            type: userMemoriesActivities.type,
+            updatedAt: userMemoriesActivities.updatedAt,
+            userId: userMemoriesActivities.userId,
+            userMemoryId: userMemoriesActivities.userMemoryId,
+          })
+          .from(userMemoriesActivities)
+          .where(
+            and(eq(userMemoriesActivities.id, id), eq(userMemoriesActivities.userId, this.userId)),
+          )
+          .limit(1);
+        if (!activity?.userMemoryId) {
+          return undefined;
+        }
+
+        const memory = await this.findUserMemoryRawById(activity.userMemoryId);
+        if (!memory) {
+          return undefined;
+        }
+        if (memory.memoryLayer !== LayersEnum.Activity) {
+          return undefined;
+        }
+
+        const { sourceId, sourceType } = await this.extractSourceMetadata(activity.metadata);
+        const source = sourceId ? await this.topicModel.findById(sourceId) : undefined;
+
+        return {
+          activity,
           layer,
           memory,
           source,
@@ -1627,6 +1774,33 @@ export class UserMemoryModel {
       })
       .where(
         and(eq(userMemoriesExperiences.id, id), eq(userMemoriesExperiences.userId, this.userId)),
+      );
+  };
+
+  updateActivityVectors = async (
+    id: string,
+    vectors: { feedbackVector?: number[] | null; narrativeVector?: number[] | null },
+  ): Promise<void> => {
+    const vectorUpdates: Partial<typeof userMemoriesActivities.$inferInsert> = {};
+    if (vectors.feedbackVector !== undefined) {
+      vectorUpdates.feedbackVector = vectors.feedbackVector;
+    }
+    if (vectors.narrativeVector !== undefined) {
+      vectorUpdates.narrativeVector = vectors.narrativeVector;
+    }
+
+    if (Object.keys(vectorUpdates).length === 0) {
+      return;
+    }
+
+    await this.db
+      .update(userMemoriesActivities)
+      .set({
+        ...vectorUpdates,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(eq(userMemoriesActivities.id, id), eq(userMemoriesActivities.userId, this.userId)),
       );
   };
 

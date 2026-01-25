@@ -85,6 +85,7 @@ const SOURCE_ALIAS_MAP: Record<string, MemorySourceType> = {
 };
 
 const LAYER_ALIAS = new Set<LayersEnum>([
+  LayersEnum.Activity,
   LayersEnum.Context,
   LayersEnum.Experience,
   LayersEnum.Identity,

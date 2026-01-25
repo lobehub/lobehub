@@ -350,6 +350,13 @@ export const desktopRoutes: RouteConfig[] = [
             ),
             path: 'experiences',
           },
+          {
+            element: dynamicElement(
+              () => import('../(main)/memory/activities'),
+              'Desktop > Memory > Activities',
+            ),
+            path: 'activities',
+          },
         ],
         element: <DesktopMemoryLayout />,
         errorElement: <ErrorBoundary resetPath="/memory" />,

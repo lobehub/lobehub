@@ -56,6 +56,7 @@ export const createAgentMemorySlice: StateCreator<
             }),
             false,
             n('useFetchMemoriesForTopic/success', {
+              activitiesCount: data.activities?.length ?? 0,
               contextsCount: data.contexts?.length ?? 0,
               experiencesCount: data.experiences?.length ?? 0,
               preferencesCount: data.preferences?.length ?? 0,

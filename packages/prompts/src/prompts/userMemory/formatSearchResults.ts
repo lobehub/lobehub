@@ -4,6 +4,7 @@ import type { SearchMemoryResult } from '@lobechat/types';
  * Search result item interfaces matching the SearchMemoryResult type
  */
 type ContextResult = SearchMemoryResult['contexts'][number];
+type ActivityResult = SearchMemoryResult['activities'][number];
 type ExperienceResult = SearchMemoryResult['experiences'][number];
 type PreferenceResult = SearchMemoryResult['preferences'][number];
 
@@ -62,6 +63,40 @@ const formatContextResult = (item: ContextResult): string => {
   const content = children.length > 0 ? `\n${children.join('\n')}\n  ` : '';
 
   return `  <context ${attrs.join(' ')}>${content}</context>`;
+};
+
+/**
+ * Format a single activity memory item for search results
+ * Includes scheduling attributes and feedback
+ */
+const formatActivityResult = (item: ActivityResult): string => {
+  const attrs: string[] = [`id="${item.id}"`];
+
+  if (item.type) {
+    attrs.push(`type="${item.type}"`);
+  }
+  if (item.status) {
+    attrs.push(`status="${item.status}"`);
+  }
+  if (item.startsAt) {
+    attrs.push(`startsAt="${item.startsAt}"`);
+  }
+  if (item.endsAt) {
+    attrs.push(`endsAt="${item.endsAt}"`);
+  }
+  if (item.timezone) {
+    attrs.push(`timezone="${item.timezone}"`);
+  }
+
+  const children: string[] = [];
+
+  if (item.feedback) {
+    children.push(`    <feedback>${item.feedback}</feedback>`);
+  }
+
+  const content = children.length > 0 ? `\n${children.join('\n')}\n  ` : '';
+
+  return `  <activity ${attrs.join(' ')}>${content}</activity>`;
 };
 
 /**
@@ -129,8 +164,8 @@ export const formatMemorySearchResults = ({
   query,
   results,
 }: FormatSearchResultsOptions): string => {
-  const { contexts, experiences, preferences } = results;
-  const total = contexts.length + experiences.length + preferences.length;
+  const { activities, contexts, experiences, preferences } = results;
+  const total = activities.length + contexts.length + experiences.length + preferences.length;
 
   if (total === 0) {
     return `<memories query="${query}">
@@ -144,6 +179,11 @@ export const formatMemorySearchResults = ({
   if (contexts.length > 0) {
     const contextsXml = contexts.map(formatContextResult).join('\n');
     sections.push(`<contexts count="${contexts.length}">\n${contextsXml}\n</contexts>`);
+  }
+
+  if (activities.length > 0) {
+    const activitiesXml = activities.map(formatActivityResult).join('\n');
+    sections.push(`<activities count="${activities.length}">\n${activitiesXml}\n</activities>`);
   }
 
   // Add experiences section

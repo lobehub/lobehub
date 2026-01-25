@@ -1,4 +1,5 @@
 export * from './base';
+export * from './activity';
 export * from './experience';
 export * from './identity';
 export * from './layers';

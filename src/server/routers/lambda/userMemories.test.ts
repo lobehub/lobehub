@@ -55,6 +55,7 @@ describe('memoryRouter.reEmbedMemories', () => {
     const updatePreferenceVectors = vi.fn().mockResolvedValue(undefined);
     const updateIdentityVectors = vi.fn().mockResolvedValue(undefined);
     const updateExperienceVectors = vi.fn().mockResolvedValue(undefined);
+    const updateActivityVectors = vi.fn().mockResolvedValue(undefined);
 
     vi.mocked(UserMemoryModel).mockImplementation(
       () =>
@@ -62,6 +63,7 @@ describe('memoryRouter.reEmbedMemories', () => {
           updateContextVectors,
           updateExperienceVectors,
           updateIdentityVectors,
+          updateActivityVectors,
           updatePreferenceVectors,
           updateUserMemoryVectors,
         }) as any,
@@ -78,6 +80,9 @@ describe('memoryRouter.reEmbedMemories', () => {
         keyLearning: 'learning text',
         situation: 'situation text',
       },
+    ];
+    const activitiesRows = [
+      { feedback: 'feedback text', id: 'activity-1', narrative: 'narrative text' },
     ];
 
     const dbStub = {
@@ -97,6 +102,9 @@ describe('memoryRouter.reEmbedMemories', () => {
         userMemoriesPreferences: {
           findMany: vi.fn().mockResolvedValue(preferencesRows),
         },
+        userMemoriesActivities: {
+          findMany: vi.fn().mockResolvedValue(activitiesRows),
+        },
       },
     } as const;
 
@@ -107,12 +115,13 @@ describe('memoryRouter.reEmbedMemories', () => {
     const result = await caller.reEmbedMemories();
 
     expect(result.success).toBe(true);
-    expect(result.aggregate).toEqual({ failed: 0, skipped: 0, succeeded: 5, total: 5 });
+    expect(result.aggregate).toEqual({ failed: 0, skipped: 0, succeeded: 6, total: 6 });
     expect(result.results?.userMemories).toEqual({ failed: 0, skipped: 0, succeeded: 1, total: 1 });
     expect(result.results?.contexts).toEqual({ failed: 0, skipped: 0, succeeded: 1, total: 1 });
     expect(result.results?.preferences).toEqual({ failed: 0, skipped: 0, succeeded: 1, total: 1 });
     expect(result.results?.identities).toEqual({ failed: 0, skipped: 0, succeeded: 1, total: 1 });
     expect(result.results?.experiences).toEqual({ failed: 0, skipped: 0, succeeded: 1, total: 1 });
+    expect(result.results?.activities).toEqual({ failed: 0, skipped: 0, succeeded: 1, total: 1 });
 
     expect(updateUserMemoryVectors).toHaveBeenCalledWith('memory-1', {
       detailsVector1024: [2],
@@ -132,8 +141,12 @@ describe('memoryRouter.reEmbedMemories', () => {
       keyLearningVector: [3],
       situationVector: [1],
     });
+    expect(updateActivityVectors).toHaveBeenCalledWith('activity-1', {
+      feedbackVector: [2],
+      narrativeVector: [1],
+    });
 
-    expect(embeddingsMock).toHaveBeenCalledTimes(5);
+    expect(embeddingsMock).toHaveBeenCalledTimes(6);
   });
 });
 
@@ -272,6 +285,7 @@ describe('userMemories.getMemoryDetail', () => {
 describe('userMemories.retrieveMemory', () => {
   it('returns aggregated memory search results', async () => {
     const searchWithEmbedding = vi.fn().mockResolvedValue({
+      activities: [],
       contexts: [
         {
           accessedAt: new Date('2024-01-01T00:00:00.000Z'),
@@ -341,14 +355,14 @@ describe('userMemories.retrieveMemory', () => {
 
     const result = await caller.searchMemory({
       query: 'Project Atlas',
-      topK: { contexts: 1, experiences: 1, preferences: 1 },
+      topK: { activities: 1, contexts: 1, experiences: 1, preferences: 1 },
     });
 
     expect(embeddingsMock).toHaveBeenCalledTimes(1);
     expect(searchWithEmbedding.mock.calls[0][0]).toBeTypeOf('object');
     expect(searchWithEmbedding.mock.calls[0][0]).toStrictEqual({
       embedding: [1],
-      limits: { contexts: 1, experiences: 1, preferences: 1 },
+      limits: { activities: 1, contexts: 1, experiences: 1, preferences: 1 },
     });
 
     expect(result.contexts[0]).toMatchObject({

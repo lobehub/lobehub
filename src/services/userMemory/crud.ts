@@ -38,6 +38,23 @@ class MemoryCRUDService {
     return lambdaClient.userMemory.updateContext.mutate({ data, id });
   };
 
+  // ============ Activity CRUD ============
+
+  deleteActivity = async (id: string) => {
+    return lambdaClient.userMemory.deleteActivity.mutate({ id });
+  };
+
+  getActivities = async () => {
+    return lambdaClient.userMemory.getActivities.query();
+  };
+
+  updateActivity = async (
+    id: string,
+    data: { narrative?: string; notes?: string; status?: string },
+  ) => {
+    return lambdaClient.userMemory.updateActivity.mutate({ data, id });
+  };
+
   // ============ Experience CRUD ============
 
   deleteExperience = async (id: string) => {

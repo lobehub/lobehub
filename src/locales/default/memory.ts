@@ -1,4 +1,14 @@
 export default {
+  'activity.actions.delete': 'Delete',
+  'activity.actions.edit': 'Edit',
+  'activity.defaultType': 'Activity',
+  'activity.deleteConfirm':
+    'Are you sure you want to delete this activity memory? This action cannot be undone.',
+  'activity.deleteTitle': 'Delete Activity Memory',
+  'activity.empty': 'No activity memories available',
+  'activity.feedback': 'Feedback',
+  'activity.narrative': 'Narrative',
+  'activity.notes': 'Notes',
   'analysis.action.button': 'Request memory analysis',
   'analysis.modal.cancel': 'Cancel',
   'analysis.modal.helper':
@@ -52,6 +62,7 @@ export default {
   'filter.sort.scoreImpact': 'Impact',
   'filter.sort.scorePriority': 'Preference Weight',
   'filter.sort.scoreUrgency': 'Urgency',
+  'filter.sort.startsAt': 'Start Time',
   'identity.empty': 'No identity memories available',
   'identity.filter.search': 'Search roles, relationships, or descriptions...',
   'identity.filter.type.all': 'All',
@@ -80,6 +91,7 @@ export default {
   'preference.empty': 'No preference memories available',
   'preference.source': 'Source',
   'preference.suggestions': 'Actions the agent might take',
+  'tab.activities': 'Activities',
   'tab.contexts': 'Contexts',
   'tab.experiences': 'Experiences',
   'tab.home': 'Home',

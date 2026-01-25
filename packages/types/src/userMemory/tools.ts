@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-import { UserMemoryContext, UserMemoryExperience, UserMemoryPreference } from './layers';
+import {
+  UserMemoryActivity,
+  UserMemoryContext,
+  UserMemoryExperience,
+  UserMemoryPreference,
+} from './layers';
 
 export const searchMemorySchema = z.object({
   // TODO: we need to dynamically fetch the available categories/types from the backend
@@ -8,6 +13,7 @@ export const searchMemorySchema = z.object({
   // memoryType: z.string().optional(),
   query: z.string(),
   topK: z.object({
+    activities: z.coerce.number().int().min(0),
     contexts: z.coerce.number().int().min(0),
     experiences: z.coerce.number().int().min(0),
     preferences: z.coerce.number().int().min(0),
@@ -17,6 +23,9 @@ export const searchMemorySchema = z.object({
 export type SearchMemoryParams = z.infer<typeof searchMemorySchema>;
 
 export interface SearchMemoryResult {
+  activities: Array<
+    Omit<UserMemoryActivity, 'userId' | 'narrativeVector' | 'feedbackVector' | 'notes' | 'narrative'>
+  >;
   contexts: Array<Omit<UserMemoryContext, 'userId' | 'titleVector' | 'descriptionVector'>>;
   experiences: Array<
     Omit<UserMemoryExperience, 'userId' | 'actionVector' | 'situationVector' | 'keyLearningVector'>

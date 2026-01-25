@@ -8,6 +8,7 @@ describe('formatMemorySearchResults', () => {
     const result = formatMemorySearchResults({
       query: 'test query',
       results: {
+        activities: [],
         contexts: [],
         experiences: [],
         preferences: [],
@@ -21,6 +22,7 @@ describe('formatMemorySearchResults', () => {
     const result = formatMemorySearchResults({
       query: 'project',
       results: {
+        activities: [],
         contexts: [
           {
             accessedAt: new Date('2024-01-01'),
@@ -52,6 +54,7 @@ describe('formatMemorySearchResults', () => {
     const result = formatMemorySearchResults({
       query: 'debugging',
       results: {
+        activities: [],
         contexts: [],
         experiences: [
           {
@@ -82,6 +85,7 @@ describe('formatMemorySearchResults', () => {
     const result = formatMemorySearchResults({
       query: 'code style',
       results: {
+        activities: [],
         contexts: [],
         experiences: [],
         preferences: [
@@ -109,6 +113,7 @@ describe('formatMemorySearchResults', () => {
     const result = formatMemorySearchResults({
       query: 'work',
       results: {
+        activities: [],
         contexts: [
           {
             accessedAt: new Date('2024-01-01'),
@@ -171,6 +176,7 @@ describe('formatMemorySearchResults', () => {
     const result = formatMemorySearchResults({
       query: 'test',
       results: {
+        activities: [],
         contexts: [
           {
             accessedAt: new Date('2024-01-01'),

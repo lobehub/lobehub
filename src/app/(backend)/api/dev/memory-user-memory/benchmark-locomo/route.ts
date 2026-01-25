@@ -82,6 +82,7 @@ export const POST = async (req: Request) => {
     const searchResult = await model.searchWithEmbedding({
       embedding,
       limits: {
+        activities: topK,
         contexts: topK,
         experiences: topK,
         preferences: topK,
@@ -101,6 +102,9 @@ export const POST = async (req: Request) => {
         .filter((id): id is string => !!id),
       ...searchResult.preferences
         .map((preference) => preference.userMemoryId)
+        .filter((id): id is string => !!id),
+      ...searchResult.activities
+        .map((activity) => activity.userMemoryId)
         .filter((id): id is string => !!id),
       ...identities
         .map((identity) => identity.userMemoryId)
@@ -179,10 +183,25 @@ export const POST = async (req: Request) => {
       })
       .filter(Boolean);
 
+    const activityItems = searchResult.activities
+      .map((activity) => {
+        const memory = activity.userMemoryId ? memoryMap.get(activity.userMemoryId) : undefined;
+        if (!memory) return undefined;
+
+        return {
+          activity,
+          id: activity.userMemoryId,
+          layer: LayersEnum.Activity,
+          memory,
+        };
+      })
+      .filter(Boolean);
+
     const items = [
       ...contextItems.slice(0, topK),
       ...experienceItems.slice(0, topK),
       ...preferenceItems.slice(0, topK),
+      ...activityItems.slice(0, topK),
       ...identityItems,
     ];
     console.log('[locomo-dev-search] compiled items');
