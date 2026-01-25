@@ -548,7 +548,13 @@ export default class LocalFileCtr extends ControllerModule {
         filesToSearch = [searchPath];
       } else {
         // Use glob pattern if provided, otherwise search all files
-        const globPattern = params.glob || '**/*';
+        // If glob doesn't contain directory separator and doesn't start with **,
+        // auto-prefix with **/ to make it recursive
+        let globPattern = params.glob || '**/*';
+        if (params.glob && !params.glob.includes('/') && !params.glob.startsWith('**')) {
+          globPattern = `**/${params.glob}`;
+        }
+
         filesToSearch = await fg(globPattern, {
           absolute: true,
           cwd: searchPath,
