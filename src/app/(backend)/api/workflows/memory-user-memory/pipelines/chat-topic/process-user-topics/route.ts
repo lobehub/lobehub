@@ -105,6 +105,7 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
           `memory:user-memory:extract:users:${userId}:process-topics-batch:${batchIndex}`,
           () =>
             MemoryExtractionWorkflowService.triggerProcessTopics(
+              userId,
               {
                 ...buildWorkflowPayloadInput(params),
                 topicCursor: undefined,

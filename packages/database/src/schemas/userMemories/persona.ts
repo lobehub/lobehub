@@ -5,6 +5,12 @@ import { createNanoId } from '../../utils/idGenerator';
 import { timestamps, timestamptz, varchar255 } from '../_helpers';
 import { users } from '../user';
 
+// TODO(@nekomeowww): add a comment/annotation layer for personas.
+// Rationale: the persona writer often wants to flag clarifications or open questions (e.g. “need team name”, “confirm Apple Developer plan”)
+// without polluting the readable persona text. A small JSONB comments array here (section + target hash + message + type) would let us
+// persist those notes, render inline highlights in the UI, and feed precise prompts back into the next persona write. This keeps the
+// narrative clean, improves user engagement (they see exactly what to answer), and gives us structured signals for future updates.
+
 export const userPersonaDocuments = pgTable(
   'user_memory_persona_documents',
   {
@@ -77,5 +83,4 @@ export type UserPersonaDocument = typeof userPersonaDocuments.$inferSelect;
 export type NewUserPersonaDocument = typeof userPersonaDocuments.$inferInsert;
 
 export type UserPersonaDocumentHistoriesItem = typeof userPersonaDocumentHistories.$inferSelect;
-export type NewUserPersonaDocumentHistoriesItem =
-  typeof userPersonaDocumentHistories.$inferInsert;
+export type NewUserPersonaDocumentHistoriesItem = typeof userPersonaDocumentHistories.$inferInsert;

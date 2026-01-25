@@ -14,10 +14,16 @@ import {
   type MemoryExtractionPayloadInput,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
+import { MemoryExtractionWorkflowService } from '@/server/services/memory/userMemory/extract';
 
 const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 
-const CEP_LAYERS: LayersEnum[] = [LayersEnum.Context, LayersEnum.Experience, LayersEnum.Preference];
+const CEPA_LAYERS: LayersEnum[] = [
+  LayersEnum.Context,
+  LayersEnum.Experience,
+  LayersEnum.Preference,
+  LayersEnum.Activity,
+];
 const IDENTITY_LAYERS: LayersEnum[] = [LayersEnum.Identity];
 
 export const { POST } = serve<MemoryExtractionPayloadInput>(
@@ -75,18 +81,24 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
           const userId = payload.userIds[0];
           const executor = await MemoryExtractionExecutor.create();
 
-          // CEP: run in parallel across the batch
+          // CEPA: run in parallel across the batch
+          //
+          // NOTICE: if modified the parallelism of CEPA_LAYERS
+          // or added new memory layer, make sure to update the number below.
+          //
+          // Currently, CEPA (context, experience, preference, activity) + identity = 5 layers.
+          // and since identity requires sequential processing, we set parallelism to 5.
           await Promise.all(
             payload.topicIds.map((topicId, index) =>
               context.run(
-                `memory:user-memory:extract:users:${userId}:topics:${topicId}:cep:${index}`,
+                `memory:user-memory:extract:users:${userId}:topics:${topicId}:cepa:${index}`,
                 () =>
                   executor.extractTopic({
                     asyncTaskId: payload.asyncTaskId,
                     forceAll: payload.forceAll,
                     forceTopics: payload.forceTopics,
                     from: payload.from,
-                    layers: CEP_LAYERS,
+                    layers: CEPA_LAYERS,
                     source: MemorySourceType.ChatTopic,
                     to: payload.to,
                     topicId,
@@ -119,6 +131,13 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
 
           console.log('[chat-topic][batch] Batch topic processing workflow completed', {
             processedTopics: payload.topicIds.length,
+          });
+
+          // Trigger user persona update after topic processing using the workflow client.
+          await context.run(`memory:user-memory:users:${userId}`, async () => {
+            await MemoryExtractionWorkflowService.triggerPersonaUpdate(userId, payload.baseUrl, {
+              extraHeaders: upstashWorkflowExtraHeaders,
+            });
           });
 
           span.setStatus({ code: SpanStatusCode.OK });

@@ -45,6 +45,7 @@ import type {
   MemoryExtractionTraceError,
   MemoryExtractionTracePayload,
 } from '@lobechat/types';
+import { FlowControl } from '@upstash/qstash';
 import { Client } from '@upstash/workflow';
 import debug from 'debug';
 import { and, asc, eq, inArray } from 'drizzle-orm';
@@ -76,6 +77,7 @@ import {
   type MergeStrategyEnum,
   TypesEnum,
 } from '@/types/userMemory';
+import { trimBasedOnBatchProbe } from '@/utils/chunkers';
 import { encodeAsync } from '@/utils/tokenizer';
 
 const SOURCE_ALIAS_MAP: Record<string, MemorySourceType> = {
@@ -468,13 +470,8 @@ export class MemoryExtractionExecutor {
     return await encodeAsync(normalized);
   }
 
-  private trimTextToTokenLimit(text: string, tokenLimit?: number) {
-    if (!tokenLimit || tokenLimit <= 0) return text;
-
-    const tokens = text.split(/\s+/);
-    if (tokens.length <= tokenLimit) return text;
-
-    return tokens.slice(Math.max(tokens.length - tokenLimit, 0)).join(' ');
+  private async trimTextToTokenLimit(text: string, tokenLimit?: number) {
+    return trimBasedOnBatchProbe(text, tokenLimit);
   }
 
   private async trimConversationsToTokenLimit<T extends OpenAIChatMessage>(
@@ -504,7 +501,7 @@ export class MemoryExtractionExecutor {
 
       const trimmedContent =
         typeof conversation.content === 'string'
-          ? this.trimTextToTokenLimit(conversation.content, remaining)
+          ? await this.trimTextToTokenLimit(conversation.content, remaining)
           : conversation.content;
 
       if (trimmedContent && remaining > 0) {
@@ -531,16 +528,15 @@ export class MemoryExtractionExecutor {
     };
 
     return tracer.startActiveSpan('gen_ai.embed', { attributes }, async (span) => {
-      const requests = texts
-        .map((text, index) => {
-          if (typeof text !== 'string') return null;
+      const requests: { index: number; text: string }[] = [];
+      for (const [index, text] of texts.entries()) {
+        if (typeof text !== 'string') continue;
 
-          const trimmed = this.trimTextToTokenLimit(text, tokenLimit);
-          if (!trimmed.trim()) return null;
+        const trimmed = await this.trimTextToTokenLimit(text, tokenLimit);
+        if (!trimmed.trim()) continue;
 
-          return { index, text: trimmed };
-        })
-        .filter(Boolean);
+        requests.push({ index, text: trimmed });
+      }
 
       span.setAttribute('memory.embedding.text_count', texts.length);
       span.setAttribute('memory.embedding.request_count', requests.length);
@@ -555,7 +551,7 @@ export class MemoryExtractionExecutor {
         const response = await runtimes.embeddings(
           {
             dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-            input: requests.map((item) => item!.text),
+            input: requests.map((item) => item.text),
             model,
           },
           { user: 'memory-extraction' },
@@ -1000,7 +996,7 @@ export class MemoryExtractionExecutor {
     const userMemoryModel = new UserMemoryModel(db, userId);
     // TODO: make topK configurable
     const topK = 10;
-    const aggregatedContent = this.trimTextToTokenLimit(
+    const aggregatedContent = await this.trimTextToTokenLimit(
       conversations.map((msg) => `${msg.role.toUpperCase()}: ${msg.content}`).join('\n\n'),
       tokenLimit,
     );
@@ -1227,11 +1223,12 @@ export class MemoryExtractionExecutor {
               extractionJob.userId,
               extractionJob.sourceId,
             );
-          const trimmedRetrievedContexts = [
-            topicContext.context,
-            retrievalMemoryContext.context,
-          ].map((context) => this.trimTextToTokenLimit(context, extractorContextLimit));
-          const trimmedRetrievedIdentitiesContext = this.trimTextToTokenLimit(
+          const trimmedRetrievedContexts = await Promise.all(
+            [topicContext.context, retrievalMemoryContext.context].map((context) =>
+              this.trimTextToTokenLimit(context, extractorContextLimit),
+            ),
+          );
+          const trimmedRetrievedIdentitiesContext = await this.trimTextToTokenLimit(
             retrievedIdentityContext.context,
             extractorContextLimit,
           );
@@ -2022,7 +2019,7 @@ export class MemoryExtractionExecutor {
 
           const builtContext = await contextProvider.buildContext(extractionJob.userId);
           const extractorContextLimit = this.privateConfig.agentLayerExtractor.contextLimit;
-          const trimmedContext = this.trimTextToTokenLimit(
+          const trimmedContext = await this.trimTextToTokenLimit(
             builtContext.context,
             extractorContextLimit,
           );
@@ -2144,6 +2141,7 @@ export class MemoryExtractionExecutor {
 }
 
 const WORKFLOW_PATHS = {
+  personaUpdate: '/api/workflows/memory-user-memory/pipelines/persona/update-writing',
   topicBatch: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topics',
   userTopics: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-user-topics',
   users: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
@@ -2200,10 +2198,15 @@ export class MemoryExtractionWorkflowService {
     }
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.userTopics, payload.baseUrl);
-    return this.getClient().trigger({ body: payload, headers: options?.extraHeaders, url });
+    return this.getClient().trigger({
+      body: payload,
+      headers: options?.extraHeaders,
+      url,
+    });
   }
 
   static triggerProcessTopics(
+    userId: string,
     payload: MemoryExtractionPayloadInput,
     options?: { extraHeaders?: Record<string, string> },
   ) {
@@ -2212,6 +2215,41 @@ export class MemoryExtractionWorkflowService {
     }
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.topicBatch, payload.baseUrl);
-    return this.getClient().trigger({ body: payload, headers: options?.extraHeaders, url });
+    return this.getClient().trigger({
+      body: payload,
+      flowControl: {
+        key: `memory-user-memory:pipelines:chat-topic:process-topics:user:${userId}`,
+        // NOTICE: if modified the parallelism of
+        // src/app/(backend)/api/workflows/memory-user-memory/pipelines/chat-topic/process-topics/route.ts
+        // or added new memory layer, make sure to update the number below.
+        //
+        // Currently, CEPA (context, experience, preference, activity) + identity = 5 layers.
+        // and since identity requires sequential processing, we set parallelism to 5.
+        parallelism: 5,
+      },
+      headers: options?.extraHeaders,
+      url,
+    });
+  }
+
+  static triggerPersonaUpdate(
+    userId: string,
+    baseUrl: string,
+    options?: { extraHeaders?: Record<string, string> },
+  ) {
+    if (!baseUrl) {
+      throw new Error('Missing baseUrl for workflow trigger');
+    }
+
+    const url = getWorkflowUrl(WORKFLOW_PATHS.personaUpdate, baseUrl);
+    return this.getClient().trigger({
+      body: { userId: [userId] },
+      flowControl: {
+        key: 'memory-user-memory:pipelines:persona:update-write:' + userId,
+        parallelism: 1,
+      } satisfies FlowControl,
+      headers: options?.extraHeaders,
+      url,
+    });
   }
 }
