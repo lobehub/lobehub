@@ -1,15 +1,12 @@
 import { IoRedisRedisProvider } from './redis';
 import { type BaseRedisProvider, type RedisConfig } from './types';
 
-/**
- * Create a Redis provider instance based on config
- *
- * @param config - Redis config
- * @param prefix - Optional custom prefix to override config.prefix
- * @returns Provider instance or null if disabled
- */
+export const isRedisDisabledByEnv = () => !!process.env.DISABLE_REDIS;
+
+export const isRedisEnabled = (config: RedisConfig) => !isRedisDisabledByEnv() && config.enabled;
+
 const createProvider = (config: RedisConfig, prefix?: string): BaseRedisProvider | null => {
-  if (!config.enabled) return null;
+  if (!isRedisEnabled(config)) return null;
 
   const actualPrefix = prefix ?? config.prefix;
   return new IoRedisRedisProvider({ ...config, prefix: actualPrefix });
@@ -57,7 +54,6 @@ class RedisManager {
 
 export const initializeRedis = (config: RedisConfig) => RedisManager.initialize(config);
 export const resetRedisClient = () => RedisManager.reset();
-export const isRedisEnabled = (config: RedisConfig) => config.enabled;
 export { RedisManager };
 
 /**
