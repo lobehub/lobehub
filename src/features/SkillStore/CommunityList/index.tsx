@@ -47,7 +47,7 @@ export const CommunityList = memo(() => {
     }
   }, [keywords, resetMCPPluginList]);
 
-  const { isLoading, isValidating, error } = useFetchMCPPluginList({
+  const { isLoading, error } = useFetchMCPPluginList({
     page: currentPage,
     pageSize: 20,
     q: keywords,
@@ -73,7 +73,7 @@ export const CommunityList = memo(() => {
     return (
       <VirtuosoGrid
         components={{
-          Footer: isValidating ? VirtuosoLoading : () => <div style={{ height: 16 }} />,
+          Footer: isLoading ? VirtuosoLoading : () => <div style={{ height: 16 }} />,
         }}
         data={allItems}
         endReached={loadMoreMCPPlugins}
