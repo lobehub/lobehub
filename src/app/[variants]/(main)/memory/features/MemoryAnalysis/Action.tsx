@@ -5,7 +5,11 @@ import { useTranslation } from 'react-i18next';
 
 import AnalysisTrigger from './AnalysisTrigger';
 
-const AnalysisAction = memo(() => {
+interface Props {
+  iconOnly?: boolean;
+}
+
+const AnalysisAction = memo<Props>(({ iconOnly }) => {
   const { t } = useTranslation('memory');
   const [range, setRange] = useState<[Date | null, Date | null]>([null, null]);
 
@@ -23,7 +27,14 @@ const AnalysisAction = memo(() => {
     [range, t],
   );
 
-  return <AnalysisTrigger footerNote={footerNote} onRangeChange={setRange} range={range} />;
+  return (
+    <AnalysisTrigger
+      footerNote={footerNote}
+      iconOnly={iconOnly}
+      onRangeChange={setRange}
+      range={range}
+    />
+  );
 });
 
 AnalysisAction.displayName = 'AnalysisAction';

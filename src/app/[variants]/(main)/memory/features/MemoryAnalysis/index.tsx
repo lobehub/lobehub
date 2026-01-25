@@ -8,7 +8,11 @@ import AnalysisAction from './Action';
 import { MemoryAnalysisStatus } from './Status';
 import { useMemoryAnalysisAsyncTask } from './useTask';
 
-const MemoryAnalysis = memo(() => {
+interface Props {
+  iconOnly?: boolean;
+}
+
+const MemoryAnalysis = memo<Props>(({ iconOnly }) => {
   const { data, isValidating } = useMemoryAnalysisAsyncTask();
 
   const { showAction, showStatus } = useMemo(() => {
@@ -25,6 +29,11 @@ const MemoryAnalysis = memo(() => {
   }, [data, isValidating]);
 
   if (!showAction && !showStatus) return null;
+
+  // For iconOnly mode, only show the action button
+  if (iconOnly) {
+    return showAction ? <AnalysisAction iconOnly /> : null;
+  }
 
   return (
     <Flexbox gap={12} style={{ paddingTop: 16, width: '100%' }}>
