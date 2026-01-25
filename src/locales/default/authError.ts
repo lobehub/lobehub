@@ -6,7 +6,10 @@ export default {
     'This account is already linked to another user',
   'codes.ACCOUNT_NOT_FOUND': 'Account not found',
   'codes.CREDENTIAL_ACCOUNT_NOT_FOUND': 'Credential account does not exist',
+  'codes.DELETED_ACCOUNT_EMAIL':
+    'This email has been associated with a deleted account and cannot be used for registration',
   'codes.EMAIL_CAN_NOT_BE_UPDATED': 'Email cannot be updated for this account',
+  'codes.EMAIL_NOT_ALLOWED': 'Email not allowed for registration',
   'codes.EMAIL_NOT_VERIFIED': 'Please verify your email first',
   'codes.FAILED_TO_CREATE_SESSION': 'Failed to create session',
   'codes.FAILED_TO_CREATE_USER': 'Failed to create user',

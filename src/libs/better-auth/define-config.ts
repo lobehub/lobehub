@@ -35,7 +35,6 @@ import { UserService } from '@/server/services/user';
 // Ref: https://github.com/better-auth/better-auth/issues/7396
 if (process.env.NODE_ENV === 'development') {
   const proxyUrl =
-    process.env.AUTH_HTTP_PROXY_URL ||
     process.env.HTTPS_PROXY ||
     process.env.https_proxy ||
     process.env.HTTP_PROXY ||
@@ -44,7 +43,6 @@ if (process.env.NODE_ENV === 'development') {
   if (proxyUrl) {
     const proxyAgent = new ProxyAgent(proxyUrl);
     setGlobalDispatcher(proxyAgent);
-    console.log(`[auth] HTTP proxy configured: ${proxyUrl}`);
   }
 }
 

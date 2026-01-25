@@ -1,6 +1,5 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { form } from 'motion/react-m';
-import { useRouter, useSearchParams } from '@/libs/next/navigation';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,6 +9,7 @@ import {
 } from '@/business/client/hooks/useBusinessSignup';
 import { message } from '@/components/AntdStaticMethods';
 import { signUp } from '@/libs/better-auth/auth-client';
+import { useRouter, useSearchParams } from '@/libs/next/navigation';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
@@ -18,7 +18,7 @@ import { BaseSignUpFormValues } from './types';
 export type SignUpFormValues = BaseSignUpFormValues & BusinessSignupFomData;
 
 export const useSignUp = () => {
-  const { t } = useTranslation('auth');
+  const { t } = useTranslation(['auth', 'authError']);
   const router = useRouter();
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
@@ -56,12 +56,15 @@ export const useSignUp = () => {
           return;
         }
 
-        if (error.code === 'INVALID_EMAIL') {
+        if (error.code === 'INVALID_EMAIL' || error.message === 'Invalid email') {
           message.error(t('betterAuth.errors.emailInvalid'));
           return;
         }
 
-        message.error(error.message || t('betterAuth.signup.error'));
+        const translated = error.code
+          ? t(`authError:codes.${error.code}`, { defaultValue: '' })
+          : '';
+        message.error(translated || error.message || t('betterAuth.signup.error'));
         return;
       }
 
