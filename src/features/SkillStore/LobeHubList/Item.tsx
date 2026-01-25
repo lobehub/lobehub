@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Image } from '@lobehub/ui';
+import { ActionIcon, Block, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar } from 'antd-style';
 import type { Klavis } from 'klavis';
@@ -55,7 +55,7 @@ const Item = memo<ItemProps>(
 
     const renderIcon = () => {
       if (typeof icon === 'string') {
-        return <Image alt={label} height={40} src={icon} width={40} />;
+        return <img alt={label} height={40} src={icon} width={40} />;
       }
       return <Icon fill={cssVar.colorText} icon={icon as any} size={40} />;
     };
