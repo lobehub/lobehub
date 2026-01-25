@@ -29,6 +29,8 @@ const getRedisConnectionDescription = (url: string): string => {
  * Create Redis client instance for Agent Runtime
  */
 export const createAgentRuntimeRedisClient = (url?: string): Redis | null => {
+  if (process.env.DISABLE_REDIS) return null;
+
   const redisUrl = url || getRedisUrl();
 
   if (!redisUrl) {
