@@ -3,10 +3,11 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, useTheme } from 'antd-style';
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
+import DragUploadZone from '@/components/DragUploadZone';
 import { PageEditor } from '@/features/PageEditor';
 import dynamic from '@/libs/next/dynamic';
 import { documentService } from '@/services/document';
@@ -58,16 +59,23 @@ export type ResourceManagerMode = 'editor' | 'explorer' | 'page';
 const ResourceManager = memo(() => {
   const theme = useTheme();
   const [, setSearchParams] = useSearchParams();
-  const [mode, currentViewItemId, libraryId, setMode, setCurrentViewItemId] =
+  const [mode, currentViewItemId, libraryId, currentFolderId, setMode, setCurrentViewItemId] =
     useResourceManagerStore((s) => [
       s.mode,
       s.currentViewItemId,
       s.libraryId,
+      s.currentFolderId,
       s.setMode,
       s.setCurrentViewItemId,
     ]);
 
   const currentDocument = useFileStore(documentSelectors.getDocumentById(currentViewItemId));
+  const pushDockFileList = useFileStore((s) => s.pushDockFileList);
+
+  const handleUploadFiles = useCallback(
+    (files: File[]) => pushDockFileList(files, libraryId, currentFolderId ?? undefined),
+    [currentFolderId, libraryId, pushDockFileList],
+  );
 
   const cssVariables = useMemo<Record<string, string>>(
     () => ({
@@ -105,28 +113,34 @@ const ResourceManager = memo(() => {
 
   return (
     <>
-      <Flexbox className={styles.container} height={'100%'} style={cssVariables}>
-        {/* Explorer is always rendered to preserve its state */}
-        <Explorer />
+      <DragUploadZone
+        enabledFiles
+        onUploadFiles={handleUploadFiles}
+        style={{ height: '100%' }}
+      >
+        <Flexbox className={styles.container} height={'100%'} style={cssVariables}>
+          {/* Explorer is always rendered to preserve its state */}
+          <Explorer />
 
-        {/* Editor overlay */}
-        {mode === 'editor' && (
-          <Flexbox className={styles.editorOverlay}>
-            <Editor onBack={handleBack} />
-          </Flexbox>
-        )}
+          {/* Editor overlay */}
+          {mode === 'editor' && (
+            <Flexbox className={styles.editorOverlay}>
+              <Editor onBack={handleBack} />
+            </Flexbox>
+          )}
 
-        {/* PageEditor overlay */}
-        {mode === 'page' && (
-          <Flexbox className={styles.pageEditorOverlay}>
-            <PageEditor
-              knowledgeBaseId={libraryId}
-              onBack={handleBack}
-              pageId={currentViewItemId}
-            />
-          </Flexbox>
-        )}
-      </Flexbox>
+          {/* PageEditor overlay */}
+          {mode === 'page' && (
+            <Flexbox className={styles.pageEditorOverlay}>
+              <PageEditor
+                knowledgeBaseId={libraryId}
+                onBack={handleBack}
+                pageId={currentViewItemId}
+              />
+            </Flexbox>
+          )}
+        </Flexbox>
+      </DragUploadZone>
       <UploadDock />
       <ChunkDrawer />
     </>

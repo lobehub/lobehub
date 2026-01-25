@@ -83,7 +83,7 @@ const DragUpload = memo<DragUploadProps>(({ enabledFiles = true, onUploadFiles }
 
   const isDragging = useDragUpload(onUploadFiles);
 
-  if (!isDragging) return;
+  if (isDragging) return;
 
   return createPortal(
     <Center className={styles.wrapper}>
