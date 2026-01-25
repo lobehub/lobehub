@@ -1,6 +1,6 @@
 'use client';
 
-import { BRANDING_NAME, ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import { BRANDING_NAME } from '@lobechat/business-const';
 import { DEFAULT_SETTINGS } from '@lobechat/config';
 import { Button, Form, type FormGroupItemType, Icon } from '@lobehub/ui';
 import { App, Switch } from 'antd';
@@ -10,12 +10,13 @@ import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AccountDeletion from '@/business/client/features/AccountDeletion';
-
 import { FORM_STYLE } from '@/const/layoutTokens';
 import DataImporter from '@/features/DataImporter';
 import { configService } from '@/services/config';
 import { useChatStore } from '@/store/chat';
 import { useFileStore } from '@/store/file';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useSessionStore } from '@/store/session';
 import { useToolStore } from '@/store/tool';
 import { useUserStore } from '@/store/user';
@@ -25,6 +26,7 @@ const AdvancedActions = () => {
   const { t } = useTranslation('setting');
   const [form] = Form.useForm();
   const { message, modal } = App.useApp();
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const [clearSessions, clearSessionGroups] = useSessionStore((s) => [
     s.clearSessions,
     s.clearSessionGroups,
@@ -117,7 +119,7 @@ const AdvancedActions = () => {
         layout: 'horizontal',
         minWidth: undefined,
       },
-      ...(ENABLE_BUSINESS_FEATURES ? [renderExportButtonFormItem()] : []),
+      ...(enableBusinessFeatures ? [renderExportButtonFormItem()] : []),
       {
         children: (
           <Button danger onClick={handleClear} type={'primary'}>
@@ -155,7 +157,7 @@ const AdvancedActions = () => {
         variant={'filled'}
         {...FORM_STYLE}
       />
-      {ENABLE_BUSINESS_FEATURES && <AccountDeletion />}
+      {enableBusinessFeatures && <AccountDeletion />}
     </>
   );
 };
