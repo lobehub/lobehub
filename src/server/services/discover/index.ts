@@ -478,11 +478,8 @@ export class DiscoverService {
           });
           break;
         }
-        case AssistantSorts.MostUsage:
-        case AssistantSorts.HaveSkills:
-        case AssistantSorts.Recommended:
         default: {
-          // Legacy source doesn't support these sorts, keep original order
+          // Legacy source doesn't support these sorts (MostUsage, HaveSkills, Recommended), keep original order
           break;
         }
       }
