@@ -135,6 +135,32 @@ const DEPRECATED_CHECKS = [
     name: 'APP_URL Trailing Slash',
   },
   {
+    docUrl: `${MIGRATION_DOC_BASE}/providers/casdoor`,
+    getVars: () => {
+      const providers = process.env['AUTH_SSO_PROVIDERS'] || '';
+      if (providers.includes('casdoor') && !process.env['CASDOOR_WEBHOOK_SECRET']) {
+        return ['CASDOOR_WEBHOOK_SECRET'];
+      }
+      return [];
+    },
+    message:
+      'Casdoor webhook is required for syncing user data (email, avatar, etc.) to LobeChat. Without it, users without email configured in Casdoor cannot login. Please configure CASDOOR_WEBHOOK_SECRET following the documentation.',
+    name: 'Casdoor Webhook',
+  },
+  {
+    docUrl: `${MIGRATION_DOC_BASE}/providers/logto`,
+    getVars: () => {
+      const providers = process.env['AUTH_SSO_PROVIDERS'] || '';
+      if (providers.includes('logto') && !process.env['LOGTO_WEBHOOK_SIGNING_KEY']) {
+        return ['LOGTO_WEBHOOK_SIGNING_KEY'];
+      }
+      return [];
+    },
+    message:
+      'Logto webhook is required for syncing user data (email, avatar, etc.) to LobeChat. Without it, users without email configured in Logto cannot login. Please configure LOGTO_WEBHOOK_SIGNING_KEY following the documentation.',
+    name: 'Logto Webhook',
+  },
+  {
     docUrl: `${MIGRATION_DOC_BASE}/nextauth-to-betterauth`,
     formatVar: (envVar) => {
       const mapping = {
