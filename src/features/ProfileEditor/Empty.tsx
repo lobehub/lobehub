@@ -1,5 +1,5 @@
 import { Empty as EmptyComponent } from '@lobehub/ui';
-import { Plug2 } from 'lucide-react';
+import { BlocksIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,7 +11,7 @@ const Empty = memo(() => {
       description={t('tools.installed.empty', {
         defaultValue: 'No skills enabled',
       })}
-      icon={Plug2}
+      icon={BlocksIcon}
       style={{ paddingBlock: 40 }}
     />
   );

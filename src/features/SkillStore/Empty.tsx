@@ -1,5 +1,5 @@
 import { Center, Empty as EmptyComponent, type EmptyProps } from '@lobehub/ui';
-import { Plug2 } from 'lucide-react';
+import { BlocksIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,7 +20,7 @@ const Empty = memo<SkillEmptyProps>(({ search, ...rest }) => {
         descriptionProps={{
           fontSize: 14,
         }}
-        icon={Plug2}
+        icon={BlocksIcon}
         style={{
           maxWidth: 400,
         }}
