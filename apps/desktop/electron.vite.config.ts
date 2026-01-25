@@ -18,6 +18,14 @@ export default defineConfig({
       rollupOptions: {
         // Native modules must be externalized to work correctly
         external: getExternalDependencies(),
+        output: {
+          // Prevent debug package from being bundled into index.js to avoid side-effect pollution
+          manualChunks(id) {
+            if (id.includes('node_modules/debug')) {
+              return 'vendor-debug';
+            }
+          },
+        },
       },
       sourcemap: isDev ? 'inline' : false,
     },
@@ -25,7 +33,6 @@ export default defineConfig({
       'process.env.UPDATE_CHANNEL': JSON.stringify(process.env.UPDATE_CHANNEL),
       'process.env.UPDATE_SERVER_URL': JSON.stringify(process.env.UPDATE_SERVER_URL),
     },
-
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src/main'),

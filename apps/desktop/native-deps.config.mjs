@@ -33,8 +33,8 @@ const isDarwin = getTargetPlatform() === 'darwin';
 export const nativeModules = [
   // macOS-only native modules
   ...(isDarwin ? ['node-mac-permissions'] : []),
+  '@napi-rs/canvas',
   // Add more native modules here as needed
-  // e.g., 'better-sqlite3', 'sharp', etc.
 ];
 
 /**
