@@ -8,6 +8,7 @@ import {
   MERGE_STRATEGIES,
   RELATIONSHIPS,
 } from '@lobechat/types';
+import { JSONSchema7 } from 'json-schema'
 
 import { systemPrompt } from './systemRole';
 import { MemoryApiName } from './types';
@@ -26,7 +27,9 @@ export const MemoryManifest: BuiltinToolManifest = {
           query: { type: 'string' },
           topK: {
             additionalProperties: false,
+            description: "Limits on number of memories to return per layer, default to search 3 activities, 0 contexts, 0 experiences, and 0 preferences if not specified.",
             properties: {
+              activities: { minimum: 0, type: 'integer' },
               contexts: { minimum: 0, type: 'integer' },
               experiences: { minimum: 0, type: 'integer' },
               preferences: { minimum: 0, type: 'integer' },
@@ -37,7 +40,7 @@ export const MemoryManifest: BuiltinToolManifest = {
         },
         required: ['query', 'topK'],
         type: 'object',
-      },
+      } satisfies JSONSchema7,
     },
     {
       description:
