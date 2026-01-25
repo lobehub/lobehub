@@ -2,6 +2,7 @@ import debug from 'debug';
 import Redis from 'ioredis';
 
 import { redisEnv } from '@/envs/redis';
+import { isRedisDisabledByEnv } from '@/libs/redis';
 
 const log = debug('lobe-server:agent-runtime:redis');
 const timing = debug('lobe-server:agent-runtime:timing');
@@ -29,7 +30,7 @@ const getRedisConnectionDescription = (url: string): string => {
  * Create Redis client instance for Agent Runtime
  */
 export const createAgentRuntimeRedisClient = (url?: string): Redis | null => {
-  if (process.env.DISABLE_REDIS) return null;
+  if (isRedisDisabledByEnv()) return null;
 
   const redisUrl = url || getRedisUrl();
 
