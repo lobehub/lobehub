@@ -211,25 +211,33 @@ export const streamingExecutor: StateCreator<
       disableTools,
     );
 
-    // Get tools manifest map (skip if disableTools is true / no plugins)
-    let toolManifestMap: Record<string, unknown> = {};
-    let enabledToolIds: string[] = [];
+    // Generate tools using ToolsEngine (centralized here, passed to chatService via agentConfig)
+    // When disableTools is true (broadcast mode), skipDefaultTools prevents default tools from being added
+    const toolsEngine = createAgentToolsEngine({
+      model: agentConfigData.model,
+      provider: agentConfigData.provider!,
+    });
 
-    if (pluginIds.length > 0) {
-      const toolsEngine = createAgentToolsEngine({
-        model: agentConfigData.model,
-        provider: agentConfigData.provider!,
-      });
-      const toolsDetailed = toolsEngine.generateToolsDetailed({
-        model: agentConfigData.model,
-        provider: agentConfigData.provider!,
-        toolIds: pluginIds,
-      });
-      enabledToolIds = toolsDetailed.enabledToolIds;
-      toolManifestMap = Object.fromEntries(
-        toolsEngine.getEnabledPluginManifests(enabledToolIds).entries(),
-      );
-    }
+    const toolsDetailed = toolsEngine.generateToolsDetailed({
+      model: agentConfigData.model,
+      provider: agentConfigData.provider!,
+      skipDefaultTools: disableTools,
+      toolIds: pluginIds,
+    });
+
+    const enabledToolIds = toolsDetailed.enabledToolIds;
+    // Use enabledManifests directly to avoid getEnabledPluginManifests adding default tools again
+    const toolManifestMap = Object.fromEntries(
+      toolsDetailed.enabledManifests.map((manifest) => [manifest.identifier, manifest]),
+    );
+
+    // Merge tools generation result into agentConfig for chatService to use
+    const agentConfigWithTools = {
+      ...agentConfig,
+      enabledManifests: toolsDetailed.enabledManifests,
+      enabledToolIds,
+      tools: toolsDetailed.tools,
+    };
 
     log(
       '[internal_createAgentState] toolManifestMap keys=%o, count=%d',
@@ -319,7 +327,7 @@ export const streamingExecutor: StateCreator<
       initialContext: runtimeInitialContext,
     };
 
-    return { state, context, agentConfig };
+    return { agentConfig: agentConfigWithTools, context, state };
   },
 
   internal_fetchAIChatMessage: async ({
