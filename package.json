@@ -146,8 +146,8 @@
     "@aws-sdk/s3-request-presigner": "~3.932.0",
     "@azure-rest/ai-inference": "1.0.0-beta.5",
     "@azure/core-auth": "^1.10.1",
-    "@better-auth/expo": "^1.4.17",
-    "@better-auth/passkey": "^1.4.17",
+    "@better-auth/expo": "1.4.6",
+    "@better-auth/passkey": "1.4.6",
     "@cfworker/json-schema": "^4.1.1",
     "@codesandbox/sandpack-react": "^2.20.0",
     "@dnd-kit/core": "^6.3.1",
@@ -237,9 +237,9 @@
     "antd-style": "4.1.0",
     "async-retry": "^1.3.3",
     "bcryptjs": "^3.0.3",
-    "better-auth": "^1.4.17",
+    "better-auth": "1.4.6",
     "better-auth-harmony": "^1.2.5",
-    "better-call": "^1.2.0",
+    "better-call": "1.1.8",
     "brotli-wasm": "^3.0.1",
     "chroma-js": "^3.2.0",
     "class-variance-authority": "^0.7.1",
@@ -452,5 +452,11 @@
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org"
+  },
+  "pnpm": {
+    "overrides": {
+      "better-auth": "1.4.6",
+      "better-call": "1.1.8"
+    }
   }
 }
