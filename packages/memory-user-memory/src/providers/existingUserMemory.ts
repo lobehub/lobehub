@@ -10,7 +10,7 @@ import { toXml } from 'xast-util-to-xml';
 import type { Child } from 'xastscript';
 import { x } from 'xastscript';
 
-import type { BuiltContext, MemoryContextProvider, MemoryExtractionJob } from '../types';
+import type { BuiltContext, MemoryContextProvider } from '../types';
 
 interface RetrievedMemories {
   activities: UserMemoryActivityWithoutVectors[];
@@ -69,13 +69,11 @@ export class RetrievalUserMemoryContextProvider implements MemoryContextProvider
     return parts.join(' | ');
   }
 
-  async buildContext(job: MemoryExtractionJob): Promise<BuiltContext> {
+  async buildContext(userId: string, sourceId: string): Promise<BuiltContext> {
     const activities = this.retrievedMemories.activities || [];
     const contexts = this.retrievedMemories.contexts || [];
     const experiences = this.retrievedMemories.experiences || [];
     const preferences = this.retrievedMemories.preferences || [];
-
-
 
     const userMemoriesChildren: Child[] = [];
 
@@ -252,8 +250,8 @@ export class RetrievalUserMemoryContextProvider implements MemoryContextProvider
     return {
       context: memoryContext,
       metadata: {},
-      sourceId: job.sourceId,
-      userId: job.userId,
+      sourceId: sourceId,
+      userId: userId,
     };
   }
 }
@@ -267,7 +265,7 @@ export class RetrievalUserMemoryIdentitiesProvider implements MemoryContextProvi
     this.fetchedAt = options.fetchedAt;
   }
 
-  async buildContext(job: MemoryExtractionJob): Promise<BuiltContext> {
+  async buildContext(userId: string, sourceId: string): Promise<BuiltContext> {
     const identityChildren: Child[] = [];
 
     this.retrievedIdentities.forEach((item) => {
@@ -345,8 +343,8 @@ export class RetrievalUserMemoryIdentitiesProvider implements MemoryContextProvi
     return {
       context: identityContext,
       metadata: {},
-      sourceId: job.sourceId,
-      userId: job.userId,
+      sourceId: sourceId,
+      userId: userId,
     };
   }
 }

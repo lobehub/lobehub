@@ -112,7 +112,7 @@ export interface MemoryContextProvider<
   P extends Record<string, unknown> = Record<string, unknown>,
   R extends Record<string, unknown> = Record<string, unknown>,
 > {
-  buildContext(job: MemoryExtractionJob, options?: P): Promise<BuiltContext<R>>;
+  buildContext(userId: string, sourceId: string, options?: P): Promise<BuiltContext<R>>;
 }
 
 export interface MemoryResultRecorder<T = Record<string, unknown>> {
