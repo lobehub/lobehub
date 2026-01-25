@@ -3,7 +3,7 @@
 import { Flexbox, Text } from '@lobehub/ui';
 import { DatePicker, Modal } from 'antd';
 import type { RangePickerProps } from 'antd/es/date-picker';
-import dayjs, { type Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -43,16 +43,10 @@ const DateRangeModal = memo<Props>(
             disabledDate={disabledDate}
             format={'YYYY/MM/DD'}
             onChange={(values) =>
-              onChange([
-                values?.[0]?.toDate() ?? null,
-                values?.[1]?.toDate() ?? null,
-              ])
+              onChange([values?.[0]?.toDate() ?? null, values?.[1]?.toDate() ?? null])
             }
             style={{ width: '100%' }}
-            value={[
-              range[0] ? dayjs(range[0]) : null,
-              range[1] ? dayjs(range[1]) : null,
-            ]}
+            value={[range[0] ? dayjs(range[0]) : null, range[1] ? dayjs(range[1]) : null]}
           />
           <Text fontSize={12} type={'secondary'}>
             {footerNote}

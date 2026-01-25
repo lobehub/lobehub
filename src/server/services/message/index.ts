@@ -1,5 +1,4 @@
 import { CompressionRepository, type LobeChatDatabase } from '@lobechat/database';
-import { LOADING_FLAT } from '@lobechat/const';
 import {
   type CreateMessageParams,
   type UIChatMessage,
@@ -304,10 +303,7 @@ export class MessageService {
     });
 
     // 3. Query updated messages (compressed messages will be grouped)
-    const messages = await this.messageModel.query(
-      { topicId, ...options },
-      this.getQueryOptions(),
-    );
+    const messages = await this.messageModel.query({ topicId, ...options }, this.getQueryOptions());
 
     return {
       messageGroupId,

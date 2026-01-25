@@ -31,7 +31,7 @@ export const useMemoryAnalysisAsyncTask = (taskId?: string) => {
 
     const timer = setInterval(() => {
       swr.mutate();
-    }, 5_000);
+    }, 5000);
 
     return () => clearInterval(timer);
   }, [swr.data?.id, swr.data?.status, swr.mutate]);

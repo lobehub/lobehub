@@ -61,9 +61,9 @@ export interface MemoryExtractionPrivateConfig {
   };
   upstashWorkflowExtraHeaders?: Record<string, string>;
   webhook: {
-    headers?: Record<string, string>;
     baseUrl?: string;
-  }
+    headers?: Record<string, string>;
+  };
   whitelistUsers?: string[];
 }
 
@@ -257,8 +257,8 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
     observabilityS3: extractorObservabilityS3,
     upstashWorkflowExtraHeaders,
     webhook: {
-      headers: webhookHeaders,
       baseUrl: process.env.MEMORY_USER_MEMORY_WEBHOOK_BASE_URL,
+      headers: webhookHeaders,
     },
     whitelistUsers,
   };

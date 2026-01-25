@@ -40,6 +40,7 @@ export default {
   'chatList.expandMessage': 'Expand Message',
   'chatList.longMessageDetail': 'View Details',
   'clearCurrentMessages': 'Clear current session messages',
+  'compressedHistory': 'Compressed History',
   'confirmClearCurrentMessages':
     'You are about to clear the current session messages. Once cleared, they cannot be retrieved. Please confirm your action.',
   'confirmRemoveChatGroupItemAlert':
@@ -56,7 +57,6 @@ export default {
   'defaultSession': 'Default Agent',
   'desktopNotification.aiReplyCompleted.body': 'Agent reply is ready',
   'desktopNotification.aiReplyCompleted.title': 'Reply completed',
-  'compressedHistory': 'Compressed History',
   'dm.placeholder': 'Your private messages with {{agentTitle}} will appear here.',
   'dm.tooltip': 'Send a private message',
   'dm.visibleTo': 'Visible to {{target}} only',

@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import { AsyncTaskStatus } from '@lobechat/types';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import AnalysisAction from './Action';
@@ -13,8 +13,7 @@ const MemoryAnalysis = memo(() => {
 
   const { showAction, showStatus } = useMemo(() => {
     const status = data?.status;
-    const isRunning =
-      status === AsyncTaskStatus.Pending || status === AsyncTaskStatus.Processing;
+    const isRunning = status === AsyncTaskStatus.Pending || status === AsyncTaskStatus.Processing;
     const isError = status === AsyncTaskStatus.Error;
 
     console.log(isRunning, isValidating, isError, data);
@@ -28,7 +27,7 @@ const MemoryAnalysis = memo(() => {
   if (!showAction && !showStatus) return null;
 
   return (
-    <Flexbox gap={12} style={{ width: '100%', paddingTop: 16 }}>
+    <Flexbox gap={12} style={{ paddingTop: 16, width: '100%' }}>
       {showStatus && <MemoryAnalysisStatus task={data} />}
       {showAction && <AnalysisAction />}
     </Flexbox>

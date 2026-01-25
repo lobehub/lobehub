@@ -17,10 +17,12 @@ import { dataSelectors, useConversationStore } from '../../store';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
-    border-radius: 12px;
-    padding: 8px 12px;
-    background: ${cssVar.colorBgContainer};
+    padding-block: 8px;
+    padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: 12px;
+
+    background: ${cssVar.colorBgContainer};
   `,
   contentScroll: css`
     max-height: min(40vh, 400px);
@@ -29,9 +31,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   tag: css`
     gap: 4px;
     align-items: center;
-
     padding-block: 4px;
-
     border-radius: 4px;
   `,
 }));

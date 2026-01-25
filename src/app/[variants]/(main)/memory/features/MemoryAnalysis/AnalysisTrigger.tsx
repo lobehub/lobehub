@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Button, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { CalendarClockIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -52,18 +52,18 @@ const AnalysisTrigger = memo<Props>(({ footerNote, range, onRangeChange }) => {
         loading={submitting || isValidating}
         onClick={() => setOpen(true)}
         size={'large'}
-        type={'primary'}
         style={{ maxWidth: 300 }}
+        type={'primary'}
       >
         {t('analysis.action.button')}
       </Button>
 
       <DateRangeModal
         footerNote={footerNote}
-        open={open}
         onCancel={() => setOpen(false)}
         onChange={onRangeChange}
         onSubmit={handleSubmit}
+        open={open}
         range={range}
         submitting={submitting}
       />
