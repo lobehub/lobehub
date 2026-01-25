@@ -1,4 +1,4 @@
-import { sql } from 'drizzle-orm';
+import { and, desc, eq, ilike, ne, or, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -164,64 +164,45 @@ export class SearchRepo {
     if (!query || query.trim() === '') return [];
 
     const trimmedQuery = query.trim();
-    const searchTerm = `%${trimmedQuery}%`;
-    const exactQuery = trimmedQuery;
-    const prefixQuery = `${trimmedQuery}%`;
 
     // Context-aware limits: prioritize relevant types based on context
     const limits = this.calculateLimits(limitPerType, type, agentId, contextType);
 
-    // Build queries based on type filter
-    const queries = [];
+    // Run searches in parallel for better performance
+    const searchPromises: Promise<SearchResult[]>[] = [];
+
     if ((!type || type === 'agent') && limits.agent > 0) {
-      queries.push(this.buildAgentQuery(searchTerm, exactQuery, prefixQuery, limits.agent));
+      searchPromises.push(this.searchAgents(trimmedQuery, limits.agent));
     }
     if ((!type || type === 'topic') && limits.topic > 0) {
-      queries.push(
-        this.buildTopicQuery(searchTerm, exactQuery, prefixQuery, limits.topic, agentId),
-      );
+      searchPromises.push(this.searchTopics(trimmedQuery, limits.topic, agentId));
     }
     if ((!type || type === 'message') && limits.message > 0) {
-      queries.push(
-        this.buildMessageQuery(searchTerm, exactQuery, prefixQuery, limits.message, agentId),
-      );
+      searchPromises.push(this.searchMessages(trimmedQuery, limits.message, agentId));
     }
     if ((!type || type === 'file') && limits.file > 0) {
-      queries.push(this.buildFileQuery(searchTerm, exactQuery, prefixQuery, limits.file));
+      searchPromises.push(this.searchFiles(trimmedQuery, limits.file));
     }
     if ((!type || type === 'folder') && limits.folder > 0) {
-      queries.push(this.buildFolderQuery(searchTerm, exactQuery, prefixQuery, limits.folder));
+      searchPromises.push(this.searchFolders(trimmedQuery, limits.folder));
     }
     if ((!type || type === 'page') && limits.page > 0) {
-      queries.push(this.buildPageQuery(searchTerm, exactQuery, prefixQuery, limits.page));
+      searchPromises.push(this.searchPages(trimmedQuery, limits.page));
     }
     if ((!type || type === 'memory') && limits.memory > 0) {
-      queries.push(this.buildMemoryQuery(searchTerm, exactQuery, prefixQuery, limits.memory));
+      searchPromises.push(this.searchMemories(trimmedQuery, limits.memory));
     }
 
-    if (queries.length === 0) return [];
+    const results = await Promise.all(searchPromises);
 
-    // Combine with UNION ALL (pattern from KnowledgeRepo)
-    const unionQuery = sql.join(
-      queries.map((q) => sql`(${q})`),
-      sql` UNION ALL `,
-    );
-
-    const finalQuery = sql`
-      SELECT * FROM (${unionQuery}) as combined
-      ORDER BY relevance ASC, updated_at DESC
-    `;
-
-    const result = await this.db.execute(finalQuery);
-    return this.mapResults(result.rows as any[]);
+    // Flatten and sort by relevance ASC, then by updatedAt DESC
+    return results
+      .flat()
+      .sort((a, b) => a.relevance - b.relevance || b.updatedAt.getTime() - a.updatedAt.getTime());
   }
 
   /**
    * Calculate result limits based on context
-   * - Agent context: expand topics (6) and messages (6), limit others (3 each)
-   * - Page context: expand pages (6), limit others (3 each)
-   * - Resource context: expand files (6) and folders (6), limit others (3 each)
-   * - General context: limit all types to 3 each
    */
   private calculateLimits(
     baseLimit: number,
@@ -261,7 +242,7 @@ export class SearchRepo {
         memory: 3,
         message: 3,
         page: 6,
-        pageContent: 0, // Not available yet
+        pageContent: 0,
         topic: 3,
       };
     }
@@ -275,7 +256,7 @@ export class SearchRepo {
         memory: 3,
         message: 3,
         page: 3,
-        pageContent: 0, // Not available yet
+        pageContent: 0,
         topic: 3,
       };
     }
@@ -289,7 +270,7 @@ export class SearchRepo {
         memory: 3,
         message: 6,
         page: 3,
-        pageContent: 0, // Not available yet
+        pageContent: 0,
         topic: 6,
       };
     }
@@ -302,637 +283,335 @@ export class SearchRepo {
       memory: 3,
       message: 3,
       page: 3,
-      pageContent: 0, // Not available yet
+      pageContent: 0,
       topic: 3,
     };
   }
 
   /**
-   * Truncate content at database level with ellipsis indicator
-   * Uses SQL LEFT() function for efficient truncation
-   * Note: This helper is defined for documentation but not currently used.
-   * Truncation is implemented inline in query methods for better SQL readability.
+   * Calculate relevance score: 1=exact, 2=prefix, 3=contains
    */
-  private truncateContent(columnName: string, maxLength: number): string {
-    return `CASE
-      WHEN LENGTH(${columnName}) > ${maxLength}
-      THEN LEFT(${columnName}, ${maxLength}) || '...'
-      ELSE ${columnName}
-    END`;
+  private calculateRelevance(value: string | null | undefined, query: string): number {
+    if (!value) return 3;
+    const lower = value.toLowerCase();
+    const queryLower = query.toLowerCase();
+    if (lower === queryLower) return 1;
+    if (lower.startsWith(queryLower)) return 2;
+    return 3;
   }
 
   /**
-   * Build agent search query
-   * Searches: title, description, slug, tags (JSONB array)
+   * Truncate content with ellipsis
    */
-  private buildAgentQuery(
-    searchTerm: string,
-    exactQuery: string,
-    prefixQuery: string,
-    limit: number,
-  ): ReturnType<typeof sql> {
-    return sql`
-      SELECT
-        a.id,
-        'agent' as type,
-        a.title,
-        a.description,
-        a.slug,
-        a.avatar,
-        a.background_color,
-        a.tags,
-        a.created_at,
-        a.updated_at,
-        CASE
-          WHEN a.title ILIKE ${exactQuery} THEN 1
-          WHEN a.title ILIKE ${prefixQuery} THEN 2
-          ELSE 3
-        END as relevance,
-        NULL::boolean as favorite,
-        NULL::text as session_id,
-        NULL::text as agent_id,
-        NULL::text as name,
-        NULL::varchar(255) as file_type,
-        NULL::integer as size,
-        NULL::text as url,
-        NULL::text as knowledge_base_id
-      FROM ${agents} a
-      WHERE a.user_id = ${this.userId}
-        AND (
-          a.title ILIKE ${searchTerm}
-          OR COALESCE(a.description, '') ILIKE ${searchTerm}
-          OR COALESCE(a.slug, '') ILIKE ${searchTerm}
-          OR (
-            a.tags IS NOT NULL
-            AND EXISTS (
-              SELECT 1 FROM jsonb_array_elements_text(a.tags) AS tag
+  private truncate(content: string | null | undefined, maxLength: number = 200): string | null {
+    if (!content) return null;
+    if (content.length <= maxLength) return content;
+    return content.slice(0, maxLength) + '...';
+  }
+
+  /**
+   * Search agents by title, description, slug, tags
+   */
+  private async searchAgents(query: string, limit: number): Promise<AgentSearchResult[]> {
+    const searchTerm = `%${query}%`;
+
+    const rows = await this.db
+      .select()
+      .from(agents)
+      .where(
+        and(
+          eq(agents.userId, this.userId),
+          or(
+            ilike(agents.title, searchTerm),
+            ilike(sql`COALESCE(${agents.description}, '')`, searchTerm),
+            ilike(sql`COALESCE(${agents.slug}, '')`, searchTerm),
+            sql`${agents.tags} IS NOT NULL AND EXISTS (
+              SELECT 1 FROM jsonb_array_elements_text(${agents.tags}) AS tag
               WHERE tag ILIKE ${searchTerm}
-            )
-          )
-        )
-      LIMIT ${limit}
-    `;
+            )`,
+          ),
+        ),
+      )
+      .orderBy(desc(agents.updatedAt))
+      .limit(limit);
+
+    return rows.map((row) => ({
+      avatar: row.avatar,
+      backgroundColor: row.backgroundColor,
+      createdAt: row.createdAt,
+      description: row.description,
+      id: row.id,
+      relevance: this.calculateRelevance(row.title, query),
+      slug: row.slug,
+      tags: (row.tags as string[]) || [],
+      title: row.title || '',
+      type: 'agent' as const,
+      updatedAt: row.updatedAt,
+    }));
   }
 
   /**
-   * Build topic search query with optional agent-context boosting
-   * Searches: title, content, historySummary
-   * When agentId is provided:
-   * - Current agent's topics: relevance 0.5-0.7 (highest priority)
-   * - Other topics: relevance 1-3 (normal priority)
+   * Search topics by title, content, historySummary
    */
-  private buildTopicQuery(
-    searchTerm: string,
-    exactQuery: string,
-    prefixQuery: string,
+  private async searchTopics(
+    query: string,
     limit: number,
     agentId?: string,
-  ): ReturnType<typeof sql> {
-    // Build relevance CASE statement with agent boosting
-    const relevanceCase = agentId
-      ? sql`
-        CASE
-          WHEN t.agent_id = ${agentId} THEN
-            CASE
-              WHEN t.title ILIKE ${exactQuery} THEN 0.5
-              WHEN t.title ILIKE ${prefixQuery} THEN 0.6
-              ELSE 0.7
-            END
-          WHEN t.title ILIKE ${exactQuery} THEN 1
-          WHEN t.title ILIKE ${prefixQuery} THEN 2
-          ELSE 3
-        END
-      `
-      : sql`
-        CASE
-          WHEN t.title ILIKE ${exactQuery} THEN 1
-          WHEN t.title ILIKE ${prefixQuery} THEN 2
-          ELSE 3
-        END
-      `;
+  ): Promise<TopicSearchResult[]> {
+    const searchTerm = `%${query}%`;
 
-    return sql`
-      SELECT
-        t.id,
-        'topic' as type,
-        t.title,
-        CASE
-          WHEN length(COALESCE(t.content, '')) > 200 THEN substring(COALESCE(t.content, ''), 1, 200) || '...'
-          ELSE t.content
-        END as description,
-        NULL::varchar(100) as slug,
-        NULL::text as avatar,
-        NULL::text as background_color,
-        NULL::jsonb as tags,
-        t.created_at,
-        t.updated_at,
-        ${relevanceCase} as relevance,
-        t.favorite,
-        t.session_id,
-        t.agent_id,
-        NULL::text as name,
-        NULL::varchar(255) as file_type,
-        NULL::integer as size,
-        NULL::text as url,
-        NULL::text as knowledge_base_id
-      FROM ${topics} t
-      WHERE t.user_id = ${this.userId}
-        AND (
-          COALESCE(t.title, '') ILIKE ${searchTerm}
-          OR COALESCE(t.content, '') ILIKE ${searchTerm}
-          OR COALESCE(t.history_summary, '') ILIKE ${searchTerm}
-        )
-      ORDER BY relevance ASC, t.updated_at DESC
-      LIMIT ${limit}
-    `;
+    const rows = await this.db
+      .select()
+      .from(topics)
+      .where(
+        and(
+          eq(topics.userId, this.userId),
+          or(
+            ilike(sql`COALESCE(${topics.title}, '')`, searchTerm),
+            ilike(sql`COALESCE(${topics.content}, '')`, searchTerm),
+            ilike(sql`COALESCE(${topics.historySummary}, '')`, searchTerm),
+          ),
+        ),
+      )
+      .orderBy(desc(topics.updatedAt))
+      .limit(limit);
+
+    return rows.map((row) => {
+      // Agent context boosting: current agent's topics get higher priority
+      let relevance = this.calculateRelevance(row.title, query);
+      if (agentId && row.agentId === agentId) {
+        // Boost current agent's topics (0.5-0.7 range)
+        relevance = relevance === 1 ? 0.5 : relevance === 2 ? 0.6 : 0.7;
+      }
+
+      return {
+        agentId: row.agentId,
+        createdAt: row.createdAt,
+        description: this.truncate(row.content),
+        favorite: row.favorite,
+        id: row.id,
+        relevance,
+        sessionId: row.sessionId,
+        title: row.title || '',
+        type: 'topic' as const,
+        updatedAt: row.updatedAt,
+      };
+    });
   }
 
   /**
-   * Build message search query with optional agent-context boosting
-   * Searches: message content (supports multi-word queries)
-   * When agentId is provided:
-   * - Current agent's messages: relevance 0.5-0.7 (highest priority)
-   * - Other messages: relevance 1-3 (normal priority)
+   * Search messages by content
    */
-  private buildMessageQuery(
-    searchTerm: string,
-    exactQuery: string,
-    prefixQuery: string,
+  private async searchMessages(
+    query: string,
     limit: number,
     agentId?: string,
-  ): ReturnType<typeof sql> {
-    // Split search query into words for better multi-word search
-    const words = exactQuery
-      .trim()
-      .split(/\s+/)
-      .filter((w) => w.length > 0);
+  ): Promise<MessageSearchResult[]> {
+    const searchTerm = `%${query}%`;
 
-    // Build WHERE clause: search for any of the words
+    // Split query into words for multi-word search
+    const words = query.split(/\s+/).filter((w) => w.length > 0);
+
     const wordConditions =
       words.length > 1
-        ? sql.join(
-            words.map((word) => sql`COALESCE(m.content, '') ILIKE ${`%${word}%`}`),
-            sql` OR `,
-          )
-        : sql`COALESCE(m.content, '') ILIKE ${searchTerm}`;
+        ? or(...words.map((word) => ilike(sql`COALESCE(${messages.content}, '')`, `%${word}%`)))
+        : ilike(sql`COALESCE(${messages.content}, '')`, searchTerm);
 
-    // Build relevance CASE statement with agent boosting
-    const relevanceCase = agentId
-      ? sql`
-        CASE
-          WHEN m.agent_id = ${agentId} THEN
-            CASE
-              WHEN m.content ILIKE ${exactQuery} THEN 0.5
-              WHEN m.content ILIKE ${prefixQuery} THEN 0.6
-              ELSE 0.7
-            END
-          WHEN m.content ILIKE ${exactQuery} THEN 1
-          WHEN m.content ILIKE ${prefixQuery} THEN 2
-          ELSE 3
-        END
-      `
-      : sql`
-        CASE
-          WHEN m.content ILIKE ${exactQuery} THEN 1
-          WHEN m.content ILIKE ${prefixQuery} THEN 2
-          ELSE 3
-        END
-      `;
+    const rows = await this.db
+      .select({
+        agentId: messages.agentId,
+        agentTitle: agents.title,
+        content: messages.content,
+        createdAt: messages.createdAt,
+        id: messages.id,
+        model: messages.model,
+        role: messages.role,
+        topicId: messages.topicId,
+        updatedAt: messages.updatedAt,
+      })
+      .from(messages)
+      .leftJoin(agents, eq(messages.agentId, agents.id))
+      .where(and(eq(messages.userId, this.userId), ne(messages.role, 'tool'), wordConditions))
+      .orderBy(desc(messages.createdAt))
+      .limit(limit);
 
-    return sql`
-      SELECT
-        m.id,
-        'message' as type,
-        CASE
-          WHEN length(m.content) > 200 THEN substring(m.content, 1, 200) || '...'
-          ELSE m.content
-        END as title,
-        COALESCE(a.title, 'General Chat') as description,
-        m.model as slug,
-        NULL::text as avatar,
-        NULL::text as background_color,
-        NULL::jsonb as tags,
-        m.created_at,
-        m.updated_at,
-        ${relevanceCase} as relevance,
-        NULL::boolean as favorite,
-        m.topic_id as session_id,
-        m.agent_id,
-        m.role as name,
-        NULL::varchar(255) as file_type,
-        NULL::integer as size,
-        NULL::text as url,
-        NULL::text as knowledge_base_id
-      FROM ${messages} m
-      LEFT JOIN ${agents} a ON m.agent_id = a.id
-      WHERE m.user_id = ${this.userId}
-        AND m.role != 'tool'
-        AND (${wordConditions})
-      ORDER BY relevance ASC, m.created_at DESC
-      LIMIT ${limit}
-    `;
-  }
-
-  /**
-   * Build file search query
-   * Searches files and their linked documents, excluding pages (file_type='custom/document')
-   */
-  private buildFileQuery(
-    searchTerm: string,
-    exactQuery: string,
-    prefixQuery: string,
-    limit: number,
-  ): ReturnType<typeof sql> {
-    // Query for files (with optional linked documents), excluding custom/document files
-    const fileQuery = sql`
-      SELECT
-        f.id,
-        'file' as type,
-        f.name as title,
-        CASE
-          WHEN length(COALESCE(d.content, '')) > 200 THEN substring(COALESCE(d.content, ''), 1, 200) || '...'
-          ELSE d.content
-        END as description,
-        NULL::varchar(100) as slug,
-        NULL::text as avatar,
-        NULL::text as background_color,
-        NULL::jsonb as tags,
-        f.created_at,
-        f.updated_at,
-        CASE
-          WHEN f.name ILIKE ${exactQuery} THEN 1
-          WHEN f.name ILIKE ${prefixQuery} THEN 2
-          ELSE 3
-        END as relevance,
-        NULL::boolean as favorite,
-        NULL::text as session_id,
-        NULL::text as agent_id,
-        f.name,
-        f.file_type,
-        f.size,
-        f.url,
-        kbf.knowledge_base_id
-      FROM ${files} f
-      LEFT JOIN ${documents} d ON f.id = d.file_id
-      LEFT JOIN ${knowledgeBaseFiles} kbf ON f.id = kbf.file_id
-      WHERE f.user_id = ${this.userId}
-        AND f.file_type != 'custom/document'
-        AND f.name ILIKE ${searchTerm}
-    `;
-
-    // Query for standalone documents (not pages, not folders, and not linked to files)
-    const documentQuery = sql`
-      SELECT
-        d.id,
-        'file' as type,
-        COALESCE(d.title, d.filename, 'Untitled') as title,
-        CASE
-          WHEN length(COALESCE(d.content, '')) > 200 THEN substring(COALESCE(d.content, ''), 1, 200) || '...'
-          ELSE d.content
-        END as description,
-        NULL::varchar(100) as slug,
-        NULL::text as avatar,
-        NULL::text as background_color,
-        NULL::jsonb as tags,
-        d.created_at,
-        d.updated_at,
-        CASE
-          WHEN COALESCE(d.title, d.filename) ILIKE ${exactQuery} THEN 1
-          WHEN COALESCE(d.title, d.filename) ILIKE ${prefixQuery} THEN 2
-          ELSE 3
-        END as relevance,
-        NULL::boolean as favorite,
-        NULL::text as session_id,
-        NULL::text as agent_id,
-        COALESCE(d.title, d.filename, 'Untitled') as name,
-        d.file_type,
-        d.total_char_count as size,
-        d.source as url,
-        kbf.knowledge_base_id
-      FROM ${documents} d
-      LEFT JOIN ${files} f ON d.file_id = f.id
-      LEFT JOIN ${knowledgeBaseFiles} kbf ON f.id = kbf.file_id
-      WHERE d.user_id = ${this.userId}
-        AND d.source_type != 'file'
-        AND d.file_type != 'custom/document'
-        AND d.file_type != 'custom/folder'
-        AND (
-          COALESCE(d.title, '') ILIKE ${searchTerm}
-          OR COALESCE(d.filename, '') ILIKE ${searchTerm}
-          OR COALESCE(d.content, '') ILIKE ${searchTerm}
-        )
-    `;
-
-    // Combine both queries
-    return sql`
-      SELECT * FROM (
-        (${fileQuery})
-        UNION ALL
-        (${documentQuery})
-      ) as combined
-      ORDER BY relevance ASC, updated_at DESC
-      LIMIT ${limit}
-    `;
-  }
-
-  /**
-   * Build folder search query
-   * Searches folders in the documents table (file_type='custom/folder')
-   */
-  private buildFolderQuery(
-    searchTerm: string,
-    exactQuery: string,
-    prefixQuery: string,
-    limit: number,
-  ): ReturnType<typeof sql> {
-    return sql`
-      SELECT
-        d.id,
-        'folder' as type,
-        COALESCE(d.title, d.filename, 'Untitled') as title,
-        d.description,
-        d.slug,
-        NULL::text as avatar,
-        NULL::text as background_color,
-        NULL::jsonb as tags,
-        d.created_at,
-        d.updated_at,
-        CASE
-          WHEN COALESCE(d.title, d.filename) ILIKE ${exactQuery} THEN 1
-          WHEN COALESCE(d.title, d.filename) ILIKE ${prefixQuery} THEN 2
-          ELSE 3
-        END as relevance,
-        NULL::boolean as favorite,
-        NULL::text as session_id,
-        NULL::text as agent_id,
-        COALESCE(d.title, d.filename, 'Untitled') as name,
-        d.file_type,
-        NULL::integer as size,
-        NULL::text as url,
-        d.knowledge_base_id
-      FROM ${documents} d
-      WHERE d.user_id = ${this.userId}
-        AND d.file_type = 'custom/folder'
-        AND (
-          COALESCE(d.title, '') ILIKE ${searchTerm}
-          OR COALESCE(d.filename, '') ILIKE ${searchTerm}
-          OR COALESCE(d.description, '') ILIKE ${searchTerm}
-        )
-      ORDER BY relevance ASC, updated_at DESC
-      LIMIT ${limit}
-    `;
-  }
-
-  /**
-   * Build page search query
-   * Fast search on page titles only (no content search for better performance)
-   * Searches standalone documents with type='custom/document'
-   */
-  private buildPageQuery(
-    searchTerm: string,
-    exactQuery: string,
-    prefixQuery: string,
-    limit: number,
-  ): ReturnType<typeof sql> {
-    return sql`
-      SELECT
-        d.id,
-        'page' as type,
-        COALESCE(d.title, d.filename, 'Untitled') as title,
-        NULL::text as description,
-        NULL::varchar(100) as slug,
-        NULL::text as avatar,
-        NULL::text as background_color,
-        NULL::jsonb as tags,
-        d.created_at,
-        d.updated_at,
-        CASE
-          WHEN COALESCE(d.title, d.filename) ILIKE ${exactQuery} THEN 1
-          WHEN COALESCE(d.title, d.filename) ILIKE ${prefixQuery} THEN 2
-          ELSE 3
-        END as relevance,
-        NULL::boolean as favorite,
-        NULL::text as session_id,
-        NULL::text as agent_id,
-        COALESCE(d.title, d.filename, 'Untitled') as name,
-        d.file_type,
-        d.total_char_count as size,
-        d.source as url,
-        NULL::text as knowledge_base_id
-      FROM ${documents} d
-      WHERE d.user_id = ${this.userId}
-        AND d.file_type = 'custom/document'
-        AND (
-          COALESCE(d.title, '') ILIKE ${searchTerm}
-          OR COALESCE(d.filename, '') ILIKE ${searchTerm}
-        )
-      ORDER BY relevance ASC, updated_at DESC
-      LIMIT ${limit}
-    `;
-  }
-
-  /**
-   * Build page content search query (FUTURE USE - Not integrated yet)
-   * Full-text search within page content for deep document search
-   * This is more expensive but allows searching within document body
-   */
-  private buildPageContentQuery(
-    searchTerm: string,
-    exactQuery: string,
-    prefixQuery: string,
-    limit: number,
-  ): ReturnType<typeof sql> {
-    return sql`
-      SELECT
-        d.id,
-        'pageContent' as type,
-        COALESCE(d.title, d.filename, 'Untitled') as title,
-        CASE
-          WHEN length(COALESCE(d.content, '')) > 200 THEN substring(COALESCE(d.content, ''), 1, 200) || '...'
-          ELSE d.content
-        END as description,
-        NULL::varchar(100) as slug,
-        NULL::text as avatar,
-        NULL::text as background_color,
-        NULL::jsonb as tags,
-        d.created_at,
-        d.updated_at,
-        CASE
-          WHEN COALESCE(d.content, '') ILIKE ${exactQuery} THEN 1
-          WHEN COALESCE(d.content, '') ILIKE ${prefixQuery} THEN 2
-          ELSE 3
-        END as relevance,
-        NULL::boolean as favorite,
-        NULL::text as session_id,
-        NULL::text as agent_id,
-        COALESCE(d.title, d.filename, 'Untitled') as name,
-        d.file_type,
-        d.total_char_count as size,
-        d.source as url,
-        NULL::text as knowledge_base_id
-      FROM ${documents} d
-      WHERE d.user_id = ${this.userId}
-        AND d.file_type = 'custom/document'
-        AND COALESCE(d.content, '') ILIKE ${searchTerm}
-      ORDER BY relevance ASC, updated_at DESC
-      LIMIT ${limit}
-    `;
-  }
-
-  /**
-   * Build memory search query
-   * Searches: title, summary, details
-   */
-  private buildMemoryQuery(
-    searchTerm: string,
-    exactQuery: string,
-    prefixQuery: string,
-    limit: number,
-  ): ReturnType<typeof sql> {
-    return sql`
-      SELECT
-        m.id,
-        'memory' as type,
-        COALESCE(m.title, 'Untitled Memory') as title,
-        CASE
-          WHEN length(COALESCE(m.summary, '')) > 200 THEN substring(COALESCE(m.summary, ''), 1, 200) || '...'
-          ELSE m.summary
-        END as description,
-        NULL::varchar(100) as slug,
-        NULL::text as avatar,
-        NULL::text as background_color,
-        NULL::jsonb as tags,
-        m.created_at,
-        m.updated_at,
-        CASE
-          WHEN COALESCE(m.title, '') ILIKE ${exactQuery} THEN 1
-          WHEN COALESCE(m.title, '') ILIKE ${prefixQuery} THEN 2
-          ELSE 3
-        END as relevance,
-        NULL::boolean as favorite,
-        NULL::text as session_id,
-        NULL::text as agent_id,
-        NULL::text as name,
-        NULL::varchar(255) as file_type,
-        NULL::integer as size,
-        NULL::text as url,
-        NULL::text as knowledge_base_id,
-        m.memory_layer
-      FROM ${userMemories} m
-      WHERE m.user_id = ${this.userId}
-        AND (
-          COALESCE(m.title, '') ILIKE ${searchTerm}
-          OR COALESCE(m.summary, '') ILIKE ${searchTerm}
-          OR COALESCE(m.details, '') ILIKE ${searchTerm}
-        )
-      ORDER BY relevance ASC, m.updated_at DESC
-      LIMIT ${limit}
-    `;
-  }
-
-  /**
-   * Map raw SQL results to typed SearchResult objects
-   * Parse JSONB strings and convert snake_case to camelCase
-   */
-  private mapResults(rows: any[]): SearchResult[] {
     return rows.map((row) => {
-      const base = {
-        createdAt: new Date(row.created_at),
+      // Agent context boosting
+      let relevance = this.calculateRelevance(row.content, query);
+      if (agentId && row.agentId === agentId) {
+        relevance = relevance === 1 ? 0.5 : relevance === 2 ? 0.6 : 0.7;
+      }
+
+      return {
+        agentId: row.agentId,
+        content: row.content || '',
+        createdAt: row.createdAt,
+        description: row.agentTitle || 'General Chat',
+        id: row.id,
+        model: row.model,
+        relevance,
+        role: row.role,
+        title: this.truncate(row.content) || '',
+        topicId: row.topicId,
+        type: 'message' as const,
+        updatedAt: row.updatedAt,
+      };
+    });
+  }
+
+  /**
+   * Search files by name
+   */
+  private async searchFiles(query: string, limit: number): Promise<FileSearchResult[]> {
+    const searchTerm = `%${query}%`;
+
+    const rows = await this.db
+      .select({
+        content: documents.content,
+        createdAt: files.createdAt,
+        fileType: files.fileType,
+        id: files.id,
+        knowledgeBaseId: knowledgeBaseFiles.knowledgeBaseId,
+        name: files.name,
+        size: files.size,
+        updatedAt: files.updatedAt,
+        url: files.url,
+      })
+      .from(files)
+      .leftJoin(documents, eq(files.id, documents.fileId))
+      .leftJoin(knowledgeBaseFiles, eq(files.id, knowledgeBaseFiles.fileId))
+      .where(
+        and(
+          eq(files.userId, this.userId),
+          ne(files.fileType, 'custom/document'),
+          ilike(files.name, searchTerm),
+        ),
+      )
+      .orderBy(desc(files.updatedAt))
+      .limit(limit);
+
+    return rows.map((row) => ({
+      createdAt: row.createdAt,
+      description: this.truncate(row.content),
+      fileType: row.fileType,
+      id: row.id,
+      knowledgeBaseId: row.knowledgeBaseId,
+      name: row.name,
+      relevance: this.calculateRelevance(row.name, query),
+      size: row.size,
+      title: row.name,
+      type: 'file' as const,
+      updatedAt: row.updatedAt,
+      url: row.url,
+    }));
+  }
+
+  /**
+   * Search folders (documents with file_type='custom/folder')
+   */
+  private async searchFolders(query: string, limit: number): Promise<FolderSearchResult[]> {
+    const searchTerm = `%${query}%`;
+
+    const rows = await this.db
+      .select()
+      .from(documents)
+      .where(
+        and(
+          eq(documents.userId, this.userId),
+          eq(documents.fileType, 'custom/folder'),
+          or(
+            ilike(sql`COALESCE(${documents.title}, '')`, searchTerm),
+            ilike(sql`COALESCE(${documents.filename}, '')`, searchTerm),
+            ilike(sql`COALESCE(${documents.description}, '')`, searchTerm),
+          ),
+        ),
+      )
+      .orderBy(desc(documents.updatedAt))
+      .limit(limit);
+
+    return rows.map((row) => {
+      const title = row.title || row.filename || 'Untitled';
+      return {
+        createdAt: row.createdAt,
         description: row.description,
         id: row.id,
-        relevance: Number(row.relevance),
-        title: row.title,
-        type: row.type as SearchResultType,
-        updatedAt: new Date(row.updated_at),
+        knowledgeBaseId: row.knowledgeBaseId,
+        relevance: this.calculateRelevance(title, query),
+        slug: row.slug,
+        title,
+        type: 'folder' as const,
+        updatedAt: row.updatedAt,
       };
-
-      switch (row.type) {
-        case 'page': {
-          return {
-            ...base,
-            type: 'page' as const,
-          };
-        }
-        case 'pageContent': {
-          return {
-            ...base,
-            type: 'pageContent' as const,
-          };
-        }
-        case 'agent': {
-          // Parse tags JSONB if string
-          let tags: string[] = [];
-          if (row.tags) {
-            if (typeof row.tags === 'string') {
-              try {
-                tags = JSON.parse(row.tags);
-              } catch {
-                tags = [];
-              }
-            } else {
-              tags = row.tags;
-            }
-          }
-
-          return {
-            ...base,
-            avatar: row.avatar,
-            backgroundColor: row.background_color,
-            slug: row.slug,
-            tags,
-            type: 'agent' as const,
-          };
-        }
-        case 'topic': {
-          return {
-            ...base,
-            agentId: row.agent_id,
-            favorite: row.favorite,
-            sessionId: row.session_id,
-            type: 'topic' as const,
-          };
-        }
-        case 'file': {
-          return {
-            ...base,
-            fileType: row.file_type,
-            knowledgeBaseId: row.knowledge_base_id,
-            name: row.name,
-            size: Number(row.size),
-            type: 'file' as const,
-            url: row.url,
-          };
-        }
-        case 'folder': {
-          return {
-            ...base,
-            knowledgeBaseId: row.knowledge_base_id,
-            slug: row.slug,
-            type: 'folder' as const,
-          };
-        }
-        case 'message': {
-          return {
-            ...base,
-            agentId: row.agent_id,
-            content: row.description || '',
-            model: row.slug,
-            role: row.name || 'user',
-            topicId: row.session_id,
-            type: 'message' as const,
-          };
-        }
-        case 'memory': {
-          return {
-            ...base,
-            memoryLayer: row.memory_layer,
-            type: 'memory' as const,
-          };
-        }
-        default: {
-          throw new Error(`Unknown search result type: ${row.type}`);
-        }
-      }
     });
+  }
+
+  /**
+   * Search pages (documents with file_type='custom/document')
+   */
+  private async searchPages(query: string, limit: number): Promise<PageSearchResult[]> {
+    const searchTerm = `%${query}%`;
+
+    const rows = await this.db
+      .select()
+      .from(documents)
+      .where(
+        and(
+          eq(documents.userId, this.userId),
+          eq(documents.fileType, 'custom/document'),
+          or(
+            ilike(sql`COALESCE(${documents.title}, '')`, searchTerm),
+            ilike(sql`COALESCE(${documents.filename}, '')`, searchTerm),
+          ),
+        ),
+      )
+      .orderBy(desc(documents.updatedAt))
+      .limit(limit);
+
+    return rows.map((row) => {
+      const title = row.title || row.filename || 'Untitled';
+      return {
+        createdAt: row.createdAt,
+        description: null,
+        id: row.id,
+        relevance: this.calculateRelevance(title, query),
+        title,
+        type: 'page' as const,
+        updatedAt: row.updatedAt,
+      };
+    });
+  }
+
+  /**
+   * Search memories by title, summary, details
+   */
+  private async searchMemories(query: string, limit: number): Promise<MemorySearchResult[]> {
+    const searchTerm = `%${query}%`;
+
+    const rows = await this.db
+      .select()
+      .from(userMemories)
+      .where(
+        and(
+          eq(userMemories.userId, this.userId),
+          or(
+            ilike(sql`COALESCE(${userMemories.title}, '')`, searchTerm),
+            ilike(sql`COALESCE(${userMemories.summary}, '')`, searchTerm),
+            ilike(sql`COALESCE(${userMemories.details}, '')`, searchTerm),
+          ),
+        ),
+      )
+      .orderBy(desc(userMemories.updatedAt))
+      .limit(limit);
+
+    return rows.map((row) => ({
+      createdAt: row.createdAt,
+      description: this.truncate(row.summary),
+      id: row.id,
+      memoryLayer: row.memoryLayer,
+      relevance: this.calculateRelevance(row.title, query),
+      title: row.title || 'Untitled Memory',
+      type: 'memory' as const,
+      updatedAt: row.updatedAt,
+    }));
   }
 }
