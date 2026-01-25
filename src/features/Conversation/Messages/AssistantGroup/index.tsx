@@ -68,7 +68,12 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
   // Get editing state from ConversationStore
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(contentId || ''));
   const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
-  const { minHeight } = useNewScreen({ creating, isLatestItem, messageId: id });
+  const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
+  const { minHeight } = useNewScreen({
+    creating: creating || generating,
+    isLatestItem,
+    messageId: id,
+  });
 
   const setMessageItemActionElementPortialContext = useSetMessageItemActionElementPortialContext();
   const setMessageItemActionTypeContext = useSetMessageItemActionTypeContext();
