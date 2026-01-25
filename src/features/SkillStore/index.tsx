@@ -2,6 +2,7 @@
 
 import { createModal } from '@lobehub/ui';
 import { t } from 'i18next';
+import { MemoryRouter } from 'react-router-dom';
 
 import { isDesktop } from '@/const/version';
 import { MarketAuthProvider } from '@/layout/AuthProvider/MarketAuth';
@@ -12,9 +13,11 @@ export const createSkillStoreModal = () =>
   createModal({
     allowFullscreen: true,
     children: (
-      <MarketAuthProvider isDesktop={isDesktop}>
-        <SkillStoreContent />
-      </MarketAuthProvider>
+      <MemoryRouter>
+        <MarketAuthProvider isDesktop={isDesktop}>
+          <SkillStoreContent />
+        </MarketAuthProvider>
+      </MemoryRouter>
     ),
     destroyOnHidden: false,
     footer: null,
