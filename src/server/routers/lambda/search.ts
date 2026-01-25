@@ -146,6 +146,7 @@ export const searchRouter = router({
         searchPromises.push(
           ctx.discoverService
             .getAssistantList({
+              includeAgentGroup: true,
               locale,
               pageSize: limitPerType,
               q: query,
