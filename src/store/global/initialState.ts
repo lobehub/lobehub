@@ -60,6 +60,7 @@ export interface SystemStatus {
   fileManagerViewMode?: 'list' | 'masonry';
   filePanelWidth: number;
   hideGemini2_5FlashImagePreviewChineseWarning?: boolean;
+  hidePHLaunch?: boolean;
   hidePWAInstaller?: boolean;
   hideThreadLimitAlert?: boolean;
   imagePanelWidth: number;
@@ -129,6 +130,7 @@ export const INITIAL_STATUS = {
   fileManagerViewMode: 'list' as const,
   filePanelWidth: 320,
   hideGemini2_5FlashImagePreviewChineseWarning: false,
+  hidePHLaunch: false,
   hidePWAInstaller: false,
   hideThreadLimitAlert: false,
   imagePanelWidth: 320,

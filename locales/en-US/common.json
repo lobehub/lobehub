@@ -286,6 +286,11 @@
   "officialSite": "Official Website",
   "ok": "OK",
   "password": "Password",
+  "phLaunch": {
+    "action": "Support Us",
+    "body": "Your support means a lot to us!",
+    "title": "We are on Product Hunt!"
+  },
   "pin": "Pin",
   "pinOff": "Unpin",
   "privacy": "Privacy Policy",

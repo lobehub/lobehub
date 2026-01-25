@@ -286,6 +286,11 @@
   "officialSite": "Trang web chính thức",
   "ok": "Đồng ý",
   "password": "Mật khẩu",
+  "phLaunch": {
+    "action": "Truy cập để ủng hộ",
+    "body": "Chúng tôi đang ra mắt trên Product Hunt! Nếu bạn yêu thích LobeChat, hãy bình chọn ủng hộ chúng tôi!",
+    "title": "LobeChat đang ra mắt trên Product Hunt!"
+  },
   "pin": "Ghim",
   "pinOff": "Bỏ ghim",
   "privacy": "Chính sách bảo mật",

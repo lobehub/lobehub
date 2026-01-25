@@ -286,6 +286,11 @@
   "officialSite": "الموقع الرسمي",
   "ok": "موافق",
   "password": "كلمة المرور",
+  "phLaunch": {
+    "action": "اذهب إلى الدعم",
+    "body": "نحن نُطلق LobeChat على Product Hunt! إذا أعجبك LobeChat، صوّت لنا وادعمنا!",
+    "title": "LobeChat يتم إطلاقه على Product Hunt!"
+  },
   "pin": "تثبيت في الأعلى",
   "pinOff": "إلغاء التثبيت",
   "privacy": "سياسة الخصوصية",

@@ -286,6 +286,11 @@
   "officialSite": "Officiële website",
   "ok": "Oké",
   "password": "Wachtwoord",
+  "phLaunch": {
+    "action": "Ga naar ondersteuning",
+    "body": "We lanceren op Product Hunt! Als je LobeChat leuk vindt, stem dan op ons!",
+    "title": "LobeChat lanceert op Product Hunt!"
+  },
   "pin": "Vastzetten",
   "pinOff": "Vastzetten uitschakelen",
   "privacy": "Privacybeleid",

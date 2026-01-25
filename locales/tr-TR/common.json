@@ -286,6 +286,11 @@
   "officialSite": "Resmi Site",
   "ok": "Tamam",
   "password": "Password",
+  "phLaunch": {
+    "action": "Destekle",
+    "body": "Product Hunt'ta yayındayız! LobeChat'i beğendiyseniz, bize oy vererek destek olun!",
+    "title": "LobeChat, Product Hunt'ta yayında!"
+  },
   "pin": "Pin",
   "pinOff": "Unpin",
   "privacy": "Gizlilik Politikası",

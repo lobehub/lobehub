@@ -286,6 +286,11 @@
   "officialSite": "Официальный сайт",
   "ok": "ОК",
   "password": "Пароль",
+  "phLaunch": {
+    "action": "Перейти к поддержке",
+    "body": "Мы запускаемся на Product Hunt! Если вам нравится LobeChat, проголосуйте за нас!",
+    "title": "LobeChat запускается на Product Hunt!"
+  },
   "pin": "Закрепить",
   "pinOff": "Открепить",
   "privacy": "Политика конфиденциальности",

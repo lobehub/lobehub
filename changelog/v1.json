@@ -1,6 +1,13 @@
 [
   {
     "children": {
+      "fixes": ["Correct claude_args quoting to prevent shell-quote parsing errors."]
+    },
+    "date": "2026-01-25",
+    "version": "1.143.3"
+  },
+  {
+    "children": {
       "fixes": ["Fix React CVE."]
     },
     "date": "2025-12-04",
