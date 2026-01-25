@@ -89,7 +89,6 @@ describe('UserPersonaService', () => {
   it('passes existing persona baseline on subsequent runs', async () => {
     const service = new UserPersonaService(db);
     await service.composeWriting({ userId, username: 'User' });
-
     await service.composeWriting({ userId, username: 'User' });
 
     expect(toolCall).toHaveBeenLastCalledWith(

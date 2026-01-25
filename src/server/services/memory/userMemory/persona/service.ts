@@ -61,6 +61,10 @@ export class UserPersonaService {
   }
 
   async composeWriting(payload: UserPersonaAgentPayload): Promise<UserPersonaAgentResult> {
+    const personaModel = new UserPersonaModel(this.db, payload.userId);
+    const lastDocument = await personaModel.getLatestPersonaDocument();
+    const existingPersonaBaseline = payload.existingPersona ?? lastDocument?.persona;
+
     const extractor = new UserPersonaExtractor({
       agent: 'user-persona',
       model: this.agentConfig.model,
@@ -68,7 +72,7 @@ export class UserPersonaService {
     });
 
     const agentResult = await extractor.toolCall({
-      existingPersona: payload.existingPersona || undefined,
+      existingPersona: existingPersonaBaseline || undefined,
       language: payload.language || this.preferredLanguage,
       personaNotes: payload.personaNotes,
       recentEvents: payload.recentEvents,
@@ -77,7 +81,6 @@ export class UserPersonaService {
       username: payload.username,
     });
 
-    const personaModel = new UserPersonaModel(this.db, payload.userId);
     const persisted = await personaModel.upsertPersona({
       capturedAt: new Date(),
       diffPersona: agentResult.diff ?? undefined,
