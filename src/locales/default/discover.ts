@@ -5,6 +5,7 @@ export default {
   'assistant.like': 'Like',
   'assistant.likeFailed': 'Failed to like',
   'assistant.likeSuccess': 'Liked',
+  'assistant.underReview': 'Under Review',
   'assistant.unfavorite': 'Unsave',
   'assistant.unfavoriteFailed': 'Failed to unsave',
   'assistant.unfavoriteSuccess': 'Unsaved',
@@ -167,6 +168,8 @@ export default {
   'fork.viewAllForks': 'View all forks',
 
   'groupAgents.tag': 'Group',
+
+  'groupAgents.underReview': 'Under Review',
 
   'home.communityAgents': 'Community Agents',
 
