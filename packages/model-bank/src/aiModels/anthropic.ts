@@ -73,6 +73,40 @@ const anthropicChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 200_000,
     description:
+      'Claude Opus 4.5 是 Anthropic 最新的用于处理高度复杂任务的最强大模型。它在性能、智能、流畅性和理解力方面表现卓越。',
+    displayName: 'Claude Opus 4.5',
+    enabled: true,
+    id: 'claude-opus-4-5-20251101',
+    maxOutput: 32_000,
+    pricing: {
+      units: [
+        { name: 'textInput_cacheRead', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 15, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 75, strategy: 'fixed', unit: 'millionTokens' },
+        {
+          lookup: { prices: { '1h': 30, '5m': 18.75 }, pricingParams: ['ttl'] },
+          name: 'textInput_cacheWrite',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
+      ],
+    },
+    releasedAt: '2025-11-01',
+    settings: {
+      extendParams: ['disableContextCaching', 'enableReasoning', 'reasoningBudgetToken'],
+      searchImpl: 'params',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 200_000,
+    description:
       'Claude Opus 4.1 是 Anthropic 最新的用于处理高度复杂任务的最强大模型。它在性能、智能、流畅性和理解力方面表现卓越。',
     displayName: 'Claude Opus 4.1',
     enabled: true,
