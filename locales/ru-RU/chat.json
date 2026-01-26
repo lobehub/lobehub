@@ -296,6 +296,7 @@
   "shareModal.popover.moreOptions": "Дополнительные параметры доступа",
   "shareModal.popover.privacyWarning.confirm": "Понимаю, продолжить",
   "shareModal.popover.privacyWarning.content": "Пожалуйста, убедитесь, что ваш разговор не содержит личной или конфиденциальной информации. Вы несёте ответственность за любой контент, которым решите поделиться, и за последствия этого.",
+  "shareModal.popover.privacyWarning.doNotShowAgain": "Больше не показывать",
   "shareModal.popover.privacyWarning.title": "Уведомление о конфиденциальности",
   "shareModal.popover.title": "Поделиться темой",
   "shareModal.popover.visibility": "Видимость",

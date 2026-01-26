@@ -29,6 +29,7 @@
   "branchingRequiresSavedTopic": "Chủ đề hiện tại chưa được lưu, vui lòng lưu trước khi sử dụng tính năng chủ đề phụ",
   "cancel": "Hủy",
   "changelog": "Nhật ký thay đổi",
+  "checkForUpdates": "Kiểm tra cập nhật",
   "clientDB.autoInit.title": "Đang khởi tạo cơ sở dữ liệu PGlite",
   "clientDB.error.desc": "PGlite không thể khởi tạo. Hãy thử lại trước. Nếu vẫn không được, mở phần Tự khắc phục và làm theo hướng dẫn. Nếu vẫn gặp lỗi sau vài lần thử, hãy gửi Báo cáo lỗi cho chúng tôi.",
   "clientDB.error.detail": "Lý do lỗi: [{{type}}] {{message}}. Chi tiết như sau:",

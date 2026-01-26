@@ -29,6 +29,7 @@
   "branchingRequiresSavedTopic": "當前話題未保存，保存後才可以使用子話題功能",
   "cancel": "取消",
   "changelog": "變更日誌",
+  "checkForUpdates": "檢查更新",
   "clientDB.autoInit.title": "初始化 PGlite 數據庫",
   "clientDB.error.desc": "非常抱歉，Pglite 資料庫初始化過程發生異常。請點擊按鈕重試。如多次重試後仍重複出錯，請 <1>提交問題</1> ，我們將會第一時間幫你排查",
   "clientDB.error.detail": "錯誤原因：[{{type}}] {{message}}，明細如下：",

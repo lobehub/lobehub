@@ -29,6 +29,7 @@
   "branchingRequiresSavedTopic": "Geçerli konu kaydedilmedi, alt konu özelliğini kullanmak için lütfen önce kaydedin",
   "cancel": "İptal",
   "changelog": "Değişiklik Günlüğü",
+  "checkForUpdates": "Güncellemeleri Kontrol Et",
   "clientDB.autoInit.title": "PGlite Veritabanı Başlatılıyor",
   "clientDB.error.desc": "PGlite başlatılamadı. Önce tekrar deneyin. Yardımcı olmazsa, Kendi Kendine Çözüm bölümünü açın ve adımları izleyin. Hâlâ sorun yaşıyorsanız, Hata Bildir seçeneğiyle bize ayrıntıları gönderin.",
   "clientDB.error.detail": "Hata nedeni: [{{type}}] {{message}}. Ayrıntılar aşağıdadır:",

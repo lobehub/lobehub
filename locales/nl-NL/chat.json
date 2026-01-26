@@ -296,6 +296,7 @@
   "shareModal.popover.moreOptions": "Meer deelopties",
   "shareModal.popover.privacyWarning.confirm": "Ik begrijp het, ga verder",
   "shareModal.popover.privacyWarning.content": "Zorg ervoor dat je gesprek geen persoonlijke of gevoelige informatie bevat. Je bent zelf verantwoordelijk voor de inhoud die je deelt en de gevolgen daarvan.",
+  "shareModal.popover.privacyWarning.doNotShowAgain": "Niet opnieuw weergeven",
   "shareModal.popover.privacyWarning.title": "Privacyverklaring",
   "shareModal.popover.title": "Onderwerp delen",
   "shareModal.popover.visibility": "Zichtbaarheid",

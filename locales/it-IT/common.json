@@ -29,6 +29,7 @@
   "branchingRequiresSavedTopic": "Il tema attuale non è salvato, salvalo prima per usare la funzione sottotema",
   "cancel": "Annulla",
   "changelog": "Registro delle modifiche",
+  "checkForUpdates": "Verifica aggiornamenti",
   "clientDB.autoInit.title": "Inizializzazione del database PGlite",
   "clientDB.error.desc": "PGlite non è riuscito a inizializzarsi. Riprova. Se il problema persiste, apri le Soluzioni automatiche e segui i passaggi. Ancora bloccato? Usa Segnala problema per inviarci i dettagli dell'errore.",
   "clientDB.error.detail": "Motivo dell'errore: [{{type}}] {{message}}. I dettagli sono i seguenti:",

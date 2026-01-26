@@ -152,9 +152,5 @@
   "upload.networkError": "网络异常或跨域配置不正确。请检查文件存储服务的 CORS 设置后重试",
   "upload.title": "上传未能完成",
   "upload.unknownError": "原因：{{reason}}",
-  "upload.uploadFailed": "上传未能完成",
-  "waitlist.currentEmail": "当前账号：{{email}}",
-  "waitlist.desc": "你的账号不在白名单中。请联系管理员申请访问权限。",
-  "waitlist.switchAccount": "切换账号",
-  "waitlist.title": "访问受限"
+  "upload.uploadFailed": "上传未能完成"
 }

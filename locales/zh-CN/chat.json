@@ -296,6 +296,7 @@
   "shareModal.popover.moreOptions": "更多分享方式",
   "shareModal.popover.privacyWarning.confirm": "我已了解，继续",
   "shareModal.popover.privacyWarning.content": "请确保对话中不含个人隐私或敏感信息，LobeHub 不对任何分享的内容及其产生的后果负责。",
+  "shareModal.popover.privacyWarning.doNotShowAgain": "不再显示此提示",
   "shareModal.popover.privacyWarning.title": "隐私提醒",
   "shareModal.popover.title": "分享话题",
   "shareModal.popover.visibility": "可见性",
