@@ -23,24 +23,28 @@ interface AssistantMessageExtraProps {
 export const AssistantMessageExtra = memo<AssistantMessageExtraProps>(
   ({ extra, id, content, performance, usage, tools, provider, model }) => {
     const loading = useConversationStore(messageStateSelectors.isMessageGenerating(id));
+    // Skip TTS/Translate for share pages (they require authentication)
+    const isSharePage = useConversationStore((s) => !!s.context.topicShareId);
 
     return (
       <Flexbox gap={8} style={{ marginTop: !!tools?.length ? 8 : 4 }}>
         {content !== LOADING_FLAT && model && (
           <Usage model={model} performance={performance} provider={provider!} usage={usage} />
         )}
-        <>
-          {!!extra?.tts && (
-            <ExtraContainer>
-              <TTS content={content} id={id} loading={loading} {...extra?.tts} />
-            </ExtraContainer>
-          )}
-          {!!extra?.translate && (
-            <ExtraContainer>
-              <Translate id={id} loading={loading} {...extra?.translate} />
-            </ExtraContainer>
-          )}
-        </>
+        {!isSharePage && (
+          <>
+            {!!extra?.tts && (
+              <ExtraContainer>
+                <TTS content={content} id={id} loading={loading} {...extra?.tts} />
+              </ExtraContainer>
+            )}
+            {!!extra?.translate && (
+              <ExtraContainer>
+                <Translate id={id} loading={loading} {...extra?.translate} />
+              </ExtraContainer>
+            )}
+          </>
+        )}
       </Flexbox>
     );
   },
