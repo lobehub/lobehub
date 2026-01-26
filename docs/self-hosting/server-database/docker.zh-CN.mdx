@@ -26,13 +26,6 @@ tags:
   存储服务](/zh/docs/self-hosting/advanced/s3/tencent-cloud)。
 </Callout>
 
-<Callout type="warning">
-  由于无法使用 Docker 环境变量暴露 `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`，使用 Docker / Docker Compose
-  部署 LobeHub 时，你不能使用 Clerk 作为登录鉴权服务。
-
-  如果你确实需要 Clerk 作为登录鉴权服务，你可以考虑使用 Vercel 部署或者自行构建镜像。
-</Callout>
-
 ## 在 Linux 服务器上部署
 
 以下是在 Linux 服务器上部署 LobeHub DB 版的流程：
@@ -45,10 +38,10 @@ tags:
   ```sh
   docker network create pg
 
-  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d pgvector/pgvector:pg16
+  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d pgvector/pgvector:pg17
   ```
 
-  上述指令会创建一个名为 `my-postgres`，并且网络为 `pg` 的 PG 实例，其中 `pgvector/pgvector:pg16` 是一个 Postgres 16 的镜像，且默认安装了 pgvector 插件。
+  上述指令会创建一个名为 `my-postgres`，并且网络为 `pg` 的 PG 实例，其中 `pgvector/pgvector:pg17` 是一个 Postgres 17 的镜像，且默认安装了 pgvector 插件。
 
   <Callout type="info">
     pgvector 插件为 Postgres 提供了向量搜索的能力，是 LobeHub 实现 RAG 的重要构件之一。

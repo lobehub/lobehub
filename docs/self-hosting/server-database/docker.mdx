@@ -28,12 +28,6 @@ tags:
   Database](/docs/self-hosting/server-database) first.
 </Callout>
 
-<Callout type="warning">
-  Due to the inability to expose `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` using Docker environment variables, you cannot use Clerk as an authentication service when deploying LobeHub using Docker / Docker Compose.
-
-  If you do need Clerk as an authentication service, you might consider deploying using Vercel or building your own image.
-</Callout>
-
 ## Deploying on a Linux Server
 
 Here is the process for deploying the LobeHub server database version on a Linux server:
@@ -46,10 +40,10 @@ Here is the process for deploying the LobeHub server database version on a Linux
   ```sh
   docker network create pg
 
-  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d pgvector/pgvector:pg16
+  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d pgvector/pgvector:pg17
   ```
 
-  The above command will create a PG instance named `my-postgres` on the network `pg`, where `pgvector/pgvector:pg16` is a Postgres 16 image with the pgvector plugin installed by default.
+  The above command will create a PG instance named `my-postgres` on the network `pg`, where `pgvector/pgvector:pg17` is a Postgres 17 image with the pgvector plugin installed by default.
 
   <Callout type="info">
     The pgvector plugin provides vector search capabilities for Postgres, which is an important
