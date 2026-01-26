@@ -17,9 +17,6 @@ import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
-import AgentForkTag from '../Header/AgentForkTag';
-import AgentStatusTag from '../Header/AgentStatusTag';
-
 const MAX_AVATAR_SIZE = 1024 * 1024; // 1MB limit for server actions
 
 const AgentHeader = memo(() => {
@@ -91,7 +88,6 @@ const AgentHeader = memo(() => {
   return (
     <Flexbox
       gap={16}
-      horizontal
       onClick={(e) => {
         e.stopPropagation();
         e.preventDefault();
@@ -152,8 +148,8 @@ const AgentHeader = memo(() => {
         size={72}
         value={meta.avatar}
       />
-      {/* Title and Tags Section */}
-      <Flexbox flex={1} gap={8} style={{ minWidth: 0 }}>
+      {/* Title Section */}
+      <Flexbox flex={1} style={{ minWidth: 0 }}>
         <Input
           onChange={(e) => {
             setLocalTitle(e.target.value);
@@ -169,10 +165,6 @@ const AgentHeader = memo(() => {
           value={localTitle}
           variant={'borderless'}
         />
-        <Flexbox gap={8} horizontal>
-          <AgentStatusTag />
-          <AgentForkTag />
-        </Flexbox>
       </Flexbox>
     </Flexbox>
   );

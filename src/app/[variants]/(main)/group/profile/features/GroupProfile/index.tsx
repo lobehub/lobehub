@@ -17,7 +17,9 @@ import { useGroupProfileStore } from '@/store/groupProfile';
 import AgentSettings from '../AgentSettings';
 import AutoSaveHint from '../Header/AutoSaveHint';
 import GroupPublishButton from '../Header/GroupPublishButton';
+import GroupForkTag from './GroupForkTag';
 import GroupHeader from './GroupHeader';
+import GroupStatusTag from './GroupStatusTag';
 
 const GroupProfile = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
@@ -65,8 +67,10 @@ const GroupProfile = memo(() => {
         style={{ cursor: 'default', marginBottom: 12 }}
       >
         <Flexbox height={66} width={'100%'}>
-          <Flexbox paddingBlock={12}>
+          <Flexbox gap={8} horizontal paddingBlock={12}>
             <AutoSaveHint />
+            <GroupStatusTag />
+            <GroupForkTag />
           </Flexbox>
         </Flexbox>
         {/* Header: Group Avatar + Title */}

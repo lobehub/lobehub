@@ -18,9 +18,6 @@ import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 
-import GroupForkTag from './GroupForkTag';
-import GroupStatusTag from './GroupStatusTag';
-
 const MAX_AVATAR_SIZE = 1024 * 1024; // 1MB limit for server actions
 
 const GroupHeader = memo(() => {
@@ -92,7 +89,6 @@ const GroupHeader = memo(() => {
   return (
     <Flexbox
       gap={16}
-      horizontal
       onClick={(e) => {
         e.stopPropagation();
         e.preventDefault();
@@ -164,8 +160,8 @@ const GroupHeader = memo(() => {
         size={72}
         value={groupMeta.avatar}
       />
-      {/* Title and Tags Section */}
-      <Flexbox flex={1} gap={8} style={{ minWidth: 0 }}>
+      {/* Title Section */}
+      <Flexbox flex={1} style={{ minWidth: 0 }}>
         <Input
           onChange={(e) => {
             setLocalTitle(e.target.value);
@@ -181,10 +177,6 @@ const GroupHeader = memo(() => {
           value={localTitle}
           variant={'borderless'}
         />
-        <Flexbox gap={8} horizontal>
-          <GroupStatusTag />
-          <GroupForkTag />
-        </Flexbox>
       </Flexbox>
     </Flexbox>
   );
