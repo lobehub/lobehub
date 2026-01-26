@@ -185,7 +185,7 @@ export class ChangelogService {
   }
 
   private genUrl(path: string) {
-    // 自定义分隔符为 {{}}
+    // Custom delimiter set to {{}}
     const compiledTemplate = template(this.config.urlTemplate, { interpolate: /{{([\S\s]+?)}}/g });
 
     return compiledTemplate({ ...this.config, path });
