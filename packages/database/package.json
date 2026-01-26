@@ -29,9 +29,9 @@
     "fake-indexeddb": "^6.2.5"
   },
   "peerDependencies": {
-    "dayjs": ">=1.11.19",
-    "drizzle-orm": ">=0.44.7",
-    "nanoid": ">=5.1.6",
-    "pg": ">=8.16.3"
+    "dayjs": "*",
+    "drizzle-orm": "*",
+    "nanoid": "*",
+    "pg": "*"
   }
 }
