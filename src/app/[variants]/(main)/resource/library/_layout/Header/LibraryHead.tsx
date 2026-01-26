@@ -122,21 +122,25 @@ const Head = memo<{ id: string }>(({ id }) => {
       {!name ? (
         <Skeleton active paragraph={false} title={{ style: { marginBottom: 0 }, width: 80 }} />
       ) : (
-        <Text ellipsis style={{ flex: 1 }} weight={500}>
-          {name}
-        </Text>
-      )}
-      {name && (
         <DropdownMenu items={menuItems} placement="bottomRight">
-          <ActionIcon
-            icon={ChevronsUpDownIcon}
+          <Center
+            gap={4}
+            horizontal
             onClick={(e) => e.stopPropagation()}
-            size={{
-              blockSize: 28,
-              size: 16,
-            }}
-            style={{ width: 24 }}
-          />
+            style={{ cursor: 'pointer', flex: 1, overflow: 'hidden' }}
+          >
+            <Text ellipsis style={{ flex: 1 }} weight={500}>
+              {name}
+            </Text>
+            <ActionIcon
+              icon={ChevronsUpDownIcon}
+              size={{
+                blockSize: 28,
+                size: 16,
+              }}
+              style={{ width: 24 }}
+            />
+          </Center>
         </DropdownMenu>
       )}
     </Block>
