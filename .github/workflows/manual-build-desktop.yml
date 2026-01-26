@@ -184,22 +184,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node & pnpm
-        uses: ./.github/actions/setup-node-pnpm
+      - name: Setup build environment
+        uses: ./.github/actions/desktop-build-setup
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: 'false'
-
-      - name: Install dependencies
-        shell: pwsh
-        run: |
-          $pnpmProc = Start-Process -FilePath "pnpm" -ArgumentList "install","--node-linker=hoisted" -NoNewWindow -PassThru -RedirectStandardOutput pnpm.log -RedirectStandardError pnpm.err
-          $npmProc = Start-Process -FilePath "npm" -ArgumentList "run","install-isolated","--prefix=./apps/desktop" -NoNewWindow -PassThru -RedirectStandardOutput npm.log -RedirectStandardError npm.err
-          $pnpmProc.WaitForExit()
-          $npmProc.WaitForExit()
-          Get-Content pnpm.log, pnpm.err, npm.log, npm.err -ErrorAction SilentlyContinue
-          if ($pnpmProc.ExitCode -ne 0) { Write-Error "pnpm install failed with exit code $($pnpmProc.ExitCode)"; exit 1 }
-          if ($npmProc.ExitCode -ne 0) { Write-Error "npm install-isolated failed with exit code $($npmProc.ExitCode)"; exit 1 }
 
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}
