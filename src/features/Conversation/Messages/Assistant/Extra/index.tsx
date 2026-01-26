@@ -3,6 +3,9 @@ import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
+
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import ExtraContainer from '../../components/Extras/ExtraContainer';
 import TTS from '../../components/Extras/TTS';
@@ -23,15 +26,14 @@ interface AssistantMessageExtraProps {
 export const AssistantMessageExtra = memo<AssistantMessageExtraProps>(
   ({ extra, id, content, performance, usage, tools, provider, model }) => {
     const loading = useConversationStore(messageStateSelectors.isMessageGenerating(id));
-    // Skip TTS/Translate for share pages (they require authentication)
-    const isSharePage = useConversationStore((s) => !!s.context.topicShareId);
+    const isLogin = useUserStore(authSelectors.isLogin);
 
     return (
       <Flexbox gap={8} style={{ marginTop: !!tools?.length ? 8 : 4 }}>
         {content !== LOADING_FLAT && model && (
           <Usage model={model} performance={performance} provider={provider!} usage={usage} />
         )}
-        {!isSharePage && (
+        {isLogin && (
           <>
             {!!extra?.tts && (
               <ExtraContainer>
