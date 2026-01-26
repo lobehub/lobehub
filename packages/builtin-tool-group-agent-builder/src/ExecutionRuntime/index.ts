@@ -6,6 +6,7 @@ import { type GroupMemberConfig, chatGroupService } from '@/services/chatGroup';
 import { useAgentStore } from '@/store/agent';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
+import { useGroupProfileStore } from '@/store/groupProfile';
 
 import type {
   BatchCreateAgentsParams,
@@ -410,6 +411,11 @@ export class GroupAgentBuilderExecutionRuntime {
       // Refresh the group detail in the store to sync agent data
       await state.refreshGroupDetail(groupId);
 
+      // IMPORTANT: Directly update the editor content instead of manipulating store data.
+      // This bypasses the priority issue between editorData (JSON) and systemRole (markdown).
+      // The editor will auto-save and sync both fields properly after the update.
+      useGroupProfileStore.getState().setAgentBuilderContent(agentId, prompt);
+
       const content = prompt
         ? `Successfully updated agent ${agentId} system prompt (${prompt.length} characters)`
         : `Successfully cleared agent ${agentId} system prompt`;
@@ -562,6 +568,11 @@ export class GroupAgentBuilderExecutionRuntime {
 
       // Refresh the group detail in the store to ensure data sync
       await state.refreshGroupDetail(group.id);
+
+      // IMPORTANT: Directly update the editor content instead of manipulating store data.
+      // This bypasses the priority issue between editorData (JSON) and content (markdown).
+      // The editor will auto-save and sync both fields properly after the update.
+      useGroupProfileStore.getState().setAgentBuilderContent(group.id, args.prompt);
 
       const content = args.prompt
         ? `Successfully updated group shared prompt (${args.prompt.length} characters)`
