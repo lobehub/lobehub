@@ -73,7 +73,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
           <Button block={mobile}>{t('changelog')}</Button>
         </a>
         {isDesktop && !hasNewVersion && (
-          <Button block={mobile} onClick={() => void autoUpdateService.checkUpdate(); }>
+          <Button block={mobile} onClick={() => void autoUpdateService.checkUpdate()}>
             {t('checkForUpdates')}
           </Button>
         )}
