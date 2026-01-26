@@ -79,7 +79,8 @@ const nvidiaChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'A frontier vision-language model that excels at high-quality reasoning from images.',
+    description:
+      'A frontier vision-language model that excels at high-quality reasoning from images.',
     displayName: 'Llama 3.2 11B Vision Instruct',
     id: 'meta/llama-3.2-11b-vision-instruct',
     type: 'chat',
@@ -89,7 +90,8 @@ const nvidiaChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 128_000,
-    description: 'A frontier vision-language model that excels at high-quality reasoning from images.',
+    description:
+      'A frontier vision-language model that excels at high-quality reasoning from images.',
     displayName: 'Llama 3.2 90B Vision Instruct',
     id: 'meta/llama-3.2-90b-vision-instruct',
     type: 'chat',
@@ -151,26 +153,18 @@ const nvidiaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description: 'A frontier text generation model strong in understanding, transformation, and code generation.',
+    description:
+      'A frontier text generation model strong in understanding, transformation, and code generation.',
     displayName: 'Gemma 2 9B Instruct',
     id: 'google/gemma-2-9b-it',
     type: 'chat',
   },
   {
     contextWindowTokens: 8192,
-    description: 'A frontier text generation model strong in understanding, transformation, and code generation.',
+    description:
+      'A frontier text generation model strong in understanding, transformation, and code generation.',
     displayName: 'Gemma 2 27B Instruct',
     id: 'google/gemma-2-27b-it',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      reasoning: true,
-    },
-    contextWindowTokens: 128_000,
-    description: 'A state-of-the-art efficient LLM strong in reasoning, math, and programming.',
-    displayName: 'DeepSeek R1',
-    id: 'deepseek-ai/deepseek-r1',
     type: 'chat',
   },
   {
@@ -178,14 +172,16 @@ const nvidiaChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 32_768,
-    description: 'A bilingual LLM for Chinese and English across language, coding, math, and reasoning.',
+    description:
+      'A bilingual LLM for Chinese and English across language, coding, math, and reasoning.',
     displayName: 'Qwen2.5 7B Instruct',
     id: 'qwen/qwen2.5-7b-instruct',
     type: 'chat',
   },
   {
     contextWindowTokens: 32_768,
-    description: 'A strong mid-sized code model with 32K context, excelling at multilingual programming.',
+    description:
+      'A strong mid-sized code model with 32K context, excelling at multilingual programming.',
     displayName: 'Qwen2.5 Coder 7B Instruct',
     id: 'qwen/qwen2.5-coder-7b-instruct',
     type: 'chat',
