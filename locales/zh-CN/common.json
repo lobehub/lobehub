@@ -29,6 +29,7 @@
   "branchingRequiresSavedTopic": "当前话题未保存。保存后即可使用子话题",
   "cancel": "取消",
   "changelog": "更新日志",
+  "checkForUpdates": "检查更新",
   "clientDB.autoInit.title": "初始化 PGlite 数据库",
   "clientDB.error.desc": "PGlite 数据库初始化遇到了问题。你可以先点右侧「重试」；如果方便，也可以打开「自助解决」按提示处理。多次重试仍不行：欢迎通过「反馈问题」把错误信息发给我们，我们会尽快排查。",
   "clientDB.error.detail": "原因：[{{type}}] {{message}}，明细如下：",

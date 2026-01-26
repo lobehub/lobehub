@@ -34,6 +34,7 @@ export default {
     'Current topic is not saved, please save it first to use subtopic feature',
   'cancel': 'Cancel',
   'changelog': 'Changelog',
+  'checkForUpdates': 'Check for Updates',
   'clientDB.autoInit.title': 'Initializing PGlite Database',
   'clientDB.error.desc':
     'PGlite failed to initialize. Retry first. If it helps, open Self-serve fixes and follow the steps. Still stuck after a few tries? Use Report issue to send us the error details.',
