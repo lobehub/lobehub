@@ -15,7 +15,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 
 import {
-  getIsInWaitList,
   getIsInviteCodeRequired,
   getReferralStatus,
   getSubscriptionPlan,
@@ -80,7 +79,6 @@ export const userRouter = router({
       hasExtraSession,
       referralStatus,
       subscriptionPlan,
-      isInWaitList,
       isInviteCodeRequired,
     ] = await Promise.all([
       ctx.userModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults),
@@ -88,7 +86,6 @@ export const userRouter = router({
       ctx.sessionModel.hasMoreThanN(1),
       getReferralStatus(ctx.userId),
       getSubscriptionPlan(ctx.userId),
-      getIsInWaitList(ctx.userId),
       getIsInviteCodeRequired(ctx.userId),
     ]);
 
@@ -120,7 +117,6 @@ export const userRouter = router({
       // business features
       referralStatus,
       subscriptionPlan,
-      isInWaitList,
       isInviteCodeRequired,
       isFreePlan: !subscriptionPlan || subscriptionPlan === Plans.Free,
     } satisfies UserInitializationState;

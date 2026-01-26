@@ -51,11 +51,6 @@ export const useDesktopUserStateRedirect = () => {
 
   return useCallback(
     (state: UserInitializationState) => {
-      if (state.isInWaitList === true) {
-        void openExternalAndLogout('/waitlist');
-        return;
-      }
-
       if (state.isInviteCodeRequired === true) {
         void openExternalAndLogout('/invite-code');
         return;
@@ -71,10 +66,6 @@ export const useDesktopUserStateRedirect = () => {
 export const useWebUserStateRedirect = () =>
   useCallback((state: UserInitializationState) => {
     const { pathname } = window.location;
-    if (state.isInWaitList === true) {
-      redirectIfNotOn(pathname, '/waitlist');
-      return;
-    }
 
     if (state.isInviteCodeRequired === true) {
       redirectIfNotOn(pathname, '/invite-code');
