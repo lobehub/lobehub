@@ -1,8 +1,9 @@
-import { Menu, MenuItemConstructorOptions, app, shell } from 'electron';
+/* eslint-disable unicorn/no-array-push-push */
+import { Menu, MenuItemConstructorOptions, app, clipboard, shell } from 'electron';
 
 import { isDev } from '@/const/env';
 
-import type { IMenuPlatform, MenuOptions } from '../types';
+import type { ContextMenuData, IMenuPlatform, MenuOptions } from '../types';
 import { BaseMenuPlatform } from './BaseMenuPlatform';
 
 export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
@@ -16,7 +17,7 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
     return this.appMenu;
   }
 
-  buildContextMenu(type: string, data?: any): Menu {
+  buildContextMenu(type: string, data?: ContextMenuData): Menu {
     let template: MenuItemConstructorOptions[];
     switch (type) {
       case 'chat': {
@@ -28,7 +29,7 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
         break;
       }
       default: {
-        template = this.getDefaultContextMenuTemplate();
+        template = this.getDefaultContextMenuTemplate(data);
       }
     }
     return Menu.buildFromTemplate(template);
@@ -178,35 +179,175 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
     return template;
   }
 
-  private getDefaultContextMenuTemplate(): MenuItemConstructorOptions[] {
+  private getDefaultContextMenuTemplate(data?: ContextMenuData): MenuItemConstructorOptions[] {
     const t = this.app.i18n.ns('menu');
+    const hasText = Boolean(data?.selectionText?.trim());
+    const hasLink = Boolean(data?.linkURL);
+    const hasImage = data?.mediaType === 'image' && Boolean(data?.srcURL);
 
-    return [
+    const template: MenuItemConstructorOptions[] = [];
+
+    // Search with Google - only when text is selected
+    if (hasText) {
+      template.push({
+        click: () => {
+          const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(data!.selectionText!.trim())}`;
+          shell.openExternal(searchUrl);
+        },
+        label: t('context.searchWithGoogle'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Link actions
+    if (hasLink) {
+      template.push({
+        click: () => shell.openExternal(data!.linkURL!),
+        label: t('context.openLink'),
+      });
+      template.push({
+        click: () => clipboard.writeText(data!.linkURL!),
+        label: t('context.copyLink'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Image actions
+    if (hasImage) {
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.downloadURL(data!.srcURL!);
+        },
+        label: t('context.saveImage'),
+      });
+      template.push({
+        click: () => {
+          clipboard.writeText(data!.srcURL!);
+        },
+        label: t('context.copyImageAddress'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Standard edit actions
+    template.push(
       { label: t('edit.cut'), role: 'cut' },
       { label: t('edit.copy'), role: 'copy' },
       { label: t('edit.paste'), role: 'paste' },
       { type: 'separator' },
       { label: t('edit.selectAll'), role: 'selectAll' },
-    ];
+    );
+
+    // Inspect Element in dev mode
+    if (isDev && data?.x !== undefined && data?.y !== undefined) {
+      template.push({ type: 'separator' });
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.inspectElement(data.x!, data.y!);
+        },
+        label: t('context.inspectElement'),
+      });
+    }
+
+    return template;
   }
 
-  private getChatContextMenuTemplate(data?: any): MenuItemConstructorOptions[] {
-    console.log(data);
+  private getChatContextMenuTemplate(data?: ContextMenuData): MenuItemConstructorOptions[] {
     const t = this.app.i18n.ns('menu');
+    const hasText = Boolean(data?.selectionText?.trim());
+    const hasLink = Boolean(data?.linkURL);
+    const hasImage = data?.mediaType === 'image' && Boolean(data?.srcURL);
 
-    return [
+    const template: MenuItemConstructorOptions[] = [];
+
+    // Search with Google - only when text is selected
+    if (hasText) {
+      template.push({
+        click: () => {
+          const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(data!.selectionText!.trim())}`;
+          shell.openExternal(searchUrl);
+        },
+        label: t('context.searchWithGoogle'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Link actions
+    if (hasLink) {
+      template.push({
+        click: () => shell.openExternal(data!.linkURL!),
+        label: t('context.openLink'),
+      });
+      template.push({
+        click: () => clipboard.writeText(data!.linkURL!),
+        label: t('context.copyLink'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Image actions
+    if (hasImage) {
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.downloadURL(data!.srcURL!);
+        },
+        label: t('context.saveImage'),
+      });
+      template.push({
+        click: () => {
+          clipboard.writeText(data!.srcURL!);
+        },
+        label: t('context.copyImageAddress'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Standard edit actions for chat
+    template.push(
       { accelerator: 'Ctrl+C', label: t('edit.copy'), role: 'copy' },
       { accelerator: 'Ctrl+V', label: t('edit.paste'), role: 'paste' },
       { type: 'separator' },
       { label: t('edit.selectAll'), role: 'selectAll' },
-    ];
+    );
+
+    // Inspect Element in dev mode
+    if (isDev && data?.x !== undefined && data?.y !== undefined) {
+      template.push({ type: 'separator' });
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.inspectElement(data.x!, data.y!);
+        },
+        label: t('context.inspectElement'),
+      });
+    }
+
+    return template;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private getEditorContextMenuTemplate(_data?: any): MenuItemConstructorOptions[] {
+  private getEditorContextMenuTemplate(data?: ContextMenuData): MenuItemConstructorOptions[] {
     const t = this.app.i18n.ns('menu');
+    const hasText = Boolean(data?.selectionText?.trim());
 
-    return [
+    const template: MenuItemConstructorOptions[] = [];
+
+    // Search with Google - only when text is selected
+    if (hasText) {
+      template.push({
+        click: () => {
+          const searchUrl = `https://www.google.com/search?q=${encodeURIComponent(data!.selectionText!.trim())}`;
+          shell.openExternal(searchUrl);
+        },
+        label: t('context.searchWithGoogle'),
+      });
+      template.push({ type: 'separator' });
+    }
+
+    // Standard edit actions for editor
+    template.push(
       { accelerator: 'Ctrl+X', label: t('edit.cut'), role: 'cut' },
       { accelerator: 'Ctrl+C', label: t('edit.copy'), role: 'copy' },
       { accelerator: 'Ctrl+V', label: t('edit.paste'), role: 'paste' },
@@ -214,7 +355,21 @@ export class WindowsMenu extends BaseMenuPlatform implements IMenuPlatform {
       { accelerator: 'Ctrl+A', label: t('edit.selectAll'), role: 'selectAll' },
       { type: 'separator' },
       { label: t('edit.delete'), role: 'delete' },
-    ];
+    );
+
+    // Inspect Element in dev mode
+    if (isDev && data?.x !== undefined && data?.y !== undefined) {
+      template.push({ type: 'separator' });
+      template.push({
+        click: () => {
+          const mainWindow = this.app.browserManager.getMainWindow();
+          mainWindow.webContents.inspectElement(data.x!, data.y!);
+        },
+        label: t('context.inspectElement'),
+      });
+    }
+
+    return template;
   }
 
   private getTrayMenuTemplate(): MenuItemConstructorOptions[] {

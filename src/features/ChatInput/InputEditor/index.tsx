@@ -165,12 +165,10 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
           e.preventDefault();
           const { electronSystemService } = await import('@/services/electron/system');
 
-          const selectionValue = editor.getSelectionDocument('markdown') as unknown as string;
-          const hasSelection = !!selectionValue;
+          const selectionText = editor.getSelectionDocument('markdown') as unknown as string;
 
           await electronSystemService.showContextMenu('editor', {
-            hasSelection,
-            value: selectionValue,
+            selectionText: selectionText || undefined,
           });
         }
       }}
