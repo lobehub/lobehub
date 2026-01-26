@@ -121,9 +121,7 @@ export default class Browser {
     logger.info(`Creating new BrowserWindow instance: ${this.identifier}`);
     logger.debug(`[${this.identifier}] Resolved window state: ${JSON.stringify(resolvedState)}`);
 
-    // Calculate traffic light position to center vertically in title bar
-    // Traffic light buttons are approximately 12px tall
-    const trafficLightY = Math.round((TITLE_BAR_HEIGHT - 12) / 2);
+
 
     return new BrowserWindow({
       ...rest,
@@ -134,7 +132,7 @@ export default class Browser {
       height: resolvedState.height,
       show: false,
       title,
-      trafficLightPosition: isMac ? { x: 12, y: trafficLightY } : undefined,
+
       vibrancy: 'sidebar',
       visualEffectState: 'active',
       webPreferences: {
