@@ -33,14 +33,17 @@ const InitPlayer = memo<TTSProps>(({ id, content, contentMd5, file }) => {
 
   const { isGlobalLoading, audio, start, stop, response } = useTTS(content, {
     onError: (err) => {
+      if (isDeletedRef.current) return;
       stop();
       setDefaultError(err);
     },
     onErrorRetry: (err) => {
+      if (isDeletedRef.current) return;
       stop();
       setDefaultError(err);
     },
     onSuccess: async () => {
+      if (isDeletedRef.current) return;
       if (!response || response.ok) return;
       const message = await getMessageError(response);
       if (message) {
@@ -51,7 +54,9 @@ const InitPlayer = memo<TTSProps>(({ id, content, contentMd5, file }) => {
       stop();
     },
     onUpload: async (currentVoice, arrayBuffers) => {
+      if (isDeletedRef.current) return;
       const fileID = await uploadTTS(id, arrayBuffers);
+      if (isDeletedRef.current) return;
       ttsMessage(id, { contentMd5, file: fileID, voice: currentVoice });
     },
   });
@@ -76,10 +81,13 @@ const InitPlayer = memo<TTSProps>(({ id, content, contentMd5, file }) => {
   useEffect(() => {
     // Skip if file exists or user has deleted TTS
     if (file || isDeletedRef.current) return;
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      // Double check in case user deleted during the delay
+      if (isDeletedRef.current) return;
       handleInitStart();
     }, 100);
-  }, [file]);
+    return () => clearTimeout(timer);
+  }, [file, handleInitStart]);
 
   return (
     <Player
