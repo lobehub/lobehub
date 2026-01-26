@@ -28,15 +28,18 @@ type AuthType =
 type PermissionType = 'authorized' | 'denied' | 'not determined' | 'restricted';
 
 // Lazy-loaded module cache
+// @ts-ignore - node-mac-permissions is optional and only available on macOS
 let macPermissionsModule: typeof import('node-mac-permissions') | null = null;
 
 // Test injection override (set via __setMacPermissionsModule for testing)
+// @ts-ignore - node-mac-permissions is optional and only available on macOS
 let testModuleOverride: typeof import('node-mac-permissions') | null = null;
 
 /**
  * Lazily load the node-mac-permissions module (macOS only)
  * Returns null on non-macOS platforms
  */
+// @ts-ignore - node-mac-permissions is optional and only available on macOS
 function getMacPermissionsModule(): typeof import('node-mac-permissions') | null {
   // Allow test injection to override the module
   if (testModuleOverride) {
@@ -70,6 +73,7 @@ export function __resetMacPermissionsModuleCache(): void {
  * @internal
  */
 export function __setMacPermissionsModule(
+  // @ts-ignore - node-mac-permissions is optional and only available on macOS
   module: typeof import('node-mac-permissions') | null,
 ): void {
   testModuleOverride = module;
