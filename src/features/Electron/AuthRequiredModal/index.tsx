@@ -5,6 +5,7 @@ import { Button, Flexbox, Icon, type ModalInstance, createModal } from '@lobehub
 import { AlertCircle, LogIn } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 
 import { useElectronStore } from '@/store/electron';
 
@@ -133,8 +134,11 @@ export const useAuthRequiredModal = () => {
 const AuthRequiredModal = memo(() => {
   const { open } = useAuthRequiredModal();
 
+  const pathname = useLocation().pathname;
   useWatchBroadcast('authorizationRequired', () => {
     if (useElectronStore.getState().isConnectionDrawerOpen) return;
+
+    if (pathname.includes('/desktop-onboarding')) return;
 
     open();
   });
