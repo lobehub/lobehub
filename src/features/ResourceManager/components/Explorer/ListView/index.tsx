@@ -62,8 +62,6 @@ const ListView = memo(function ListView() {
     selectFileIds,
     setSelectedFileIds,
     pendingRenameItemId,
-    fileListHasMore,
-    loadMoreKnowledgeItems,
     sorter,
     sortType,
     storeIsTransitioning,
@@ -74,8 +72,6 @@ const ListView = memo(function ListView() {
     s.selectedFileIds,
     s.setSelectedFileIds,
     s.pendingRenameItemId,
-    s.fileListHasMore,
-    s.loadMoreKnowledgeItems,
     s.sorter,
     s.sortType,
     s.isTransitioning,
@@ -118,7 +114,7 @@ const ListView = memo(function ListView() {
   );
 
   const { isLoading, isValidating } = useFetchResources(queryParams);
-  const { queryParams: currentQueryParams } = useFileStore();
+  const { queryParams: currentQueryParams, hasMore, loadMoreResources } = useFileStore();
 
   const isNavigating = useMemo(() => {
     if (!currentQueryParams || !queryParams) return false;
@@ -239,17 +235,17 @@ const ListView = memo(function ListView() {
 
   // Handle automatic load more when reaching the end
   const handleEndReached = useCallback(async () => {
-    log('handleEndReached', fileListHasMore, isLoadingMore);
+    log('handleEndReached', hasMore, isLoadingMore);
 
-    if (!fileListHasMore || isLoadingMore) return;
+    if (!hasMore || isLoadingMore) return;
 
     setIsLoadingMore(true);
     try {
-      await loadMoreKnowledgeItems();
+      await loadMoreResources();
     } finally {
       setIsLoadingMore(false);
     }
-  }, [fileListHasMore, loadMoreKnowledgeItems, isLoadingMore]);
+  }, [hasMore, loadMoreResources, isLoadingMore]);
 
   // Clear auto-scroll timers
   const clearScrollTimers = useCallback(() => {
@@ -330,15 +326,15 @@ const ListView = memo(function ListView() {
 
   // Memoize footer component to show skeleton loaders when loading more
   const Footer = useCallback(() => {
-    if (isLoadingMore && fileListHasMore) return <ListViewSkeleton columnWidths={columnWidths} />;
+    if (isLoadingMore && hasMore) return <ListViewSkeleton columnWidths={columnWidths} />;
 
     // Leave some padding at the end when there are no more pages,
     // so users can clearly feel they've reached the end of the list.
-    if (fileListHasMore === false && dataLength > 0)
+    if (hasMore === false && dataLength > 0)
       return <div aria-hidden style={{ height: 96 }} />;
 
     return null;
-  }, [columnWidths, dataLength, fileListHasMore, isLoadingMore]);
+  }, [columnWidths, dataLength, hasMore, isLoadingMore]);
 
   if (showSkeleton) return <ListViewSkeleton columnWidths={columnWidths} />;
 
