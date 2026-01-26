@@ -32,10 +32,6 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   const showServerVersion = serverVersion && serverVersion !== CURRENT_VERSION;
   const isDesktop = useMemo(() => !!getElectronIpc(), []);
 
-  const handleCheckForUpdates = () => {
-    autoUpdateService.checkUpdate();
-  };
-
   return (
     <Flexbox
       align={mobile ? 'stretch' : 'center'}
@@ -77,7 +73,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
           <Button block={mobile}>{t('changelog')}</Button>
         </a>
         {isDesktop && !hasNewVersion && (
-          <Button block={mobile} onClick={handleCheckForUpdates}>
+          <Button block={mobile} onClick={() => void autoUpdateService.checkUpdate()}>
             {t('checkForUpdates')}
           </Button>
         )}
