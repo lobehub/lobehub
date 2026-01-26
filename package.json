@@ -207,7 +207,7 @@
     "@lobehub/icons": "^4.0.3",
     "@lobehub/market-sdk": "0.29.1",
     "@lobehub/tts": "^4.0.2",
-    "@lobehub/ui": "^4.32.0",
+    "@lobehub/ui": "^4.32.1",
     "@modelcontextprotocol/sdk": "^1.25.3",
     "@napi-rs/canvas": "^0.1.88",
     "@neondatabase/serverless": "^1.0.2",

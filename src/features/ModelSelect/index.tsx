@@ -22,20 +22,8 @@ interface ModelOption {
   abilities?: ModelAbilities;
   displayName?: string;
   id: string;
-  kind?: 'model';
   label: ReactNode;
   provider: string;
-  value: string;
-}
-
-interface ProviderHeaderOption {
-  disabled: true;
-  kind: 'provider';
-  label: ReactNode;
-  logo?: string;
-  name: string;
-  provider: string;
-  source?: EnabledProviderWithModels['source'];
   value: string;
 }
 
@@ -66,8 +54,6 @@ const ModelSelect = memo<ModelSelectProps>(
     const { styles } = useStyles({ popupWidth });
     const enabledList = useEnabledChatModels();
 
-    const selectValue = value?.provider && value?.model ? `${value.provider}/${value.model}` : undefined;
-
     const options = useMemo<LobeSelectProps['options']>(() => {
       const getChatModels = (provider: EnabledProviderWithModels) => {
         const models =
@@ -79,7 +65,6 @@ const ModelSelect = memo<ModelSelectProps>(
 
         return models.map((model) => ({
           ...model,
-          kind: 'model' as const,
           label: <ModelItemRender {...model} {...model.abilities} showInfoTag={false} />,
           provider: provider.id,
           value: `${provider.id}/${model.id}`,
@@ -92,67 +77,44 @@ const ModelSelect = memo<ModelSelectProps>(
         return getChatModels(provider);
       }
 
-      // NOTE: Flatten group options to avoid OptGroup scroll-jumping under virtual list.
-      const flat: Array<ModelOption | ProviderHeaderOption> = [];
+      return enabledList
+        .map((provider) => {
+          const opts = getChatModels(provider);
+          if (opts.length === 0) return undefined;
 
-      for (const provider of enabledList) {
-        const opts = getChatModels(provider) as unknown as ModelOption[];
-        if (opts.length === 0) continue;
-
-        flat.push({
-          disabled: true,
-          kind: 'provider',
-          label: (
-            <ProviderItemRender
-              logo={provider.logo}
-              name={provider.name}
-              provider={provider.id}
-              source={provider.source}
-            />
-          ),
-          logo: provider.logo,
-          name: provider.name,
-          provider: provider.id,
-          source: provider.source,
-          value: `__provider__/${provider.id}`,
-        }, ...opts);
-      }
-
-      return flat as unknown as LobeSelectProps['options'];
+          return {
+            label: (
+              <ProviderItemRender
+                logo={provider.logo}
+                name={provider.name}
+                provider={provider.id}
+                source={provider.source}
+              />
+            ),
+            options: opts,
+          };
+        })
+        .filter(Boolean) as LobeSelectProps['options'];
     }, [enabledList, requiredAbilities, showAbility]);
 
     return (
       <TooltipGroup>
         <LobeSelect
-          defaultValue={selectValue}
+          defaultValue={`${value?.provider}/${value?.model}`}
           loading={loading}
           onChange={(value, option) => {
             if (!value) return;
-            if (typeof value === 'string' && value.startsWith('__provider__/')) return;
             const model = (value as string).split('/').slice(1).join('/');
             onChange?.({ model, provider: (option as unknown as ModelOption).provider });
           }}
           optionRender={(option) => {
-            const data = option as unknown as ModelOption | ProviderHeaderOption;
-            if (data.kind === 'provider') {
-              return (
-                <div style={{ opacity: 0.75, paddingInline: 4 }}>
-                  <ProviderItemRender
-                    logo={data.logo}
-                    name={data.name}
-                    provider={data.provider}
-                    source={data.source}
-                  />
-                </div>
-              );
-            }
-
+            const data = option as unknown as ModelOption;
             return (
               <ModelItemRender
-                displayName={(data as ModelOption).displayName}
-                id={(data as ModelOption).id}
+                displayName={data.displayName}
+                id={data.id}
                 showInfoTag
-                {...(data as ModelOption).abilities}
+                {...data.abilities}
               />
             );
           }}
@@ -166,7 +128,7 @@ const ModelSelect = memo<ModelSelectProps>(
             width: initialWidth ? 'initial' : undefined,
             ...style,
           }}
-          value={selectValue}
+          value={`${value?.provider}/${value?.model}`}
           variant={variant}
           virtual
         />
