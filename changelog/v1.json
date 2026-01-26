@@ -1,5 +1,20 @@
 [
   {
+    "children": {
+      "fixes": ["Group builder not set true edit data."]
+    },
+    "date": "2026-01-26",
+    "version": "2.0.0-next.384"
+  },
+  {
+    "children": {
+      "features": ["Add the fork tag show in community detail page."],
+      "fixes": ["Slove the agentbuilder install market tools not work."]
+    },
+    "date": "2026-01-26",
+    "version": "2.0.0-next.383"
+  },
+  {
     "children": {},
     "date": "2026-01-26",
     "version": "2.0.0-next.382"

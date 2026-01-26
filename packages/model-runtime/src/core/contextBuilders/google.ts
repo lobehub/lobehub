@@ -248,6 +248,16 @@ const sanitizeSchemaForGoogle = (schema: Record<string, any>): Record<string, an
       continue;
     }
 
+    // Filter null values from enum arrays (Google doesn't support null in enum)
+    if (key === 'enum' && Array.isArray(value)) {
+      const filteredEnum = value.filter((item) => item !== null);
+      // Only set enum if there are remaining values after filtering
+      if (filteredEnum.length > 0) {
+        result[key] = filteredEnum;
+      }
+      continue;
+    }
+
     // Recursively process nested objects
     if (value && typeof value === 'object') {
       result[key] = sanitizeSchemaForGoogle(value);

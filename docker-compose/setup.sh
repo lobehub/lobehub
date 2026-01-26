@@ -183,20 +183,50 @@ show_message() {
         tips_already_installed)
             case $LANGUAGE in
                 zh_CN)
-                    echo "检测到您已经运行过 LobeChat Database，本安装程序只能完成初始化配置，并不能重复安装。如果你需要重新安装，请删除 data 和 s3_data 文件夹。"
+                    echo "检测到您已经运行过 LobeHub，本安装程序只能完成初始化配置，并不能重复安装。如果你需要重新安装，请删除 data 和 s3_data 文件夹。"
                 ;;
                 *)
-                    echo "It is detected that you have run LobeChat Database. This installation program can only complete the initialization configuration and cannot be reinstalled. If you need to reinstall, please delete the data and s3_data folders."
+                    echo "It is detected that you have run LobeHub. This installation program can only complete the initialization configuration and cannot be reinstalled. If you need to reinstall, please delete the data and s3_data folders."
                 ;;
             esac
         ;;
         tips_run_command)
             case $LANGUAGE in
                 zh_CN)
-                    echo "您已经完成了所有配置。请运行以下命令启动LobeChat："
+                    echo "您已经完成了所有配置。请运行以下命令启动 LobeHub 尝试启动："
                 ;;
                 *)
-                    echo "You have completed all configurations. Please run this command to start LobeChat:"
+                    echo "You have completed all configurations. Please run this command to start LobeHub:"
+                ;;
+            esac
+        ;;
+        tips_if_want_searxng_logs)
+            case $LANGUAGE in
+                zh_CN)
+                    echo "在上述命令中已屏蔽 SearXNG 的日志。如果你想查看 SearXNG 的日志，可以去除选项： --no-attach searxng 或运行以下命令："
+                ;;
+                *)
+                    echo "In the above command, the logs of SearXNG are blocked by default. If you want to view the logs of SearXNG, you can remove the option: --no-attach searxng or run the following command:"
+                ;;
+            esac
+        ;;
+        tips_if_run_normally)
+            case $LANGUAGE in
+                zh_CN)
+                    echo "如果一切运行正常，你可以使用以下指令在 daemon 模式下启动 LobeHub:"
+                ;;
+                *)
+                    echo "If everything runs normally, you can use the following command to start LobeHub in daemon mode:"
+                ;;
+            esac
+        ;;
+        tips_regen_jwks)
+            case $LANGUAGE in
+                zh_CN)
+                    echo "在完成部署测试后，请前往 https://lobehub.com/zh/docs/self-hosting/environment-variables/auth#jwks_key 生成新的 JWKS_KEY 并替换 .env 中的值，以确保安全性。"
+                ;;
+                *)
+                    echo "After completing the deployment test, please go to https://lobehub.com/docs/self-hosting/environment-variables/auth#jwks_key to generate a new JWKS_KEY and replace the value in .env to ensure security."
                 ;;
             esac
         ;;
@@ -308,7 +338,7 @@ show_message() {
             case $LANGUAGE in
                 zh_CN)
                     echo "请选择部署模式："
-                    echo "(0) 域名模式（访问时无需指明端口），需要使用反向代理服务 LobeChat, MinIO, Casdoor ，并分别分配一个域名；"
+                    echo "(0) 域名模式（访问时无需指明端口），需要使用反向代理服务 LobeHub, RustFS, Casdoor ，并分别分配一个域名；"
                     echo "(1) 端口模式（访问时需要指明端口，如使用IP访问，或域名+端口访问），需要放开指定端口；"
                     echo "(2) 本地模式（仅供本地测试使用）"
                     echo "如果你对这些内容疑惑，可以先选择使用本地模式进行部署，稍后根据文档指引再进行修改。"
@@ -316,7 +346,7 @@ show_message() {
                 ;;
                 *)
                     echo "Please select the deployment mode:"
-                    echo "(0) Domain mode (no need to specify the port when accessing), you need to use the reverse proxy service LobeChat, MinIO, Casdoor, and assign a domain name respectively;"
+                    echo "(0) Domain mode (no need to specify the port when accessing), you need to use the reverse proxy service LobeHub, RustFS, Casdoor, and assign a domain name respectively;"
                     echo "(1) Port mode (need to specify the port when accessing, such as using IP access, or domain name + port access), you need to open the specified port;"
                     echo "(2) Local mode (for local testing only)"
                     echo "If you are confused about these contents, you can choose to deploy in local mode first, and then modify according to the document guide later."
@@ -369,7 +399,7 @@ show_message() {
 
 # Function to download files
 download_file() {
-    wget --show-progress "$1" -O "$2"
+    wget "$1" -O "$2"
     # If run failed, exit
     if [ $? -ne 0 ]; then
         show_message "tips_download_failed" "$2"
@@ -444,6 +474,7 @@ FILES=(
     "$SUB_DIR/docker-compose.yml"
     "$SUB_DIR/init_data.json"
     "$SUB_DIR/searxng-settings.yml"
+    "$SUB_DIR/bucket.config.json"
 )
 ENV_EXAMPLES=(
     "$SUB_DIR/.env.zh-CN.example"
@@ -452,9 +483,9 @@ ENV_EXAMPLES=(
 # Default values
 CASDOOR_PASSWORD="pswd123"
 CASDOOR_SECRET="CASDOOR_SECRET"
-MINIO_ROOT_PASSWORD="YOUR_MINIO_PASSWORD"
+RUSTFS_SECRET_KEY="YOUR_RUSTFS_PASSWORD"
 CASDOOR_HOST="localhost:8000"
-MINIO_HOST="localhost:9000"
+RUSTFS_HOST="localhost:9000"
 PROTOCOL="http"
 
 # If no language is specified, ask the user to choose
@@ -485,7 +516,7 @@ section_download_files(){
     download_file "$SOURCE_URL/${FILES[0]}" "docker-compose.yml"
     download_file "$SOURCE_URL/${FILES[1]}" "init_data.json"
     download_file "$SOURCE_URL/${FILES[2]}" "searxng-settings.yml"
-    
+    download_file "$SOURCE_URL/${FILES[3]}" "bucket.config.json"
     # Download .env.example with the specified language
     if [ "$LANGUAGE" = "zh_CN" ]; then
         download_file "$SOURCE_URL/${ENV_EXAMPLES[0]}" ".env"
@@ -542,13 +573,13 @@ section_configurate_host() {
     case $DEPLOY_MODE in
         0)
             DEPLOY_MODE="domain"
-            echo "LobeChat" $(show_message "ask_domain" "example.com")
+            echo "LobeHub" $(show_message "ask_domain" "example.com")
             ask "(example.com)"
             LOBE_HOST="$ask_result"
-            # If user use domain mode, ask for the domain of Minio and Casdoor
-            echo "Minio S3 API" $(show_message "ask_domain" "minio.example.com")
-            ask "(minio.example.com)"
-            MINIO_HOST="$ask_result"
+            # If user use domain mode, ask for the domain of RustFS and Casdoor
+            echo "RustFS S3 API" $(show_message "ask_domain" "s3.example.com")
+            ask "(s3.example.com)"
+            RUSTFS_HOST="$ask_result"
             echo "Casdoor API" $(show_message "ask_domain" "auth.example.com")
             ask "(auth.example.com)"
             CASDOOR_HOST="$ask_result"
@@ -557,13 +588,13 @@ section_configurate_host() {
         ;;
         1)
             DEPLOY_MODE="ip"
-            ask $(printf "%s%s" "LobeChat" $(show_message "ask_host")) "$HOST" $(printf "%s" $(show_message "tips_auto_detected"))
+            ask $(printf "%s%s" "LobeHub" $(show_message "ask_host")) "$HOST" $(printf "%s" $(show_message "tips_auto_detected"))
             LOBE_HOST="$ask_result"
             # If user use ip mode, use ask_result as the host
             HOST="$ask_result"
             # If user use ip mode, append the port to the host
             LOBE_HOST="${HOST}:3210"
-            MINIO_HOST="${HOST}:9000"
+            RUSTFS_HOST="${HOST}:9000"
             CASDOOR_HOST="${HOST}:8000"
             # Setup callback url for Casdoor
             sed "${SED_INPLACE_ARGS[@]}" "s/"localhost:3210"/${LOBE_HOST}/" init_data.json
@@ -577,12 +608,11 @@ section_configurate_host() {
     # lobe host
     sed "${SED_INPLACE_ARGS[@]}" "s#^APP_URL=.*#APP_URL=$PROTOCOL://$LOBE_HOST#" .env
     # auth related
-    sed "${SED_INPLACE_ARGS[@]}" "s#^AUTH_URL=.*#AUTH_URL=$PROTOCOL://$LOBE_HOST/api/auth#" .env
     sed "${SED_INPLACE_ARGS[@]}" "s#^AUTH_CASDOOR_ISSUER=.*#AUTH_CASDOOR_ISSUER=$PROTOCOL://$CASDOOR_HOST#" .env
     sed "${SED_INPLACE_ARGS[@]}" "s#^origin=.*#origin=$PROTOCOL://$CASDOOR_HOST#" .env
     # s3 related
-    sed "${SED_INPLACE_ARGS[@]}" "s#^S3_PUBLIC_DOMAIN=.*#S3_PUBLIC_DOMAIN=$PROTOCOL://$MINIO_HOST#" .env
-    sed "${SED_INPLACE_ARGS[@]}" "s#^S3_ENDPOINT=.*#S3_ENDPOINT=$PROTOCOL://$MINIO_HOST#" .env
+    sed "${SED_INPLACE_ARGS[@]}" "s#^S3_PUBLIC_DOMAIN=.*#S3_PUBLIC_DOMAIN=$PROTOCOL://$RUSTFS_HOST#" .env
+    sed "${SED_INPLACE_ARGS[@]}" "s#^S3_ENDPOINT=.*#S3_ENDPOINT=$PROTOCOL://$RUSTFS_HOST#" .env
     
 
     # Check if env modified success
@@ -665,16 +695,16 @@ section_regenerate_secrets() {
             echo $(show_message "security_secrect_regenerate_failed") "CASDOOR_PASSWORD in \`init_data.json\`"
         fi
     fi
-    # Generate Minio S3 User Password
-    MINIO_ROOT_PASSWORD=$(generate_key 8)
+    # Generate RUSTFS S3 User Password
+    RUSTFS_SECRET_KEY=$(generate_key 8)
     if [ $? -ne 0 ]; then
-        echo $(show_message "security_secrect_regenerate_failed") "MINIO_ROOT_PASSWORD"
-        MINIO_ROOT_PASSWORD="YOUR_MINIO_PASSWORD"
+        echo $(show_message "security_secrect_regenerate_failed") "RUSTFS_SECRET_KEY"
+        RUSTFS_SECRET_KEY="YOUR_RUSTFS_PASSWORD"
     else
         # Search and replace the value of S3_SECRET_ACCESS_KEY in .env
-        sed "${SED_INPLACE_ARGS[@]}" "s#^MINIO_ROOT_PASSWORD=.*#MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD}#" .env
+        sed "${SED_INPLACE_ARGS[@]}" "s#^RUSTFS_SECRET_KEY=.*#RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}#" .env
         if [ $? -ne 0 ]; then
-            echo $(show_message "security_secrect_regenerate_failed") "MINIO_ROOT_PASSWORD in \`.env\`"
+            echo $(show_message "security_secrect_regenerate_failed") "RUSTFS_SECRET_KEY in \`.env\`"
         fi
     fi
 }
@@ -730,22 +760,27 @@ section_display_configurated_report() {
     # Display configuration reports
     echo $(show_message "security_secrect_regenerate_report")
     
-    echo -e "LobeChat: \n  - URL: $PROTOCOL://$LOBE_HOST \n  - Username: user \n  - Password: ${CASDOOR_PASSWORD} "
+    echo -e "LobeHub: \n  - URL: $PROTOCOL://$LOBE_HOST \n  - Username: user \n  - Password: ${CASDOOR_PASSWORD} "
     echo -e "Casdoor: \n  - URL: $PROTOCOL://$CASDOOR_HOST \n  - Username: admin \n  - Password: ${CASDOOR_PASSWORD}\n"
-    echo -e "Minio: \n  - URL: $PROTOCOL://$MINIO_HOST \n  - Username: admin\n  - Password: ${MINIO_ROOT_PASSWORD}\n"
+    echo -e "RustFS: \n  - URL: $PROTOCOL://$RUSTFS_HOST \n  - Username: admin\n  - Password: ${RUSTFS_SECRET_KEY}\n"
     
     # if user run in domain mode, diplay reverse proxy configuration
     if [[ "$DEPLOY_MODE" == "domain" ]]; then
         echo $(show_message "tips_add_reverse_proxy")
         printf "\n%s\t->\t%s\n" "$LOBE_HOST" "127.0.0.1:3210"
         printf "%s\t->\t%s\n" "$CASDOOR_HOST" "127.0.0.1:8000"
-        printf "%s\t->\t%s\n" "$MINIO_HOST" "127.0.0.1:9000"
+        printf "%s\t->\t%s\n" "$RUSTFS_HOST" "127.0.0.1:9000"
     fi
 
     # Display final message
 
     printf "\n%s\n\n" "$(show_message "tips_run_command")"
-    print_centered "docker compose up -d" "green"
+    print_centered "docker compose up --no-attach searxng" "green"
+    printf "\n%s\n" "$(show_message "tips_if_run_normally")"
+    printf "\n%s\n\n" "$(show_message "tips_regen_jwks")"
+    print_centered "docker compose up -d --no-attach searxng" "green"
+    printf "\n%s\n" "$(show_message "tips_if_want_searxng_logs")"
+    print_centered "docker compose logs -f searxng" "white"
     printf "\n%s\n" "$(show_message "tips_allow_ports")"
     printf "\n%s" "$(show_message "tips_show_documentation")"
     printf "%s\n" $(show_message "tips_show_documentation_url")

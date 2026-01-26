@@ -122,11 +122,23 @@ export const checkAuth =
       handler(clonedReq, { ...options, jwtPayload, serverDB, userId }),
     );
 
-    const headers = new Headers(res.headers);
-    const traceparent = injectActiveTraceHeaders(headers);
-    if (!traceparent) {
+    // Only inject trace headers when the handler returns a Response
+    // NOTICE: this is related to src/app/(backend)/webapi/chat/[provider]/route.test.ts
+    if (!(res instanceof Response)) {
+      console.warn('Response is not an instance of Response, skipping trace header injection. Possibly bug or mocked response in tests, please check and make sure this is intended behavior.');
       return res;
     }
 
-    return new Response(res.body, { ...res, headers });
+    try {
+      const headers = new Headers(res.headers);
+      const traceparent = injectActiveTraceHeaders(headers);
+      if (!traceparent) {
+        return res;
+      }
+
+      return new Response(res.body, { ...res, headers });
+    } catch(err) {
+      console.error('Failed to inject trace headers:', err);
+      return res;
+    }
   };
