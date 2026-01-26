@@ -120,7 +120,7 @@
   "checking": "Checking...",
   "checkingPermissions": "Checking permissions...",
   "danger.clear.action": "Clear Now",
-  "danger.clear.confirm": "Clear all chat data? This can’t be undone.",
+  "danger.clear.confirm": "Clear all chat data? This can't be undone.",
   "danger.clear.desc": "Delete all data, including agents, files, messages, and skills. Your account will NOT be deleted.",
   "danger.clear.success": "All session messages have been cleared",
   "danger.clear.title": "Wipe Data",

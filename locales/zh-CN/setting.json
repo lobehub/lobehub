@@ -120,7 +120,7 @@
   "checking": "检查中…",
   "checkingPermissions": "检查权限中…",
   "danger.clear.action": "立即清除",
-  "danger.clear.confirm": "确认清除所有聊天数据吗？此操作不可撤销",
+  "danger.clear.confirm": "确定要清除所有聊天数据吗？此操作无法撤销。",
   "danger.clear.desc": "删除所有数据，包括智能体、文件、消息和技能。您的账户不会被删除。",
   "danger.clear.success": "已清除所有会话消息",
   "danger.clear.title": "清除数据",
