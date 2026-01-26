@@ -5,12 +5,14 @@ import {
 } from '@lobechat/model-runtime';
 import { ChatErrorType, type ClientSecretPayload } from '@lobechat/types';
 import { getXorPayload } from '@lobechat/utils/server';
+import { context as otContext } from '@lobechat/observability-otel/api';
 
 import { auth } from '@/auth';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { type LobeChatDatabase } from '@/database/type';
 import { LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER, OAUTH_AUTHORIZED } from '@/envs/auth';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
+import { extractTraceContext, injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { createErrorResponse } from '@/utils/errorResponse';
 
 import { checkAuthMethod } from './utils';
@@ -114,5 +116,17 @@ export const checkAuth =
 
     const userId = jwtPayload.userId || '';
 
-    return handler(clonedReq, { ...options, jwtPayload, serverDB, userId });
+    const extractedContext = extractTraceContext(req.headers);
+
+    const res = await otContext.with(extractedContext, () =>
+      handler(clonedReq, { ...options, jwtPayload, serverDB, userId }),
+    );
+
+    const headers = new Headers(res.headers);
+    const traceparent = injectActiveTraceHeaders(headers);
+    if (!traceparent) {
+      return res;
+    }
+
+    return new Response(res.body, { ...res, headers });
   };
