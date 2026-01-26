@@ -30,7 +30,8 @@ const lazyFileLoaders: Record<SupportedFileType, LazyLoaderFactory> = {
         globalThis.DOMPoint = canvas.DOMPoint;
         globalThis.DOMRect = canvas.DOMRect;
         globalThis.Path2D = canvas.Path2D;
-      } catch {
+      } catch (e) {
+        console.error('Error importing @napi-rs/canvas:', e);
         // @napi-rs/canvas not available, pdfjs-dist may fail if DOMMatrix is needed
       }
     }

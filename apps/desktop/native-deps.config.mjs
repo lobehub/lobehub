@@ -113,6 +113,19 @@ export function getFilesPatterns() {
 }
 
 /**
+ * Generate files config objects for electron-builder to explicitly copy native modules.
+ * This uses object form to ensure scoped packages with pnpm symlinks are properly copied.
+ * @returns {Array<{from: string, to: string, filter: string[]}>}
+ */
+export function getNativeModulesFilesConfig() {
+  return getAllDependencies().map((dep) => ({
+    filter: ['**/*'],
+    from: `node_modules/${dep}`,
+    to: `node_modules/${dep}`,
+  }));
+}
+
+/**
  * Generate glob patterns for electron-builder asarUnpack config
  * @returns {string[]} Array of glob patterns
  */
@@ -126,6 +139,47 @@ export function getAsarUnpackPatterns() {
  */
 export function getExternalDependencies() {
   return getAllDependencies();
+}
+
+/**
+ * Copy native modules to source node_modules, resolving pnpm symlinks.
+ * This is used in beforePack hook to ensure native modules are properly
+ * included in the asar archive (electron-builder glob doesn't follow symlinks).
+ */
+export async function copyNativeModulesToSource() {
+  const fsPromises = await import('node:fs/promises');
+  const deps = getAllDependencies();
+  const sourceNodeModules = path.join(__dirname, 'node_modules');
+
+  console.log(`📦 Resolving ${deps.length} native module symlinks for packaging...`);
+
+  for (const dep of deps) {
+    const modulePath = path.join(sourceNodeModules, dep);
+
+    try {
+      const stat = await fsPromises.lstat(modulePath);
+
+      if (stat.isSymbolicLink()) {
+        // Resolve the symlink to get the real path
+        const realPath = await fsPromises.realpath(modulePath);
+        console.log(`  📎 ${dep} (resolving symlink)`);
+
+        // Remove the symlink
+        await fsPromises.rm(modulePath, { force: true, recursive: true });
+
+        // Create parent directory if needed (for scoped packages like @napi-rs)
+        await fsPromises.mkdir(path.dirname(modulePath), { recursive: true });
+
+        // Copy the actual directory content in place of the symlink
+        await copyDir(realPath, modulePath);
+      }
+    } catch (err) {
+      // Module might not exist (optional dependency for different platform)
+      console.log(`  ⏭️  ${dep} (skipped: ${err.code || err.message})`);
+    }
+  }
+
+  console.log(`✅ Native module symlinks resolved`);
 }
 
 /**
