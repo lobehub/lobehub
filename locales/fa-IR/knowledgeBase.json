@@ -1,5 +1,5 @@
 {
-  "addToKnowledgeBase.addSuccess": "فایل با موفقیت اضافه شد، <1>اکنون مشاهده کنید</1>",
+  "addToKnowledgeBase.addSuccess": "فایل با موفقیت اضافه شد",
   "addToKnowledgeBase.confirm": "افزودن",
   "addToKnowledgeBase.error": "افزودن فایل به کتابخانه با شکست مواجه شد",
   "addToKnowledgeBase.id.placeholder": "لطفاً یک کتابخانه برای افزودن انتخاب کنید",

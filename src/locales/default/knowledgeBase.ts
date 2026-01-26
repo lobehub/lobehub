@@ -1,5 +1,5 @@
 export default {
-  'addToKnowledgeBase.addSuccess': 'File added successfully, <1>view now</1>',
+  'addToKnowledgeBase.addSuccess': 'File added successfully',
   'addToKnowledgeBase.confirm': 'Add',
   'addToKnowledgeBase.error': 'Failed to add file to Library',
   'addToKnowledgeBase.id.placeholder': 'Please select a library to add to',

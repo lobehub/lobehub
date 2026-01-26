@@ -1,5 +1,5 @@
 {
-  "addToKnowledgeBase.addSuccess": "Bestand succesvol toegevoegd, <1>nu bekijken</1>",
+  "addToKnowledgeBase.addSuccess": "Bestand succesvol toegevoegd",
   "addToKnowledgeBase.confirm": "Toevoegen",
   "addToKnowledgeBase.error": "Toevoegen van bestand aan bibliotheek mislukt",
   "addToKnowledgeBase.id.placeholder": "Selecteer een bibliotheek om toe te voegen",
