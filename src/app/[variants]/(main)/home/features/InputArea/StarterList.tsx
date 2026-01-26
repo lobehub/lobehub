@@ -76,12 +76,12 @@ const StarterList = memo(() => {
         key: 'image',
         titleKey: 'starter.image',
       },
-      {
-        disabled: true,
-        icon: MicroscopeIcon,
-        key: 'research',
-        titleKey: 'starter.deepResearch',
-      },
+      // {
+      //   disabled: true,
+      //   icon: MicroscopeIcon,
+      //   key: 'research',
+      //   titleKey: 'starter.deepResearch',
+      // },
     ],
     [],
   );
