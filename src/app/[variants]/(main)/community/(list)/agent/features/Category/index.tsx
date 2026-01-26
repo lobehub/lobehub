@@ -17,7 +17,7 @@ import { useCategory } from './useCategory';
 const Category = memo(() => {
   const useAssistantCategories = useDiscoverStore((s) => s.useAssistantCategories);
   const {
-    category = 'all',
+    category = AssistantCategory.Discover,
     q,
     source,
   } = useQuery() as { category?: AssistantCategory; q?: string; source?: string };
@@ -29,7 +29,7 @@ const Category = memo(() => {
     qs.stringifyUrl(
       {
         query: {
-          category: [AssistantCategory.All, AssistantCategory.Discover].includes(key) ? null : key,
+          category: key === AssistantCategory.Discover ? null : key,
           q,
           sort: key === AssistantCategory.Discover ? AssistantSorts.Recommended : null,
         },
