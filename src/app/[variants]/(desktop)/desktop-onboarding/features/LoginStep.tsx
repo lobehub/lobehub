@@ -460,7 +460,7 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
             e.preventDefault();
             const { electronSystemService } = await import('@/services/electron/system');
             const input = e.target as HTMLInputElement;
-            const selectionText = input.value.substring(
+            const selectionText = input.value.slice(
               input.selectionStart || 0,
               input.selectionEnd || 0,
             );
