@@ -61,7 +61,6 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     knowledgeCount,
     userName,
     forkCount,
-    forkedFromAgentId,
   } = useDetailContext();
   const { mobile = isMobile } = useResponsive();
   const { isAuthenticated, signIn, session } = useMarketAuth();
