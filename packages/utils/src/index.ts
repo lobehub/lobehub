@@ -3,6 +3,7 @@ export * from './chunkers'
 export * from './client/cookie';
 export * from './detectChinese';
 export * from './env';
+export * from './error';
 export * from './folderStructure';
 export * from './format';
 export * from './imageToBase64';
