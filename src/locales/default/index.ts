@@ -1,5 +1,3 @@
-import { businessLocales } from '@/business/locales/index';
-
 import agentGroup from './agentGroup';
 import auth from './auth';
 import authError from './authError';
@@ -82,8 +80,6 @@ const resources = {
   topic,
   ui,
   welcome,
-
-  ...businessLocales,
 } as const;
 
 export default resources;
