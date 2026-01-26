@@ -69,12 +69,14 @@ const SearchResults = memo<SearchResultsProps>(
         }
         case 'file': {
           // Navigate to resource library with file parameter
-          if (result.knowledgeBaseId) {
-            navigate(`/resource/library/${result.knowledgeBaseId}?file=${result.id}`);
-          } else {
-            // Fallback to library root if no knowledge base
-            navigate(`/resource/library?file=${result.id}`);
-          }
+          const fileUrl = result.knowledgeBaseId
+            ? `/resource/library/${result.knowledgeBaseId}?file=${result.id}`
+            : `/resource?file=${result.id}`;
+          console.log('[SearchResults] File navigation:', {
+            url: fileUrl,
+            fileDetails: result,
+          });
+          navigate(fileUrl);
           break;
         }
         case 'folder': {
