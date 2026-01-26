@@ -272,6 +272,7 @@ export const aiAgentRouter = router({
         const userMessage = await ctx.messageModel.create({
           agentId,
           content: instruction,
+          groupId,
           parentId: parentMessageId,
           role: 'user',
           threadId: thread.id,
@@ -283,17 +284,10 @@ export const aiAgentRouter = router({
         // 3. Query thread messages and main chat messages in parallel
         const [threadMessages, messages] = await Promise.all([
           // Thread messages (messages within this thread)
-          ctx.messageModel.query({
-            agentId,
-            threadId: thread.id,
-            topicId,
-          }),
+          ctx.messageModel.query({ agentId, threadId: thread.id, topicId }),
           // Main chat messages (messages without threadId, includes updated taskDetail)
-          ctx.messageModel.query({
-            agentId,
-            topicId,
-            // No threadId - matchThread will filter for threadId IS NULL (main chat)
-          }),
+          // Pass both agentId and groupId - query() prioritizes groupId when present
+          ctx.messageModel.query({ agentId, groupId, topicId }),
         ]);
 
         log(
