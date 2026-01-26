@@ -42,7 +42,7 @@ describe('KnowledgeRepo', () => {
           userId,
           title: 'My Note',
           fileType: 'custom/note',
-          sourceType: 'note',
+          sourceType: 'file',
           source: 'internal://note/doc-1',
           totalCharCount: 500,
           totalLineCount: 10,
@@ -54,7 +54,7 @@ describe('KnowledgeRepo', () => {
           userId,
           title: 'Search Note',
           fileType: 'custom/note',
-          sourceType: 'note',
+          sourceType: 'file',
           source: 'internal://note/doc-2',
           totalCharCount: 300,
           totalLineCount: 5,
@@ -66,7 +66,7 @@ describe('KnowledgeRepo', () => {
           userId,
           title: 'KB Note',
           fileType: 'custom/note',
-          sourceType: 'note',
+          sourceType: 'file',
           source: 'internal://note/doc-in-kb',
           knowledgeBaseId: 'kb-1',
           totalCharCount: 200,
@@ -79,7 +79,7 @@ describe('KnowledgeRepo', () => {
           userId,
           title: 'Folder',
           fileType: 'custom/folder',
-          sourceType: 'folder',
+          sourceType: 'file',
           source: 'internal://folder/doc-folder',
           slug: 'my-folder',
           totalCharCount: 0,
@@ -92,7 +92,7 @@ describe('KnowledgeRepo', () => {
           userId: otherUserId,
           title: 'Other Note',
           fileType: 'custom/note',
-          sourceType: 'note',
+          sourceType: 'file',
           source: 'internal://note/other-doc',
           totalCharCount: 100,
           totalLineCount: 2,
@@ -108,7 +108,7 @@ describe('KnowledgeRepo', () => {
           userId,
           title: 'Child Note',
           fileType: 'custom/note',
-          sourceType: 'note',
+          sourceType: 'file',
           source: 'internal://note/doc-with-parent',
           parentId: 'doc-1',
           totalCharCount: 150,
@@ -292,17 +292,19 @@ describe('KnowledgeRepo', () => {
 
     it('should resolve slug to parentId', async () => {
       // First ensure we have a document with child
-      await serverDB.insert(documents).values({
-        id: 'child-of-folder',
-        userId,
-        title: 'Child of Folder',
-        fileType: 'custom/note',
-        sourceType: 'note',
-        source: 'internal://note/child-of-folder',
-        parentId: 'doc-folder',
-        totalCharCount: 100,
-        totalLineCount: 2,
-      });
+      await serverDB.insert(documents).values([
+        {
+          id: 'child-of-folder',
+          userId,
+          title: 'Child of Folder',
+          fileType: 'custom/note',
+          sourceType: 'file',
+          source: 'internal://note/child-of-folder',
+          parentId: 'doc-folder',
+          totalCharCount: 100,
+          totalLineCount: 2,
+        },
+      ]);
 
       const result = await knowledgeRepo.query({ parentId: 'my-folder' });
 
@@ -353,7 +355,7 @@ describe('KnowledgeRepo', () => {
           userId,
           title: 'Recent Note',
           fileType: 'custom/note',
-          sourceType: 'note',
+          sourceType: 'file',
           source: 'internal://note/recent-doc-1',
           totalCharCount: 100,
           totalLineCount: 2,
@@ -393,16 +395,18 @@ describe('KnowledgeRepo', () => {
         url: 'https://example.com/delete.txt',
       });
 
-      await serverDB.insert(documents).values({
-        id: 'delete-doc',
-        userId,
-        title: 'To Delete Note',
-        fileType: 'custom/note',
-        sourceType: 'note',
-        source: 'internal://note/delete-doc',
-        totalCharCount: 100,
-        totalLineCount: 2,
-      });
+      await serverDB.insert(documents).values([
+        {
+          id: 'delete-doc',
+          userId,
+          title: 'To Delete Note',
+          fileType: 'custom/note',
+          sourceType: 'file',
+          source: 'internal://note/delete-doc',
+          totalCharCount: 100,
+          totalLineCount: 2,
+        },
+      ]);
     });
 
     it('should delete file by id', async () => {
@@ -451,7 +455,7 @@ describe('KnowledgeRepo', () => {
           userId,
           title: 'Delete Note 1',
           fileType: 'custom/note',
-          sourceType: 'note',
+          sourceType: 'file',
           source: 'internal://note/delete-many-doc-1',
           totalCharCount: 100,
           totalLineCount: 2,
@@ -461,7 +465,7 @@ describe('KnowledgeRepo', () => {
           userId,
           title: 'Delete Note 2',
           fileType: 'custom/note',
-          sourceType: 'note',
+          sourceType: 'file',
           source: 'internal://note/delete-many-doc-2',
           totalCharCount: 100,
           totalLineCount: 2,
@@ -548,16 +552,18 @@ describe('KnowledgeRepo', () => {
         url: 'https://example.com/find.txt',
       });
 
-      await serverDB.insert(documents).values({
-        id: 'find-doc',
-        userId,
-        title: 'Find Me Note',
-        fileType: 'custom/note',
-        sourceType: 'note',
-        source: 'internal://note/find-doc',
-        totalCharCount: 100,
-        totalLineCount: 2,
-      });
+      await serverDB.insert(documents).values([
+        {
+          id: 'find-doc',
+          userId,
+          title: 'Find Me Note',
+          fileType: 'custom/note',
+          sourceType: 'file',
+          source: 'internal://note/find-doc',
+          totalCharCount: 100,
+          totalLineCount: 2,
+        },
+      ]);
     });
 
     it('should find file by id', async () => {
@@ -640,16 +646,18 @@ describe('KnowledgeRepo', () => {
         },
       ]);
 
-      await serverDB.insert(documents).values({
-        id: 'all-doc-1',
-        userId,
-        title: 'All Note',
-        fileType: 'custom/note',
-        sourceType: 'note',
-        source: 'internal://note/all-doc-1',
-        totalCharCount: 100,
-        totalLineCount: 2,
-      });
+      await serverDB.insert(documents).values([
+        {
+          id: 'all-doc-1',
+          userId,
+          title: 'All Note',
+          fileType: 'custom/note',
+          sourceType: 'file',
+          source: 'internal://note/all-doc-1',
+          totalCharCount: 100,
+          totalLineCount: 2,
+        },
+      ]);
     });
 
     it('should return all items when category is All', async () => {
