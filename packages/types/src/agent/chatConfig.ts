@@ -87,6 +87,13 @@ export interface LobeAgentChatConfig {
   searchFCModel?: WorkingModel;
   urlContext?: boolean;
   useModelBuiltinSearch?: boolean;
+
+  /**
+   * Maximum length for tool execution result content (in characters)
+   * This prevents context overflow when sending tool results back to LLM
+   * @default 6000
+   */
+  toolResultMaxLength?: number;
 }
 /* eslint-enable */
 
@@ -130,6 +137,7 @@ export const AgentChatConfigSchema = z.object({
   thinking: z.enum(['disabled', 'auto', 'enabled']).optional(),
   thinkingBudget: z.number().optional(),
   thinkingLevel: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
+  toolResultMaxLength: z.number().default(6000),
   urlContext: z.boolean().optional(),
   useModelBuiltinSearch: z.boolean().optional(),
 });

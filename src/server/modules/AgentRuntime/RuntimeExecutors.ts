@@ -471,11 +471,17 @@ export const createRuntimeExecutors = (
       const chatToolPayload: ChatToolPayload = payload.toolCalling;
 
       const toolName = `${chatToolPayload.identifier}/${chatToolPayload.apiName}`;
+
+      // Extract toolResultMaxLength from agent config
+      const agentConfig = state.metadata?.agentConfig;
+      const toolResultMaxLength = agentConfig?.chatConfig?.toolResultMaxLength;
+
       // Execute tool using ToolExecutionService
       log(`[${operationLogId}] Executing tool ${toolName} ...`);
       const executionResult = await toolExecutionService.executeTool(chatToolPayload, {
         serverDB: ctx.serverDB,
         toolManifestMap: state.toolManifestMap,
+        toolResultMaxLength,
         topicId: ctx.topicId,
         userId: ctx.userId,
       });
@@ -629,7 +635,9 @@ export const createRuntimeExecutors = (
     const events: AgentEvent[] = [];
 
     const operationLogId = `${operationId}:${stepIndex}`;
-    log(`[${operationLogId}][call_tools_batch] Starting batch execution for ${toolsCalling.length} tools`);
+    log(
+      `[${operationLogId}][call_tools_batch] Starting batch execution for ${toolsCalling.length} tools`,
+    );
 
     // Track all tool message IDs created during execution
     const toolMessageIds: string[] = [];
@@ -692,7 +700,10 @@ export const createRuntimeExecutors = (
             toolMessageIds.push(toolMessage.id);
             log(`[${operationLogId}] Created tool message ${toolMessage.id} for ${toolName}`);
           } catch (error) {
-            console.error(`[${operationLogId}] Failed to create tool message for ${toolName}:`, error);
+            console.error(
+              `[${operationLogId}] Failed to create tool message for ${toolName}:`,
+              error,
+            );
           }
 
           // Collect tool result
@@ -734,7 +745,9 @@ export const createRuntimeExecutors = (
       }),
     );
 
-    log(`[${operationLogId}][call_tools_batch] All tools executed, created ${toolMessageIds.length} tool messages`);
+    log(
+      `[${operationLogId}][call_tools_batch] All tools executed, created ${toolMessageIds.length} tool messages`,
+    );
 
     // Refresh messages from database to ensure state is in sync
     const newState = structuredClone(state);
@@ -753,7 +766,9 @@ export const createRuntimeExecutors = (
       tool_calls: msg.tool_calls,
     }));
 
-    log(`[${operationLogId}][call_tools_batch] Refreshed ${newState.messages.length} messages from database`);
+    log(
+      `[${operationLogId}][call_tools_batch] Refreshed ${newState.messages.length} messages from database`,
+    );
 
     // Get the last tool message ID as parentMessageId for next LLM call
     const lastToolMessageId = toolMessageIds.at(-1);
