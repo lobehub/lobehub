@@ -1,3 +1,4 @@
+import { CREDITS_PER_DOLLAR } from '@lobechat/const/currency';
 import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, Popover, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
@@ -7,6 +8,8 @@ import { memo, useMemo } from 'react';
 
 import NewModelBadge from '@/components/ModelSelect/NewModelBadge';
 import { useIsDark } from '@/hooks/useIsDark';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 const POPOVER_MAX_WIDTH = 320;
 
@@ -60,20 +63,33 @@ const ImageModelItem = memo<ImageModelItemProps>(
     ...model
   }) => {
     const isDarkMode = useIsDark();
+    const enableBusinessFeatures = useServerConfigStore(
+      serverConfigSelectors.enableBusinessFeatures,
+    );
 
     const priceLabel = useMemo(() => {
-      // Priority 1: Use exact price
-      if (typeof pricePerImage === 'number') {
-        return `${numeral(pricePerImage).format('$0,0.00[000]')} / image`;
-      }
-
-      // Priority 2: Use approximate price with prefix
-      if (typeof approximatePricePerImage === 'number') {
-        return `~ ${numeral(approximatePricePerImage).format('$0,0.00[000]')} / image`;
+      if (enableBusinessFeatures) {
+        // Show credits for business features
+        if (typeof pricePerImage === 'number') {
+          const credits = pricePerImage * CREDITS_PER_DOLLAR;
+          return `${numeral(credits).format('0,0')} credits / image`;
+        }
+        if (typeof approximatePricePerImage === 'number') {
+          const credits = approximatePricePerImage * CREDITS_PER_DOLLAR;
+          return `~ ${numeral(credits).format('0,0')} credits / image`;
+        }
+      } else {
+        // Show USD price for open source version
+        if (typeof pricePerImage === 'number') {
+          return `${numeral(pricePerImage).format('$0,0.00[000]')} / image`;
+        }
+        if (typeof approximatePricePerImage === 'number') {
+          return `~ ${numeral(approximatePricePerImage).format('$0,0.00[000]')} / image`;
+        }
       }
 
       return undefined;
-    }, [approximatePricePerImage, pricePerImage]);
+    }, [approximatePricePerImage, enableBusinessFeatures, pricePerImage]);
 
     const popoverContent = useMemo(() => {
       if (!description && !priceLabel) return null;

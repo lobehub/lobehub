@@ -101,6 +101,7 @@ export interface SystemStatus {
   hideGemini2_5FlashImagePreviewChineseWarning?: boolean;
   hidePWAInstaller?: boolean;
   hideThreadLimitAlert?: boolean;
+  hideTopicSharePrivacyWarning?: boolean;
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   /**
@@ -212,6 +213,7 @@ export const INITIAL_STATUS = {
   hideGemini2_5FlashImagePreviewChineseWarning: false,
   hidePWAInstaller: false,
   hideThreadLimitAlert: false,
+  hideTopicSharePrivacyWarning: false,
   imagePanelWidth: 320,
   imageTopicPanelWidth: 80,
   knowledgeBaseModalViewMode: 'list' as const,
