@@ -79,12 +79,35 @@ export class AgentCronJobModel {
 
   // Update cron job
   async update(id: string, data: UpdateAgentCronJobData): Promise<AgentCronJob | null> {
+    // Check if critical fields (cronPattern or timezone) are being changed
+    // If so, reset lastExecutedAt to allow immediate execution with new schedule
+    let shouldResetLastExecuted = false;
+
+    if (data?.cronPattern !== undefined || data?.timezone !== undefined) {
+      const existing = await this.findById(id);
+      if (existing && (
+        (data?.cronPattern !== undefined && data?.cronPattern !== existing.cronPattern) ||
+        (data?.timezone !== undefined && data?.timezone !== existing.timezone)
+      )) {
+        shouldResetLastExecuted = true;
+      }
+    }
+
+    const updateData: Record<string, unknown> = {
+      ...data,
+      ...(shouldResetLastExecuted ? { lastExecutedAt: null } : {}),
+      updatedAt: new Date(),
+    };
+
+    // When maxExecutions is updated, reset remainingExecutions to match
+    // This ensures the new limit takes effect immediately
+    if (data?.maxExecutions !== undefined) {
+      updateData.remainingExecutions = data.maxExecutions;
+    }
+
     const result = await this.db
       .update(agentCronJobs)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(and(eq(agentCronJobs.id, id), eq(agentCronJobs.userId, this.userId)))
       .returning();
 
