@@ -116,8 +116,8 @@ describe('shareRouter', () => {
         groupBackgroundColor: '#000000',
         groupId: 'group-1',
         groupMembers: [
-          { avatar: 'member1.png', backgroundColor: '#111' },
-          { avatar: 'member2.png', backgroundColor: '#222' },
+          { avatar: 'member1.png', backgroundColor: '#111', id: 'member-1', title: 'Member 1' },
+          { avatar: 'member2.png', backgroundColor: '#222', id: 'member-2', title: 'Member 2' },
         ],
         groupTitle: 'Test Group',
         ownerId: 'user-1',

@@ -126,12 +126,16 @@ export class TopicShareModel {
     const share = result[0];
 
     // Fetch group members if this is a group topic
-    let groupMembers: { avatar: string | null; backgroundColor: string | null }[] | undefined;
+    let groupMembers:
+      | { avatar: string | null; backgroundColor: string | null; id: string; title: string | null }[]
+      | undefined;
     if (share.groupId) {
       const members = await db
         .select({
           avatar: agents.avatar,
           backgroundColor: agents.backgroundColor,
+          id: agents.id,
+          title: agents.title,
         })
         .from(chatGroupsAgents)
         .innerJoin(agents, eq(chatGroupsAgents.agentId, agents.id))
