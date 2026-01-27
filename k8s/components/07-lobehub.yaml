@@ -1,159 +1,5 @@
-# LobeHub K8S Dev Deployment (PostgreSQL + Redis + LobeHub)
-
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: lobehub
-  labels:
-    name: lobehub
 ---
-apiVersion: v1
-kind: Secret
-metadata:
-  name: lobe-secrets
-  namespace: lobehub
-type: Opaque
-stringData:
-  POSTGRES_PASSWORD: postgres
-  POSTGRES_DB: lobehub
-  DATABASE_URL: postgresql://postgres:postgres@postgres:5432/lobehub
-
-  # Core authentication configuration
-  AUTH_SECRET: NX2kaPE923dt6BL2U8e9oSre5RfoT7hg
-  KEY_VAULTS_SECRET: Kix2wcUONd4CX51E/ZPAd36BqM4wzJgKjPtz2sGztqQ=
-
-  # Redis configuration
-  REDIS_URL: redis://redis:6379
-  REDIS_PREFIX: lobehub
-  REDIS_TLS: "0"
-
-  # S3 storage configuration (disabled but requires valid values)
-  S3_ENDPOINT: http://localhost:9000
-  S3_PUBLIC_DOMAIN: http://localhost:9000
-  S3_ENABLE_PATH_STYLE: "0"
-  S3_SET_ACL: "0"
-
-  # Other feature configuration
-  LLM_VISION_IMAGE_USE_BASE64: "1"
-  AUTH_SSO_PROVIDERS: ""
-  SEARXNG_URL: http://localhost:8080
-  LOBE_PORT: "3210"
-  APP_URL: http://localhost:3210
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: postgres
-  namespace: lobehub
-  labels:
-    app: postgres
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: postgres
-  template:
-    metadata:
-      labels:
-        app: postgres
-    spec:
-      containers:
-      - name: postgres
-        image: pgvector/pgvector:pg17
-        ports:
-        - containerPort: 5432
-        env:
-        - name: POSTGRES_DB
-          valueFrom:
-            secretKeyRef:
-              name: lobe-secrets
-              key: POSTGRES_DB
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: lobe-secrets
-              key: POSTGRES_PASSWORD
-        livenessProbe:
-          exec:
-            command:
-            - pg_isready
-            - -U
-            - postgres
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          exec:
-            command:
-            - pg_isready
-            - -U
-            - postgres
-          initialDelaySeconds: 5
-          periodSeconds: 5
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: postgres
-  namespace: lobehub
-spec:
-  selector:
-    app: postgres
-  ports:
-  - port: 5432
-    targetPort: 5432
-  type: ClusterIP
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: redis
-  namespace: lobehub
-  labels:
-    app: redis
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: redis
-  template:
-    metadata:
-      labels:
-        app: redis
-    spec:
-      containers:
-      - name: redis
-        image: redis:7-alpine
-        ports:
-        - containerPort: 6379
-        command: ["redis-server", "--save", "60", "1000", "--appendonly", "yes"]
-        livenessProbe:
-          exec:
-            command:
-            - redis-cli
-            - ping
-          initialDelaySeconds: 30
-          periodSeconds: 10
-        readinessProbe:
-          exec:
-            command:
-            - redis-cli
-            - ping
-          initialDelaySeconds: 5
-          periodSeconds: 5
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: redis
-  namespace: lobehub
-spec:
-  selector:
-    app: redis
-  ports:
-  - port: 6379
-    targetPort: 6379
-  type: ClusterIP
----
+# LobeHub Deployment
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -161,6 +7,8 @@ metadata:
   namespace: lobehub
   labels:
     app: lobehub
+    tier: frontend
+    version: latest
 spec:
   replicas: 1
   selector:
@@ -170,12 +18,47 @@ spec:
     metadata:
       labels:
         app: lobehub
+        tier: frontend
+        version: latest
     spec:
+      initContainers:
+      - name: rustfs-init
+        image: minio/mc:latest
+        env:
+        - name: RUSTFS_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: RUSTFS_ACCESS_KEY
+        - name: RUSTFS_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: RUSTFS_SECRET_KEY
+        command:
+        - /bin/sh
+        - -c
+        - |
+          set -eux;
+          echo "S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}, S3_SECRET_KEY=${RUSTFS_SECRET_KEY}";
+          mc --version;
+          mc alias set rustfs "http://rustfs:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}";
+          mc ls rustfs || true;
+          mc mb "rustfs/lobe" --ignore-existing;
+          mc admin info rustfs || true;
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
       containers:
       - name: lobehub
         image: lobehub/lobehub:latest
         ports:
         - containerPort: 3210
+          name: http
         env:
         # Core authentication configuration
         - name: AUTH_SECRET
@@ -213,7 +96,12 @@ spec:
               name: lobe-secrets
               key: REDIS_TLS
 
-        # S3 storage configuration (disabled but requires valid values)
+        # S3/Rufs configuration
+        - name: S3_BUCKET
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: S3_BUCKET
         - name: S3_ENDPOINT
           valueFrom:
             secretKeyRef:
@@ -229,12 +117,27 @@ spec:
             secretKeyRef:
               name: lobe-secrets
               key: S3_ENABLE_PATH_STYLE
+        - name: S3_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: S3_ACCESS_KEY
+        - name: S3_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: S3_ACCESS_KEY_ID
+        - name: S3_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: S3_SECRET_ACCESS_KEY
         - name: S3_SET_ACL
           valueFrom:
             secretKeyRef:
               name: lobe-secrets
               key: S3_SET_ACL
-
+              
         # Other feature configuration
         - name: LLM_VISION_IMAGE_USE_BASE64
           valueFrom:
@@ -270,21 +173,36 @@ spec:
             port: 3210
           initialDelaySeconds: 60
           periodSeconds: 30
+          timeoutSeconds: 5
         readinessProbe:
           tcpSocket:
             port: 3210
           initialDelaySeconds: 30
           periodSeconds: 10
+          timeoutSeconds: 5
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+
 ---
+# LobeHub Service
 apiVersion: v1
 kind: Service
 metadata:
   name: lobehub
   namespace: lobehub
+  labels:
+    app: lobehub
+    tier: frontend
 spec:
   selector:
     app: lobehub
   ports:
   - port: 3210
     targetPort: 3210
+    name: http
   type: ClusterIP

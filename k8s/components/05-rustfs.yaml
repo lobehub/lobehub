@@ -1,0 +1,91 @@
+---
+# Rustfs Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rustfs
+  namespace: lobehub
+  labels:
+    app: rustfs
+    tier: storage
+    version: latest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rustfs
+  template:
+    metadata:
+      labels:
+        app: rustfs
+        tier: storage
+        version: latest
+    spec:
+      containers:
+      - name: rustfs
+        image: rustfs/rustfs:latest
+        ports:
+        - containerPort: 9000
+          name: http
+        env:
+        - name: RUSTFS_CONSOLE_ENABLE
+          value: "true"
+        - name: RUSTFS_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: RUSTFS_ACCESS_KEY
+        - name: RUSTFS_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: RUSTFS_SECRET_KEY
+        command: ["/usr/bin/rustfs"]
+        args: ["--access-key", "$(RUSTFS_ACCESS_KEY)", "--secret-key", "$(RUSTFS_SECRET_KEY)", "/data"]
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 9000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 9000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: rustfs-storage
+          mountPath: /data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: rustfs-storage
+        persistentVolumeClaim:
+          claimName: rustfs-pvc
+
+---
+# Rustfs Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: rustfs
+  namespace: lobehub
+  labels:
+    app: rustfs
+    tier: storage
+spec:
+  selector:
+    app: rustfs
+  ports:
+  - port: 9000
+    targetPort: 9000
+    name: http
+  type: ClusterIP

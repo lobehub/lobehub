@@ -1,0 +1,84 @@
+---
+# SearXNG Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: searxng
+  namespace: lobehub
+  labels:
+    app: searxng
+    tier: search
+    version: latest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: searxng
+  template:
+    metadata:
+      labels:
+        app: searxng
+        tier: search
+        version: latest
+    spec:
+      containers:
+      - name: searxng
+        image: searxng/searxng
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: SEARXNG_SETTINGS_FILE
+          value: /etc/searxng/settings.yml
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 5
+        volumeMounts:
+        - name: searxng-config
+          mountPath: /etc/searxng
+        - name: searxng-data
+          mountPath: /var/lib/searxng
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: searxng-config
+        persistentVolumeClaim:
+          claimName: searxng-config-pvc
+      - name: searxng-data
+        persistentVolumeClaim:
+          claimName: searxng-data-pvc
+
+---
+# SearXNG Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: searxng
+  namespace: lobehub
+  labels:
+    app: searxng
+    tier: search
+spec:
+  selector:
+    app: searxng
+  ports:
+  - port: 8080
+    targetPort: 8080
+    name: http
+  type: ClusterIP
