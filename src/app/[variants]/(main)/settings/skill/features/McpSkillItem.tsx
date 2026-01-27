@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Modal, Block } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { Flexbox, Modal } from '@lobehub/ui';
 import { Suspense, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,35 +14,7 @@ import { pluginSelectors } from '@/store/tool/selectors';
 import { type LobeToolType } from '@/types/tool/tool';
 
 import Actions from './Actions';
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  container: css`
-    padding-block: 12px;
-    padding-inline: 0;
-  `,
-  icon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
-
-    background: ${cssVar.colorFillTertiary};
-  `,
-  title: css`
-    cursor: pointer;
-    font-size: 15px;
-    font-weight: 500;
-    color: ${cssVar.colorText};
-
-    &:hover {
-      color: ${cssVar.colorPrimary};
-    }
-  `,
-}));
+import { sharedStyles } from './style';
 
 interface McpSkillItemProps {
   author?: string;
@@ -68,17 +39,17 @@ const McpSkillItem = memo<McpSkillItemProps>(
       <>
         <Flexbox
           align="center"
-          className={styles.container}
+          className={sharedStyles.container}
           gap={16}
           horizontal
           justify="space-between"
         >
-          <Flexbox align="center" gap={12} horizontal style={{ flex: 1, overflow: 'hidden' }}>
-            <Block className={styles.icon} variant={'outlined'}>
+          <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
+            <div className={sharedStyles.icon}>
               <PluginAvatar avatar={avatar} size={32} />
-            </Block>
+            </div>
             <Flexbox align="center" gap={8} horizontal style={{ overflow: 'hidden' }}>
-              <span className={styles.title} onClick={() => setDetailOpen(true)}>
+              <span className={sharedStyles.title} onClick={() => setDetailOpen(true)}>
                 {title}
               </span>
               <PluginTag author={author} isMCP={isMCP} type={type} />
