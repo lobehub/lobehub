@@ -1,6 +1,6 @@
 import { createStaticStyles } from 'antd-style';
 
-export const sharedStyles = createStaticStyles(({ css, cssVar }) => ({
+export const styles = createStaticStyles(({ css, cssVar }) => ({
   connected: css`
     font-size: 14px;
     color: ${cssVar.colorSuccess};
@@ -11,6 +11,12 @@ export const sharedStyles = createStaticStyles(({ css, cssVar }) => ({
   `,
   disconnected: css`
     font-size: 14px;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  disconnectedIcon: css`
+    opacity: 0.5;
+  `,
+  disconnectedTitle: css`
     color: ${cssVar.colorTextTertiary};
   `,
   error: css`
@@ -28,6 +34,10 @@ export const sharedStyles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: 12px;
 
     background: ${cssVar.colorFillTertiary};
+  `,
+  pending: css`
+    font-size: 14px;
+    color: ${cssVar.colorWarning};
   `,
   title: css`
     cursor: pointer;

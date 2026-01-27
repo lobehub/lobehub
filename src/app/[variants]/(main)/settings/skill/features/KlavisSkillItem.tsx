@@ -3,7 +3,7 @@
 import { type KlavisServerType } from '@lobechat/const';
 import { Avatar, DropdownMenu, Flexbox, Icon, Button as LobeButton } from '@lobehub/ui';
 import { App, Button } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Loader2, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,17 +14,10 @@ import { type KlavisServer, KlavisServerStatus } from '@/store/tool/slices/klavi
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import { sharedStyles } from './style';
+import { styles } from './style';
 
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  pending: css`
-    font-size: 14px;
-    color: ${cssVar.colorWarning};
-  `,
-}));
 
 interface KlavisSkillItemProps {
   server?: KlavisServer;
@@ -193,7 +186,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
   const renderStatus = () => {
     if (!server) {
       return (
-        <span className={sharedStyles.disconnected}>
+        <span className={styles.disconnected}>
           {t('tools.klavis.disconnected', { defaultValue: 'Disconnected' })}
         </span>
       );
@@ -201,17 +194,17 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
 
     switch (server.status) {
       case KlavisServerStatus.CONNECTED: {
-        return <span className={sharedStyles.connected}>{t('tools.klavis.connected')}</span>;
+        return <span className={styles.connected}>{t('tools.klavis.connected')}</span>;
       }
       case KlavisServerStatus.PENDING_AUTH: {
         return <span className={styles.pending}>{t('tools.klavis.authRequired')}</span>;
       }
       case KlavisServerStatus.ERROR: {
-        return <span className={sharedStyles.error}>{t('tools.klavis.error')}</span>;
+        return <span className={styles.error}>{t('tools.klavis.error')}</span>;
       }
       default: {
         return (
-          <span className={sharedStyles.disconnected}>
+          <span className={styles.disconnected}>
             {t('tools.klavis.disconnected', { defaultValue: 'Disconnected' })}
           </span>
         );
@@ -278,7 +271,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
   return (
     <Flexbox
       align="center"
-      className={sharedStyles.container}
+      className={styles.container}
       gap={16}
       horizontal
       justify="space-between"
@@ -297,9 +290,9 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
           }
           style={{ cursor: 'pointer' }}
         >
-          <div className={sharedStyles.icon}>{renderIcon()}</div>
+          <div className={styles.icon}>{renderIcon()}</div>
           <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-            <span className={sharedStyles.title}>{serverType.label}</span>
+            <span className={styles.title}>{serverType.label}</span>
             {!isConnected && renderStatus()}
           </Flexbox>
         </Flexbox>

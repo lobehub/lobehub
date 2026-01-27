@@ -14,7 +14,7 @@ import { pluginSelectors } from '@/store/tool/selectors';
 import { type LobeToolType } from '@/types/tool/tool';
 
 import Actions from './Actions';
-import { sharedStyles } from './style';
+import { styles } from './style';
 
 interface McpSkillItemProps {
   author?: string;
@@ -39,7 +39,7 @@ const McpSkillItem = memo<McpSkillItemProps>(
       <>
         <Flexbox
           align="center"
-          className={sharedStyles.container}
+          className={styles.container}
           gap={16}
           horizontal
           justify="space-between"
@@ -52,10 +52,10 @@ const McpSkillItem = memo<McpSkillItemProps>(
               onClick={() => setDetailOpen(true)}
               style={{ cursor: 'pointer' }}
             >
-              <div className={sharedStyles.icon}>
+              <div className={styles.icon}>
                 <PluginAvatar avatar={avatar} size={32} />
               </div>
-              <span className={sharedStyles.title}>{title}</span>
+              <span className={styles.title}>{title}</span>
             </Flexbox>
             <PluginTag author={author} isMCP={isMCP} type={type} />
           </Flexbox>

@@ -3,7 +3,7 @@
 import { type LobehubSkillProviderType } from '@lobechat/const';
 import { Avatar, DropdownMenu, Flexbox, Icon, Button as LobeButton } from '@lobehub/ui';
 import { App, Button } from 'antd';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { cssVar } from 'antd-style';
 import { Loader2, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,19 +15,10 @@ import {
   LobehubSkillStatus,
 } from '@/store/tool/slices/lobehubSkillStore/types';
 
-import { sharedStyles } from './style';
+import { styles } from './style';
 
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
-
-const styles = createStaticStyles(({ css, cssVar }) => ({
-  disconnectedIcon: css`
-    opacity: 0.5;
-  `,
-  disconnectedTitle: css`
-    color: ${cssVar.colorTextTertiary};
-  `,
-}));
 
 interface LobehubSkillItemProps {
   provider: LobehubSkillProviderType;
@@ -198,7 +189,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
   const renderStatus = () => {
     if (!server) {
       return (
-        <span className={sharedStyles.disconnected}>
+        <span className={styles.disconnected}>
           {t('tools.lobehubSkill.disconnected', { defaultValue: 'Disconnected' })}
         </span>
       );
@@ -207,17 +198,17 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
     switch (server.status) {
       case LobehubSkillStatus.CONNECTED: {
         return (
-          <span className={sharedStyles.connected}>
+          <span className={styles.connected}>
             {t('tools.lobehubSkill.connected', { defaultValue: 'Connected' })}
           </span>
         );
       }
       case LobehubSkillStatus.ERROR: {
-        return <span className={sharedStyles.error}>{t('tools.lobehubSkill.error')}</span>;
+        return <span className={styles.error}>{t('tools.lobehubSkill.error')}</span>;
       }
       default: {
         return (
-          <span className={sharedStyles.disconnected}>
+          <span className={styles.disconnected}>
             {t('tools.lobehubSkill.disconnected', { defaultValue: 'Disconnected' })}
           </span>
         );
@@ -264,7 +255,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
   return (
     <Flexbox
       align="center"
-      className={sharedStyles.container}
+      className={styles.container}
       gap={16}
       horizontal
       justify="space-between"
@@ -282,13 +273,11 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
           }
           style={{ cursor: 'pointer' }}
         >
-          <div className={`${sharedStyles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
+          <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
             {renderIcon()}
           </div>
           <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-            <span
-              className={`${sharedStyles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}
-            >
+            <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
               {provider.label}
             </span>
             {!isConnected && renderStatus()}
