@@ -6,7 +6,7 @@ import {
   getKlavisServerByServerIdentifier,
   getLobehubSkillProviderById,
 } from '@lobechat/const';
-import { Flexbox, Icon, Image, Tag, Text, Typography, useModalContext } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon, Tag, Text, Typography, useModalContext } from '@lobehub/ui';
 import { Button, Divider } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { Klavis } from 'klavis';
@@ -19,6 +19,8 @@ import { useToolStore } from '@/store/tool';
 import { klavisStoreSelectors, lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
+
+const ICON_SIZE = 56;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   authorLink: css`
@@ -59,11 +61,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 56px;
-    height: 56px;
-    border-radius: 12px;
-
-    background: ${cssVar.colorBgContainer};
+    width: ${ICON_SIZE}px;
+    height: ${ICON_SIZE}px;
   `,
   introduction: css`
     font-size: 14px;
@@ -185,9 +184,9 @@ export const IntegrationDetailContent = ({
 
   const renderIcon = () => {
     if (typeof icon === 'string') {
-      return <Image alt={label} height={36} src={icon} width={36} />;
+      return <Avatar avatar={icon} shape={'square'} size={ICON_SIZE} />;
     }
-    return <Icon fill={cssVar.colorText} icon={icon} size={36} />;
+    return <Icon fill={cssVar.colorText} icon={icon} size={ICON_SIZE} />;
   };
 
   const handleAuthorClick = () => {
@@ -229,7 +228,11 @@ export const IntegrationDetailContent = ({
         style={{ flexWrap: 'nowrap' }}
       >
         <Flexbox align="center" gap={16} horizontal>
-          <div className={styles.icon}>{renderIcon()}</div>
+          {typeof icon === 'string' ? (
+            renderIcon()
+          ) : (
+            <div className={styles.icon}>{renderIcon()}</div>
+          )}
           <Flexbox gap={4}>
             <span className={styles.title}>{label}</span>
             <Text style={{ fontSize: 14 }} type="secondary">
