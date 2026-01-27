@@ -13,9 +13,10 @@ const Header = memo(() => {
   const { t } = useTranslation('common');
   return (
     <SideBarHeaderLayout
+      backTo="/resource"
       breadcrumb={[
         {
-          href: '/resource',
+          href: `/resource/library/${id}`,
           title: t('tab.resource'),
         },
       ]}

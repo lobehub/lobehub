@@ -2,6 +2,7 @@ import { Command } from 'cmdk';
 import dayjs from 'dayjs';
 import {
   Bot,
+  Brain,
   ChevronRight,
   FileText,
   Folder,
@@ -68,12 +69,14 @@ const SearchResults = memo<SearchResultsProps>(
         }
         case 'file': {
           // Navigate to resource library with file parameter
-          if (result.knowledgeBaseId) {
-            navigate(`/resource/library/${result.knowledgeBaseId}?file=${result.id}`);
-          } else {
-            // Fallback to library root if no knowledge base
-            navigate(`/resource/library?file=${result.id}`);
-          }
+          const fileUrl = result.knowledgeBaseId
+            ? `/resource/library/${result.knowledgeBaseId}?file=${result.id}`
+            : `/resource?file=${result.id}`;
+          console.log('[SearchResults] File navigation:', {
+            fileDetails: result,
+            url: fileUrl,
+          });
+          navigate(fileUrl);
           break;
         }
         case 'folder': {
@@ -102,6 +105,10 @@ const SearchResults = memo<SearchResultsProps>(
         }
         case 'communityAgent': {
           navigate(`/community/agent/${result.identifier}`);
+          break;
+        }
+        case 'memory': {
+          navigate(`/memory`);
           break;
         }
       }
@@ -137,6 +144,9 @@ const SearchResults = memo<SearchResultsProps>(
         case 'communityAgent': {
           return <Bot size={16} />;
         }
+        case 'memory': {
+          return <Brain size={16} />;
+        }
       }
     };
 
@@ -168,6 +178,9 @@ const SearchResults = memo<SearchResultsProps>(
         }
         case 'communityAgent': {
           return t('cmdk.search.assistant');
+        }
+        case 'memory': {
+          return t('cmdk.search.memory');
         }
       }
     };
@@ -219,6 +232,7 @@ const SearchResults = memo<SearchResultsProps>(
     const fileResults = results.filter((r) => r.type === 'file');
     const folderResults = results.filter((r) => r.type === 'folder');
     const pageResults = results.filter((r) => r.type === 'page');
+    const memoryResults = results.filter((r) => r.type === 'memory');
     const mcpResults = results.filter((r) => r.type === 'mcp');
     const pluginResults = results.filter((r) => r.type === 'plugin');
     const assistantResults = results.filter((r) => r.type === 'communityAgent');
@@ -325,6 +339,13 @@ const SearchResults = memo<SearchResultsProps>(
           <Command.Group>
             {pageResults.map((result) => renderResultItem(result))}
             {renderSearchMore('page', pageResults.length)}
+          </Command.Group>
+        )}
+
+        {memoryResults.length > 0 && (
+          <Command.Group>
+            {memoryResults.map((result) => renderResultItem(result))}
+            {renderSearchMore('memory', memoryResults.length)}
           </Command.Group>
         )}
 

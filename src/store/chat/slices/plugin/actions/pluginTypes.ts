@@ -6,6 +6,7 @@ import { t } from 'i18next';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { type MCPToolCallResult } from '@/libs/mcp';
+import { truncateToolResult } from '@/server/utils/truncateToolResult';
 import { chatService } from '@/services/chat';
 import { mcpService } from '@/services/mcp';
 import { messageService } from '@/services/message';
@@ -346,6 +347,9 @@ export const pluginTypes: StateCreator<
 
     if (!data) return;
 
+    // Truncate content to prevent context overflow
+    const truncatedContent = truncateToolResult(data.content);
+
     // operationId already declared above, reuse it
     const context = operationId ? { operationId } : undefined;
 
@@ -353,14 +357,14 @@ export const pluginTypes: StateCreator<
     await get().optimisticUpdateToolMessage(
       id,
       {
-        content: data.content,
+        content: truncatedContent,
         pluginError: data.success ? undefined : data.error,
         pluginState: data.success ? data.state : undefined,
       },
       context,
     );
 
-    return data.content;
+    return truncatedContent;
   },
 
   internal_invokeRemoteToolPlugin: async (id, payload, executor, logPrefix) => {

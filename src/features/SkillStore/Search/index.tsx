@@ -37,7 +37,7 @@ export const Search = memo<SearchProps>(({ activeTab, onLobeHubSearch }) => {
             }
           }}
           placeholder={t('skillStore.search')}
-          variant="filled"
+          variant="outlined"
         />
       </Flexbox>
     </Flexbox>

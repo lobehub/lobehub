@@ -1,9 +1,9 @@
 ---
-title: Configure Okta Identity Verification Service for LobeChat
+title: Configure Okta Identity Verification Service for LobeHub
 description: >-
-  Learn how to configure Okta Identity Verification Service for LobeChat for
-  your organization, including creating applications, adding users, and
-  configuring environment variables.
+  Learn how to configure Okta Identity Verification Service for LobeHub for your
+  organization, including creating applications, adding users, and configuring
+  environment variables.
 tags:
   - Okta
   - Identity Verification
@@ -27,7 +27,7 @@ tags:
 
   | Setting Name           | Description                                                                                                  | Sample Information                            |
   | ---------------------- | ------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
-  | App Integration Name   | The Application Name your users will see                                                                     | LobeChat Instance                             |
+  | App Integration Name   | The Application Name your users will see                                                                     | LobeHub Instance                              |
   | Sign-in redirect URIs  | Okta sends the authentication response and ID token for the user's sign-in request to these URIs             | (http(s)://your-domain/api/auth/callback/okta |
   | Sign-out redirect URIs | After your application contacts Okta to close the user session, Okta redirects the user to one of these URIs | (http(s)://your-domain                        |
 
@@ -38,11 +38,11 @@ tags:
 
   ### Add Users
 
-  Click on the "Assignments" in the top navigation bar to enter the user management interface, where you can create or assign users in your organization to log in to LobeChat.
+  Click on the "Assignments" in the top navigation bar to enter the user management interface, where you can create or assign users in your organization to log in to LobeHub.
 
   ### Configure Environment Variables
 
-  When deploying LobeChat, you need to configure the following environment variables:
+  When deploying LobeHub, you need to configure the following environment variables:
 
   | Environment Variable      | Type     | Description                                                                                                                                                                                         |
   | ------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -59,7 +59,7 @@ tags:
 </Steps>
 
 <Callout>
-  After successful deployment, users will be able to authenticate and use LobeChat using the users
+  After successful deployment, users will be able to authenticate and use LobeHub using the users
   configured in Okta.
 </Callout>
 

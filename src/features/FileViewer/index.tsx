@@ -183,7 +183,23 @@ const MSDOC_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/octet-stream',
+]);
+
+// Archive file types - not supported for preview
+const ARCHIVE_EXTENSIONS = ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2', '.xz', '.tgz'];
+const ARCHIVE_MIME_TYPES = new Set([
+  'zip',
+  'rar',
+  '7z',
+  'application/zip',
+  'application/x-zip-compressed',
+  'application/x-rar-compressed',
+  'application/x-7z-compressed',
+  'application/x-tar',
+  'application/gzip',
+  'application/x-gzip',
+  'application/x-bzip2',
+  'application/x-xz',
 ]);
 
 // Helper function to check file type
@@ -238,14 +254,21 @@ const FileViewer = memo<FileViewerProps>(({ id, style, fileType, url, name }) =>
     return <VideoViewer fileId={id} url={url} />;
   }
 
+  // Archive files (zip, rar, 7z, etc.) - not supported for preview
+  // Check before code files to avoid false matches
+  if (matchesFileType(fileType, name, ARCHIVE_EXTENSIONS, ARCHIVE_MIME_TYPES)) {
+    return <NotSupport fileName={name} style={style} url={url} />;
+  }
+
+  // Microsoft Office documents - check before code files to avoid false matches
+  // (e.g., 'doc' contains 'c' which would match CODE_EXTENSIONS)
+  if (matchesFileType(fileType, name, MSDOC_EXTENSIONS, MSDOC_MIME_TYPES)) {
+    return <MSDocViewer fileId={id} url={url} />;
+  }
+
   // Code files (JavaScript, TypeScript, Python, Java, C++, Go, Rust, Markdown, etc.)
   if (matchesFileType(fileType, name, CODE_EXTENSIONS, CODE_MIME_TYPES)) {
     return <CodeViewer fileId={id} fileName={name} url={url} />;
-  }
-
-  // Microsoft Office documents
-  if (matchesFileType(fileType, name, MSDOC_EXTENSIONS, MSDOC_MIME_TYPES)) {
-    return <MSDocViewer fileId={id} url={url} />;
   }
 
   // Unsupported file type

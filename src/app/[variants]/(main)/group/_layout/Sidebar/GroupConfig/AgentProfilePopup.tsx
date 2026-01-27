@@ -65,6 +65,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorTextTertiary};
     text-transform: uppercase;
   `,
+  trigger: css`
+    border-radius: ${cssVar.borderRadius};
+
+    &[data-popup-open] {
+      background: ${cssVar.colorFillTertiary};
+    }
+  `,
 }));
 
 interface AgentProfilePopupProps extends PropsWithChildren {
@@ -169,7 +176,9 @@ const AgentProfilePopup = memo<AgentProfilePopupProps>(({ agent, groupId, childr
 
   return (
     <Popover
+      classNames={{ trigger: styles.trigger }}
       content={content}
+      nativeButton={false}
       onOpenChange={setOpen}
       open={open}
       placement="right"

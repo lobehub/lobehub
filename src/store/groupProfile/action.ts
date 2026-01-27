@@ -16,6 +16,11 @@ export interface Action {
   flushSave: () => void;
   handleContentChange: (saveCallback: (payload: SaveContentPayload) => Promise<void>) => void;
   setActiveTabId: (tabId: string) => void;
+  /**
+   * Set content from agent builder - triggers editor to update
+   * @param entityId - groupId for group editor, agentId for member editor
+   */
+  setAgentBuilderContent: (entityId: string, content: string) => void;
   setChatPanelExpanded: (expanded: boolean | ((prev: boolean) => boolean)) => void;
   updateSaveStatus: (tabId: string, status: SaveStatus) => void;
 }
@@ -151,6 +156,16 @@ export const store: StateCreator<Store> = (set, get) => {
 
     setActiveTabId: (tabId) => {
       set({ activeTabId: tabId });
+    },
+
+    setAgentBuilderContent: (entityId, content) => {
+      set({
+        agentBuilderContentUpdate: {
+          content,
+          entityId,
+          timestamp: Date.now(),
+        },
+      });
     },
 
     setChatPanelExpanded: (expanded) => {

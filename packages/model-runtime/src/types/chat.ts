@@ -91,6 +91,20 @@ export interface ChatStreamPayload {
    */
   messages: OpenAIChatMessage[];
   /**
+   * @title Custom text chunks for mock response
+   */
+  mockChunks?: string[];
+  /**
+   * @title Delay in milliseconds between mock chunks
+   * @default 50
+   */
+  mockDelayMs?: number;
+  /**
+   * @title Enable mock response for benchmark testing
+   * @description When true, returns a simulated SSE stream without calling real LLM API
+   */
+  mockResponse?: boolean;
+  /**
    * @title Model name
    */
   model: string;

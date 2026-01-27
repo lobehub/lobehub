@@ -6,7 +6,6 @@ import { createSkillStoreModal } from '@/features/SkillStore';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
-import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import { useAgentId } from '../../hooks/useAgentId';
 import Action from '../components/Action';
@@ -19,8 +18,6 @@ const Tools = memo(() => {
   const { marketItems } = useControls({
     setUpdating,
   });
-
-  const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
 
   const agentId = useAgentId();
   const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(agentId)(s));
@@ -41,13 +38,7 @@ const Tools = memo(() => {
         icon={Blocks}
         loading={updating}
         popover={{
-          content: (
-            <PopoverContent
-              enableKlavis={enableKlavis}
-              items={marketItems}
-              onOpenStore={handleOpenStore}
-            />
-          ),
+          content: <PopoverContent items={marketItems} onOpenStore={handleOpenStore} />,
           maxWidth: 320,
           minWidth: 320,
           styles: {

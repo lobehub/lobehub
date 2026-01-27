@@ -15,6 +15,7 @@ const MIGRATION_DOC_BASE = 'https://lobehub.com/docs/self-hosting/advanced/auth'
  *   message: string;
  *   docUrl?: string;
  *   formatVar?: (envVar: string) => string;
+ *   severity?: 'error' | 'warning';
  * }>}
  */
 const DEPRECATED_CHECKS = [
@@ -135,6 +136,34 @@ const DEPRECATED_CHECKS = [
     name: 'APP_URL Trailing Slash',
   },
   {
+    docUrl: `${MIGRATION_DOC_BASE}/providers/casdoor`,
+    getVars: () => {
+      const providers = process.env['AUTH_SSO_PROVIDERS'] || '';
+      if (providers.includes('casdoor') && !process.env['CASDOOR_WEBHOOK_SECRET']) {
+        return ['CASDOOR_WEBHOOK_SECRET'];
+      }
+      return [];
+    },
+    message:
+      'Casdoor webhook is recommended for syncing user data (email, avatar, etc.) to LobeChat. This is especially important for users migrating from NextAuth to Better Auth - users without email configured in Casdoor will not be able to login. Consider configuring CASDOOR_WEBHOOK_SECRET following the documentation.',
+    name: 'Casdoor Webhook',
+    severity: 'warning',
+  },
+  {
+    docUrl: `${MIGRATION_DOC_BASE}/providers/logto`,
+    getVars: () => {
+      const providers = process.env['AUTH_SSO_PROVIDERS'] || '';
+      if (providers.includes('logto') && !process.env['LOGTO_WEBHOOK_SIGNING_KEY']) {
+        return ['LOGTO_WEBHOOK_SIGNING_KEY'];
+      }
+      return [];
+    },
+    message:
+      'Logto webhook is recommended for syncing user data (email, avatar, etc.) to LobeChat. This is especially important for users migrating from NextAuth to Better Auth - users without email configured in Logto will not be able to login. Consider configuring LOGTO_WEBHOOK_SIGNING_KEY following the documentation.',
+    name: 'Logto Webhook',
+    severity: 'warning',
+  },
+  {
     docUrl: `${MIGRATION_DOC_BASE}/nextauth-to-betterauth`,
     formatVar: (envVar) => {
       const mapping = {
@@ -159,18 +188,22 @@ const DEPRECATED_CHECKS = [
 ];
 
 /**
- * Print a single deprecation error block
+ * Print a single deprecation block (error or warning)
  */
-function printErrorBlock(name, vars, message, docUrl, formatVar) {
-  console.error(`\n❌ ${name}`);
-  console.error('─'.repeat(50));
-  console.error('Detected deprecated environment variables:');
+function printIssueBlock(name, vars, message, docUrl, formatVar, severity = 'error') {
+  const isWarning = severity === 'warning';
+  const icon = isWarning ? '⚠️' : '❌';
+  const log = isWarning ? console.warn : console.error;
+
+  log(`\n${icon} ${name}`);
+  log('─'.repeat(50));
+  log(isWarning ? 'Missing recommended environment variables:' : 'Detected deprecated environment variables:');
   for (const envVar of vars) {
-    console.error(`  • ${formatVar ? formatVar(envVar) : envVar}`);
+    log(`  • ${formatVar ? formatVar(envVar) : envVar}`);
   }
-  console.error(`\n${message}`);
+  log(`\n${message}`);
   if (docUrl) {
-    console.error(`📖 Migration guide: ${docUrl}`);
+    log(`📖 Documentation: ${docUrl}`);
   }
 }
 
@@ -182,23 +215,46 @@ function printErrorBlock(name, vars, message, docUrl, formatVar) {
 function checkDeprecatedAuth(options = {}) {
   const { action = 'redeploy' } = options;
 
-  const foundIssues = [];
+  const errors = [];
+  const warnings = [];
+
   for (const check of DEPRECATED_CHECKS) {
     const foundVars = check.getVars();
     if (foundVars.length > 0) {
-      foundIssues.push({ ...check, foundVars });
+      const issue = { ...check, foundVars };
+      if (check.severity === 'warning') {
+        warnings.push(issue);
+      } else {
+        errors.push(issue);
+      }
     }
   }
 
-  if (foundIssues.length > 0) {
+  // Print warnings (non-blocking)
+  if (warnings.length > 0) {
+    console.warn('\n' + '═'.repeat(70));
+    console.warn(`⚠️  WARNING: Found ${warnings.length} recommended configuration(s) missing`);
+    console.warn('═'.repeat(70));
+
+    for (const issue of warnings) {
+      printIssueBlock(issue.name, issue.foundVars, issue.message, issue.docUrl, issue.formatVar, 'warning');
+    }
+
+    console.warn('\n' + '═'.repeat(70));
+    console.warn('These are recommendations. Your application will still run.');
+    console.warn('═'.repeat(70) + '\n');
+  }
+
+  // Print errors and exit (blocking)
+  if (errors.length > 0) {
     console.error('\n' + '═'.repeat(70));
     console.error(
-      `❌ ERROR: Found ${foundIssues.length} deprecated environment variable issue(s)!`,
+      `❌ ERROR: Found ${errors.length} deprecated environment variable issue(s)!`,
     );
     console.error('═'.repeat(70));
 
-    for (const issue of foundIssues) {
-      printErrorBlock(issue.name, issue.foundVars, issue.message, issue.docUrl, issue.formatVar);
+    for (const issue of errors) {
+      printIssueBlock(issue.name, issue.foundVars, issue.message, issue.docUrl, issue.formatVar, 'error');
     }
 
     console.error('\n' + '═'.repeat(70));

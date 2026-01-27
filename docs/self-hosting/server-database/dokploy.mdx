@@ -1,18 +1,18 @@
 ---
-title: Deploy LobeChat with database on Dokploy
+title: Deploy LobeHub with database on Dokploy
 description: >-
-  Learn how to deploy LobeChat with database on Dokploy with ease, including:
+  Learn how to deploy LobeHub with database on Dokploy with ease, including:
   database, authentication and S3 storage service.
 tags:
-  - Deploy LobeChat
-  - Dokploy Deployment
-  - Better Auth
-  - S3 Storage
+  - Deploy LobeHub
+  - Vercel Deployment
+  - OpenAI API Key
+  - Custom Domain Binding
 ---
 
 # Deploying Server Database Version on Dokploy.
 
-This article will detail how to deploy the server database version of LobeChat.
+This article will detail how to deploy the server database version of LobeHub.
 
 ## 1. Preparation Work
 
@@ -24,11 +24,11 @@ curl -sSL https://dokploy.com/install.sh | sh
 
 1. Connect your GitHub to Dokploy in the Settings / Git section according to the prompt.
 
-![](https://github.com/user-attachments/assets/c75eb19e-e0f5-4135-91e4-55be8be8a996)
+![](/blog/assets0f97d1dfccd5ba07172aff71ff9acd7b.webp)
 
 2. Enter the Projects interface to create a Project.
 
-![](https://github.com/user-attachments/assets/4e04928d-0171-48d1-afff-e22fc2faaf4e)
+![](/blog/assetsb26b68a4875a6510ddc202dd4b40d010.webp)
 
 ### Configure S3 Storage Service
 
@@ -69,9 +69,9 @@ You also need to configure the `JWKS_KEY` environment variable for signing and v
 
 Enter the previously created Project, click on Create Service, and select Database. In the Database interface, choose PostgreSQL, then set the database name, user, and password. In the Docker image field, enter `pgvector/pgvector:pg17`, and finally click Create to create the database.
 
-![](https://github.com/user-attachments/assets/97899819-278f-42fd-804a-144d521d4b4f)
+![](/blog/assets7006b60baaf62aa0d95cd40456e24afe.webp)
 
-Enter the created database and set an unused port in External Credentials to allow external access; otherwise, LobeChat will not be able to connect to the database. You can view the Postgres database connection URL in External Host, as shown below:
+Enter the created database and set an unused port in External Credentials to allow external access; otherwise, LobeHub will not be able to connect to the database. You can view the Postgres database connection URL in External Host, as shown below:
 
 ```shell
 postgresql://postgres:wAbLxfXSwkxxxxxx@45.577.281.48:5432/postgres
@@ -79,21 +79,21 @@ postgresql://postgres:wAbLxfXSwkxxxxxx@45.577.281.48:5432/postgres
 
 Finally, click Deploy to deploy the database.
 
-![](https://github.com/user-attachments/assets/b4e89dd4-877b-43fe-aa42-4680de17ba8e)
+![](/blog/assets1b9283f9cc5fc5073ff9cffc24880e96.webp)
 
-## Deploy LobeChat on Dokploy.
+## Deploy LobeHub on Dokploy.
 
-Click "Create Service", select "Application", and create the LobeChat application.
+Click "Create Service", select "Application", and create the LobeHub application.
 
-![](https://github.com/user-attachments/assets/4cbbbcce-36be-48ff-bb0b-31607a0bba5c)
+![](/blog/assetsb33085e7553d2b7194005b102184553e.webp)
 
-Enter the created LobeChat application, select the forked lobe-chat project and branch, and click Save to save.
+Enter the created LobeHub application, select the forked lobe-chat project and branch, and click Save to save.
 
-![](https://github.com/user-attachments/assets/2bb4c09d-75bb-4c46-bb2f-faf538308305)
+![](/blog/assetsf0ebf396dbe9559eb3478f48f648a6e2.webp)
 
 Switch to the Environment section, fill in the environment variables, and click Save.
 
-![](https://github.com/user-attachments/assets/0f79c266-cce5-4936-aabd-4c8f19196d91)
+![](/blog/assets6b67dabe7b9226cdff1bace5a3b8ab18.webp)
 
 ```shell
 # Environment variables required for building
@@ -125,14 +125,14 @@ S3_ENABLE_PATH_STYLE=
 
 After adding the environment variables and saving, click Deploy to initiate the deployment. You can check the deployment progress and log information under Deployments.
 
-![](https://github.com/user-attachments/assets/411e2002-61f0-4010-9841-18e88ca895ec)
+![](/blog/assets7c3eab218c0823fa353b1cd23afe21c3.webp)
 
-After a successful deployment, bind your own domain to your LobeChat application and request a certificate on the Domains page.
+After a successful deployment, bind your own domain to your LobeHub application and request a certificate on the Domains page.
 
-![](https://github.com/user-attachments/assets/dd6bc4a4-3c20-4162-87fd-5cac57e5d7e7)
+![](/blog/assetseebf66254337ce88357629c34e78c08d.webp)
 
-## Check if LobeChat is working properly.
+## Check if LobeHub is working properly.
 
-Go to your LobeChat website, and if you click on the login button in the upper left corner and the login pop-up appears normally, it means you have configured it successfully. Enjoy it to the fullest!
+Go to your LobeHub website, and if you click on the login button in the upper left corner and the login pop-up appears normally, it means you have configured it successfully. Enjoy it to the fullest!
 
-![](https://github.com/user-attachments/assets/798ddb18-50c7-462a-a083-0c6841351d26)
+![](/blog/assets11a8089b511aaa61e8982dea0a3665c5.webp)

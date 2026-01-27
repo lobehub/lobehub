@@ -1154,6 +1154,79 @@ describe('google contextBuilders', () => {
         type: 'string',
       });
     });
+
+    it('should filter null values from enum arrays for Google compatibility', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with enum containing null',
+          name: 'enumTool',
+          parameters: {
+            properties: {
+              memoryType: {
+                enum: ['short_term', 'long_term', null, 'working'],
+                type: 'string',
+              },
+              nested: {
+                properties: {
+                  status: {
+                    enum: [null, 'active', 'inactive', null],
+                    type: 'string',
+                  },
+                },
+                type: 'object',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // null values should be filtered from enum arrays
+      expect(result.parameters?.properties).toEqual({
+        memoryType: {
+          enum: ['short_term', 'long_term', 'working'],
+          type: 'string',
+        },
+        nested: {
+          properties: {
+            status: {
+              enum: ['active', 'inactive'],
+              type: 'string',
+            },
+          },
+          type: 'object',
+        },
+      });
+    });
+
+    it('should handle enum with only null values', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with enum containing only null',
+          name: 'nullEnumTool',
+          parameters: {
+            properties: {
+              value: {
+                enum: [null],
+                type: 'string',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // When enum only contains null, the enum property should be removed
+      expect(result.parameters?.properties?.value).toEqual({
+        type: 'string',
+      });
+    });
   });
 
   describe('buildGoogleTools', () => {

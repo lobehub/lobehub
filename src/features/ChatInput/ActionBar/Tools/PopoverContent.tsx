@@ -18,12 +18,11 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface PopoverContentProps {
-  enableKlavis: boolean;
   items: ItemType[];
   onOpenStore: () => void;
 }
 
-const PopoverContent = memo<PopoverContentProps>(({ items, enableKlavis, onOpenStore }) => {
+const PopoverContent = memo<PopoverContentProps>(({ items, onOpenStore }) => {
   const { t } = useTranslation('setting');
   const navigate = useNavigate();
 
@@ -34,7 +33,6 @@ const PopoverContent = memo<PopoverContentProps>(({ items, enableKlavis, onOpenS
       <div
         style={{
           maxHeight: 500,
-          minHeight: enableKlavis ? 500 : undefined,
           overflowY: 'auto',
         }}
       >

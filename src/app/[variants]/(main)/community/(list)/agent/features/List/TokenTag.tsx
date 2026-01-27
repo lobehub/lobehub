@@ -1,7 +1,7 @@
 import { MCP } from '@lobehub/icons';
 import { Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { BookTextIcon, CoinsIcon, DownloadIcon } from 'lucide-react';
+import { BookTextIcon, CoinsIcon, GitForkIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,7 +22,7 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 });
 
 interface TokenTagProps {
-  installCount?: number;
+  forkCount?: number;
   knowledgeCount?: number;
   placement?: 'top' | 'right';
   pluginCount?: number;
@@ -30,7 +30,7 @@ interface TokenTagProps {
 }
 
 const TokenTag = memo<TokenTagProps>(
-  ({ tokenUsage, pluginCount, knowledgeCount, installCount, placement = 'right' }) => {
+  ({ tokenUsage, pluginCount, knowledgeCount, forkCount, placement = 'right' }) => {
     const { t } = useTranslation('discover');
     return (
       <Flexbox align={'center'} gap={4} horizontal>
@@ -43,14 +43,14 @@ const TokenTag = memo<TokenTagProps>(
             {formatIntergerNumber(tokenUsage)}
           </Tag>
         </Tooltip>
-        {Boolean(installCount && installCount > 0) && (
+        {Boolean(forkCount && forkCount > 0) && (
           <Tooltip
             placement={placement}
             styles={{ root: { pointerEvents: 'none' } }}
-            title={t('assistants.downloads')}
+            title={t('fork.forksCount', { count: forkCount })}
           >
-            <Tag className={styles.token} icon={<Icon icon={DownloadIcon} />}>
-              {formatIntergerNumber(installCount)}
+            <Tag className={styles.token} icon={<Icon icon={GitForkIcon} />}>
+              {formatIntergerNumber(forkCount)}
             </Tag>
           </Tooltip>
         )}

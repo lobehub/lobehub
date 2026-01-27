@@ -1,10 +1,10 @@
+import { LayersEnum, MemorySourceType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {
   RetrievalUserMemoryContextProvider,
   RetrievalUserMemoryIdentitiesProvider,
 } from './existingUserMemory';
-import { LayersEnum, MemorySourceType } from '@lobechat/types';
 
 const job = {
   source: MemorySourceType.ChatTopic,
@@ -109,7 +109,7 @@ describe('RetrievalUserMemoryContextProvider', () => {
       },
     });
 
-    const result = await provider.buildContext(job);
+    const result = await provider.buildContext(job.userId, job.sourceId);
 
     expect(result.sourceId).toBe('topic-1');
     expect(result.userId).toBe('user-1');
@@ -167,7 +167,7 @@ describe('RetrievalUserMemoryIdentitiesProvider', () => {
       ],
     });
 
-    const result = await provider.buildContext(job);
+    const result = await provider.buildContext(job.userId, job.sourceId);
 
     expect(result.sourceId).toBe('topic-1');
     expect(result.userId).toBe('user-1');

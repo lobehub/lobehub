@@ -1,7 +1,6 @@
 'use client';
 
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useMemo } from 'react';
 
@@ -13,29 +12,14 @@ import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import Empty from '../Empty';
+import { gridStyles } from '../style';
 import Item from './Item';
-
-const styles = createStaticStyles(({ css }) => ({
-  grid: css`
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-
-    padding-block-end: 16px;
-    padding-inline: 16px;
-
-    @media (max-width: 768px) {
-      grid-template-columns: 1fr;
-    }
-  `,
-}));
 
 interface LobeHubListProps {
   keywords: string;
 }
 
 export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
-
   const isLobehubSkillEnabled = useServerConfigStore(serverConfigSelectors.enableLobehubSkill);
   const isKlavisEnabled = useServerConfigStore(serverConfigSelectors.enableKlavis);
   const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
@@ -98,7 +82,7 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
   if (filteredItems.length === 0) return <Empty search={hasSearchKeywords} />;
 
   return (
-    <div className={styles.grid}>
+    <div className={gridStyles.grid}>
       {filteredItems.map((item) => {
         if (item.type === 'lobehub') {
           const server = getLobehubSkillServerByProvider(item.provider.id);

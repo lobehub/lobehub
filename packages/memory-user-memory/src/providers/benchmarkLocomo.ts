@@ -3,7 +3,7 @@ import { toXml } from 'xast-util-to-xml';
 import type { Child } from 'xastscript';
 import { x } from 'xastscript';
 
-import type { BuiltContext, MemoryContextProvider, MemoryExtractionJob } from '../types';
+import type { BuiltContext, MemoryContextProvider } from '../types';
 
 export interface BenchmarkLocomoPart {
   content: string;
@@ -21,9 +21,10 @@ export interface BenchmarkLocomoContextProviderOptions {
   userId: string;
 }
 
-export class BenchmarkLocomoContextProvider
-  implements MemoryContextProvider<Record<string, unknown>, Record<string, unknown>>
-{
+export class BenchmarkLocomoContextProvider implements MemoryContextProvider<
+  Record<string, unknown>,
+  Record<string, unknown>
+> {
   private readonly options: BenchmarkLocomoContextProviderOptions;
 
   constructor(options: BenchmarkLocomoContextProviderOptions) {
@@ -42,7 +43,7 @@ export class BenchmarkLocomoContextProvider
     return x('message', attributes, part.content, metadata ? `\n[metadata:${metadata}]` : '');
   }
 
-  async buildContext(job: MemoryExtractionJob): Promise<BuiltContext<Record<string, unknown>>> {
+  async buildContext(userId: string): Promise<BuiltContext<Record<string, unknown>>> {
     const messageChildren: Child[] = this.options.parts.map((part, index) =>
       this.buildMessageNode(part, index),
     );
@@ -63,7 +64,7 @@ export class BenchmarkLocomoContextProvider
       context: toXml(root),
       metadata: {},
       sourceId: this.options.sourceId,
-      userId: job.userId,
+      userId: userId,
     };
   }
 }

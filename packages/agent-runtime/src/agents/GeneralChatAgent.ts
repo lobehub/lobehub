@@ -4,6 +4,7 @@ import { DEFAULT_SECURITY_BLACKLIST, InterventionChecker } from '../core';
 import {
   Agent,
   AgentInstruction,
+  AgentInstructionCompressContext,
   AgentRuntimeContext,
   AgentState,
   GeneralAgentCallLLMInstructionPayload,
@@ -11,11 +12,13 @@ import {
   GeneralAgentCallToolResultPayload,
   GeneralAgentCallToolsBatchInstructionPayload,
   GeneralAgentCallingToolInstructionPayload,
+  GeneralAgentCompressionResultPayload,
   GeneralAgentConfig,
   HumanAbortPayload,
   TaskResultPayload,
   TasksBatchResultPayload,
 } from '../types';
+import { shouldCompress } from '../utils/tokenCounter';
 
 /**
  * ChatAgent - The "Brain" of the chat agent
@@ -220,6 +223,26 @@ export class GeneralChatAgent implements Agent {
   }
 
   /**
+   * Find existing compression summary from messages
+   * Looks for MessageGroup with type 'compression' and extracts its content
+   */
+  private findExistingSummary(messages: any[]): string | undefined {
+    // Look for compression group summary in messages
+    // The summary is typically stored as a system message with compression metadata
+    // or as a MessageGroup content field
+    for (const msg of messages) {
+      if (msg.role === 'system' && msg.metadata?.compressionSummary) {
+        return msg.content;
+      }
+      // Check for MessageGroup type compression
+      if (msg.messageGroupType === 'compression' && msg.content) {
+        return msg.content;
+      }
+    }
+    return undefined;
+  }
+
+  /**
    * Handle abort scenario - unified abort handling logic
    */
   private handleAbort(
@@ -260,6 +283,23 @@ export class GeneralChatAgent implements Agent {
     switch (context.phase) {
       case 'init':
       case 'user_input': {
+        // Check if context compression is needed before calling LLM
+        const compressionCheck = shouldCompress(state.messages, {
+          maxWindowToken: this.config.compressionConfig?.maxWindowToken,
+        });
+
+        if (compressionCheck.needsCompression) {
+          // Context exceeds threshold, compress ALL messages into a single summary
+          return {
+            payload: {
+              currentTokenCount: compressionCheck.currentTokenCount,
+              existingSummary: this.findExistingSummary(state.messages),
+              messages: state.messages,
+            },
+            type: 'compress_context',
+          } as AgentInstructionCompressContext;
+        }
+
         // User input received, call LLM to generate response
         // At this point, messages may have been preprocessed with RAG/Search
         return {
@@ -487,6 +527,27 @@ export class GeneralChatAgent implements Agent {
             messages: messagesWithPrompt,
             model: this.config.modelRuntimeConfig?.model,
             parentMessageId,
+            provider: this.config.modelRuntimeConfig?.provider,
+            tools: state.tools,
+          } as GeneralAgentCallLLMInstructionPayload,
+          type: 'call_llm',
+        };
+      }
+
+      case 'compression_result': {
+        // Context compression completed, continue to call LLM
+        const compressionPayload = context.payload as GeneralAgentCompressionResultPayload;
+
+        // If compression was skipped (no messages to compress), just call LLM
+        // Otherwise, messages have been updated with compressed content
+        // Pass parentMessageId and createAssistantMessage=true to force new message creation
+        return {
+          payload: {
+            // Force create new assistant message after compression
+            createAssistantMessage: true,
+            messages: compressionPayload.compressedMessages,
+            model: this.config.modelRuntimeConfig?.model,
+            parentMessageId: compressionPayload.parentMessageId,
             provider: this.config.modelRuntimeConfig?.provider,
             tools: state.tools,
           } as GeneralAgentCallLLMInstructionPayload,

@@ -1,11 +1,11 @@
 ---
-title: Customize LobeChat Deployment with Environment Variables
+title: Customize LobeHub Deployment with Environment Variables
 description: >-
-  Learn about the common environment variables used to customize LobeChat
-  deployment, including OAuth SSO, base path, and default agent
+  Learn about the common environment variables used to customize LobeHub
+  deployment, including access code, OAuth SSO, base path, and default agent
   configuration.
 tags:
-  - LobeChat
+  - LobeHub
   - environment variables
   - deployment
   - OAuth SSO
@@ -15,14 +15,14 @@ tags:
 
 # Environment Variables
 
-LobeChat provides some additional configuration options during deployment, which can be customized using environment variables.
+LobeHub provides some additional configuration options during deployment, which can be customized using environment variables.
 
 ## Common Variables
 
 ### `KEY_VAULTS_SECRET`
 
-- Type: Required (server database mode)
-- Description: Used to encrypt sensitive information stored by users in the database (such as API Keys, baseURL, etc.), preventing exposure of critical information in case of database breach
+- Type: Optional
+- Description: Add a password to access the LobeHub service. You can set a long password to prevent brute force attacks.
 - Default: -
 - Example: `Kix2wcUONd4CX51E/ZPAd36BqM4wzJgKjPtz2sGztqQ=`
 
@@ -46,11 +46,11 @@ When using the `turn` mode, the API Keys will be retrieved in a polling manner a
 ### `DEFAULT_AGENT_CONFIG`
 
 - Type: Optional
-- Description: Used to configure the default settings for the LobeChat default agent. It supports various data types and structures, including key-value pairs, nested fields, array values, and more.
+- Description: Used to configure the default settings for the LobeHub default agent. It supports various data types and structures, including key-value pairs, nested fields, array values, and more.
 - Default: -
 - Example: `'model=gpt-4-1106-preview;params.max_tokens=300;plugins=search-engine,lobe-image-designer'`
 
-The `DEFAULT_AGENT_CONFIG` is used to configure the default settings for the LobeChat default agent. It supports various data types and structures, including key-value pairs, nested fields, array values, and more. The table below provides detailed information on the configuration options, examples, and corresponding explanations for the `DEFAULT_AGENT_CONFIG` environment variable:
+The `DEFAULT_AGENT_CONFIG` is used to configure the default settings for the LobeHub default agent. It supports various data types and structures, including key-value pairs, nested fields, array values, and more. The table below provides detailed information on the configuration options, examples, and corresponding explanations for the `DEFAULT_AGENT_CONFIG` environment variable:
 
 | Configuration Type      | Example                                                                                                                  | Explanation                                                                                                        |
 | ----------------------- | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
@@ -72,7 +72,7 @@ Further reading:
 ### `SYSTEM_AGENT`
 
 - Type: Optional
-- Description: Used to configure models and providers for LobeChat system agents (such as topic generation, translation, etc.).
+- Description: Used to configure models and providers for LobeHub system agents (such as topic generation, translation, etc.).
 - Default value: `-`
 - Example: `default=ollama/deepseek-v3` or `topic=openai/gpt-4,translation=anthropic/claude-1`
 
@@ -103,7 +103,7 @@ Available system agents and their functions:
 ### `FEATURE_FLAGS`
 
 - Type: Optional
-- Description: Used to control LobeChat's feature functionalities. Supports multiple feature flags, using `+` to add a feature and `-` to disable a feature. Separate multiple feature flags with a comma `,` and enclose the entire value in quotes `"` to avoid parsing errors.
+- Description: Used to control LobeHub's feature functionalities. Supports multiple feature flags, using `+` to add a feature and `-` to disable a feature. Separate multiple feature flags with a comma `,` and enclose the entire value in quotes `"` to avoid parsing errors.
 - Default: `-`
 - Example: `"-welcome_suggest"`
 
@@ -145,9 +145,9 @@ For specific content, please refer to the [Feature Flags](/docs/self-hosting/adv
 
 **Use Cases**:
 
-LobeChat performs SSRF security checks in the following scenarios:
+LobeHub performs SSRF security checks in the following scenarios:
 
-1. **Image/Video URL to Base64 Conversion**: When processing media messages (e.g., vision models, multimodal models), LobeChat converts image and video URLs to base64 format. This check prevents malicious users from accessing internal network resources.
+1. **Image/Video URL to Base64 Conversion**: When processing media messages (e.g., vision models, multimodal models), LobeHub converts image and video URLs to base64 format. This check prevents malicious users from accessing internal network resources.
 
    Examples:
 
@@ -221,7 +221,7 @@ This environment variable allows administrators to customize the default image g
 ### `PLUGINS_INDEX_URL`
 
 - Type: Optional
-- Description: Index address of the LobeChat plugin market. If you have deployed the plugin market service on your own, you can use this variable to override the default plugin market address.
+- Description: Index address of the LobeHub plugin market. If you have deployed the plugin market service on your own, you can use this variable to override the default plugin market address.
 - Default: `https://chat-plugins.lobehub.com`
 
 ### `PLUGIN_SETTINGS`
@@ -250,5 +250,5 @@ The above example sets the `SERPAPI_API_KEY` of the `search-engine` plugin to `x
 ### `AGENTS_INDEX_URL`
 
 - Type: Optional
-- Description: Index address of the LobeChat assistant market. If you have deployed the assistant market service on your own, you can use this variable to override the default market address.
+- Description: Index address of the LobeHub assistant market. If you have deployed the assistant market service on your own, you can use this variable to override the default market address.
 - Default: `https://chat-agents.lobehub.com`

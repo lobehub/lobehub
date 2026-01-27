@@ -71,3 +71,11 @@ See the [Clerk Migration Guide](/docs/self-hosting/advanced/auth/clerk-to-better
 LobeHub 2.0 only supports Server DB mode. Client DB (PGlite) is no longer supported. If you were using `NEXT_PUBLIC_SERVICE_MODE=client`, you need to migrate to Server DB deployment.
 
 For deployment guides, see [Server Database Deployment](/docs/self-hosting/server-database).
+
+## PostgreSQL Version Requirements
+
+LobeHub 2.0 recommends using **PostgreSQL 17** or higher.
+
+This is because LobeHub 2.0 uses the [pg\_search](https://github.com/paradedb/paradedb/tree/main/pg_search) extension for full-text search capabilities. If you use Serverless Postgres services like Neon, the pg\_search extension is only available on PostgreSQL 17.
+
+If you self-host your database with Docker, we recommend using the `pgvector/pgvector:pg17` image.

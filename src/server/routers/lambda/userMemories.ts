@@ -6,6 +6,7 @@ import {
 } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import {
+  ActivityMemoryItemSchema,
   AddIdentityActionSchema,
   ContextMemoryItemSchema,
   ExperienceMemoryItemSchema,
@@ -21,6 +22,7 @@ import { z } from 'zod';
 import {
   type IdentityEntryBasePayload,
   type IdentityEntryPayload,
+  UserMemoryActivityModel,
   UserMemoryExperienceModel,
   UserMemoryIdentityModel,
   UserMemoryModel,
@@ -28,6 +30,7 @@ import {
 import { UserMemoryTopicRepository } from '@/database/repositories/userMemory';
 import {
   userMemories,
+  userMemoriesActivities,
   userMemoriesContexts,
   userMemoriesExperiences,
   userMemoriesIdentities,
@@ -39,6 +42,7 @@ import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 const EMPTY_SEARCH_RESULT: SearchMemoryResult = {
+  activities: [],
   contexts: [],
   experiences: [],
   preferences: [],
@@ -54,6 +58,27 @@ type MemorySearchResult = Awaited<ReturnType<UserMemoryModel['searchWithEmbeddin
 
 const mapMemorySearchResult = (layeredResults: MemorySearchResult): SearchMemoryResult => {
   return {
+    activities: layeredResults.activities.map((activity) => ({
+      accessedAt: activity.accessedAt,
+      associatedLocations: activity.associatedLocations,
+      associatedObjects: activity.associatedObjects,
+      associatedSubjects: activity.associatedSubjects,
+      capturedAt: activity.capturedAt,
+      createdAt: activity.createdAt,
+      endsAt: activity.endsAt,
+      feedback: activity.feedback,
+      id: activity.id,
+      metadata: activity.metadata,
+      narrative: activity.narrative,
+      notes: activity.notes,
+      startsAt: activity.startsAt,
+      status: activity.status,
+      tags: activity.tags,
+      timezone: activity.timezone,
+      type: activity.type,
+      updatedAt: activity.updatedAt,
+      userMemoryId: activity.userMemoryId,
+    })),
     contexts: layeredResults.contexts.map((context) => ({
       accessedAt: context.accessedAt,
       associatedObjects: context.associatedObjects,
@@ -121,9 +146,10 @@ const searchUserMemories = async (
   });
 
   const limits = {
-    contexts: input.topK?.contexts,
-    experiences: input.topK?.experiences,
-    preferences: input.topK?.preferences,
+    activities: input.topK?.activities ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.activities,
+    contexts: input.topK?.contexts ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.contexts,
+    experiences: input.topK?.experiences ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.experiences,
+    preferences: input.topK?.preferences ?? DEFAULT_SEARCH_USER_MEMORY_TOP_K.preferences,
   };
 
   const layeredResults = await ctx.memoryModel.searchWithEmbedding({
@@ -167,6 +193,7 @@ const REEMBED_TABLE_KEYS = [
   'preferences',
   'identities',
   'experiences',
+  'activities',
 ] as const;
 type ReEmbedTableKey = (typeof REEMBED_TABLE_KEYS)[number];
 
@@ -204,6 +231,7 @@ const memoryProcedure = authedProcedure.use(serverDatabase).use(async (opts) => 
   const { ctx } = opts;
   return opts.next({
     ctx: {
+      activityModel: new UserMemoryActivityModel(ctx.serverDB, ctx.userId),
       experienceModel: new UserMemoryExperienceModel(ctx.serverDB, ctx.userId),
       identityModel: new UserMemoryIdentityModel(ctx.serverDB, ctx.userId),
       memoryModel: new UserMemoryModel(ctx.serverDB, ctx.userId),
@@ -220,6 +248,34 @@ export const userMemoriesRouter = router({
       } catch (error) {
         console.error('Failed to retrieve memory detail:', error);
         return null;
+      }
+    }),
+
+  queryActivities: memoryProcedure
+    .input(
+      z
+        .object({
+          order: z.enum(['asc', 'desc']).optional(),
+          page: z.coerce.number().int().min(1).optional(),
+          pageSize: z.coerce.number().int().min(1).max(100).optional(),
+          q: z.string().optional(),
+          sort: z.enum(['capturedAt', 'startsAt']).optional(),
+          status: z.array(z.string()).optional(),
+          tags: z.array(z.string()).optional(),
+          types: z.array(z.string()).optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const params = input ?? {};
+      const fallbackPage = params.page ?? 1;
+      const fallbackPageSize = params.pageSize ?? 20;
+
+      try {
+        return await ctx.activityModel.queryList(params);
+      } catch (error) {
+        console.error('Failed to query activities:', error);
+        return { items: [], page: fallbackPage, pageSize: fallbackPageSize, total: 0 };
       }
     }),
 
@@ -318,8 +374,16 @@ export const userMemoriesRouter = router({
           pageSize: z.coerce.number().int().min(1).max(100).optional(),
           q: z.string().optional(),
           sort: z
-            .enum(['capturedAt', 'scoreConfidence', 'scoreImpact', 'scorePriority', 'scoreUrgency'])
+            .enum([
+              'capturedAt',
+              'scoreConfidence',
+              'scoreImpact',
+              'scorePriority',
+              'scoreUrgency',
+              'startsAt',
+            ])
             .optional(),
+          status: z.array(z.string()).optional(),
           tags: z.array(z.string()).optional(),
           types: z.array(z.string()).optional(),
         })
@@ -361,11 +425,6 @@ export const userMemoriesRouter = router({
       }
     }),
 
-  // REVIEW: Extract memories directly from current topic
-  // REVIEW: We need a function implementation that can be triggered both by cron and manually by users for "daily/weekly/periodic" memory extraction/generation
-  // REVIEW: Scheduled task
-  // Don't use tRPC, use server/service directly
-  // Reference: https://github.com/lobehub/lobe-chat-cloud/blob/886ff2fcd44b7b00a3aa8906f84914a6dcaa1815/src/app/(backend)/cron/reset-budgets/route.ts#L214
   reEmbedMemories: memoryProcedure
     .input(reEmbedInputSchema.optional())
     .mutation(async ({ ctx, input }) => {
@@ -639,6 +698,73 @@ export const userMemoriesRouter = router({
           } satisfies ReEmbedStats;
         });
 
+        await run('activities', async () => {
+          const where = combineConditions([
+            eq(userMemoriesActivities.userId, ctx.userId),
+            options.startDate
+              ? gte(userMemoriesActivities.createdAt, options.startDate)
+              : undefined,
+            options.endDate ? lte(userMemoriesActivities.createdAt, options.endDate) : undefined,
+          ]);
+
+          const rows = await ctx.serverDB.query.userMemoriesActivities.findMany({
+            columns: { feedback: true, id: true, narrative: true },
+            limit: options.limit,
+            orderBy: [asc(userMemoriesActivities.createdAt)],
+            where,
+          });
+
+          let succeeded = 0;
+          let failed = 0;
+          let skipped = 0;
+
+          await pMap(
+            rows,
+            async (row) => {
+              const narrative = normalizeEmbeddable(row.narrative);
+              const feedback = normalizeEmbeddable(row.feedback);
+
+              try {
+                if (!narrative && !feedback) {
+                  await ctx.memoryModel.updateActivityVectors(row.id, {
+                    feedbackVector: null,
+                    narrativeVector: null,
+                  });
+                  skipped += 1;
+                  return;
+                }
+
+                const inputs: string[] = [];
+                if (narrative) inputs.push(narrative);
+                if (feedback) inputs.push(feedback);
+
+                const embeddings = await embedTexts(inputs);
+                let embedIndex = 0;
+
+                const narrativeVector = narrative ? (embeddings[embedIndex++] ?? null) : null;
+                const feedbackVector = feedback ? (embeddings[embedIndex++] ?? null) : null;
+
+                await ctx.memoryModel.updateActivityVectors(row.id, {
+                  feedbackVector,
+                  narrativeVector,
+                });
+                succeeded += 1;
+              } catch (err) {
+                failed += 1;
+                console.error(`[memoryRouter.reEmbed] Failed to re-embed activity ${row.id}`, err);
+              }
+            },
+            { concurrency },
+          );
+
+          return {
+            failed,
+            skipped,
+            succeeded,
+            total: rows.length,
+          } satisfies ReEmbedStats;
+        });
+
         await run('experiences', async () => {
           const where = combineConditions([
             eq(userMemoriesExperiences.userId, ctx.userId),
@@ -796,7 +922,68 @@ export const userMemoriesRouter = router({
     }
   }),
 
-  // REVIEW: Need to implement tool memory api
+  toolAddActivityMemory: memoryProcedure
+    .input(ActivityMemoryItemSchema)
+    .mutation(async ({ input, ctx }) => {
+      try {
+        const { agentRuntime, embeddingModel } = await getEmbeddingRuntime(
+          ctx.serverDB,
+          ctx.userId,
+        );
+        const embed = createEmbedder(agentRuntime, embeddingModel);
+
+        const summaryEmbedding = await embed(input.summary);
+        const detailsEmbedding = await embed(input.details);
+        const narrativeVector = await embed(input.withActivity.narrative);
+        const feedbackVector = await embed(input.withActivity.feedback);
+
+        const { activity, memory } = await ctx.memoryModel.createActivityMemory({
+          activity: {
+            associatedLocations:
+              UserMemoryModel.parseAssociatedLocations(input.withActivity.associatedLocations) ??
+              null,
+            associatedObjects:
+              UserMemoryModel.parseAssociatedObjects(input.withActivity.associatedObjects) ?? [],
+            associatedSubjects:
+              UserMemoryModel.parseAssociatedSubjects(input.withActivity.associatedSubjects) ?? [],
+            endsAt: UserMemoryModel.parseDateFromString(input.withActivity.endsAt ?? undefined),
+            feedback: input.withActivity.feedback ?? null,
+            feedbackVector: feedbackVector ?? null,
+            metadata: input.withActivity.metadata ?? null,
+            narrative: input.withActivity.narrative ?? null,
+            narrativeVector: narrativeVector ?? null,
+            notes: input.withActivity.notes ?? null,
+            startsAt: UserMemoryModel.parseDateFromString(input.withActivity.startsAt ?? undefined),
+            status: input.withActivity.status ?? 'pending',
+            tags: input.withActivity.tags ?? input.tags ?? [],
+            timezone: input.withActivity.timezone ?? null,
+            type: input.withActivity.type ?? 'other',
+          },
+          details: input.details || '',
+          detailsEmbedding,
+          memoryCategory: input.memoryCategory,
+          memoryLayer: LayersEnum.Activity,
+          memoryType: input.memoryType,
+          summary: input.summary,
+          summaryEmbedding,
+          title: input.title,
+        });
+
+        return {
+          activityId: activity.id,
+          memoryId: memory.id,
+          message: 'Memory saved successfully',
+          success: true,
+        };
+      } catch (error) {
+        console.error('Failed to save memory:', error);
+        return {
+          message: `Failed to save memory: ${(error as Error).message}`,
+          success: false,
+        };
+      }
+    }),
+
   toolAddContextMemory: memoryProcedure
     .input(ContextMemoryItemSchema)
     .mutation(async ({ input, ctx }) => {

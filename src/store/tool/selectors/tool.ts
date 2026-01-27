@@ -41,7 +41,7 @@ const getManifestById =
       .concat(s.builtinTools.map((b) => b.manifest as LobeChatPluginManifest))
       .find((i) => i.identifier === id);
 
-// 获取插件 manifest 加载状态
+// Get plugin manifest loading status
 const getManifestLoadingStatus = (id: string) => (s: ToolStoreState) => {
   const manifest = getManifestById(id)(s);
 

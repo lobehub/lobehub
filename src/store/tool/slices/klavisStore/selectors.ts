@@ -6,7 +6,7 @@ import { type KlavisServer, KlavisServerStatus } from './types';
  */
 export const klavisStoreSelectors = {
   /**
-   * 获取所有 Klavis 服务器的 identifier 集合
+   * Get identifier set of all Klavis servers
    */
   getAllServerIdentifiers: (s: ToolStore): Set<string> => {
     const servers = s.servers || [];
@@ -14,46 +14,46 @@ export const klavisStoreSelectors = {
   },
 
   /**
-   * 获取所有可用的工具（来自所有已连接的服务器）
+   * Get all available tools (from all connected servers)
    */
   getAllTools: (s: ToolStore) => {
     const connectedServers = klavisStoreSelectors.getConnectedServers(s);
     return connectedServers.flatMap((server) =>
       (server.tools || []).map((tool) => ({
         ...tool,
-        // 工具仍然需要 serverName 用于 API 调用
+        // Tool still needs serverName for API calls
         serverName: server.serverName,
       })),
     );
   },
 
   /**
-   * 获取所有已连接的服务器
+   * Get all connected servers
    */
   getConnectedServers: (s: ToolStore): KlavisServer[] =>
     (s.servers || []).filter((server) => server.status === KlavisServerStatus.CONNECTED),
 
   /**
-   * 获取所有待认证的服务器
+   * Get all servers pending authentication
    */
   getPendingAuthServers: (s: ToolStore): KlavisServer[] =>
     (s.servers || []).filter((server) => server.status === KlavisServerStatus.PENDING_AUTH),
 
   /**
-   * 根据 identifier 获取服务器
-   * @param identifier - 服务器标识符 (e.g., 'google-calendar')
+   * Get server by identifier
+   * @param identifier - Server identifier (e.g., 'google-calendar')
    */
   getServerByIdentifier: (identifier: string) => (s: ToolStore) =>
     s.servers?.find((server) => server.identifier === identifier),
 
   /**
-   * 获取所有 Klavis 服务器
+   * Get all Klavis servers
    */
   getServers: (s: ToolStore): KlavisServer[] => s.servers || [],
 
   /**
-   * 检查给定的 identifier 是否是 Klavis 服务器
-   * @param identifier - 服务器标识符 (e.g., 'google-calendar')
+   * Check if given identifier is a Klavis server
+   * @param identifier - Server identifier (e.g., 'google-calendar')
    */
   isKlavisServer:
     (identifier: string) =>
@@ -63,14 +63,14 @@ export const klavisStoreSelectors = {
     },
 
   /**
-   * 检查服务器是否正在加载
-   * @param identifier - 服务器标识符 (e.g., 'google-calendar')
+   * Check if server is loading
+   * @param identifier - Server identifier (e.g., 'google-calendar')
    */
   isServerLoading: (identifier: string) => (s: ToolStore) =>
     s.loadingServerIds?.has(identifier) || false,
 
   /**
-   * 检查工具是否正在执行
+   * Check if tool is executing
    */
   isToolExecuting: (serverUrl: string, toolName: string) => (s: ToolStore) => {
     const toolId = `${serverUrl}:${toolName}`;
@@ -97,7 +97,7 @@ export const klavisStoreSelectors = {
 
       if (apis.length > 0) {
         tools.push({
-          // 使用 identifier 作为存储和引用的标识符
+          // Use identifier as storage and reference identifier
           identifier: server.identifier,
           manifest: {
             api: apis,

@@ -1,54 +1,52 @@
 ---
-title: Using Local Qwen Model in LobeChat
-description: 通过LobeChat和Ollama的集成，您可以轻松在LobeChat中使用Qwen。本文将指导您如何在LobeChat中使用本地部署版本的Qwen。
+title: Using the Local Qwen Model in LobeHub
+description: >-
+  Easily chat with the locally deployed Qwen model through LobeHub's integration
+  with Ollama. Learn how to install and select the Qwen model.
 tags:
   - Qwen
-  - LobeChat
+  - Qwen Model
+  - LobeHub Integration
   - Ollama
-  - 本地部署
-  - AI大模型
+  - Local Deployment
 ---
 
 # Using the Local Qwen Model
 
-<Image alt={'Using Qwen in LobeChat'} cover src={'https://github.com/lobehub/lobe-chat/assets/17870709/b4a01219-e7b1-48a0-888c-f0271b18e3a6'} />
+<Image alt={'Using Qwen in LobeHub'} cover src={'/blog/assets17870709/b4a01219-e7b1-48a0-888c-f0271b18e3a6.webp'} />
 
-[Qwen](https://github.com/QwenLM/Qwen1.5) is a large language model (LLM) open-sourced by Alibaba Cloud. It is officially defined as a constantly evolving AI large model, and it achieves more accurate Chinese recognition capabilities through more training set content.
+[Qwen](https://github.com/QwenLM/Qwen1.5) is an open-source large language model (LLM) developed by Alibaba Cloud. It is officially described as an evolving AI model that achieves more accurate Chinese language understanding through extensive training data.
 
-<Video src="https://github.com/lobehub/lobe-chat/assets/28616219/31e5f625-8dc4-4a5f-a5fd-d28d0457782d" />
+<Video src="/blog/assets28616219/31e5f625-8dc4-4a5f-a5fd-d28d0457782d.mp4" />
 
-Now, through the integration of LobeChat and [Ollama](https://ollama.com/), you can easily use Qwen in LobeChat. This document will guide you on how to use the local deployment version of Qwen in LobeChat:
+Now, thanks to LobeHub’s integration with [Ollama](https://ollama.com/), you can easily use the Qwen model locally within LobeHub.
+
+This guide will walk you through how to use the locally deployed Qwen model in LobeHub:
 
 <Steps>
-  ## Local Installation of Ollama
+  ### Install Ollama Locally
 
-  First, you need to install Ollama. For the installation process, please refer to the [Ollama Usage Document](/docs/usage/providers/ollama).
+  First, you’ll need to install Ollama. For installation instructions, refer to the [Ollama usage guide](/en/docs/usage/providers/ollama).
 
-  ## Pull the Qwen Model to Local with Ollama
+  ### Pull the Qwen Model Using Ollama
 
-  After installing Ollama, you can install the Qwen model with the following command, taking the 14b model as an example:
+  Once Ollama is installed, you can pull the Qwen model locally. For example, to pull the 14b version of the model, run:
 
   ```bash
   ollama pull qwen:14b
   ```
 
-  <Callout type={'info'}>
-    The local version of Qwen provides different model sizes to choose from. Please refer to the
-    [Qwen's Ollama integration page](https://ollama.com/library/qwen) to understand how to choose the
-    model size.
-  </Callout>
-
-  <Image alt={'Use Ollama Pull Qwen Model'} height={473} inStep src={'https://github.com/lobehub/lobe-chat/assets/1845053/fe34fdfe-c2e4-4d6a-84d7-4ebc61b2516a'} />
+  <Image alt={'Pulling the Qwen model using Ollama'} height={473} inStep src={'/blog/assets1845053/fe34fdfe-c2e4-4d6a-84d7-4ebc61b2516a.webp'} />
 
   ### Select the Qwen Model
 
-  In the LobeChat conversation page, open the model selection panel, and then select the Qwen model.
+  In the chat interface, open the model selection panel and choose the Qwen model.
 
-  <Image alt={'Choose Qwen Model'} height={430} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/e0608cca-f62f-414a-bc55-28a61ba21f14'} />
+  <Image alt={'Selecting the Qwen model in the model panel'} height={430} inStep src={'/blog/assets28616219/e0608cca-f62f-414a-bc55-28a61ba21f14.webp'} />
 
   <Callout type={'info'}>
-    If you do not see the Ollama provider in the model selection panel, please refer to [Integration with Ollama](/docs/self-hosting/examples/ollama) to learn how to enable the Ollama provider in LobeChat.
+    If you don’t see the Ollama provider in the model selection panel, refer to the [Ollama Integration Guide](/en/docs/self-hosting/examples/ollama) to learn how to enable the Ollama provider in LobeHub.
   </Callout>
 </Steps>
 
-Next, you can have a conversation with the local Qwen model in LobeChat.
+You’re now ready to start chatting with the local Qwen model in LobeHub.

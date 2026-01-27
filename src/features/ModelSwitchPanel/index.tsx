@@ -34,9 +34,7 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
 
     return (
       <DropdownMenuRoot onOpenChange={handleOpenChange} open={isOpen}>
-        <DropdownMenuTrigger nativeButton={false} openOnHover>
-          {children}
-        </DropdownMenuTrigger>
+        <DropdownMenuTrigger openOnHover>{children}</DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner hoverTrigger placement={placement}>
             <DropdownMenuPopup className={styles.container}>

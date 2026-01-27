@@ -2,7 +2,7 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { Button, type ButtonProps, Center, Tooltip } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { BotIcon, FilePenIcon, ImageIcon, MicroscopeIcon } from 'lucide-react';
+import { BotIcon, FilePenIcon, ImageIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -76,12 +76,12 @@ const StarterList = memo(() => {
         key: 'image',
         titleKey: 'starter.image',
       },
-      {
-        disabled: true,
-        icon: MicroscopeIcon,
-        key: 'research',
-        titleKey: 'starter.deepResearch',
-      },
+      // {
+      //   disabled: true,
+      //   icon: MicroscopeIcon,
+      //   key: 'research',
+      //   titleKey: 'starter.deepResearch',
+      // },
     ],
     [],
   );

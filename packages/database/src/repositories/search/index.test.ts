@@ -7,6 +7,7 @@ import { NewFile, files } from '../../schemas/file';
 import { messages } from '../../schemas/message';
 import { NewTopic, topics } from '../../schemas/topic';
 import { users } from '../../schemas/user';
+import { documents } from '../../schemas';
 import { LobeChatDatabase } from '../../type';
 import { SearchRepo } from './index';
 
@@ -673,6 +674,256 @@ describe('SearchRepo', () => {
         expect(topic.relevance).toBeGreaterThanOrEqual(1);
         expect(topic.relevance).toBeLessThanOrEqual(3);
       });
+    });
+  });
+
+  describe('search - folder search', () => {
+    beforeEach(async () => {
+      // Create test folders (documents with file_type='custom/folder')
+      await serverDB.insert(documents).values([
+        {
+          description: 'My project files',
+          fileType: 'custom/folder',
+          filename: 'project-folder',
+          slug: 'project-folder-slug',
+          source: 'internal://folder-1',
+          sourceType: 'file',
+          title: 'Project Documents',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+        },
+        {
+          description: 'Archive folder for old files',
+          fileType: 'custom/folder',
+          filename: 'archive',
+          slug: 'archive-slug',
+          source: 'internal://folder-2',
+          sourceType: 'file',
+          title: 'Archive Folder',
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+        },
+      ]);
+    });
+
+    it('should find folders by title', async () => {
+      const results = await searchRepo.search({ query: 'Project', type: 'folder' });
+
+      expect(results.length).toBeGreaterThan(0);
+      results.forEach((result) => {
+        expect(result.type).toBe('folder');
+      });
+    });
+
+    it('should find folders by description', async () => {
+      const results = await searchRepo.search({ query: 'archive', type: 'folder' });
+
+      expect(results.length).toBeGreaterThan(0);
+      const folder = results[0];
+      if (folder.type === 'folder') {
+        expect(folder.title.toLowerCase()).toContain('archive');
+      }
+    });
+
+    it('should return correct folder structure', async () => {
+      const results = await searchRepo.search({ query: 'project', type: 'folder' });
+
+      expect(results.length).toBeGreaterThan(0);
+      const folder = results[0];
+
+      expect(folder.type).toBe('folder');
+      expect(folder.id).toBeDefined();
+      expect(folder.title).toBeDefined();
+      expect(folder.relevance).toBeGreaterThan(0);
+      expect(folder.createdAt).toBeInstanceOf(Date);
+      expect(folder.updatedAt).toBeInstanceOf(Date);
+
+      if (folder.type === 'folder') {
+        expect(folder.slug).toBeDefined();
+      }
+    });
+  });
+
+  describe('search - page search', () => {
+    beforeEach(async () => {
+      // Create test pages (documents with file_type='custom/document')
+      await serverDB.insert(documents).values([
+        {
+          content: 'This is the content of my notes page',
+          fileType: 'custom/document',
+          filename: 'my-notes.md',
+          source: 'internal://page-1',
+          sourceType: 'file',
+          title: 'My Notes Page',
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId,
+        },
+        {
+          content: 'Documentation for the project',
+          fileType: 'custom/document',
+          filename: 'readme.md',
+          source: 'internal://page-2',
+          sourceType: 'file',
+          title: 'Project README',
+          totalCharCount: 200,
+          totalLineCount: 20,
+          userId,
+        },
+      ]);
+    });
+
+    it('should find pages by title', async () => {
+      const results = await searchRepo.search({ query: 'Notes', type: 'page' });
+
+      expect(results.length).toBeGreaterThan(0);
+      results.forEach((result) => {
+        expect(result.type).toBe('page');
+      });
+    });
+
+    it('should find pages by filename', async () => {
+      const results = await searchRepo.search({ query: 'readme', type: 'page' });
+
+      expect(results.length).toBeGreaterThan(0);
+      expect(results[0].type).toBe('page');
+    });
+
+    it('should return correct page structure', async () => {
+      const results = await searchRepo.search({ query: 'notes', type: 'page' });
+
+      expect(results.length).toBeGreaterThan(0);
+      const page = results[0];
+
+      expect(page.type).toBe('page');
+      expect(page.id).toBeDefined();
+      expect(page.title).toBeDefined();
+      expect(page.relevance).toBeGreaterThan(0);
+      expect(page.createdAt).toBeInstanceOf(Date);
+      expect(page.updatedAt).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('search - context types', () => {
+    beforeEach(async () => {
+      // Create test data for context testing
+      await serverDB.insert(agents).values(
+        Array.from({ length: 5 }, (_, i) => ({
+          slug: `ctx-agent-${i}`,
+          title: `Context Test Agent ${i}`,
+          userId,
+        })),
+      );
+
+      await serverDB.insert(topics).values(
+        Array.from({ length: 5 }, (_, i) => ({
+          title: `Context Test Topic ${i}`,
+          userId,
+        })),
+      );
+
+      await serverDB.insert(files).values(
+        Array.from({ length: 8 }, (_, i) => ({
+          fileType: 'text/plain',
+          name: `context-test-file-${i}.txt`,
+          size: 100,
+          url: `file://context-test-file-${i}.txt`,
+          userId,
+        })),
+      );
+
+      await serverDB.insert(documents).values([
+        ...Array.from({ length: 8 }, (_, i) => ({
+          fileType: 'custom/folder',
+          filename: `context-test-folder-${i}`,
+          source: `internal://ctx-folder-${i}`,
+          sourceType: 'file' as const,
+          title: `Context Test Folder ${i}`,
+          totalCharCount: 0,
+          totalLineCount: 0,
+          userId,
+        })),
+        ...Array.from({ length: 8 }, (_, i) => ({
+          fileType: 'custom/document',
+          filename: `context-test-page-${i}.md`,
+          source: `internal://ctx-page-${i}`,
+          sourceType: 'file' as const,
+          title: `Context Test Page ${i}`,
+          totalCharCount: 100,
+          totalLineCount: 10,
+          userId,
+        })),
+      ]);
+    });
+
+    it('should expand pages to 6 in page context', async () => {
+      const results = await searchRepo.search({
+        contextType: 'page',
+        query: 'context test',
+      });
+
+      const pageResults = results.filter((r) => r.type === 'page');
+      expect(pageResults.length).toBe(6);
+    });
+
+    it('should limit other types to 3 in page context', async () => {
+      const results = await searchRepo.search({
+        contextType: 'page',
+        query: 'context test',
+      });
+
+      const agentResults = results.filter((r) => r.type === 'agent');
+      const topicResults = results.filter((r) => r.type === 'topic');
+      const fileResults = results.filter((r) => r.type === 'file');
+      const folderResults = results.filter((r) => r.type === 'folder');
+
+      expect(agentResults.length).toBeLessThanOrEqual(3);
+      expect(topicResults.length).toBeLessThanOrEqual(3);
+      expect(fileResults.length).toBeLessThanOrEqual(3);
+      expect(folderResults.length).toBeLessThanOrEqual(3);
+    });
+
+    it('should expand files and folders to 6 in resource context', async () => {
+      const results = await searchRepo.search({
+        contextType: 'resource',
+        query: 'context-test',
+      });
+
+      const fileResults = results.filter((r) => r.type === 'file');
+      const folderResults = results.filter((r) => r.type === 'folder');
+
+      expect(fileResults.length).toBe(6);
+      expect(folderResults.length).toBe(6);
+    });
+
+    it('should limit other types to 3 in resource context', async () => {
+      const results = await searchRepo.search({
+        contextType: 'resource',
+        query: 'context test',
+      });
+
+      const agentResults = results.filter((r) => r.type === 'agent');
+      const topicResults = results.filter((r) => r.type === 'topic');
+      const pageResults = results.filter((r) => r.type === 'page');
+
+      expect(agentResults.length).toBeLessThanOrEqual(3);
+      expect(topicResults.length).toBeLessThanOrEqual(3);
+      expect(pageResults.length).toBeLessThanOrEqual(3);
+    });
+
+    it('should use agent context limits with contextType=agent', async () => {
+      const results = await searchRepo.search({
+        contextType: 'agent',
+        query: 'context test',
+      });
+
+      const topicResults = results.filter((r) => r.type === 'topic');
+      expect(topicResults.length).toBeLessThanOrEqual(6);
+
+      const agentResults = results.filter((r) => r.type === 'agent');
+      expect(agentResults.length).toBeLessThanOrEqual(3);
     });
   });
 

@@ -1,6 +1,6 @@
 ---
-title: 在 LobeChat 中使用 Ollama
-description: 了解如何在 LobeChat 中使用 Ollama ，在你的本地运行大型语言模型，获得最前沿的 AI 使用体验。
+title: 在 LobeHub 中使用 Ollama
+description: 了解如何在 LobeHub 中使用 Ollama ，在你的本地运行大型语言模型，获得最前沿的 AI 使用体验。
 tags:
   - Ollama
   - Web UI
@@ -9,15 +9,15 @@ tags:
   - Ollama WebUI
 ---
 
-# 在 LobeChat 中使用 Ollama
+# 在 LobeHub 中使用 Ollama
 
-<Image alt={'在 LobeChat 中使用 Ollama'} borderless cover src={'https://github.com/lobehub/lobe-chat/assets/17870709/f579b39b-e771-402c-a1d1-620e57a10c75'} />
+<Image alt={'在 LobeHub 中使用 Ollama'} borderless cover src={'/blog/assets17870709/f579b39b-e771-402c-a1d1-620e57a10c75.webp'} />
 
-Ollama 是一款强大的本地运行大型语言模型（LLM）的框架，支持多种语言模型，包括 Llama 2, Mistral 等。现在，LobeChat 已经支持与 Ollama 的集成，这意味着你可以在 LobeChat 中轻松使用 Ollama 提供的语言模型来增强你的应用。
+Ollama 是一款强大的本地运行大型语言模型（LLM）的框架，支持多种语言模型，包括 Llama 2, Mistral 等。现在，LobeHub 已经支持与 Ollama 的集成，这意味着你可以在 LobeHub 中轻松使用 Ollama 提供的语言模型来增强你的应用。
 
-本文档将指导你如何在 LobeChat 中使用 Ollama：
+本文档将指导你如何在 LobeHub 中使用 Ollama：
 
-<Video alt={'在 LobeChat 中使用 Ollama的完整演示'} height={580} src="https://github.com/lobehub/lobe-chat/assets/28616219/c32b56db-c6a1-4876-9bc3-acbd37ec0c0c" />
+<Video alt={'在 LobeHub 中使用 Ollama的完整演示'} height={580} src="/blog/assets28616219/c32b56db-c6a1-4876-9bc3-acbd37ec0c0c.mp4" />
 
 ## 在 macOS 下使用 Ollama
 
@@ -36,11 +36,11 @@ Ollama 是一款强大的本地运行大型语言模型（LLM）的框架，支�
 
   完成设置后，需要重启 Ollama 应用程序。
 
-  ### 在 LobeChat 中与本地大模型对话
+  ### 在 LobeHub 中与本地大模型对话
 
-  接下来，你就可以使用 LobeChat 与本地 LLM 对话了。
+  接下来，你就可以使用 LobeHub 与本地 LLM 对话了。
 
-  <Image alt="在 LobeChat 中与 llama3 对话" height="573" src="https://github.com/lobehub/lobe-chat/assets/28616219/7f9a9a9f-fd91-4f59-aac9-3f26c6d49a1e" />
+  <Image alt="在 LobeHub 中与 llama3 对话" height="573" src="/blog/assets28616219/7f9a9a9f-fd91-4f59-aac9-3f26c6d49a1e.webp" />
 </Steps>
 
 ## 在 windows 下使用 Ollama
@@ -62,9 +62,9 @@ Ollama 是一款强大的本地运行大型语言模型（LLM）的框架，支�
   4. 点击`OK/应用`保存后重启系统。
   5. 重新运行`Ollama`。
 
-  ### 在 LobeChat 中与本地大模型对话
+  ### 在 LobeHub 中与本地大模型对话
 
-  接下来，你就可以使用 LobeChat 与本地 LLM 对话了。
+  接下来，你就可以使用 LobeHub 与本地 LLM 对话了。
 </Steps>
 
 ## 在 linux 下使用 Ollama
@@ -106,9 +106,9 @@ Ollama 是一款强大的本地运行大型语言模型（LLM）的框架，支�
   sudo systemctl restart ollama
   ```
 
-  ### 在 LobeChat 中与本地大模型对话
+  ### 在 LobeHub 中与本地大模型对话
 
-  接下来，你就可以使用 LobeChat 与本地 LLM 对话了。
+  接下来，你就可以使用 LobeHub 与本地 LLM 对话了。
 </Steps>
 
 ## 使用 docker 部署使用 Ollama
@@ -132,20 +132,20 @@ Ollama 是一款强大的本地运行大型语言模型（LLM）的框架，支�
   docker run -d --gpus=all -v ollama:/root/.ollama -e OLLAMA_ORIGINS="*" -p 11434:11434 --name ollama ollama/ollama
   ```
 
-  ### 在 LobeChat 中与本地大模型对话
+  ### 在 LobeHub 中与本地大模型对话
 
-  接下来，你就可以使用 LobeChat 与本地 LLM 对话了。
+  接下来，你就可以使用 LobeHub 与本地 LLM 对话了。
 </Steps>
 
 ## 安装 Ollama 模型
 
 Ollama 支持多种模型，你可以在 [Ollama Library](https://ollama.com/library) 中查看可用的模型列表，并根据需求选择合适的模型。
 
-### LobeChat 中安装
+### LobeHub 中安装
 
-在 LobeChat 中，我们默认开启了一些常用的大语言模型，例如 llama3、 Gemma 、 Mistral 等。当你选中模型进行对话时，我们会提示你需要下载该模型。
+在 LobeHub 中，我们默认开启了一些常用的大语言模型，例如 llama3、 Gemma 、 Mistral 等。当你选中模型进行对话时，我们会提示你需要下载该模型。
 
-<Image alt="LobeChat 提示安装 Ollama 模型" height="460" src="https://github.com/lobehub/lobe-chat/assets/28616219/4e81decc-776c-43b8-9a54-dfb43e9f601a" />
+<Image alt="LobeHub 提示安装 Ollama 模型" height="460" src="/blog/assets28616219/4e81decc-776c-43b8-9a54-dfb43e9f601a.webp" />
 
 下载完成后即可开始对话。
 
@@ -157,15 +157,15 @@ Ollama 支持多种模型，你可以在 [Ollama Library](https://ollama.com/lib
 ollama pull llama3
 ```
 
-<Video height={524} src="https://github.com/lobehub/lobe-chat/assets/28616219/95828c11-0ae5-4dfa-84ed-854124e927a6" />
+<Video height={524} src="/blog/assets28616219/95828c11-0ae5-4dfa-84ed-854124e927a6.mp4" />
 
 ## 自定义配置
 
 你可以在 `设置` -> `AI 服务商` 中找到 Ollama 的配置选项，你可以在这里配置 Ollama 的代理、模型名称等。
 
-<Image alt={'Ollama 服务商设置'} height={274} src={'https://github.com/lobehub/lobe-chat/assets/28616219/54b3696b-5b13-4761-8c1b-1e664867b2dd'} />
+<Image alt={'Ollama 服务商设置'} height={274} src={'/blog/assets28616219/54b3696b-5b13-4761-8c1b-1e664867b2dd.webp'} />
 
 <Callout type={'info'}>
-  你可以前往 [与 Ollama 集成](/zh/docs/self-hosting/examples/ollama) 了解如何部署 LobeChat
+  你可以前往 [与 Ollama 集成](/zh/docs/self-hosting/examples/ollama) 了解如何部署 LobeHub
   ，以满足与 Ollama 的集成需求。
 </Callout>

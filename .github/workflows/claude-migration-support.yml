@@ -1,5 +1,4 @@
 name: Claude Migration Support
-description: Automatically respond to migration feedback issues using Claude Code
 
 on:
   issue_comment:
@@ -76,6 +75,7 @@ jobs:
 
             3. Read additional reference files:
             - Main auth documentation: `cat docs/self-hosting/advanced/auth.mdx`
+            - Migration internals: `cat docs/self-hosting/advanced/auth/migration-internals.mdx`
             - Deprecated env vars checker: `cat scripts/_shared/checkDeprecatedAuth.js`
 
             4. Analyze the user's comment and determine:

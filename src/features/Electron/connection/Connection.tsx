@@ -1,52 +1,70 @@
+import { Center, Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { useState } from 'react';
+import { Suspense, useCallback } from 'react';
 
-import ConnectionMode from './ConnectionMode';
+import LoginStep from '@/app/[variants]/(desktop)/desktop-onboarding/features/LoginStep';
+import { BrandTextLoading } from '@/components/Loading';
+import { useElectronStore } from '@/store/electron';
+import { isMacOS } from '@/utils/platform';
+
 import RemoteStatus from './RemoteStatus';
-import WaitingOAuth from './Waiting';
+
+const isMac = isMacOS();
 
 const styles = createStaticStyles(({ css }) => {
   return {
     modal: css`
       .ant-drawer-close {
         position: absolute;
-        inset-block-start: 8px;
-        inset-inline-end: 0;
+        inset-block-start: ${isMac ? '12px' : '46px'};
+        inset-inline-end: 6px;
       }
     `,
   };
 });
 
 const Connection = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isWaiting, setWaiting] = useState(false);
+  const [isOpen, setConnectionDrawerOpen] = useElectronStore((s) => [
+    s.isConnectionDrawerOpen,
+    s.setConnectionDrawerOpen,
+  ]);
+
+  const handleClose = useCallback(() => {
+    setConnectionDrawerOpen(false);
+  }, [setConnectionDrawerOpen]);
 
   return (
     <>
       <RemoteStatus
         onClick={() => {
-          setIsOpen(true);
+          setConnectionDrawerOpen(true);
         }}
       />
       <Drawer
         classNames={{ header: styles.modal }}
-        height={'100vh'}
-        onClose={() => {
-          setIsOpen(false);
-        }}
+        onClose={handleClose}
         open={isOpen}
         placement={'top'}
+        size={'100vh'}
         style={{
           background: cssVar.colorBgLayout,
         }}
         styles={{ body: { padding: 0 }, header: { padding: 0 } }}
       >
-        {isWaiting ? (
-          <WaitingOAuth setIsOpen={setIsOpen} setWaiting={setWaiting} />
-        ) : (
-          <ConnectionMode setWaiting={setWaiting} />
-        )}
+        <Suspense
+          fallback={
+            <Center style={{ height: '100%' }}>
+              <BrandTextLoading debugId="Connection" />
+            </Center>
+          }
+        >
+          <Center style={{ height: '100%', overflow: 'auto', padding: 24 }}>
+            <Flexbox style={{ maxWidth: 560, width: '100%' }}>
+              <LoginStep onBack={handleClose} onNext={handleClose} />
+            </Flexbox>
+          </Center>
+        </Suspense>
       </Drawer>
     </>
   );

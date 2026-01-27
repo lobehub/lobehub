@@ -1,10 +1,10 @@
 ---
-title: LobeChat Environment Variables - Customizing Guide
+title: LobeHub Environment Variables - Customizing Guide
 description: >-
-  Learn how to customize LobeChat configuration using environment variables for
+  Learn how to customize LobeHub configuration using environment variables for
   additional features and options.
 tags:
-  - LobeChat
+  - LobeHub
   - Environment Variables
   - Configuration
   - Customization
@@ -12,7 +12,7 @@ tags:
 
 # Environment Variables
 
-LobeChat provides some additional configuration options when deployed, which can be customized using environment variables.
+LobeHub provides some additional configuration options when deployed, which can be customized using environment variables.
 
 <Cards>
   <Card href={'environment-variables/basic'} title={'Basic Environment Variables'} />
@@ -28,7 +28,7 @@ LobeChat provides some additional configuration options when deployed, which can
 
 ## Building a Custom Image with Overridden `NEXT_PUBLIC` Variables
 
-If you need to override `NEXT_PUBLIC` environment variables, you can build a custom Docker image using GitHub Actions without forking the entire LobeChat repository. Here's a guide on how to do this:
+If you need to override `NEXT_PUBLIC` environment variables, you can build a custom Docker image using GitHub Actions without forking the entire LobeHub repository. Here's a guide on how to do this:
 
 1. Create a new GitHub repository for your custom build.
 
@@ -89,6 +89,6 @@ jobs:
 
 5. Set "Read and write" permissions for workflows in Repository settings > Actions > General > Workflow permissions.
 
-6. To build your custom image, go to the "Actions" tab in your GitHub repository and manually trigger the "Build Custom LobeChat Image" workflow.
+6. To build your custom image, go to the "Actions" tab in your GitHub repository and manually trigger the "Build Custom LobeHub Image" workflow.
 
-This approach allows you to create a custom build with your desired `NEXT_PUBLIC` variables without maintaining a full fork of the LobeChat repository. You can trigger a new build whenever you need to update your custom image.
+This approach allows you to create a custom build with your desired `NEXT_PUBLIC` variables without maintaining a full fork of the LobeHub repository. You can trigger a new build whenever you need to update your custom image.

@@ -1,14 +1,14 @@
 ---
-title: Configure Wechat Authentication Service in LobeChat
+title: Configure Wechat Authentication Service in LobeHub
 description: >-
-  Learn how to configure Wechat authentication service in LobeChat, including
+  Learn how to configure Wechat authentication service in LobeHub, including
   creating a new Wechat App, setting permissions, and environment variables.
 tags:
   - Wechat Authentication
   - Wechat App
   - Environment Variable Configuration
   - Single Sign-On
-  - LobeChat
+  - LobeHub
 ---
 
 # Configure Wechat Authentication Service
@@ -26,12 +26,12 @@ tags:
 
   ### Configure Environment Variables
 
-  When deploying LobeChat, you need to configure the following environment variables:
+  When deploying LobeHub, you need to configure the following environment variables:
 
   | Environment Variable      | Type     | Description                                                                                                                                                                                           |
   | ------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
   | `AUTH_SECRET`             | Required | Key used to encrypt Auth.js session tokens. You can generate the key using the command: `openssl rand -base64 32`                                                                                     |
-  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the Single Sign-On provider for LobeChat. Use `github` for Github.                                                                                                                             |
+  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the Single Sign-On provider for LobeHub. Use `github` for Github.                                                                                                                              |
   | `WECHAT_CLIENT_ID`        | Required | Client ID from the Wechat website application details page                                                                                                                                            |
   | `WECHAT_CLIENT_SECRET`    | Required | Client Secret from the Wechat website application details page                                                                                                                                        |
   | `AUTH_URL`                | Required | This URL is used to specify the callback address for Auth.js when performing OAuth authentication. Only set it if the default generated redirect address is incorrect. `https://example.com/api/auth` |
@@ -43,5 +43,5 @@ tags:
 
 <Callout type={'info'}>
   After successful deployment, users will be able to authenticate through the WeChat Open Platform
-  and use LobeChat.
+  and use LobeHub.
 </Callout>

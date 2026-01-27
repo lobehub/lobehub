@@ -12,7 +12,10 @@ import { useResourceManagerStore } from '../features/store';
 const ResourceHomePage = memo(() => {
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const [setCategory, setLibraryId] = useResourceManagerStore((s) => [s.setCategory, s.setLibraryId]);
+  const [setCategory, setLibraryId] = useResourceManagerStore((s) => [
+    s.setCategory,
+    s.setLibraryId,
+  ]);
 
   const categoryParam = (searchParams.get('category') as FilesTabs) || FilesTabs.All;
 

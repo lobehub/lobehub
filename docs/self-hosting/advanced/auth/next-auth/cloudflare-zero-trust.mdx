@@ -1,13 +1,13 @@
 ---
-title: Configuring Cloudflare Zero Trust Authentication Service for LobeChat
+title: Configuring Cloudflare Zero Trust Authentication Service for LobeHub
 description: >-
   Learn how to configure Cloudflare Zero Trust for Single Sign-On (SSO) for
-  LobeChat, including creating an application provider, setting environment
+  LobeHub, including creating an application provider, setting environment
   variables, and deployment instructions.
 tags:
   - Cloudflare Zero Trust
   - Single Sign-On (SSO)
-  - LobeChat Authentication
+  - LobeHub Authentication
   - Environment Variables
   - Deployment Instructions
 ---
@@ -19,33 +19,33 @@ tags:
 <Steps>
   ### Creating an Application in Cloudflare Zero Trust
 
-  We assume you are already familiar with using the Cloudflare Zero Trust platform and that your LobeChat instance is deployed at `https://chat.example.com`.
+  We assume you are already familiar with using the Cloudflare Zero Trust platform and that your LobeHub instance is deployed at `https://chat.example.com`.
 
   First, we need to visit `https://one.dash.cloudflare.com/` and navigate to `Access - Applications`.
 
-  ![image](https://github.com/user-attachments/assets/4d671a7c-5d94-4c4b-b4fd-71a5a0e9d227)
+  ![image](/blog/assetsc74cf5c8daee1515c37a85bce087f0d6.webp)
 
   Now, on the current page, click `Add an application` and select `SaaS`.
 
-  ![image](https://github.com/user-attachments/assets/3da4c8c4-88c6-40a9-8005-6a0a44aa3b1f)
+  ![image](/blog/assetse717764a3618df4e56212e447a6c20cd.webp)
 
-  In the `Application` text box, enter the application name, such as `LobeChat SSO`. Then click `Select OIDC`, followed by clicking `Add application`.
+  In the `Application` text box, enter the application name, such as `LobeHub SSO`. Then click `Select OIDC`, followed by clicking `Add application`.
 
-  ![image](https://github.com/user-attachments/assets/16cd9aef-c87b-48a4-95c0-b666082e7515)
+  ![image](/blog/assets0ceb7e446f9a850df283093563ba7803.webp)
 
-  At this point, you have successfully created a SaaS application named `LobeChat SSO` in Cloudflare Zero Trust.
+  At this point, you have successfully created a SaaS application named `LobeHub SSO` in Cloudflare Zero Trust.
 
   Next, we need to enter `https://chat.example.com/api/auth/callback/cloudflare-zero-trust` in the `Redirect URLs` field (note that `chat.example.com` should be replaced with your instance's address).
 
-  ![image](https://github.com/user-attachments/assets/433fdce4-0af5-417f-b80d-163c2d4f02f6)
+  ![image](/blog/assets4aaf8d5d092608b649230e0e6fc92df6.webp)
 
-  Finally, scroll down the page and record the following three values: `Client secret`, `Client ID`, and `Issuer`. You will need these for setting the environment variables when deploying LobeChat.
+  Finally, scroll down the page and record the following three values: `Client secret`, `Client ID`, and `Issuer`. You will need these for setting the environment variables when deploying LobeHub.
 
-  ![image](https://github.com/user-attachments/assets/2dd3cde5-fa0d-4f52-b82b-28d9e89379a0)
+  ![image](/blog/assets66b0dfa56c1f5b3063b5ba740dd3ef8d.webp)
 
   ### Configure Environment Variables
 
-  When deploying LobeChat, you need to configure the following environment variables:
+  When deploying LobeHub, you need to configure the following environment variables:
 
   | Environment Variable                | Type     | Description                                                                                                                                                                                                         |
   | ----------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -62,6 +62,6 @@ tags:
 </Steps>
 
 <Callout type={'info'}>
-  After a successful deployment, users will be able to use LobeChat by authenticating with the users
+  After a successful deployment, users will be able to use LobeHub by authenticating with the users
   configured in Cloudflare Zero Trust.
 </Callout>

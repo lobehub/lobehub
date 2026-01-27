@@ -6,6 +6,8 @@ import type { StateCreator } from 'zustand/vanilla';
 import { CURRENT_VERSION, isDesktop } from '@/const/version';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { globalService } from '@/services/global';
+import { getElectronStoreState } from '@/store/electron';
+import { electronSyncSelectors } from '@/store/electron/selectors';
 import type { SystemStatus } from '@/store/global/initialState';
 import { type LocaleMode } from '@/types/locale';
 import { switchLang } from '@/utils/client/switchLang';
@@ -23,7 +25,7 @@ export interface GlobalGeneralAction {
   updateResourceManagerColumnWidth: (column: 'name' | 'date' | 'size', width: number) => void;
   updateSystemStatus: (status: Partial<SystemStatus>, action?: any) => void;
   useCheckLatestVersion: (enabledCheck?: boolean) => SWRResponse<string>;
-  useCheckServerVersion: (enabledCheck?: boolean) => SWRResponse<string | null>;
+  useCheckServerVersion: () => SWRResponse<string | null>;
   useInitSystemStatus: () => SWRResponse;
 }
 
@@ -161,9 +163,13 @@ export const generalActionSlice: StateCreator<
       },
     ),
 
-  useCheckServerVersion: (enabledCheck = true) =>
+  useCheckServerVersion: () =>
     useOnlyFetchOnceSWR(
-      enabledCheck ? 'checkServerVersion' : null,
+      isDesktop &&
+      // only check server version for self-hosted remote server
+      electronSyncSelectors.storageMode(getElectronStoreState()) !== 'cloud'
+        ? 'checkServerVersion'
+        : null,
       async () => globalService.getServerVersion(),
       {
         onSuccess: (data: string | null) => {

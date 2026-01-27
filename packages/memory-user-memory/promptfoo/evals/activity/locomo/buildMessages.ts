@@ -3,9 +3,9 @@ import { MemorySourceType } from '@lobechat/types';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 
-import { BenchmarkLocomoContextProvider, BenchmarkLocomoPart } from '../../../../src/providers';
 import type { IngestPayload } from '../../../../src/converters/locomo';
 import { activityPrompt } from '../../../../src/prompts';
+import { BenchmarkLocomoContextProvider, BenchmarkLocomoPart } from '../../../../src/providers';
 import type { ExtractorTemplateProps, MemoryExtractionJob } from '../../../../src/types';
 
 export interface PromptVars extends ExtractorTemplateProps {
@@ -44,7 +44,11 @@ const buildParts = (payload: IngestPayload, sessionId?: string): BenchmarkLocomo
   );
 };
 
-const resolveSessionDate = (payload: IngestPayload, parts: BenchmarkLocomoPart[], sessionId?: string) => {
+const resolveSessionDate = (
+  payload: IngestPayload,
+  parts: BenchmarkLocomoPart[],
+  sessionId?: string,
+) => {
   const sessionDate =
     payload.sessions.find((session) => session.sessionId === sessionId)?.timestamp ||
     payload.sessions[0]?.timestamp;
@@ -67,7 +71,9 @@ export const buildLocomoActivityMessages = async (vars: PromptVars) => {
 
   const parts = buildParts(payload, vars.sessionId);
   if (parts.length === 0) {
-    throw new Error(`No matching parts found in ${payload.sampleId} for session ${vars.sessionId || 'all'}`);
+    throw new Error(
+      `No matching parts found in ${payload.sampleId} for session ${vars.sessionId || 'all'}`,
+    );
   }
   const userId = vars.userId || `locomo-user-${payload.sampleId}`;
   const sourceId = payload.topicId || `sample_${payload.sampleId}`;
@@ -86,7 +92,7 @@ export const buildLocomoActivityMessages = async (vars: PromptVars) => {
     userId,
   };
 
-  const { context } = await provider.buildContext(extractionJob);
+  const { context } = await provider.buildContext(extractionJob.userId);
 
   const rendered = renderPlaceholderTemplate(activityPrompt, {
     availableCategories: vars.availableCategories,

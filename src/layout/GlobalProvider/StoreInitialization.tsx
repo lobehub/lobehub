@@ -5,7 +5,6 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
 
-import { isDesktop } from '@/const/version';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -44,7 +43,7 @@ const StoreInitialization = memo(() => {
   useInitSystemStatus();
 
   // check server version in desktop app
-  useCheckServerVersion(isDesktop);
+  useCheckServerVersion();
 
   // fetch server config
   const useFetchServerConfig = useServerConfigStore((s) => s.useInitServerConfig);

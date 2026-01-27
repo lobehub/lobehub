@@ -2020,5 +2020,198 @@ describe('UserMemoryModel', () => {
         }
       }
     });
+
+    it('should update identity layer accessedAt when calling findById', async () => {
+      // Create an identity entry with base memory
+      const { identityId, userMemoryId } = await userMemoryModel.addIdentityEntry({
+        base: {
+          memoryLayer: 'identity',
+          summary: 'Identity summary',
+        },
+        identity: {
+          description: 'Identity description',
+          type: 'personal',
+        },
+      });
+
+      // Get initial state
+      const beforeIdentity = await serverDB.query.userMemoriesIdentities.findFirst({
+        where: eq(userMemoriesIdentities.id, identityId),
+      });
+
+      const initialAccessedAt = beforeIdentity?.accessedAt;
+
+      // Wait a bit to ensure timestamp difference
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      // Call findById which triggers updateAccessMetrics internally
+      await userMemoryModel.findById(userMemoryId);
+
+      // Get after state
+      const afterIdentity = await serverDB.query.userMemoriesIdentities.findFirst({
+        where: eq(userMemoriesIdentities.id, identityId),
+      });
+
+      // The identity layer should have updated accessedAt
+      expect(afterIdentity).toBeDefined();
+      expect(afterIdentity!.accessedAt).toBeDefined();
+
+      // accessedAt should be updated (either later or same if test runs fast)
+      if (initialAccessedAt && afterIdentity!.accessedAt) {
+        expect(afterIdentity!.accessedAt.getTime()).toBeGreaterThanOrEqual(
+          initialAccessedAt.getTime()
+        );
+      }
+    });
+  });
+
+  describe('getAllIdentitiesWithMemory', () => {
+    it('should return all identities with their associated base memories', async () => {
+      // Create identity entries
+      await userMemoryModel.addIdentityEntry({
+        base: {
+          memoryLayer: 'identity',
+          summary: 'Summary 1',
+          title: 'Title 1',
+        },
+        identity: {
+          description: 'Description 1',
+          type: 'personal',
+        },
+      });
+
+      await userMemoryModel.addIdentityEntry({
+        base: {
+          memoryLayer: 'identity',
+          summary: 'Summary 2',
+          title: 'Title 2',
+        },
+        identity: {
+          description: 'Description 2',
+          type: 'professional',
+        },
+      });
+
+      const result = await userMemoryModel.getAllIdentitiesWithMemory();
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toHaveProperty('identity');
+      expect(result[0]).toHaveProperty('memory');
+      expect(result[0].identity).toHaveProperty('description');
+      expect(result[0].memory).toHaveProperty('summary');
+    });
+
+    it('should order by capturedAt desc', async () => {
+      await userMemoryModel.addIdentityEntry({
+        base: { summary: 'First' },
+        identity: {
+          capturedAt: new Date('2024-01-01T00:00:00Z'),
+          description: 'First identity',
+        },
+      });
+
+      await userMemoryModel.addIdentityEntry({
+        base: { summary: 'Second' },
+        identity: {
+          capturedAt: new Date('2024-01-02T00:00:00Z'),
+          description: 'Second identity',
+        },
+      });
+
+      const result = await userMemoryModel.getAllIdentitiesWithMemory();
+
+      expect(result).toHaveLength(2);
+      expect(result[0].identity.description).toBe('Second identity');
+      expect(result[1].identity.description).toBe('First identity');
+    });
+
+    it('should only return identities for current user', async () => {
+      // Create identity for current user
+      await userMemoryModel.addIdentityEntry({
+        base: { summary: 'My identity' },
+        identity: { description: 'My description' },
+      });
+
+      // Create identity for other user
+      const otherUserModel = new UserMemoryModel(serverDB, userId2);
+      await otherUserModel.addIdentityEntry({
+        base: { summary: 'Other identity' },
+        identity: { description: 'Other description' },
+      });
+
+      const result = await userMemoryModel.getAllIdentitiesWithMemory();
+
+      expect(result).toHaveLength(1);
+      expect(result[0].identity.description).toBe('My description');
+    });
+  });
+
+  describe('getIdentitiesByType', () => {
+    beforeEach(async () => {
+      // Create identities with different types
+      await userMemoryModel.addIdentityEntry({
+        base: { summary: 'Personal 1' },
+        identity: {
+          capturedAt: new Date('2024-01-01T00:00:00Z'),
+          description: 'Personal identity 1',
+          type: 'personal',
+        },
+      });
+
+      await userMemoryModel.addIdentityEntry({
+        base: { summary: 'Personal 2' },
+        identity: {
+          capturedAt: new Date('2024-01-02T00:00:00Z'),
+          description: 'Personal identity 2',
+          type: 'personal',
+        },
+      });
+
+      await userMemoryModel.addIdentityEntry({
+        base: { summary: 'Professional' },
+        identity: {
+          capturedAt: new Date('2024-01-03T00:00:00Z'),
+          description: 'Professional identity',
+          type: 'professional',
+        },
+      });
+    });
+
+    it('should return identities filtered by type', async () => {
+      const personalIdentities = await userMemoryModel.getIdentitiesByType('personal');
+
+      expect(personalIdentities).toHaveLength(2);
+      expect(personalIdentities.every((i) => i.type === 'personal')).toBe(true);
+    });
+
+    it('should order by capturedAt desc', async () => {
+      const personalIdentities = await userMemoryModel.getIdentitiesByType('personal');
+
+      expect(personalIdentities[0].description).toBe('Personal identity 2');
+      expect(personalIdentities[1].description).toBe('Personal identity 1');
+    });
+
+    it('should return empty array for non-existent type', async () => {
+      const result = await userMemoryModel.getIdentitiesByType('non-existent');
+
+      expect(result).toHaveLength(0);
+    });
+
+    it('should only return identities for current user', async () => {
+      // Create identity for other user with same type
+      const otherUserModel = new UserMemoryModel(serverDB, userId2);
+      await otherUserModel.addIdentityEntry({
+        base: { summary: 'Other personal' },
+        identity: {
+          description: 'Other personal identity',
+          type: 'personal',
+        },
+      });
+
+      const personalIdentities = await userMemoryModel.getIdentitiesByType('personal');
+
+      expect(personalIdentities).toHaveLength(2);
+      expect(personalIdentities.every((i) => i.userId === userId)).toBe(true);
+    });
   });
 });

@@ -1,56 +1,22 @@
 import { Flexbox, Icon, type ItemType, Segmented } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ArrowRight, ExternalLink, Settings, Store } from 'lucide-react';
-import { type ReactNode, memo } from 'react';
+import { ChevronRight, ExternalLink, Settings, Store } from 'lucide-react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+
+import ToolsList, { toolsListStyles } from '@/features/ChatInput/ActionBar/Tools/ToolsList';
 
 import Empty from './Empty';
 
 type TabType = 'all' | 'installed';
 
-const prefixCls = 'ant';
+const SKILL_ICON_SIZE = 20;
 
 const styles = createStaticStyles(({ css }) => ({
-  dropdown: css`
-    overflow: hidden;
-    width: 100%;
-
-    .${prefixCls}-dropdown-menu {
-      border-radius: 0 !important;
-      background: transparent !important;
-      box-shadow: none !important;
-    }
-  `,
-  footerItem: css`
-    cursor: pointer;
-
-    display: flex;
-    gap: 12px;
-    align-items: center;
-
-    padding-block: 8px;
-    padding-inline: 12px;
-    border-radius: 6px;
-
-    transition: background-color 0.2s;
-
-    &:hover {
-      background: ${cssVar.colorFillTertiary};
-    }
-  `,
-  footerItemContent: css`
-    flex: 1;
-    min-width: 0;
-  `,
-  footerItemIcon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 24px;
-    height: 24px;
+  footer: css`
+    padding: 4px;
+    border-block-start: 1px solid ${cssVar.colorBorderSecondary};
   `,
   header: css`
     padding: ${cssVar.paddingXS};
@@ -67,20 +33,22 @@ const styles = createStaticStyles(({ css }) => ({
 
 interface PopoverContentProps {
   activeTab: TabType;
+  allTabItems: ItemType[];
   installedTabItems: ItemType[];
-  menu: ReactNode;
   onClose?: () => void;
   onOpenStore: () => void;
   onTabChange: (tab: TabType) => void;
 }
 
 const PopoverContent = memo<PopoverContentProps>(
-  ({ menu, activeTab, onTabChange, installedTabItems, onOpenStore, onClose }) => {
+  ({ activeTab, onTabChange, allTabItems, installedTabItems, onOpenStore, onClose }) => {
     const { t } = useTranslation('setting');
     const navigate = useNavigate();
 
+    const currentItems = activeTab === 'all' ? allTabItems : installedTabItems;
+
     return (
-      <Flexbox className={styles.dropdown} style={{ maxHeight: 500 }}>
+      <Flexbox style={{ maxHeight: 500, width: '100%' }}>
         {/* stopPropagation prevents dropdown's onClick from calling preventDefault on Segmented */}
         <div className={styles.header} onClick={(e) => e.stopPropagation()}>
           <Segmented
@@ -101,23 +69,22 @@ const PopoverContent = memo<PopoverContentProps>(
           />
         </div>
         <div className={styles.scroller} style={{ flex: 1 }}>
-          {activeTab === 'installed' && installedTabItems.length === 0 ? <Empty /> : menu}
+          {activeTab === 'installed' && installedTabItems.length === 0 ? (
+            <Empty />
+          ) : (
+            <ToolsList items={currentItems} />
+          )}
         </div>
-        <div
-          style={{
-            borderBlockStart: `1px solid ${cssVar.colorBorderSecondary}`,
-            padding: 4,
-          }}
-        >
-          <div className={styles.footerItem} onClick={onOpenStore} role="button" tabIndex={0}>
-            <div className={styles.footerItemIcon}>
-              <Icon icon={Store} size={20} />
+        <div className={styles.footer}>
+          <div className={toolsListStyles.item} onClick={onOpenStore} role="button" tabIndex={0}>
+            <div className={toolsListStyles.itemIcon}>
+              <Icon icon={Store} size={SKILL_ICON_SIZE} />
             </div>
-            <div className={styles.footerItemContent}>{t('skillStore.title')}</div>
-            <Icon className={styles.trailingIcon} icon={ArrowRight} size={16} />
+            <div className={toolsListStyles.itemContent}>{t('skillStore.title')}</div>
+            <Icon className={styles.trailingIcon} icon={ChevronRight} size={16} />
           </div>
           <div
-            className={styles.footerItem}
+            className={toolsListStyles.item}
             onClick={() => {
               onClose?.();
               navigate('/settings/skill');
@@ -125,10 +92,10 @@ const PopoverContent = memo<PopoverContentProps>(
             role="button"
             tabIndex={0}
           >
-            <div className={styles.footerItemIcon}>
-              <Icon icon={Settings} size={20} />
+            <div className={toolsListStyles.itemIcon}>
+              <Icon icon={Settings} size={SKILL_ICON_SIZE} />
             </div>
-            <div className={styles.footerItemContent}>{t('tools.plugins.management')}</div>
+            <div className={toolsListStyles.itemContent}>{t('tools.plugins.management')}</div>
             <Icon className={styles.trailingIcon} icon={ExternalLink} size={16} />
           </div>
         </div>

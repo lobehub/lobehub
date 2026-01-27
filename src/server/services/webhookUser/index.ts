@@ -3,8 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { NextResponse } from 'next/server';
 
 import { UserModel } from '@/database/models/user';
-import { type UserItem, account, session } from '@/database/schemas';
-import { pino } from '@/libs/logger';
+import { type UserItem, account, nextauthAccounts, session, users } from '@/database/schemas';
 
 export class WebhookUserService {
   private db: LobeChatDatabase;
@@ -14,7 +13,9 @@ export class WebhookUserService {
   }
 
   /**
-   * Find user by provider account info
+   * Find user by provider account info.
+   * First checks Better Auth accounts table, then falls back to NextAuth accounts table
+   * for users who performed simple migration (without migrating accounts data).
    */
   private getUserByAccount = async ({
     providerId,
@@ -23,15 +24,31 @@ export class WebhookUserService {
     accountId: string;
     providerId: string;
   }) => {
-    const result = await this.db.query.account.findFirst({
+    // First, try Better Auth accounts table
+    const betterAuthAccount = await this.db.query.account.findFirst({
       where: and(eq(account.providerId, providerId), eq(account.accountId, accountId)),
     });
 
-    if (!result) return null;
+    if (betterAuthAccount) {
+      return this.db.query.users.findFirst({
+        where: eq(users.id, betterAuthAccount.userId),
+      });
+    }
 
-    return this.db.query.users.findFirst({
-      where: eq(account.userId, result.userId),
-    });
+    // Fallback to NextAuth accounts table for simple migration users
+    const nextAuthAccount = await this.db
+      .select({ users })
+      .from(nextauthAccounts)
+      .innerJoin(users, eq(nextauthAccounts.userId, users.id))
+      .where(
+        and(
+          eq(nextauthAccounts.provider, providerId),
+          eq(nextauthAccounts.providerAccountId, accountId),
+        ),
+      )
+      .then((res) => res[0]);
+
+    return nextAuthAccount?.users ?? null;
   };
 
   /**
@@ -41,7 +58,7 @@ export class WebhookUserService {
     { accountId, providerId }: { accountId: string; providerId: string },
     data: Partial<UserItem>,
   ) => {
-    pino.info(`updating user "${JSON.stringify({ accountId, providerId })}" due to webhook`);
+    console.log(`updating user "${JSON.stringify({ accountId, providerId })}" due to webhook`);
 
     const user = await this.getUserByAccount({ accountId, providerId });
 
@@ -53,7 +70,7 @@ export class WebhookUserService {
         fullName: data?.fullName,
       });
     } else {
-      pino.warn(
+      console.warn(
         `[${providerId}]: Webhook user "${JSON.stringify({ accountId, providerId })}" update for "${JSON.stringify(data)}", but no user was found.`,
       );
     }
@@ -71,14 +88,14 @@ export class WebhookUserService {
     accountId: string;
     providerId: string;
   }) => {
-    pino.info(`Signing out user "${JSON.stringify({ accountId, providerId })}"`);
+    console.log(`Signing out user "${JSON.stringify({ accountId, providerId })}"`);
 
     const user = await this.getUserByAccount({ accountId, providerId });
 
     if (user?.id) {
       await this.db.delete(session).where(eq(session.userId, user.id));
     } else {
-      pino.warn(
+      console.warn(
         `[${providerId}]: Webhook user "${JSON.stringify({ accountId, providerId })}" signout, but no user was found.`,
       );
     }

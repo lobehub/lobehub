@@ -84,7 +84,7 @@ const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
           horizontal
           paddingBlock={12}
           paddingInline={12}
-          variant={'filled'}
+          variant={'outlined'}
         >
           <PluginAvatar avatar={avatar} size={40} />
           <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
@@ -109,6 +109,7 @@ const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
                   onClick: handleDelete,
                 },
               ]}
+              nativeButton={false}
               placement="bottomRight"
             >
               <ActionIcon icon={MoreVerticalIcon} />

@@ -316,6 +316,253 @@ describe('UserMemoryIdentityModel', () => {
     });
   });
 
+  describe('queryList', () => {
+    beforeEach(async () => {
+      // Create user memories for joining
+      await serverDB.insert(userMemories).values([
+        {
+          id: 'id-memory-1',
+          userId,
+          title: 'Identity Memory 1',
+          lastAccessedAt: new Date(),
+        },
+        {
+          id: 'id-memory-2',
+          userId,
+          title: 'Identity Memory 2',
+          lastAccessedAt: new Date(),
+        },
+        {
+          id: 'id-memory-3',
+          userId,
+          title: 'Searchable Title',
+          lastAccessedAt: new Date(),
+        },
+        {
+          id: 'other-id-memory',
+          userId: otherUserId,
+          title: 'Other Memory',
+          lastAccessedAt: new Date(),
+        },
+      ]);
+
+      // Create test identities with user memories
+      await serverDB.insert(userMemoriesIdentities).values([
+        {
+          id: 'list-id-1',
+          userId,
+          userMemoryId: 'id-memory-1',
+          type: 'personal',
+          description: 'First description',
+          role: 'developer',
+          relationship: RelationshipEnum.Self,
+          tags: ['tag1'],
+          capturedAt: new Date('2024-01-15T10:00:00Z'),
+          createdAt: new Date('2024-01-01T10:00:00Z'),
+          updatedAt: new Date('2024-01-01T10:00:00Z'),
+        },
+        {
+          id: 'list-id-2',
+          userId,
+          userMemoryId: 'id-memory-2',
+          type: 'professional',
+          description: 'Searchable description content',
+          role: 'Searchable role content',
+          relationship: RelationshipEnum.Self,
+          tags: ['tag2'],
+          capturedAt: new Date('2024-01-16T10:00:00Z'),
+          createdAt: new Date('2024-01-02T10:00:00Z'),
+          updatedAt: new Date('2024-01-02T10:00:00Z'),
+        },
+        {
+          id: 'list-id-3',
+          userId,
+          userMemoryId: 'id-memory-3',
+          type: 'personal',
+          description: 'Third description',
+          role: 'manager',
+          relationship: RelationshipEnum.Friend,
+          tags: [],
+          capturedAt: new Date('2024-01-17T10:00:00Z'),
+          createdAt: new Date('2024-01-03T10:00:00Z'),
+          updatedAt: new Date('2024-01-03T10:00:00Z'),
+        },
+        {
+          id: 'other-list-id',
+          userId: otherUserId,
+          userMemoryId: 'other-id-memory',
+          type: 'personal',
+          description: 'Other user identity',
+          relationship: RelationshipEnum.Self,
+          capturedAt: new Date('2024-01-18T10:00:00Z'),
+          createdAt: new Date('2024-01-04T10:00:00Z'),
+        },
+      ]);
+    });
+
+    it('should return paginated list with default parameters (self relationship only)', async () => {
+      const result = await identityModel.queryList();
+
+      // Default filters to self relationship
+      expect(result.items).toHaveLength(2);
+      expect(result.page).toBe(1);
+      expect(result.pageSize).toBe(20);
+      expect(result.total).toBe(2);
+    });
+
+    it('should return all relationships when specified', async () => {
+      const result = await identityModel.queryList({
+        relationships: [RelationshipEnum.Self, RelationshipEnum.Friend],
+      });
+
+      expect(result.items).toHaveLength(3);
+      expect(result.total).toBe(3);
+    });
+
+    it('should return correct page and pageSize', async () => {
+      const result = await identityModel.queryList({
+        page: 1,
+        pageSize: 1,
+        relationships: [RelationshipEnum.Self, RelationshipEnum.Friend],
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.page).toBe(1);
+      expect(result.pageSize).toBe(1);
+      expect(result.total).toBe(3);
+    });
+
+    it('should return second page correctly', async () => {
+      const result = await identityModel.queryList({
+        page: 2,
+        pageSize: 2,
+        relationships: [RelationshipEnum.Self, RelationshipEnum.Friend],
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.page).toBe(2);
+    });
+
+    it('should normalize invalid page to 1', async () => {
+      const result = await identityModel.queryList({ page: -1 });
+
+      expect(result.page).toBe(1);
+    });
+
+    it('should cap pageSize at 100', async () => {
+      const result = await identityModel.queryList({ pageSize: 200 });
+
+      expect(result.pageSize).toBe(100);
+    });
+
+    it('should search by query in title', async () => {
+      const result = await identityModel.queryList({
+        q: 'Searchable Title',
+        relationships: [RelationshipEnum.Self, RelationshipEnum.Friend],
+      });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('list-id-3');
+    });
+
+    it('should search by query in description', async () => {
+      const result = await identityModel.queryList({ q: 'Searchable description' });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('list-id-2');
+    });
+
+    it('should search by query in role', async () => {
+      const result = await identityModel.queryList({ q: 'Searchable role' });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('list-id-2');
+    });
+
+    it('should filter by types', async () => {
+      const result = await identityModel.queryList({ types: ['professional'] });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].type).toBe('professional');
+    });
+
+    it('should filter by multiple types', async () => {
+      const result = await identityModel.queryList({
+        types: ['personal', 'professional'],
+        relationships: [RelationshipEnum.Self, RelationshipEnum.Friend],
+      });
+
+      expect(result.items).toHaveLength(3);
+    });
+
+    it('should filter by relationships', async () => {
+      const result = await identityModel.queryList({ relationships: [RelationshipEnum.Friend] });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('list-id-3');
+    });
+
+    it('should filter by tags', async () => {
+      const result = await identityModel.queryList({ tags: ['tag1'] });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('list-id-1');
+    });
+
+    it('should sort by capturedAt desc by default', async () => {
+      const result = await identityModel.queryList({ order: 'desc' });
+
+      expect(result.items[0].id).toBe('list-id-2');
+      expect(result.items[1].id).toBe('list-id-1');
+    });
+
+    it('should sort by capturedAt asc', async () => {
+      const result = await identityModel.queryList({ order: 'asc' });
+
+      expect(result.items[0].id).toBe('list-id-1');
+      expect(result.items[1].id).toBe('list-id-2');
+    });
+
+    it('should sort by type', async () => {
+      const result = await identityModel.queryList({ sort: 'type', order: 'asc' });
+
+      // 'personal' comes before 'professional' alphabetically
+      expect(result.items[0].type).toBe('personal');
+      expect(result.items[1].type).toBe('professional');
+    });
+
+    it('should not return other users identities', async () => {
+      const result = await identityModel.queryList({
+        relationships: [RelationshipEnum.Self, RelationshipEnum.Friend],
+      });
+
+      const otherIdentity = result.items.find((i) => i.id === 'other-list-id');
+      expect(otherIdentity).toBeUndefined();
+    });
+
+    it('should return correct fields structure', async () => {
+      const result = await identityModel.queryList({ pageSize: 1 });
+
+      expect(result.items[0]).toHaveProperty('id');
+      expect(result.items[0]).toHaveProperty('title');
+      expect(result.items[0]).toHaveProperty('description');
+      expect(result.items[0]).toHaveProperty('role');
+      expect(result.items[0]).toHaveProperty('type');
+      expect(result.items[0]).toHaveProperty('relationship');
+      expect(result.items[0]).toHaveProperty('tags');
+      expect(result.items[0]).toHaveProperty('episodicDate');
+      expect(result.items[0]).toHaveProperty('capturedAt');
+      expect(result.items[0]).toHaveProperty('createdAt');
+      expect(result.items[0]).toHaveProperty('updatedAt');
+    });
+
+    it('should handle empty query string', async () => {
+      const result = await identityModel.queryList({ q: '   ' });
+
+      expect(result.items).toHaveLength(2); // Default self relationship filter
+    });
+  });
+
   describe('queryForInjection', () => {
     beforeEach(async () => {
       // Create identities with different relationships

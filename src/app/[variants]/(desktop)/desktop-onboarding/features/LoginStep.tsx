@@ -459,7 +459,14 @@ const LoginStep = memo<LoginStepProps>(({ onBack, onNext }) => {
             if (!isDesktop) return;
             e.preventDefault();
             const { electronSystemService } = await import('@/services/electron/system');
-            await electronSystemService.showContextMenu('edit');
+            const input = e.target as HTMLInputElement;
+            const selectionText = input.value.slice(
+              input.selectionStart || 0,
+              input.selectionEnd || 0,
+            );
+            await electronSystemService.showContextMenu('editor', {
+              selectionText: selectionText || undefined,
+            });
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {

@@ -367,9 +367,6 @@ export function defineConfig(config: CustomNextConfig) {
         type: 'javascript/auto',
       });
 
-      // https://github.com/pinojs/pino/issues/688#issuecomment-637763276
-      baseWebpackConfig.externals.push('pino-pretty');
-
       baseWebpackConfig.resolve.alias.canvas = false;
 
       // to ignore epub2 compile error

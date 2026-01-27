@@ -1523,6 +1523,35 @@ describe('StreamingExecutor actions', () => {
       expect(state.toolManifestMap).toEqual({});
     });
 
+    it('should return empty tools in agentConfig when disableTools is true', async () => {
+      act(() => {
+        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: TEST_CONTENT.USER_MESSAGE,
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      // Get actual internal_createAgentState result with disableTools: true
+      const { agentConfig } = result.current.internal_createAgentState({
+        messages: [userMessage],
+        parentMessageId: userMessage.id,
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+        disableTools: true,
+      });
+
+      // agentConfig should have empty tools-related fields when disableTools is true
+      expect(agentConfig.tools).toBeUndefined();
+      expect(agentConfig.enabledToolIds).toEqual([]);
+      expect(agentConfig.enabledManifests).toEqual([]);
+    });
+
     it('should include tools in toolManifestMap when disableTools is false or undefined', async () => {
       act(() => {
         useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });

@@ -2,6 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import {
+  CalendarClockIcon,
   BrainCircuitIcon,
   BubblesIcon,
   HeartPulseIcon,
@@ -26,6 +27,7 @@ interface Item {
 }
 
 enum MemoryTabKey {
+  Activities = 'activities',
   Contexts = 'contexts',
   Experiences = 'experiences',
   Home = 'home',
@@ -84,6 +86,12 @@ const Nav = memo(() => {
         key: MemoryTabKey.Experiences,
         title: t('tab.experiences'),
         url: '/memory/experiences',
+      },
+      {
+        icon: CalendarClockIcon,
+        key: MemoryTabKey.Activities,
+        title: t('tab.activities'),
+        url: '/memory/activities',
       },
     ],
     [t],

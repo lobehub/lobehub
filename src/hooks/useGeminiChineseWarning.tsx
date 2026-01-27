@@ -48,7 +48,7 @@ export const useGeminiChineseWarning = () => {
       return new Promise<boolean>((resolve) => {
         let doNotShowAgain = false;
 
-        // 根据场景选择不同的按钮文案
+        // Select different button text based on scenario
         const continueText =
           scenario === 'image'
             ? t('geminiImageChineseWarning.continueGenerate')

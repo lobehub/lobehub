@@ -19,7 +19,8 @@ export type MemoryExtractionAgent =
   | 'layer-context'
   | 'layer-experience'
   | 'layer-identity'
-  | 'layer-preference';
+  | 'layer-preference'
+  | 'user-persona';
 
 export interface ExtractorRunOptions<RO> extends ExtractorOptions {
   contextProvider: MemoryContextProvider<{ topK?: number }>;
@@ -112,7 +113,7 @@ export interface MemoryContextProvider<
   P extends Record<string, unknown> = Record<string, unknown>,
   R extends Record<string, unknown> = Record<string, unknown>,
 > {
-  buildContext(job: MemoryExtractionJob, options?: P): Promise<BuiltContext<R>>;
+  buildContext(userId: string, sourceId: string, options?: P): Promise<BuiltContext<R>>;
 }
 
 export interface MemoryResultRecorder<T = Record<string, unknown>> {
@@ -176,4 +177,23 @@ export interface MemoryExtractionResult {
 
 export interface TemplateProps {
   [key: string]: unknown;
+}
+
+export interface PersonaTemplateProps extends ExtractorTemplateProps {
+  existingPersona?: string;
+  personaNotes?: string;
+  recentEvents?: string;
+  retrievedMemories?: string;
+  userProfile?: string;
+}
+
+export interface PersonaExtractorOptions extends ExtractorOptions, PersonaTemplateProps {}
+
+export interface UserPersonaExtractionResult {
+  diff?: string | null;
+  memoryIds?: string[];
+  persona: string;
+  reasoning?: string | null;
+  sourceIds?: string[];
+  tagline?: string | null;
 }

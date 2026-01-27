@@ -42,14 +42,14 @@ const getMCPPluginRequiringConfig = (id: string) => (s: ToolStoreState) =>
 const isMCPPluginRequiringConfig = (id: string) => (s: ToolStoreState) =>
   !!s.mcpInstallProgress[id]?.configSchema;
 
-// 检查插件是否正在安装中（有安装进度且不是配置阶段）
+// Check if plugin is installing (has install progress and not in config stage)
 const isMCPInstallInProgress = (id: string) => (s: ToolStoreState) => {
   const progress = s.mcpInstallProgress[id];
 
   return !!progress && !progress.needsConfig && progress.step !== 'Error';
 };
 
-// 测试连接相关选择器
+// Test connection related selectors
 const isMCPConnectionTesting = (id: string) => (s: ToolStoreState) => s.mcpTestLoading[id] || false;
 
 const getMCPConnectionTestError = (id: string) => (s: ToolStoreState) => s.mcpTestErrors[id];

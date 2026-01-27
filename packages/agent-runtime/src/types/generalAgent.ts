@@ -1,6 +1,8 @@
 import { ChatToolPayload, MessageToolCall } from '@lobechat/types';
 
 export interface GeneralAgentCallLLMInstructionPayload {
+  /** Force create a new assistant message (e.g., after compression) */
+  createAssistantMessage?: boolean;
   isFirstMessage?: boolean;
   messages: any[];
   model: string;
@@ -68,17 +70,23 @@ export interface GeneralAgentConfig {
   /**
    * Context compression configuration
    * Note: Compression checking is always enabled to prevent context overflow.
-   * This config only controls the compression parameters.
+   * When triggered, ALL messages are compressed into a single MessageGroup summary.
    */
   compressionConfig?: {
-    /** Number of recent messages to keep uncompressed (default: 10) */
-    keepRecentCount?: number;
     /** Model's max context window token count (default: 128k) */
     maxWindowToken?: number;
   };
   modelRuntimeConfig?: {
     model: string;
     provider: string;
+    /**
+     * Compression model configuration
+     * Used for context compression tasks
+     */
+    compressionModel?: {
+      model: string;
+      provider: string;
+    };
   };
   operationId: string;
   userId?: string;
@@ -90,12 +98,10 @@ export interface GeneralAgentConfig {
 export interface GeneralAgentCompressionResultPayload {
   /** Compressed messages (summary + pinned + recent) */
   compressedMessages: any[];
-  /** Token count after compression */
-  compressedTokenCount: number;
   /** Compression group ID in database */
   groupId: string;
-  /** Token count before compression */
-  originalTokenCount: number;
+  /** Parent message ID for subsequent LLM call (last assistant message before compression) */
+  parentMessageId?: string;
   /** Whether compression was skipped (no messages to compress) */
   skipped?: boolean;
 }

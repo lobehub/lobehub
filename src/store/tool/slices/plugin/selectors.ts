@@ -54,7 +54,7 @@ const installedPluginManifestList = (s: ToolStoreState) =>
 
 const installedPluginMetaList = (s: ToolStoreState) =>
   installedPlugins(s)
-    // 过滤掉 Klavis 插件（它们有自己的显示位置）
+    // Filter out Klavis plugins (they have their own display location)
     .filter((p) => !p.customParams?.klavis)
     .map<InstallPluginMeta>((p) => ({
       author: p.manifest?.author,

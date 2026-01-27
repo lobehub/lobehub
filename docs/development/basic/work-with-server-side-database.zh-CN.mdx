@@ -1,10 +1,17 @@
 ---
 title: 使用服务端数据库
+description: 快速设置 LobeHub 服务端数据库，支持 Docker 和图像生成。
+tags:
+  - 服务端数据库
+  - LobeHub
+  - Docker
+  - 图像生成
+  - PostgreSQL
 ---
 
 # 使用服务端数据库
 
-LobeChat 提供了内置的客户端数据库体验。
+LobeHub 提供了内置的客户端数据库体验。
 但某些重要功能仅在服务端开发中可用。
 
 为了使用服务端数据库功能，
@@ -55,7 +62,7 @@ pnpm db:migrate
 
 ### 启动开发服务器
 
-启动 LobeChat 开发服务器：
+启动 LobeHub 开发服务器：
 
 ```bash
 pnpm dev
@@ -144,7 +151,7 @@ await fetch(uploadUrl, {
 
 运行 Docker Compose 开发环境时：
 
-- **PostgreSQL**：`postgres://postgres@localhost:5432/lobechat`
+- **PostgreSQL**：`postgres://postgres@localhost:5432/LobeHub`
 - **MinIO API**：`http://localhost:9000`
 - **MinIO 控制台**：`http://localhost:9001` (admin/CHANGE\_THIS\_PASSWORD\_IN\_PRODUCTION)
 - **应用程序**：`http://localhost:3010`

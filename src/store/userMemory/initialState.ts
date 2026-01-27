@@ -1,5 +1,6 @@
 import type { RetrieveMemoryParams, RetrieveMemoryResult } from '@lobechat/types';
 
+import { type ActivitySliceState, activityInitialState } from './slices/activity';
 import { type AgentMemorySliceState, agentMemoryInitialState } from './slices/agent';
 import { type ContextSliceState, contextInitialState } from './slices/context';
 import { type ExperienceSliceState, experienceInitialState } from './slices/experience';
@@ -13,6 +14,7 @@ export interface PersonaData {
 
 export interface UserMemoryStoreState
   extends
+    ActivitySliceState,
     AgentMemorySliceState,
     ContextSliceState,
     ExperienceSliceState,
@@ -22,7 +24,7 @@ export interface UserMemoryStoreState
   activeParamsKey?: string;
   editingMemoryContent?: string;
   editingMemoryId?: string;
-  editingMemoryLayer?: 'context' | 'experience' | 'identity' | 'preference';
+  editingMemoryLayer?: 'activity' | 'context' | 'experience' | 'identity' | 'preference';
   memoryFetchedAtMap: Record<string, number>;
   memoryMap: Record<string, RetrieveMemoryResult>;
   persona?: PersonaData;
@@ -33,6 +35,7 @@ export interface UserMemoryStoreState
 }
 
 export const initialState: UserMemoryStoreState = {
+  ...activityInitialState,
   ...agentMemoryInitialState,
   ...contextInitialState,
   ...experienceInitialState,

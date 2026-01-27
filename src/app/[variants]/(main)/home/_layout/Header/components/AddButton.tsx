@@ -44,7 +44,7 @@ const AddButton = memo(() => {
         size={DESKTOP_HEADER_ICON_SIZE}
         title={tChat('newAgent')}
       />
-      <DropdownMenu items={dropdownItems} nativeButton={false}>
+      <DropdownMenu items={dropdownItems}>
         <ActionIcon
           color={cssVar.colorTextQuaternary}
           icon={ChevronDownIcon}

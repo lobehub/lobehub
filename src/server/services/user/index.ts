@@ -4,7 +4,6 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { initNewUserForBusiness } from '@/business/server/user';
 import { UserModel } from '@/database/models/user';
 import { initializeServerAnalytics } from '@/libs/analytics';
-import { pino } from '@/libs/logger';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { FileS3 } from '@/server/modules/S3';
 
@@ -67,7 +66,7 @@ export class UserService {
       }
       return Buffer.from(file);
     } catch (error) {
-      pino.error({ error }, 'Failed to get user avatar');
+      console.error('Failed to get user avatar', error);
     }
   };
 }

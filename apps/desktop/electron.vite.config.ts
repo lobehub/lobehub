@@ -18,6 +18,21 @@ export default defineConfig({
       rollupOptions: {
         // Native modules must be externalized to work correctly
         external: getExternalDependencies(),
+        output: {
+          // Prevent debug package from being bundled into index.js to avoid side-effect pollution
+          manualChunks(id) {
+            if (id.includes('node_modules/debug')) {
+              return 'vendor-debug';
+            }
+
+            // Split i18n json resources by namespace (ns), not by locale.
+            // Example: ".../resources/locales/zh-CN/common.json?import" -> "locales-common"
+            const normalizedId = id.replaceAll('\\', '/').split('?')[0];
+            const match = normalizedId.match(/\/locales\/[^/]+\/([^/]+)\.json$/);
+
+            if (match?.[1]) return `locales-${match[1]}`;
+          },
+        },
       },
       sourcemap: isDev ? 'inline' : false,
     },
@@ -25,7 +40,6 @@ export default defineConfig({
       'process.env.UPDATE_CHANNEL': JSON.stringify(process.env.UPDATE_CHANNEL),
       'process.env.UPDATE_SERVER_URL': JSON.stringify(process.env.UPDATE_SERVER_URL),
     },
-
     resolve: {
       alias: {
         '@': resolve(__dirname, 'src/main'),

@@ -1,6 +1,28 @@
 export default {
   '_cloud.officialProvider': '{{name}} Official Model Service',
   'about.title': 'About',
+  'accountDeletion.cancelButton': 'Cancel Deletion',
+  'accountDeletion.cancelConfirmTitle': 'Cancel account deletion request?',
+  'accountDeletion.cancelFailed': 'Failed to cancel deletion request',
+  'accountDeletion.cancelSuccess': 'Deletion request cancelled',
+  'accountDeletion.confirmCheckbox':
+    'I have read and understood the above, and confirm to proceed with account deletion',
+  'accountDeletion.confirmContent':
+    'After submission, you will enter a <0>72-hour</0> cooling-off period during which you can cancel at any time. Once the period ends, your account data will be permanently deleted, unpaid invoices will be canceled immediately, and paid fees will not be refunded. Your registration and deletion records will be retained for compliance purposes.',
+  'accountDeletion.confirmOk': 'Delete Account',
+  'accountDeletion.confirmRequired': 'Please confirm you understand the consequences',
+  'accountDeletion.confirmTitle': 'Delete Account?',
+  'accountDeletion.desc':
+    'Permanently delete your account and all associated data. This action cannot be undone.',
+  'accountDeletion.pendingDesc': 'Your account is scheduled for deletion',
+  'accountDeletion.pendingMessage': 'Your account will be deleted in {{hours}} hours',
+  'accountDeletion.reasonPlaceholder': 'Please tell us why you want to delete your account...',
+  'accountDeletion.reasonRequired': 'Please provide a reason for deletion',
+  'accountDeletion.requestButton': 'Request Account Deletion',
+  'accountDeletion.requestFailed': 'Failed to request account deletion',
+  'accountDeletion.requestSuccess': 'Deletion request submitted',
+  'accountDeletion.sectionTitle': 'Account Deletion',
+  'accountDeletion.title': 'Delete Account',
   'advancedSettings': 'Advanced Settings',
   'agentCronJobs.addJob': 'Add Scheduled Task',
   'agentCronJobs.confirmDelete': 'Are you sure you want to delete this scheduled task?',
@@ -102,7 +124,7 @@ export default {
   'checking': 'Checking...',
   'checkingPermissions': 'Checking permissions...',
   'danger.clear.action': 'Clear Now',
-  'danger.clear.confirm': 'Clear all chat data? This can’t be undone.',
+  'danger.clear.confirm': "Clear all chat data? This can't be undone.",
   'danger.clear.desc':
     'Delete all data, including agents, files, messages, and skills. Your account will NOT be deleted.',
   'danger.clear.success': 'All session messages have been cleared',

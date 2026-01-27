@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
+import { ActionIcon, Button, Icon, Tooltip } from '@lobehub/ui';
 import { App } from 'antd';
 import { CalendarClockIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -13,11 +13,12 @@ import DateRangeModal from './DateRangeModal';
 
 interface Props {
   footerNote: string;
+  iconOnly?: boolean;
   onRangeChange: (range: [Date | null, Date | null]) => void;
   range: [Date | null, Date | null];
 }
 
-const AnalysisTrigger = memo<Props>(({ footerNote, range, onRangeChange }) => {
+const AnalysisTrigger = memo<Props>(({ footerNote, range, onRangeChange, iconOnly }) => {
   const { t } = useTranslation('memory');
   const { message } = App.useApp();
   const { isValidating, refresh } = useMemoryAnalysisAsyncTask();
@@ -45,25 +46,33 @@ const AnalysisTrigger = memo<Props>(({ footerNote, range, onRangeChange }) => {
     }
   };
 
+  const loading = submitting || isValidating;
+
   return (
     <>
-      <Button
-        icon={<Icon icon={CalendarClockIcon} />}
-        loading={submitting || isValidating}
-        onClick={() => setOpen(true)}
-        size={'large'}
-        type={'primary'}
-        style={{ maxWidth: 300 }}
-      >
-        {t('analysis.action.button')}
-      </Button>
+      {iconOnly ? (
+        <Tooltip title={t('analysis.action.button')}>
+          <ActionIcon icon={CalendarClockIcon} loading={loading} onClick={() => setOpen(true)} />
+        </Tooltip>
+      ) : (
+        <Button
+          icon={<Icon icon={CalendarClockIcon} />}
+          loading={loading}
+          onClick={() => setOpen(true)}
+          size={'large'}
+          style={{ maxWidth: 300 }}
+          type={'primary'}
+        >
+          {t('analysis.action.button')}
+        </Button>
+      )}
 
       <DateRangeModal
         footerNote={footerNote}
-        open={open}
         onCancel={() => setOpen(false)}
         onChange={onRangeChange}
         onSubmit={handleSubmit}
+        open={open}
         range={range}
         submitting={submitting}
       />

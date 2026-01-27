@@ -1,6 +1,7 @@
 import { Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { type ChatItemProps } from '../type';
 
@@ -12,11 +13,14 @@ export interface TitleProps {
 }
 
 const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
+  const { t } = useTranslation('chat');
+  const title = avatar.title || t('untitledAgent');
+
   return (
     <>
-      {showTitle && avatar.title && (
+      {showTitle && (
         <Text fontSize={14} weight={500}>
-          {avatar.title}
+          {title}
         </Text>
       )}
       {showTitle ? titleAddon : undefined}

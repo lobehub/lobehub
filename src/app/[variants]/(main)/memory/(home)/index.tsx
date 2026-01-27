@@ -37,6 +37,7 @@ const Home: FC = () => {
         right={
           <Flexbox gap={8} horizontal>
             {/* <ActionIcon icon={PencilLineIcon} onClick={openEditor} /> */}
+            <MemoryAnalysis iconOnly />
             <WideScreenButton />
           </Flexbox>
         }
@@ -44,7 +45,6 @@ const Home: FC = () => {
           zIndex: 1,
         }}
       />
-      <MemoryAnalysis />
       <Flexbox
         height={'100%'}
         id={SCROLL_PARENT_ID}

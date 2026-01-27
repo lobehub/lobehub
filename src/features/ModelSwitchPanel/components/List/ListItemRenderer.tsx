@@ -147,15 +147,16 @@ export const ListItemRenderer = memo<ListItemRendererProps>(
 
       case 'model-item-multiple': {
         return (
-          <MultipleProvidersModelItem
-            activeKey={activeKey}
-            data={item.data}
-            isScrolling={isScrolling}
-            key={item.data.displayName}
-            newLabel={newLabel}
-            onClose={onClose}
-            onModelChange={onModelChange}
-          />
+          <Flexbox key={item.data.displayName} style={{ marginBlock: 1, marginInline: 4 }}>
+            <MultipleProvidersModelItem
+              activeKey={activeKey}
+              data={item.data}
+              isScrolling={isScrolling}
+              newLabel={newLabel}
+              onClose={onClose}
+              onModelChange={onModelChange}
+            />
+          </Flexbox>
         );
       }
 

@@ -1,5 +1,5 @@
 {
-  "addToKnowledgeBase.addSuccess": "ファイルが正常に追加されました。<1>今すぐ確認</1>",
+  "addToKnowledgeBase.addSuccess": "ファイルが正常に追加されました",
   "addToKnowledgeBase.confirm": "追加",
   "addToKnowledgeBase.error": "ファイルのナレッジベースへの追加に失敗しました",
   "addToKnowledgeBase.id.placeholder": "追加するナレッジベースを選択してください",

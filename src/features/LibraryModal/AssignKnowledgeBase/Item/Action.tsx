@@ -66,7 +66,7 @@ const Actions = memo<ActionsProps>(({ id, type, enabled }) => {
                   return;
                 }
 
-                window.open(`/knowledge?file=${id}`);
+                window.open(`/resource?file=${id}`);
               },
             },
             {

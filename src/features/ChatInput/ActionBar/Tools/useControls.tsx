@@ -6,7 +6,7 @@ import {
   RECOMMENDED_SKILLS,
   RecommendedSkillType,
 } from '@lobechat/const';
-import { Avatar, Icon, Image, type ItemType } from '@lobehub/ui';
+import { Avatar, Icon, type ItemType } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ToyBrick } from 'lucide-react';
@@ -32,18 +32,25 @@ import KlavisServerItem from './KlavisServerItem';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
 import ToolItem from './ToolItem';
 
+const SKILL_ICON_SIZE = 20;
+
 /**
  * Klavis 服务器图标组件
- * 对于 string 类型的 icon，使用 Image 组件渲染
- * 对于 IconType 类型的 icon，使用 Icon 组件渲染，并根据主题设置填充色
  */
 const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
   if (typeof icon === 'string') {
-    return <Image alt={label} height={18} src={icon} style={{ flex: 'none' }} width={18} />;
+    return (
+      <Avatar
+        alt={label}
+        avatar={icon}
+        shape={'square'}
+        size={SKILL_ICON_SIZE}
+        style={{ flex: 'none' }}
+      />
+    );
   }
 
-  // 使用主题色填充，在深色模式下自动适应
-  return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
+  return <Icon fill={cssVar.colorText} icon={icon} size={SKILL_ICON_SIZE} />;
 });
 
 KlavisIcon.displayName = 'KlavisIcon';
@@ -54,10 +61,18 @@ KlavisIcon.displayName = 'KlavisIcon';
 const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
   ({ icon, label }) => {
     if (typeof icon === 'string') {
-      return <Image alt={label} height={18} src={icon} style={{ flex: 'none' }} width={18} />;
+      return (
+        <Avatar
+          alt={label}
+          avatar={icon}
+          shape={'square'}
+          size={SKILL_ICON_SIZE}
+          style={{ flex: 'none' }}
+        />
+      );
     }
 
-    return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
+    return <Icon fill={cssVar.colorText} icon={icon} size={SKILL_ICON_SIZE} />;
   },
 );
 
@@ -193,7 +208,12 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     () =>
       filteredBuiltinList.map((item) => ({
         icon: (
-          <Avatar avatar={item.meta.avatar} shape={'square'} size={20} style={{ flex: 'none' }} />
+          <Avatar
+            avatar={item.meta.avatar}
+            shape={'square'}
+            size={SKILL_ICON_SIZE}
+            style={{ flex: 'none' }}
+          />
         ),
         key: item.identifier,
         label: (
@@ -236,9 +256,9 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
   // 生成插件列表项的函数
   const mapPluginToItem = (item: (typeof list)[0]) => ({
     icon: item?.avatar ? (
-      <PluginAvatar avatar={item.avatar} size={20} />
+      <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
     ) : (
-      <Icon icon={ToyBrick} size={20} />
+      <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
     ),
     key: item.identifier,
     label: (
@@ -315,7 +335,12 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
       .filter((item) => checked.includes(item.identifier))
       .map((item) => ({
         icon: (
-          <Avatar avatar={item.meta.avatar} shape={'square'} size={20} style={{ flex: 'none' }} />
+          <Avatar
+            avatar={item.meta.avatar}
+            shape={'square'}
+            size={SKILL_ICON_SIZE}
+            style={{ flex: 'none' }}
+          />
         ),
         key: item.identifier,
         label: (
@@ -371,9 +396,9 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
       .filter((item) => checked.includes(item.identifier))
       .map((item) => ({
         icon: item?.avatar ? (
-          <PluginAvatar avatar={item.avatar} size={20} />
+          <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
         ) : (
-          <Icon icon={ToyBrick} size={20} />
+          <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
         ),
         key: item.identifier,
         label: (
@@ -395,9 +420,9 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
       .filter((item) => checked.includes(item.identifier))
       .map((item) => ({
         icon: item?.avatar ? (
-          <PluginAvatar avatar={item.avatar} size={20} />
+          <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
         ) : (
-          <Icon icon={ToyBrick} size={20} />
+          <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
         ),
         key: item.identifier,
         label: (

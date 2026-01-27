@@ -1,4 +1,37 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, responsive } from 'antd-style';
+
+export const gridStyles = createStaticStyles(({ css }) => ({
+  grid: css`
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+
+    padding-block-end: 16px;
+    padding-inline: 16px;
+
+    ${responsive.sm} {
+      grid-template-columns: 1fr;
+    }
+  `,
+}));
+
+export const virtuosoGridStyles = createStaticStyles(({ css }) => ({
+  item: css`
+    width: calc(50% - 6px);
+
+    ${responsive.sm} {
+      width: 100%;
+    }
+  `,
+  list: css`
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+
+    padding-block-end: 16px;
+    padding-inline: 16px;
+  `,
+}));
 
 export const itemStyles = createStaticStyles(({ css, cssVar }) => ({
   container: css`

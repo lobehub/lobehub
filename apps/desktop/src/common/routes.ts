@@ -34,14 +34,14 @@ export interface RouteInterceptConfig {
  */
 export const interceptRoutes: RouteInterceptConfig[] = [
   {
-    description: '开发者工具',
+    description: 'Developer Tools',
     enabled: true,
     pathPrefix: '/desktop/devtools',
     targetWindow: 'devtools',
   },
-  // 未来可能的其他路由
+  // Possible future routes
   // {
-  //   description: '帮助中心',
+  //   description: 'Help Center',
   //   enabled: true,
   //   pathPrefix: '/help',
   //   targetWindow: 'help',
@@ -49,24 +49,24 @@ export const interceptRoutes: RouteInterceptConfig[] = [
 ];
 
 /**
- * 通过路径查找匹配的路由拦截配置
- * @param path 需要检查的路径
- * @returns 匹配的拦截配置，如果没有匹配则返回 undefined
+ * Find matching route intercept configuration by path
+ * @param path Path to check
+ * @returns Matching intercept configuration, or undefined if no match found
  */
 export const findMatchingRoute = (path: string): RouteInterceptConfig | undefined => {
   return interceptRoutes.find((route) => route.enabled && path.startsWith(route.pathPrefix));
 };
 
 /**
- * 从完整路径中提取子路径
- * @param fullPath 完整路径，如 '/settings/agent'
- * @param pathPrefix 路径前缀，如 '/settings'
- * @returns 子路径，如 'agent'
+ * Extract sub-path from full path
+ * @param fullPath Full path, e.g., '/settings/agent'
+ * @param pathPrefix Path prefix, e.g., '/settings'
+ * @returns Sub-path, e.g., 'agent'
  */
 export const extractSubPath = (fullPath: string, pathPrefix: string): string | undefined => {
   if (fullPath.length <= pathPrefix.length) return undefined;
 
-  // 去除前导斜杠
+  // Remove leading slash
   const subPath = fullPath.slice(Math.max(0, pathPrefix.length + 1));
   return subPath || undefined;
 };

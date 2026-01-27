@@ -1,16 +1,17 @@
 'use client';
 
-import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Center, Icon, Text } from '@lobehub/ui';
 import { ServerCrash } from 'lucide-react';
-import { memo, useEffect } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Virtuoso } from 'react-virtuoso';
+import { VirtuosoGrid } from 'react-virtuoso';
 
 import { useToolStore } from '@/store/tool';
 
 import Empty from '../Empty';
 import Loading from '../Loading';
 import VirtuosoLoading from '../VirtuosoLoading';
+import { virtuosoGridStyles } from '../style';
 import Item from './Item';
 
 export const CommunityList = memo(() => {
@@ -20,7 +21,6 @@ export const CommunityList = memo(() => {
     keywords,
     isMcpListInit,
     allItems,
-    totalCount,
     currentPage,
     searchLoading,
     useFetchMCPPluginList,
@@ -30,7 +30,6 @@ export const CommunityList = memo(() => {
     s.mcpSearchKeywords,
     s.isMcpListInit,
     s.mcpPluginItems,
-    s.totalCount,
     s.currentPage,
     s.searchLoading,
     s.useFetchMCPPluginList,
@@ -38,8 +37,14 @@ export const CommunityList = memo(() => {
     s.resetMCPPluginList,
   ]);
 
+  const prevKeywordsRef = useRef(keywords);
+
   useEffect(() => {
-    resetMCPPluginList(keywords);
+    // Only reset when keywords actually change, not on initial mount
+    if (prevKeywordsRef.current !== keywords) {
+      prevKeywordsRef.current = keywords;
+      resetMCPPluginList(keywords);
+    }
   }, [keywords, resetMCPPluginList]);
 
   const { isLoading, error } = useFetchMCPPluginList({
@@ -66,29 +71,18 @@ export const CommunityList = memo(() => {
     if (allItems.length === 0) return <Empty search={hasSearchKeywords} />;
 
     return (
-      <Virtuoso
+      <VirtuosoGrid
         components={{
-          Footer: isLoading ? VirtuosoLoading : undefined,
+          Footer: isLoading ? VirtuosoLoading : () => <div style={{ height: 16 }} />,
         }}
         data={allItems}
         endReached={loadMoreMCPPlugins}
         increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
-        itemContent={(index) => {
-          const item = allItems[index];
-          // Render two items per row
-          if (index % 2 !== 0) return null;
-
-          const nextItem = allItems[index + 1];
-          return (
-            <Flexbox gap={12} horizontal paddingInline={16} style={{ paddingBottom: 12 }}>
-                <Item {...item} />
-                {nextItem && <Item {...nextItem} />}
-              </Flexbox>
-          );
-        }}
+        itemClassName={virtuosoGridStyles.item}
+        itemContent={(_, item) => <Item {...item} />}
+        listClassName={virtuosoGridStyles.list}
         overscan={24}
         style={{ height: '60vh', width: '100%' }}
-        totalCount={Math.ceil((totalCount || 0) / 2)}
       />
     );
   };

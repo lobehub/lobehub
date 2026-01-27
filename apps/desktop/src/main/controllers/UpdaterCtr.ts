@@ -12,7 +12,7 @@ export default class UpdaterCtr extends ControllerModule {
   @IpcMethod()
   async checkForUpdates() {
     logger.info('Check for updates requested');
-    await this.app.updaterManager.checkForUpdates();
+    await this.app.updaterManager.checkForUpdates({ manual: true });
   }
 
   /**

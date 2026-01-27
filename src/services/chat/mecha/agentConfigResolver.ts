@@ -4,7 +4,9 @@ import {
   getAgentRuntimeConfig,
 } from '@lobechat/builtin-agents';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
+import type { LobeToolManifest } from '@lobechat/context-engine';
 import {
+  type ChatCompletionTool,
   type LobeAgentChatConfig,
   type LobeAgentConfig,
   type MessageMapScope,
@@ -111,6 +113,10 @@ export interface ResolvedAgentConfig {
   agentConfig: LobeAgentConfig;
   /** The chat config */
   chatConfig: LobeAgentChatConfig;
+  /** Enabled manifests for context engineering (populated by internal_createAgentState) */
+  enabledManifests?: LobeToolManifest[];
+  /** Enabled tool IDs after filtering (populated by internal_createAgentState) */
+  enabledToolIds?: string[];
   /** Whether this is a builtin agent */
   isBuiltinAgent: boolean;
   /**
@@ -121,6 +127,8 @@ export interface ResolvedAgentConfig {
   plugins: string[];
   /** The agent's slug (if builtin) */
   slug?: string;
+  /** Pre-generated tools array (populated by internal_createAgentState, undefined means tools disabled) */
+  tools?: ChatCompletionTool[];
 }
 
 /**

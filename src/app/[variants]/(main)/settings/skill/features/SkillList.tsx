@@ -10,9 +10,11 @@ import {
   getKlavisServerByServerIdentifier,
   getLobehubSkillProviderById,
 } from '@lobechat/const';
+import { Center, Empty } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
+import { BlocksIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -202,11 +204,10 @@ const SkillList = memo(() => {
 
   if (!hasAnySkills) {
     return (
-      <div className={styles.container}>
-        <p className={styles.description}>{t('tab.skillDesc')}</p>
-        <div className={styles.empty}>{t('tab.skillEmpty')}</div>
+      <Center className={styles.container} paddingBlock={48}>
+        <Empty description={t('tab.skillDesc')} icon={BlocksIcon} title={t('tab.skillEmpty')} />
         <AddSkillButton />
-      </div>
+      </Center>
     );
   }
 

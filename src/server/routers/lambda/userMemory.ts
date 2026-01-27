@@ -15,6 +15,7 @@ import { AsyncTaskModel, initUserMemoryExtractionMetadata } from '@/database/mod
 import { TopicModel } from '@/database/models/topic';
 import { UserMemoryModel } from '@/database/models/userMemory';
 import {
+  UserMemoryActivityModel,
   UserMemoryContextModel,
   UserMemoryExperienceModel,
   UserMemoryIdentityModel,
@@ -35,6 +36,7 @@ const userMemoryProcedure = authedProcedure.use(serverDatabase).use(async (opts)
 
   return opts.next({
     ctx: {
+      activityModel: new UserMemoryActivityModel(ctx.serverDB, ctx.userId),
       asyncTaskModel: new AsyncTaskModel(ctx.serverDB, ctx.userId),
       contextModel: new UserMemoryContextModel(ctx.serverDB, ctx.userId),
       experienceModel: new UserMemoryExperienceModel(ctx.serverDB, ctx.userId),
@@ -75,6 +77,14 @@ export const userMemoryRouter = router({
       });
     }),
 
+
+  // ============ Activity CRUD ============
+  deleteActivity: userMemoryProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return ctx.activityModel.delete(input.id);
+    }),
+
   // ============ Context CRUD ============
   deleteContext: userMemoryProcedure
     .input(z.object({ id: z.string() }))
@@ -89,11 +99,13 @@ export const userMemoryRouter = router({
       return ctx.experienceModel.delete(input.id);
     }),
 
+
   deleteIdentity: userMemoryProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.userMemoryModel.removeIdentityEntry(input.id);
     }),
+
 
   // ============ Preference CRUD ============
   deletePreference: userMemoryProcedure
@@ -101,6 +113,11 @@ export const userMemoryRouter = router({
     .mutation(async ({ ctx, input }) => {
       return ctx.preferenceModel.delete(input.id);
     }),
+
+
+  getActivities: userMemoryProcedure.query(async ({ ctx }) => {
+    return ctx.userMemoryModel.searchActivities({});
+  }),
 
   getContexts: userMemoryProcedure.query(async ({ ctx }) => {
     return ctx.userMemoryModel.searchContexts({});
@@ -134,9 +151,10 @@ export const userMemoryRouter = router({
     }),
 
   // ============ Persona ============
-  getPersona: userMemoryProcedure.query(async () => {
+getPersona: userMemoryProcedure.query(async () => {
     return { content: '', summary: '' };
   }),
+
 
   getPreferences: userMemoryProcedure.query(async ({ ctx }) => {
     return ctx.userMemoryModel.searchPreferences({});
@@ -240,6 +258,21 @@ export const userMemoryRouter = router({
         metadata: metadata as UserMemoryExtractionMetadata,
         status: AsyncTaskStatus.Pending,
       };
+    }),
+
+  updateActivity: userMemoryProcedure
+    .input(
+      z.object({
+        data: z.object({
+          narrative: z.string().optional(),
+          notes: z.string().optional(),
+          status: z.string().optional(),
+        }),
+        id: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return ctx.activityModel.update(input.id, input.data);
     }),
 
   updateContext: userMemoryProcedure

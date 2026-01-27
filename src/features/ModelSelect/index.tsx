@@ -1,14 +1,18 @@
 import { LobeSelect, type LobeSelectProps, TooltipGroup } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStyles } from 'antd-style';
 import { type ReactNode, memo, useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { type EnabledProviderWithModels } from '@/types/aiProvider';
 
-const styles = createStaticStyles(({ css }) => ({
+const useStyles = createStyles(({ css }, { popupWidth }: { popupWidth?: number | string }) => ({
   popup: css`
-    width: max(360px, var(--anchor-width));
+    width: ${popupWidth
+      ? typeof popupWidth === 'number'
+        ? `${popupWidth}px`
+        : popupWidth
+      : 'max(360px, var(--anchor-width))'};
   `,
 }));
 
@@ -27,6 +31,7 @@ interface ModelSelectProps extends Pick<LobeSelectProps, 'loading' | 'size' | 's
   defaultValue?: { model: string; provider?: string };
   initialWidth?: boolean;
   onChange?: (props: { model: string; provider: string }) => void;
+  popupWidth?: number | string;
   requiredAbilities?: (keyof EnabledProviderWithModels['children'][number]['abilities'])[];
   showAbility?: boolean;
 
@@ -41,10 +46,12 @@ const ModelSelect = memo<ModelSelectProps>(
     showAbility = true,
     requiredAbilities,
     loading,
+    popupWidth,
     size,
     style,
     variant,
   }) => {
+    const { styles } = useStyles({ popupWidth });
     const enabledList = useEnabledChatModels();
 
     const options = useMemo<LobeSelectProps['options']>(() => {

@@ -1,20 +1,23 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import { AsyncTaskStatus } from '@lobechat/types';
+import { Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import AnalysisAction from './Action';
 import { MemoryAnalysisStatus } from './Status';
 import { useMemoryAnalysisAsyncTask } from './useTask';
 
-const MemoryAnalysis = memo(() => {
+interface Props {
+  iconOnly?: boolean;
+}
+
+const MemoryAnalysis = memo<Props>(({ iconOnly }) => {
   const { data, isValidating } = useMemoryAnalysisAsyncTask();
 
   const { showAction, showStatus } = useMemo(() => {
     const status = data?.status;
-    const isRunning =
-      status === AsyncTaskStatus.Pending || status === AsyncTaskStatus.Processing;
+    const isRunning = status === AsyncTaskStatus.Pending || status === AsyncTaskStatus.Processing;
     const isError = status === AsyncTaskStatus.Error;
 
     console.log(isRunning, isValidating, isError, data);
@@ -27,8 +30,13 @@ const MemoryAnalysis = memo(() => {
 
   if (!showAction && !showStatus) return null;
 
+  // For iconOnly mode, only show the action button
+  if (iconOnly) {
+    return showAction ? <AnalysisAction iconOnly /> : null;
+  }
+
   return (
-    <Flexbox gap={12} style={{ width: '100%', paddingTop: 16 }}>
+    <Flexbox gap={12} style={{ paddingTop: 16, width: '100%' }}>
       {showStatus && <MemoryAnalysisStatus task={data} />}
       {showAction && <AnalysisAction />}
     </Flexbox>

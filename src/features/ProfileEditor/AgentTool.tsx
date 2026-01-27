@@ -7,7 +7,7 @@ import {
   type LobehubSkillProviderType,
 } from '@lobechat/const';
 import { Avatar, Button, Flexbox, Icon, type ItemType } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { PlusIcon, ToyBrick } from 'lucide-react';
 import React, { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -40,30 +40,25 @@ const WEB_BROWSING_IDENTIFIER = 'lobe-web-browsing';
 
 type TabType = 'all' | 'installed';
 
-const styles = createStaticStyles(({ css }) => ({
-  icon: css`
-    flex: none;
-    width: 18px;
-    height: 18px;
-    margin-inline-end: ${cssVar.marginXS};
-  `,
-  scroller: css`
-    overflow: hidden auto;
-  `,
-}));
+const SKILL_ICON_SIZE = 20;
 
 /**
  * Klavis 服务器图标组件
- * 对于 string 类型的 icon，使用 Image 组件渲染
- * 对于 IconType 类型的 icon，使用 Icon 组件渲染，并根据主题设置填充色
  */
 const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
   if (typeof icon === 'string') {
-    return <img alt={label} className={styles.icon} height={18} src={icon} width={18} />;
+    return (
+      <Avatar
+        alt={label}
+        avatar={icon}
+        shape={'square'}
+        size={SKILL_ICON_SIZE}
+        style={{ flex: 'none' }}
+      />
+    );
   }
 
-  // 使用主题色填充，在深色模式下自动适应
-  return <Icon className={styles.icon} fill={cssVar.colorText} icon={icon} size={18} />;
+  return <Icon fill={cssVar.colorText} icon={icon} size={SKILL_ICON_SIZE} />;
 });
 
 /**
@@ -72,10 +67,18 @@ const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label
 const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
   ({ icon, label }) => {
     if (typeof icon === 'string') {
-      return <img alt={label} className={styles.icon} height={18} src={icon} width={18} />;
+      return (
+        <Avatar
+          alt={label}
+          avatar={icon}
+          shape={'square'}
+          size={SKILL_ICON_SIZE}
+          style={{ flex: 'none' }}
+        />
+      );
     }
 
-    return <Icon className={styles.icon} fill={cssVar.colorText} icon={icon} size={18} />;
+    return <Icon fill={cssVar.colorText} icon={icon} size={SKILL_ICON_SIZE} />;
   },
 );
 
@@ -315,7 +318,12 @@ const AgentTool = memo<AgentToolProps>(
         // 原有的 builtin 工具
         ...filteredBuiltinList.map((item) => ({
           icon: (
-            <Avatar avatar={item.meta.avatar} size={20} style={{ flex: 'none', marginRight: 0 }} />
+            <Avatar
+              avatar={item.meta.avatar}
+              shape={'square'}
+              size={SKILL_ICON_SIZE}
+              style={{ flex: 'none' }}
+            />
           ),
           key: item.identifier,
           label: (
@@ -347,9 +355,9 @@ const AgentTool = memo<AgentToolProps>(
     const mapPluginToItem = useCallback(
       (item: (typeof installedPluginList)[0]) => ({
         icon: item?.avatar ? (
-          <PluginAvatar avatar={item.avatar} size={20} />
+          <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
         ) : (
-          <Icon icon={ToyBrick} size={20} />
+          <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
         ),
         key: item.identifier,
         label: (
@@ -428,7 +436,14 @@ const AgentTool = memo<AgentToolProps>(
       const enabledBuiltinItems = filteredBuiltinList
         .filter((item) => isToolEnabled(item.identifier))
         .map((item) => ({
-          icon: <Avatar avatar={item.meta.avatar} size={20} style={{ flex: 'none' }} />,
+          icon: (
+            <Avatar
+              avatar={item.meta.avatar}
+              shape={'square'}
+              size={SKILL_ICON_SIZE}
+              style={{ flex: 'none' }}
+            />
+          ),
           key: item.identifier,
           label: (
             <ToolItem
@@ -475,9 +490,9 @@ const AgentTool = memo<AgentToolProps>(
         .filter((item) => plugins.includes(item.identifier))
         .map((item) => ({
           icon: item?.avatar ? (
-            <PluginAvatar avatar={item.avatar} size={20} />
+            <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
           ) : (
-            <Icon icon={ToyBrick} size={20} />
+            <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
           ),
           key: item.identifier,
           label: (
@@ -508,9 +523,9 @@ const AgentTool = memo<AgentToolProps>(
         .filter((item) => plugins.includes(item.identifier))
         .map((item) => ({
           icon: item?.avatar ? (
-            <PluginAvatar avatar={item.avatar} size={20} />
+            <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
           ) : (
-            <Icon icon={ToyBrick} size={20} />
+            <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
           ),
           key: item.identifier,
           label: (
@@ -552,7 +567,6 @@ const AgentTool = memo<AgentToolProps>(
 
     // Use effective tab for display (default to all while initializing)
     const effectiveTab = activeTab ?? 'all';
-    const currentItems = effectiveTab === 'all' ? allTabItems : installedTabItems;
 
     const button = (
       <Button
@@ -581,11 +595,11 @@ const AgentTool = memo<AgentToolProps>(
         {/* Plugin Selector and Tags */}
         <Flexbox align="center" gap={8} horizontal wrap={'wrap'}>
           <Suspense fallback={button}>
-          {/* Plugin Selector Dropdown - Using Action component pattern */}
+            {/* Plugin Selector Dropdown - Using Action component pattern */}
             <ActionDropdown
               maxWidth={400}
               menu={{
-                items: currentItems,
+                items: [],
                 style: {
                   // let only the custom scroller scroll
                   maxHeight: 'unset',
@@ -596,15 +610,20 @@ const AgentTool = memo<AgentToolProps>(
               onOpenChange={setDropdownOpen}
               open={dropdownOpen}
               placement={'bottomLeft'}
-              popupRender={(menu) => (
+              popupProps={{
+                style: {
+                  padding: 0,
+                },
+              }}
+              popupRender={() => (
                 <PopoverContent
                   activeTab={effectiveTab}
+                  allTabItems={allTabItems}
                   installedTabItems={installedTabItems}
-                  menu={menu}
                   onClose={() => setDropdownOpen(false)}
                   onOpenStore={() => {
                     setDropdownOpen(false);
-                    createSkillStoreModal()
+                    createSkillStoreModal();
                   }}
                   onTabChange={setActiveTab}
                 />
