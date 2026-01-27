@@ -3,175 +3,175 @@
   "cloud": [],
   "community": [
     {
-      "image": "https://file.rene.wang/clipboard-1769155711708-710967bee57bc.png",
+      "image": "/blog/assets7f3b38c1d76cceb91edb29d6b1eb60db.webp",
       "id": "2025-12-20-mcp",
       "date": "2025-12-20",
       "versionRange": ["1.142.8", "1.143"]
     },
     {
-      "image": "https://file.rene.wang/clipboard-1769155737647-1b4fc6558f029.png",
+      "image": "/blog/assets3a7f0b29839603336e39e923b423409b.webp",
       "id": "2025-11-08-comfy-ui",
       "date": "2025-11-08",
       "versionRange": ["1.133.5", "1.142.8"]
     },
     {
-      "image": "https://file.rene.wang/clipboard-1769155791342-7f43b72cc6b42.png",
+      "image": "/blog/assets35e6aa692b0c16009c61964279514166.webp",
       "id": "2025-10-08-python",
       "date": "2025-10-08",
       "versionRange": ["1.120.7", "1.133.5"]
     },
     {
-      "image": "https://file.rene.wang/clipboard-1769155818070-7eb403550b6c7.png",
+      "image": "/blog/assetsce5d6dc93676f974be2e162e8ace03f0.webp",
       "id": "2025-09-08-gemini",
       "date": "2025-09-08",
       "versionRange": ["1.109.1", "1.120.7"]
     },
     {
-      "image": "https://file.rene.wang/clipboard-1769155880302-272fbd2c5290b.png",
+      "image": "/blog/assetsdf48eed9de76b7e37c269b294285f09d.webp",
       "id": "2025-08-08-image-generation",
       "date": "2025-08-08",
       "versionRange": ["1.97.10", "1.109.1"]
     },
     {
-      "image": "https://file.rene.wang/clipboard-1769155935435-93dab92dd0f44.png",
+      "image": "/blog/assets902eb746fe2042fc2ea831c71002be72.webp",
       "id": "2025-07-08-mcp-market",
       "date": "2025-07-08",
       "versionRange": ["1.93.3", "1.97.10"]
     },
     {
-      "image": "https://file.rene.wang/clipboard-1769155973881-ff1ee142d5b8f.png",
+      "image": "/blog/assets5cc27b8cae995074da20d4ffe06a1460.webp",
       "id": "2025-06-08-claude-4",
       "date": "2025-06-08",
       "versionRange": ["1.84.27", "1.93.3"]
     },
     {
-      "image": "https://file.rene.wang/clipboard-1769156005535-c2e79e11f4b56.png",
+      "image": "/blog/assets2a36d86a4eed6e7938dd6e9c684701ed.webp",
       "id": "2025-05-08-desktop-app",
       "date": "2025-05-08",
       "versionRange": ["1.77.17", "1.84.27"]
     },
     {
-      "image": "https://file.rene.wang/clipboard-1769156036607-2b4fe37c4b56c.png",
+      "image": "/blog/assetsc0efdb82443556ae3acefe00099b3f23.webp",
       "id": "2025-04-06-exports",
       "date": "2025-04-06",
       "versionRange": ["1.67.2", "1.77.17"]
     },
     {
-      "image": "https://file.rene.wang/clipboard-1769156050787-ecf4f48474ae2.png",
+      "image": "/blog/assetse743f0a47127390dde766a0a790476db.webp",
       "id": "2025-03-02-new-models",
       "date": "2025-03-02",
       "versionRange": ["1.49.13", "1.67.2"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/5fe4c373-ebd0-42a9-bdca-0ab7e0a2e747",
+      "image": "/blog/assets18168d5fe64ea34905a7e52fd82d0e9d.webp",
       "id": "2025-02-02-deepseek-r1",
       "date": "2025-02-02",
       "versionRange": ["1.47.8", "1.49.12"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/7350f211-61ce-488e-b0e2-f0fcac25caeb",
+      "image": "/blog/assetsf9ed064fe764cbeff2f46910e7099a91.webp",
       "id": "2025-01-22-new-ai-provider",
       "date": "2025-01-22",
       "versionRange": ["1.43.1", "1.47.7"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/3d80e0f5-d32a-4412-85b2-e709731460a0",
+      "image": "/blog/assets2d409f43b58953ad5396c6beab8a0719.webp",
       "id": "2025-01-03-user-profile",
       "date": "2025-01-03",
       "versionRange": ["1.34.1", "1.43.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/2048b4c2-4a56-4029-acf9-71e35ff08652",
+      "image": "/blog/assets/d9cbfcbef130183bc490d515d8a38aa4.webp",
       "id": "2024-11-27-forkable-chat",
       "date": "2024-11-27",
       "versionRange": ["1.33.1", "1.34.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/fa8fab19-ace2-4f85-8428-a3a0e28845bb",
+      "image": "/blog/assets/2d678631c55369ba7d753c3ffcb73782.webp",
       "id": "2024-11-25-november-providers",
       "date": "2024-11-25",
       "versionRange": ["1.30.1", "1.33.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/eb3f3d8a-79ce-40aa-a206-2c846206c0c0",
+      "image": "/blog/assets/f10a4b98782e36797c38071eed785c6f.webp",
       "id": "2024-11-06-share-text-json",
       "date": "2024-11-06",
       "versionRange": ["1.26.1", "1.28.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/e70c2db6-05c9-43ea-b111-6f6f99e0ae88",
+      "image": "/blog/assets/944c671604833cd2457445b211ebba33.webp",
       "id": "2024-10-27-pin-assistant",
       "date": "2024-10-27",
       "versionRange": ["1.19.1", "1.26.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/635f1c74-6327-48a8-a8d9-68d7376c7749",
+      "image": "/blog/assets/f6d047a345e47a52592cff916c9a64ce.webp",
       "id": "2024-09-20-artifacts",
       "date": "2024-09-20",
       "versionRange": ["1.17.1", "1.19.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/bd6d0c82-8f14-4167-ad09-2a841f1e34e4",
+      "image": "/blog/assets/d7e57f8e69f97b76b3c2414f3441b6e4.webp",
       "id": "2024-09-13-openai-o1-models",
       "date": "2024-09-13",
       "versionRange": ["1.12.1", "1.17.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/385eaca6-daea-484a-9bea-ba7270b4753d",
+      "image": "/blog/assets/d6129350de510a62fe87b2d2f0fb9477.webp",
       "id": "2024-08-21-file-upload-and-knowledge-base",
       "date": "2024-08-21",
       "versionRange": ["1.8.1", "1.12.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/2a4116a7-15ad-43e5-b801-cc62d8da2012",
+      "image": "/blog/assets/37d85fdfccff9ed56e9c6827faee01c7.webp",
       "id": "2024-08-02-lobe-chat-database-docker",
       "date": "2024-08-02",
       "versionRange": ["1.6.1", "1.8.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/0e3a7174-6b66-4432-a319-dff60b033c24",
+      "image": "/blog/assets/39d7890f8cbe21e77db8d3c94f7f22e4.webp",
       "id": "2024-07-19-gpt-4o-mini",
       "date": "2024-07-19",
       "versionRange": ["1.0.1", "1.6.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/82bfc467-e0c6-4d99-9b1f-18e4aea24285",
+      "image": "/blog/assets/eb477e62217f4d1b644eff975c7ac168.webp",
       "id": "2024-06-19-lobe-chat-v1",
       "date": "2024-06-19",
       "versionRange": ["0.147.0", "1.0.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/aee846d5-b5ee-46cb-9dd0-d952ea708b67",
+      "image": "/blog/assets/8a8d361b4c0cce6da350cc0de65c0ad6.webp",
       "id": "2024-02-14-ollama",
       "date": "2024-02-14",
       "versionRange": ["0.125.1", "0.127.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/533f7a5e-8a93-4a57-a62f-8233897d72b5",
+      "image": "/blog/assets/9498087e85f27e692716a63cb3b58d79.webp",
       "id": "2024-02-08-sso-oauth",
       "date": "2024-02-08",
       "versionRange": ["0.118.1", "0.125.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/6069332b-8e15-4d3c-8a77-479e8bc09c23",
+      "image": "/blog/assets/603fefbb944bc6761ebdab5956fc0084.webp",
       "id": "2023-12-22-dalle-3",
       "date": "2023-12-22",
       "versionRange": ["0.102.1", "0.118.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/03433283-08a5-481a-8f6c-069b2fc6bace",
+      "image": "/blog/assets/8d4c2cc0ce8654fa8ac06cc036a7f941.webp",
       "id": "2023-11-19-tts-stt",
       "date": "2023-11-19",
       "versionRange": ["0.101.1", "0.102.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/dde2c9c5-cdda-4a65-8f32-b6f4da907df2",
+      "image": "/blog/assets/d47654360d626f80144cdedb979a3526.webp",
       "id": "2023-11-14-gpt4-vision",
       "date": "2023-11-14",
       "versionRange": ["0.90.0", "0.101.0"]
     },
     {
-      "image": "https://github.com/user-attachments/assets/eaed3762-136f-4297-b161-ca92a27c4982",
+      "image": "/blog/assets/50b38eac1769ae6f13aef72f3d725eec.webp",
       "id": "2023-09-09-plugin-system",
       "date": "2023-09-09",
       "versionRange": ["0.67.0", "0.72.0"]

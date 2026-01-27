@@ -24,6 +24,13 @@ export default defineConfig({
             if (id.includes('node_modules/debug')) {
               return 'vendor-debug';
             }
+
+            // Split i18n json resources by namespace (ns), not by locale.
+            // Example: ".../resources/locales/zh-CN/common.json?import" -> "locales-common"
+            const normalizedId = id.replaceAll('\\', '/').split('?')[0];
+            const match = normalizedId.match(/\/locales\/[^/]+\/([^/]+)\.json$/);
+
+            if (match?.[1]) return `locales-${match[1]}`;
           },
         },
       },

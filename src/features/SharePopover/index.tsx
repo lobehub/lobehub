@@ -2,6 +2,7 @@
 
 import {
   Button,
+  Checkbox,
   Flexbox,
   LobeSelect,
   Popover,
@@ -20,6 +21,8 @@ import { useAppOrigin } from '@/hooks/useAppOrigin';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { topicService } from '@/services/topic';
 import { useChatStore } from '@/store/chat';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 
 import { styles } from './style';
 
@@ -38,6 +41,10 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
   const appOrigin = useAppOrigin();
 
   const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const [hideTopicSharePrivacyWarning, updateSystemStatus] = useGlobalStore((s) => [
+    systemStatusSelectors.systemStatus(s).hideTopicSharePrivacyWarning ?? false,
+    s.updateSystemStatus,
+  ]);
 
   const {
     data: shareInfo,
@@ -79,13 +86,38 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
 
   const handleVisibilityChange = useCallback(
     (visibility: Visibility) => {
-      // Show confirmation when changing from private to link
-      if (currentVisibility === 'private' && visibility === 'link') {
+      // Show confirmation when changing from private to link (unless user has dismissed it)
+      if (
+        currentVisibility === 'private' &&
+        visibility === 'link' &&
+        !hideTopicSharePrivacyWarning
+      ) {
+        let doNotShowAgain = false;
+
         modal.confirm({
           cancelText: t('cancel', { ns: 'common' }),
-          content: t('shareModal.popover.privacyWarning.content'),
+          centered: true,
+          content: (
+            <div>
+              <p>{t('shareModal.popover.privacyWarning.content')}</p>
+              <div style={{ marginTop: 16 }}>
+                <Checkbox
+                  onChange={(v) => {
+                    doNotShowAgain = v;
+                  }}
+                >
+                  {t('shareModal.popover.privacyWarning.doNotShowAgain')}
+                </Checkbox>
+              </div>
+            </div>
+          ),
           okText: t('shareModal.popover.privacyWarning.confirm'),
-          onOk: () => updateVisibility(visibility),
+          onOk: () => {
+            if (doNotShowAgain) {
+              updateSystemStatus({ hideTopicSharePrivacyWarning: true });
+            }
+            updateVisibility(visibility);
+          },
           title: t('shareModal.popover.privacyWarning.title'),
           type: 'warning',
         });
@@ -93,7 +125,14 @@ const SharePopoverContent = memo<SharePopoverContentProps>(({ onOpenModal }) => 
         updateVisibility(visibility);
       }
     },
-    [currentVisibility, modal, t, updateVisibility],
+    [
+      currentVisibility,
+      hideTopicSharePrivacyWarning,
+      modal,
+      t,
+      updateSystemStatus,
+      updateVisibility,
+    ],
   );
 
   const handleCopyLink = useCallback(async () => {

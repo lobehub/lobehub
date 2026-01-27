@@ -85,12 +85,17 @@ const MessageItem = memo<MessageItemProps>(
         if (isDesktop) {
           const { electronSystemService } = await import('@/services/electron/system');
 
+          // Get selected text for context menu features like Look Up and Search
+          const selection = window.getSelection();
+          const selectionText = selection?.toString() || '';
+
           electronSystemService.showContextMenu('chat', {
             content: message.content,
             hasError: !!message.error,
             messageId: id,
             // For assistantGroup, we treat it as assistant for context menu purposes
             role: message.role === 'assistantGroup' ? 'assistant' : message.role,
+            selectionText,
           });
 
           return;

@@ -326,6 +326,7 @@ export default {
   'shareModal.popover.privacyWarning.confirm': 'I understand, continue',
   'shareModal.popover.privacyWarning.content':
     "Please make sure your conversation doesn't contain any personal or sensitive information. You are responsible for any content you choose to share and its consequences.",
+  'shareModal.popover.privacyWarning.doNotShowAgain': "Don't show this again",
   'shareModal.popover.privacyWarning.title': 'Privacy Notice',
   'shareModal.popover.title': 'Share Topic',
   'shareModal.popover.visibility': 'Visibility',

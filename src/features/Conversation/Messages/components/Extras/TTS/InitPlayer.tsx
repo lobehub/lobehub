@@ -1,6 +1,6 @@
 import { getMessageError } from '@lobechat/fetch-sse';
 import { type ChatMessageError, type ChatTTS } from '@lobechat/types';
-import { memo, useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTTS } from '@/hooks/useTTS';
@@ -18,6 +18,7 @@ export interface TTSProps extends ChatTTS {
 const InitPlayer = memo<TTSProps>(({ id, content, contentMd5, file }) => {
   const [isStart, setIsStart] = useState(false);
   const [error, setError] = useState<ChatMessageError>();
+  const isDeletedRef = useRef(false);
   const uploadTTS = useFileStore((s) => s.uploadTTSByArrayBuffers);
   const { t } = useTranslation('chat');
 
@@ -32,14 +33,17 @@ const InitPlayer = memo<TTSProps>(({ id, content, contentMd5, file }) => {
 
   const { isGlobalLoading, audio, start, stop, response } = useTTS(content, {
     onError: (err) => {
+      if (isDeletedRef.current) return;
       stop();
       setDefaultError(err);
     },
     onErrorRetry: (err) => {
+      if (isDeletedRef.current) return;
       stop();
       setDefaultError(err);
     },
     onSuccess: async () => {
+      if (isDeletedRef.current) return;
       if (!response || response.ok) return;
       const message = await getMessageError(response);
       if (message) {
@@ -50,7 +54,9 @@ const InitPlayer = memo<TTSProps>(({ id, content, contentMd5, file }) => {
       stop();
     },
     onUpload: async (currentVoice, arrayBuffers) => {
+      if (isDeletedRef.current) return;
       const fileID = await uploadTTS(id, arrayBuffers);
+      if (isDeletedRef.current) return;
       ttsMessage(id, { contentMd5, file: fileID, voice: currentVoice });
     },
   });
@@ -62,6 +68,7 @@ const InitPlayer = memo<TTSProps>(({ id, content, contentMd5, file }) => {
   }, [isStart, start]);
 
   const handleDelete = useCallback(() => {
+    isDeletedRef.current = true;
     stop();
     clearTTS(id);
   }, [stop, id, clearTTS]);
@@ -72,11 +79,15 @@ const InitPlayer = memo<TTSProps>(({ id, content, contentMd5, file }) => {
   }, [start]);
 
   useEffect(() => {
-    if (file) return;
-    setTimeout(() => {
+    // Skip if file exists or user has deleted TTS
+    if (file || isDeletedRef.current) return;
+    const timer = setTimeout(() => {
+      // Double check in case user deleted during the delay
+      if (isDeletedRef.current) return;
       handleInitStart();
     }, 100);
-  }, [file]);
+    return () => clearTimeout(timer);
+  }, [file, handleInitStart]);
 
   return (
     <Player

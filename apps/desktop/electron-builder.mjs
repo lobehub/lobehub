@@ -6,8 +6,9 @@ import { fileURLToPath } from 'node:url';
 
 import {
   copyNativeModules,
+  copyNativeModulesToSource,
   getAsarUnpackPatterns,
-  getFilesPatterns,
+  getNativeModulesFilesConfig,
 } from './native-deps.config.mjs';
 
 dotenv.config();
@@ -89,6 +90,13 @@ const getIconFileName = () => {
  * @see https://www.electron.build/configuration
  */
 const config = {
+  /**
+   * BeforePack hook to resolve pnpm symlinks for native modules.
+   * This ensures native modules are properly included in the asar archive.
+   */
+  beforePack: async () => {
+    await copyNativeModulesToSource();
+  },
   /**
    * AfterPack hook for post-processing:
    * 1. Copy native modules to asar.unpacked (resolving pnpm symlinks)
@@ -204,10 +212,10 @@ const config = {
     '!dist/next/packages',
     '!dist/next/.next/server/app/sitemap',
     '!dist/next/.next/static/media',
-    // Exclude node_modules from packaging (except native modules)
+    // Exclude all node_modules first
     '!node_modules',
-    // Include native modules (defined in native-deps.config.mjs)
-    ...getFilesPatterns(),
+    // Then explicitly include native modules using object form (handles pnpm symlinks)
+    ...getNativeModulesFilesConfig(),
   ],
   generateUpdatesFilesForAllChannels: true,
   linux: {

@@ -71,6 +71,7 @@ const ResourceManager = memo(() => {
 
   const currentDocument = useFileStore(documentSelectors.getDocumentById(currentViewItemId));
   const pushDockFileList = useFileStore((s) => s.pushDockFileList);
+  const updateDocumentOptimistically = useFileStore((s) => s.updateDocumentOptimistically);
 
   const handleUploadFiles = useCallback(
     (files: File[]) => pushDockFileList(files, libraryId, currentFolderId ?? undefined),
@@ -111,6 +112,27 @@ const ResourceManager = memo(() => {
     document.title = BRANDING_NAME;
   };
 
+  // Optimistic update handlers for page title and emoji
+  const handleTitleChange = useCallback(
+    (newTitle: string) => {
+      if (currentViewItemId) {
+        updateDocumentOptimistically(currentViewItemId, { title: newTitle });
+      }
+    },
+    [currentViewItemId, updateDocumentOptimistically],
+  );
+
+  const handleEmojiChange = useCallback(
+    (newEmoji: string | undefined) => {
+      if (currentViewItemId) {
+        updateDocumentOptimistically(currentViewItemId, {
+          metadata: { ...currentDocument?.metadata, emoji: newEmoji },
+        });
+      }
+    },
+    [currentViewItemId, currentDocument?.metadata, updateDocumentOptimistically],
+  );
+
   return (
     <>
       <DragUploadZone
@@ -133,9 +155,13 @@ const ResourceManager = memo(() => {
           {mode === 'page' && (
             <Flexbox className={styles.pageEditorOverlay}>
               <PageEditor
+                emoji={currentDocument?.metadata?.emoji as string | undefined}
                 knowledgeBaseId={libraryId}
                 onBack={handleBack}
+                onEmojiChange={handleEmojiChange}
+                onTitleChange={handleTitleChange}
                 pageId={currentViewItemId}
+                title={currentDocument?.title}
               />
             </Flexbox>
           )}

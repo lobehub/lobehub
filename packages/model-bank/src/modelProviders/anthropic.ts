@@ -2,7 +2,7 @@ import { type ModelProviderCard } from '@/types/llm';
 
 const Anthropic: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'claude-3-haiku-20240307',
+  checkModel: 'claude-opus-4-5-20251101',
   description:
     'Anthropic builds advanced language models like Claude 3.5 Sonnet, Claude 3 Sonnet, Claude 3 Opus, and Claude 3 Haiku, balancing intelligence, speed, and cost for workloads from enterprise to rapid-response use cases.',
   enabled: true,

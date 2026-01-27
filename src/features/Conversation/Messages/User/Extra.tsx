@@ -1,6 +1,9 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
+import { useUserStore } from '@/store/user';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
+
 import { messageStateSelectors, useConversationStore } from '../../store';
 import ExtraContainer from '../components/Extras/ExtraContainer';
 import TTS from '../components/Extras/TTS';
@@ -14,11 +17,12 @@ interface UserMessageExtraProps {
 
 export const UserMessageExtra = memo<UserMessageExtraProps>(({ extra, id, content }) => {
   const loading = useConversationStore(messageStateSelectors.isMessageGenerating(id));
+  const isLogin = useUserStore(authSelectors.isLogin);
 
   const showTranslate = !!extra?.translate;
   const showTTS = !!extra?.tts;
 
-  const showExtra = showTranslate || showTTS;
+  const showExtra = isLogin && (showTranslate || showTTS);
 
   if (!showExtra) return;
 

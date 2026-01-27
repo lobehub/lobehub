@@ -70,7 +70,7 @@ export const useDesktopUserStateRedirect = () => {
 
 export const useWebUserStateRedirect = () =>
   useCallback((state: UserInitializationState) => {
-    const pathname = window.location.pathname;
+    const { pathname } = window.location;
     if (state.isInWaitList === true) {
       redirectIfNotOn(pathname, '/waitlist');
       return;
@@ -78,6 +78,12 @@ export const useWebUserStateRedirect = () =>
 
     if (state.isInviteCodeRequired === true) {
       redirectIfNotOn(pathname, '/invite-code');
+      return;
+    }
+
+    // Redirect away from invite-code page if no longer required
+    if (pathname.startsWith('/invite-code')) {
+      window.location.href = '/';
       return;
     }
 
