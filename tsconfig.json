@@ -34,8 +34,8 @@
         "./src/const/*"
       ],
       "@/utils/*": [
-        "./packages/utils/src/*",
-        "./src/utils/*"
+        "./src/utils/*",
+        "./packages/utils/src/*"
       ],
       "@/types/*": [
         "./packages/types/src/*",
