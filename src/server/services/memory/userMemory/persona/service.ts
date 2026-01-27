@@ -14,13 +14,32 @@ import { desc, eq } from 'drizzle-orm';
 
 import { UserMemoryModel } from '@/database/models/userMemory';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
+import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { LobeChatDatabase } from '@/database/type';
 import {
   MemoryAgentConfig,
   parseMemoryExtractionConfig,
 } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { LayersEnum } from '@/types/userMemory';
 import { trimBasedOnBatchProbe } from '@/utils/chunkers';
+
+const extractCredentialsFromVault = (
+  vault?: Record<string, unknown>,
+): { apiKey?: string; baseURL?: string } => {
+  if (!vault || typeof vault !== 'object') return {};
+
+  const apiKey =
+    'apiKey' in vault && typeof (vault as any).apiKey === 'string'
+      ? (vault as any).apiKey
+      : undefined;
+  const baseURL =
+    'baseURL' in vault && typeof (vault as any).baseURL === 'string'
+      ? (vault as any).baseURL
+      : undefined;
+
+  return { apiKey, baseURL };
+};
 
 interface UserPersonaAgentPayload {
   existingPersona?: string | null;
@@ -45,7 +64,6 @@ interface UserPersonaAgentResult {
 export class UserPersonaService {
   private readonly preferredLanguage?: string;
   private readonly db: LobeChatDatabase;
-  private readonly runtime: ModelRuntime;
   private readonly agentConfig: MemoryAgentConfig;
 
   constructor(db: LobeChatDatabase) {
@@ -54,13 +72,36 @@ export class UserPersonaService {
     this.db = db;
     this.preferredLanguage = agentPersonaWriter.language;
     this.agentConfig = agentPersonaWriter;
-    this.runtime = ModelRuntime.initializeWithProvider(agentPersonaWriter.provider || 'openai', {
-      apiKey: agentPersonaWriter.apiKey,
-      baseURL: agentPersonaWriter.baseURL,
-    });
   }
 
   async composeWriting(payload: UserPersonaAgentPayload): Promise<UserPersonaAgentResult> {
+    const aiInfraRepos = new AiInfraRepos(this.db, payload.userId, {});
+    const runtimeState = await aiInfraRepos.getAiProviderRuntimeState(
+      KeyVaultsGateKeeper.getUserKeyVaults,
+    );
+
+    const providerId = await AiInfraRepos.tryMatchingProviderFrom(runtimeState, {
+      fallbackProvider: this.agentConfig.provider,
+      label: 'persona writer',
+      modelId: this.agentConfig.model,
+    });
+
+    const normalizedProvider = providerId.toLowerCase();
+    const { apiKey: vaultApiKey, baseURL: vaultBaseURL } = extractCredentialsFromVault(
+      runtimeState.runtimeConfig?.[normalizedProvider]?.keyVaults,
+    );
+
+    const useVaultCredential = !!vaultApiKey;
+    const apiKey = useVaultCredential ? vaultApiKey : this.agentConfig.apiKey;
+    const baseURL = useVaultCredential
+      ? vaultBaseURL || this.agentConfig.baseURL
+      : this.agentConfig.baseURL;
+
+    const runtime = await ModelRuntime.initializeWithProvider(normalizedProvider, {
+      apiKey,
+      baseURL,
+    });
+
     const personaModel = new UserPersonaModel(this.db, payload.userId);
     const lastDocument = await personaModel.getLatestPersonaDocument();
     const existingPersonaBaseline = payload.existingPersona ?? lastDocument?.persona;
@@ -68,7 +109,7 @@ export class UserPersonaService {
     const extractor = new UserPersonaExtractor({
       agent: 'user-persona',
       model: this.agentConfig.model,
-      modelRuntime: this.runtime,
+      modelRuntime: runtime,
     });
 
     const agentResult = await extractor.toolCall({
