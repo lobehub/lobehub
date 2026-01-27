@@ -74,7 +74,7 @@
     "diff": "^8.0.2",
     "electron": "^38.7.2",
     "electron-builder": "^26.0.12",
-    "electron-devtools-installer": "^3.2.0",
+    "electron-devtools-installer": "^4.0.0",
     "electron-is": "^3.0.0",
     "electron-log": "^5.4.3",
     "electron-store": "^8.2.0",
