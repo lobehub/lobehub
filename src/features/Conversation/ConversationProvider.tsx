@@ -1,8 +1,11 @@
 'use client';
 
 import type { UIChatMessage } from '@lobechat/types';
+import debug from 'debug';
 import isEqual from 'fast-deep-equal';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode, memo, useMemo } from 'react';
+
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import StoreUpdater from './StoreUpdater';
 import { Provider, createStore } from './store';
@@ -12,6 +15,8 @@ import type {
   ConversationHooks,
   OperationState,
 } from './types';
+
+const log = debug('lobe-render:features:Conversation');
 
 export interface ConversationProviderProps {
   /**
@@ -75,6 +80,16 @@ export const ConversationProvider = memo<ConversationProviderProps>(
     operationState,
     skipFetch,
   }) => {
+    const contextKey = useMemo(() => messageMapKey(context), [context]);
+
+    log(
+      '[Provider] render | contextKey=%s | messagesCount=%d | hasInitMessages=%s | skipFetch=%s',
+      contextKey,
+      messages?.length ?? 0,
+      hasInitMessages,
+      skipFetch,
+    );
+
     return (
       <Provider createStore={() => createStore({ context, hooks, skipFetch })}>
         <StoreUpdater

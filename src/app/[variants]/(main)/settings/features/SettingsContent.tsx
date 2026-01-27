@@ -56,6 +56,9 @@ const componentMap = {
   [SettingsTabs.Security]: dynamic(() => import('../security'), {
     loading: () => <Loading debugId="Settings > Security" />,
   }),
+  [SettingsTabs.Skill]: dynamic(() => import('../skill'), {
+    loading: () => <Loading debugId="Settings > Skill" />,
+  }),
   ...(ENABLE_BUSINESS_FEATURES
     ? ({
         [SettingsTabs.Plans]: dynamic(

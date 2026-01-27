@@ -1,6 +1,6 @@
 'use client';
 
-import { ChartColumnBigIcon, LogOut, ShieldCheck, UserCircle } from 'lucide-react';
+import { ChartColumnBigIcon, LogOut, UserCircle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -11,11 +11,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
 const Category = memo(() => {
-  const [isLogin, isLoginWithClerk, signOut] = useUserStore((s) => [
-    authSelectors.isLogin(s),
-    authSelectors.isLoginWithClerk(s),
-    s.logout,
-  ]);
+  const [isLogin, signOut] = useUserStore((s) => [authSelectors.isLogin(s), s.logout]);
   const navigate = useNavigate();
   const { t } = useTranslation('auth');
   const items: CellProps[] = [
@@ -24,12 +20,6 @@ const Category = memo(() => {
       key: ProfileTabs.Profile,
       label: t('tab.profile'),
       onClick: () => navigate('/settings/profile'),
-    },
-    isLoginWithClerk && {
-      icon: ShieldCheck,
-      key: ProfileTabs.Security,
-      label: t('tab.security'),
-      onClick: () => navigate('/settings/security'),
     },
     {
       icon: ChartColumnBigIcon,
@@ -46,7 +36,7 @@ const Category = memo(() => {
       label: t('signout', { ns: 'auth' }),
       onClick: () => {
         signOut();
-        navigate('/login');
+        navigate('/signin');
       },
     },
   ].filter(Boolean) as CellProps[];

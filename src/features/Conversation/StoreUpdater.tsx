@@ -1,8 +1,11 @@
 'use client';
 
 import type { UIChatMessage } from '@lobechat/types';
-import { memo, useEffect } from 'react';
+import debug from 'debug';
+import { memo, useEffect, useRef } from 'react';
 import { createStoreUpdater } from 'zustand-utils';
+
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { useConversationStoreApi } from './store';
 import type {
@@ -11,6 +14,8 @@ import type {
   ConversationHooks,
   OperationState,
 } from './types';
+
+const log = debug('lobe-render:features:Conversation');
 
 export interface StoreUpdaterProps {
   /**
@@ -54,6 +59,8 @@ const StoreUpdater = memo<StoreUpdaterProps>(
   }) => {
     const storeApi = useConversationStoreApi();
     const useStoreUpdater = createStoreUpdater(storeApi);
+    const prevMessagesRef = useRef<UIChatMessage[] | undefined>(undefined);
+    const contextKey = messageMapKey(context);
 
     useStoreUpdater('actionsBar', actionsBar);
     useStoreUpdater('context', context);
@@ -68,9 +75,26 @@ const StoreUpdater = memo<StoreUpdaterProps>(
     // Sync external messages into store
     useEffect(() => {
       if (messages) {
+        const prevMessages = prevMessagesRef.current;
+        const prevCount = prevMessages?.length ?? 0;
+        const newCount = messages.length;
+        const isSameReference = prevMessages === messages;
+        const storeMessages = storeApi.getState().dbMessages;
+
+        log(
+          '[StoreUpdater] messages effect | contextKey=%s | prevCount=%d | newCount=%d | sameRef=%s | storeCount=%d | messageIds=%o',
+          contextKey,
+          prevCount,
+          newCount,
+          isSameReference,
+          storeMessages.length,
+          messages.slice(0, 5).map((m) => m.id),
+        );
+
+        prevMessagesRef.current = messages;
         storeApi.getState().replaceMessages(messages);
       }
-    }, [messages, storeApi]);
+    }, [messages, storeApi, contextKey]);
 
     return null;
   },

@@ -3,8 +3,9 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Button, Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
+import { useTheme } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { Clock, PlayIcon } from 'lucide-react';
+import { Clock, PlayIcon, Settings2Icon } from 'lucide-react';
 import React, { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
@@ -16,6 +17,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import AgentCronJobs from '../AgentCronJobs';
+import AgentSettings from '../AgentSettings';
 import EditorCanvas from '../EditorCanvas';
 import AgentPublishButton from '../Header/AgentPublishButton';
 import AgentHeader from './AgentHeader';
@@ -23,6 +25,7 @@ import AgentTool from './AgentTool';
 
 const ProfileEditor = memo(() => {
   const { t } = useTranslation('setting');
+  const theme = useTheme();
   const config = useAgentStore(agentSelectors.currentAgentConfig, isEqual);
   const updateConfig = useAgentStore((s) => s.updateAgentConfig);
   const agentId = useAgentStore((s) => s.activeAgentId);
@@ -44,7 +47,7 @@ const ProfileEditor = memo(() => {
       >
         {/* Header: Avatar + Name + Description */}
         <AgentHeader />
-        {/* Config Bar: Model Selector */}
+        {/* Config Bar: Model Selector + Settings Button */}
         <Flexbox
           align={'center'}
           gap={8}
@@ -53,12 +56,23 @@ const ProfileEditor = memo(() => {
           style={{ marginBottom: 12 }}
         >
           <ModelSelect
+            initialWidth
             onChange={updateConfig}
+            popupWidth={400}
             value={{
               model: config.model,
               provider: config.provider,
             }}
           />
+          <Button
+            icon={Settings2Icon}
+            onClick={() => useAgentStore.setState({ showAgentSetting: true })}
+            size={'small'}
+            style={{ color: theme.colorTextSecondary }}
+            type={'text'}
+          >
+            {t('advancedSettings')}
+          </Button>
         </Flexbox>
         <AgentTool />
         <Flexbox
@@ -93,6 +107,8 @@ const ProfileEditor = memo(() => {
       <EditorCanvas />
       {/* Agent Cron Jobs Display (only show if jobs exist) */}
       {ENABLE_BUSINESS_FEATURES && <AgentCronJobs />}
+      {/* Advanced Settings Modal */}
+      <AgentSettings />
     </>
   );
 });

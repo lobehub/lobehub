@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
+import { and, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 
 import {
   type AgentCronJob,
@@ -25,8 +25,8 @@ export class AgentCronJobModel {
       .values({
         ...data,
         // Initialize remaining executions to match max executions
-remainingExecutions: data.maxExecutions,
-        
+        remainingExecutions: data.maxExecutions,
+
         userId: this.userId,
       } as NewAgentCronJob)
       .returning();
@@ -79,12 +79,35 @@ remainingExecutions: data.maxExecutions,
 
   // Update cron job
   async update(id: string, data: UpdateAgentCronJobData): Promise<AgentCronJob | null> {
+    // Check if critical fields (cronPattern or timezone) are being changed
+    // If so, reset lastExecutedAt to allow immediate execution with new schedule
+    let shouldResetLastExecuted = false;
+
+    if (data?.cronPattern !== undefined || data?.timezone !== undefined) {
+      const existing = await this.findById(id);
+      if (existing && (
+        (data?.cronPattern !== undefined && data?.cronPattern !== existing.cronPattern) ||
+        (data?.timezone !== undefined && data?.timezone !== existing.timezone)
+      )) {
+        shouldResetLastExecuted = true;
+      }
+    }
+
+    const updateData: Record<string, unknown> = {
+      ...data,
+      ...(shouldResetLastExecuted ? { lastExecutedAt: null } : {}),
+      updatedAt: new Date(),
+    };
+
+    // When maxExecutions is updated, reset remainingExecutions to match
+    // This ensures the new limit takes effect immediately
+    if (data?.maxExecutions !== undefined) {
+      updateData.remainingExecutions = data.maxExecutions;
+    }
+
     const result = await this.db
       .update(agentCronJobs)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
+      .set(updateData)
       .where(and(eq(agentCronJobs.id, id), eq(agentCronJobs.userId, this.userId)))
       .returning();
 
@@ -149,11 +172,11 @@ remainingExecutions: data.maxExecutions,
       .set({
         enabled: true,
         // Re-enable job when resetting
-lastExecutedAt: null,
-        
-maxExecutions: newMaxExecutions,
-        
-remainingExecutions: newMaxExecutions, 
+        lastExecutedAt: null,
+
+        maxExecutions: newMaxExecutions,
+
+        remainingExecutions: newMaxExecutions,
         totalExecutions: 0,
         updatedAt: new Date(),
       })
@@ -227,7 +250,7 @@ remainingExecutions: newMaxExecutions,
         enabled,
         updatedAt: new Date(),
       })
-      .where(and(sql`${agentCronJobs.id} = ANY(${ids})`, eq(agentCronJobs.userId, this.userId)))
+      .where(and(inArray(agentCronJobs.id, ids), eq(agentCronJobs.userId, this.userId)))
       .returning();
 
     return result.length;

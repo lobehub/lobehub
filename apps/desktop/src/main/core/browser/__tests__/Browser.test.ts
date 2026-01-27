@@ -102,7 +102,7 @@ vi.mock('@/const/env', () => ({
   isWindows: true,
 }));
 
-vi.mock('@/const/theme', () => ({
+vi.mock('../../../const/theme', () => ({
   BACKGROUND_DARK: '#1a1a1a',
   BACKGROUND_LIGHT: '#ffffff',
   SYMBOL_COLOR_DARK: '#ffffff',
@@ -332,7 +332,7 @@ describe('Browser', () => {
           expect.objectContaining({
             backgroundColor: '#1a1a1a',
             titleBarOverlay: expect.objectContaining({
-              color: '#1a1a1a',
+              color: '#00000000',
               symbolColor: '#ffffff',
             }),
           }),
@@ -346,7 +346,7 @@ describe('Browser', () => {
           expect.objectContaining({
             backgroundColor: '#ffffff',
             titleBarOverlay: expect.objectContaining({
-              color: '#ffffff',
+              color: '#00000000',
               symbolColor: '#000000',
             }),
           }),

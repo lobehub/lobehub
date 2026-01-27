@@ -92,7 +92,7 @@ const CouncilMember = memo<CouncilMemberProps>(({ item, index }) => {
       showTitle
       time={createdAt}
     >
-      <AutoScrollShadow>
+      <AutoScrollShadow content={content} streaming={generating}>
         <MessageContent {...item} />
       </AutoScrollShadow>
     </ChatItem>

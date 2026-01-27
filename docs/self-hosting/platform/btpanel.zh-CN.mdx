@@ -1,11 +1,11 @@
 ---
-title: 通过 宝塔面板Docker应用商店 部署 LobeChat
+title: 通过 宝塔面板Docker应用商店 部署 LobeHub
 description: >-
-  学习如何使用 宝塔面板Docker应用 部署 LobeChat 服务，包括安装 Docker
+  学习如何使用 宝塔面板Docker应用 部署 LobeHub 服务，包括安装 Docker
   容器环境和使用指令一键启动服务。详细说明如何配置环境变量和使用代理地址。
 tags:
   - Docker
-  - LobeChat
+  - LobeHub
   - 部署指引
 ---
 
@@ -18,15 +18,15 @@ tags:
 
 ## 部署
 
-1. 登录宝塔面板，在左侧菜单栏中点击 `Docker` ![Docker](https://github.com/user-attachments/assets/15d92756-92f0-45da-8f95-bfe725d13003)
+1. 登录宝塔面板，在左侧菜单栏中点击 `Docker` ![Docker](/blog/assets653a83fe7d837e0d225c1de12e60cf92.webp)
 
-2. 首次会提示安装`Docker`和`Docker Compose`服务，点击立即安装，若已安装请忽略。 ![安装环境](https://github.com/user-attachments/assets/6e383b75-09e3-42d1-8a6c-5fb7cf558f00)
+2. 首次会提示安装`Docker`和`Docker Compose`服务，点击立即安装，若已安装请忽略。 ![安装环境](/blog/assets15ecc1bbe365f3e02702631e28c7b764.webp)
 
-3. 安装完成后在`Docker-应用商店-AI/大模型`中找到 `LobeChat`，点击`安装` ![安装](https://github.com/user-attachments/assets/db59a5e7-32ed-49d7-a791-8f8ee6618c01)
+3. 安装完成后在`Docker-应用商店-AI/大模型`中找到 `LobeHub`，点击`安装` ![安装](/blog/assetsf601ee6fa15bed25e17d6b6879691f0f.webp)
 
-4. 设置域名等基本信息，点击`确定` ![设置](https://github.com/user-attachments/assets/37251adf-949b-4aec-bc49-bf4647e119da)
+4. 设置域名等基本信息，点击`确定` ![设置](/blog/assetscd53b161a6d02424d03f8c5dcadc3dd5.webp)
 
-- 名称：应用名称，默认`lobechat_随机字符`
+- 名称：应用名称，默认`LobeHub_随机字符`
 - 版本选择：默认`latest`
 - 域名：如您需要通过域名访问，请在此处填写您的域名
 - 允许外部访问：如您需通过`IP+Port`直接访问，请勾选，如您已经设置了域名，请不要勾选此处
@@ -45,7 +45,7 @@ tags:
   [https://github.com/lobehub/lobe-chat/discussions/5986](https://github.com/lobehub/lobe-chat/discussions/5986)
 </Callout>
 
-## 访问 LobeChat
+## 访问 LobeHub
 
-- 如果您填写域名，请在浏览器输入您的域名访问，如`http://demo.lobechat`，即可访问 `LobeChat` 页面。
-- 请在浏览器地址栏中输入域名访问 `http://<宝塔面板IP>:3210`，即可访问 `LobeChat` 页面。 ![LobeChat](https://github.com/user-attachments/assets/808f8849-5738-4a60-8ccf-01e300b0dc88)
+- 如果您填写域名，请在浏览器输入您的域名访问，如`http://demo.LobeHub`，即可访问 `LobeHub` 页面。
+- 请在浏览器地址栏中输入域名访问 `http://<宝塔面板IP>:3210`，即可访问 `LobeHub` 页面。 ![LobeHub](/blog/assets0f893c504377ba45a9f5cdbb5ccb1612.webp)

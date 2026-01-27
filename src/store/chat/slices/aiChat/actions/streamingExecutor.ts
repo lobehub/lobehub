@@ -60,6 +60,11 @@ export interface StreamingExecutorAction {
      */
     agentId?: string;
     /**
+     * Whether to disable tools for this agent execution
+     * When true, agent will respond without calling any tools
+     */
+    disableTools?: boolean;
+    /**
      * Explicit topicId for this execution (avoids using global activeTopicId)
      */
     topicId?: string | null;
@@ -118,6 +123,11 @@ export interface StreamingExecutorAction {
      */
     context: ConversationContext;
     /**
+     * Whether to disable tools for this agent execution
+     * When true, agent will respond without calling any tools
+     */
+    disableTools?: boolean;
+    /**
      * Initial agent runtime context (for resuming execution from a specific phase)
      */
     initialContext?: AgentRuntimeContext;
@@ -156,6 +166,7 @@ export const streamingExecutor: StateCreator<
     messages,
     parentMessageId,
     agentId: paramAgentId,
+    disableTools,
     topicId: paramTopicId,
     threadId,
     initialState,
@@ -165,8 +176,9 @@ export const streamingExecutor: StateCreator<
     isSubTask,
   }) => {
     // Use provided agentId/topicId or fallback to global state
+    // Note: Use || instead of ?? to also fallback when paramAgentId is empty string
     const { activeAgentId, activeTopicId } = get();
-    const agentId = paramAgentId ?? activeAgentId;
+    const agentId = paramAgentId || activeAgentId;
     const topicId = paramTopicId !== undefined ? paramTopicId : activeTopicId;
 
     // For group orchestration scenarios:
@@ -181,29 +193,56 @@ export const streamingExecutor: StateCreator<
 
     // Resolve agent config with builtin agent runtime config merged
     // This ensures runtime plugins (e.g., 'lobe-agent-builder' for Agent Builder) are included
-    // isSubTask is passed to filter out lobe-gtd tools to prevent nested sub-task creation
+    // - isSubTask: filters out lobe-gtd tools to prevent nested sub-task creation
+    // - disableTools: clears all plugins for broadcast scenarios
     const agentConfig = resolveAgentConfig({
       agentId: effectiveAgentId || '',
+      disableTools, // Clear plugins for broadcast scenarios
       groupId, // Pass groupId for supervisor detection
       isSubTask, // Filter out lobe-gtd in sub-task context
       scope, // Pass scope from operation context
     });
     const { agentConfig: agentConfigData, plugins: pluginIds } = agentConfig;
 
-    log('[internal_createAgentState] resolved plugins=%o, isSubTask=%s', pluginIds, isSubTask);
+    log(
+      '[internal_createAgentState] resolved plugins=%o, isSubTask=%s, disableTools=%s',
+      pluginIds,
+      isSubTask,
+      disableTools,
+    );
 
-    // Get tools manifest map
+    // Generate tools using ToolsEngine (centralized here, passed to chatService via agentConfig)
+    // When disableTools is true (broadcast mode), skipDefaultTools prevents default tools from being added
     const toolsEngine = createAgentToolsEngine({
       model: agentConfigData.model,
       provider: agentConfigData.provider!,
     });
-    const { enabledToolIds } = toolsEngine.generateToolsDetailed({
+
+    const toolsDetailed = toolsEngine.generateToolsDetailed({
       model: agentConfigData.model,
       provider: agentConfigData.provider!,
+      skipDefaultTools: disableTools,
       toolIds: pluginIds,
     });
+
+    const enabledToolIds = toolsDetailed.enabledToolIds;
+    // Use enabledManifests directly to avoid getEnabledPluginManifests adding default tools again
     const toolManifestMap = Object.fromEntries(
-      toolsEngine.getEnabledPluginManifests(enabledToolIds).entries(),
+      toolsDetailed.enabledManifests.map((manifest) => [manifest.identifier, manifest]),
+    );
+
+    // Merge tools generation result into agentConfig for chatService to use
+    const agentConfigWithTools = {
+      ...agentConfig,
+      enabledManifests: toolsDetailed.enabledManifests,
+      enabledToolIds,
+      tools: toolsDetailed.tools,
+    };
+
+    log(
+      '[internal_createAgentState] toolManifestMap keys=%o, count=%d',
+      Object.keys(toolManifestMap),
+      Object.keys(toolManifestMap).length,
     );
 
     // Get user intervention config
@@ -213,18 +252,29 @@ export const streamingExecutor: StateCreator<
       allowList: toolInterventionSelectors.allowList(userStore),
     };
 
+    // Build modelRuntimeConfig for compression and other runtime features
+    const modelRuntimeConfig = {
+      compressionModel: {
+        model: agentConfigData.model,
+        provider: agentConfigData.provider!,
+      },
+      model: agentConfigData.model,
+      provider: agentConfigData.provider!,
+    };
+
     // Create initial state or use provided state
     const state =
       initialState ||
       AgentRuntime.createInitialState({
-        operationId: operationId ?? agentId,
-        messages,
         maxSteps: 400,
+        messages,
         metadata: {
           sessionId: agentId,
-          topicId,
           threadId,
+          topicId,
         },
+        modelRuntimeConfig,
+        operationId: operationId ?? agentId,
         toolManifestMap,
         userInterventionConfig,
       });
@@ -277,7 +327,7 @@ export const streamingExecutor: StateCreator<
       initialContext: runtimeInitialContext,
     };
 
-    return { state, context, agentConfig };
+    return { agentConfig: agentConfigWithTools, context, state };
   },
 
   internal_fetchAIChatMessage: async ({
@@ -313,13 +363,21 @@ export const streamingExecutor: StateCreator<
         log('[internal_fetchAIChatMessage] ERROR: Operation not found: %s', operationId);
         throw new Error(`Operation not found: ${operationId}`);
       }
-      agentId = operation.context.agentId!;
-      subAgentId = operation.context.subAgentId;
       topicId = operation.context.topicId;
       threadId = operation.context.threadId ?? undefined;
       groupId = operation.context.groupId;
       scope = operation.context.scope;
+      subAgentId = operation.context.subAgentId;
       abortController = operation.abortController; // 👈 Use operation's abortController
+
+      // In group orchestration scenarios (has groupId), subAgentId is the actual responding agent
+      // Use it for context injection instead of the session agentId
+      if (groupId && subAgentId) {
+        agentId = subAgentId;
+      } else {
+        agentId = operation.context.agentId!;
+      }
+
       log(
         '[internal_fetchAIChatMessage] get context from operation %s: agentId=%s, subAgentId=%s, topicId=%s, groupId=%s, aborted=%s',
         operationId,
@@ -450,7 +508,6 @@ export const streamingExecutor: StateCreator<
         // Pass pre-resolved config to avoid duplicate resolveAgentConfig calls
         // This ensures isSubTask filtering and other runtime modifications are preserved
         resolvedAgentConfig: agentConfig,
-        scope, // Pass scope to chat service for page-agent injection
         topicId: topicId ?? undefined, // Pass topicId for GTD context injection
         ...agentConfigData.params,
       },
@@ -549,6 +606,7 @@ export const streamingExecutor: StateCreator<
 
   internal_execAgentRuntime: async (params) => {
     const {
+      disableTools,
       messages: originalMessages,
       parentMessageId,
       parentMessageType,
@@ -588,7 +646,7 @@ export const streamingExecutor: StateCreator<
     }
 
     log(
-      '[internal_execAgentRuntime] start, operationId: %s, agentId: %s, subAgentId: %s, effectiveAgentId: %s, topicId: %s, messageKey: %s, parentMessageId: %s, parentMessageType: %s, messages count: %d',
+      '[internal_execAgentRuntime] start, operationId: %s, agentId: %s, subAgentId: %s, effectiveAgentId: %s, topicId: %s, messageKey: %s, parentMessageId: %s, parentMessageType: %s, messages count: %d, disableTools: %s',
       operationId,
       agentId,
       subAgentId,
@@ -598,6 +656,7 @@ export const streamingExecutor: StateCreator<
       parentMessageId,
       parentMessageType,
       originalMessages.length,
+      disableTools,
     );
 
     // Create a new array to avoid modifying the original messages
@@ -615,6 +674,7 @@ export const streamingExecutor: StateCreator<
       messages,
       parentMessageId: params.parentMessageId,
       agentId,
+      disableTools,
       topicId,
       threadId: threadId ?? undefined,
       initialState: params.initialState,
@@ -629,18 +689,21 @@ export const streamingExecutor: StateCreator<
     const model = agentConfigData.model;
     const provider = agentConfigData.provider;
 
+    const modelRuntimeConfig = {
+      model,
+      provider: provider!,
+      // TODO: Support dedicated compression model from chatConfig.compressionModelId
+      compressionModel: { model, provider: provider! },
+    };
     // ===========================================
     // Step 2: Create and Execute Agent Runtime
     // ===========================================
-    log('[internal_execAgentRuntime] Creating agent runtime');
+    log('[internal_execAgentRuntime] Creating agent runtime with config', modelRuntimeConfig);
 
     const agent = new GeneralChatAgent({
       agentConfig: { maxSteps: 1000 },
       operationId: `${messageKey}/${params.parentMessageId}`,
-      modelRuntimeConfig: {
-        model,
-        provider: provider!,
-      },
+      modelRuntimeConfig,
     });
 
     const runtime = new AgentRuntime(agent, {
@@ -716,20 +779,24 @@ export const streamingExecutor: StateCreator<
       nextContext = { ...nextContext, stepContext };
 
       log(
-        '[internal_execAgentRuntime][step-%d]: phase=%s, status=%s, stepContext=%O',
+        '[internal_execAgentRuntime][step-%d]: phase=%s, status=%s, state.messages=%d, dbMessagesMap[%s]=%d, stepContext=%O',
         stepCount,
         nextContext.phase,
         state.status,
+        state.messages.length,
+        messageKey,
+        currentDBMessages.length,
         stepContext,
       );
 
       const result = await runtime.step(state, nextContext);
 
       log(
-        '[internal_execAgentRuntime] Step %d completed, events: %d, newStatus=%s',
+        '[internal_execAgentRuntime] Step %d completed, events: %d, newStatus=%s, newState.messages=%d',
         stepCount,
         result.events.length,
         result.newState.status,
+        result.newState.messages.length,
       );
 
       // After parallel tool batch completes, refresh messages to ensure all tool results are synced

@@ -43,7 +43,7 @@ const ThemeButton: FC<{ placement?: DropdownMenuProps['placement']; size?: numbe
   );
 
   return (
-    <DropdownMenu items={items} nativeButton={false} placement={placement}>
+    <DropdownMenu items={items} placement={placement}>
       <ActionIcon
         icon={themeIcons[(theme as 'dark' | 'light' | 'system') || 'system']}
         size={size || { blockSize: 32, size: 16 }}

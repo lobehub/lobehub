@@ -1,21 +1,21 @@
 ---
-title: Deploying LobeChat Database on Zeabur
+title: Deploying LobeHub Database on Zeabur
 description: >-
-  Learn how to deploy LobeChat on Zeabur with ease. Follow the provided steps to
+  Learn how to deploy LobeHub on Zeabur with ease. Follow the provided steps to
   set up your chat application seamlessly.
 tags:
-  - Deploy LobeChat
+  - Deploy LobeHub
   - Zeabur Deployment
   - OpenAI API Key
   - Custom Domain Binding
 ---
 
-# Deploying LobeChat Database on Zeabur
+# Deploying LobeHub Database on Zeabur
 
 <Callout type="info">
   This article assumes that you are familiar with the basic principles and processes of deploying
-  the LobeChat server database version, so it only includes content related to core environment
-  variable configuration. If you are not familiar with the deployment principles of the LobeChat
+  the LobeHub server database version, so it only includes content related to core environment
+  variable configuration. If you are not familiar with the deployment principles of the LobeHub
   server database version, please refer to [Deploying Server
   Database](/docs/self-hosting/server-database) first.
 </Callout>
@@ -25,16 +25,16 @@ The template on Zeabur includes 4 services:
 - Logto for authrization.
 - PostgreSQL with Vector plugin for data storage and indexing.
 - MinIO for image storage.
-- LobeChat database version.
+- LobeHub database version.
 
 ## Deploying on Zeabur
 
-Here is the process for deploying the LobeChat server database version on Zeabur:
+Here is the process for deploying the LobeHub server database version on Zeabur:
 
 <Steps>
   ### Go to the template page on Zeabur
 
-  Go to the [LobeChat Database template page](https://zeabur.com/templates/RRSPSD) on Zeabur and click on the "Deploy" button.
+  Go to the [LobeHub Database template page](https://zeabur.com/templates/RRSPSD) on Zeabur and click on the "Deploy" button.
 
   ### Fill in the required environment variables
 
@@ -44,7 +44,7 @@ Here is the process for deploying the LobeChat server database version on Zeabur
 
   - OpenAI API key: Your OpenAI API key to get responses from OpenAI.
 
-  - LobeChat Domain: A free subdomain with `.zeabur.app` suffix.
+  - LobeHub Domain: A free subdomain with `.zeabur.app` suffix.
 
   - MinIO Public Domain: A free subdomain with `.zeabur.app` suffix for yout MinIO web port to enable public access for the uploaded files.
 
@@ -54,7 +54,7 @@ Here is the process for deploying the LobeChat server database version on Zeabur
 
   ### Select a region and deploy
 
-  After you fill all the required environment variables, select a region where you want to deploy your LobeChat Database and click on the "Deploy" button.
+  After you fill all the required environment variables, select a region where you want to deploy your LobeHub Database and click on the "Deploy" button.
 
   You will see another modal pop-up where you can see the deployment progress.
 
@@ -64,13 +64,13 @@ Here is the process for deploying the LobeChat server database version on Zeabur
 
   Access your Logto console with the console domain you just binded, and then create a `Next.js 14(App router)` application to get the client ID and client secret, and fill in the cors and callback URLs. You can check [this document](../advanced/auth.mdx) for a more detailed guide.
 
-  Fill in those variables into your LobeChat service on Zeabur, here is a more detailed guide for [editing environment variables on Zeabur](https://zeabur.com/docs/deploy/variables).
+  Fill in those variables into your LobeHub service on Zeabur, here is a more detailed guide for [editing environment variables on Zeabur](https://zeabur.com/docs/deploy/variables).
 
   For detailed configuration of Logto, refer to [this document](/docs/self-hosting/advanced/auth/next-auth/logto).
 
-  ### Access your LobeChat Instance
+  ### Access your LobeHub Instance
 
-  Press on the `LobeChat-Database` and you can see the public domain you just created, click on it to access your LobeChat Database.
+  Press on the `LobeHub-Database` and you can see the public domain you just created, click on it to access your LobeHub Database.
 
   You can also bind a custom domain for your services if you want, here is a guide on how to [bind a custom domain on Zeabur](https://zeabur.com/docs/deploy/domain-binding).
 </Steps>

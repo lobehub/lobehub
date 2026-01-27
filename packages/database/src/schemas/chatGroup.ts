@@ -32,6 +32,7 @@ export const chatGroups = pgTable(
     description: text('description'),
     avatar: text('avatar'),
     backgroundColor: text('background_color'),
+    marketIdentifier: text('market_identifier'),
     content: text('content'),
     editorData: jsonb('editor_data').$type<Record<string, any>>(),
 
@@ -51,6 +52,7 @@ export const chatGroups = pgTable(
   },
   (t) => [
     uniqueIndex('chat_groups_client_id_user_id_unique').on(t.clientId, t.userId),
+    index('chat_groups_user_id_idx').on(t.userId),
     index('chat_groups_group_id_idx').on(t.groupId),
   ],
 );
@@ -94,6 +96,7 @@ export const chatGroupsAgents = pgTable(
   },
   (t) => ({
     pk: primaryKey({ columns: [t.chatGroupId, t.agentId] }),
+    userIdIdx: index('chat_groups_agents_user_id_idx').on(t.userId),
   }),
 );
 

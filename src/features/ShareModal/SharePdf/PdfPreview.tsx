@@ -1,3 +1,5 @@
+'use client';
+
 import { LoadingOutlined } from '@ant-design/icons';
 import { Button, Flexbox } from '@lobehub/ui';
 import { Input, Modal, Spin } from 'antd';
@@ -5,14 +7,11 @@ import { createStaticStyles, cx } from 'antd-style';
 import { ChevronLeft, ChevronRight, Expand, FileText } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Document, Page, pdfjs } from 'react-pdf';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { Document, Page } from '@/libs/pdfjs';
 
 import { containerStyles } from '../style';
-
-// Set PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `https://registry.npmmirror.com/pdfjs-dist/${pdfjs.version}/files/build/pdf.worker.min.mjs`;
 
 const styles = createStaticStyles(({ css }) => ({
   containerWrapper: css`

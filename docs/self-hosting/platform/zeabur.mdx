@@ -1,17 +1,17 @@
 ---
-title: Deploy LobeChat on Zeabur
+title: Deploy LobeHub on Zeabur
 description: >-
-  Learn how to deploy LobeChat on Zeabur with ease. Follow the provided steps to
+  Learn how to deploy LobeHub on Zeabur with ease. Follow the provided steps to
   set up your chat application seamlessly.
 tags:
-  - Deploy LobeChat
+  - Deploy LobeHub
   - Zeabur Deployment
   - Custom Domain Binding
 ---
 
-# Deploy LobeChat with Zeabur
+# Deploy LobeHub with Zeabur
 
-If you want to deploy LobeChat on Zeabur, you can follow the steps below:
+If you want to deploy LobeHub on Zeabur, you can follow the steps below:
 
 ## Zeabur Deployment Process
 
@@ -27,16 +27,16 @@ If you want to deploy LobeChat on Zeabur, you can follow the steps below:
   You can use the subdomain provided by Zeabur, or choose to bind a custom domain. Currently, the domains provided by Zeabur have not been contaminated, and most regions can connect directly.
 </Steps>
 
-# Deploy LobeChat with Zeabur as serverless function
+# Deploy LobeHub with Zeabur as serverless function
 
 > Note: There are still issues with [middlewares and rewrites of next.js on Zeabur](https://github.com/lobehub/lobe-chat/pull/2775?notification_referrer_id=NT_kwDOAdi2DrQxMDkyODQ4MDc2NTozMDk3OTU5OA#issuecomment-2146713899), use at your own risk!
 
-Since Zeabur does NOT officially support FREE users deploy containerized service, you may wish to deploy LobeChat as a serverless function service. To deploy LobeChat as a serverless function service on Zeabur, you can follow the steps below:
+Since Zeabur does NOT officially support FREE users deploy containerized service, you may wish to deploy LobeHub as a serverless function service. To deploy LobeHub as a serverless function service on Zeabur, you can follow the steps below:
 
 ## Zeabur Deployment Process
 
 <Steps>
-  ### Fork LobeChat
+  ### Fork LobeHub
 
   ### Add Zeabur pack config file
 
@@ -57,7 +57,7 @@ Since Zeabur does NOT officially support FREE users deploy containerized service
 
   Create a project, then create a service under this project.
 
-  ### Link your fork of LobeChat to the just created Zeabur service.
+  ### Link your fork of LobeHub to the just created Zeabur service.
 
   When adding service, choose github. This may triger a oAuth depend on varies factors like how you login to Zeabur and if you have already authorized Zeabur to access all your repos
 

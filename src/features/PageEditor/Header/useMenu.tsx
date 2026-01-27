@@ -1,3 +1,4 @@
+import { isDesktop } from '@lobechat/const';
 import { type DropdownItem, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar, useResponsive } from 'antd-style';
@@ -51,7 +52,7 @@ export const useMenu = (): { menuItems: any[] } => {
     }
   };
 
-  const handleExportMarkdown = () => {
+  const handleExportMarkdown = async () => {
     const state = storeApi.getState();
     const { editor, title } = state;
 
@@ -59,16 +60,26 @@ export const useMenu = (): { menuItems: any[] } => {
 
     try {
       const markdown = (editor.getDocument('markdown') as unknown as string) || '';
-      const blob = new Blob([markdown], { type: 'text/markdown' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${title || 'Untitled'}.md`;
-      document.body.append(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      message.success(t('pageEditor.exportSuccess'));
+      const fileName = `${title || 'Untitled'}.md`;
+
+      if (isDesktop) {
+        const { desktopExportService } = await import('@/services/electron/desktopExportService');
+        await desktopExportService.exportMarkdown({
+          content: markdown,
+          fileName,
+        });
+      } else {
+        const blob = new Blob([markdown], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.append(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+        message.success(t('pageEditor.exportSuccess'));
+      }
     } catch (error) {
       console.error('Failed to export markdown:', error);
       message.error(t('pageEditor.exportError'));

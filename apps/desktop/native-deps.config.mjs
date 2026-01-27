@@ -24,6 +24,7 @@ function getTargetPlatform() {
   return process.env.npm_config_platform || os.platform();
 }
 const isDarwin = getTargetPlatform() === 'darwin';
+
 /**
  * List of native modules that need special handling
  * Only add the top-level native modules here - dependencies are resolved automatically
@@ -33,8 +34,8 @@ const isDarwin = getTargetPlatform() === 'darwin';
 export const nativeModules = [
   // macOS-only native modules
   ...(isDarwin ? ['node-mac-permissions'] : []),
+  '@napi-rs/canvas',
   // Add more native modules here as needed
-  // e.g., 'better-sqlite3', 'sharp', etc.
 ];
 
 /**
@@ -53,20 +54,30 @@ function resolveDependencies(
     return visited;
   }
 
+  // Always add the module name first (important for workspace dependencies
+  // that may not be in local node_modules but are declared in nativeModules)
+  visited.add(moduleName);
+
   const packageJsonPath = path.join(nodeModulesPath, moduleName, 'package.json');
 
-  // Check if module exists
+  // If module doesn't exist locally, still keep it in visited but skip dependency resolution
   if (!fs.existsSync(packageJsonPath)) {
     return visited;
   }
 
-  visited.add(moduleName);
-
   try {
     const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
     const dependencies = packageJson.dependencies || {};
+    const optionalDependencies = packageJson.optionalDependencies || {};
 
+    // Resolve regular dependencies
     for (const dep of Object.keys(dependencies)) {
+      resolveDependencies(dep, visited, nodeModulesPath);
+    }
+
+    // Also resolve optional dependencies (important for native modules like @napi-rs/canvas
+    // which have platform-specific binaries in optional deps)
+    for (const dep of Object.keys(optionalDependencies)) {
       resolveDependencies(dep, visited, nodeModulesPath);
     }
   } catch {
@@ -102,6 +113,19 @@ export function getFilesPatterns() {
 }
 
 /**
+ * Generate files config objects for electron-builder to explicitly copy native modules.
+ * This uses object form to ensure scoped packages with pnpm symlinks are properly copied.
+ * @returns {Array<{from: string, to: string, filter: string[]}>}
+ */
+export function getNativeModulesFilesConfig() {
+  return getAllDependencies().map((dep) => ({
+    filter: ['**/*'],
+    from: `node_modules/${dep}`,
+    to: `node_modules/${dep}`,
+  }));
+}
+
+/**
  * Generate glob patterns for electron-builder asarUnpack config
  * @returns {string[]} Array of glob patterns
  */
@@ -115,4 +139,121 @@ export function getAsarUnpackPatterns() {
  */
 export function getExternalDependencies() {
   return getAllDependencies();
+}
+
+/**
+ * Copy native modules to source node_modules, resolving pnpm symlinks.
+ * This is used in beforePack hook to ensure native modules are properly
+ * included in the asar archive (electron-builder glob doesn't follow symlinks).
+ */
+export async function copyNativeModulesToSource() {
+  const fsPromises = await import('node:fs/promises');
+  const deps = getAllDependencies();
+  const sourceNodeModules = path.join(__dirname, 'node_modules');
+
+  console.log(`📦 Resolving ${deps.length} native module symlinks for packaging...`);
+
+  for (const dep of deps) {
+    const modulePath = path.join(sourceNodeModules, dep);
+
+    try {
+      const stat = await fsPromises.lstat(modulePath);
+
+      if (stat.isSymbolicLink()) {
+        // Resolve the symlink to get the real path
+        const realPath = await fsPromises.realpath(modulePath);
+        console.log(`  📎 ${dep} (resolving symlink)`);
+
+        // Remove the symlink
+        await fsPromises.rm(modulePath, { force: true, recursive: true });
+
+        // Create parent directory if needed (for scoped packages like @napi-rs)
+        await fsPromises.mkdir(path.dirname(modulePath), { recursive: true });
+
+        // Copy the actual directory content in place of the symlink
+        await copyDir(realPath, modulePath);
+      }
+    } catch (err) {
+      // Module might not exist (optional dependency for different platform)
+      console.log(`  ⏭️  ${dep} (skipped: ${err.code || err.message})`);
+    }
+  }
+
+  console.log(`✅ Native module symlinks resolved`);
+}
+
+/**
+ * Copy native modules to destination, resolving symlinks
+ * This is used in afterPack hook to handle pnpm symlinks correctly
+ * @param {string} destNodeModules - Destination node_modules path
+ */
+export async function copyNativeModules(destNodeModules) {
+  const fsPromises = await import('node:fs/promises');
+  const deps = getAllDependencies();
+  const sourceNodeModules = path.join(__dirname, 'node_modules');
+
+  console.log(`📦 Copying ${deps.length} native modules to unpacked directory...`);
+
+  for (const dep of deps) {
+    const sourcePath = path.join(sourceNodeModules, dep);
+    const destPath = path.join(destNodeModules, dep);
+
+    try {
+      // Check if source exists (might be a symlink)
+      const stat = await fsPromises.lstat(sourcePath);
+
+      if (stat.isSymbolicLink()) {
+        // Resolve the symlink to get the real path
+        const realPath = await fsPromises.realpath(sourcePath);
+        console.log(`  📎 ${dep} (symlink -> ${path.relative(sourceNodeModules, realPath)})`);
+
+        // Create destination directory
+        await fsPromises.mkdir(path.dirname(destPath), { recursive: true });
+
+        // Copy the actual directory content (not the symlink)
+        await copyDir(realPath, destPath);
+      } else if (stat.isDirectory()) {
+        console.log(`  📁 ${dep}`);
+        await fsPromises.mkdir(path.dirname(destPath), { recursive: true });
+        await copyDir(sourcePath, destPath);
+      }
+    } catch (err) {
+      // Module might not exist (optional dependency for different platform)
+      console.log(`  ⏭️  ${dep} (skipped: ${err.code || err.message})`);
+    }
+  }
+
+  console.log(`✅ Native modules copied successfully`);
+}
+
+/**
+ * Recursively copy a directory
+ * @param {string} src - Source directory
+ * @param {string} dest - Destination directory
+ */
+async function copyDir(src, dest) {
+  const fsPromises = await import('node:fs/promises');
+
+  await fsPromises.mkdir(dest, { recursive: true });
+  const entries = await fsPromises.readdir(src, { withFileTypes: true });
+
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+
+    if (entry.isDirectory()) {
+      await copyDir(srcPath, destPath);
+    } else if (entry.isSymbolicLink()) {
+      // For symlinks within the module, resolve and copy the actual file
+      const realPath = await fsPromises.realpath(srcPath);
+      const realStat = await fsPromises.stat(realPath);
+      if (realStat.isDirectory()) {
+        await copyDir(realPath, destPath);
+      } else {
+        await fsPromises.copyFile(realPath, destPath);
+      }
+    } else {
+      await fsPromises.copyFile(srcPath, destPath);
+    }
+  }
 }

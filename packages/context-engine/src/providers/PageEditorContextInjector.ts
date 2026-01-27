@@ -20,6 +20,9 @@ export interface PageEditorContextInjectorConfig {
  * Page Editor Context Injector
  * Responsible for injecting current page context at the end of the last user message
  * This ensures the model receives the most up-to-date page/document state
+ *
+ * Note: Page selections (user-selected text regions) are handled separately by
+ * PageSelectionsInjector, which injects selections into each user message that has them
  */
 export class PageEditorContextInjector extends BaseLastUserContentProvider {
   readonly name = 'PageEditorContextInjector';
@@ -37,20 +40,11 @@ export class PageEditorContextInjector extends BaseLastUserContentProvider {
 
     const clonedContext = this.cloneContext(context);
 
-    // Skip if Page Editor is not enabled or no page content context
-    if (!this.config.enabled || !this.config.pageContentContext) {
-      log('Page Editor not enabled or no pageContentContext, skipping injection');
-      return this.markAsExecuted(clonedContext);
-    }
+    // Check if we have page content to inject
+    const hasPageContent = this.config.enabled && this.config.pageContentContext;
 
-    // Format page content context
-    const formattedContent = formatPageContentContext(this.config.pageContentContext);
-
-    log('Formatted content length:', formattedContent.length);
-
-    // Skip if no content to inject
-    if (!formattedContent) {
-      log('No content to inject after formatting');
+    if (!hasPageContent) {
+      log('No pageContentContext, skipping injection');
       return this.markAsExecuted(clonedContext);
     }
 
@@ -63,6 +57,16 @@ export class PageEditorContextInjector extends BaseLastUserContentProvider {
       log('No user messages found, skipping injection');
       return this.markAsExecuted(clonedContext);
     }
+
+    // Format page content
+    const formattedContent = formatPageContentContext(this.config.pageContentContext!);
+
+    if (!formattedContent) {
+      log('No content to inject after formatting');
+      return this.markAsExecuted(clonedContext);
+    }
+
+    log('Page content formatted, length:', formattedContent.length);
 
     // Check if system context wrapper already exists
     // If yes, only insert context block; if no, use full wrapper

@@ -6,6 +6,11 @@ export interface ToolExecutionContext {
   /** Server database for LobeHub Skills execution */
   serverDB?: LobeChatDatabase;
   toolManifestMap: Record<string, LobeToolManifest>;
+  /**
+   * Maximum length for tool execution result content (in characters)
+   * @default 6000
+   */
+  toolResultMaxLength?: number;
   /** Topic ID for sandbox session management */
   topicId?: string;
   userId?: string;

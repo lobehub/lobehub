@@ -105,6 +105,11 @@ export interface UIChatMessage {
    */
   children?: AssistantContentBlock[];
   chunksList?: ChatFileChunk[];
+  /**
+   * All messages within a compression group (role: 'compressedGroup')
+   * Used for rendering expanded view with conversation-flow parsing
+   */
+  compressedMessages?: UIChatMessage[];
   content: string;
   createdAt: number;
   error?: ChatMessageError | null;

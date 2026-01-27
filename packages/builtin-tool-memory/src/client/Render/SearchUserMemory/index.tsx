@@ -6,8 +6,6 @@ import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { highlightTextStyles } from '@/styles';
-
 import type { SearchMemoryParams, SearchUserMemoryState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -120,9 +118,7 @@ const SearchUserMemoryRender = memo<BuiltinRenderProps<SearchMemoryParams, Searc
               paddingInline={12}
               title={
                 <Text className={styles.sectionHeader}>
-                  <span className={highlightTextStyles.info}>
-                    {t('builtins.lobe-user-memory.render.contexts' as any)}
-                  </span>
+                  <span>{t('builtins.lobe-user-memory.render.contexts')}</span>
                   <Text as={'span'} type={'secondary'}>
                     {' '}
                     ({contexts.length})
@@ -152,9 +148,7 @@ const SearchUserMemoryRender = memo<BuiltinRenderProps<SearchMemoryParams, Searc
               paddingInline={12}
               title={
                 <Text className={styles.sectionHeader}>
-                  <span className={highlightTextStyles.gold}>
-                    {t('builtins.lobe-user-memory.render.experiences' as any)}
-                  </span>
+                  <span>{t('builtins.lobe-user-memory.render.experiences')}</span>
                   <Text as={'span'} type={'secondary'}>
                     {' '}
                     ({experiences.length})
@@ -184,9 +178,7 @@ const SearchUserMemoryRender = memo<BuiltinRenderProps<SearchMemoryParams, Searc
               paddingInline={12}
               title={
                 <Text className={styles.sectionHeader}>
-                  <span className={highlightTextStyles.warning}>
-                    {t('builtins.lobe-user-memory.render.preferences' as any)}
-                  </span>
+                  <span>{t('builtins.lobe-user-memory.render.preferences')}</span>
                   <Text as={'span'} type={'secondary'}>
                     {' '}
                     ({preferences.length})

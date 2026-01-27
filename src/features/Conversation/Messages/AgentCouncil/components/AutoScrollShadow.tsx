@@ -1,27 +1,38 @@
 import { ScrollShadow } from '@lobehub/ui';
-import { type PropsWithChildren, type RefObject, memo, useEffect, useRef } from 'react';
+import { type PropsWithChildren, type RefObject, memo, useEffect } from 'react';
 
-const AutoScrollShadow = memo<PropsWithChildren>(({ children }) => {
-  const contentRef = useRef<HTMLDivElement | null>(null);
+import { useAutoScroll } from '@/hooks/useAutoScroll';
 
+interface AutoScrollShadowProps extends PropsWithChildren {
+  /**
+   * Content string to track for auto-scrolling
+   */
+  content?: string;
+  /**
+   * Whether the content is currently streaming/generating
+   */
+  streaming?: boolean;
+}
+
+const AutoScrollShadow = memo<AutoScrollShadowProps>(({ children, content, streaming }) => {
+  const { ref, handleScroll, resetScrollLock } = useAutoScroll<HTMLDivElement>({
+    deps: [content],
+    enabled: streaming,
+  });
+
+  // Reset scroll lock when content is cleared (new stream starts)
   useEffect(() => {
-    const container = contentRef.current;
-    if (!container) return;
-    const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-    const isNearBottom = distanceToBottom < 120;
-
-    if (isNearBottom) {
-      requestAnimationFrame(() => {
-        container.scrollTop = container.scrollHeight;
-      });
+    if (!content) {
+      resetScrollLock();
     }
-  }, []);
+  }, [content, resetScrollLock]);
 
   return (
     <ScrollShadow
       height={'max(33vh, 480px)'}
       hideScrollBar
-      ref={contentRef as unknown as RefObject<HTMLDivElement>}
+      onScroll={handleScroll}
+      ref={ref as RefObject<HTMLDivElement>}
       size={16}
     >
       {children}

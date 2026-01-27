@@ -1,19 +1,19 @@
 ---
-title: 在 LobeChat 中使用 OpenRouter API Key
-description: 学习如何在 LobeChat 中注册、创建 API Key、充值信用额度并配置 OpenRouter，以便开始使用多种优秀大语言模型 API。
+title: 在 LobeHub 中使用 OpenRouter API Key
+description: 学习如何在 LobeHub 中注册、创建 API Key、充值信用额度并配置 OpenRouter，以便开始使用多种优秀大语言模型 API。
 tags:
   - OpenRouter
   - API Key
   - Web UI
 ---
 
-# 在 LobeChat 中使用 OpenRouter
+# 在 LobeHub 中使用 OpenRouter
 
-<Image alt={'在 LobeChat 中使用 OpenRouter'} cover src={'https://github.com/lobehub/lobe-chat/assets/34400653/40520a43-ac03-4954-8a4d-282fbb946066'} />
+<Image alt={'在 LobeHub 中使用 OpenRouter'} cover src={'/blog/assets34400653/40520a43-ac03-4954-8a4d-282fbb946066.webp'} />
 
 [OpenRouter](https://openrouter.ai/) 是一个提供多种优秀大语言模型 API 的服务，它支持 OpenAI (包括 GPT-3.5/4)、Anthropic (Claude2、Instant)、LLaMA 2 和 PaLM Bison 等众多模型。
 
-本文档将指导你如何在 LobeChat 中使用 OpenRouter:
+本文档将指导你如何在 LobeHub 中使用 OpenRouter:
 
 <Steps>
   ### 步骤一：注册 OpenRouter 账号并登录
@@ -21,20 +21,20 @@ tags:
   - 访问 [OpenRouter.ai](https://openrouter.ai/) 并创建一个账号
   - 你可以用 Google 账号或 MetaMask 钱包登录
 
-  <Image alt={'注册 OpenRouter'} height={457} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/a024af40-e1d9-4df0-b998-0e6e87cebe5b'} />
+  <Image alt={'注册 OpenRouter'} height={457} inStep src={'/blog/assets34400653/a024af40-e1d9-4df0-b998-0e6e87cebe5b.webp'} />
 
   ### 步骤二：创建 API 密钥
 
   - 进入 `Keys` 菜单或直接访问 [OpenRouter Keys](https://openrouter.ai/keys)
   - 点击 `Create Key` 开始创建
-  - 在弹出对话框中为 API 密钥取一个名字，例如 "LobeChat Key"
+  - 在弹出对话框中为 API 密钥取一个名字，例如 "LobeHub Key"
   - 留空 `Credit limit` 表示不设置金额限制
 
-  <Image alt={'创建 OpenRouter Key'} height={460} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/094d701f-ce80-464a-bbbc-0a5ecc8d08e3'} />
+  <Image alt={'创建 OpenRouter Key'} height={460} inStep src={'/blog/assets34400653/094d701f-ce80-464a-bbbc-0a5ecc8d08e3.webp'} />
 
   - 在弹出的对话框中复制 API 密钥，并妥善保存
 
-  <Image alt={'获取 OpenRouter Key'} height={519} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/7a012a11-87bd-4366-a567-0ebf6d12ae10'} />
+  <Image alt={'获取 OpenRouter Key'} height={519} inStep src={'/blog/assets34400653/7a012a11-87bd-4366-a567-0ebf6d12ae10.webp'} />
 
   <Callout type={'warning'}>
     请安全地存储密钥，因为它只会出现一次。如果您意外丢失它，您将需要创建一个新密钥。
@@ -46,23 +46,23 @@ tags:
   - 点击 `Manage Credits` 充值信用额度，在 [https://openrouter.ai/models](https://openrouter.ai/models) 中可以查看模型价格
   - OpenRouter 提供了一些免费模型，未充值的情况下可以使用
 
-  <Image alt={'充值 OpenRouter 信用额度'} height={385} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/50b73232-01fc-4ef0-939a-3e06354d1b5a'} />
+  <Image alt={'充值 OpenRouter 信用额度'} height={385} inStep src={'/blog/assets34400653/50b73232-01fc-4ef0-939a-3e06354d1b5a.webp'} />
 
-  ### 步骤四：在 LobeChat 中配置 OpenRouter
+  ### 步骤四：在 LobeHub 中配置 OpenRouter
 
-  - 访问 LobeChat 的 `设置` 界面
+  - 访问 LobeHub 的 `设置` 界面
   - 在 `AI 服务商` 下找到 `OpenRouter` 的设置项
   - 打开 OpenRouter 并填入获得的 API 密钥
 
-  <Image alt={'在 LobeChat 中配置 OpenRouter'} height={518} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/5c3898ab-23d7-44c2-bbd9-b255e25e400c'} />
+  <Image alt={'在 LobeHub 中配置 OpenRouter'} height={518} inStep src={'/blog/assets34400653/5c3898ab-23d7-44c2-bbd9-b255e25e400c.webp'} />
 
   - 为你的助手选择一个 OpenRouter 模型即可开始对话
 
-  <Image alt={'使用 OpenRouter 模型'} height={518} inStep src={'https://github.com/lobehub/lobe-chat/assets/34400653/77b5feee-3f46-486d-9a36-31ff60efa5e9'} />
+  <Image alt={'使用 OpenRouter 模型'} height={518} inStep src={'/blog/assets34400653/77b5feee-3f46-486d-9a36-31ff60efa5e9.webp'} />
 
   <Callout type={'warning'}>
     在使用过程中你可能需要向 API 服务提供商付费，请参考 OpenRouter 的相关费用政策。
   </Callout>
 </Steps>
 
-至此你已经可以在 LobeChat 中使用 OpenRouter 提供的模型进行对话了。
+至此你已经可以在 LobeHub 中使用 OpenRouter 提供的模型进行对话了。

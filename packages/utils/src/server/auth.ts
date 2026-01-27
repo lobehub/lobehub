@@ -1,42 +1,18 @@
 import { headers } from 'next/headers';
 
-import { enableBetterAuth, enableClerk, enableNextAuth } from '@/envs/auth';
+import { auth } from '@/auth';
 
 export const getUserAuth = async () => {
-  if (enableClerk) {
-    const { ClerkAuth } = await import('@/libs/clerk-auth');
+  const currentHeaders = await headers();
+  const requestHeaders = Object.fromEntries(currentHeaders.entries());
 
-    const clerkAuth = new ClerkAuth();
+  const session = await auth.api.getSession({
+    headers: requestHeaders,
+  });
 
-    return await clerkAuth.getAuth();
-  }
+  const userId = session?.user?.id;
 
-  if (enableBetterAuth) {
-    const { auth: betterAuth } = await import('@/auth');
-
-    const currentHeaders = await headers();
-    const requestHeaders = Object.fromEntries(currentHeaders.entries());
-
-    const session = await betterAuth.api.getSession({
-      headers: requestHeaders,
-    });
-
-    const userId = session?.user?.id;
-
-    return { betterAuth: session, userId };
-  }
-
-  if (enableNextAuth) {
-    const { default: NextAuth } = await import('@/libs/next-auth');
-
-    const session = await NextAuth.auth();
-
-    const userId = session?.user.id;
-
-    return { nextAuth: session, userId };
-  }
-
-  throw new Error('Auth method is not enabled');
+  return { betterAuth: session, userId };
 };
 
 /**

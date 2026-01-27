@@ -61,24 +61,24 @@ export const TIMEZONE_OPTIONS = [
 
 // Weekday options for checkbox group
 export const WEEKDAY_OPTIONS = [
-  { label: 'Mon', value: 1 },
-  { label: 'Tue', value: 2 },
-  { label: 'Wed', value: 3 },
-  { label: 'Thu', value: 4 },
-  { label: 'Fri', value: 5 },
-  { label: 'Sat', value: 6 },
-  { label: 'Sun', value: 0 },
-];
+  { label: 'agentCronJobs.weekday.short.monday', value: 1 },
+  { label: 'agentCronJobs.weekday.short.tuesday', value: 2 },
+  { label: 'agentCronJobs.weekday.short.wednesday', value: 3 },
+  { label: 'agentCronJobs.weekday.short.thursday', value: 4 },
+  { label: 'agentCronJobs.weekday.short.friday', value: 5 },
+  { label: 'agentCronJobs.weekday.short.saturday', value: 6 },
+  { label: 'agentCronJobs.weekday.short.sunday', value: 0 },
+] as const;
 
-// Weekday labels for display
+// Weekday labels for display (i18n keys)
 export const WEEKDAY_LABELS: Record<number, string> = {
-  0: 'Sunday',
-  1: 'Monday',
-  2: 'Tuesday',
-  3: 'Wednesday',
-  4: 'Thursday',
-  5: 'Friday',
-  6: 'Saturday',
+  0: 'agentCronJobs.weekday.sunday',
+  1: 'agentCronJobs.weekday.monday',
+  2: 'agentCronJobs.weekday.tuesday',
+  3: 'agentCronJobs.weekday.wednesday',
+  4: 'agentCronJobs.weekday.thursday',
+  5: 'agentCronJobs.weekday.friday',
+  6: 'agentCronJobs.weekday.saturday',
 };
 
 /**

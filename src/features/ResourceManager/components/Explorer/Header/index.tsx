@@ -87,7 +87,7 @@ const Header = memo(() => {
     <Flexbox style={{ marginLeft: 8 }}>
       {category === FilesTabs.All
         ? t('resource', { defaultValue: 'Resource' })
-        : t(`tab.${category as FilesTabs}` as any)}
+        : t(`tab.${category as FilesTabs}` as any, { ns: 'file' })}
     </Flexbox>
   ) : (
     <Flexbox style={{ marginLeft: 8 }}>

@@ -1,33 +1,33 @@
 ---
-title: ModelScope Provider Setup
-description: Learn how to configure and use ModelScope provider in LobeChat
+title: ModelScope Provider Configuration
+description: Learn how to configure and use the ModelScope provider in LobeHub
 tags:
   - ModelScope
 ---
 
-# ModelScope Provider Setup
+# ModelScope Provider Configuration
 
-ModelScope (魔塔社区) is Alibaba's open-source model community that provides access to various AI models. This guide will help you set up the ModelScope provider in LobeChat.
+ModelScope is an open-source AI model community by Alibaba, offering access to a wide range of AI models. This guide will walk you through setting up the ModelScope provider in LobeHub.
 
 ## Prerequisites
 
-Before using ModelScope API, you need to:
+Before using the ModelScope API, you need to:
 
 1. **Create a ModelScope Account**
 
    - Visit [ModelScope](https://www.modelscope.cn/)
-   - Register for an account
+   - Sign up for an account
 
-2. **Bind Alibaba Cloud Account**
+2. **Link Your Alibaba Cloud Account**
 
-   - **Important**: ModelScope API requires binding with an Alibaba Cloud account
-   - Visit your [ModelScope Access Token page](https://www.modelscope.cn/my/myaccesstoken)
-   - Follow the instructions to bind your Alibaba Cloud account
+   - **Important**: Accessing the ModelScope API requires linking your Alibaba Cloud account
+   - Go to your [ModelScope Access Token Page](https://www.modelscope.cn/my/myaccesstoken)
+   - Follow the instructions to link your Alibaba Cloud account
    - This step is mandatory for API access
 
-3. **Get API Token**
-   - After binding your Alibaba Cloud account, generate an API token
-   - Copy the token for use in LobeChat
+3. **Obtain an API Token**
+   - After linking your Alibaba Cloud account, generate an API token
+   - Copy the token for use in LobeHub
 
 ## Configuration
 
@@ -45,13 +45,13 @@ MODELSCOPE_API_KEY=your_modelscope_api_token
 # Optional: Custom model list (comma-separated)
 MODELSCOPE_MODEL_LIST=deepseek-ai/DeepSeek-V3-0324,Qwen/Qwen3-235B-A22B
 
-# Optional: Proxy URL if needed
+# Optional: Proxy URL (if needed)
 MODELSCOPE_PROXY_URL=https://your-proxy-url
 ```
 
 ### Docker Configuration
 
-If using Docker, add the ModelScope environment variables to your `docker-compose.yml`:
+If you're using Docker, add the ModelScope environment variables to your `docker-compose.yml`:
 
 ```yaml
 environment:
@@ -62,7 +62,7 @@ environment:
 
 ## Available Models
 
-ModelScope provides access to various models including:
+ModelScope provides access to a variety of models, including:
 
 - **DeepSeek Models**: DeepSeek-V3, DeepSeek-R1 series
 - **Qwen Models**: Qwen3 series, Qwen2.5 series
@@ -73,25 +73,25 @@ ModelScope provides access to various models including:
 
 ### Common Issues
 
-1. **"Please bind your Alibaba Cloud account before use" Error**
+1. **"Please link your Alibaba Cloud account first" error**
 
-   - This means you haven't bound your Alibaba Cloud account to ModelScope
-   - Visit [ModelScope Access Token page](https://www.modelscope.cn/my/myaccesstoken)
-   - Complete the Alibaba Cloud account binding process
+   - This means your Alibaba Cloud account is not yet linked to ModelScope
+   - Visit the [ModelScope Access Token Page](https://www.modelscope.cn/my/myaccesstoken)
+   - Complete the account linking process
 
-2. **401 Authentication Error**
+2. **401 Unauthorized Error**
 
    - Check if your API token is correct
-   - Ensure the token hasn't expired
-   - Verify that your Alibaba Cloud account is properly bound
+   - Ensure the token has not expired
+   - Verify that your Alibaba Cloud account is properly linked
 
-3. **Model Not Available**
+3. **Model Unavailable**
    - Some models may require additional permissions
    - Check the model's page on ModelScope for access requirements
 
 ### Debug Mode
 
-Enable debug mode to see detailed logs:
+Enable debug mode to view detailed logs:
 
 ```bash
 DEBUG_MODELSCOPE_CHAT_COMPLETION=1
@@ -99,19 +99,39 @@ DEBUG_MODELSCOPE_CHAT_COMPLETION=1
 
 ## Notes
 
-- ModelScope API is compatible with OpenAI API format
-- The service is primarily designed for users in China
-- Some models may have usage limitations or require additional verification
-- API responses are in Chinese by default for some models
+- The ModelScope API is compatible with the OpenAI API format
+- This service is primarily designed for users in China
+- Some models may have usage restrictions or require additional verification
+- API responses for certain models may default to Chinese
 
 ## Support
 
 For ModelScope-specific issues:
 
-- Visit [ModelScope Documentation](https://www.modelscope.cn/docs)
-- Check [ModelScope Community](https://www.modelscope.cn/community)
+- Visit the [ModelScope Documentation](https://www.modelscope.cn/docs)
+- Check out the [ModelScope Community](https://www.modelscope.cn/community)
 
-For LobeChat integration issues:
+For LobeHub integration issues:
 
-- Check our [GitHub Issues](https://github.com/lobehub/lobe-chat/issues)
+- Browse our [GitHub Issues](https://github.com/lobehub/lobe-chat/issues)
 - Join our community discussions
+
+## Model ID Format
+
+ModelScope uses a namespace-prefixed format for model IDs, for example:
+
+```
+deepseek-ai/DeepSeek-V3-0324
+deepseek-ai/DeepSeek-R1-0528
+Qwen/Qwen3-235B-A22B
+Qwen/Qwen3-32B
+```
+
+When configuring the model list, be sure to use the full model ID format.
+
+## API Limitations
+
+- The ModelScope API is subject to rate limits
+- Some models may require special permissions
+- It's recommended to monitor API usage in production environments
+- Certain advanced models may require a paid subscription to access

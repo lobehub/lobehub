@@ -14,10 +14,14 @@ export type {
   AgentCouncilNode,
   AssistantGroupNode,
   BranchNode,
+  CompareGroupChild,
+  CompareGroupNode,
   CompareNode,
+  CompressedGroupNode,
   ContextNode,
   MessageNode,
   TasksNode,
+  PinnedMessage,
 } from './contextTree';
 
 // Flat Message List Types

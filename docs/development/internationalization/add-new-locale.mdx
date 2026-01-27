@@ -1,14 +1,21 @@
 ---
 title: New Locale Guide
+description: Learn how to add Vietnamese language support in LobeHub using lobe-i18n.
+tags:
+  - LobeHub
+  - i18n
+  - language support
+  - Vietnamese
+  - localization
 ---
 
 # New Locale Guide
 
-LobeChat uses [lobe-i18n](https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-i18n) as the i18n solution, which allows for quick addition of new language support in the application.
+LobeHub uses [lobe-i18n](https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-i18n) as the i18n solution, which allows for quick addition of new language support in the application.
 
 ## Adding New Language Support
 
-To add new language internationalization support in LobeChat (for example, adding Vietnamese `vi-VN`), please follow the steps below:
+To add new language internationalization support in LobeHub (for example, adding Vietnamese `vi-VN`), please follow the steps below:
 
 ### Step 1: Update the Internationalization Configuration File
 
@@ -33,7 +40,7 @@ module.exports = {
 
 ### Step 2: Automatically Translate Language Files
 
-LobeChat uses the `lobe-i18n` tool to automatically translate language files, so manual updating of i18n files is not required.
+LobeHub uses the `lobe-i18n` tool to automatically translate language files, so manual updating of i18n files is not required.
 
 Run the following command to automatically translate and generate the Vietnamese language files:
 
@@ -47,12 +54,12 @@ This will utilize the `lobe-i18n` tool to process the language files.
 
 Once you have completed the above steps, you need to submit your changes and create a Pull Request.
 
-Ensure that you follow LobeChat's contribution guidelines and provide a necessary description to explain your changes. For example, refer to a similar previous Pull Request [#759](https://github.com/lobehub/lobe-chat/pull/759).
+Ensure that you follow LobeHub's contribution guidelines and provide a necessary description to explain your changes. For example, refer to a similar previous Pull Request [#759](https://github.com/lobehub/lobe-chat/pull/759).
 
 ### Additional Information
 
 - After submitting your Pull Request, please patiently wait for the project maintainers to review it.
-- If you encounter any issues, you can reach out to the LobeChat community for assistance.
+- If you encounter any issues, you can reach out to the LobeHub community for assistance.
 - For more accurate results, ensure that your Pull Request is based on the latest main branch and stays in sync with the main branch.
 
-By following the above steps, you can successfully add new language support to LobeChat and ensure that the application provides a localized experience for more users.
+By following the above steps, you can successfully add new language support to LobeHub and ensure that the application provides a localized experience for more users.

@@ -122,6 +122,7 @@ export const remoteSyncSlice: StateCreator<
 
           set({ dataSyncConfig: data, isInitRemoteServerConfig: true });
         },
+        suspense: false,
       },
     ),
 });

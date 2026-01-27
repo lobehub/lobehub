@@ -42,7 +42,7 @@ export interface InterruptTaskParams {
 
 /**
  * Parameters for createClientTaskThread
- * Creates a Thread for client-side task execution (desktop only)
+ * Creates a Thread for client-side task execution (desktop only, single agent mode)
  */
 export interface CreateClientTaskThreadParams {
   agentId: string;
@@ -50,6 +50,22 @@ export interface CreateClientTaskThreadParams {
   /** Initial user message content (task instruction) */
   instruction: string;
   parentMessageId: string;
+  title?: string;
+  topicId: string;
+}
+
+/**
+ * Parameters for createClientGroupAgentTaskThread
+ * Creates a Thread for client-side task execution in Group mode
+ */
+export interface CreateClientGroupAgentTaskThreadParams {
+  /** The Group ID (required for Group mode) */
+  groupId: string;
+  /** Initial user message content (task instruction) */
+  instruction: string;
+  parentMessageId: string;
+  /** The Sub-Agent ID that will execute the task (worker agent in group) */
+  subAgentId: string;
   title?: string;
   topicId: string;
 }
@@ -106,13 +122,24 @@ class AiAgentService {
   }
 
   /**
-   * Create Thread for client-side task execution (desktop only)
+   * Create Thread for client-side task execution (desktop only, single agent mode)
    *
    * This method is called when runInClient=true on desktop client.
    * It creates the Thread but does NOT execute the task - execution happens locally.
    */
   async createClientTaskThread(params: CreateClientTaskThreadParams) {
     return await lambdaClient.aiAgent.createClientTaskThread.mutate(params);
+  }
+
+  /**
+   * Create Thread for client-side task execution in Group mode
+   *
+   * This method is specifically for Group Chat scenarios where:
+   * - Messages may have different agentIds (supervisor, workers)
+   * - Thread messages query should not filter by agentId
+   */
+  async createClientGroupAgentTaskThread(params: CreateClientGroupAgentTaskThreadParams) {
+    return await lambdaClient.aiAgent.createClientGroupAgentTaskThread.mutate(params);
   }
 
   /**

@@ -115,8 +115,15 @@ const getAgentBuilderContextById =
     };
   };
 
+/**
+ * Get full agent data by agentId
+ * Returns the complete agent object including metadata fields like updatedAt
+ */
+const getAgentById = (agentId: string) => (s: AgentStoreState) => s.agentMap[agentId];
+
 export const agentByIdSelectors = {
   getAgentBuilderContextById,
+  getAgentById,
   getAgentConfigById: agentSelectors.getAgentConfigById,
   getAgentEnableModeById,
   getAgentFilesById,

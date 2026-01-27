@@ -1,7 +1,7 @@
 ---
-title: LobeChat Upstream Sync and Docker Deployment Guide
+title: LobeHub Upstream Sync and Docker Deployment Guide
 description: >-
-  Learn how to enable automatic updates for LobeChat Vercel deployments and
+  Learn how to enable automatic updates for LobeHub Vercel deployments and
   upgrade Docker deployment versions easily. Follow step-by-step instructions
   for a seamless deployment process.
 tags:
@@ -36,27 +36,27 @@ After forking the project, due to Github's limitations, you need to manually ena
 
 If you encounter a sync failure, you need to manually click "Update Branch" once.
 
-<Image alt="GitHub Action Sync Failure" src="https://github.com/user-attachments/assets/9baacac6-5af4-460b-862d-682b76c18459" />
+<Image alt="GitHub Action Sync Failure" src="/blog/assets195200c7bc42360675e78a6bfa9fe320.webp" />
 
-<Image alt="Manually Sync 'Update Branch'" src="https://github.com/user-attachments/assets/d524c20d-306a-45bc-971b-96920b87fab4" />
+<Image alt="Manually Sync 'Update Branch'" src="/blog/assetsbeefe4dbe3e6f141e09c62064c6dc397.webp" />
 
 ## `B` Docker Deployment
 
-Upgrading the Docker deployment version is very simple, you just need to redeploy the latest LobeChat image. Here are the commands required to perform these steps:
+Upgrading the Docker deployment version is very simple, you just need to redeploy the latest LobeHub image. Here are the commands required to perform these steps:
 
 <Steps>
-  ### Stop and Remove the Current Running LobeChat Container
+  ### Stop and Remove the Current Running LobeHub Container
 
-  Assuming the LobeChat container is named `lobe-chat`, use the following commands to stop and remove the currently running LobeChat container:
+  Assuming the LobeHub container is named `lobe-chat`, use the following commands to stop and remove the currently running LobeHub container:
 
   ```fish
   docker stop lobe-chat
   docker rm lobe-chat
   ```
 
-  ### Pull the Latest LobeChat Image
+  ### Pull the Latest LobeHub Image
 
-  Use the following command to pull the latest Docker image for LobeChat:
+  Use the following command to pull the latest Docker image for LobeHub:
 
   ```fish
   docker pull lobehub/lobe-chat
@@ -64,7 +64,7 @@ Upgrading the Docker deployment version is very simple, you just need to redeplo
 
   ### Restart the Docker Container
 
-  Redeploy the LobeChat container using the newly pulled image:
+  Redeploy the LobeHub container using the newly pulled image:
 
   ```fish
   docker run -d -p 3210:3210 \
@@ -80,7 +80,7 @@ Ensure that you have sufficient permissions to stop and remove the container bef
 <Callout type={'tip'}>
   **If I redeploy, will I lose my local chat records?**
 
-  No need to worry, you won't. All of LobeChat's chat records are stored in your local browser. Therefore, when redeploying LobeChat using Docker, your chat records will not be lost.
+  No need to worry, you won't. All of LobeHub's chat records are stored in your local browser. Therefore, when redeploying LobeHub using Docker, your chat records will not be lost.
 </Callout>
 
 If you wish to automate the above steps, you can follow the method below and use Crontab scheduling to complete it. The specific steps are as follows.

@@ -24,6 +24,16 @@ vi.mock('@lobehub/analytics/react', () => ({
   }),
 }));
 
+// Global mock for @/auth to avoid better-auth validator module issue in tests
+// The validator package has ESM resolution issues in Vitest environment
+vi.mock('@/auth', () => ({
+  auth: {
+    api: {
+      getSession: vi.fn().mockResolvedValue(null),
+    },
+  },
+}));
+
 // node runtime
 if (typeof window === 'undefined') {
   // test with polyfill crypto

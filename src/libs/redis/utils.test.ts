@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildIORedisSetArgs,
-  buildUpstashSetOptions,
   normalizeMsetValues,
   normalizeRedisKey,
   normalizeRedisKeys,
@@ -33,14 +32,5 @@ describe('redis utils', () => {
     const args = buildIORedisSetArgs({ ex: 1, nx: true, get: true });
 
     expect(args).toEqual(['EX', 1, 'NX', 'GET']);
-  });
-
-  it('builds upstash set options', () => {
-    expect(buildUpstashSetOptions()).toBeUndefined();
-    expect(buildUpstashSetOptions({ ex: 10, nx: true, get: true })).toEqual({
-      ex: 10,
-      nx: true,
-      get: true,
-    });
   });
 });

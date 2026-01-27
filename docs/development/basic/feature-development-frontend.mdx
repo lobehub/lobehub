@@ -1,10 +1,19 @@
 ---
 title: How to Develop a New Feature
+description: >-
+  Learn how to implement the Chat Messages feature in LobeHub using Next.js and
+  TypeScript.
+tags:
+  - LobeHub
+  - Next.js
+  - TypeScript
+  - Chat Feature
+  - Zustand
 ---
 
 # How to Develop a New Feature
 
-LobeChat is built on the Next.js framework and uses TypeScript as the primary development language. When developing a new feature, we need to follow a certain development process to ensure the quality and stability of the code. The general process can be divided into the following five steps:
+LobeHub is built on the Next.js framework and uses TypeScript as the primary development language. When developing a new feature, we need to follow a certain development process to ensure the quality and stability of the code. The general process can be divided into the following five steps:
 
 1. Routing: Define routes (`src/app`).
 2. Data Structure: Define data structures (`src/types`).
@@ -80,7 +89,7 @@ const ChatPage = () => {
       renderItem={(message) => (
         <List.Item>
           <Typography.Text>{message.content}</Typography.Text>
-       
+
 </List.Item>
       )}
     />
@@ -90,7 +99,7 @@ const ChatPage = () => {
 export default ChatPage;
 ```
 
-> **Note on Feature Organization**: LobeChat uses two patterns for organizing features:
+> **Note on Feature Organization**: LobeHub uses two patterns for organizing features:
 >
 > - **Global features** (`src/features/`): Shared components like `ChatInput`, `Conversation` used across the app
 > - **Page-specific features** (`src/app/<page>/features/`): Components used only within a specific page route
@@ -119,12 +128,12 @@ const ChatPage = () => {
         renderItem={(message) => (
           <List.Item>
             <Typography.Text>{message.content}</Typography.Text>
-         
+
 </List.Item>
         )}
       />
       <Button onClick={handleSend}>Send</Button>
-   
+
 </>
   );
 };
@@ -132,4 +141,4 @@ const ChatPage = () => {
 export default ChatPage;
 ```
 
-The above is the step to implement the "chat message" feature in LobeChat. Of course, in the actual development of LobeChat, the business requirements and scenarios faced in real situations are far more complex than the above demo. Please develop according to the actual situation.
+The above is the step to implement the "chat message" feature in LobeHub. Of course, in the actual development of LobeHub, the business requirements and scenarios faced in real situations are far more complex than the above demo. Please develop according to the actual situation.

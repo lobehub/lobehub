@@ -3,9 +3,11 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import BubblesLoading from '@/components/BubblesLoading';
+import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import type { OperationType } from '@/store/chat/slices/operation/types';
+import { shinyTextStyles } from '@/styles/loading';
 
 const ELAPSED_TIME_THRESHOLD = 2100; // Show elapsed time after 2 seconds
 
@@ -55,6 +57,15 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
   const showElapsedTime = elapsedSeconds >= ELAPSED_TIME_THRESHOLD / 1000;
 
   if (operationType && NO_NEED_SHOW_DOT_OP_TYPES.has(operationType)) return null;
+
+  if (operationType === 'contextCompression') {
+    return (
+      <Flexbox align={'center'} gap={8} horizontal>
+        <NeuralNetworkLoading size={16} />
+        <span className={shinyTextStyles.shinyText}>{t('operation.contextCompression')}</span>
+      </Flexbox>
+    );
+  }
 
   return (
     <Flexbox align={'center'} horizontal>

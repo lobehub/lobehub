@@ -4,6 +4,7 @@ import type { UserMemoryStoreState } from './initialState';
 import { userMemoryCacheKey } from './utils/cacheKey';
 
 const EMPTY_RESULT: RetrieveMemoryResult = {
+  activities: [],
   contexts: [],
   experiences: [],
   preferences: [],

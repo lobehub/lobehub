@@ -170,7 +170,14 @@ export class AgentRuntime {
 
         // Special handling for batch tool execution
         if (instruction.type === 'call_tools_batch') {
-          result = await this.executeToolsBatch(instruction as any, currentState, runtimeContext);
+          // Check if custom executor is provided (e.g., server-side with DB access)
+          const customExecutor = this.executors['call_tools_batch' as keyof typeof this.executors];
+          if (customExecutor) {
+            result = await customExecutor(instruction, currentState, runtimeContext);
+          } else {
+            // Fallback to built-in executeToolsBatch
+            result = await this.executeToolsBatch(instruction as any, currentState, runtimeContext);
+          }
         } else {
           const executor = this.executors[instruction.type as keyof typeof this.executors];
           if (!executor) {

@@ -5,6 +5,19 @@ import OpenAI from 'openai';
 import { OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 
+const ANTHROPIC_SUPPORTED_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]);
+
+const isImageTypeSupported = (mimeType: string | null): boolean => {
+  if (!mimeType) return true;
+  return ANTHROPIC_SUPPORTED_IMAGE_TYPES.has(mimeType.toLowerCase());
+};
+
 export const buildAnthropicBlock = async (
   content: UserMessageContentPart,
 ): Promise<Anthropic.ContentBlock | Anthropic.ImageBlockParam | undefined> => {
@@ -23,7 +36,9 @@ export const buildAnthropicBlock = async (
     case 'image_url': {
       const { mimeType, base64, type } = parseDataUri(content.image_url.url);
 
-      if (type === 'base64')
+      if (type === 'base64') {
+        if (!isImageTypeSupported(mimeType)) return undefined;
+
         return {
           source: {
             data: base64 as string,
@@ -32,9 +47,13 @@ export const buildAnthropicBlock = async (
           },
           type: 'image',
         };
+      }
 
       if (type === 'url') {
         const { base64, mimeType } = await imageUrlToBase64(content.image_url.url);
+
+        if (!isImageTypeSupported(mimeType)) return undefined;
+
         return {
           source: {
             data: base64 as string,
@@ -95,10 +114,13 @@ export const buildAnthropicMessage = async (
       // if there is tool_calls , we need to covert the tool_calls to tool_use content block
       // refs: https://docs.anthropic.com/claude/docs/tool-use#tool-use-and-tool-result-content-blocks
       if (message.tool_calls && message.tool_calls.length > 0) {
+        // Handle content: string with text, array, null/undefined/empty -> filter out
         const rawContent =
-          typeof content === 'string'
-            ? ([{ text: message.content, type: 'text' }] as UserMessageContentPart[])
-            : content;
+          typeof content === 'string' && content.trim()
+            ? ([{ text: content, type: 'text' }] as UserMessageContentPart[])
+            : Array.isArray(content)
+              ? content
+              : []; // null/undefined/empty string -> empty array (will be filtered)
 
         const messageContent = await buildArrayContent(rawContent);
 
@@ -161,10 +183,17 @@ export const buildAnthropicMessages = async (
 
     // refs: https://docs.anthropic.com/claude/docs/tool-use#tool-use-and-tool-result-content-blocks
     if (message.role === 'tool') {
+      // Handle different content types in tool messages
+      const toolResultContent = Array.isArray(message.content)
+        ? await buildArrayContent(message.content)
+        : !message.content
+          ? [{ text: '<empty_content>', type: 'text' as const }]
+          : [{ text: message.content, type: 'text' as const }];
+
       // 检查这个工具消息是否有对应的 assistant 工具调用
       if (message.tool_call_id && validToolCallIds.has(message.tool_call_id)) {
         pendingToolResults.push({
-          content: [{ text: message.content as string, type: 'text' }],
+          content: toolResultContent as Anthropic.ToolResultBlockParam['content'],
           tool_use_id: message.tool_call_id,
           type: 'tool_result',
         });
@@ -179,8 +208,11 @@ export const buildAnthropicMessages = async (
         }
       } else {
         // 如果工具消息没有对应的 assistant 工具调用，则作为普通文本处理
+        const fallbackContent = Array.isArray(message.content)
+          ? JSON.stringify(message.content)
+          : message.content || '<empty_content>';
         messages.push({
-          content: message.content as string,
+          content: fallbackContent,
           role: 'user',
         });
       }

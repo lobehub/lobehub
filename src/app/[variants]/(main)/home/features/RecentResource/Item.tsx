@@ -40,7 +40,7 @@ const RecentResourceItem = memo<RecentResourceItemProps>(({ file }) => {
     >
       <Center
         flex={'none'}
-        height={126}
+        height={148}
         style={{ background: cssVar.colorFillTertiary, overflow: 'hidden' }}
       >
         {isImage && file.url ? (
@@ -63,7 +63,7 @@ const RecentResourceItem = memo<RecentResourceItemProps>(({ file }) => {
 
       {/* File Info */}
       <Flexbox flex={1} gap={6} justify={'space-between'} padding={12}>
-        <Text ellipsis={{ rows: 2 }} fontSize={13} style={{ lineHeight: 1.4 }} weight={500}>
+        <Text ellipsis fontSize={13} style={{ lineHeight: 1.4 }} weight={500}>
           {file.name}
         </Text>
         <Flexbox align={'center'} gap={8} horizontal>

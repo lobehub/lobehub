@@ -1,7 +1,7 @@
 ---
-title: Configuration of Microsoft Entra ID Authentication Service for LobeChat
+title: Configuration of Microsoft Entra ID Authentication Service for LobeHub
 description: >-
-  Learn how to configure Microsoft Entra ID Authentication Service for LobeChat,
+  Learn how to configure Microsoft Entra ID Authentication Service for LobeHub,
   create applications, add users, and set up environment variables for seamless
   integration.
 tags:
@@ -10,7 +10,7 @@ tags:
   - Azure Portal
   - SSO
   - Environment Variables
-  - LobeChat
+  - LobeHub
 ---
 
 # Configuration of Microsoft Entra ID Authentication Service
@@ -33,17 +33,17 @@ tags:
       matches the deployed URL. - Please replace "your-domain" with your own domain.
   </Callout>
 
-  <Image alt="App Register" inStep src="https://github.com/lobehub/lobe-chat/assets/13883964/4f9d83bd-b3fc-4abc-bcf4-ccbad65c219d" />
+  <Image alt="App Register" inStep src="/blog/assets13883964/4f9d83bd-b3fc-4abc-bcf4-ccbad65c219d.webp" />
 
   Click on "Register".
 
   After successfully creating the application, click on the corresponding application to enter the application details page, and switch to the "Overview" tab to view the corresponding configuration information.
 
-  <Image alt="App Overview" inStep src="https://github.com/lobehub/lobe-chat/assets/13883964/48a0b702-05bd-4ce4-a007-a8ad00a36e5a" />
+  <Image alt="App Overview" inStep src="/blog/assets13883964/48a0b702-05bd-4ce4-a007-a8ad00a36e5a.webp" />
 
   Go to "Certificates & secrets", select the "Client secrets" tab, click on "New client secret", fill in the description, select the expiration time, and click on "Add" to create a new client secret.
 
-  <Image alt="Create App Client Secret" inStep src="https://github.com/lobehub/lobe-chat/assets/13883964/c9d66fa0-158c-4bd3-a1fa-969e638259d2" />
+  <Image alt="Create App Client Secret" inStep src="/blog/assets13883964/c9d66fa0-158c-4bd3-a1fa-969e638259d2.webp" />
 
   <Callout type={'important'}>
     Please make sure to save your client secret as this is your only chance to view it.
@@ -51,11 +51,11 @@ tags:
 
   ### Add Users
 
-  Go back to the "Microsoft Entra ID" interface, enter "Users", click on "New user", fill in the user information, and click on "Create" to create a user for using LobeChat.
+  Go back to the "Microsoft Entra ID" interface, enter "Users", click on "New user", fill in the user information, and click on "Create" to create a user for using LobeHub.
 
   ### Configure Environment Variables
 
-  When deploying LobeChat, you need to configure the following environment variables:
+  When deploying LobeHub, you need to configure the following environment variables:
 
   | Environment Variable                | Type     | Description                                                                                                                                                                                                                |
   | ----------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -74,7 +74,7 @@ tags:
 </Steps>
 
 <Callout>
-  After successful deployment, users will be able to authenticate and use LobeChat using the users
+  After successful deployment, users will be able to authenticate and use LobeHub using the users
   configured in Microsoft Entra ID.
 </Callout>
 

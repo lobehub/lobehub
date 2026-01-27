@@ -30,6 +30,7 @@ config.overrides = [
     files: ['*.mdx'],
     rules: {
       '@typescript-eslint/no-unused-vars': 1,
+      'micromark-extension-mdx-jsx': 0,
       'no-undef': 0,
       'react/jsx-no-undef': 0,
       'react/no-unescaped-entities': 0,
@@ -38,7 +39,6 @@ config.overrides = [
       'mdx/code-blocks': false,
     },
   },
-
   {
     files: ['src/store/image/**/*', 'src/types/generation/**/*'],
     rules: {
@@ -46,6 +46,14 @@ config.overrides = [
       'sort-keys-fix/sort-keys-fix': 0,
       'typescript-sort-keys/interface': 0,
       'typescript-sort-keys/string-enum': 0,
+    },
+  },
+  // CLI scripts legitimately use process.exit() and async IIFE patterns
+  {
+    files: ['scripts/**/*'],
+    rules: {
+      'unicorn/no-process-exit': 0,
+      'unicorn/prefer-top-level-await': 0,
     },
   },
 ];

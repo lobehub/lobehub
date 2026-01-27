@@ -25,21 +25,21 @@ const n = setNamespace('lobehubSkillStore');
  */
 export interface LobehubSkillStoreAction {
   /**
-   * 调用 LobeHub Skill 工具
+   * Call LobeHub Skill tool
    */
   callLobehubSkillTool: (params: CallLobehubSkillToolParams) => Promise<CallLobehubSkillToolResult>;
 
   /**
-   * 获取单个 Provider 的连接状态
-   * @param provider - Provider ID (如 'linear')
+   * Get single Provider connection status
+   * @param provider - Provider ID (e.g., 'linear')
    */
   checkLobehubSkillStatus: (provider: string) => Promise<LobehubSkillServer | undefined>;
 
   /**
-   * 获取 Provider 的授权信息（URL、code、过期时间）
-   * @param provider - Provider ID (如 'linear')
-   * @param options - 可选的 scopes 和 redirectUri
-   * @returns 授权 URL 和相关信息
+   * Get Provider authorization info (URL, code, expiration time)
+   * @param provider - Provider ID (e.g., 'linear')
+   * @param options - Optional scopes and redirectUri
+   * @returns Authorization URL and related info
    */
   getLobehubSkillAuthorizeUrl: (
     provider: string,
@@ -47,7 +47,7 @@ export interface LobehubSkillStoreAction {
   ) => Promise<{ authorizeUrl: string; code: string; expiresIn: number }>;
 
   /**
-   * 内部方法: 更新 Server 状态
+   * Internal method: Update Server status
    */
   internal_updateLobehubSkillServer: (
     provider: string,
@@ -55,26 +55,26 @@ export interface LobehubSkillStoreAction {
   ) => void;
 
   /**
-   * 刷新 Provider 的 Token (如果支持)
+   * Refresh Provider Token (if supported)
    * @param provider - Provider ID
    */
   refreshLobehubSkillToken: (provider: string) => Promise<boolean>;
 
   /**
-   * 刷新 Provider 的工具列表
+   * Refresh Provider tool list
    * @param provider - Provider ID
    */
   refreshLobehubSkillTools: (provider: string) => Promise<void>;
 
   /**
-   * 断开 Provider 连接
+   * Disconnect Provider connection
    * @param provider - Provider ID
    */
   revokeLobehubSkill: (provider: string) => Promise<void>;
 
   /**
-   * 使用 SWR 获取用户的所有连接状态
-   * @param enabled - 是否启用获取
+   * Use SWR to fetch user's all connection statuses
+   * @param enabled - Whether to enable fetching
    */
   useFetchLobehubSkillConnections: (enabled: boolean) => SWRResponse<LobehubSkillServer[]>;
 }

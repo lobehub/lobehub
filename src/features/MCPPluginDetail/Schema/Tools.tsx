@@ -1,11 +1,11 @@
 import { Block, Collapse, Empty, Highlighter, Icon, Markdown, Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { CheckIcon, MinusIcon, Wrench } from 'lucide-react';
-import { markdownToTxt } from 'markdown-to-txt';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import Title from '../../../app/[variants]/(main)/community/features/Title';
 import CollapseDesc from '../CollapseDesc';

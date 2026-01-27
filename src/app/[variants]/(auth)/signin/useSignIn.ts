@@ -1,6 +1,5 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Form } from 'antd';
-import { useRouter, useSearchParams } from '@/libs/next/navigation';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,6 +9,7 @@ import { useBusinessSignin } from '@/business/client/hooks/useBusinessSignin';
 import { message } from '@/components/AntdStaticMethods';
 import { requestPasswordReset, signIn } from '@/libs/better-auth/auth-client';
 import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
+import { useRouter, useSearchParams } from '@/libs/next/navigation';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
@@ -37,6 +37,7 @@ export const useSignIn = () => {
   const [socialLoading, setSocialLoading] = useState<string | null>(null);
   const [step, setStep] = useState<Step>('email');
   const [email, setEmail] = useState('');
+  const [isSocialOnly, setIsSocialOnly] = useState(false);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
   const oAuthSSOProviders = useServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
   const { ssoProviders, preSocialSigninCheck, getAdditionalData } = useBusinessSignin();
@@ -142,7 +143,8 @@ export const useSignIn = () => {
         return;
       }
 
-      message.info(t('betterAuth.signin.socialOnlyHint'));
+      // User has no password and magic link is disabled, they can only sign in via social
+      setIsSocialOnly(true);
     } catch (error) {
       console.error('Error checking user:', error);
       message.error(t('betterAuth.signin.error'));
@@ -215,6 +217,7 @@ export const useSignIn = () => {
   const handleBackToEmail = () => {
     setStep('email');
     setEmail('');
+    setIsSocialOnly(false);
   };
 
   const handleGoToSignup = () => {
@@ -247,6 +250,7 @@ export const useSignIn = () => {
     handleGoToSignup,
     handleSignIn,
     handleSocialSignIn,
+    isSocialOnly,
     loading,
     oAuthSSOProviders: ENABLE_BUSINESS_FEATURES ? ssoProviders : oAuthSSOProviders,
     serverConfigInit: ENABLE_BUSINESS_FEATURES ? true : serverConfigInit,

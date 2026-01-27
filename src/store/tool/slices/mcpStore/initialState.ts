@@ -12,7 +12,7 @@ export interface MCPStoreState {
   mcpInstallProgress: MCPInstallProgressMap;
   mcpPluginItems: PluginItem[];
   mcpSearchKeywords?: string;
-  // 测试连接相关状态
+  // Test connection related state
   mcpTestAbortControllers: Record<string, AbortController>;
   mcpTestErrors: Record<string, string>;
   mcpTestLoading: Record<string, boolean>;
@@ -28,7 +28,7 @@ export const initialMCPStoreState: MCPStoreState = {
   mcpInstallAbortControllers: {},
   mcpInstallProgress: {},
   mcpPluginItems: [],
-  // 测试连接相关状态初始化
+  // Test connection related state initialization
   mcpTestAbortControllers: {},
   mcpTestErrors: {},
   mcpTestLoading: {},

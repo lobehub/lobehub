@@ -16,7 +16,10 @@ import CategoryMenu from '../../../../components/CategoryMenu';
 
 const Category = memo(() => {
   const useMcpCategories = useDiscoverStore((s) => s.useMcpCategories);
-  const { category = McpCategory.Discover, q } = useQuery() as { category?: McpCategory; q?: string };
+  const { category = McpCategory.Discover, q } = useQuery() as {
+    category?: McpCategory;
+    q?: string;
+  };
   const { data: items = [] } = useMcpCategories({ q });
   const navigate = useNavigate();
   const cates = useCategory();
@@ -25,7 +28,7 @@ const Category = memo(() => {
     qs.stringifyUrl(
       {
         query: {
-          category: [McpCategory.All, McpCategory.Discover].includes(key) ? null : key,
+          category: key === McpCategory.Discover ? null : key,
           q,
           sort: key === McpCategory.Discover ? McpSorts.Recommended : null,
         },

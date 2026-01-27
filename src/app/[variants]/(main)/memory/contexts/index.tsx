@@ -3,6 +3,7 @@ import { BrainCircuitIcon } from 'lucide-react';
 import { type FC, memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MemoryAnalysis from '@/app/[variants]/(main)/memory/features/MemoryAnalysis';
 import { SCROLL_PARENT_ID } from '@/app/[variants]/(main)/memory/features/TimeLineView/useScrollParent';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
@@ -87,6 +88,7 @@ const ContextsArea = memo(() => {
         }
         right={
           <>
+            <MemoryAnalysis iconOnly />
             <ViewModeSwitcher onChange={setViewMode} value={viewMode} />
             <WideScreenButton />
           </>

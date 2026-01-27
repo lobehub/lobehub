@@ -77,8 +77,6 @@ const ModelTable = memo<UsageChartProps>(({ data, isLoading, groupBy }) => {
     [data, groupBy],
   );
 
-  console.log('ModelTable', groupBy, formattedData);
-
   return isLoading ? (
     <Skeleton active paragraph={{ rows: 8 }} title={false} />
   ) : (

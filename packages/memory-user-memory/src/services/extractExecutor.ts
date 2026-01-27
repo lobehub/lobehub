@@ -12,6 +12,7 @@ import { attributesCommon } from '@lobechat/observability-otel/node';
 import { LayersEnum } from '@lobechat/types';
 
 import {
+  ActivityExtractor,
   ContextExtractor,
   ExperienceExtractor,
   IdentityExtractor,
@@ -32,6 +33,7 @@ import {
 } from '../types';
 
 const LAYER_ORDER: LayersEnum[] = [
+  'activity' as LayersEnum,
   'identity' as LayersEnum,
   'context' as LayersEnum,
   'preference' as LayersEnum,
@@ -39,6 +41,7 @@ const LAYER_ORDER: LayersEnum[] = [
 ];
 
 const LAYER_LABEL_MAP: Record<LayersEnum, string> = {
+  activity: 'activities',
   context: 'contexts',
   experience: 'experiences',
   identity: 'identities',
@@ -61,6 +64,7 @@ export interface MemoryExtractionServiceOptions {
 
 export interface MemoryExtractionLayerOutputTypes {
   [LayersEnum.Context]: Awaited<ReturnType<ContextExtractor['structuredCall']>>;
+  [LayersEnum.Activity]: Awaited<ReturnType<ActivityExtractor['structuredCall']>>;
   [LayersEnum.Experience]: Awaited<ReturnType<ExperienceExtractor['structuredCall']>>;
   [LayersEnum.Preference]: Awaited<ReturnType<PreferenceExtractor['structuredCall']>>;
   [LayersEnum.Identity]: Awaited<ReturnType<IdentityExtractor['structuredCall']>>;
@@ -79,6 +83,7 @@ export class MemoryExtractionService<RO> {
   private readonly contextExtractor: ContextExtractor;
   private readonly experienceExtractor: ExperienceExtractor;
   private readonly preferenceExtractor: PreferenceExtractor;
+  private readonly activityExtractor: ActivityExtractor;
 
   private readonly gatekeeperRuntime: ModelRuntime;
   private readonly layerRuntime: ModelRuntime;
@@ -114,6 +119,9 @@ export class MemoryExtractionService<RO> {
 
     this.identityExtractor = new IdentityExtractor(
       buildExtractorConfig(LayersEnum.Identity, 'layer-identity'),
+    );
+    this.activityExtractor = new ActivityExtractor(
+      buildExtractorConfig(LayersEnum.Activity, 'layer-activity'),
     );
     this.contextExtractor = new ContextExtractor(
       buildExtractorConfig(LayersEnum.Context, 'layer-context'),
@@ -214,6 +222,7 @@ export class MemoryExtractionService<RO> {
       const outputs = await this.runLayers(job, layersToExtract, { ...options });
 
       const processedLayersCount = {
+        activity: outputs.activity?.data ? outputs.activity?.data?.memories?.length : 0,
         context: outputs.context?.data ? outputs.context?.data?.memories?.length : 0,
         experience: outputs.experience?.data ? outputs.experience?.data?.memories?.length : 0,
         identity: outputs.identity?.data
@@ -224,6 +233,7 @@ export class MemoryExtractionService<RO> {
         preference: outputs.preference?.data ? outputs.preference?.data?.memories?.length : 0,
       };
       const processedErrorsCount = {
+        activity: outputs.activity?.error ? 1 : 0,
         context: outputs.context?.error ? 1 : 0,
         experience: outputs.experience?.error ? 1 : 0,
         identity: outputs.identity?.error ? 1 : 0,
@@ -275,6 +285,15 @@ export class MemoryExtractionService<RO> {
   private async runContextLayer(job: MemoryExtractionJob, options: ExtractorOptions) {
     return this.runLayerExtractor(job, LayersEnum.Context, () =>
       this.contextExtractor.structuredCall({
+        ...options,
+        language: options.language ?? 'English',
+      }),
+    );
+  }
+
+  private async runActivityLayer(job: MemoryExtractionJob, options: ExtractorOptions) {
+    return this.runLayerExtractor(job, LayersEnum.Activity, () =>
+      this.activityExtractor.structuredCall({
         ...options,
         language: options.language ?? 'English',
       }),
@@ -347,6 +366,12 @@ export class MemoryExtractionService<RO> {
             | { error: unknown };
           break;
         }
+        case LayersEnum.Activity: {
+          outputs.activity = result as
+            | { data: MemoryExtractionLayerOutputTypes[typeof layer] }
+            | { error: unknown };
+          break;
+        }
         case LayersEnum.Experience: {
           outputs.experience = result as
             | { data: MemoryExtractionLayerOutputTypes[typeof layer] }
@@ -374,6 +399,7 @@ export class MemoryExtractionService<RO> {
     await Promise.all(
       (
         [
+          LayersEnum.Activity,
           LayersEnum.Context,
           LayersEnum.Experience,
           LayersEnum.Preference,
@@ -406,6 +432,9 @@ export class MemoryExtractionService<RO> {
     switch (layer) {
       case LayersEnum.Context: {
         return await this.runContextLayer(job, options);
+      }
+      case LayersEnum.Activity: {
+        return await this.runActivityLayer(job, options);
       }
       case LayersEnum.Experience: {
         return await this.runExperienceLayer(job, options);

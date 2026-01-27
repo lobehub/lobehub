@@ -35,7 +35,7 @@ All 40 action files in the store now have comprehensive test coverage!
 
 All store action tests should follow the patterns documented in:
 
-- **Main Guide**: `@.cursor/rules/testing-guide/zustand-store-action-test.mdc`
+- **Main Guide**: `.agents/skills/testing/references/zustand-store-action-test.md`
 
 Key principles:
 
@@ -141,7 +141,7 @@ For files with multiple action files to test, use the Task tool to create subage
 **Example subagent prompt**:
 
 ```
-Write comprehensive tests for src/store/discover/slices/plugin/action.ts following @.cursor/rules/testing-guide/zustand-store-action-test.mdc.
+Write comprehensive tests for src/store/discover/slices/plugin/action.ts following .agents/skills/testing/references/zustand-store-action-test.md.
 
 Requirements:
 1. Write tests covering all actions in the file
@@ -315,7 +315,7 @@ Create 5 subagents, one for each action file:
 Task({
   subagent_type: 'general-purpose',
   description: 'Test plugin action',
-  prompt: `Write comprehensive tests for src/store/discover/slices/plugin/action.ts following @.cursor/rules/testing-guide/zustand-store-action-test.mdc.
+  prompt: `Write comprehensive tests for src/store/discover/slices/plugin/action.ts following .agents/skills/testing/references/zustand-store-action-test.md.
 
 Requirements:
 1. Write tests covering all actions (usePluginCategories, usePluginDetail, usePluginList, usePluginIdentifiers)
@@ -330,7 +330,7 @@ DO NOT commit changes or update test-coverage.md.`,
 Task({
   subagent_type: 'general-purpose',
   description: 'Test mcp action',
-  prompt: `Write comprehensive tests for src/store/discover/slices/mcp/action.ts following @.cursor/rules/testing-guide/zustand-store-action-test.mdc.
+  prompt: `Write comprehensive tests for src/store/discover/slices/mcp/action.ts following .agents/skills/testing/references/zustand-store-action-test.md.
 
 Requirements:
 1. Write tests covering all actions (useFetchMcpDetail, useFetchMcpList, useMcpCategories)
@@ -561,7 +561,7 @@ bunx eslint src/store/[domain]/
 - 25 action files already have comprehensive tests (62.5% coverage)
 - 742 tests written across 80 test files
 - Well-tested stores: agent, chat (partial), file (partial), image, session, tool, user, global, aiInfra (partial)
-- Following zustand testing best practices from `@.cursor/rules/testing-guide/zustand-store-action-test.mdc`
+- Following zustand testing best practices from `.agents/skills/testing/references/zustand-store-action-test.md`
 
 ## Notes
 

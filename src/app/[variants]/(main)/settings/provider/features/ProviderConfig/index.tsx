@@ -62,8 +62,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   form: css`
     .${prefixCls}-form-item-control:has(.${prefixCls}-input,.${prefixCls}-select) {
       flex: none;
-      width: min(70%, 800px);
-      min-width: min(70%, 800px) !important;
     }
     ${responsive.sm} {
       width: 100%;
@@ -396,7 +394,6 @@ const ProviderConfig = memo<ProviderConfigProps>(
             ),
             desc: t('providerModels.config.checker.desc'),
             label: t('providerModels.config.checker.title'),
-            minWidth: undefined,
           }
         : undefined,
       showAceGcm && aceGcmItem,

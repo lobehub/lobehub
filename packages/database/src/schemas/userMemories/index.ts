@@ -60,8 +60,14 @@ export const userMemoriesContexts = pgTable(
     metadata: jsonb('metadata').$type<Record<string, unknown>>(),
     tags: text('tags').array(),
 
-    associatedObjects: jsonb('associated_objects').$type<{ extra?: Record<string, unknown>, name?: string, type?: string }[]>(),
-    associatedSubjects: jsonb('associated_subjects').$type<{ extra?: Record<string, unknown>, name?: string, type?: string }[]>(),
+    associatedObjects:
+      jsonb('associated_objects').$type<
+        { extra?: Record<string, unknown>; name?: string; type?: string }[]
+      >(),
+    associatedSubjects:
+      jsonb('associated_subjects').$type<
+        { extra?: Record<string, unknown>; name?: string; type?: string }[]
+      >(),
 
     title: text('title'),
     description: text('description'),
@@ -145,22 +151,28 @@ export const userMemoriesActivities = pgTable(
     startsAt: timestamptz('starts_at'),
     endsAt: timestamptz('ends_at'),
 
-    associatedObjects: jsonb('associated_objects').$type<{
-      extra?: Record<string, unknown>,
-      name?: string,
-      type?: string
-    }[]>(),
-    associatedSubjects: jsonb('associated_subjects').$type<{
-      extra?: Record<string, unknown>,
-      name?: string,
-      type?: string
-    }[]>(),
-    associatedLocations: jsonb('associated_locations').$type<{
-      address?: string;
-      name?: string;
-      tags?: string[];
-      type?: string;
-    }[]>(),
+    associatedObjects: jsonb('associated_objects').$type<
+      {
+        extra?: Record<string, unknown>;
+        name?: string;
+        type?: string;
+      }[]
+    >(),
+    associatedSubjects: jsonb('associated_subjects').$type<
+      {
+        extra?: Record<string, unknown>;
+        name?: string;
+        type?: string;
+      }[]
+    >(),
+    associatedLocations: jsonb('associated_locations').$type<
+      {
+        address?: string;
+        name?: string;
+        tags?: string[];
+        type?: string;
+      }[]
+    >(),
 
     notes: text('notes'),
     narrative: text('narrative'),
@@ -313,3 +325,5 @@ export type UserMemoryActivitiesWithoutVectors = Omit<
   'narrativeVector' | 'feedbackVector'
 >;
 export type NewUserMemoryActivity = typeof userMemoriesActivities.$inferInsert;
+
+export * from './persona';

@@ -1,21 +1,21 @@
 import { type LobehubSkillServer } from './types';
 
 /**
- * LobeHub Skill Store 状态接口
+ * LobeHub Skill Store state interface
  *
- * NOTE: 所有连接状态和工具数据都从 Market API 实时获取，不存储到本地数据库
+ * NOTE: All connection states and tool data are fetched in real-time from Market API, not stored in local database
  */
 export interface LobehubSkillStoreState {
-  /** 正在执行的工具调用 ID 集合 */
+  /** Set of executing tool call IDs */
   lobehubSkillExecutingToolIds: Set<string>;
-  /** 正在加载的 Provider ID 集合 */
+  /** Set of loading Provider IDs */
   lobehubSkillLoadingIds: Set<string>;
-  /** 已连接的 LobeHub Skill Server 列表 */
+  /** List of connected LobeHub Skill Servers */
   lobehubSkillServers: LobehubSkillServer[];
 }
 
 /**
- * LobeHub Skill Store 初始状态
+ * LobeHub Skill Store initial state
  */
 export const initialLobehubSkillStoreState: LobehubSkillStoreState = {
   lobehubSkillExecutingToolIds: new Set(),

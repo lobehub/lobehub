@@ -25,14 +25,15 @@ export class NodemailerImpl implements EmailServiceImpl {
       );
     }
 
+    // Note: Use || to handle empty string from Dockerfile defaults
     const transportConfig: NodemailerConfig = {
       auth: {
         pass: emailEnv.SMTP_PASS,
         user: emailEnv.SMTP_USER,
       },
-      host: emailEnv.SMTP_HOST ?? 'localhost',
-      port: emailEnv.SMTP_PORT ?? 587,
-      secure: emailEnv.SMTP_SECURE ?? false,
+      host: emailEnv.SMTP_HOST || 'localhost',
+      port: emailEnv.SMTP_PORT || 587,
+      secure: emailEnv.SMTP_SECURE || false,
     };
 
     try {
@@ -49,8 +50,8 @@ export class NodemailerImpl implements EmailServiceImpl {
   }
 
   async sendMail(payload: EmailPayload): Promise<EmailResponse> {
-    // Use SMTP_USER as default sender if not provided
-    const from = payload.from ?? emailEnv.SMTP_USER!;
+    // Use SMTP_FROM as default sender, fallback to SMTP_USER for backward compatibility
+    const from = payload.from || emailEnv.SMTP_FROM || emailEnv.SMTP_USER!;
 
     log('Sending email with payload: %o', {
       from,

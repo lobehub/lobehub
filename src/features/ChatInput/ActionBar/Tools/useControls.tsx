@@ -3,8 +3,10 @@ import {
   type KlavisServerType,
   LOBEHUB_SKILL_PROVIDERS,
   type LobehubSkillProviderType,
+  RECOMMENDED_SKILLS,
+  RecommendedSkillType,
 } from '@lobechat/const';
-import { Avatar, Flexbox, Icon, Image, type ItemType } from '@lobehub/ui';
+import { Avatar, Icon, type ItemType } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ToyBrick } from 'lucide-react';
@@ -30,18 +32,25 @@ import KlavisServerItem from './KlavisServerItem';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
 import ToolItem from './ToolItem';
 
+const SKILL_ICON_SIZE = 20;
+
 /**
  * Klavis 服务器图标组件
- * 对于 string 类型的 icon，使用 Image 组件渲染
- * 对于 IconType 类型的 icon，使用 Icon 组件渲染，并根据主题设置填充色
  */
 const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
   if (typeof icon === 'string') {
-    return <Image alt={label} height={18} src={icon} style={{ flex: 'none' }} width={18} />;
+    return (
+      <Avatar
+        alt={label}
+        avatar={icon}
+        shape={'square'}
+        size={SKILL_ICON_SIZE}
+        style={{ flex: 'none' }}
+      />
+    );
   }
 
-  // 使用主题色填充，在深色模式下自动适应
-  return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
+  return <Icon fill={cssVar.colorText} icon={icon} size={SKILL_ICON_SIZE} />;
 });
 
 KlavisIcon.displayName = 'KlavisIcon';
@@ -52,10 +61,18 @@ KlavisIcon.displayName = 'KlavisIcon';
 const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
   ({ icon, label }) => {
     if (typeof icon === 'string') {
-      return <Image alt={label} height={18} src={icon} style={{ flex: 'none' }} width={18} />;
+      return (
+        <Avatar
+          alt={label}
+          avatar={icon}
+          shape={'square'}
+          size={SKILL_ICON_SIZE}
+          style={{ flex: 'none' }}
+        />
+      );
     }
 
-    return <Icon fill={cssVar.colorText} icon={icon} size={18} />;
+    return <Icon fill={cssVar.colorText} icon={icon} size={SKILL_ICON_SIZE} />;
   },
 );
 
@@ -70,12 +87,6 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     s.togglePlugin,
   ]);
   const builtinList = useToolStore(builtinToolSelectors.metaList, isEqual);
-  const enablePluginCount = useAgentStore(
-    (s) =>
-      agentByIdSelectors
-        .getAgentPluginsById(agentId)(s)
-        .filter((i) => !builtinList.some((b) => b.identifier === i)).length,
-  );
   const plugins = useAgentStore((s) => agentByIdSelectors.getAgentPluginsById(agentId)(s));
 
   // Klavis 相关状态
@@ -123,11 +134,44 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     [builtinList, allKlavisTypeIdentifiers, isKlavisEnabledInEnv],
   );
 
-  // Klavis 服务器列表项
+  // 获取推荐的 Klavis skill IDs
+  const recommendedKlavisIds = useMemo(
+    () =>
+      new Set(
+        RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Klavis).map((s) => s.id),
+      ),
+    [],
+  );
+
+  // 获取推荐的 Lobehub skill IDs
+  const recommendedLobehubIds = useMemo(
+    () =>
+      new Set(
+        RECOMMENDED_SKILLS.filter((s) => s.type === RecommendedSkillType.Lobehub).map((s) => s.id),
+      ),
+    [],
+  );
+
+  // 获取已安装的 Klavis server IDs
+  const installedKlavisIds = useMemo(
+    () => new Set(allKlavisServers.map((s) => s.identifier)),
+    [allKlavisServers],
+  );
+
+  // 获取已安装的 Lobehub skill IDs
+  const installedLobehubIds = useMemo(
+    () => new Set(allLobehubSkillServers.map((s) => s.identifier)),
+    [allLobehubSkillServers],
+  );
+
+  // Klavis 服务器列表项 - 只展示已安装或推荐的
   const klavisServerItems = useMemo(
     () =>
       isKlavisEnabledInEnv
-        ? KLAVIS_SERVER_TYPES.map((type) => ({
+        ? KLAVIS_SERVER_TYPES.filter(
+            (type) =>
+              installedKlavisIds.has(type.identifier) || recommendedKlavisIds.has(type.identifier),
+          ).map((type) => ({
             icon: <KlavisIcon icon={type.icon} label={type.label} />,
             key: type.identifier,
             label: (
@@ -140,29 +184,36 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             ),
           }))
         : [],
-    [isKlavisEnabledInEnv, allKlavisServers],
+    [isKlavisEnabledInEnv, allKlavisServers, installedKlavisIds, recommendedKlavisIds],
   );
 
-  // LobeHub Skill Provider 列表项
+  // LobeHub Skill Provider 列表项 - 只展示已安装或推荐的
   const lobehubSkillItems = useMemo(
     () =>
       isLobehubSkillEnabled
-        ? LOBEHUB_SKILL_PROVIDERS.map((provider) => ({
+        ? LOBEHUB_SKILL_PROVIDERS.filter(
+            (provider) =>
+              installedLobehubIds.has(provider.id) || recommendedLobehubIds.has(provider.id),
+          ).map((provider) => ({
             icon: <LobehubSkillIcon icon={provider.icon} label={provider.label} />,
             key: provider.id, // 使用 provider.id 作为 key，与 pluginId 保持一致
             label: <LobehubSkillServerItem label={provider.label} provider={provider.id} />,
           }))
         : [],
-    [isLobehubSkillEnabled, allLobehubSkillServers],
+    [isLobehubSkillEnabled, allLobehubSkillServers, installedLobehubIds, recommendedLobehubIds],
   );
 
-  // 合并 builtin 工具、Klavis 服务器和 LobeHub Skill Provider
+  // Builtin 工具列表项（不包含 Klavis 和 LobeHub Skill）
   const builtinItems = useMemo(
-    () => [
-      // 原有的 builtin 工具
-      ...filteredBuiltinList.map((item) => ({
+    () =>
+      filteredBuiltinList.map((item) => ({
         icon: (
-          <Avatar avatar={item.meta.avatar} shape={'square'} size={20} style={{ flex: 'none' }} />
+          <Avatar
+            avatar={item.meta.avatar}
+            shape={'square'}
+            size={SKILL_ICON_SIZE}
+            style={{ flex: 'none' }}
+          />
         ),
         key: item.identifier,
         label: (
@@ -178,56 +229,101 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
           />
         ),
       })),
-      // LobeHub Skill Providers
-      ...lobehubSkillItems,
-      // Klavis 服务器
-      ...klavisServerItems,
-    ],
-    [filteredBuiltinList, klavisServerItems, lobehubSkillItems, checked, togglePlugin, setUpdating],
+    [filteredBuiltinList, checked, togglePlugin, setUpdating],
   );
+
+  // Skills 列表项（包含 LobeHub Skill 和 Klavis）
+  // 已连接的排在前面
+  const skillItems = useMemo(() => {
+    const allItems = [...lobehubSkillItems, ...klavisServerItems];
+
+    return allItems.sort((a, b) => {
+      const isConnectedA =
+        installedLobehubIds.has(a.key as string) || installedKlavisIds.has(a.key as string);
+      const isConnectedB =
+        installedLobehubIds.has(b.key as string) || installedKlavisIds.has(b.key as string);
+
+      if (isConnectedA && !isConnectedB) return -1;
+      if (!isConnectedA && isConnectedB) return 1;
+      return 0;
+    });
+  }, [lobehubSkillItems, klavisServerItems, installedLobehubIds, installedKlavisIds]);
+
+  // 区分社区插件和自定义插件
+  const communityPlugins = list.filter((item) => item.type !== 'customPlugin');
+  const customPlugins = list.filter((item) => item.type === 'customPlugin');
+
+  // 生成插件列表项的函数
+  const mapPluginToItem = (item: (typeof list)[0]) => ({
+    icon: item?.avatar ? (
+      <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
+    ) : (
+      <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
+    ),
+    key: item.identifier,
+    label: (
+      <ToolItem
+        checked={checked.includes(item.identifier)}
+        id={item.identifier}
+        label={item.title}
+        onUpdate={async () => {
+          setUpdating(true);
+          await togglePlugin(item.identifier);
+          setUpdating(false);
+        }}
+      />
+    ),
+  });
+
+  // 构建 LobeHub 分组的 children（包含内置工具和 LobeHub Skill/Klavis）
+  const lobehubGroupChildren: ItemType[] = [
+    // 1. 内置工具
+    ...builtinItems,
+    // 2. LobeHub Skill 和 Klavis（作为内置技能）
+    ...skillItems,
+  ];
+
+  // 构建 Community 分组的 children（只包含社区插件）
+  const communityGroupChildren: ItemType[] = communityPlugins.map(mapPluginToItem);
+
+  // 构建 Custom 分组的 children（只包含自定义插件）
+  const customGroupChildren: ItemType[] = customPlugins.map(mapPluginToItem);
 
   // 市场 tab 的 items
   const marketItems: ItemType[] = [
-    {
-      children: builtinItems,
-      key: 'builtins',
-      label: t('tools.builtins.groupName'),
-      type: 'group',
-    },
-    {
-      children: list.map((item) => ({
-        icon: item?.avatar ? (
-          <PluginAvatar avatar={item.avatar} size={20} />
-        ) : (
-          <Icon icon={ToyBrick} size={20} />
-        ),
-        key: item.identifier,
-        label: (
-          <ToolItem
-            checked={checked.includes(item.identifier)}
-            id={item.identifier}
-            label={item.title}
-            onUpdate={async () => {
-              setUpdating(true);
-              await togglePlugin(item.identifier);
-              setUpdating(false);
-            }}
-          />
-        ),
-      })),
-      key: 'plugins',
-      label: (
-        <Flexbox align={'center'} gap={40} horizontal justify={'space-between'}>
-          {t('tools.plugins.groupName')}
-          {enablePluginCount === 0 ? null : (
-            <div style={{ fontSize: 12, marginInlineEnd: 4 }}>
-              {t('tools.plugins.enabled', { num: enablePluginCount })}
-            </div>
-          )}
-        </Flexbox>
-      ),
-      type: 'group',
-    },
+    // LobeHub 分组
+    ...(lobehubGroupChildren.length > 0
+      ? [
+          {
+            children: lobehubGroupChildren,
+            key: 'lobehub',
+            label: t('skillStore.tabs.lobehub'),
+            type: 'group' as const,
+          },
+        ]
+      : []),
+    // Community 分组
+    ...(communityGroupChildren.length > 0
+      ? [
+          {
+            children: communityGroupChildren,
+            key: 'community',
+            label: t('skillStore.tabs.community'),
+            type: 'group' as const,
+          },
+        ]
+      : []),
+    // Custom 分组（只有在有自定义插件时才显示）
+    ...(customGroupChildren.length > 0
+      ? [
+          {
+            children: customGroupChildren,
+            key: 'custom',
+            label: t('skillStore.tabs.custom'),
+            type: 'group' as const,
+          },
+        ]
+      : []),
   ];
 
   // 已安装 tab 的 items - 只显示已安装的插件
@@ -239,7 +335,12 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
       .filter((item) => checked.includes(item.identifier))
       .map((item) => ({
         icon: (
-          <Avatar avatar={item.meta.avatar} shape={'square'} size={20} style={{ flex: 'none' }} />
+          <Avatar
+            avatar={item.meta.avatar}
+            shape={'square'}
+            size={SKILL_ICON_SIZE}
+            style={{ flex: 'none' }}
+          />
         ),
         key: item.identifier,
         label: (
@@ -256,7 +357,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         ),
       }));
 
-    // 已连接的 Klavis 服务器（放在 builtin 里面）
+    // 已连接的 Klavis 服务器
     const connectedKlavisItems = klavisServerItems.filter((item) =>
       checked.includes(item.key as string),
     );
@@ -266,30 +367,38 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
       checked.includes(item.key as string),
     );
 
-    // 合并 builtin、Klavis 和 LobeHub Skill
-    const allBuiltinItems = [
+    // 合并已启用的 LobeHub Skill 和 Klavis（作为内置技能）
+    const enabledSkillItems = [...connectedLobehubSkillItems, ...connectedKlavisItems];
+
+    // 构建内置工具分组的 children（包含内置工具和 LobeHub Skill/Klavis）
+    const allBuiltinItems: ItemType[] = [
+      // 1. 内置工具
       ...enabledBuiltinItems,
-      ...connectedKlavisItems,
-      ...connectedLobehubSkillItems,
+      // 2. divider (如果有内置工具且有 skill items)
+      ...(enabledBuiltinItems.length > 0 && enabledSkillItems.length > 0
+        ? [{ key: 'installed-divider-builtin-skill', type: 'divider' as const }]
+        : []),
+      // 3. LobeHub Skill 和 Klavis
+      ...enabledSkillItems,
     ];
 
     if (allBuiltinItems.length > 0) {
       installedItems.push({
         children: allBuiltinItems,
-        key: 'installed-builtins',
-        label: t('tools.builtins.groupName'),
+        key: 'installed-lobehub',
+        label: t('skillStore.tabs.lobehub'),
         type: 'group',
       });
     }
 
-    // 已安装的插件
-    const installedPlugins = list
+    // 已启用的社区插件
+    const enabledCommunityPlugins = communityPlugins
       .filter((item) => checked.includes(item.identifier))
       .map((item) => ({
         icon: item?.avatar ? (
-          <PluginAvatar avatar={item.avatar} size={20} />
+          <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
         ) : (
-          <Icon icon={ToyBrick} size={20} />
+          <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
         ),
         key: item.identifier,
         label: (
@@ -306,11 +415,46 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
         ),
       }));
 
-    if (installedPlugins.length > 0) {
+    // 已启用的自定义插件
+    const enabledCustomPlugins = customPlugins
+      .filter((item) => checked.includes(item.identifier))
+      .map((item) => ({
+        icon: item?.avatar ? (
+          <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
+        ) : (
+          <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
+        ),
+        key: item.identifier,
+        label: (
+          <ToolItem
+            checked={true}
+            id={item.identifier}
+            label={item.title}
+            onUpdate={async () => {
+              setUpdating(true);
+              await togglePlugin(item.identifier);
+              setUpdating(false);
+            }}
+          />
+        ),
+      }));
+
+    // Community 分组（只包含社区插件）
+    if (enabledCommunityPlugins.length > 0) {
       installedItems.push({
-        children: installedPlugins,
-        key: 'installed-plugins',
-        label: t('tools.plugins.groupName'),
+        children: enabledCommunityPlugins,
+        key: 'installed-community',
+        label: t('skillStore.tabs.community'),
+        type: 'group',
+      });
+    }
+
+    // Custom 分组（只包含自定义插件）
+    if (enabledCustomPlugins.length > 0) {
+      installedItems.push({
+        children: enabledCustomPlugins,
+        key: 'installed-custom',
+        label: t('skillStore.tabs.custom'),
         type: 'group',
       });
     }
@@ -318,7 +462,8 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
     return installedItems;
   }, [
     filteredBuiltinList,
-    list,
+    communityPlugins,
+    customPlugins,
     klavisServerItems,
     lobehubSkillItems,
     checked,

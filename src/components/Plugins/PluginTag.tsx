@@ -25,13 +25,14 @@ const PluginTag = memo<PluginTagProps>(
       </Tag>
     );
 
-    if (isMCP)
+    if (isMCP) {
       return (
         <>
           <MCPTag showIcon={showIcon} showText={false} />
           {isCustom && customTag}
         </>
       );
+    }
 
     if (isCustom) return customTag;
 

@@ -63,7 +63,6 @@ const AgentHeader = memo(() => {
       setUploading(true);
       try {
         const result = await uploadWithProgress({ file });
-        console.log('result', result);
         if (result?.url) {
           updateMeta({ avatar: result.url });
         }
@@ -98,6 +97,7 @@ const AgentHeader = memo(() => {
         cursor: 'default',
       }}
     >
+      {/* Avatar Section */}
       <EmojiPicker
         allowDelete={!!meta.avatar}
         allowUpload
@@ -148,21 +148,24 @@ const AgentHeader = memo(() => {
         size={72}
         value={meta.avatar}
       />
-      <Input
-        onChange={(e) => {
-          setLocalTitle(e.target.value);
-          debouncedSaveTitle(e.target.value);
-        }}
-        placeholder={t('settingAgent.name.placeholder', { ns: 'setting' })}
-        style={{
-          fontSize: 36,
-          fontWeight: 600,
-          padding: 0,
-          width: '100%',
-        }}
-        value={localTitle}
-        variant={'borderless'}
-      />
+      {/* Title Section */}
+      <Flexbox flex={1} style={{ minWidth: 0 }}>
+        <Input
+          onChange={(e) => {
+            setLocalTitle(e.target.value);
+            debouncedSaveTitle(e.target.value);
+          }}
+          placeholder={t('settingAgent.name.placeholder', { ns: 'setting' })}
+          style={{
+            fontSize: 36,
+            fontWeight: 600,
+            padding: 0,
+            width: '100%',
+          }}
+          value={localTitle}
+          variant={'borderless'}
+        />
+      </Flexbox>
     </Flexbox>
   );
 });

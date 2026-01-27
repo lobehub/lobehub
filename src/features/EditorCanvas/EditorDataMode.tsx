@@ -22,13 +22,19 @@ const loadEditorContent = (
     typeof editorData.editorData === 'object' &&
     Object.keys(editorData.editorData as object).length > 0;
 
-  if (hasValidEditorData) {
-    editorInstance.setDocument('json', JSON.stringify(editorData.editorData));
-    return true;
-  } else if (editorData.content?.trim()) {
-    editorInstance.setDocument('markdown', editorData.content, { keepId: true });
-    return true;
+  try {
+    if (hasValidEditorData) {
+      editorInstance.setDocument('json', JSON.stringify(editorData.editorData));
+      return true;
+    } else if (editorData.content?.trim()) {
+      editorInstance.setDocument('markdown', editorData.content, { keepId: true });
+      return true;
+    }
+  } catch (err) {
+    console.error('[loadEditorContent] Error loading content:', err);
+    return false;
   }
+
   return false;
 };
 
@@ -65,12 +71,12 @@ const EditorDataMode = memo<EditorDataModeProps>(
       [editorData, entityId, onInit],
     );
 
-    // Load content only when entityId changes (switching to a different entity)
-    // Ignore editorData changes for the same entity to prevent focus loss during auto-save
+    // Load content when entityId changes (switching to a different entity)
+    // Ignore editorData changes when entityId hasn't changed to prevent focus loss during auto-save
     useEffect(() => {
       if (!editor || !isEditorReadyRef.current) return;
 
-      // Only reload if entityId changed (switching entities)
+      // Only reload if entityId changed
       if (!isEntityChanged) {
         // Same entity - don't reload, user is still editing
         return;
@@ -84,7 +90,7 @@ const EditorDataMode = memo<EditorDataModeProps>(
       } catch (err) {
         console.error('[EditorCanvas] Failed to load content:', err);
       }
-    }, [editor, entityId, isEntityChanged, editorData]);
+    }, [editor, entityId, editorData, isEntityChanged]);
 
     if (!editor) return null;
 

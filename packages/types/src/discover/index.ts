@@ -10,7 +10,7 @@ export * from './plugins';
 export * from './providers';
 
 export enum DiscoverTab {
-  Assistants = 'assistant',
+  Assistants = 'agent',
   GroupAgents = 'group_agent',
   Home = 'home',
   Mcp = 'mcp',

@@ -19,8 +19,9 @@ export class TopicShareModel {
   }
 
   /**
-   * Create a new share for a topic.
+   * Create or get existing share for a topic.
    * Each topic can only have one share record (enforced by unique constraint).
+   * If record already exists, returns the existing one.
    */
   create = async (topicId: string, visibility: ShareVisibility = 'private') => {
     // First verify the topic belongs to the user
@@ -39,7 +40,13 @@ export class TopicShareModel {
         userId: this.userId,
         visibility,
       })
+      .onConflictDoNothing({ target: topicShares.topicId })
       .returning();
+
+    // If conflict occurred, return existing record
+    if (!result) {
+      return this.getByTopicId(topicId);
+    }
 
     return result;
   };
@@ -74,6 +81,7 @@ export class TopicShareModel {
       .select({
         id: topicShares.id,
         topicId: topicShares.topicId,
+        userId: topicShares.userId,
         visibility: topicShares.visibility,
       })
       .from(topicShares)

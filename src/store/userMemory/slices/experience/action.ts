@@ -1,3 +1,4 @@
+import type { ExperienceListResult } from '@lobechat/types';
 import { uniqBy } from 'es-toolkit/compat';
 import { produce } from 'immer';
 import useSWR, { type SWRResponse } from 'swr';
@@ -5,7 +6,6 @@ import { type StateCreator } from 'zustand/vanilla';
 
 import { userMemoryService } from '@/services/userMemory';
 import { memoryCRUDService } from '@/services/userMemory/index';
-import { LayersEnum } from '@/types/userMemory';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type UserMemoryStore } from '../../store';
@@ -16,14 +16,14 @@ export interface ExperienceQueryParams {
   page?: number;
   pageSize?: number;
   q?: string;
-  sort?: 'scoreConfidence';
+  sort?: 'capturedAt' | 'scoreConfidence';
 }
 
 export interface ExperienceAction {
   deleteExperience: (id: string) => Promise<void>;
   loadMoreExperiences: () => void;
   resetExperiencesList: (params?: Omit<ExperienceQueryParams, 'page' | 'pageSize'>) => void;
-  useFetchExperiences: (params: ExperienceQueryParams) => SWRResponse<any>;
+  useFetchExperiences: (params: ExperienceQueryParams) => SWRResponse<ExperienceListResult>;
 }
 
 export const createExperienceSlice: StateCreator<
@@ -81,44 +81,32 @@ export const createExperienceSlice: StateCreator<
     return useSWR(
       swrKey,
       async () => {
-        const result = await userMemoryService.queryMemories({
-          layer: LayersEnum.Experience,
+        // Use the new dedicated queryExperiences API
+        return userMemoryService.queryExperiences({
           page: params.page,
           pageSize: params.pageSize,
           q: params.q,
           sort: params.sort,
         });
-
-        return result;
       },
       {
-        onSuccess(data: any) {
+        onSuccess(data: ExperienceListResult) {
           set(
             produce((draft) => {
               draft.experiencesSearchLoading = false;
+              draft.experiencesTotal = data.total;
 
-              // 设置基础信息
               if (!draft.experiencesInit) {
                 draft.experiencesInit = true;
-                draft.experiencesTotal = data.total;
               }
 
-              // 转换数据结构
-              const transformedItems = data.items.map((item: any) => ({
-                ...item.memory,
-                ...item.experience,
-              }));
-
-              // 累积数据逻辑
+              // Backend now returns flat structure directly, no transformation needed
               if (page === 1) {
-                // 第一页，直接设置
-                draft.experiences = uniqBy(transformedItems, 'id');
+                draft.experiences = uniqBy(data.items, 'id');
               } else {
-                // 后续页面，累积数据
-                draft.experiences = uniqBy([...draft.experiences, ...transformedItems], 'id');
+                draft.experiences = uniqBy([...draft.experiences, ...data.items], 'id');
               }
 
-              // 更新 hasMore
               draft.experiencesHasMore = data.items.length >= (params.pageSize || 20);
             }),
             false,

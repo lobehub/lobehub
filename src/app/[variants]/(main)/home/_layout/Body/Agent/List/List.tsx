@@ -4,6 +4,7 @@ import { MoreHorizontal } from 'lucide-react';
 import { type CSSProperties, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import EmptyNavItem from '@/features/NavPanel/components/EmptyNavItem';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -11,7 +12,6 @@ import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 import { SessionDefaultGroup } from '@/types/session';
 
-import EmptyNavItem from '../../../../../../../../features/NavPanel/components/EmptyNavItem';
 import { useCreateMenuItems } from '../../../hooks';
 import GroupItem from './AgentGroupItem';
 import AgentItem from './AgentItem';

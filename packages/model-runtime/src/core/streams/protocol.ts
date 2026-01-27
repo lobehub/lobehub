@@ -151,9 +151,19 @@ export function readableFromAsyncIterable<T>(iterable: AsyncIterable<T>) {
     },
 
     async pull(controller) {
-      const { done, value } = await it.next();
-      if (done) controller.close();
-      else controller.enqueue(value);
+      try {
+        const { done, value } = await it.next();
+        if (done) controller.close();
+        else controller.enqueue(value);
+      } catch (e) {
+        const error = e as Error;
+
+        controller.enqueue(
+          (ERROR_CHUNK_PREFIX +
+            JSON.stringify({ message: error.message, name: error.name, stack: error.stack })) as T,
+        );
+        controller.close();
+      }
     },
   });
 }
@@ -171,9 +181,19 @@ export const convertIterableToStream = <T>(stream: AsyncIterable<T>) => {
       await it.return?.(reason);
     },
     async pull(controller) {
-      const { done, value } = await it.next();
-      if (done) controller.close();
-      else controller.enqueue(value);
+      try {
+        const { done, value } = await it.next();
+        if (done) controller.close();
+        else controller.enqueue(value);
+      } catch (e) {
+        const error = e as Error;
+
+        controller.enqueue(
+          (ERROR_CHUNK_PREFIX +
+            JSON.stringify({ message: error.message, name: error.name, stack: error.stack })) as T,
+        );
+        controller.close();
+      }
     },
 
     async start(controller) {
@@ -448,8 +468,17 @@ export const createTokenSpeedCalculator = (
 
   const process = (chunk: StreamProtocolChunk) => {
     let result = [chunk];
-    // if the chunk is the first text or reasoning chunk, set as output start
-    if (!outputStartAt && (chunk.type === 'text' || chunk.type === 'reasoning')) {
+    // Set outputStartAt when receiving the first content chunk (for TTFT calculation)
+    // - text/reasoning: standard text output events
+    // - content_part/reasoning_part: multimodal output events used by Gemini 3+ models
+    //   which emit structured parts instead of plain text events
+    if (
+      !outputStartAt &&
+      (chunk.type === 'text' ||
+        chunk.type === 'reasoning' ||
+        chunk.type === 'content_part' ||
+        chunk.type === 'reasoning_part')
+    ) {
       outputStartAt = Date.now();
     }
 

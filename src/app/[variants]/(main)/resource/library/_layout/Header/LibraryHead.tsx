@@ -33,10 +33,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
+/**
+ * Quickly switch between libraries
+ */
 const Head = memo<{ id: string }>(({ id }) => {
   const navigate = useNavigate();
   const name = useKnowledgeBaseStore(knowledgeBaseSelectors.getKnowledgeBaseNameById(id));
-  const setMode = useResourceManagerStore((s) => s.setMode);
+  const [setMode, setLibraryId] = useResourceManagerStore((s) => [s.setMode, s.setLibraryId]);
   const isDragActive = useDragActive();
   const [isDropZoneActive, setIsDropZoneActive] = useState(false);
 
@@ -50,10 +53,14 @@ const Head = memo<{ id: string }>(({ id }) => {
 
   const handleLibrarySwitch = useCallback(
     (libraryId: string) => {
-      navigate(`/resource/library/${libraryId}`);
+      setLibraryId(libraryId);
       setMode('explorer');
+      // 使用 setTimeout 确保在下一个事件循环中执行 navigate
+      setTimeout(() => {
+        navigate(`/resource/library/${libraryId}`);
+      }, 0);
     },
-    [navigate, setMode],
+    [navigate, setLibraryId, setMode],
   );
 
   // Native HTML5 drag-and-drop handlers for root directory drop
@@ -115,21 +122,25 @@ const Head = memo<{ id: string }>(({ id }) => {
       {!name ? (
         <Skeleton active paragraph={false} title={{ style: { marginBottom: 0 }, width: 80 }} />
       ) : (
-        <Text ellipsis style={{ flex: 1 }} weight={500}>
-          {name}
-        </Text>
-      )}
-      {name && (
         <DropdownMenu items={menuItems} placement="bottomRight">
-          <ActionIcon
-            icon={ChevronsUpDownIcon}
+          <Center
+            gap={4}
+            horizontal
             onClick={(e) => e.stopPropagation()}
-            size={{
-              blockSize: 28,
-              size: 16,
-            }}
-            style={{ width: 24 }}
-          />
+            style={{ cursor: 'pointer', flex: 1, overflow: 'hidden' }}
+          >
+            <Text ellipsis style={{ flex: 1 }} weight={500}>
+              {name}
+            </Text>
+            <ActionIcon
+              icon={ChevronsUpDownIcon}
+              size={{
+                blockSize: 28,
+                size: 16,
+              }}
+              style={{ width: 24 }}
+            />
+          </Center>
         </DropdownMenu>
       )}
     </Block>

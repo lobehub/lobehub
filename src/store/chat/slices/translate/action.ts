@@ -114,8 +114,15 @@ export const chatTranslate: StateCreator<
   },
 
   updateMessageTranslate: async (id, data) => {
-    await messageService.updateMessageTranslate(id, data);
+    // Optimistic update
+    get().internal_dispatchMessage({
+      id,
+      key: 'translate',
+      type: 'updateMessageExtra',
+      value: data === false ? undefined : data,
+    });
 
-    await get().refreshMessages();
+    // Persist to database
+    await messageService.updateMessageTranslate(id, data);
   },
 });

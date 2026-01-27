@@ -1,3 +1,4 @@
+import { AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
 import { BrowserWindow, type Session } from 'electron';
 
 import { isDev } from '@/const/env';
@@ -167,7 +168,7 @@ export class BackendProxyProtocolManager {
         // The server sets X-Auth-Required header for real authentication failures (e.g., token expired)
         // Other 401 errors (e.g., invalid API keys) should not trigger re-authentication
         if (upstreamResponse.status === 401) {
-          const authRequired = upstreamResponse.headers.get('X-Auth-Required') === 'true';
+          const authRequired = upstreamResponse.headers.get(AUTH_REQUIRED_HEADER) === 'true';
           if (authRequired) {
             this.notifyAuthorizationRequired();
           }

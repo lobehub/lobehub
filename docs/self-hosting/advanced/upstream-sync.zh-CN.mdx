@@ -1,6 +1,6 @@
 ---
-title: LobeChat 启动自动更新 - Vercel / Zeabur 部署
-description: 按照指南重新部署项目以解决 LobeChat 在 Vercel 中默认创建新项目导致的“有可用更新”提示问题，并启用自动更新。
+title: LobeHub 启动自动更新 - Vercel / Zeabur 部署
+description: 按照指南重新部署项目以解决 LobeHub 在 Vercel 中默认创建新项目导致的“有可用更新”提示问题，并启用自动更新。
 tags:
   - Vercel
   - Zeabur
@@ -31,27 +31,27 @@ tags:
 
 如果你遇到了同步失败的情况，你需要手动重新点一次 「Update Branch」。
 
-<Image alt="GitHub Action 同步失败" src="https://github.com/user-attachments/assets/9baacac6-5af4-460b-862d-682b76c18459" />
+<Image alt="GitHub Action 同步失败" src="/blog/assets195200c7bc42360675e78a6bfa9fe320.webp" />
 
-<Image alt="手动同步 「Update Branch」" src="https://github.com/user-attachments/assets/d524c20d-306a-45bc-971b-96920b87fab4" />
+<Image alt="手动同步 「Update Branch」" src="/blog/assetsbeefe4dbe3e6f141e09c62064c6dc397.webp" />
 
 ## `B` Docker 部署
 
-Docker 部署版本的升级非常简单，只需要重新部署 LobeChat 的最新镜像即可。 以下是执行这些步骤所需的指令：
+Docker 部署版本的升级非常简单，只需要重新部署 LobeHub 的最新镜像即可。 以下是执行这些步骤所需的指令：
 
 <Steps>
-  ### 停止并删除当前运行的 LobeChat 容器
+  ### 停止并删除当前运行的 LobeHub 容器
 
-  假设 LobeChat 容器的名称是 `lobe-chat`，使用以下指令停止并删除当前运行的 LobeChat 容器：
+  假设 LobeHub 容器的名称是 `lobe-chat`，使用以下指令停止并删除当前运行的 LobeHub 容器：
 
   ```fish
   docker stop lobe-chat
   docker rm lobe-chat
   ```
 
-  ### 拉取最新的 LobeChat 镜像
+  ### 拉取最新的 LobeHub 镜像
 
-  使用以下命令拉取 LobeChat 的最新 Docker 镜像：
+  使用以下命令拉取 LobeHub 的最新 Docker 镜像：
 
   ```fish
   docker pull lobehub/lobe-chat
@@ -59,7 +59,7 @@ Docker 部署版本的升级非常简单，只需要重新部署 LobeChat 的最
 
   ### 重新启动 Docker 容器
 
-  使用新拉取的镜像重新部署 LobeChat 容器：
+  使用新拉取的镜像重新部署 LobeHub 容器：
 
   ```fish
   docker run -d -p 3210:3210 \
@@ -75,7 +75,7 @@ Docker 部署版本的升级非常简单，只需要重新部署 LobeChat 的最
 <Callout type={'tip'}>
   **重新部署的话，我本地的聊天记录会丢失吗？**
 
-  放心，不会的。LobeChat 的聊天记录全部都存储在你的本地浏览器中。因此使用 Docker 重新部署 LobeChat 时，你的聊天记录并不会丢失。
+  放心，不会的。LobeHub 的聊天记录全部都存储在你的本地浏览器中。因此使用 Docker 重新部署 LobeHub 时，你的聊天记录并不会丢失。
 </Callout>
 
 如果你希望自动化执行以上步骤，你可以参照下面的方法，利用 Crontab 定时来完成。具体步骤如下。

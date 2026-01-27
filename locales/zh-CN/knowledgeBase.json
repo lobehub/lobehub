@@ -1,5 +1,5 @@
 {
-  "addToKnowledgeBase.addSuccess": "文件添加成功，<1>立即查看</1>",
+  "addToKnowledgeBase.addSuccess": "文件添加成功",
   "addToKnowledgeBase.confirm": "添加",
   "addToKnowledgeBase.error": "添加文件到资源库失败",
   "addToKnowledgeBase.id.placeholder": "请选择要添加的资源库",

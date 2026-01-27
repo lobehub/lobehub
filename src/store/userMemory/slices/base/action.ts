@@ -26,7 +26,7 @@ export interface BaseAction {
   setEditingMemory: (
     id: string,
     content: string,
-    layer: 'context' | 'experience' | 'identity' | 'preference',
+    layer: 'activity' | 'context' | 'experience' | 'identity' | 'preference',
   ) => void;
   updateMemory: (id: string, content: string, layer: LayersEnum) => Promise<void>;
   useFetchMemoryDetail: (id: string | null, layer: LayersEnum) => SWRResponse<any>;
@@ -90,11 +90,21 @@ export const createBaseSlice: StateCreator<
 
   updateMemory: async (id, content, layer) => {
     const { memoryCRUDService } = await import('@/services/userMemory');
-    const { resetContextsList, resetExperiencesList, resetIdentitiesList, resetPreferencesList } =
-      get();
+    const {
+      resetActivitiesList,
+      resetContextsList,
+      resetExperiencesList,
+      resetIdentitiesList,
+      resetPreferencesList,
+    } = get();
 
     // Update the memory content based on layer
     switch (layer) {
+      case LayersEnum.Activity: {
+        await memoryCRUDService.updateActivity(id, { narrative: content });
+        resetActivitiesList({ q: get().activitiesQuery, sort: get().activitiesSort });
+        break;
+      }
       case LayersEnum.Context: {
         await memoryCRUDService.updateContext(id, { description: content });
         resetContextsList({ q: get().contextsQuery, sort: get().contextsSort });
@@ -135,6 +145,17 @@ export const createBaseSlice: StateCreator<
 
         // Transform nested structure to flat structure
         switch (layer) {
+          case LayersEnum.Activity: {
+            if (detail.layer === LayersEnum.Activity) {
+              return {
+                ...detail.memory,
+                ...detail.activity,
+                source: detail.source,
+                sourceType: detail.sourceType,
+              };
+            }
+            break;
+          }
           case LayersEnum.Context: {
             if (detail.layer === LayersEnum.Context) {
               return {
@@ -202,7 +223,7 @@ export const createBaseSlice: StateCreator<
 
           const state = get();
           const previous = state.memoryMap[key];
-          const next = result ?? { contexts: [], experiences: [], preferences: [] };
+          const next = result ?? { activities: [], contexts: [], experiences: [], preferences: [] };
           const fetchedAt = Date.now();
 
           if (previous && isEqual(previous, next)) {
@@ -217,6 +238,7 @@ export const createBaseSlice: StateCreator<
               n('useFetchUserMemory/refresh', {
                 key,
                 totals: {
+                  activities: next.activities.length,
                   contexts: next.contexts.length,
                   experiences: next.experiences.length,
                   preferences: next.preferences.length,
@@ -242,6 +264,7 @@ export const createBaseSlice: StateCreator<
             n('useFetchUserMemory/success', {
               key,
               totals: {
+                activities: next.activities.length,
                 contexts: next.contexts.length,
                 experiences: next.experiences.length,
                 preferences: next.preferences.length,

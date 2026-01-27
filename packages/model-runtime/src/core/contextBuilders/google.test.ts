@@ -149,6 +149,48 @@ describe('google contextBuilders', () => {
         thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
       });
     });
+
+    it('should return undefined for unsupported SVG image (base64)', async () => {
+      const svgBase64 =
+        'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: 'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==',
+        mimeType: 'image/svg+xml',
+        type: 'base64',
+      });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: svgBase64 },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined for unsupported SVG image (URL)', async () => {
+      const svgUrl = 'https://example.com/image.svg';
+
+      vi.mocked(parseDataUri).mockReturnValueOnce({
+        base64: null,
+        mimeType: null,
+        type: 'url',
+      });
+
+      vi.spyOn(imageToBase64Module, 'imageUrlToBase64').mockResolvedValueOnce({
+        base64: 'PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjwvc3ZnPg==',
+        mimeType: 'image/svg+xml',
+      });
+
+      const content: UserMessageContentPart = {
+        image_url: { url: svgUrl },
+        type: 'image_url',
+      };
+
+      const result = await buildGooglePart(content);
+      expect(result).toBeUndefined();
+    });
   });
 
   describe('buildGoogleMessage', () => {
@@ -1109,6 +1151,79 @@ describe('google contextBuilders', () => {
       });
       expect(operations.items.oneOf[1].properties.action).toEqual({
         enum: ['modify'],
+        type: 'string',
+      });
+    });
+
+    it('should filter null values from enum arrays for Google compatibility', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with enum containing null',
+          name: 'enumTool',
+          parameters: {
+            properties: {
+              memoryType: {
+                enum: ['short_term', 'long_term', null, 'working'],
+                type: 'string',
+              },
+              nested: {
+                properties: {
+                  status: {
+                    enum: [null, 'active', 'inactive', null],
+                    type: 'string',
+                  },
+                },
+                type: 'object',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // null values should be filtered from enum arrays
+      expect(result.parameters?.properties).toEqual({
+        memoryType: {
+          enum: ['short_term', 'long_term', 'working'],
+          type: 'string',
+        },
+        nested: {
+          properties: {
+            status: {
+              enum: ['active', 'inactive'],
+              type: 'string',
+            },
+          },
+          type: 'object',
+        },
+      });
+    });
+
+    it('should handle enum with only null values', () => {
+      const tool: ChatCompletionTool = {
+        function: {
+          description: 'A tool with enum containing only null',
+          name: 'nullEnumTool',
+          parameters: {
+            properties: {
+              value: {
+                enum: [null],
+                type: 'string',
+              },
+            },
+            type: 'object',
+          },
+        },
+        type: 'function',
+      };
+
+      const result = buildGoogleTool(tool);
+
+      // When enum only contains null, the enum property should be removed
+      expect(result.parameters?.properties?.value).toEqual({
         type: 'string',
       });
     });

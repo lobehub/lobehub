@@ -36,7 +36,7 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
   const actionsConfig = useConversationStore((s) => s.actionsBar?.assistant);
 
-  const { agentId, error, role, content, createdAt, metadata, taskDetail } = item;
+  const { agentId, groupId, error, role, content, createdAt, metadata, taskDetail } = item;
 
   const avatar = useAgentMeta(agentId);
 
@@ -44,7 +44,11 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
   const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
   const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
   const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
-  const newScreen = useNewScreen({ creating: generating || creating, isLatestItem });
+  const { minHeight } = useNewScreen({
+    creating: generating || creating,
+    isLatestItem,
+    messageId: id,
+  });
 
   const errorContent = useErrorContent(error);
 
@@ -84,7 +88,7 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
       id={id}
       loading={generating}
       message={message}
-      newScreen={newScreen}
+      newScreenMinHeight={minHeight}
       onAvatarClick={onAvatarClick}
       onDoubleClick={onDoubleClick}
       placement={'left'}
@@ -93,7 +97,12 @@ const TaskMessage = memo<TaskMessageProps>(({ id, index, disableEditing, isLates
       titleAddon={<Tag>{t('task.subtask')}</Tag>}
     >
       {taskDetail?.clientMode ? (
-        <ClientTaskDetail messageId={id} taskDetail={taskDetail} />
+        <ClientTaskDetail
+          agentId={agentId !== 'supervisor' ? agentId : undefined}
+          groupId={groupId}
+          messageId={id}
+          taskDetail={taskDetail}
+        />
       ) : (
         <TaskDetailPanel
           content={content}

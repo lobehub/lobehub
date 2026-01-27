@@ -1,24 +1,35 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Button, Flexbox, Icon, Input, Skeleton, Text } from '@lobehub/ui';
+import { Alert, Button, Flexbox, Icon, Input, Skeleton, Text } from '@lobehub/ui';
 import { Divider, Form } from 'antd';
 import type { FormInstance, InputRef } from 'antd';
+import { createStaticStyles } from 'antd-style';
 import { ChevronRight, Mail } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
-import AuthIcons from '@/components/NextAuth/AuthIcons';
+import AuthIcons from '@/components/AuthIcons';
 import { PRIVACY_URL, TERMS_URL } from '@/const/url';
 
 import AuthCard from '../../../../features/AuthCard';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  setPasswordLink: css`
+    cursor: pointer;
+    color: ${cssVar.colorPrimary};
+    text-decoration: underline;
+  `,
+}));
 
 export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const USERNAME_REGEX = /^\w+$/;
 
 export interface SignInEmailStepProps {
   form: FormInstance<{ email: string }>;
+  isSocialOnly: boolean;
   loading: boolean;
   oAuthSSOProviders: string[];
   onCheckUser: (values: { email: string }) => Promise<void>;
+  onSetPassword: () => void;
   onSocialSignIn: (provider: string) => void;
   serverConfigInit: boolean;
   socialLoading: string | null;
@@ -26,11 +37,13 @@ export interface SignInEmailStepProps {
 
 export const SignInEmailStep = ({
   form,
+  isSocialOnly,
   loading,
   oAuthSSOProviders,
   serverConfigInit,
   socialLoading,
   onCheckUser,
+  onSetPassword,
   onSocialSignIn,
 }: SignInEmailStepProps) => {
   const { t } = useTranslation('auth');
@@ -88,7 +101,7 @@ export const SignInEmailStep = ({
     <AuthCard
       footer={footer}
       subtitle={t('signin.subtitle', { appName: BRANDING_NAME })}
-      title={t('signin.title')}
+      title={'Agent teams that grow with you'}
     >
       {!serverConfigInit && (
         <Flexbox gap={12}>
@@ -172,6 +185,21 @@ export const SignInEmailStep = ({
           />
         </Form.Item>
       </Form>
+      {isSocialOnly && (
+        <Alert
+          description={
+            <>
+              {t('betterAuth.signin.socialOnlyHint')}{' '}
+              <a className={styles.setPasswordLink} onClick={onSetPassword}>
+                {t('betterAuth.signin.setPassword')}
+              </a>
+            </>
+          }
+          showIcon
+          style={{ marginTop: 12 }}
+          type="info"
+        />
+      )}
     </AuthCard>
   );
 };

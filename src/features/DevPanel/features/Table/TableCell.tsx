@@ -8,7 +8,7 @@ interface TableCellProps {
   rowIndex: number;
 }
 
-const TableCell = ({ dataItem, column, rowIndex }: TableCellProps) => {
+const TableCell = ({ dataItem, column }: TableCellProps) => {
   const data = get(dataItem, column);
   const content = useMemo(() => {
     if (isDate(data)) return dayjs(data).format('YYYY-MM-DD HH:mm:ss');
@@ -29,7 +29,7 @@ const TableCell = ({ dataItem, column, rowIndex }: TableCellProps) => {
   }, [data]);
 
   return (
-    <td key={column} onDoubleClick={() => console.log('Edit cell:', rowIndex, column)}>
+    <td key={column}>
       {/* 不能使用 antd 的 Text， 会有大量的重渲染导致滚动极其卡顿 */}
       {content}
     </td>

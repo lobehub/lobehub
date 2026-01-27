@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 
 type HistoryMode = 'push' | 'replace';
 
-// options 接口，用于 useQueryParam hook
+// Options interface for useQueryParam hook
 interface QueryParamOptions<T> {
   clearOnDefault?: boolean;
   defaultValue?: T;
@@ -11,13 +11,13 @@ interface QueryParamOptions<T> {
   throttleMs?: number;
 }
 
-// 解析器接口
+// Parser interface
 interface Parser<T> {
   parse: (value: string | null) => T;
   serialize: (value: T) => string | null;
 }
 
-// 带默认值的解析器接口
+// Parser interface with default value
 interface ParserWithDefault<T> extends Parser<T> {
   // nuqs has an optional default value on parsers
   defaultValue?: T;
@@ -25,8 +25,8 @@ interface ParserWithDefault<T> extends Parser<T> {
 }
 
 /**
- * 核心钩子，用于管理单个查询参数
- * 为 react-router-dom 替换 nuqs 的 useQueryState 功能
+ * Core hook for managing a single query parameter
+ * Replaces nuqs's useQueryState functionality for react-router-dom
  */
 export function useQueryParam<T>(
   key: string,
@@ -35,7 +35,7 @@ export function useQueryParam<T>(
 ): [T, (value: T | ((prev: T) => T)) => void] {
   const [searchParams, setSearchParams] = useSearchParams();
 
-  // 从 options 或 parser 本身提取 defaultValue
+  // Extract defaultValue from options or parser itself
   const {
     clearOnDefault = false,
     defaultValue = (parser as ParserWithDefault<T>)?.defaultValue,
@@ -47,14 +47,14 @@ export function useQueryParam<T>(
   const throttleTimer = useRef<NodeJS.Timeout | null>(null);
   const lastExecuteTime = useRef<number>(0);
 
-  // 使用 ref 存储最新的值，让 setValue 保持稳定
+  // Use ref to store latest values, keeping setValue stable
   const searchParamsRef = useRef(searchParams);
   const parserRef = useRef(parser);
   const defaultValueRef = useRef(defaultValue);
   const clearOnDefaultRef = useRef(clearOnDefault);
   const historyRef = useRef(history);
 
-  // 每次渲染时更新 ref
+  // Update refs on every render
   useEffect(() => {
     searchParamsRef.current = searchParams;
     parserRef.current = parser;
@@ -63,34 +63,34 @@ export function useQueryParam<T>(
     historyRef.current = history;
   });
 
-  // 从 URL 解析当前值
+  // Parse current value from URL
   const currentValue = parser.parse(searchParams.get(key));
   const value = currentValue ?? (defaultValue as T);
 
-  // setValue 现在是稳定的，不会因为 searchParams 变化而重新创建
+  // setValue is now stable and won't be recreated when searchParams changes
   const setValue = useCallback(
     (newValue: T | ((prev: T) => T)) => {
-      // 从 ref 读取最新值，避免闭包陈旧值问题
+      // Read latest values from refs to avoid stale closure issues
       const currentSearchParams = searchParamsRef.current;
       const currentParser = parserRef.current;
       const currentDefaultValue = defaultValueRef.current;
       const currentClearOnDefault = clearOnDefaultRef.current;
       const currentHistory = historyRef.current;
 
-      // 通过函数形式获取最新值
+      // Get latest value through function form
       const currentVal =
         currentParser.parse(currentSearchParams.get(key)) ?? (currentDefaultValue as T);
       const actualValue =
         typeof newValue === 'function' ? (newValue as (prev: T) => T)(currentVal) : newValue;
 
       const updateParams = () => {
-        // 使用函数式更新，确保基于最新的 searchParams
+        // Use functional update to ensure it's based on latest searchParams
         setSearchParams(
           (prevParams) => {
             const newSearchParams = new URLSearchParams(prevParams);
             const serialized = currentParser.serialize(actualValue);
 
-            // 处理 clearOnDefault 选项
+            // Handle clearOnDefault option
             if (
               currentClearOnDefault &&
               currentDefaultValue !== undefined &&
@@ -109,22 +109,22 @@ export function useQueryParam<T>(
         );
       };
 
-      // 处理节流
+      // Handle throttling
       if (throttleMs > 0) {
         const now = Date.now();
         const timeSinceLastExecute = now - lastExecuteTime.current;
 
         if (timeSinceLastExecute >= throttleMs) {
-          // 距离上次执行已超过节流时间，立即执行
+          // Throttle time exceeded since last execution, execute immediately
           lastExecuteTime.current = now;
           updateParams();
-          // 清理可能存在的定时器
+          // Clear any existing timer
           if (throttleTimer.current) {
             clearTimeout(throttleTimer.current);
             throttleTimer.current = null;
           }
         } else {
-          // 还在节流期内，设置定时器在剩余时间后执行最后一次
+          // Still within throttle period, set timer to execute one last time after remaining time
           if (throttleTimer.current) {
             clearTimeout(throttleTimer.current);
           }
@@ -139,10 +139,10 @@ export function useQueryParam<T>(
         updateParams();
       }
     },
-    [key, setSearchParams, throttleMs], // 只依赖不会频繁变化的值
+    [key, setSearchParams, throttleMs], // Only depend on values that don't change frequently
   );
 
-  // 组件卸载时清理节流计时器
+  // Clean up throttle timer on component unmount
   useEffect(() => {
     return () => {
       if (throttleTimer.current) {
@@ -154,10 +154,10 @@ export function useQueryParam<T>(
   return [value, setValue];
 }
 
-// ===== 解析器 (Parsers) =====
+// ===== Parsers =====
 
 /**
- * 字符串解析器 - 默认行为
+ * String parser - default behavior
  */
 export const parseAsString: Parser<string | null> & {
   withDefault: (defaultValue: string) => ParserWithDefault<string>;
@@ -172,7 +172,7 @@ export const parseAsString: Parser<string | null> & {
 };
 
 /**
- * 布尔值解析器
+ * Boolean parser
  */
 export const parseAsBoolean: Parser<boolean | null> & {
   withDefault: (defaultValue: boolean) => ParserWithDefault<boolean>;
@@ -196,7 +196,7 @@ export const parseAsBoolean: Parser<boolean | null> & {
 };
 
 /**
- * 整数解析器
+ * Integer parser
  */
 export const parseAsInteger: Parser<number | null> & {
   withDefault: (defaultValue: number) => ParserWithDefault<number>;
@@ -222,7 +222,7 @@ export const parseAsInteger: Parser<number | null> & {
 };
 
 /**
- * 字符串枚举解析器
+ * String enum parser
  */
 export function parseAsStringEnum<T extends string>(validValues: readonly T[]) {
   const parser: Parser<T | null> = {
@@ -245,75 +245,75 @@ export function parseAsStringEnum<T extends string>(validValues: readonly T[]) {
   return Object.assign(parser, { withDefault });
 }
 
-// ===== 简化的 API (Simplified API) =====
+// ===== Simplified API =====
 
-// --- 重载签名 ---
+// --- Overload Signatures ---
 
-// 字符串 (无解析器或仅有 options)
+// String (no parser or only options)
 export function useQueryState(
   key: string,
   options?: QueryParamOptions<string | null>,
 ): [string | null, (value: string | null | ((prev: string | null) => string | null)) => void];
 
-// 带默认值的字符串解析器
+// String parser with default value
 // eslint-disable-next-line no-redeclare
 export function useQueryState(
   key: string,
   parserWithDefault: ParserWithDefault<string>,
 ): [string, (value: string | ((prev: string) => string)) => void];
 
-// 布尔值解析器
+// Boolean parser
 // eslint-disable-next-line no-redeclare
 export function useQueryState(
   key: string,
   parser: typeof parseAsBoolean,
 ): [boolean | null, (value: boolean | null | ((prev: boolean | null) => boolean | null)) => void];
 
-// 带默认值的布尔值解析器
+// Boolean parser with default value
 // eslint-disable-next-line no-redeclare
 export function useQueryState(
   key: string,
   parserWithDefault: ParserWithDefault<boolean>,
 ): [boolean, (value: boolean | ((prev: boolean) => boolean)) => void];
 
-// 整数解析器
+// Integer parser
 // eslint-disable-next-line no-redeclare
 export function useQueryState(
   key: string,
   parser: typeof parseAsInteger,
 ): [number | null, (value: number | null | ((prev: number | null) => number | null)) => void];
 
-// 带默认值的整数解析器
+// Integer parser with default value
 // eslint-disable-next-line no-redeclare
 export function useQueryState(
   key: string,
   parserWithDefault: ParserWithDefault<number>,
 ): [number, (value: number | ((prev: number) => number)) => void];
 
-// 带默认值的字符串枚举解析器
+// String enum parser with default value
 // eslint-disable-next-line no-redeclare
 export function useQueryState<T extends string>(
   key: string,
   parserWithDefault: ParserWithDefault<T>,
 ): [T, (value: T | ((prev: T) => T)) => void];
 
-// --- 单一实现 ---
+// --- Single Implementation ---
 // eslint-disable-next-line no-redeclare
 export function useQueryState(key: string, parserOrOptions?: any): any {
-  // 修复了逻辑分派问题
+  // Fixed logic dispatch issue
   let parser: Parser<any>;
   let options: QueryParamOptions<any> = {};
 
   if (!parserOrOptions) {
-    // 场景 1: useQueryState('key')
+    // Scenario 1: useQueryState('key')
     parser = parseAsString;
   } else if (typeof parserOrOptions.parse === 'function') {
-    // 场景 2: useQueryState('key', parseAsInteger) 或 useQueryState('key', parseAsInteger.withDefault(10))
+    // Scenario 2: useQueryState('key', parseAsInteger) or useQueryState('key', parseAsInteger.withDefault(10))
     parser = parserOrOptions;
-    // 从解析器自身提取 options (例如 defaultValue)
+    // Extract options from parser itself (e.g. defaultValue)
     options = parserOrOptions;
   } else {
-    // 场景 3: useQueryState('key', { defaultValue: 'foo', throttleMs: 500 })
+    // Scenario 3: useQueryState('key', { defaultValue: 'foo', throttleMs: 500 })
     parser = parseAsString;
     options = parserOrOptions;
   }

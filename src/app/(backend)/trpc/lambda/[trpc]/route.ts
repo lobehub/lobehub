@@ -3,6 +3,7 @@ import type { NextRequest } from 'next/server';
 
 import { createLambdaContext } from '@/libs/trpc/lambda/context';
 import { prepareRequestForTRPC } from '@/libs/trpc/utils/request-adapter';
+import { createResponseMeta } from '@/libs/trpc/utils/responseMeta';
 import { lambdaRouter } from '@/server/routers/lambda';
 
 const handler = (req: NextRequest) => {
@@ -28,11 +29,7 @@ const handler = (req: NextRequest) => {
     },
 
     req: preparedReq,
-    responseMeta({ ctx }) {
-      const headers = ctx?.resHeaders;
-
-      return { headers };
-    },
+    responseMeta: createResponseMeta,
     router: lambdaRouter,
   });
 };

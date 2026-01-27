@@ -62,14 +62,14 @@ describe('useUserAvatar', () => {
     expect(result.current).toBe(mockAvatar);
   });
 
-  it('should return original avatar when no remote server URL in desktop environment', () => {
+  it('should return original avatar when no remote server URL in desktop environment (selfHost mode)', () => {
     mockIsDesktop = true;
     const mockAvatar = '/api/avatar.png';
 
     act(() => {
       useUserStore.setState({ user: { avatar: mockAvatar } as any });
       useElectronStore.setState({
-        dataSyncConfig: { remoteServerUrl: undefined, storageMode: 'local' },
+        dataSyncConfig: { remoteServerUrl: undefined, storageMode: 'selfHost' },
       });
     });
 

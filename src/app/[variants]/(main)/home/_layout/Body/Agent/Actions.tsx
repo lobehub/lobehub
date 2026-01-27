@@ -9,7 +9,7 @@ interface ActionsProps {
 
 const Actions = memo<ActionsProps>(({ dropdownMenu, isLoading }) => {
   return (
-    <DropdownMenu items={dropdownMenu}>
+    <DropdownMenu items={dropdownMenu} nativeButton={false}>
       <ActionIcon
         icon={MoreHorizontalIcon}
         loading={isLoading}

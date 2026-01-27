@@ -1,8 +1,8 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, FormGroup, Text } from '@lobehub/ui';
-import { Skeleton as AntSkeleton, Divider } from 'antd';
+import { Flexbox, FormGroup, Skeleton, Text } from '@lobehub/ui';
+import { Divider } from 'antd';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -28,20 +28,20 @@ const SkeletonRow = ({ mobile }: { mobile?: boolean }) => {
     return (
       <Flexbox gap={12} style={rowStyle}>
         <Flexbox align="center" horizontal justify="space-between">
-          <AntSkeleton.Input active size="small" style={{ height: 22, width: 60 }} />
-          <AntSkeleton.Input active size="small" style={{ height: 22, width: 80 }} />
+          <Skeleton.Button active size="small" style={{ height: 22, width: 60 }} />
+          <Skeleton.Button active size="small" style={{ height: 22, width: 80 }} />
         </Flexbox>
-        <AntSkeleton.Input active size="small" style={{ height: 22, width: 120 }} />
+        <Skeleton.Button active size="small" style={{ height: 22, width: 120 }} />
       </Flexbox>
     );
   }
   return (
     <Flexbox align="center" gap={24} horizontal justify="space-between" style={rowStyle}>
       <Flexbox align="center" gap={24} horizontal style={{ flex: 1 }}>
-        <AntSkeleton.Input active size="small" style={{ ...labelStyle, height: 22 }} />
-        <AntSkeleton.Input active size="small" style={{ height: 22, minWidth: 120, width: 160 }} />
+        <Skeleton.Button active size="small" style={{ ...labelStyle, height: 22 }} />
+        <Skeleton.Button active size="small" style={{ height: 22, minWidth: 120, width: 160 }} />
       </Flexbox>
-      <AntSkeleton.Input active size="small" style={{ height: 22, width: 100 }} />
+      <Skeleton.Button active size="small" style={{ height: 22, width: 100 }} />
     </Flexbox>
   );
 };
@@ -51,10 +51,7 @@ interface ProfileSettingProps {
 }
 
 const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
-  const [isLoginWithNextAuth, isLoginWithBetterAuth] = useUserStore((s) => [
-    authSelectors.isLoginWithNextAuth(s),
-    authSelectors.isLoginWithBetterAuth(s),
-  ]);
+  const isLogin = useUserStore(authSelectors.isLogin);
   const [userProfile, isUserLoaded] = useUserStore((s) => [
     userProfileSelectors.userProfile(s),
     s.isLoaded,
@@ -72,17 +69,14 @@ const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
   // Fetch Klavis servers
   useFetchUserKlavisServers(enableKlavis);
 
-  const isLoginWithAuth = isLoginWithNextAuth || isLoginWithBetterAuth;
   const isLoading =
-    !isUserLoaded ||
-    (isLoginWithAuth && !isLoadedAuthProviders) ||
-    (enableKlavis && !isServersInit);
+    !isUserLoaded || (isLogin && !isLoadedAuthProviders) || (enableKlavis && !isServersInit);
 
   useEffect(() => {
-    if (isLoginWithAuth) {
+    if (isLogin) {
       fetchAuthProviders();
     }
-  }, [isLoginWithAuth, fetchAuthProviders]);
+  }, [isLogin, fetchAuthProviders]);
 
   const { t } = useTranslation('auth');
 
@@ -118,8 +112,8 @@ const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
           {/* Interests Row - Editable */}
           <InterestsRow mobile={mobile} />
 
-          {/* Password Row - For Better Auth users to change or set password */}
-          {!isDesktop && isLoginWithBetterAuth && (
+          {/* Password Row - For logged in users to change or set password */}
+          {!isDesktop && isLogin && (
             <>
               <Divider style={{ margin: 0 }} />
               <PasswordRow mobile={mobile} />
@@ -127,7 +121,7 @@ const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
           )}
 
           {/* Email Row - Read Only */}
-          {isLoginWithAuth && userProfile?.email && (
+          {isLogin && userProfile?.email && (
             <>
               <Divider style={{ margin: 0 }} />
               <ProfileRow label={t('profile.email')} mobile={mobile}>
@@ -137,7 +131,7 @@ const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
           )}
 
           {/* SSO Providers Row */}
-          {isLoginWithAuth && (
+          {isLogin && (
             <>
               <Divider style={{ margin: 0 }} />
               <ProfileRow label={t('profile.sso.providers')} mobile={mobile}>

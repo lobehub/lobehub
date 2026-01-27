@@ -10,7 +10,6 @@ import ToolRender from './ToolRender';
 const ToolUI = () => {
   const messageId = useChatStore(chatPortalSelectors.toolMessageId);
   const message = useChatStore(dbMessageSelectors.getDbMessageById(messageId || ''), isEqual);
-  console.log(messageId, message);
   // make sure the message and id is valid
   if (!messageId || !message) return;
 

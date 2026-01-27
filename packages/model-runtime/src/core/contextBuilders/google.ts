@@ -11,6 +11,19 @@ import { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '.
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import { parseDataUri } from '../../utils/uriParser';
 
+const GOOGLE_SUPPORTED_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+]);
+
+const isImageTypeSupported = (mimeType: string | null): boolean => {
+  if (!mimeType) return true;
+  return GOOGLE_SUPPORTED_IMAGE_TYPES.has(mimeType.toLowerCase());
+};
+
 /**
  * Magic thoughtSignature
  * @see https://ai.google.dev/gemini-api/docs/thought-signatures#model-behavior:~:text=context_engineering_is_the_way_to_go
@@ -43,6 +56,8 @@ export const buildGooglePart = async (
           throw new TypeError("Image URL doesn't contain base64 data");
         }
 
+        if (!isImageTypeSupported(mimeType)) return undefined;
+
         return {
           inlineData: { data: base64, mimeType: mimeType || 'image/png' },
           thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
@@ -51,6 +66,8 @@ export const buildGooglePart = async (
 
       if (type === 'url') {
         const { base64, mimeType } = await imageUrlToBase64(content.image_url.url);
+
+        if (!isImageTypeSupported(mimeType)) return undefined;
 
         return {
           inlineData: { data: base64, mimeType },
@@ -228,6 +245,16 @@ const sanitizeSchemaForGoogle = (schema: Record<string, any>): Record<string, an
     // Convert 'const' to 'enum' with single value (Google doesn't support 'const')
     if (key === 'const') {
       result['enum'] = [value];
+      continue;
+    }
+
+    // Filter null values from enum arrays (Google doesn't support null in enum)
+    if (key === 'enum' && Array.isArray(value)) {
+      const filteredEnum = value.filter((item) => item !== null);
+      // Only set enum if there are remaining values after filtering
+      if (filteredEnum.length > 0) {
+        result[key] = filteredEnum;
+      }
       continue;
     }
 

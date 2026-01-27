@@ -1,16 +1,17 @@
 ---
-title: 在 Zeabur 上部署 LobeChat
-description: 点击按钮进行部署。在部署完成后，即可开始使用 LobeChat 并选择是否绑定自定义域名。
+title: 在 Zeabur 上部署 LobeHub
+description: 按照指南准备 OpenAI API Key 并点击按钮进行部署。在部署完成后，即可开始使用 LobeHub 并选择是否绑定自定义域名。
 tags:
   - Zeabur
-  - LobeChat
+  - LobeHub
+  - OpenAI API Key
   - 部署流程
   - 自定义域名
 ---
 
 # 使用 Zeabur 部署
 
-如果想在 Zeabur 上部署 LobeChat，可以按照以下步骤进行操作：
+如果想在 Zeabur 上部署 LobeHub，可以按照以下步骤进行操作：
 
 ## Zeabur 部署流程
 
@@ -26,16 +27,16 @@ tags:
   你可以使用 Zeabur 提供的子域名，也可以选择绑定自定义域名。目前 Zeabur 提供的域名还未被污染，大多数地区都可以直连。
 </Steps>
 
-# 使用 Zeabur 将 LobeChat 部署为无服务器函数
+# 使用 Zeabur 将 LobeHub 部署为无服务器函数
 
 > **注意：** 仍然存在关于 [Zeabur 上 next.js 的中间件和重写问题](https://github.com/lobehub/lobe-chat/pull/2775?notification_referrer_id=NT_kwDOAdi2DrQxMDkyODQ4MDc2NTozMDk3OTU5OA#issuecomment-2146713899)，请自担风险！
 
-由于 Zeabur 并未官方支持免费用户部署容器化服务，您可能希望将 LobeChat 部署为无服务器函数服务。要在 Zeabur 上将 LobeChat 部署为无服务器函数服务，您可以按照以下步骤操作：
+由于 Zeabur 并未官方支持免费用户部署容器化服务，您可能希望将 LobeHub 部署为无服务器函数服务。要在 Zeabur 上将 LobeHub 部署为无服务器函数服务，您可以按照以下步骤操作：
 
 ## Zeabur 部署流程
 
 <Steps>
-  ### Fork LobeChat
+  ### Fork LobeHub
 
   ### 添加 Zeabur 打包配置文件
 
@@ -56,7 +57,7 @@ tags:
 
   创建一个项目，并再这个项目下新建一个服务。
 
-  ### 将您的 LobeChat 分支链接到刚创建的 Zeabur 服务。
+  ### 将您的 LobeHub 分支链接到刚创建的 Zeabur 服务。
 
   在添加服务时，选择 github。这可能会触发一个 oAuth，取决于诸如您如何登录到 Zeabur 以及您是否已经授权 Zeabur 访问所有您的存储库等各种因素。
 

@@ -280,7 +280,7 @@ describe('AI Agent Router Integration Tests', () => {
         .returning();
 
       // Create a thread (required by foreign key constraint on messages)
-      const [thread] = await serverDB
+      const [thread] = (await serverDB
         .insert(threads)
         .values({
           topicId: topic.id,
@@ -288,7 +288,7 @@ describe('AI Agent Router Integration Tests', () => {
           userId,
           type: 'isolation',
         })
-        .returning();
+        .returning()) as any[];
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 

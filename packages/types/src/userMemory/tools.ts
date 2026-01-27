@@ -1,22 +1,37 @@
 import { z } from 'zod';
 
-import { UserMemoryContext, UserMemoryExperience, UserMemoryPreference } from './layers';
+import {
+  UserMemoryActivity,
+  UserMemoryContext,
+  UserMemoryExperience,
+  UserMemoryPreference,
+} from './layers';
 
 export const searchMemorySchema = z.object({
-  // TODO: we need to dynamically fetch the available categories/types from the backend
-  // memoryCategory: z.string().optional(),
-  // memoryType: z.string().optional(),
   query: z.string(),
-  topK: z.object({
-    contexts: z.coerce.number().int().min(0),
-    experiences: z.coerce.number().int().min(0),
-    preferences: z.coerce.number().int().min(0),
-  }),
+  /**
+   * Optional limits for each memory layer. If omitted, server defaults are used.
+   * Each field is optional - only specify layers you want to customize.
+   * Set a layer to 0 to exclude it from search results.
+   */
+  topK: z
+    .object({
+      /** Number of activity memories to return */
+      activities: z.number().int().min(0).optional(),
+      /** Number of context memories to return */
+      contexts: z.number().int().min(0).optional(),
+      /** Number of experience memories to return */
+      experiences: z.number().int().min(0).optional(),
+      /** Number of preference memories to return */
+      preferences: z.number().int().min(0).optional(),
+    })
+    .optional(),
 });
 
 export type SearchMemoryParams = z.infer<typeof searchMemorySchema>;
 
 export interface SearchMemoryResult {
+  activities: Array<Omit<UserMemoryActivity, 'userId' | 'narrativeVector' | 'feedbackVector'>>;
   contexts: Array<Omit<UserMemoryContext, 'userId' | 'titleVector' | 'descriptionVector'>>;
   experiences: Array<
     Omit<UserMemoryExperience, 'userId' | 'actionVector' | 'situationVector' | 'keyLearningVector'>
@@ -31,6 +46,11 @@ interface MemoryToolBaseResult {
 
 export interface AddContextMemoryResult extends MemoryToolBaseResult {
   contextId?: string;
+  memoryId?: string;
+}
+
+export interface AddActivityMemoryResult extends MemoryToolBaseResult {
+  activityId?: string;
   memoryId?: string;
 }
 

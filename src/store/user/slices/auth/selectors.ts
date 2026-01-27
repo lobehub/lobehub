@@ -1,36 +1,16 @@
-import { BRANDING_NAME } from '@lobechat/business-const';
-import { isDesktop } from '@lobechat/const';
 import { type LobeUser, type SSOProvider } from '@lobechat/types';
 import { t } from 'i18next';
 
-import { enableAuth, enableBetterAuth, enableClerk, enableNextAuth } from '@/envs/auth';
 import type { UserStore } from '@/store/user';
-
-const DEFAULT_USERNAME = BRANDING_NAME;
 
 const nickName = (s: UserStore) => {
   const defaultNickName = s.user?.fullName || s.user?.username;
-  if (!enableAuth) {
-    if (isDesktop) {
-      return defaultNickName;
-    }
-    return t('userPanel.defaultNickname', { ns: 'common' });
-  }
-
   if (s.isSignedIn) return defaultNickName;
 
   return t('userPanel.anonymousNickName', { ns: 'common' });
 };
 
 const username = (s: UserStore) => {
-  if (!enableAuth) {
-    if (isDesktop) {
-      return s.user?.username;
-    }
-
-    return DEFAULT_USERNAME;
-  }
-
   if (s.isSignedIn) return s.user?.username;
 
   return 'anonymous';
@@ -56,7 +36,4 @@ export const authSelectors = {
   isLoadedAuthProviders: (s: UserStore) => s.isLoadedAuthProviders ?? false,
   isLogin: (s: UserStore) => s.isSignedIn,
   isLoginWithAuth: (s: UserStore) => s.isSignedIn,
-  isLoginWithBetterAuth: (s: UserStore): boolean => (s.isSignedIn && enableBetterAuth) || false,
-  isLoginWithClerk: (s: UserStore): boolean => (s.isSignedIn && enableClerk) || false,
-  isLoginWithNextAuth: (s: UserStore): boolean => (s.isSignedIn && !!enableNextAuth) || false,
 };

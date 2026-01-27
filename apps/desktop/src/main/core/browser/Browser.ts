@@ -3,7 +3,6 @@ import { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-c
 import {
   BrowserWindow,
   BrowserWindowConstructorOptions,
-  Menu,
   session as electronSession,
   ipcMain,
   screen,
@@ -12,7 +11,7 @@ import console from 'node:console';
 import { join } from 'node:path';
 
 import { preloadDir, resourcesDir } from '@/const/dir';
-import { isDev, isMac } from '@/const/env';
+import { isMac } from '@/const/env';
 import { ELECTRON_BE_PROTOCOL_SCHEME } from '@/const/protocol';
 import RemoteServerConfigCtr from '@/controllers/RemoteServerConfigCtr';
 import { backendProxyProtocolManager } from '@/core/infrastructure/BackendProxyProtocolManager';
@@ -121,9 +120,7 @@ export default class Browser {
     logger.info(`Creating new BrowserWindow instance: ${this.identifier}`);
     logger.debug(`[${this.identifier}] Resolved window state: ${JSON.stringify(resolvedState)}`);
 
-    // Calculate traffic light position to center vertically in title bar
-    // Traffic light buttons are approximately 12px tall
-    const trafficLightY = Math.round((TITLE_BAR_HEIGHT - 12) / 2);
+
 
     return new BrowserWindow({
       ...rest,
@@ -134,7 +131,7 @@ export default class Browser {
       height: resolvedState.height,
       show: false,
       title,
-      trafficLightPosition: isMac ? { x: 12, y: trafficLightY } : undefined,
+
       vibrancy: 'sidebar',
       visualEffectState: 'active',
       webPreferences: {
@@ -192,7 +189,7 @@ export default class Browser {
     this.setupCloseListener(browserWindow);
     this.setupFocusListener(browserWindow);
     this.setupWillPreventUnloadListener(browserWindow);
-    this.setupDevContextMenu(browserWindow);
+    this.setupContextMenu(browserWindow);
   }
 
   private setupWillPreventUnloadListener(browserWindow: BrowserWindow): void {
@@ -239,39 +236,25 @@ export default class Browser {
   }
 
   /**
-   * Setup context menu with "Inspect Element" option in development mode
+   * Setup context menu with platform-specific features
+   * Delegates to MenuManager for consistent platform behavior
    */
-  private setupDevContextMenu(browserWindow: BrowserWindow): void {
-    if (!isDev) return;
-
-    logger.debug(`[${this.identifier}] Setting up dev context menu.`);
+  private setupContextMenu(browserWindow: BrowserWindow): void {
+    logger.debug(`[${this.identifier}] Setting up context menu.`);
 
     browserWindow.webContents.on('context-menu', (_event, params) => {
-      const { x, y } = params;
+      const { x, y, selectionText, linkURL, srcURL, mediaType, isEditable } = params;
 
-      const menu = Menu.buildFromTemplate([
-        {
-          click: () => {
-            browserWindow.webContents.inspectElement(x, y);
-          },
-          label: 'Inspect Element',
-        },
-        { type: 'separator' },
-        {
-          click: () => {
-            browserWindow.webContents.openDevTools();
-          },
-          label: 'Open DevTools',
-        },
-        {
-          click: () => {
-            browserWindow.webContents.reload();
-          },
-          label: 'Reload',
-        },
-      ]);
-
-      menu.popup({ window: browserWindow });
+      // Use the platform menu system with full context data
+      this.app.menuManager.showContextMenu('default', {
+        isEditable,
+        linkURL: linkURL || undefined,
+        mediaType: mediaType as any,
+        selectionText: selectionText || undefined,
+        srcURL: srcURL || undefined,
+        x,
+        y,
+      });
     });
   }
 
