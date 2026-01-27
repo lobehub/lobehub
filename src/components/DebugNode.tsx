@@ -8,8 +8,9 @@ interface DebugNodeProps {
 }
 
 const DebugNode = ({ children, trace }: DebugNodeProps) => {
+  if (process.env.NODE_ENV !== 'development') return null;
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return;
     // eslint-disable-next-line no-console
     console.log(`[DebugNode] Suspense fallback active: ${trace}`);
   }, [trace]);
