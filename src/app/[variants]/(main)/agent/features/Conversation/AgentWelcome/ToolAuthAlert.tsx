@@ -104,7 +104,7 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
         try {
           await refreshKlavisServerTools(identifier);
         } catch (error) {
-          console.error('[Klavis] Failed to check auth status:', error);
+          console.debug('[Klavis] Polling check (expected during auth):', error);
         }
       }, POLL_INTERVAL_MS);
 
@@ -129,7 +129,8 @@ const KlavisToolAuthItem = memo<KlavisToolAuthItemProps>(({ tool, onAuthComplete
               windowCheckIntervalRef.current = null;
             }
             oauthWindowRef.current = null;
-            refreshKlavisServerTools(identifier);
+            // Start polling after window closes
+            startFallbackPolling(identifier);
           }
         } catch {
           if (windowCheckIntervalRef.current) {
