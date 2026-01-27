@@ -25,19 +25,47 @@ vi.mock('@/server/globalConfig/parseMemoryExtractionConfig', () => ({
       model: 'gpt-mock',
       provider: 'openai',
     },
+    agentPersonaWriterPreferredModels: ['gpt-mock'],
+    agentPersonaWriterPreferredProviders: ['openai'],
   }),
 }));
 
-const structuredResult = {
+vi.mock('@/server/globalConfig', () => ({
+  getServerGlobalConfig: vi.fn().mockResolvedValue({ aiProvider: {} }),
+}));
+
+const mockGetUserKeyVaults = vi.hoisted(() => vi.fn());
+vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
+  KeyVaultsGateKeeper: { getUserKeyVaults: mockGetUserKeyVaults },
+}));
+
+const mockGetAiProviderRuntimeState = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({
+    enabledAiModels: [{ id: 'gpt-mock', providerId: 'openai' }],
+    runtimeConfig: {
+      openai: {
+        keyVaults: { apiKey: 'user-key', baseURL: 'https://user.example.com' },
+      },
+    },
+  }),
+);
+
+vi.mock('@/database/repositories/aiInfra', () => ({
+  AiInfraRepos: vi.fn().mockImplementation(() => ({
+    getAiProviderRuntimeState: mockGetAiProviderRuntimeState,
+  })),
+}));
+
+const structuredResult = vi.hoisted(() => ({
   diff: '- updated',
   memoryIds: ['mem-1'],
   persona: '# Persona',
   reasoning: 'reason',
   sourceIds: ['src-1'],
   summary: 'summary',
-};
+}));
 
-const toolCall = vi.fn().mockResolvedValue(structuredResult);
+const toolCall = vi.hoisted(() => vi.fn().mockResolvedValue(structuredResult));
 
 vi.mock('@lobechat/memory-user-memory', () => ({
   UserPersonaExtractor: vi.fn().mockImplementation(() => ({
@@ -47,7 +75,7 @@ vi.mock('@lobechat/memory-user-memory', () => ({
 
 vi.mock('@lobechat/model-runtime', () => ({
   ModelRuntime: {
-    initializeWithProvider: vi.fn().mockResolvedValue({}),
+    initializeWithProvider: vi.fn().mockReturnValue({}),
   },
 }));
 

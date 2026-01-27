@@ -44,6 +44,8 @@ export interface MemoryExtractionPrivateConfig {
   agentLayerExtractorPreferredModels?: string[];
   agentLayerExtractorPreferredProviders?: string[];
   agentPersonaWriter: MemoryAgentConfig;
+  agentPersonaWriterPreferredModels?: string[];
+  agentPersonaWriterPreferredProviders?: string[];
   concurrency?: number;
   embedding: MemoryAgentConfig;
   embeddingPreferredModels?: string[];
@@ -264,6 +266,12 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
   const agentLayerExtractorPreferredModels = parsePreferredList(
     process.env.MEMORY_USER_MEMORY_LAYER_EXTRACTOR_PREFERRED_MODELS,
   );
+  const agentPersonaWriterPreferredProviders = parsePreferredList(
+    process.env.MEMORY_USER_MEMORY_PERSONA_WRITER_PREFERRED_PROVIDERS,
+  );
+  const agentPersonaWriterPreferredModels = parsePreferredList(
+    process.env.MEMORY_USER_MEMORY_PERSONA_WRITER_PREFERRED_MODELS,
+  );
 
   return {
     agentGateKeeper,
@@ -273,6 +281,8 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
     agentLayerExtractorPreferredModels,
     agentLayerExtractorPreferredProviders,
     agentPersonaWriter,
+    agentPersonaWriterPreferredModels,
+    agentPersonaWriterPreferredProviders,
     concurrency,
     embedding,
     embeddingPreferredModels,
