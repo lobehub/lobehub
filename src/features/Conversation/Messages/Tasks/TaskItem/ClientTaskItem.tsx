@@ -19,7 +19,7 @@ interface ClientTaskItemProps {
 }
 
 const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
-  const { id, metadata, taskDetail } = item;
+  const { id, agentId: itemAgentId, groupId: itemGroupId, metadata, taskDetail } = item;
   const [expanded, setExpanded] = useState(false);
 
   const title = taskDetail?.title || metadata?.taskTitle;
@@ -32,21 +32,29 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
   const isError = status === ThreadStatus.Failed || status === ThreadStatus.Cancel;
   const isInitializing = !taskDetail || !status;
 
-  // Fetch thread messages for client mode (like Task/ClientTaskDetail)
+  // Fetch thread messages for client mode
+  // Use item's agentId (from task message) to query with the correct SubAgent ID that created the thread
+  // Fall back to activeAgentId if task message doesn't have agentId (shouldn't happen normally)
   const [activeAgentId, activeTopicId, useFetchMessages] = useChatStore((s) => [
     s.activeAgentId,
     s.activeTopicId,
     s.useFetchMessages,
   ]);
 
+  // Use task message's agentId (skip 'supervisor' as it's not a valid agent ID for queries)
+  // Fall back to activeAgentId if not available
+  const agentId =
+    itemAgentId && itemAgentId !== 'supervisor' ? itemAgentId : activeAgentId;
+
   const threadContext = useMemo(
     () => ({
-      agentId: activeAgentId,
+      agentId,
+      groupId: itemGroupId,
       scope: 'thread' as const,
       threadId,
       topicId: activeTopicId,
     }),
-    [activeAgentId, activeTopicId, threadId],
+    [agentId, itemGroupId, activeTopicId, threadId],
   );
 
   const threadMessageKey = useMemo(

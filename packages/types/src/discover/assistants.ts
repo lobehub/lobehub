@@ -56,6 +56,7 @@ export interface DiscoverAssistantItem extends Omit<LobeAgentSettings, 'meta'>, 
   homepage: string;
   identifier: string;
   installCount?: number;
+  isValidated?: boolean;
   knowledgeCount: number;
   pluginCount: number;
   status?: AgentStatus;
@@ -92,6 +93,7 @@ export interface DiscoverAssistantDetail extends DiscoverAssistantItem {
   currentVersion?: string;
   editorData?: any;
   examples?: FewShots;
+  isValidated?: boolean;
   related: DiscoverAssistantItem[];
   summary?: string;
   versions?: DiscoverAssistantVersion[];

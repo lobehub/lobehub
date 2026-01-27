@@ -24,8 +24,6 @@ const MasonryView = memo(function MasonryView() {
     searchQuery,
     selectedFileIds,
     setSelectedFileIds,
-    loadMoreKnowledgeItems,
-    fileListHasMore,
     storeIsMasonryReady,
     sorter,
     sortType,
@@ -36,8 +34,6 @@ const MasonryView = memo(function MasonryView() {
     s.searchQuery,
     s.selectedFileIds,
     s.setSelectedFileIds,
-    s.loadMoreKnowledgeItems,
-    s.fileListHasMore,
     s.isMasonryReady,
     s.sorter,
     s.sortType,
@@ -65,7 +61,7 @@ const MasonryView = memo(function MasonryView() {
   );
 
   const { isLoading, isValidating } = useFetchResources(queryParams);
-  const { queryParams: currentQueryParams } = useFileStore();
+  const { queryParams: currentQueryParams, hasMore, loadMoreResources } = useFileStore();
 
   const isNavigating = useMemo(() => {
     if (!currentQueryParams || !queryParams) return false;
@@ -130,15 +126,15 @@ const MasonryView = memo(function MasonryView() {
 
   // Handle automatic load more when scrolling to bottom
   const handleLoadMore = useCallback(async () => {
-    if (!fileListHasMore || isLoadingMore) return;
+    if (!hasMore || isLoadingMore) return;
 
     setIsLoadingMore(true);
     try {
-      await loadMoreKnowledgeItems();
+      await loadMoreResources();
     } finally {
       setIsLoadingMore(false);
     }
-  }, [fileListHasMore, loadMoreKnowledgeItems, isLoadingMore]);
+  }, [hasMore, loadMoreResources, isLoadingMore]);
 
   // Handle scroll event to detect when near bottom
   const handleScroll = useCallback(

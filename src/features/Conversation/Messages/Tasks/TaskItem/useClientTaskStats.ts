@@ -14,7 +14,11 @@ export interface ClientTaskStats {
 }
 
 interface UseClientTaskStatsOptions {
+  /** Agent ID from the task message (use task's agentId, not activeAgentId) */
+  agentId?: string;
   enabled?: boolean;
+  /** Group ID from the task message (use task's groupId, not activeGroupId) */
+  groupId?: string;
   threadId?: string;
 }
 
@@ -23,23 +27,30 @@ interface UseClientTaskStatsOptions {
  * Used in TaskItem to display progress metrics (steps, tool calls, elapsed time).
  */
 export const useClientTaskStats = ({
+  agentId: propAgentId,
+  groupId,
   threadId,
   enabled = true,
 }: UseClientTaskStatsOptions): ClientTaskStats => {
+  // Use task message's agentId to query with the correct SubAgent ID that created the thread
+  // Fall back to activeAgentId if not provided
   const [activeAgentId, activeTopicId, useFetchMessages] = useChatStore((s) => [
     s.activeAgentId,
     s.activeTopicId,
     s.useFetchMessages,
   ]);
 
+  const agentId = propAgentId || activeAgentId;
+
   const threadContext = useMemo(
     () => ({
-      agentId: activeAgentId,
+      agentId,
+      groupId,
       scope: 'thread' as const,
       threadId,
       topicId: activeTopicId,
     }),
-    [activeAgentId, activeTopicId, threadId],
+    [agentId, groupId, activeTopicId, threadId],
   );
 
   const threadMessageKey = useMemo(

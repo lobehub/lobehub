@@ -35,6 +35,7 @@ const createExecutor = (privateOverrides?: Partial<MemoryExtractionPrivateConfig
       model: 'layer-1',
       provider: 'provider-l',
     },
+    agentPersonaWriter: { model: 'persona-1', provider: 'provider-s' },
     concurrency: 1,
     embedding: { model: 'embed-1', provider: 'provider-e' },
     featureFlags: { enableBenchmarkLoCoMo: false },

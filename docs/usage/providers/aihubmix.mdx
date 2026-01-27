@@ -1,0 +1,98 @@
+---
+title: AiHubMix Provider Configuration
+description: Learn how to configure and use the AiHubMix provider in LobeHub
+tags:
+  - AiHubMix
+  - Provider Configuration
+  - Setup Guide
+---
+
+# AiHubMix Provider Configuration
+
+AiHubMix is an AI model aggregation platform that offers access to a variety of AI models through a unified OpenAI-compatible API. This guide will help you set up the AiHubMix provider in LobeHub.
+
+## Prerequisites
+
+Before using the AiHubMix API, you need to:
+
+1. **Create an AiHubMix Account**
+   - Visit [AiHubMix](https://lobe.li/MZmv94N)
+   - Sign up for an account
+
+2. **Obtain an API Key**
+   - Log in to your AiHubMix dashboard
+   - Navigate to the API settings
+   - Generate an API key for use with LobeHub
+
+## Configuration
+
+### Environment Variables
+
+Add the following environment variable to your `.env` file:
+
+```bash
+# AiHubMix API Key (required)
+AIHUBMIX_API_KEY=your_aihubmix_api_key
+```
+
+### Available Models
+
+AiHubMix provides access to a variety of popular AI models, including:
+
+- **GPT-4o Mini** – A cost-effective lightweight model from OpenAI
+- **GPT-4o** – OpenAI’s flagship multimodal model
+- **Claude 3.5 Sonnet** – Anthropic’s advanced reasoning model
+- **Claude 3.5 Haiku** – A fast and efficient Claude model
+- **Gemini Pro 1.5** – Google’s model with long-context support
+- **DeepSeek V3** – A model with strong reasoning capabilities
+
+## How to Use
+
+1. **Configure the API Key**
+   - Set your AiHubMix API key in the environment variables
+   - Restart your LobeHub instance
+
+2. **Select a Model**
+   - Go to LobeHub settings
+   - Navigate to the Language Model section
+   - Choose AiHubMix as your provider
+   - Select a model from the available options
+
+3. **Start a Conversation**
+   - Create a new conversation
+   - Select an AiHubMix model
+   - Begin chatting
+
+## Features
+
+- **Multi-Model Access**: Access a variety of AI models through a single API
+- **OpenAI-Compatible**: Uses the standard OpenAI API format
+- **Function Calling**: Supports function calling for compatible models
+- **Vision Capabilities**: Some models support image analysis
+- **Model Discovery**: Automatically fetches the list of available models
+
+## Troubleshooting
+
+### Common Issues
+
+1. **401 Unauthorized Error**
+   - Verify that your API key is correct
+   - Ensure the API key has the necessary permissions
+   - Check if your account has sufficient credits
+
+2. **Model Unavailable**
+   - Some models may have usage restrictions
+   - Refer to the AiHubMix documentation for model availability
+   - Confirm that your account tier supports the requested model
+
+3. **Rate Limiting**
+   - AiHubMix may enforce rate limits based on your subscription plan
+   - Consider upgrading your plan for higher limits
+
+## Support
+
+For additional help:
+
+- Visit the [AiHubMix Documentation](https://docs.aihubmix.com/)
+- Browse the [Model List](https://aihubmix.com/models)
+- Contact the AiHubMix support team for API-related issues

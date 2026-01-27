@@ -1,0 +1,79 @@
+---
+title: Cloud Sandbox
+description: >-
+  Learn how to use scheduled tasks, including creating, editing, and deleting
+  them.
+tags:
+  - Scheduled Tasks
+  - Create
+  - Edit
+  - Delete
+---
+
+# Cloud Sandbox
+
+LobeHub supports the Cloud Sandbox feature, enabling AI assistants to execute code and process files in a securely isolated cloud environment. Instead of merely providing code snippets, the assistant can directly run code, generate documents, and create charts — delivering downloadable results that you can iterate on in real time. Cloud Sandbox breaks the boundaries of traditional conversations, extending AI output from suggestions to actual execution. From data analysis to document generation, from code debugging to file conversion, Cloud Sandbox transforms AI into a true execution assistant.
+
+## Understanding Cloud Sandbox
+
+Cloud Sandbox is a securely isolated cloud-based execution environment. When you need more than just code snippets and want actual execution results, the assistant will run the code in the Cloud Sandbox and return the output.
+
+## What Can Cloud Sandbox Do?
+
+### Execute Code
+
+The assistant can run Python, JavaScript, and TypeScript code within the sandbox and return the results. You’ll see real execution output, not just code text.
+
+### Generate Files
+
+The assistant can create various types of files — PDF documents, Excel spreadsheets, Word documents, images, charts, and more — and provide download links. You can download and use them directly.
+
+### Process Data
+
+The assistant can read, analyze, and transform data files. Upload CSV, JSON, or other data formats, and the assistant can help clean, summarize, and visualize the data.
+
+### Run Commands
+
+The assistant can execute shell commands to install dependencies, manipulate files, and perform complex operations.
+
+### Enabling Cloud Sandbox
+
+Cloud Sandbox is a built-in plugin that must be enabled for the assistant to use its features. You can enable the Cloud Sandbox plugin from the "Assistant Profile" page under the plugin section, or directly within a conversation by checking the plugin option in the chat interface.
+
+### Using Cloud Sandbox
+
+#### Ask the Assistant to Execute Code
+
+Simply describe the task you want to accomplish, and the assistant will write and run the code in the Cloud Sandbox:
+
+- “Write a Python script to calculate the average and standard deviation of this dataset.”
+- “Implement a quicksort algorithm in JavaScript and run a test.”
+- “Run this code for me and show the output.”
+
+#### Ask the Assistant to Generate Documents
+
+Describe the content you need, and the assistant will generate the document and provide a download link:
+
+- “Generate a PDF report with the analysis of this data.”
+- “Convert this content into a Word document.”
+- “Create an Excel spreadsheet to organize this information.”
+
+#### Ask the Assistant to Process Data
+
+Provide data or files, and the assistant will process and return the results:
+
+- “Analyze this sales data and create a trend chart.”
+- “Convert this JSON file to CSV format.”
+- “Clean this dataset by removing duplicates.”
+
+### Understanding the Cloud Sandbox Environment
+
+The Cloud Sandbox runs in a securely isolated cloud server, completely separate from your local machine. All operations performed by the assistant in the sandbox will not affect your local file system.
+
+### Session-Based File Storage
+
+Files in the Cloud Sandbox are temporary and tied to the current conversation session. If the session ends or remains inactive for a long time, the sandbox files may be cleared. If you need to keep the files, be sure to download them using the export links provided by the assistant.
+
+### Automatic Export of Results
+
+When the assistant generates files in the Cloud Sandbox, they are automatically exported with download links. No extra steps are needed — you’ll receive documents, charts, data files, and other outputs directly from the code execution.

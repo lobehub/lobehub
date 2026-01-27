@@ -29,6 +29,7 @@
   "branchingRequiresSavedTopic": "Bieżący temat nie został zapisany, zapisz go najpierw, aby użyć funkcji podtematu",
   "cancel": "Anuluj",
   "changelog": "Lista zmian",
+  "checkForUpdates": "Sprawdź dostępność aktualizacji",
   "clientDB.autoInit.title": "Inicjalizacja bazy danych PGlite",
   "clientDB.error.desc": "Nie udało się zainicjować PGlite. Spróbuj ponownie. Jeśli to nie pomoże, otwórz Samodzielne naprawy i postępuj zgodnie z instrukcjami. Nadal masz problem? Użyj Zgłoś problem, aby przesłać szczegóły błędu.",
   "clientDB.error.detail": "Przyczyna błędu: [{{type}}] {{message}}. Szczegóły poniżej:",

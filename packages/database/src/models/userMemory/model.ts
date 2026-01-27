@@ -2535,7 +2535,8 @@ export class UserMemoryModel {
     // Keep lock acquisition order deterministic to avoid deadlocks under concurrent updates
     if (orderedMemoryIds.length === 0 && orderedContextIds.length === 0) return;
 
-    const now = options?.timestamp ?? new Date();
+    // Prefer server-side clock to avoid shipping duplicate timestamp params on every query.
+    const now = options?.timestamp ? sql`${options.timestamp}` : sql`now()`;
 
     await this.db.transaction(async (tx) => {
       if (orderedMemoryIds.length > 0) {

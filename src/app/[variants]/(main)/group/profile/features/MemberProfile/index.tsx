@@ -4,7 +4,7 @@ import { Alert, Button, Flexbox, Icon } from '@lobehub/ui';
 import { Divider } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { InfoIcon, PlayIcon } from 'lucide-react';
-import React, { memo, useCallback, useMemo } from 'react';
+import React, { memo, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
@@ -28,6 +28,8 @@ const MemberProfile = memo(() => {
   const agentId = useGroupProfileStore((s) => s.activeTabId);
   const editor = useGroupProfileStore((s) => s.editor);
   const handleContentChange = useGroupProfileStore((s) => s.handleContentChange);
+  const agentBuilderContentUpdate = useGroupProfileStore((s) => s.agentBuilderContentUpdate);
+  const setAgentBuilderContent = useGroupProfileStore((s) => s.setAgentBuilderContent);
 
   // Get agent config by agentId
   const config = useAgentStore(agentByIdSelectors.getAgentConfigById(agentId), isEqual);
@@ -79,6 +81,18 @@ const MemberProfile = memo(() => {
     },
     [updateAgentConfigById, agentId],
   );
+
+  // Watch for agent builder content updates and apply them directly to the editor
+  useEffect(() => {
+    if (!editor || !agentBuilderContentUpdate) return;
+    if (agentBuilderContentUpdate.entityId !== agentId) return;
+
+    // Directly set the editor content
+    editor.setDocument('markdown', agentBuilderContentUpdate.content);
+
+    // Clear the update after processing to prevent re-applying
+    setAgentBuilderContent('', '');
+  }, [editor, agentBuilderContentUpdate, agentId, setAgentBuilderContent]);
 
   return (
     <>

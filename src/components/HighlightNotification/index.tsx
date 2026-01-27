@@ -12,6 +12,7 @@ export interface HighlightNotificationProps {
   actionLabel?: ReactNode;
   description?: ReactNode;
   image?: string;
+  onActionClick?: () => void;
   onClose?: () => void;
   open?: boolean;
   title?: ReactNode;
@@ -62,7 +63,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 const HighlightNotification = memo<HighlightNotificationProps>(
-  ({ open, onClose, image, title, description, actionLabel, actionHref }) => {
+  ({ open, onClose, onActionClick, image, title, description, actionLabel, actionHref }) => {
     if (!open) return null;
 
     return (
@@ -77,6 +78,7 @@ const HighlightNotification = memo<HighlightNotificationProps>(
               <Link
                 className={styles.action}
                 href={actionHref || '/'}
+                onClick={onActionClick}
                 rel="noopener noreferrer"
                 target="_blank"
               >

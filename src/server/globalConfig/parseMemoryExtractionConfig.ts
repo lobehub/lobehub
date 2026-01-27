@@ -30,6 +30,7 @@ export type MemoryAgentConfig = MemoryAgentPublicConfig & {
   language?: string;
   model: string;
 };
+
 export type MemoryLayerExtractorConfig = MemoryLayerExtractorPublicConfig &
   MemoryAgentConfig & {
     layers: Record<GlobalMemoryLayer, string>;
@@ -42,6 +43,7 @@ export interface MemoryExtractionPrivateConfig {
   agentLayerExtractor: MemoryLayerExtractorConfig;
   agentLayerExtractorPreferredModels?: string[];
   agentLayerExtractorPreferredProviders?: string[];
+  agentPersonaWriter: MemoryAgentConfig;
   concurrency?: number;
   embedding: MemoryAgentConfig;
   embeddingPreferredModels?: string[];
@@ -136,6 +138,26 @@ const parseEmbeddingAgent = (
   };
 };
 
+const parsePersonaWriterAgent = (
+  fallbackModel: string,
+  fallbackProvider?: string,
+  fallbackApiKey?: string,
+): MemoryAgentConfig => {
+  const model = process.env.MEMORY_USER_MEMORY_PERSONA_WRITER_MODEL || fallbackModel;
+  const provider =
+    process.env.MEMORY_USER_MEMORY_PERSONA_WRITER_PROVIDER ||
+    fallbackProvider ||
+    DEFAULT_MINI_PROVIDER;
+
+  return {
+    apiKey: process.env.MEMORY_USER_MEMORY_PERSONA_WRITER_API_KEY ?? fallbackApiKey,
+    baseURL: process.env.MEMORY_USER_MEMORY_PERSONA_WRITER_BASE_URL,
+    contextLimit: parseTokenLimitEnv(process.env.MEMORY_USER_MEMORY_PERSONA_WRITER_CONTEXT_LIMIT),
+    model,
+    provider,
+  };
+};
+
 const parseExtractorAgentObservabilityS3 = () => {
   const accessKeyId = process.env.MEMORY_USER_MEMORY_EXTRACTOR_S3_ACCESS_KEY_ID;
   const secretAccessKey = process.env.MEMORY_USER_MEMORY_EXTRACTOR_S3_SECRET_ACCESS_KEY;
@@ -180,6 +202,7 @@ const parsePreferredList = (value?: string) =>
 export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => {
   const agentGateKeeper = parseGateKeeperAgent();
   const agentLayerExtractor = parseLayerExtractorAgent(agentGateKeeper.model);
+  const agentPersonaWriter = parsePersonaWriterAgent(agentGateKeeper.model);
   const embedding = parseEmbeddingAgent(
     agentLayerExtractor.model,
     agentLayerExtractor.provider || DEFAULT_MINI_PROVIDER,
@@ -249,6 +272,7 @@ export const parseMemoryExtractionConfig = (): MemoryExtractionPrivateConfig => 
     agentLayerExtractor,
     agentLayerExtractorPreferredModels,
     agentLayerExtractorPreferredProviders,
+    agentPersonaWriter,
     concurrency,
     embedding,
     embeddingPreferredModels,

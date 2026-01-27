@@ -1,6 +1,6 @@
 ---
-title: 在 Dokploy 上部署 LobeChat 的服务端数据库版本
-description: 本文详细介绍如何在 Dokploy 中部署服务端数据库版 LobeChat，包括数据库配置、身份验证服务配置的设置步骤。
+title: 在 Dokploy 上部署 LobeHub 的服务端数据库版本
+description: 本文详细介绍如何在 Dokploy 中部署服务端数据库版 LobeHub，包括数据库配置、身份验证服务配置的设置步骤。
 tags:
   - 服务端数据库
   - Postgres
@@ -13,7 +13,7 @@ tags:
 
 # 在 Dokploy 上部署服务端数据库版
 
-本文将详细介绍如何在 Dokploy 中部署服务端数据库版 LobeChat。
+本文将详细介绍如何在 Dokploy 中部署服务端数据库版 LobeHub。
 
 ## 一、准备工作
 
@@ -25,11 +25,11 @@ curl -sSL https://dokploy.com/install.sh | sh
 
 1. 在 Dokploy 的 Settings / Git 处根据提示将 Github 绑定到 Dokploy
 
-![](https://github.com/user-attachments/assets/c75eb19e-e0f5-4135-91e4-55be8be8a996)
+![](/blog/assets0f97d1dfccd5ba07172aff71ff9acd7b.webp)
 
 2. 进入 Projects 界面创建一个 Project
 
-![](https://github.com/user-attachments/assets/4e04928d-0171-48d1-afff-e22fc2faaf4e)
+![](/blog/assetsb26b68a4875a6510ddc202dd4b40d010.webp)
 
 ### 配置 S3 存储服务
 
@@ -70,9 +70,9 @@ S3_ENABLE_PATH_STYLE=
 
 进入前面创建的 Project，点击 Create Service 选择 Database，在 Database 界面选择 PostgreSQL ，然后设置数据库名、用户、密码，在 Docker image 中填入 `pgvector/pgvector:pg17` 最后点击 Create 创建数据库。
 
-![](https://github.com/user-attachments/assets/97899819-278f-42fd-804a-144d521d4b4f)
+![](/blog/assets7006b60baaf62aa0d95cd40456e24afe.webp)
 
-进入创建的数据库，在 External Credentials 设置一个未被占用的端口，使其能能通过外部访问，否则 LobeChat 将无法连接到该数据库。你可以在 External Host 查看 Postgres 数据库连接 URL ，如下：
+进入创建的数据库，在 External Credentials 设置一个未被占用的端口，使其能能通过外部访问，否则 LobeHub 将无法连接到该数据库。你可以在 External Host 查看 Postgres 数据库连接 URL ，如下：
 
 ```shell
 postgresql://postgres:wAbLxfXSwkxxxxxx@45.577.281.48:5432/postgres
@@ -80,21 +80,21 @@ postgresql://postgres:wAbLxfXSwkxxxxxx@45.577.281.48:5432/postgres
 
 最后点击 Deploy 部署数据库
 
-![](https://github.com/user-attachments/assets/b4e89dd4-877b-43fe-aa42-4680de17ba8e)
+![](/blog/assets1b9283f9cc5fc5073ff9cffc24880e96.webp)
 
-## 在 Dokploy 上部署 LobeChat
+## 在 Dokploy 上部署 LobeHub
 
-点击 Create Service 选择 Application，创建 LobeChat 应用
+点击 Create Service 选择 Application，创建 LobeHub 应用
 
-![](https://github.com/user-attachments/assets/4cbbbcce-36be-48ff-bb0b-31607a0bba5c)
+![](/blog/assetsb33085e7553d2b7194005b102184553e.webp)
 
-进入创建的 LobeChat 应用，选择你 fork 的 lobe-chat 项目及分支，点击 Save 保存
+进入创建的 LobeHub 应用，选择你 fork 的 lobe-chat 项目及分支，点击 Save 保存
 
-![](https://github.com/user-attachments/assets/2bb4c09d-75bb-4c46-bb2f-faf538308305)
+![](/blog/assetsf0ebf396dbe9559eb3478f48f648a6e2.webp)
 
 切换到 Environment ，在其中填入环境变量，点击保存。
 
-![](https://github.com/user-attachments/assets/0f79c266-cce5-4936-aabd-4c8f19196d91)
+![](/blog/assets6b67dabe7b9226cdff1bace5a3b8ab18.webp)
 
 ```shell
 # 构建所必需的环境变量
@@ -126,14 +126,14 @@ S3_ENABLE_PATH_STYLE=
 
 添加完环境变量并保存后，点击 Deploy 进行部署，你可以在 Deployments 处查看部署进程及日志信息
 
-![](https://github.com/user-attachments/assets/411e2002-61f0-4010-9841-18e88ca895ec)
+![](/blog/assets7c3eab218c0823fa353b1cd23afe21c3.webp)
 
-部署成功后在 Domains 页面，为你的 LobeChat 应用绑定自己的域名并申请证书。
+部署成功后在 Domains 页面，为你的 LobeHub 应用绑定自己的域名并申请证书。
 
-![](https://github.com/user-attachments/assets/dd6bc4a4-3c20-4162-87fd-5cac57e5d7e7)
+![](/blog/assetseebf66254337ce88357629c34e78c08d.webp)
 
-## 验证 LobeChat 是否正常工作
+## 验证 LobeHub 是否正常工作
 
-进入你的 LobeChat 网址，如果你点击左上角登录，可以正常显示登录弹窗，那么说明你已经配置成功了，尽情享用吧～
+进入你的 LobeHub 网址，如果你点击左上角登录，可以正常显示登录弹窗，那么说明你已经配置成功了，尽情享用吧～
 
-![](https://github.com/user-attachments/assets/798ddb18-50c7-462a-a083-0c6841351d26)
+![](/blog/assets11a8089b511aaa61e8982dea0a3665c5.webp)

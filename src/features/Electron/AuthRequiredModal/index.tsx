@@ -3,25 +3,19 @@
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Button, Flexbox, Icon, type ModalInstance, createModal } from '@lobehub/ui';
 import { AlertCircle, LogIn } from 'lucide-react';
-import { type ReactNode, memo, useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 
 import { useElectronStore } from '@/store/electron';
 
-interface ModalUpdateOptions {
-  closable?: boolean;
-  keyboard?: boolean;
-  maskClosable?: boolean;
-  title?: ReactNode;
-}
-
 interface AuthRequiredModalContentProps {
   onClose: () => void;
-  setModalProps: (props: ModalUpdateOptions) => void;
+  onSigningInChange?: (isSigningIn: boolean) => void;
 }
 
 const AuthRequiredModalContent = memo<AuthRequiredModalContentProps>(
-  ({ onClose, setModalProps }) => {
+  ({ onClose, onSigningInChange }) => {
     const { t } = useTranslation('auth');
     const [isSigningIn, setIsSigningIn] = useState(false);
     const isClosingRef = useRef(false);
@@ -34,18 +28,9 @@ const AuthRequiredModalContent = memo<AuthRequiredModalContentProps>(
         s.clearRemoteServerSyncError,
       ]);
 
-    // Update modal props based on signing in state
-    setModalProps({
-      closable: !isSigningIn,
-      keyboard: !isSigningIn,
-      maskClosable: !isSigningIn,
-      title: (
-        <Flexbox align="center" gap={8} horizontal>
-          <Icon icon={AlertCircle} />
-          {t('authModal.title')}
-        </Flexbox>
-      ),
-    });
+    useEffect(() => {
+      onSigningInChange?.(isSigningIn);
+    }, [isSigningIn, onSigningInChange]);
 
     // Listen for successful authorization to close the modal
     useWatchBroadcast('authorizationSuccessful', async () => {
@@ -104,30 +89,41 @@ AuthRequiredModalContent.displayName = 'AuthRequiredModalContent';
  * Hook to create and manage the auth required modal
  */
 export const useAuthRequiredModal = () => {
+  const { t } = useTranslation('auth');
   const instanceRef = useRef<ModalInstance | null>(null);
 
   const open = useCallback(() => {
-    // Don't open multiple modals
     if (instanceRef.current) return;
-
-    const setModalProps = (nextProps: ModalUpdateOptions) => {
-      instanceRef.current?.update?.(nextProps);
-    };
 
     const handleClose = () => {
       instanceRef.current?.close();
       instanceRef.current = null;
     };
 
+    const handleSigningInChange = (isSigningIn: boolean) => {
+      instanceRef.current?.update?.({
+        closable: !isSigningIn,
+        keyboard: !isSigningIn,
+        maskClosable: !isSigningIn,
+      });
+    };
+
     instanceRef.current = createModal({
-      children: <AuthRequiredModalContent onClose={handleClose} setModalProps={setModalProps} />,
+      children: (
+        <AuthRequiredModalContent onClose={handleClose} onSigningInChange={handleSigningInChange} />
+      ),
       closable: false,
       footer: null,
       keyboard: false,
       maskClosable: false,
-      title: '',
+      title: (
+        <Flexbox align="center" gap={8} horizontal>
+          <Icon icon={AlertCircle} />
+          {t('authModal.title')}
+        </Flexbox>
+      ),
     });
-  }, []);
+  }, [t]);
 
   return { open };
 };
@@ -138,8 +134,12 @@ export const useAuthRequiredModal = () => {
 const AuthRequiredModal = memo(() => {
   const { open } = useAuthRequiredModal();
 
-  // Listen for IPC event to open the modal
+  const pathname = useLocation().pathname;
   useWatchBroadcast('authorizationRequired', () => {
+    if (useElectronStore.getState().isConnectionDrawerOpen) return;
+
+    if (pathname.includes('/desktop-onboarding')) return;
+
     open();
   });
 

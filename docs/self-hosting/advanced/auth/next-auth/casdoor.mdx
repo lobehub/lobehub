@@ -1,14 +1,14 @@
 ---
-title: Configuring Casdoor Authentication Service in LobeChat
+title: Configuring Casdoor Authentication Service in LobeHub
 description: >-
-  Learn how to configure the Casdoor authentication service in LobeChat,
+  Learn how to configure the Casdoor authentication service in LobeHub,
   including deployment, creation, permission settings, and environment
   variables.
 tags:
   - Casdoor Authentication
   - Environment Variable Configuration
   - Single Sign-On
-  - LobeChat
+  - LobeHub
 ---
 
 # Configuring Casdoor Authentication Service
@@ -17,19 +17,19 @@ tags:
 
 <Callout type={'tip'}>
   If you want to privately deploy Casdoor, we recommend using Docker Compose to deploy it together
-  with the LobeChat database version, allowing LobeChat to share the same Postgres instance.
+  with the LobeHub database version, allowing LobeHub to share the same Postgres instance.
 </Callout>
 
 ## Casdoor Configuration Process
 
 If you are deploying using a local network IP, the following assumptions apply:
 
-- Your LobeChat database version IP/port is `http://LOBECHAT_IP:3210`.
+- Your LobeHub database version IP/port is `http://LobeHub_IP:3210`.
 - You privately deploy Casdoor, and its domain is `http://CASDOOR_IP:8000`.
 
 If you are deploying using a public network, the following assumptions apply:
 
-- Your LobeChat database version domain is `https://lobe.example.com`.
+- Your LobeHub database version domain is `https://lobe.example.com`.
 - You privately deploy Casdoor, and its domain is `https://lobe-auth-api.example.com`.
 
 <Steps>
@@ -37,12 +37,12 @@ If you are deploying using a public network, the following assumptions apply:
 
   Access your privately deployed Casdoor WebUI (default is `http://localhost:8000/`) to enter the console. The default account is `admin`, and the password is `123`.
 
-  Go to `Authentication` -> `Applications`, create a `LobeChat` application or directly modify the built-in `built-in` application. You can explore other fields, but you must configure at least the following fields:
+  Go to `Authentication` -> `Applications`, create a `LobeHub` application or directly modify the built-in `built-in` application. You can explore other fields, but you must configure at least the following fields:
 
-  - Name, Display Name: `LobeChat`
+  - Name, Display Name: `LobeHub`
   - Redirect URLs:
     - Local Development Environment: `http://localhost:3210/api/auth/callback/casdoor`
-    - Local Network IP Deployment: `http://LOBECHAT_IP:3210/api/auth/callback/casdoor`
+    - Local Network IP Deployment: `http://LobeHub_IP:3210/api/auth/callback/casdoor`
     - Public Network Environment: `https://lobe.example.com/api/auth/callback/casdoor`
 
   There are also some optional fields that can enhance user experience:
@@ -97,7 +97,7 @@ If you are deploying using a public network, the following assumptions apply:
 
   ### Disable User Registration
 
-  Go to `Identity` -> `Applications`, select the `LobeChat` application, and set `Allow Register` to `false`.
+  Go to `Identity` -> `Applications`, select the `LobeHub` application, and set `Allow Register` to `false`.
 
   <Callout type={'warning'}>
     Disabling user registration is necessary to prevent users from registering through the Casdoor
@@ -108,7 +108,7 @@ If you are deploying using a public network, the following assumptions apply:
 
   > Available on Casdoor `>=1.843.0`.
 
-  Configure the Casdoor webhook so that LobeChat can receive notifications when user information is updated.
+  Configure the Casdoor webhook so that LobeHub can receive notifications when user information is updated.
 
   Go to `Admin` -> `Webhooks`, add a webhook, and fill in the following fields:
 
@@ -125,20 +125,20 @@ If you are deploying using a public network, the following assumptions apply:
 
   ### Configure Environment Variables
 
-  Set the obtained `Client ID` and `Client Secret` as `AUTH_CASDOOR_ID` and `AUTH_CASDOOR_SECRET` in the LobeChat environment variables.
+  Set the obtained `Client ID` and `Client Secret` as `AUTH_CASDOOR_ID` and `AUTH_CASDOOR_SECRET` in the LobeHub environment variables.
 
-  Configure `AUTH_CASDOOR_ISSUER` in the LobeChat environment variables as follows:
+  Configure `AUTH_CASDOOR_ISSUER` in the LobeHub environment variables as follows:
 
   - `http://localhost:8000/` if you are in a local development environment.
   - `http://CASDOOR_IP:8000/` if you are privately deploying Casdoor in a local network.
   - `https://lobe-auth-api.example.com/` if you are deploying Casdoor in a public network environment.
 
-  When deploying LobeChat, you need to configure the following environment variables:
+  When deploying LobeHub, you need to configure the following environment variables:
 
   | Environment Variable      | Type     | Description                                                                                                                                                                                        |
   | ------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
   | `AUTH_SECRET`             | Required | A key for encrypting Auth.js session tokens. You can generate a key using the command: `openssl rand -base64 32`.                                                                                  |
-  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the single sign-on provider for LobeChat. Fill in `casdoor` for using Casdoor.                                                                                                              |
+  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the single sign-on provider for LobeHub. Fill in `casdoor` for using Casdoor.                                                                                                               |
   | `AUTH_CASDOOR_ID`         | Required | The client ID from the Casdoor application details page.                                                                                                                                           |
   | `AUTH_CASDOOR_SECRET`     | Required | The client secret from the Casdoor application details page.                                                                                                                                       |
   | `AUTH_CASDOOR_ISSUER`     | Required | The OpenID Connect issuer for the Casdoor provider.                                                                                                                                                |
@@ -152,5 +152,5 @@ If you are deploying using a public network, the following assumptions apply:
 </Steps>
 
 <Callout type={'info'}>
-  Once deployed successfully, users will be able to authenticate via Casdoor and use LobeChat.
+  Once deployed successfully, users will be able to authenticate via Casdoor and use LobeHub.
 </Callout>

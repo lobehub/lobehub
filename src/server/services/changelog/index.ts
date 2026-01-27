@@ -214,9 +214,7 @@ export class ChangelogService {
   }
 
   private replaceCdnUrl(url: string) {
-    if (!docCdnPrefix || !this.cdnUrls?.[url]) {
-      return url;
-    }
-    return urlJoin(docCdnPrefix, this.cdnUrls[url]);
+    if (url?.startsWith('/blog')) return urlJoin('https://hub-apac-1.lobeobjects.space/', url);
+    return url;
   }
 }

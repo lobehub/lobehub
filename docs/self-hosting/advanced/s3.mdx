@@ -1,9 +1,9 @@
 ---
-title: Configuring S3 Storage Service for AI - LobeChat
-description: Learn how to configure S3 storage for LobeChat's multimodal AI conversations.
+title: Configuring S3 Storage Service for AI - LobeHub
+description: Learn how to configure S3 storage for LobeHub's multimodal AI conversations.
 tags:
   - S3 Storage
-  - LobeChat
+  - LobeHub
   - AI Conversations
   - Cloud Storage
   - Image Upload
@@ -11,7 +11,7 @@ tags:
 
 # Configuring S3 Storage Service
 
-LobeChat has supported multimodal AI conversations since [a long time ago](https://x.com/lobehub/status/1724289575672291782), which involves the function of uploading images to AI. In the client-side database solution, image files are stored as binary data directly in the browser's IndexedDB database. However, this solution is not feasible in the server-side database. Storing file-like data directly in Postgres would greatly waste database storage space and slow down computational performance.
+LobeHub has supported multimodal AI conversations since [a long time ago](https://x.com/lobehub/status/1724289575672291782), which involves the function of uploading images to AI. In the client-side database solution, image files are stored as binary data directly in the browser's IndexedDB database. However, this solution is not feasible in the server-side database. Storing file-like data directly in Postgres would greatly waste database storage space and slow down computational performance.
 
 The best practice in this area is to use a file storage service (S3) to store image files. S3 is also the storage solution on which the file upload/knowledge base function depends.
 

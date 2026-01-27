@@ -20,27 +20,27 @@ We need to configure an S3 storage service in the server-side database to store 
 
   The interface of Cloudflare R2 is shown below:
 
-  <Image alt={'Cloudflare R2 Storage Interface'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/41f7f677-0153-4a96-b849-5ac9b7ebefee'} />
+  <Image alt={'Cloudflare R2 Storage Interface'} src={'/blog/assets28616219/41f7f677-0153-4a96-b849-5ac9b7ebefee.webp'} />
 
   When creating the bucket, specify its name and then click create.
 
-  <Image alt={'Create Bucket in R2'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/9c0d184c-3169-40fa-9115-011cfffb9ca7'} />
+  <Image alt={'Create Bucket in R2'} src={'/blog/assets28616219/9c0d184c-3169-40fa-9115-011cfffb9ca7.webp'} />
 
   ### Obtain Environment Variables for the Bucket
 
   In the settings of the R2 storage bucket, you can view the bucket configuration information:
 
-  <Image alt={'View relevant information of the bucket'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/2ceb210c-eca0-4439-ba27-8734d4ebb3ee'} />
+  <Image alt={'View relevant information of the bucket'} src={'/blog/assets28616219/2ceb210c-eca0-4439-ba27-8734d4ebb3ee.webp'} />
 
   The corresponding environment variables are:
 
   ```shell
   # Bucket name
-  S3_BUCKET=lobechat
+  S3_BUCKET=LobeHub
   # Request endpoint of the bucket (note that the path in this link includes the bucket name, which must be removed, or use the link provided on the page for applying S3 API token)
   S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
   # Access domain of the bucket
-  S3_PUBLIC_DOMAIN=https://s3-for-lobechat.your-domain.com
+  S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com
   ```
 
   <Callout type={'warning'}>
@@ -49,21 +49,21 @@ We need to configure an S3 storage service in the server-side database to store 
 
   ### Obtain S3 Key Environment Variables
 
-  You need to obtain the access key for S3 so that the LobeChat server has permission to access the S3 storage service. In R2, you can configure the access key in the account details:
+  You need to obtain the access key for S3 so that the LobeHub server has permission to access the S3 storage service. In R2, you can configure the access key in the account details:
 
-  <Image alt={'View access key of the bucket'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/be0c95c0-6693-44ee-a490-7e8dfaa8b34d'} />
+  <Image alt={'View access key of the bucket'} src={'/blog/assets28616219/be0c95c0-6693-44ee-a490-7e8dfaa8b34d.webp'} />
 
   Click the button in the upper right corner to create an API token and enter the create API Token page.
 
-  <Image alt={'Create corresponding API token'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/7b0ea46c-5157-40a8-888f-f47664a4884f'} />
+  <Image alt={'Create corresponding API token'} src={'/blog/assets28616219/7b0ea46c-5157-40a8-888f-f47664a4884f.webp'} />
 
   Since our server-side database needs to read and write to the S3 storage service, the permission needs to be set to `Object Read and Write`, then click create.
 
-  <Image alt={'Configure API token permissions'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/d6f5a918-7b50-4d6e-83a6-3894ab930ddf'} />
+  <Image alt={'Configure API token permissions'} src={'/blog/assets28616219/d6f5a918-7b50-4d6e-83a6-3894ab930ddf.webp'} />
 
   After creation, you can see the corresponding S3 API token.
 
-  <Image alt={'Copy API token'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/763b18f9-2b5f-44bb-a479-9b56d46f7397'} />
+  <Image alt={'Copy API token'} src={'/blog/assets28616219/763b18f9-2b5f-44bb-a479-9b56d46f7397.webp'} />
 
   The corresponding environment variables are:
 
@@ -78,11 +78,11 @@ We need to configure an S3 storage service in the server-side database to store 
 
   In R2, you can find the CORS configuration in the settings of the storage bucket:
 
-  <Image alt={'Cross-Origin Settings in Cloudflare R2'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/ab008be7-26b2-4b78-8bd9-24301bf34d23'} />
+  <Image alt={'Cross-Origin Settings in Cloudflare R2'} src={'/blog/assets28616219/ab008be7-26b2-4b78-8bd9-24301bf34d23.webp'} />
 
   Add a CORS rule to allow requests from your domain (in the previous section, it is `https://your-project.vercel.app`):
 
-  <Image alt={'Configure allowed site domain'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/dfcc2cb3-2958-4498-a8a4-51bec584fe7d'} />
+  <Image alt={'Configure allowed site domain'} src={'/blog/assets28616219/dfcc2cb3-2958-4498-a8a4-51bec584fe7d.webp'} />
 
   <Callout type={'info'}>
     If you also plan to use the desktop client, add <code>[http://localhost:3015](http://localhost:3015)</code> to <code>AllowedOrigins</code> so the desktop client (running locally) can access R2.
@@ -115,7 +115,7 @@ S3_ACCESS_KEY_ID=9998d6757e276cf9f1edbd325b7083a6
 S3_SECRET_ACCESS_KEY=55af75d8eb6b99f189f6a35f855336ea62cd9c4751a5cf4337c53c1d3f497ac2
 
 # Bucket Name
-S3_BUCKET=lobechat
+S3_BUCKET=LobeHub
 # Bucket Request Endpoint
 S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
 # Public Access Domain for the Bucket

@@ -37,11 +37,12 @@ interface SliderWithCheckboxProps {
   onToggle: (checked: boolean) => void;
   step: number;
   styles: any;
+  unlimitedInput?: boolean;
   value?: number;
 }
 
 const SliderWithCheckbox = memo<SliderWithCheckboxProps>(
-  ({ value, onChange, disabled, checked, onToggle, min, max, step }) => {
+  ({ value, onChange, disabled, checked, onToggle, min, max, step, unlimitedInput }) => {
     return (
       <Flexbox align="center" gap={12} horizontal justify={'flex-end'} width={300}>
         {!disabled && (
@@ -52,8 +53,39 @@ const SliderWithCheckbox = memo<SliderWithCheckboxProps>(
               min={min}
               onChange={onChange}
               step={step}
+              unlimitedInput={unlimitedInput}
               value={value}
             />
+          </div>
+        )}
+        <Switch
+          checked={checked}
+          onChange={(v) => {
+            onToggle(v);
+          }}
+          size={checked ? 'small' : 'default'}
+        />
+      </Flexbox>
+    );
+  },
+);
+
+// Wrapper component for select with checkbox
+interface SelectWithCheckboxProps {
+  checked: boolean;
+  onChange?: (value: string) => void;
+  onToggle: (checked: boolean) => void;
+  options: Array<{ label: string; value: string }>;
+  value?: string;
+}
+
+const SelectWithCheckbox = memo<SelectWithCheckboxProps>(
+  ({ value, onChange, checked, onToggle, options }) => {
+    return (
+      <Flexbox align="center" gap={12} horizontal justify={'flex-end'} width={300}>
+        {checked && (
+          <div style={{ flex: 1 }}>
+            <Select onChange={onChange} options={options} value={value} />
           </div>
         )}
         <Switch
@@ -121,9 +153,6 @@ const AgentModal = memo(() => {
   const { t } = useTranslation('setting');
   const [form] = Form.useForm();
   const config = useStore(selectors.currentAgentConfig, isEqual);
-
-  const enableMaxTokens = AntdForm.useWatch(['chatConfig', 'enableMaxTokens'], form);
-  const enableReasoningEffort = AntdForm.useWatch(['chatConfig', 'enableReasoningEffort'], form);
 
   const updateConfig = useStore((s) => s.setAgentConfig);
 
@@ -231,6 +260,9 @@ const AgentModal = memo(() => {
     } satisfies FormItemProps;
   });
 
+  const maxTokensValue = AntdForm.useWatch(['params', 'max_tokens'], form);
+  const reasoningEffortValue = AntdForm.useWatch(['params', 'reasoning_effort'], form);
+
   const model: FormGroupItemType = {
     children: [
       {
@@ -244,42 +276,46 @@ const AgentModal = memo(() => {
       },
       ...paramItems,
       {
-        children: <Switch />,
-        label: t('settingModel.enableMaxTokens.title'),
-        layout: 'horizontal',
-        minWidth: undefined,
-        name: ['chatConfig', 'enableMaxTokens'],
-        valuePropName: 'checked',
-      },
-      {
         children: (
-          <SliderWithInput
-            disabled={!enableMaxTokens}
+          <SliderWithCheckbox
+            checked={typeof maxTokensValue === 'number'}
+            disabled={typeof maxTokensValue !== 'number'}
             max={32_000}
             min={0}
+            onToggle={(checked) => {
+              if (!checked) {
+                form.setFieldValue(['params', 'max_tokens'], undefined);
+              } else {
+                form.setFieldValue(['params', 'max_tokens'], 4096);
+              }
+            }}
             step={100}
+            styles={styles}
             unlimitedInput
           />
         ),
         desc: t('settingModel.maxTokens.desc'),
-        divider: false,
-        hidden: !enableMaxTokens,
-        label: t('settingModel.maxTokens.title'),
+        label: (
+          <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
+            {t('settingModel.maxTokens.title')}
+            <InfoTooltip title={t('settingModel.maxTokens.desc')} />
+          </Flexbox>
+        ),
+        minWidth: undefined,
         name: ['params', 'max_tokens'],
         tag: 'max_tokens',
       },
       {
-        children: <Switch />,
-        label: t('settingModel.enableReasoningEffort.title'),
-        layout: 'horizontal',
-        minWidth: undefined,
-        name: ['chatConfig', 'enableReasoningEffort'],
-        valuePropName: 'checked',
-      },
-      {
         children: (
-          <Select
-            defaultValue="medium"
+          <SelectWithCheckbox
+            checked={typeof reasoningEffortValue === 'string'}
+            onToggle={(checked) => {
+              if (!checked) {
+                form.setFieldValue(['params', 'reasoning_effort'], undefined);
+              } else {
+                form.setFieldValue(['params', 'reasoning_effort'], 'medium');
+              }
+            }}
             options={[
               { label: t('settingModel.reasoningEffort.options.low'), value: 'low' },
               { label: t('settingModel.reasoningEffort.options.medium'), value: 'medium' },
@@ -288,8 +324,13 @@ const AgentModal = memo(() => {
           />
         ),
         desc: t('settingModel.reasoningEffort.desc'),
-        hidden: !enableReasoningEffort,
-        label: t('settingModel.reasoningEffort.title'),
+        label: (
+          <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
+            {t('settingModel.reasoningEffort.title')}
+            <InfoTooltip title={t('settingModel.reasoningEffort.desc')} />
+          </Flexbox>
+        ),
+        minWidth: undefined,
         name: ['params', 'reasoning_effort'],
         tag: 'reasoning_effort',
       },

@@ -1,5 +1,5 @@
 import type { Attributes, Span } from '@lobechat/observability-otel/api';
-import { SpanKind, SpanStatusCode, diag, trace } from '@lobechat/observability-otel/api';
+import { SpanKind, SpanStatusCode, context, diag, trace } from '@lobechat/observability-otel/api';
 import {
   ATTR_ERROR_TYPE,
   ATTR_EXCEPTION_MESSAGE,
@@ -20,6 +20,8 @@ import { TRPCError } from '@trpc/server';
 import { env } from 'node:process';
 
 import { name } from '../../../../package.json';
+import { injectSpanTraceHeaders } from '@/libs/observability/traceparent';
+
 import { trpc } from '../lambda/init';
 
 const tracer = trace.getTracer('trpc-server');
@@ -62,7 +64,7 @@ const finalizeSpanWithError = (span: Span, error: unknown) => {
   }
 };
 
-export const openTelemetry = trpc.middleware(async ({ path, type, next, getRawInput }) => {
+export const openTelemetry = trpc.middleware(async ({ ctx, path, type, next, getRawInput }) => {
   if (!env.ENABLE_TELEMETRY) {
     diag.debug(name, 'telemetry disabled', env.ENABLE_TELEMETRY);
 
@@ -76,15 +78,24 @@ export const openTelemetry = trpc.middleware(async ({ path, type, next, getRawIn
   const input = getRawInput();
   const requestSize = getPayloadSize(input);
 
-  const span = tracer.startSpan(spanName, {
-    attributes: baseAttributes,
-    kind: SpanKind.SERVER,
-  });
+  const span = tracer.startSpan(
+    spanName,
+    {
+      attributes: baseAttributes,
+      kind: SpanKind.SERVER,
+    },
+    ctx?.traceContext,
+  );
+
+  // attach trace headers for downstream consumers (traceparent/tracestate)
+  if (ctx?.resHeaders) {
+    injectSpanTraceHeaders(ctx.resHeaders, span);
+  }
 
   const startTimestamp = Date.now();
 
   try {
-    const result = await next();
+    const result = await context.with(trace.setSpan(context.active(), span), async () => next());
     diag.debug(name, 'tRPC instrumentation', 'requestHandled');
 
     const responseSize = getPayloadSize(result.ok ? result.data : result.error);

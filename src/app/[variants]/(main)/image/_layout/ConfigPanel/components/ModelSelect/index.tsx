@@ -46,7 +46,7 @@ const ModelSelect = memo(() => {
   const options = useMemo<SelectProps['options']>(() => {
     const getImageModels = (provider: EnabledProviderWithModels) => {
       const modelOptions = provider.children.map((model) => ({
-        label: <ImageModelItem {...model} />,
+        label: <ImageModelItem {...model} providerId={provider.id} />,
         provider: provider.id,
         value: `${provider.id}/${model.id}`,
       }));
@@ -130,7 +130,14 @@ const ModelSelect = memo(() => {
 
     if (!modelInfo) return props.label;
 
-    return <ImageModelItem {...modelInfo} showBadge={false} showPopover={false} />;
+    return (
+      <ImageModelItem
+        {...modelInfo}
+        providerId={modelInfo.providerId}
+        showBadge={false}
+        showPopover={false}
+      />
+    );
   };
 
   return (

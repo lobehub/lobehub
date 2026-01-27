@@ -1,12 +1,12 @@
 ---
-title: Configuring Github Authentication Service for LobeChat
+title: Configuring Github Authentication Service for LobeHub
 description: >-
-  Learn how to configure Github authentication service for LobeChat, including
+  Learn how to configure Github authentication service for LobeHub, including
   creating a Github provider, setting up environment variables, and deploying
-  LobeChat.
+  LobeHub.
 tags:
   - Github authentication
-  - LobeChat
+  - LobeHub
   - Environment variables
   - Single Sign-On
   - OAuth authentication
@@ -23,40 +23,40 @@ tags:
 
   Fill in the Github App name, Homepage URL, and Callback URL.
 
-  <Image alt="Create a Github Provider" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/2f919f99-2aaa-4fa7-9938-169d3ed09db7" />
+  <Image alt="Create a Github Provider" inStep src="/blog/assets64475363/2f919f99-2aaa-4fa7-9938-169d3ed09db7.webp" />
 
   Set the webhook callback URL according to your needs.
 
-  <Image alt="Fill in other fields" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/d7ef5ad1-b1a3-435e-b1bc-4436d2b6fecd" />
+  <Image alt="Fill in other fields" inStep src="/blog/assets64475363/d7ef5ad1-b1a3-435e-b1bc-4436d2b6fecd.webp" />
 
   Set the permission to read email addresses.
 
-  <Image alt="Set required permissions" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/23131ca1-9e84-4a89-a840-ef79c4bc0251" />
+  <Image alt="Set required permissions" inStep src="/blog/assets64475363/23131ca1-9e84-4a89-a840-ef79c4bc0251.webp" />
 
-  <Image alt="Set permission to read email addresses" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/358bca8d-3d82-4e76-9a5e-90d16a39efde" />
+  <Image alt="Set permission to read email addresses" inStep src="/blog/assets64475363/358bca8d-3d82-4e76-9a5e-90d16a39efde.webp" />
 
   Set whether it is accessible publicly or only accessible to yourself.
 
-  <Image alt="Set whether it is accessible publicly or only accessible to yourself" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/995780cb-9096-4a36-ab17-d422703ab970" />
+  <Image alt="Set whether it is accessible publicly or only accessible to yourself" inStep src="/blog/assets64475363/995780cb-9096-4a36-ab17-d422703ab970.webp" />
 
   Click "Create Github App".
 
   After successful creation, click "Generate a new client secret" to create a client secret.
 
-  <Image alt="Create a new client secret" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/6d69bdca-7d18-4cbc-b3e0-220d8815cd29" />
+  <Image alt="Create a new client secret" inStep src="/blog/assets64475363/6d69bdca-7d18-4cbc-b3e0-220d8815cd29.webp" />
 
   After successful creation, save the `Client ID` and `Client Secret`.
 
-  <Image alt="Create a new client secret" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/c6108133-a918-48b0-ab1a-e3fa607572a4" />
+  <Image alt="Create a new client secret" inStep src="/blog/assets64475363/c6108133-a918-48b0-ab1a-e3fa607572a4.webp" />
 
   ### Configure Environment Variables
 
-  When deploying LobeChat, you need to configure the following environment variables:
+  When deploying LobeHub, you need to configure the following environment variables:
 
   | Environment Variable      | Type     | Description                                                                                                                                                                                           |
   | ------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
   | `AUTH_SECRET`             | Required | Key used to encrypt Auth.js session tokens. You can generate the key using the command: `openssl rand -base64 32`                                                                                     |
-  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the Single Sign-On provider for LobeChat. Use `github` for Github.                                                                                                                             |
+  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the Single Sign-On provider for LobeHub. Use `github` for Github.                                                                                                                              |
   | `AUTH_GITHUB_ID`          | Required | Client ID in the Github App details page.                                                                                                                                                             |
   | `AUTH_GITHUB_SECRET`      | Required | Client Secret in the Github App details page.                                                                                                                                                         |
   | `AUTH_URL`                | Required | This URL is used to specify the callback address for Auth.js when performing OAuth authentication. Only set it if the default generated redirect address is incorrect. `https://example.com/api/auth` |
@@ -68,7 +68,7 @@ tags:
 </Steps>
 
 <Callout type={'info'}>
-  After successful deployment, users will be able to authenticate with Github and use LobeChat.
+  After successful deployment, users will be able to authenticate with Github and use LobeHub.
 </Callout>
 
 [github-create-app]: https://github.com/settings/apps/new

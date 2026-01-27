@@ -3,7 +3,7 @@ title: >-
   Configuring Online Search Functionality - Enhancing AI's Ability to Access Web
   Information
 description: >-
-  Learn how to configure the SearXNG online search functionality for LobeChat,
+  Learn how to configure the SearXNG online search functionality for LobeHub,
   enabling AI to access the latest web information.
 tags:
   - Online Search
@@ -14,7 +14,7 @@ tags:
 
 # Configuring Online Search Functionality
 
-LobeChat supports configuring **web search functionality** for AI, enabling it to retrieve real-time information from the internet to provide more accurate and up-to-date responses. Web search supports multiple search engine providers, including [SearXNG](https://github.com/searxng/searxng), [Search1API](https://www.search1api.com), [Google](https://programmablesearchengine.google.com), and [Brave](https://brave.com/search/api), among others.
+LobeHub supports configuring **web search functionality** for AI, enabling it to retrieve real-time information from the internet to provide more accurate and up-to-date responses. Web search supports multiple search engine providers, including [SearXNG](https://github.com/searxng/searxng), [Search1API](https://www.search1api.com), [Google](https://programmablesearchengine.google.com), and [Brave](https://brave.com/search/api), among others.
 
 <Callout type="info">
   Web search allows AI to access time-sensitive content, such as the latest news, technology trends,
@@ -23,7 +23,7 @@ LobeChat supports configuring **web search functionality** for AI, enabling it t
   your use case.
 </Callout>
 
-By setting the search service environment variable `SEARCH_PROVIDERS` and the corresponding API Keys, LobeChat will query multiple sources and return the results. You can also configure crawler service environment variables such as `CRAWLER_IMPLS` (e.g., `browserless`, `firecrawl`, `tavily`, etc.) to extract webpage content, enhancing the capability of search + reading.
+By setting the search service environment variable `SEARCH_PROVIDERS` and the corresponding API Keys, LobeHub will query multiple sources and return the results. You can also configure crawler service environment variables such as `CRAWLER_IMPLS` (e.g., `browserless`, `firecrawl`, `tavily`, etc.) to extract webpage content, enhancing the capability of search + reading.
 
 # Core Environment Variables
 
@@ -189,7 +189,7 @@ SEARXNG_URL=https://searxng-instance.com
 
 This URL should point to a functional SearXNG instance. You can choose to self-host SearXNG or use a publicly available SearXNG instance.
 
-You can find publicly available SearXNG instances in the [SearXNG instance list](https://searx.space/). Choose an instance that is fast and reliable, and then configure its URL in LobeChat.
+You can find publicly available SearXNG instances in the [SearXNG instance list](https://searx.space/). Choose an instance that is fast and reliable, and then configure its URL in LobeHub.
 
 > Note that the `searxng` you use must have `json` output enabled; otherwise, the `lobe-chat` call will result in an error. If self-hosting, find the `searxng` configuration file and add `json` as shown below.
 
@@ -206,7 +206,7 @@ formats:
 
 After configuration, you can verify whether the online search functionality is working correctly by following these steps:
 
-1. Restart the LobeChat service.
+1. Restart the LobeHub service.
 2. Start a new chat session, enable smart online search, and then ask AI a question that requires the latest information, such as "What is the current gold price today?" or "What are the latest major news stories?"
 3. Observe whether AI can return the latest information based on internet searches.
 
@@ -214,6 +214,6 @@ If AI can answer these time-sensitive questions, it indicates that the online se
 
 ## References
 
-- [LobeChat Online Search RFC Discussion](https://github.com/lobehub/lobe-chat/discussions/6447)
+- [LobeHub Online Search RFC Discussion](https://github.com/lobehub/lobe-chat/discussions/6447)
 - [SearXNG GitHub Repository](https://github.com/searxng/searxng)
 - [Discussion on Enabling JSON Output for SearXNG](https://github.com/searxng/searxng/discussions/3542)

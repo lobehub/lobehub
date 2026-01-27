@@ -1,7 +1,7 @@
 ---
-title: Observability and Tracing for LobeChat
+title: Observability and Tracing for LobeHub
 description: >-
-  Enhance your LobeChat applications with open-source observability and tracing
+  Enhance your LobeHub applications with open-source observability and tracing
   using Langfuse. Automatically capture detailed traces and metrics for every
   request to optimize and debug your chats.
 tags:
@@ -10,11 +10,11 @@ tags:
   - Langfuse
 ---
 
-# Monitor your LobeChat application with Langfuse
+# Monitor your LobeHub application with Langfuse
 
 ## What is Langfuse?
 
-[Langfuse](https://langfuse.com/) an **open-source LLM Observability platform**. By enabling the Langfuse integration, you can trace your application data to develop, monitor, and improve the use of LobeChat, including:
+[Langfuse](https://langfuse.com/) an **open-source LLM Observability platform**. By enabling the Langfuse integration, you can trace your application data to develop, monitor, and improve the use of LobeHub, including:
 
 - Application [traces](https://langfuse.com/docs/tracing)
 - Usage patterns
@@ -28,13 +28,13 @@ tags:
 
   Get your Langfuse API key by signing up for [Langfuse Cloud](https://cloud.langfuse.com) or [self-hosting](https://langfuse.com/docs/deployment/self-host) Langfuse.
 
-  ### Set up LobeChat
+  ### Set up LobeHub
 
-  There are multiple ways to [self-host LobeChat](https://lobehub.com/docs/self-hosting/start). For this example, we will use the Docker Desktop deployment.
+  There are multiple ways to [self-host LobeHub](https://lobehub.com/docs/self-hosting/start). For this example, we will use the Docker Desktop deployment.
 
   <Tabs items={["Environment Variables", "Example in Docker Desktop"]}>
     <Tab>
-      Before deploying LobeChat, set the following four environment variables with the Langfuse API keys you created in the previous step.
+      Before deploying LobeHub, set the following four environment variables with the Langfuse API keys you created in the previous step.
 
       ```sh
       ENABLE_LANGFUSE = '1'
@@ -47,25 +47,25 @@ tags:
     <Tab>
       Before running the Docker container, set the environment variables in the Docker Desktop with the Langfuse API keys you created in the previous step.
 
-      <Image alt={'Environment Variables in Docker Desktop'} src={'https://langfuse.com/images/docs/lobechat-docker-desktop-env.png'} />
+      <Image alt={'Environment Variables in Docker Desktop'} src={'https://langfuse.com/images/docs/LobeHub-docker-desktop-env.png'} />
     </Tab>
   </Tabs>
 
   ### Activate Analytics in Settings
 
-  Once you have LobeChat running, navigate to the **About** tab in the **Settings** and activate analytics. This is necessary for traces to be sent to Langfuse.
+  Once you have LobeHub running, navigate to the **About** tab in the **Settings** and activate analytics. This is necessary for traces to be sent to Langfuse.
 
-  <Image alt={'LobeChat Settings'} src={'https://langfuse.com/images/docs/lobechat-settings.png'} />
+  <Image alt={'LobeHub Settings'} src={'https://langfuse.com/images/docs/LobeHub-settings.png'} />
 
   ### See Chat Traces in Langfuse
 
-  After setting your LLM model key, you can start interacting with your LobeChat application.
+  After setting your LLM model key, you can start interacting with your LobeHub application.
 
-  <Image alt={'LobeChat Conversation'} src={'https://langfuse.com/images/docs/lobechat-converstation.png'} />
+  <Image alt={'LobeHub Conversation'} src={'https://langfuse.com/images/docs/LobeHub-converstation.png'} />
 
   All conversations in the chat are automatically traced and sent to Langfuse. You can view the traces in the [Traces section](https://langfuse.com/docs/tracing) in the Langfuse UI.
 
-  <Image alt={'LobeChat Example Trace'} src={'https://langfuse.com/images/docs/lobechat-example-trace.png'} />
+  <Image alt={'LobeHub Example Trace'} src={'https://langfuse.com/images/docs/LobeHub-example-trace.png'} />
 
   *[Example trace in the Langfuse UI](https://cloud.langfuse.com/project/cloramnkj0002jz088vzn1ja4/traces/63e9246d-3f22-4e45-936d-b0c4ccf55a1e?timestamp=2024-11-26T17%3A00%3A02.028Z\&observation=7ea75a0c-d9d1-425c-9b88-27561c63b413)*
 </Steps>

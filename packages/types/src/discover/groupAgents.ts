@@ -86,6 +86,10 @@ export interface DiscoverGroupAgentItem extends MetaData {
   isFeatured?: boolean;
   isOfficial?: boolean;
   /**
+   * Whether the agent group is validated
+   */
+  isValidated?: boolean;
+  /**
    * Number of knowledge bases across all member agents
    */
   knowledgeCount?: number;
@@ -140,6 +144,10 @@ export interface DiscoverGroupAgentDetail extends DiscoverGroupAgentItem {
    * Example conversations (if available from config)
    */
   examples?: any;
+  /**
+   * Whether the agent group is validated
+   */
+  isValidated?: boolean;
   /**
    * Member agents in the group
    */

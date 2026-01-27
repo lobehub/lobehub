@@ -1,5 +1,5 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import { ContextMenuHost, ModalHost, TooltipGroup } from '@lobehub/ui';
+import { ContextMenuHost, ModalHost, ToastHost, TooltipGroup } from '@lobehub/ui';
 import { LazyMotion, domMax } from 'motion/react';
 import { type ReactNode, Suspense } from 'react';
 
@@ -78,6 +78,7 @@ const GlobalLayout = async ({
                           <LobeAnalyticsProviderWrapper>{children}</LobeAnalyticsProviderWrapper>
                         </TooltipGroup>
                         <ModalHost />
+                        <ToastHost />
                         <ContextMenuHost />
                       </LazyMotion>
                     </DragUploadProvider>

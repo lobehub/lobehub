@@ -1,7 +1,7 @@
 ---
-title: Configure Auth0 Identity Verification Service for LobeChat
+title: Configure Auth0 Identity Verification Service for LobeHub
 description: >-
-  Learn how to configure Auth0 Identity Verification Service for LobeChat for
+  Learn how to configure Auth0 Identity Verification Service for LobeHub for
   your organization, including creating applications, adding users, and
   configuring environment variables.
 tags:
@@ -21,15 +21,15 @@ tags:
 
   Register and log in to [Auth0][auth0-client-page], click on the "Applications" in the left navigation bar to switch to the application management interface, and click "Create Application" in the upper right corner to create an application.
 
-  <Image alt="Create Auth0 Application S1" inStep src="https://github.com/lobehub/lobe-chat/assets/30863298/f068190f-0027-4d3b-8667-d632e43d5a86" />
+  <Image alt="Create Auth0 Application S1" inStep src="/blog/assets30863298/f068190f-0027-4d3b-8667-d632e43d5a86.webp" />
 
   Fill in the application name you want to display to the organization users, choose any application type, and click "Create".
 
-  <Image alt="Create Auth0 Application S2" inStep src="https://github.com/lobehub/lobe-chat/assets/30863298/3e0082df-9b6f-46f3-b67f-bdc79e1eb2cc" />
+  <Image alt="Create Auth0 Application S2" inStep src="/blog/assets30863298/3e0082df-9b6f-46f3-b67f-bdc79e1eb2cc.webp" />
 
   After successful creation, click on the corresponding application to enter the application details page, switch to the "Settings" tab, and you can see the corresponding configuration information.
 
-  <Image alt="Create Auth0 Application S3" inStep src="https://github.com/lobehub/lobe-chat/assets/30863298/df4cea85-616a-46f5-b2de-42725d9b82a6" />
+  <Image alt="Create Auth0 Application S3" inStep src="/blog/assets30863298/df4cea85-616a-46f5-b2de-42725d9b82a6.webp" />
 
   In the application configuration page, you also need to configure Allowed Callback URLs, where you should fill in:
 
@@ -37,7 +37,7 @@ tags:
   http(s)://your-domain/api/auth/callback/auth0
   ```
 
-  <Image alt="Create Auth0 Application S4" inStep src="https://github.com/lobehub/lobe-chat/assets/30863298/62fbd09f-a69a-4460-949b-0f6285fa65b9" />
+  <Image alt="Create Auth0 Application S4" inStep src="/blog/assets30863298/62fbd09f-a69a-4460-949b-0f6285fa65b9.webp" />
 
   <Callout type={'important'}>
     You can fill in or modify Allowed Callback URLs after deployment, but make sure the filled URL is
@@ -46,13 +46,13 @@ tags:
 
   ### Add Users
 
-  Click on the "Users Management" in the left navigation bar to enter the user management interface, where you can create users for your organization to log in to LobeChat.
+  Click on the "Users Management" in the left navigation bar to enter the user management interface, where you can create users for your organization to log in to LobeHub.
 
-  <Image alt="Add Users" inStep src="https://github.com/lobehub/lobe-chat/assets/30863298/0beda150-d0b6-43cf-a9f1-fce928b83a96" />
+  <Image alt="Add Users" inStep src="/blog/assets30863298/0beda150-d0b6-43cf-a9f1-fce928b83a96.webp" />
 
   ### Configure Environment Variables
 
-  When deploying LobeChat, you need to configure the following environment variables:
+  When deploying LobeHub, you need to configure the following environment variables:
 
   | Environment Variable      | Type     | Description                                                                                                                                                                                         |
   | ------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -69,7 +69,7 @@ tags:
 </Steps>
 
 <Callout>
-  After successful deployment, users will be able to authenticate and use LobeChat using the users
+  After successful deployment, users will be able to authenticate and use LobeHub using the users
   configured in Auth0.
 </Callout>
 
@@ -81,17 +81,17 @@ If your enterprise or organization already has a unified identity authentication
 
 Auth0 supports single sign-on services such as Azure Active Directory, Slack, Google Workspace, Office 365, Zoom, and more. For a detailed list of supported services, please refer to [this link][auth0-sso-integrations].
 
-<Image alt="Connecting to an Existing Single Sign-On Service" src="https://github.com/lobehub/lobe-chat/assets/30863298/9891347e-a338-4aa9-8714-f16c8dbcfcec" />
+<Image alt="Connecting to an Existing Single Sign-On Service" src="/blog/assets30863298/9891347e-a338-4aa9-8714-f16c8dbcfcec.webp" />
 
 ### Configuring Social Login
 
 If your enterprise or organization needs to support external user logins, you can configure social login services in Authentication -> Social.
 
-<Image alt="Configuring Social Login" src="https://github.com/lobehub/lobe-chat/assets/30863298/880749a6-5ba4-4e20-a968-b583a54de7fa" />
+<Image alt="Configuring Social Login" src="/blog/assets30863298/880749a6-5ba4-4e20-a968-b583a54de7fa.webp" />
 
 <Callout type={'warning'}>
   Configuring social login services by default allows anyone to authenticate, which may lead to
-  LobeChat being abused by external users.
+  LobeHub being abused by external users.
 </Callout>
 
 <Callout>

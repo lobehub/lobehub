@@ -1,9 +1,11 @@
 import { Center, Flexbox } from '@lobehub/ui';
 import { Drawer } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { useCallback, useState } from 'react';
+import { Suspense, useCallback } from 'react';
 
 import LoginStep from '@/app/[variants]/(desktop)/desktop-onboarding/features/LoginStep';
+import { BrandTextLoading } from '@/components/Loading';
+import { useElectronStore } from '@/store/electron';
 import { isMacOS } from '@/utils/platform';
 
 import RemoteStatus from './RemoteStatus';
@@ -23,17 +25,20 @@ const styles = createStaticStyles(({ css }) => {
 });
 
 const Connection = () => {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setConnectionDrawerOpen] = useElectronStore((s) => [
+    s.isConnectionDrawerOpen,
+    s.setConnectionDrawerOpen,
+  ]);
 
   const handleClose = useCallback(() => {
-    setIsOpen(false);
-  }, []);
+    setConnectionDrawerOpen(false);
+  }, [setConnectionDrawerOpen]);
 
   return (
     <>
       <RemoteStatus
         onClick={() => {
-          setIsOpen(true);
+          setConnectionDrawerOpen(true);
         }}
       />
       <Drawer
@@ -47,11 +52,19 @@ const Connection = () => {
         }}
         styles={{ body: { padding: 0 }, header: { padding: 0 } }}
       >
-        <Center style={{ height: '100%', overflow: 'auto', padding: 24 }}>
-          <Flexbox style={{ maxWidth: 560, width: '100%' }}>
-            <LoginStep onBack={handleClose} onNext={handleClose} />
-          </Flexbox>
-        </Center>
+        <Suspense
+          fallback={
+            <Center style={{ height: '100%' }}>
+              <BrandTextLoading debugId="Connection" />
+            </Center>
+          }
+        >
+          <Center style={{ height: '100%', overflow: 'auto', padding: 24 }}>
+            <Flexbox style={{ maxWidth: 560, width: '100%' }}>
+              <LoginStep onBack={handleClose} onNext={handleClose} />
+            </Flexbox>
+          </Center>
+        </Suspense>
       </Drawer>
     </>
   );

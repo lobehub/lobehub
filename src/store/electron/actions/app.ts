@@ -15,6 +15,7 @@ import type { ElectronStore } from '../store';
 // ======== Action Interface ======== //
 
 export interface ElectronAppAction {
+  setConnectionDrawerOpen: (isOpen: boolean) => void;
   updateElectronAppState: (state: ElectronAppState) => void;
 
   /**
@@ -32,6 +33,10 @@ export const createElectronAppSlice: StateCreator<
   [],
   ElectronAppAction
 > = (set, get) => ({
+  setConnectionDrawerOpen: (isOpen: boolean) => {
+    set({ isConnectionDrawerOpen: isOpen }, false, 'setConnectionDrawerOpen');
+  },
+
   updateElectronAppState: (state: ElectronAppState) => {
     const prevState = get().appState;
     set({ appState: merge(prevState, state) });

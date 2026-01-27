@@ -1,0 +1,118 @@
+---
+title: Migrate from Local Database (v1.x) to Cloud (v2.x)
+description: >-
+  Export your data from the v1.x local database and import it into LobeHub v2.x
+  Cloud.
+tags:
+  - LobeHub
+  - Migration
+  - Cloud
+  - Desktop
+  - Local Database
+---
+
+# Migrate from Local Database (v1.x) to Cloud (v2.x)
+
+LobeHub v1.x Desktop supported a **local database** mode, which stored your data on this device. Starting from v2.x, we have moved to a **cloud-first architecture** and removed the local database so we can iterate faster and deliver a more consistent experience across platforms.
+
+<Callout type="info">
+  Why the change? The v1.x local database typically consumed more system resources, and only a small
+  portion of users relied on it. By simplifying the client and focusing on the cloud-first
+  experience, we can improve overall performance and ship new features faster.
+</Callout>
+
+This guide explains how to **export your data from v1.x** and **import it into v2.x**.
+
+## Before you start
+
+- Keep your **v1.x client installed** until you confirm the migration is successful.
+- Prepare a **stable network connection** (importing may take time, especially for large histories).
+- Sign in to **LobeHub v2.x** (Cloud or your self-hosted instance).
+
+If you prefer self-hosting, you can follow the [Self-Hosting Guide](/docs/self-hosting/start) first, then import into your self-hosted v2.x instance.
+
+## If you already upgraded to v2.x by accident
+
+You can still migrate your data:
+
+1. Download and install a **v1.x build** from [GitHub Releases](https://github.com/lobehub/lobe-chat/releases).
+2. Use v1.x to export your data (`Settings -> Data Storage -> Export Data`), then import it in v2.x.
+
+Don’t worry: **upgrading to v2.x does not delete your local database files**. As long as the local database files are still there, your data is still there.
+
+### Local database location
+
+By default, the local database is stored at:
+
+- `${appData}/lobehub-storage/lobehub-local-db`
+
+## What will be migrated
+
+The exact items depend on the export format and your v1.x build, but typically include:
+
+- Your assistants/agents
+- Conversations / topics and messages
+- Prompt templates (if used in your v1.x build)
+- Basic preferences and settings (when supported)
+
+## What will NOT be migrated (common cases)
+
+- Provider API keys and secrets (recommended to re-enter them in v2.x)
+- Local-only files or cached data
+- Some device-specific settings
+
+<Callout type="warning">
+  If your v1.x data contains sensitive content, keep the export file in a safe location. Do not
+  share it publicly.
+</Callout>
+
+## Step 1: Export data from LobeHub v1.x
+
+In the v1.x Desktop app:
+
+1. Go to **Settings** → **Data Storage** → **Export Data**.
+2. You will get a JSON export file (for example: `2026-01-22-10-02_LobeHub-data.json`).
+3. Save the file to a location you can easily find (for example, Desktop).
+
+![v1.x Export Data](/blog/assets13656829368732a95940edeff9ddfca6.webp)
+
+### Export tips
+
+- If you have a very large message history, consider exporting during idle time.
+
+## Step 2: Import data into LobeHub v2.x
+
+In any v2.x app (Desktop / Web / self-hosted):
+
+1. Sign in to your LobeHub account.
+2. Go to **Settings** → **Data Storage** → **Import Data**.
+3. Upload the export JSON file from Step 1.
+4. Wait for the import to complete, then refresh the page/app if needed.
+
+![v2.x Import Data](/blog/assets1e640c898e897bfb4ce4b66d5377010b.webp)
+
+## Verify your migration
+
+After importing, check:
+
+- Agents/assistants are present and their prompts look correct
+- Recent conversations appear as expected
+- Key settings (language, theme, shortcuts, etc.) are set the way you want
+
+If anything is missing, keep the v1.x export file and retry the import after updating to the latest v2.x.
+
+## Troubleshooting
+
+### Import fails or gets stuck
+
+- Confirm your network is stable and try again.
+- Update to the latest v2.x and re-import.
+
+### Some data is missing after import
+
+- Different v1.x builds may store data slightly differently.
+- If you used multiple profiles/workspaces in v1.x, export and import them separately (when supported).
+
+## Getting help
+
+If you run into issues, please check [Help & Support](/docs/usage/help) or report an issue via [GitHub Issues](https://github.com/lobehub/lobe-chat/issues/new/choose).

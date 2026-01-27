@@ -296,6 +296,7 @@
   "shareModal.popover.moreOptions": "گزینه‌های بیشتر برای اشتراک‌گذاری",
   "shareModal.popover.privacyWarning.confirm": "متوجه شدم، ادامه بده",
   "shareModal.popover.privacyWarning.content": "لطفاً مطمئن شوید که گفتگوی شما حاوی اطلاعات شخصی یا حساس نیست. شما مسئول محتوایی هستید که برای اشتراک‌گذاری انتخاب می‌کنید و پیامدهای آن.",
+  "shareModal.popover.privacyWarning.doNotShowAgain": "دیگر این پیام را نمایش نده",
   "shareModal.popover.privacyWarning.title": "هشدار حریم خصوصی",
   "shareModal.popover.title": "اشتراک‌گذاری موضوع",
   "shareModal.popover.visibility": "قابلیت مشاهده",

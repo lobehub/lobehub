@@ -48,7 +48,7 @@ export interface SupervisorInstructionParallelCallAgents {
 }
 
 /**
- * Instruction to execute an async task for an agent
+ * Instruction to execute an async task for an agent (server-side)
  */
 export interface SupervisorInstructionExecAsyncTask {
   payload: {
@@ -60,6 +60,22 @@ export interface SupervisorInstructionExecAsyncTask {
     toolMessageId: string;
   };
   type: 'exec_async_task';
+}
+
+/**
+ * Instruction to execute an async task for an agent on the client (desktop only)
+ * Used when task requires local tools like file system or shell commands
+ */
+export interface SupervisorInstructionExecClientAsyncTask {
+  payload: {
+    agentId: string;
+    task: string;
+    timeout?: number;
+    /** Task title (shown in UI, used as thread title) */
+    title?: string;
+    toolMessageId: string;
+  };
+  type: 'exec_client_async_task';
 }
 
 /**
@@ -106,6 +122,7 @@ export type SupervisorInstruction =
   | SupervisorInstructionCallAgent
   | SupervisorInstructionParallelCallAgents
   | SupervisorInstructionExecAsyncTask
+  | SupervisorInstructionExecClientAsyncTask
   | SupervisorInstructionBatchExecAsyncTasks
   | SupervisorInstructionDelegate
   | SupervisorInstructionFinish;

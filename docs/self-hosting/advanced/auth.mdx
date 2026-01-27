@@ -1,9 +1,9 @@
 ---
-title: LobeChat Authentication Service Configuration
+title: LobeHub Authentication Service Configuration
 description: >-
-  Learn how to configure Better Auth for centralized user authorization
-  management. Supported SSO providers include Google, GitHub, Microsoft, and
-  more.
+  Learn how to configure external authentication services using Better Auth,
+  Clerk, or Next Auth for centralized user authorization management. Supported
+  authentication services include Auth0, Azure ID, etc.
 tags:
   - Authentication Service
   - Better Auth
@@ -12,13 +12,23 @@ tags:
 
 # Authentication Service
 
-LobeChat uses [Better Auth](https://www.better-auth.com) as its authentication solution, providing comprehensive, secure, and flexible identity verification for self-hosted deployments.
+LobeHub supports the configuration of external authentication services using Better Auth, Clerk, or Next Auth for internal use within enterprises/organizations to centrally manage user authorization.
 
 <Callout type={'info'}>
   Looking for legacy authentication methods? See [Legacy Authentication](/docs/self-hosting/advanced/auth/legacy) for NextAuth and Clerk documentation.
 </Callout>
 
-## Key Features
+Clerk is a comprehensive identity verification solution that has recently gained popularity. It provides a simple yet powerful API and services to handle user authentication and session management. Clerk's design philosophy is to offer a concise and modern authentication solution that enables developers to easily integrate and use it.
+
+LobeHub has deeply integrated with Clerk to provide users with a more secure and convenient login and registration experience. It also relieves developers from the burden of managing authentication logic. Clerk's concise and modern design philosophy aligns perfectly with LobeHub's goals, making user management on the entire platform more efficient and reliable.
+
+By setting the environment variables `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in LobeHub's environment, you can enable and use Clerk.
+
+## Better Auth
+
+[Better Auth](https://www.better-auth.com) is a modern, framework-agnostic authentication library designed to provide comprehensive, secure, and flexible authentication solutions. It supports various authentication methods including email/password, magic links, and multiple OAuth/SSO providers.
+
+### Key Features
 
 - **Email/Password Authentication**: Built-in support for traditional email and password login with secure password hashing
 - **Email Verification**: Optional email verification flow with customizable email templates
@@ -28,12 +38,14 @@ LobeChat uses [Better Auth](https://www.better-auth.com) as its authentication s
 
 ## Getting Started
 
-To enable Better Auth in LobeChat, set the following environment variables:
+To enable Better Auth in LobeHub, set the following environment variables:
 
-| Environment Variable | Type     | Description                                                                    |
-| -------------------- | -------- | ------------------------------------------------------------------------------ |
-| `AUTH_SECRET`        | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32`  |
-| `AUTH_SSO_PROVIDERS` | Optional | Comma-separated list of enabled SSO providers, e.g., `google,github,microsoft` |
+| Environment Variable             | Type     | Description                                                                                                                                                               |
+| -------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_ENABLE_BETTER_AUTH` | Required | Set to `1` to enable Better Auth service                                                                                                                                  |
+| `AUTH_SECRET`                    | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32`                                                                                             |
+| `NEXT_PUBLIC_AUTH_URL`           | Required | The browser-accessible base URL for Better Auth (e.g., `http://localhost:3010`, `https://LobeHub.com`). Optional for Vercel deployments (auto-detected from `VERCEL_URL`) |
+| `AUTH_SSO_PROVIDERS`             | Optional | Comma-separated list of enabled SSO providers, e.g., `google,github,microsoft`                                                                                            |
 
 ## Supported SSO Providers
 
@@ -140,9 +152,7 @@ Send emails via SMTP protocol, suitable for users with existing email services. 
 
 ### Common Configuration
 
-| Environment Variable      | Type     | Description                                               | Example |
-| ------------------------- | -------- | --------------------------------------------------------- | ------- |
-| `AUTH_EMAIL_VERIFICATION` | Optional | Set to `1` to require email verification (off by default) | `1`     |
+Before using NextAuth, please set the following variables in LobeHub's environment variables:
 
 ## Magic Link (Passwordless) Login
 
@@ -190,4 +200,16 @@ Set the `AUTH_ALLOWED_EMAILS` environment variable with a comma-separated list o
 - Allow only `example.com` domain: `AUTH_ALLOWED_EMAILS=example.com`
 - Allow multiple domains and specific emails: `AUTH_ALLOWED_EMAILS=example.com,company.org,admin@other.com`
 
-Leave empty to allow all emails. This restriction applies to both email registration and SSO login.
+## Additional Features
+
+### Webhook Support
+
+Allow LobeHub to receive notifications when user information is updated in the identity provider. Supported providers include Casdoor and Logto. Please refer to the specific provider documentation for configuration details.
+
+### Database Session
+
+Allow the session store in database, see also the [Auth.js Session Documentation](https://authjs.dev/concepts/session-strategies#database-session).
+
+## Other SSO Providers
+
+Please refer to the [Auth.js](https://authjs.dev/getting-started/authentication/oauth) documentation and feel free to submit a Pull Request.

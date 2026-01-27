@@ -1,7 +1,7 @@
 ---
 title: 使用 Grafana、Prometheus 和 Tempo 进行可观测性监控
 description: >-
-  使用 Grafana、Prometheus 指标和 Tempo 链路追踪，监控和分析你的 LobeChat
+  使用 Grafana、Prometheus 指标和 Tempo 链路追踪，监控和分析你的 LobeHub
   实例。本指南涵盖自托管部署的搭建、配置和示例仪表盘。
 tags:
   - 可观测性
@@ -12,7 +12,7 @@ tags:
 
 # 使用 [Grafana](https://grafana.com/)、[Prometheus](https://prometheus.io/) 和 [Tempo](https://grafana.com/docs/tempo/latest/) 进行可观测性监控
 
-LobeChat 支持通过开源工具实现自托管部署的高级可观测性：
+LobeHub 支持通过开源工具实现自托管部署的高级可观测性：
 
 - **Grafana**：仪表盘与可视化
 - **Prometheus**：指标采集
@@ -42,7 +42,7 @@ mv .env.example .env
    docker compose up -d
    ```
 
-   这将会启动 Grafana、Prometheus、Tempo、otel-collector 以及 LobeChat、Casdoor、Minio 等高级服务。
+   这将会启动 Grafana、Prometheus、Tempo、otel-collector 以及 LobeHub、Casdoor、Minio 等高级服务。
 
 ## 2. 访问 Grafana 仪表盘
 
@@ -59,7 +59,7 @@ mv .env.example .env
 
 - 确认所有容器已运行：`docker compose ps`
 - 查看服务日志：`docker compose logs <服务名>`
-- 检查 Prometheus 和 Tempo 是否正常采集 LobeChat 及 otel-collector 的数据。
+- 检查 Prometheus 和 Tempo 是否正常采集 LobeHub 及 otel-collector 的数据。
 
 ## 相关链接
 

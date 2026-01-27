@@ -1,56 +1,57 @@
 ---
-title: Using Nvidia NIM API Key in LobeChat
-description: Learn how to configure and use Nvidia NIM AI models in LobeChat, obtain an API key, and start a conversation.
+title: Using Nvidia NIM API Key in LobeHub
+description: >-
+  Learn how to configure and use Nvidia NIM AI models in LobeHub, obtain your
+  API key, and start chatting.
 tags:
-  - LobeChat
+  - LobeHub
   - Nvidia NIM
   - API Key
   - Web UI
 ---
 
-# Using Nvidia NIM in LobeChat
+# Using Nvidia NIM in LobeHub
 
-<Image alt={'Using Nvidia NIM in LobeChat'} cover src={'https://github.com/user-attachments/assets/539349dd-2c16-4f42-b525-cca74e113541'} />
+<Image alt={'Using Nvidia NIM in LobeHub'} cover src={'/blog/assetsd8927338578c426b833e5cb57e0b57ec.webp'} />
 
-[NVIDIA NIM](https://developer.nvidia.com/nim) is part of NVIDIA AI Enterprise and is designed to accelerate the deployment of generative AI applications through microservices. It provides a set of easy-to-use inference microservices that can run on any cloud, data center, or workstation, supporting NVIDIA GPU acceleration.
+[NVIDIA NIM](https://developer.nvidia.com/nim) is part of NVIDIA AI Enterprise, designed to accelerate the deployment of generative AI applications through microservices. It offers a set of easy-to-use inference microservices that can run on any cloud, data center, or workstation, with support for NVIDIA GPU acceleration.
 
-This document will guide you on how to access and use AI models provided by Nvidia NIM in LobeChat:
+This guide will walk you through how to integrate and use AI models provided by Nvidia NIM in LobeHub:
 
 <Steps>
-  ### Step 1: Obtain Nvidia NIM API Key
+  ### Step 1: Obtain Your Nvidia NIM API Key
 
-  - First, visit the [Nvidia NIM console](https://build.nvidia.com/explore/discover) and complete the registration and login.
-  - On the `Models` page, select the model you need, such as Deepseek-R1.
+  - First, visit the [Nvidia NIM Console](https://build.nvidia.com/explore/discover) and complete the registration and login process.
+  - On the `Models` page, select the model you want to use, such as Deepseek-R1.
 
-  <Image alt={'Select Model'} inStep src={'https://github.com/user-attachments/assets/b49ed0c1-d6bf-4f46-b9df-5f7c730afaa3'} />
+  <Image alt={'Select a model'} inStep src={'/blog/assets74000cc1bc59ee4a15e8f0304afbf866.webp'} />
 
-  - On the model details page, click "Build with this NIM".
+  - On the model details page, click on `Build with this NIM`.
   - In the pop-up dialog, click the `Generate API Key` button.
 
-  <Image alt={'Get API Key'} inStep src={'https://github.com/user-attachments/assets/5321f987-2c64-4211-8549-bd30ca9b59b9'} />
+  <Image alt={'Get API Key'} inStep src={'/blog/assetsaf57d31364a41634b10c243ed9b1f8f8.webp'} />
 
-  - Copy and save the created API Key.
+  - Copy and securely save the generated API key.
 
   <Callout type={'warning'}>
-    Please store the key securely as it will only appear once. If you accidentally lose it, you will
-    need to create a new key.
+    Make sure to store your API key securely, as it will only be shown once. If you lose it, you’ll need to generate a new one.
   </Callout>
 
-  ### Step 2: Configure Nvidia NIM in LobeChat
+  ### Step 2: Configure Nvidia NIM in LobeHub
 
-  - Visit the `Application Settings` -> `AI Service Provider` interface in LobeChat.
-  - Find the settings item for `Nvidia NIM` in the list of providers.
+  - Go to the `App Settings` section in LobeHub and navigate to `AI Service Providers`.
+  - Find the `Nvidia NIM` option in the list of providers.
 
-  <Image alt={'Fill in the Nvidia NIM API Key'} inStep src={'https://github.com/user-attachments/assets/dfc45807-2ed6-43eb-af4c-47df66dfff7d'} />
+  <Image alt={'Enter Nvidia NIM API Key'} inStep src={'/blog/assetscad58c557fda04b9379000cbbaa4c493.webp'} />
 
-  - Enable the Nvidia NIM service provider and fill in the obtained API key.
-  - Select an Nvidia NIM model for your assistant and start the conversation.
+  - Enable the Nvidia NIM provider and paste in your API key.
+  - Choose a Nvidia NIM model for your assistant to start chatting.
 
-  <Image alt={'Select Nvidia NIM Model'} inStep src={'https://github.com/user-attachments/assets/cb4ba5fe-c223-4b9f-a662-de93e4a536d1'} />
+  <Image alt={'Select Nvidia NIM Model'} inStep src={'/blog/assets45d90e73abffd7ae7d85808f81827bb9.webp'} />
 
   <Callout type={'warning'}>
-    You may need to pay the API service provider during use, please refer to Nvidia NIM's related fee policies.
+    You may incur charges from the API service provider during usage. Please refer to Nvidia NIM’s pricing policy for details.
   </Callout>
 </Steps>
 
-Now you can use the models provided by Nvidia NIM to have conversations in LobeChat.
+That’s it! You’re now ready to use Nvidia NIM-powered models in LobeHub for your conversations.

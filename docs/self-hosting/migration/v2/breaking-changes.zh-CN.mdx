@@ -69,3 +69,11 @@ LobeHub 2.0 仅支持 Better Auth 认证系统，不再支持 NextAuth 和 Clerk
 LobeHub 2.0 仅支持 Server DB 模式，不再支持 Client DB (PGlite)。如果您之前使用 `NEXT_PUBLIC_SERVICE_MODE=client`，需要迁移到 Server DB 部署方式。
 
 详细部署指南请参阅[服务端数据库部署](/docs/self-hosting/server-database)。
+
+## PostgreSQL 版本要求
+
+LobeHub 2.0 推荐使用 **PostgreSQL 17** 及以上版本。
+
+这是因为 LobeHub 2.0 使用了 [pg\_search](https://github.com/paradedb/paradedb/tree/main/pg_search) 插件来提供全文搜索能力。如果您使用 Neon 等 Serverless Postgres 服务，pg\_search 插件仅在 PostgreSQL 17 上可用。
+
+如果您使用 Docker 自建数据库，推荐使用 `pgvector/pgvector:pg17` 镜像。

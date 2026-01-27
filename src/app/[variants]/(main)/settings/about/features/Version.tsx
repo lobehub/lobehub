@@ -1,13 +1,15 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
+import { getElectronIpc } from '@lobechat/electron-client-ipc';
 import { Block, Button, Flexbox, Tag } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { memo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
 import { CHANGELOG_URL, MANUAL_UPGRADE_URL, OFFICIAL_SITE } from '@/const/url';
 import { CURRENT_VERSION } from '@/const/version';
 import { useNewVersion } from '@/features/User/UserPanel/useNewVersion';
+import { autoUpdateService } from '@/services/electron/autoUpdate';
 import { useGlobalStore } from '@/store/global';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -28,6 +30,7 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
   useCheckServerVersion();
 
   const showServerVersion = serverVersion && serverVersion !== CURRENT_VERSION;
+  const isDesktop = useMemo(() => !!getElectronIpc(), []);
 
   return (
     <Flexbox
@@ -69,7 +72,12 @@ const Version = memo<{ mobile?: boolean }>(({ mobile }) => {
         <a href={CHANGELOG_URL} rel="noreferrer" style={{ flex: 1 }} target="_blank">
           <Button block={mobile}>{t('changelog')}</Button>
         </a>
-        {hasNewVersion && (
+        {isDesktop && !hasNewVersion && (
+          <Button block={mobile} onClick={() => void autoUpdateService.checkUpdate()}>
+            {t('checkForUpdates')}
+          </Button>
+        )}
+        {hasNewVersion && !isDesktop && (
           <a href={MANUAL_UPGRADE_URL} rel="noreferrer" style={{ flex: 1 }} target="_blank">
             <Button block={mobile} type={'primary'}>
               {t('upgradeVersion.action')}

@@ -120,6 +120,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
     identifier,
     memberCount,
     status,
+    isValidated,
   }) => {
     const { t } = useTranslation(['discover', 'setting']);
     const navigate = useNavigate();
@@ -235,10 +236,17 @@ const UserGroupCard = memo<UserGroupCardProps>(
                     {title}
                   </Text>
                 </Link>
-                {isOwner && status && (
-                  <AntTag color={getStatusTagColor(status)} style={{ flexShrink: 0, margin: 0 }}>
-                    {t(`setting:myAgents.status.${status}`)}
+                {isValidated === false ? (
+                  <AntTag color="orange" style={{ flexShrink: 0, margin: 0 }}>
+                    {t('groupAgents.underReview', { defaultValue: 'Under Review' })}
                   </AntTag>
+                ) : (
+                  isOwner &&
+                  status && (
+                    <AntTag color={getStatusTagColor(status)} style={{ flexShrink: 0, margin: 0 }}>
+                      {t(`setting:myAgents.status.${status}`)}
+                    </AntTag>
+                  )
                 )}
               </Flexbox>
             </Flexbox>

@@ -13,9 +13,30 @@ import { message } from '@/components/AntdStaticMethods';
 import GuideModal from '@/components/GuideModal';
 import GuideVideo from '@/components/GuideVideo';
 import { useFileStore } from '@/store/file';
+import { FilesTabs } from '@/types/files';
 
 import useNotionImport from './hooks/useNotionImport';
 import useUploadFolder from './hooks/useUploadFolder';
+
+const getAcceptedFileTypes = (category: FilesTabs): string | undefined => {
+  switch (category) {
+    case FilesTabs.Videos: {
+      return 'video/*';
+    }
+    case FilesTabs.Audios: {
+      return 'audio/*';
+    }
+    case FilesTabs.Documents: {
+      return '.pdf,.doc,.docx,.md,.markdown,.xls,.xlsx';
+    }
+    case FilesTabs.Images: {
+      return 'image/*';
+    }
+    default: {
+      return undefined;
+    }
+  }
+};
 
 const AddButton = () => {
   const { t } = useTranslation('file');
@@ -28,16 +49,30 @@ const AddButton = () => {
   // Keep old functions temporarily for components not yet migrated
   const createDocument = useFileStore((s) => s.createDocument);
 
-  const [libraryId, currentFolderId, setCurrentViewItemId, setMode, setPendingRenameItemId] =
-    useResourceManagerStore((s) => [
-      s.libraryId,
-      s.currentFolderId,
-      s.setCurrentViewItemId,
-      s.setMode,
-      s.setPendingRenameItemId,
-    ]);
+  const [
+    libraryId,
+    category,
+    currentFolderId,
+    setCategory,
+    setCurrentViewItemId,
+    setMode,
+    setPendingRenameItemId,
+  ] = useResourceManagerStore((s) => [
+    s.libraryId,
+    s.category,
+    s.currentFolderId,
+    s.setCategory,
+    s.setCurrentViewItemId,
+    s.setMode,
+    s.setPendingRenameItemId,
+  ]);
 
   const handleOpenPageEditor = useCallback(async () => {
+    // Navigate to "All" category first if not already there
+    if (category !== FilesTabs.All) {
+      setCategory(FilesTabs.All);
+    }
+
     // Create a new page and wait for server sync - ensures page editor can load the document
     const untitledTitle = t('pageList.untitled');
     const realId = await createResourceAndSync({
@@ -52,9 +87,14 @@ const AddButton = () => {
     // Switch to page view mode with real ID
     setCurrentViewItemId(realId);
     setMode('page');
-  }, [createResourceAndSync, currentFolderId, libraryId, setCurrentViewItemId, setMode, t]);
+  }, [category, createResourceAndSync, currentFolderId, libraryId, setCategory, setCurrentViewItemId, setMode, t]);
 
   const handleCreateFolder = useCallback(async () => {
+    // Navigate to "All" category first if not already there
+    if (category !== FilesTabs.All) {
+      setCategory(FilesTabs.All);
+    }
+
     // Create folder and wait for sync to complete before triggering rename
     try {
       // Get current resource list to check for duplicate folder names
@@ -95,7 +135,7 @@ const AddButton = () => {
       message.error(t('header.actions.createFolderError'));
       console.error('Failed to create folder:', error);
     }
-  }, [createResourceAndSync, currentFolderId, libraryId, setPendingRenameItemId, t]);
+  }, [category, createResourceAndSync, currentFolderId, libraryId, setCategory, setPendingRenameItemId, t]);
 
   const {
     handleCloseNotionGuide,
@@ -156,6 +196,7 @@ const AddButton = () => {
         key: 'upload-file',
         label: (
           <Upload
+            accept={getAcceptedFileTypes(category)}
             beforeUpload={async (file) => {
               setMenuOpen(false);
               await pushDockFileList([file], libraryId, currentFolderId ?? undefined);
@@ -193,6 +234,7 @@ const AddButton = () => {
       },
     ],
     [
+      category,
       currentFolderId,
       handleCreateFolder,
       handleOpenPageEditor,

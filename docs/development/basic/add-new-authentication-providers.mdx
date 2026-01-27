@@ -1,14 +1,21 @@
 ---
 title: New Authentication Provider Guide
+description: Learn how to implement a new authentication provider using Auth.js in LobeHub.
+tags:
+  - Authentication
+  - Auth.js
+  - LobeHub
+  - Okta
+  - OAuth
 ---
 
 # New Authentication Provider Guide
 
-LobeChat uses [Better Auth](https://www.better-auth.com) as its authentication service. This document explains how to add new SSO authentication providers.
+LobeHub uses [Auth.js v5](https://authjs.dev/) as the external authentication service. Auth.js is an open-source authentication library that provides a simple way to implement authentication and authorization features. This document will introduce how to use Auth.js to implement a new authentication provider.
 
 ## Architecture Overview
 
-Better Auth SSO providers fall into two categories:
+To add a new authentication provider in LobeHub (for example, adding Okta), you need to follow the steps below:
 
 | Type      | Description                                 | Examples                         |
 | --------- | ------------------------------------------- | -------------------------------- |
@@ -176,20 +183,4 @@ AUTH_OKTA_SECRET=your-client-secret
 AUTH_OKTA_ISSUER=https://your-domain.okta.com
 ```
 
-## Debugging Tips
-
-1. **Environment variable check fails**: Ensure all required environment variables are set
-2. **Callback URL errors**: Verify the callback URL configured in your OAuth application
-3. **User profile mapping**: Use `mapProfileToUser` to customize the mapping from OAuth profile to user info
-
-## Related Files
-
-| File                                      | Description                      |
-| ----------------------------------------- | -------------------------------- |
-| `src/libs/better-auth/sso/providers/*.ts` | Provider definitions             |
-| `src/libs/better-auth/sso/index.ts`       | Provider registration            |
-| `src/libs/better-auth/sso/types.ts`       | Type definitions                 |
-| `src/libs/better-auth/sso/helpers.ts`     | Helper functions                 |
-| `src/libs/better-auth/constants.ts`       | Built-in provider constants      |
-| `src/envs/auth.ts`                        | Environment variable definitions |
-| `src/libs/better-auth/define-config.ts`   | Better Auth configuration        |
+Now, you can use Okta as your provider to implement the authentication feature in LobeHub.

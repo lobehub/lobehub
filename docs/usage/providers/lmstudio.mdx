@@ -1,75 +1,77 @@
 ---
-title: Using LM Studio in LobeChat
-description: Learn how to configure and use LM Studio, and run AI models for conversations in LobeChat through LM Studio.
+title: Using LM Studio in LobeHub
+description: >-
+  Learn how to configure and use LM Studio to run AI models for conversations
+  within LobeHub.
 tags:
-  - LobeChat
+  - LobeHub
   - LM Studio
-  - Open Source Model
+  - Open Source Models
   - Web UI
 ---
 
-# Using LM Studio in LobeChat
+# Using LM Studio in LobeHub
 
-<Image alt={'Using LM Studio in LobeChat'} cover src={'https://github.com/user-attachments/assets/cc1f6146-8063-4a4d-947a-7fd6b9133c0c'} />
+<Image alt={'Using LM Studio in LobeHub'} cover src={'/blog/assets28749075f0c4d62c1642694a4ed9ec08.webp'} />
 
-[LM Studio](https://lmstudio.ai/) is a platform for testing and running large language models (LLMs), providing an intuitive and easy-to-use interface suitable for developers and AI enthusiasts. It supports deploying and running various open-source LLM models, such as Deepseek or Qwen, on local computers, enabling offline AI chatbot functionality, thereby protecting user privacy and providing greater flexibility.
+[LM Studio](https://lmstudio.ai/) is a platform designed for testing and running large language models (LLMs). It offers an intuitive and user-friendly interface, making it ideal for developers and AI enthusiasts. LM Studio supports deploying and running various open-source LLMs locally—such as Deepseek or Qwen—enabling offline AI chatbot functionality that enhances privacy and flexibility.
 
-This document will guide you on how to use LM Studio in LobeChat:
+This guide will walk you through how to use LM Studio within LobeHub:
 
 <Steps>
-  ### Step 1: Obtain and Install LM Studio
+  ### Step 1: Download and Install LM Studio
 
-  - Go to the [LM Studio official website](https://lmstudio.ai/)
-  - Choose your platform and download the installation package. LM Studio currently supports MacOS, Windows, and Linux platforms.
-  - Follow the prompts to complete the installation and run LM Studio.
+  - Visit the [official LM Studio website](https://lmstudio.ai/)
+  - Choose your operating system and download the installer. LM Studio currently supports macOS, Windows, and Linux
+  - Follow the installation instructions and launch LM Studio
 
-  <Image alt={'Install and run LM Studio'} inStep src={'https://github.com/user-attachments/assets/e887fa04-c553-45f1-917f-5c123ac9c68b'} />
+  <Image alt={'Install and launch LM Studio'} inStep src={'/blog/assets73ba166f1e6d54e8c860b91f61c23355.webp'} />
 
-  ### Step 2: Search and Download Models
+  ### Step 2: Search and Download a Model
 
-  - Open the `Discover` menu on the left, search for and download the model you want to use.
-  - Find a suitable model (such as Deepseek R1) and click download.
-  - The download may take some time, please wait patiently for it to complete.
+  - Open the `Discover` tab on the left sidebar to search for models
+  - Find a model you’d like to use (e.g., Deepseek R1) and click to download
+  - The download may take some time—please be patient
 
-  <Image alt={'Search and download models'} inStep src={'https://github.com/user-attachments/assets/f878355f-710b-452e-8606-0c75c47f29d2'} />
+  <Image alt={'Search and download a model'} inStep src={'/blog/assets3e2af0090f02059c687b6add6b73a90b.webp'} />
 
-  ### Step 3: Deploy and Run Models
+  ### Step 3: Deploy and Run the Model
 
-  - Select the downloaded model in the top model selection bar and load the model.
-  - Configure the model runtime parameters in the pop-up panel. Refer to the [LM Studio official documentation](https://lmstudio.ai/docs) for detailed parameter settings.
+  - Use the model selector at the top to choose the downloaded model and load it
+  - In the pop-up panel, configure the model’s runtime parameters. For detailed settings, refer to the [LM Studio documentation](https://lmstudio.ai/docs)
 
-  <Image alt={'Configure model runtime parameters'} inStep src={'https://github.com/user-attachments/assets/dba58ea6-7df8-4971-b6d4-b24d5f486ba7'} />
+  <Image alt={'Configure model runtime parameters'} inStep src={'/blog/assetsbbe90aa719d182d3d2f327e4182732c5.webp'} />
 
-  - Click the `Load Model` button and wait for the model to finish loading and running.
-  - Once the model is loaded, you can use it in the chat interface for conversations.
+  - Click the `Load Model` button and wait for the model to fully load and start
+  - Once loaded, you can begin chatting with the model in the built-in interface
 
-  ### Step 4: Enable Local Service
+  ### Step 4: Enable Local API Service
 
-  - If you want to use the model through other programs, you need to start a local API service. Start the service through the `Developer` panel or the software menu. The LM Studio service starts on port `1234` on your local machine by default.
+  - To use the model with other applications, you’ll need to start a local API service. This can be done via the `Developer` panel or from the app menu. By default, LM Studio runs the service on port `1234`
 
-  <Image alt={'Start local service'} inStep src={'https://github.com/user-attachments/assets/08ced88b-4968-46e8-b1da-0c04ddf5b743'} />
+  <Image alt={'Start local API service'} inStep src={'/blog/assets5fd5fb937b9b05d50ce8659cea3210a4.webp'} />
 
-  - After the local service is started, you also need to enable the `CORS (Cross-Origin Resource Sharing)` option in the service settings so that the model can be used in other programs.
+  - After starting the service, make sure to enable the `CORS (Cross-Origin Resource Sharing)` option in the service settings. This is required for external applications to access the model
 
-  <Image alt={'Enable CORS'} inStep src={'https://github.com/user-attachments/assets/8ce79bd6-f1a3-48bb-b3d0-5271c84801c2'} />
+  <Image alt={'Enable CORS'} inStep src={'/blog/assets5f8cc99da9c3c1eaca284411833c99e3.webp'} />
 
-  ### Step 5: Use LM Studio in LobeChat
+  ### Step 5: Connect LM Studio to LobeHub
 
-  - Visit the `AI Service Provider` interface in LobeChat's `Application Settings`.
-  - Find the settings for `LM Studio` in the list of providers.
+  - Go to the `App Settings` in LobeHub and open the `AI Service Providers` section
+  - Find and select the `LM Studio` provider from the list
 
-  <Image alt={'Fill in the LM Studio address'} inStep src={'https://github.com/user-attachments/assets/143ff392-97b5-427a-97a7-f2f577915728'} />
+  <Image alt={'Enter LM Studio API address'} inStep src={'/blog/assetsc52da5833158f3b3143e40bf2a534ac7.webp'} />
 
-  - Open the LM Studio service provider and fill in the API service address.
+  - Enable the LM Studio provider and enter the API service address
 
   <Callout type={'warning'}>
-    If your LM Studio is running locally, make sure to turn on `Client Request Mode`.
+    If LM Studio is running locally, make sure to enable the "Client Request Mode".
   </Callout>
 
-  - Add the model you are running in the model list below.
-  - Select a Volcano Engine model for your assistant to start the conversation.
+  - Add the model you’re running to the model list below
+  - Choose a model for your assistant and start chatting
 
-    <Image alt={'Select LM Studio model'} inStep src={'https://github.com/user-attachments/assets/bd399cef-283c-4706-bdc8-de9de662de41'} />
+  <Image alt={'Select LM Studio model'} inStep src={'/blog/assets4224bf4978bea84e82b3b3aec77656f0.webp'} />
 </Steps>
 
-Now you can use the model running in LM Studio in LobeChat for conversations.
+And that’s it! You’re now ready to use models running in LM Studio directly within LobeHub.

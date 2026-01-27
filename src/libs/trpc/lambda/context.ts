@@ -6,6 +6,8 @@ import { type NextRequest } from 'next/server';
 import { auth } from '@/auth';
 import { LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER, authEnv } from '@/envs/auth';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
+import { extractTraceContext } from '@/libs/observability/traceparent';
+import type { Context as OtContext } from '@lobechat/observability-otel/api';
 
 // Create context logger namespace
 const log = debug('lobe-trpc:lambda:context');
@@ -40,6 +42,7 @@ export interface AuthContext {
   // Add OIDC authentication information
   oidcAuth?: OIDCAuth | null;
   resHeaders?: Headers;
+  traceContext?: OtContext;
   userAgent?: string;
   userId?: string | null;
 }
@@ -53,6 +56,7 @@ export const createContextInner = async (params?: {
   clientIp?: string | null;
   marketAccessToken?: string;
   oidcAuth?: OIDCAuth | null;
+  traceContext?: OtContext;
   userAgent?: string;
   userId?: string | null;
 }): Promise<AuthContext> => {
@@ -65,6 +69,7 @@ export const createContextInner = async (params?: {
     marketAccessToken: params?.marketAccessToken,
     oidcAuth: params?.oidcAuth,
     resHeaders: responseHeaders,
+    traceContext: params?.traceContext,
     userAgent: params?.userAgent,
     userId: params?.userId,
   };
@@ -83,10 +88,10 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   const isMockUser = process.env.ENABLE_MOCK_DEV_USER === '1';
 
   if (process.env.NODE_ENV === 'development' && (isDebugApi || isMockUser)) {
-    return {
+    return createContextInner({
       authorizationHeader: request.headers.get(LOBE_CHAT_AUTH_HEADER),
       userId: process.env.MOCK_DEV_USER_ID,
-    };
+    });
   }
 
   log('createLambdaContext called for request');
@@ -100,6 +105,8 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
   const cookieHeader = request.headers.get('cookie');
   const cookies = cookieHeader ? parse(cookieHeader) : {};
   const marketAccessToken = cookies['mp_token'];
+  // Extract upstream trace context for parent linking
+  const traceContext = extractTraceContext(request.headers);
 
   log('marketAccessToken from cookie:', marketAccessToken ? '[HIDDEN]' : 'undefined');
   const commonContext = {
@@ -137,9 +144,10 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
         return createContextInner({
           oidcAuth,
           ...commonContext,
-          userId,
-        });
-      }
+          traceContext,
+      userId,
+    });
+  }
     } catch (error) {
       // If OIDC authentication fails, log error and continue with other authentication methods
       if (oidcAuthToken) {
@@ -165,6 +173,7 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
 
     return createContextInner({
       ...commonContext,
+      traceContext,
       userId,
     });
   } catch (e) {
@@ -177,5 +186,5 @@ export const createLambdaContext = async (request: NextRequest): Promise<LambdaC
     'All authentication methods attempted, returning final context, userId: %s',
     userId || 'not authenticated',
   );
-  return createContextInner({ ...commonContext, userId });
+  return createContextInner({ ...commonContext, traceContext, userId });
 };

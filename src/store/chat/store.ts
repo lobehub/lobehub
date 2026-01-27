@@ -62,4 +62,8 @@ export const useChatStore = createWithEqualityFn<ChatStore>()(
   shallow,
 );
 
+if (typeof window !== 'undefined') {
+  window.__CHAT_STORE__ = useChatStore;
+}
+
 export const getChatStoreState = () => useChatStore.getState();

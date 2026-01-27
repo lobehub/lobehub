@@ -296,6 +296,7 @@
   "shareModal.popover.moreOptions": "Tùy chọn chia sẻ khác",
   "shareModal.popover.privacyWarning.confirm": "Tôi hiểu, tiếp tục",
   "shareModal.popover.privacyWarning.content": "Vui lòng đảm bảo cuộc trò chuyện của bạn không chứa thông tin cá nhân hoặc nhạy cảm. Bạn chịu trách nhiệm về bất kỳ nội dung nào bạn chọn chia sẻ và hậu quả của nó.",
+  "shareModal.popover.privacyWarning.doNotShowAgain": "Không hiển thị lại",
   "shareModal.popover.privacyWarning.title": "Thông báo quyền riêng tư",
   "shareModal.popover.title": "Chia sẻ chủ đề",
   "shareModal.popover.visibility": "Quyền hiển thị",

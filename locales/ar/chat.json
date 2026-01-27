@@ -296,6 +296,7 @@
   "shareModal.popover.moreOptions": "خيارات مشاركة إضافية",
   "shareModal.popover.privacyWarning.confirm": "أفهم، المتابعة",
   "shareModal.popover.privacyWarning.content": "يرجى التأكد من أن محادثتك لا تحتوي على أي معلومات شخصية أو حساسة. أنت المسؤول عن أي محتوى تختار مشاركته وما يترتب عليه من نتائج.",
+  "shareModal.popover.privacyWarning.doNotShowAgain": "لا تُظهر هذا مرة أخرى",
   "shareModal.popover.privacyWarning.title": "تنبيه الخصوصية",
   "shareModal.popover.title": "مشاركة الموضوع",
   "shareModal.popover.visibility": "مستوى الرؤية",

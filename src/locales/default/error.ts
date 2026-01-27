@@ -1,5 +1,3 @@
-import { businessErrorsLocales } from '@/business/locales/errors';
-
 export default {
   'error.backHome': 'Back to Home',
   'error.desc': 'Give it a try later, or go back to the known world.',
@@ -12,12 +10,19 @@ export default {
   'import.incompatible.description':
     'This file was exported from a higher version. Please try upgrading to the latest version and then re-importing.',
   'import.incompatible.title': 'Current application does not support importing this file',
+  'inviteCode.continue': 'Continue',
   'inviteCode.currentEmail': 'Current account: {{email}}',
   'inviteCode.desc':
     'An invite code is required to access LobeHub. Please enter a valid invite code to continue.',
-  'inviteCode.friends': 'Friends',
-  'inviteCode.getCodeHint': 'Get an invite code from:',
-  'inviteCode.title': 'Invite Code Required',
+  'inviteCode.friends': 'Ask a friend',
+  'inviteCode.joinUsOn': 'Join us on',
+  'inviteCode.lookingForInvite': 'Looking for an invite?',
+  'inviteCode.notYou': 'Not you?',
+  'inviteCode.openingInStages': 'is opening in stages.',
+  'inviteCode.placeholder': 'Invite code or link',
+  'inviteCode.pleaseEnterCode': 'Enter your invite code to continue.',
+  'inviteCode.switchAccount': 'Switch account',
+  'inviteCode.title': "You're Almost In",
   'loginRequired.desc': 'You will be redirected to the login page shortly',
   'loginRequired.title': 'Please log in to use this feature',
   'notFound.backHome': 'Back to Home',
@@ -238,10 +243,4 @@ export default {
   'upload.title': 'File upload failed. Please check your network connection or try again later',
   'upload.unknownError': 'Error reason: {{reason}}',
   'upload.uploadFailed': 'File upload failed.',
-  'waitlist.currentEmail': 'Current account: {{email}}',
-  'waitlist.desc':
-    'Your account is not on the whitelist. Please contact the administrator to request access.',
-  'waitlist.switchAccount': 'Switch Account',
-  'waitlist.title': 'Access Restricted',
-  ...businessErrorsLocales,
 };

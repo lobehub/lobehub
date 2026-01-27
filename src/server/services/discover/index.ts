@@ -577,10 +577,13 @@ export class DiscoverService {
             role: example.role || 'user',
           }))
           : [],
+        forkCount: (data as any).forkCount,
+        forkedFromAgentId: (data as any).forkedFromAgentId,
         homepage:
           (data as any).homepage ||
           `https://lobehub.com/discover/assistant/${(data as any).identifier}`,
         identifier: (data as any).identifier,
+        isValidated: (data as any).isValidated,
         knowledgeCount:
           (data.config as any)?.knowledgeBases?.length || (data as any).knowledgeCount || 0,
         pluginCount: (data.config as any)?.plugins?.length || (data as any).pluginCount || 0,
@@ -1725,6 +1728,7 @@ export class DiscoverService {
         homepage: `https://lobehub.com/discover/assistant/${agent.identifier}`,
         identifier: agent.identifier,
         installCount: agent.installCount,
+        isValidated: agent.isValidated,
         knowledgeCount: agent.knowledgeCount || 0,
         pluginCount: agent.pluginCount || 0,
         schemaVersion: 1,
@@ -1746,6 +1750,7 @@ export class DiscoverService {
         installCount: group.installCount || 0,
         isFeatured: group.isFeatured || false,
         isOfficial: group.isOfficial || false,
+        isValidated: group.isValidated,
         memberCount: 0, // Will be populated from memberAgents in detail view
         schemaVersion: 1,
         status: group.status,
@@ -1768,6 +1773,7 @@ export class DiscoverService {
           homepage: `https://lobehub.com/discover/assistant/${agent.identifier}`,
           identifier: agent.identifier,
           installCount: agent.installCount,
+          isValidated: agent.isValidated,
           knowledgeCount: agent.knowledgeCount || 0,
           pluginCount: agent.pluginCount || 0,
           schemaVersion: 1,
@@ -1792,6 +1798,7 @@ export class DiscoverService {
         installCount: group.installCount || 0,
         isFeatured: group.isFeatured || false,
         isOfficial: group.isOfficial || false,
+        isValidated: group.isValidated,
         memberCount: 0, // Will be populated from memberAgents in detail view
         schemaVersion: 1,
         status: group.status,

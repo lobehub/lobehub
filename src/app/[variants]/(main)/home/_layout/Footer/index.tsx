@@ -14,7 +14,8 @@ import {
   Mail,
   Rocket,
 } from 'lucide-react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { useAnalytics } from '@lobehub/analytics/react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import ChangelogModal from '@/components/ChangelogModal';
@@ -37,6 +38,7 @@ const PRODUCT_HUNT_NOTIFICATION = {
 
 const Footer = memo(() => {
   const { t } = useTranslation('common');
+  const { analytics } = useAnalytics();
   const { hideGitHub } = useServerConfigStore(featureFlagsSelectors);
   const [isLabsModalOpen, setIsLabsModalOpen] = useState(false);
   const [shouldLoadChangelog, setShouldLoadChangelog] = useState(false);
@@ -53,11 +55,26 @@ const Footer = memo(() => {
     return now >= PRODUCT_HUNT_NOTIFICATION.startTime && now <= PRODUCT_HUNT_NOTIFICATION.endTime;
   }, []);
 
+  const trackProductHuntEvent = useCallback(
+    (eventName: string, properties: Record<string, string>) => {
+      try {
+        analytics?.track({ name: eventName, properties });
+      } catch {
+        // silently ignore tracking errors to avoid affecting business logic
+      }
+    },
+    [analytics],
+  );
+
   useEffect(() => {
     if (isWithinTimeWindow && !isNotificationRead) {
       setIsProductHuntCardOpen(true);
+      trackProductHuntEvent('product_hunt_card_viewed', {
+        spm: 'homepage.product_hunt.viewed',
+        trigger: 'auto',
+      });
     }
-  }, [isWithinTimeWindow, isNotificationRead]);
+  }, [isWithinTimeWindow, isNotificationRead, trackProductHuntEvent]);
 
   const { open: openFeedbackModal } = useFeedbackModal();
 
@@ -84,6 +101,10 @@ const Footer = memo(() => {
 
   const handleOpenProductHuntCard = () => {
     setIsProductHuntCardOpen(true);
+    trackProductHuntEvent('product_hunt_card_viewed', {
+      spm: 'homepage.product_hunt.viewed',
+      trigger: 'menu_click',
+    });
   };
 
   const handleCloseProductHuntCard = () => {
@@ -94,6 +115,15 @@ const Footer = memo(() => {
         readNotificationSlugs: [...currentSlugs, PRODUCT_HUNT_NOTIFICATION.slug],
       });
     }
+    trackProductHuntEvent('product_hunt_card_closed', {
+      spm: 'homepage.product_hunt.closed',
+    });
+  };
+
+  const handleProductHuntActionClick = () => {
+    trackProductHuntEvent('product_hunt_action_clicked', {
+      spm: 'homepage.product_hunt.action_clicked',
+    });
   };
 
   const helpMenuItems: MenuProps['items'] = useMemo(
@@ -186,6 +216,7 @@ const Footer = memo(() => {
         actionLabel={t('productHunt.actionLabel')}
         description={t('productHunt.description')}
         image={PRODUCT_HUNT_NOTIFICATION.image}
+        onActionClick={handleProductHuntActionClick}
         onClose={handleCloseProductHuntCard}
         open={isProductHuntCardOpen}
         title={t('productHunt.title')}
