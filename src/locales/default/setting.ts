@@ -501,6 +501,9 @@ export default {
     'Set the default number of images generated when creating a new task in the image generation panel.',
   'settingImage.defaultCount.label': 'Default Image Count',
   'settingImage.defaultCount.title': 'AI Art',
+  'settingModel.enableContextCompression.desc':
+    'Automatically compress historical messages into summaries when conversation exceeds 64,000 tokens, saving 60-80% token usage',
+  'settingModel.enableContextCompression.title': 'Enable Auto Context Compression',
   'settingModel.enableMaxTokens.title': 'Enable Max Tokens Limit',
   'settingModel.enableReasoningEffort.title': 'Enable Reasoning Effort Adjustment',
   'settingModel.frequencyPenalty.desc':

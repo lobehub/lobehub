@@ -328,7 +328,7 @@
     "remark-gfm": "^4.0.1",
     "remark-html": "^16.0.1",
     "remove-markdown": "^0.6.3",
-    "resend": "^6.8.0",
+    "resend": "6.8.0",
     "resolve-accept-language": "^3.1.15",
     "rtl-detect": "^1.1.2",
     "semver": "^7.7.3",
