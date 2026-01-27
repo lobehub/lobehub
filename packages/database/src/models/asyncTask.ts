@@ -60,27 +60,33 @@ export class AsyncTaskModel {
 
   incrementUserMemoryExtractionProgress = async (taskId: string) => {
     const completedExpr = sql<number>`COALESCE(((${asyncTasks.metadata}) -> 'progress' ->> 'completedTopics')::int, 0) + 1`;
-    const totalExpr = sql<number | null>`((${asyncTasks.metadata}) -> 'progress' ->> 'totalTopics')::int`;
+    const totalExpr = sql<
+      number | null
+    >`((${asyncTasks.metadata}) -> 'progress' ->> 'totalTopics')::int`;
 
     const result = await this.db
       .update(asyncTasks)
       .set({
-        metadata: sql`jsonb_set(
+        metadata: sql`
           jsonb_set(
-            ${asyncTasks.metadata},
-            '{progress,completedTopics}',
-            to_jsonb(${completedExpr}),
+            jsonb_set(
+              ${asyncTasks.metadata},
+              '{progress,completedTopics}',
+              to_jsonb(${completedExpr}),
+              true
+            ),
+            '{progress,totalTopics}',
+            COALESCE((${asyncTasks.metadata}) -> 'progress' -> 'totalTopics', 'null'::jsonb),
             true
-          ),
-          '{progress,totalTopics}',
-          COALESCE((${asyncTasks.metadata}) -> 'progress' -> 'totalTopics', 'null'::jsonb),
-          true
-        )`,
-        status: sql`CASE
-          WHEN ${totalExpr} IS NOT NULL AND ${completedExpr} >= ${totalExpr}
-            THEN ${AsyncTaskStatus.Success}
-          ELSE ${AsyncTaskStatus.Processing}
-        END`,
+          )
+        `,
+        status: sql`
+          CASE
+            WHEN ${totalExpr} IS NOT NULL AND ${completedExpr} >= ${totalExpr}
+              THEN ${AsyncTaskStatus.Success}
+            ELSE ${AsyncTaskStatus.Processing}
+          END
+        `,
         updatedAt: new Date(),
       })
       .where(and(eq(asyncTasks.id, taskId), eq(asyncTasks.userId, this.userId)))

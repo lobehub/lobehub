@@ -2142,6 +2142,7 @@ export class MemoryExtractionExecutor {
 
 const WORKFLOW_PATHS = {
   personaUpdate: '/api/workflows/memory-user-memory/pipelines/persona/update-writing',
+  topic: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
   topicBatch: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topics',
   userTopics: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-user-topics',
   users: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
@@ -2218,13 +2219,35 @@ export class MemoryExtractionWorkflowService {
     return this.getClient().trigger({
       body: payload,
       flowControl: {
-        key: `memory-user-memory:pipelines:chat-topic:process-topics:user:${userId}`,
+        key: `memory-user-memory.pipelines.chat-topic.process-topics.user.${userId}`,
         // NOTICE: if modified the parallelism of
         // src/app/(backend)/api/workflows/memory-user-memory/pipelines/chat-topic/process-topics/route.ts
         // or added new memory layer, make sure to update the number below.
         //
         // Currently, CEPA (context, experience, preference, activity) + identity = 5 layers.
         // and since identity requires sequential processing, we set parallelism to 5.
+        parallelism: 5,
+      },
+      headers: options?.extraHeaders,
+      url,
+    });
+  }
+
+  static triggerProcessTopic(
+    userId: string,
+    topicId: string,
+    payload: MemoryExtractionPayloadInput,
+    options?: { extraHeaders?: Record<string, string> },
+  ) {
+    if (!payload.baseUrl) {
+      throw new Error('Missing baseUrl for workflow trigger');
+    }
+
+    const url = getWorkflowUrl(WORKFLOW_PATHS.topic, payload.baseUrl);
+    return this.getClient().trigger({
+      body: { ...payload, topicIds: [topicId], userId, userIds: [userId] },
+      flowControl: {
+        key: `memory-user-memory.pipelines.chat-topic.process-topic.user.${userId}.topic.${topicId}`,
         parallelism: 5,
       },
       headers: options?.extraHeaders,
@@ -2243,9 +2266,9 @@ export class MemoryExtractionWorkflowService {
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.personaUpdate, baseUrl);
     return this.getClient().trigger({
-      body: { userId: [userId] },
+      body: { userId },
       flowControl: {
-        key: 'memory-user-memory:pipelines:persona:update-write:' + userId,
+        key: `memory-user-memory.pipelines.persona.update-write.${userId}`,
         parallelism: 1,
       } satisfies FlowControl,
       headers: options?.extraHeaders,

@@ -97,6 +97,8 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
 
       const cursor = 'cursor' in topicBatch ? topicBatch.cursor : undefined;
 
+      // TODO: follow the new pattern of process-topic
+      // remove the batch sequential, replace it with context.invoke(...) pattern
       await forEachBatchSequential(ids, TOPIC_BATCH_SIZE, async (topicIds, batchIndex) => {
         // NOTICE: We trigger via QStash instead of context.invoke because invoke only swaps the last path
         // segment with the workflowId. If we invoked directly from /process-user-topics, child workflow
