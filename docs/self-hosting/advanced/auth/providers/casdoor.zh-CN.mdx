@@ -56,6 +56,14 @@ tags:
 
   配置 Casdoor 的 [Webhook](https://www.casdoor.org/docs/webhooks/overview#setting-up-a-webhook) 以便在用户信息更新时同步到 LobeChat。
 
+  **同步的数据字段**：
+
+  - 头像 (`avatar`)
+  - 邮箱 (`email`)
+  - 显示名称 (`displayName`)
+
+  **配置步骤**：
+
   1. 前往 `管理工具` -> `Webhooks`，创建一个 Webhook
   2. 填写以下字段：
      - 链接：`https://your-domain.com/api/webhooks/casdoor`
