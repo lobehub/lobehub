@@ -653,11 +653,12 @@ export const createGroupOrchestrationExecutors = (
         log(`[${sessionLogId}] Created task message: ${taskMessageId}`);
 
         // 2. Create Thread via API first (to get threadId for operation context)
-        const threadResult = await aiAgentService.createClientTaskThread({
-          agentId,
-          groupId,
+        // Use Group-specific API that handles different agentIds in thread context
+        const threadResult = await aiAgentService.createClientGroupAgentTaskThread({
+          groupId: groupId!,
           instruction: task,
           parentMessageId: taskMessageId,
+          subAgentId: agentId,
           title,
           topicId,
         });
@@ -709,29 +710,21 @@ export const createGroupOrchestrationExecutors = (
 
         // 5. Sync messages to store
         // Update main chat messages with latest taskDetail status (use messageContext for Group)
+        const mainKey = messageMapKey(messageContext);
         log(
-          `[${sessionLogId}] replaceMessages (main): messages=%d, context=%O`,
+          `[${sessionLogId}] replaceMessages (main): messages=%d, key=%s, context=%O`,
           messages.length,
-          messageContext,
-        );
-        console.log(
-          `[${sessionLogId}] replaceMessages (main): messages=`,
-          messages,
-          'context=',
+          mainKey,
           messageContext,
         );
         get().replaceMessages(messages, { context: messageContext });
 
         // Update thread messages
+        const threadKey = messageMapKey(subContext);
         log(
-          `[${sessionLogId}] replaceMessages (thread): threadMessages=%d, subContext=%O`,
+          `[${sessionLogId}] replaceMessages (thread): threadMessages=%d, key=%s, subContext=%O`,
           threadMessages.length,
-          subContext,
-        );
-        console.log(
-          `[${sessionLogId}] replaceMessages (thread): threadMessages=`,
-          threadMessages,
-          'subContext=',
+          threadKey,
           subContext,
         );
         get().replaceMessages(threadMessages, { context: subContext });
