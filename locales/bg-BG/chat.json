@@ -296,6 +296,7 @@
   "shareModal.popover.moreOptions": "Още опции за споделяне",
   "shareModal.popover.privacyWarning.confirm": "Разбирам, продължи",
   "shareModal.popover.privacyWarning.content": "Моля, уверете се, че разговорът ви не съдържа лична или чувствителна информация. Вие носите отговорност за съдържанието, което решите да споделите, и за последствията от това.",
+  "shareModal.popover.privacyWarning.doNotShowAgain": "Не показвай това отново",
   "shareModal.popover.privacyWarning.title": "Уведомление за поверителност",
   "shareModal.popover.title": "Сподели тема",
   "shareModal.popover.visibility": "Видимост",

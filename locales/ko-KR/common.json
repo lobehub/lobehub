@@ -29,6 +29,7 @@
   "branchingRequiresSavedTopic": "현재 주제가 저장되지 않았습니다. 저장 후 하위 주제 기능을 사용할 수 있습니다",
   "cancel": "취소",
   "changelog": "업데이트 로그",
+  "checkForUpdates": "업데이트 확인",
   "clientDB.autoInit.title": "PGlite 데이터베이스 초기화",
   "clientDB.error.desc": "PGlite 데이터베이스 초기화 중 문제가 발생했습니다. 오른쪽 '재시도' 버튼을 클릭하세요. 여러 번 실패하면 '자가 해결'을 열어 안내를 따르세요",
   "clientDB.error.detail": "원인: [{{type}}] {{message}}, 상세 내용은 다음과 같습니다:",

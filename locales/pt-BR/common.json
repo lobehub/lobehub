@@ -29,6 +29,7 @@
   "branchingRequiresSavedTopic": "O tópico atual não está salvo, salve-o primeiro para usar o recurso de subtópico",
   "cancel": "Cancelar",
   "changelog": "Registro de Alterações",
+  "checkForUpdates": "Verificar atualizações",
   "clientDB.autoInit.title": "Inicializando Banco de Dados PGlite",
   "clientDB.error.desc": "Falha ao inicializar o PGlite. Tente novamente. Se necessário, abra as Correções Automáticas e siga os passos. Ainda com problemas? Use 'Relatar Problema' para nos enviar os detalhes do erro.",
   "clientDB.error.detail": "Motivo do erro: [{{type}}] {{message}}. Detalhes a seguir:",

@@ -296,6 +296,7 @@
   "shareModal.popover.moreOptions": "その他の共有オプション",
   "shareModal.popover.privacyWarning.confirm": "理解しました。続行します",
   "shareModal.popover.privacyWarning.content": "会話に個人情報や機密情報が含まれていないことをご確認ください。共有する内容およびその結果については、あなた自身が責任を負うものとします。",
+  "shareModal.popover.privacyWarning.doNotShowAgain": "今後このメッセージを表示しない",
   "shareModal.popover.privacyWarning.title": "プライバシーに関する注意",
   "shareModal.popover.title": "トピックを共有",
   "shareModal.popover.visibility": "公開範囲",

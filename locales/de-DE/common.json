@@ -29,6 +29,7 @@
   "branchingRequiresSavedTopic": "Das aktuelle Thema ist nicht gespeichert. Bitte speichern Sie es zuerst, um die Unterthema-Funktion zu nutzen.",
   "cancel": "Abbrechen",
   "changelog": "Änderungsprotokoll",
+  "checkForUpdates": "Nach Updates suchen",
   "clientDB.autoInit.title": "PGlite-Datenbank wird initialisiert",
   "clientDB.error.desc": "PGlite konnte nicht initialisiert werden. Versuchen Sie es erneut. Wenn das nicht hilft, öffnen Sie die Selbsthilfe und folgen Sie den Schritten. Immer noch Probleme? Nutzen Sie „Problem melden“, um uns die Fehlerdetails zu senden.",
   "clientDB.error.detail": "Fehlerursache: [{{type}}] {{message}}. Details wie folgt:",

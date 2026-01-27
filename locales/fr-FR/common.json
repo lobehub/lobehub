@@ -29,6 +29,7 @@
   "branchingRequiresSavedTopic": "Le sujet actuel n'est pas enregistré, veuillez l'enregistrer d'abord pour utiliser la fonction de sous-sujet",
   "cancel": "Annuler",
   "changelog": "Journal des modifications",
+  "checkForUpdates": "Vérifier les mises à jour",
   "clientDB.autoInit.title": "Initialisation de la base de données PGlite",
   "clientDB.error.desc": "Échec de l'initialisation de PGlite. Réessayez d'abord. Si cela ne fonctionne pas, ouvrez les solutions en libre-service et suivez les étapes. Toujours bloqué après plusieurs tentatives ? Utilisez « Signaler un problème » pour nous envoyer les détails de l'erreur.",
   "clientDB.error.detail": "Raison de l'erreur : [{{type}}] {{message}}. Les détails sont les suivants :",

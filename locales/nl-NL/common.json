@@ -29,6 +29,7 @@
   "branchingRequiresSavedTopic": "Huidig onderwerp is niet opgeslagen, sla het eerst op om subonderwerpen te kunnen gebruiken",
   "cancel": "Annuleren",
   "changelog": "Wijzigingslogboek",
+  "checkForUpdates": "Controleren op updates",
   "clientDB.autoInit.title": "PGlite-database initialiseren",
   "clientDB.error.desc": "PGlite kon niet worden geïnitialiseerd. Probeer het opnieuw. Als dat niet helpt, open dan Zelfhulpoplossingen en volg de stappen. Nog steeds vast? Gebruik 'Probleem melden' om ons de foutdetails te sturen.",
   "clientDB.error.detail": "Foutreden: [{{type}}] {{message}}. Details zijn als volgt:",

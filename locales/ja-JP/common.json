@@ -29,6 +29,7 @@
   "branchingRequiresSavedTopic": "現在のトピックが保存されていません。保存後にサブトピック機能を使用できます",
   "cancel": "キャンセル",
   "changelog": "更新履歴",
+  "checkForUpdates": "アップデートを確認",
   "clientDB.autoInit.title": "PGlite データベースを初期化",
   "clientDB.error.desc": "PGlite データベースの初期化中に問題が発生しました。右側の「再試行」をクリックしてください。何度も失敗する場合は、「自己解決」を開いて案内に従ってください",
   "clientDB.error.detail": "原因：[{{type}}] {{message}}、詳細は以下の通り：",

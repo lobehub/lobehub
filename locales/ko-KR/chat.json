@@ -296,6 +296,7 @@
   "shareModal.popover.moreOptions": "추가 공유 옵션",
   "shareModal.popover.privacyWarning.confirm": "이해했습니다. 계속하기",
   "shareModal.popover.privacyWarning.content": "대화에 개인 정보나 민감한 정보가 포함되어 있지 않은지 확인하세요. 공유한 콘텐츠와 그로 인한 결과에 대한 책임은 사용자 본인에게 있습니다.",
+  "shareModal.popover.privacyWarning.doNotShowAgain": "다시 표시하지 않기",
   "shareModal.popover.privacyWarning.title": "개인정보 보호 안내",
   "shareModal.popover.title": "주제 공유",
   "shareModal.popover.visibility": "공개 범위",

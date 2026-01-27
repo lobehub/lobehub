@@ -296,6 +296,7 @@
   "shareModal.popover.moreOptions": "Diğer paylaşım seçenekleri",
   "shareModal.popover.privacyWarning.confirm": "Anladım, devam et",
   "shareModal.popover.privacyWarning.content": "Lütfen konuşmanızın kişisel veya hassas bilgiler içermediğinden emin olun. Paylaşmayı seçtiğiniz içerikten ve sonuçlarından siz sorumlusunuz.",
+  "shareModal.popover.privacyWarning.doNotShowAgain": "Bir daha gösterme",
   "shareModal.popover.privacyWarning.title": "Gizlilik Uyarısı",
   "shareModal.popover.title": "Konuyu Paylaş",
   "shareModal.popover.visibility": "Görünürlük",
