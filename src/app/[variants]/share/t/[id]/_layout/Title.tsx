@@ -58,11 +58,11 @@ const Title = memo(() => {
         })) as AgentGroupMember[],
         avatar: data.groupMeta.avatar,
         backgroundColor: data.groupMeta.backgroundColor,
-        createdAt: new Date(),
+        createdAt: data.groupMeta.createdAt ? new Date(data.groupMeta.createdAt) : new Date(),
         id: data.groupId,
         title: data.groupMeta.title,
-        updatedAt: new Date(),
-        userId: '',
+        updatedAt: data.groupMeta.updatedAt ? new Date(data.groupMeta.updatedAt) : new Date(),
+        userId: data.groupMeta.userId || '',
       };
 
       // Set activeGroupId and update groupMap
