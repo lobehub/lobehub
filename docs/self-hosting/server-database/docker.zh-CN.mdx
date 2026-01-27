@@ -83,16 +83,16 @@ tags:
 
   ```
 
-  ### 启动 lobe-chat-database docker 镜像
+  ### 启动 lobehub docker 镜像
 
   ```sh
-  docker run -it -d -p 3210:3210 --network pg --env-file lobe-chat.env --name lobe-chat-database lobehub/lobe-chat-database
+  docker run -it -d -p 3210:3210 --network pg --env-file lobe-chat.env --name lobehub lobehub/lobehub
   ```
 
   你可以使用下述指令检查日志：
 
   ```sh
-  docker logs -f lobe-chat-database
+  docker logs -f lobehub
   ```
 
   如果你在容器中看到了以下日志，则说明已经启动成功：
@@ -126,7 +126,7 @@ LobeHub 的 DB 版也支持直接在本地的 Mac/Windows 本地使用。
 那么你需要执行的脚本指令为：
 
 ```shell
-$ docker run -it -d --name lobe-chat-database -p 3210:3210 \
+$ docker run -it -d --name lobehub -p 3210:3210 \
   -e DATABASE_URL=postgres://postgres:mysecretpassword@host.docker.internal:5432/postgres \
   -e KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
   -e AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
@@ -137,7 +137,7 @@ $ docker run -it -d --name lobe-chat-database -p 3210:3210 \
   -e S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com \
   -e S3_BUCKET=LobeHub \
   -e S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com \
-  lobehub/lobe-chat-database
+  lobehub/lobehub
 ```
 
 <Callout type="tip">
@@ -145,9 +145,9 @@ $ docker run -it -d --name lobe-chat-database -p 3210:3210 \
   ，将会走到自身容器的 `localhost`，此时请尝试用 `host.docker.internal` 替代 `localhost`
 </Callout>
 
-[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobe-chat-database
-[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobe-chat-database?color=45cc11&labelColor=black&style=flat-square
-[docker-release-link]: https://hub.docker.com/r/lobehub/lobe-chat-database
-[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobe-chat-database?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
-[docker-size-link]: https://hub.docker.com/r/lobehub/lobe-chat-database
-[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobe-chat-database?color=369eff&labelColor=black&style=flat-square&sort=semver
+[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobehub?color=45cc11&labelColor=black&style=flat-square
+[docker-release-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobehub?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
+[docker-size-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver

@@ -52,7 +52,7 @@ LobeHub 默认使用客户端数据库（IndexedDB），同时也支持使用服
   针对服务端数据库部署场景，你需要将 `NEXT_PUBLIC_SERVICE_MODE` 设置为 `server`。
 
   <Callout type={'info'}>
-    在官方的 `lobe-chat-database` Docker 镜像中，已经默认将该环境变量设为 `server`，因此如果你使用
+    在官方的 `lobehub` Docker 镜像中，已经默认将该环境变量设为 `server`，因此如果你使用
     Docker 镜像部署，则无需再配置该环境变量。
   </Callout>
 
@@ -78,7 +78,7 @@ LobeHub 默认使用客户端数据库（IndexedDB），同时也支持使用服
   为提升部署便捷性，我们根据不同的平台特点设置了默认值：
 
   - 在 Vercel 平台下，`DATABASE_DRIVER` 默认为 `neon`；
-  - 在我们提供的 Docker 镜像 `lobe-chat-database` 中，`DATABASE_DRIVER` 默认为 `node`。
+  - 在我们提供的 Docker 镜像 `lobehub` 中，`DATABASE_DRIVER` 默认为 `node`。
 
   因此如果你采用了以下标准的部署方式，你无需手动配置 `DATABASE_DRIVER` 环境变量：
 
@@ -123,7 +123,7 @@ NextAuth 是一个开源的身份验证库，支持多种身份验证提供商�
 关于 NextAuth 的配置，你可以参考 [身份验证](/zh/docs/self-hosting/advanced/authentication) 的文档获取更多信息。
 
 <Callout type={'tip'}>
-  在官方的 Docker 镜像 `lobe-chat-database` 中，我们推荐使用 NextAuth 作为身份验证服务。
+  在官方的 Docker 镜像 `lobehub` 中，我们推荐使用 NextAuth 作为身份验证服务。
 </Callout>
 
 ## 配置 S3 存储服务

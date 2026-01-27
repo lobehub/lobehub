@@ -47,17 +47,6 @@ body:
     validations:
       required: false
 
-  - type: dropdown
-    attributes:
-      label: '🔧 Deployment Mode'
-      multiple: true
-      options:
-        - 'client db (lobe-chat image)'
-        - 'client pgelite db (lobe-chat-pglite image)'
-        - 'server db (lobe-chat-database image)'
-    validations:
-      required: true
-
   - type: input
     attributes:
       label: '📌 Version'

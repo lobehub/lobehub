@@ -54,7 +54,7 @@ Since we support file-based conversations/knowledge base conversations, we need 
   For server-side database deployment scenarios, you need to set `NEXT_PUBLIC_SERVICE_MODE` to `server`.
 
   <Callout type={'info'}>
-    In the official `lobe-chat-database` Docker image, this environment variable is already set to
+    In the official `lobehub` Docker image, this environment variable is already set to
     `server` by default. Therefore, if you deploy using the Docker image, you do not need to configure
     this environment variable again.
   </Callout>
@@ -82,7 +82,7 @@ Since we support file-based conversations/knowledge base conversations, we need 
   To streamline deployment, we have set default values based on the characteristics of different platforms:
 
   - On the Vercel platform, `DATABASE_DRIVER` defaults to `neon`;
-  - In our provided Docker image `lobe-chat-database`, `DATABASE_DRIVER` defaults to `node`.
+  - In our provided Docker image `lobehub`, `DATABASE_DRIVER` defaults to `node`.
 
   Therefore, if you follow the standard deployment methods below, you do not need to manually configure the `DATABASE_DRIVER` environment variable:
 
@@ -132,7 +132,7 @@ NextAuth is an open-source authentication library that supports multiple identit
 For information on configuring NextAuth, you can refer to the [Authentication](/docs/self-hosting/advanced/authentication) documentation.
 
 <Callout type={'tip'}>
-  In the official Docker image `lobe-chat-database`, we recommend using NextAuth as the
+  In the official Docker image `lobehub`, we recommend using NextAuth as the
   authentication service.
 </Callout>
 

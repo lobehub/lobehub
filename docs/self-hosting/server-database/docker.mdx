@@ -83,16 +83,16 @@ Here is the process for deploying the LobeHub server database version on a Linux
 
   ```
 
-  ### Start the lobe-chat-database Docker image
+  ### Start the lobehub Docker image
 
   ```sh
-  docker run -it -d -p 3210:3210 --network pg --env-file lobe-chat.env --name lobe-chat-database lobehub/lobe-chat-database
+  docker run -it -d -p 3210:3210 --network pg --env-file lobe-chat.env --name lobehub lobehub/lobehub
   ```
 
   You can use the following command to check the logs:
 
   ```sh
-  docker logs -f lobe-chat-database
+  docker logs -f lobehub
   ```
 
   If you see the following logs in the container, it means it has started successfully:
@@ -126,7 +126,7 @@ Here, we assume that you have a pg instance available on port 5432 locally on yo
 The script command you need to execute is:
 
 ```shell
-$ docker run -it -d --name lobe-chat-database -p 3210:3210 \
+$ docker run -it -d --name lobehub -p 3210:3210 \
   -e DATABASE_URL=postgres://postgres:mysecretpassword@host.docker.internal:5432/postgres \
   -e KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
   -e AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk= \
@@ -137,7 +137,7 @@ $ docker run -it -d --name lobe-chat-database -p 3210:3210 \
   -e S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com \
   -e S3_BUCKET=LobeHub \
   -e S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com \
-  lobehub/lobe-chat-database
+  lobehub/lobehub
 ```
 
 <Callout type="tip">
@@ -146,9 +146,9 @@ $ docker run -it -d --name lobe-chat-database -p 3210:3210 \
   `host.docker.internal` instead of `localhost`.
 </Callout>
 
-[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobe-chat-database
-[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobe-chat-database?color=45cc11&labelColor=black&style=flat-square
-[docker-release-link]: https://hub.docker.com/r/lobehub/lobe-chat-database
-[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobe-chat-database?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
-[docker-size-link]: https://hub.docker.com/r/lobehub/lobe-chat-database
-[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobe-chat-database?color=369eff&labelColor=black&style=flat-square&sort=semver
+[docker-pulls-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobehub?color=45cc11&labelColor=black&style=flat-square
+[docker-release-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-release-shield]: https://img.shields.io/docker/v/lobehub/lobehub?color=369eff&label=docker&labelColor=black&logo=docker&logoColor=white&style=flat-square&sort=semver
+[docker-size-link]: https://hub.docker.com/r/lobehub/lobehub
+[docker-size-shield]: https://img.shields.io/docker/image-size/lobehub/lobehub?color=369eff&labelColor=black&style=flat-square&sort=semver
