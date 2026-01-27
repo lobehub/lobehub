@@ -80,7 +80,7 @@
     "electron-store": "^8.2.0",
     "electron-vite": "^4.0.1",
     "es-toolkit": "^1.43.0",
-    "eslint": "^8.57.1",
+    "eslint": "^9.39.2",
     "execa": "^9.6.1",
     "fast-glob": "^3.3.3",
     "fix-path": "^5.0.0",

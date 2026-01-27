@@ -415,7 +415,7 @@
     "dpdm-fast": "^1.0.14",
     "drizzle-dbml-generator": "^0.10.0",
     "drizzle-kit": "^0.31.8",
-    "eslint": "^8.57.1",
+    "eslint": "^9.39.2",
     "eslint-plugin-mdx": "^3.6.2",
     "fake-indexeddb": "^6.2.5",
     "fs-extra": "^11.3.3",
