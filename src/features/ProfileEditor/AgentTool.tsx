@@ -1,11 +1,6 @@
 'use client';
 
-import {
-  KLAVIS_SERVER_TYPES,
-  type KlavisServerType,
-  LOBEHUB_SKILL_PROVIDERS,
-  type LobehubSkillProviderType,
-} from '@lobechat/const';
+import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { Avatar, Button, Flexbox, Icon, type ItemType } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -15,6 +10,10 @@ import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import KlavisServerItem from '@/features/ChatInput/ActionBar/Tools/KlavisServerItem';
+import KlavisSkillIcon, {
+  SKILL_ICON_SIZE,
+} from '@/features/ChatInput/ActionBar/Tools/KlavisSkillIcon';
+import LobehubSkillIcon from '@/features/ChatInput/ActionBar/Tools/LobehubSkillIcon';
 import LobehubSkillServerItem from '@/features/ChatInput/ActionBar/Tools/LobehubSkillServerItem';
 import ToolItem from '@/features/ChatInput/ActionBar/Tools/ToolItem';
 import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
@@ -39,44 +38,6 @@ import PopoverContent from './PopoverContent';
 const WEB_BROWSING_IDENTIFIER = 'lobe-web-browsing';
 
 type TabType = 'all' | 'installed';
-
-const SKILL_ICON_SIZE = 20;
-
-/**
- * Klavis 服务器图标组件
- */
-const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
-  if (typeof icon === 'string') {
-    return (
-      <img
-        alt={label}
-        src={icon}
-        style={{ maxHeight: SKILL_ICON_SIZE, maxWidth: SKILL_ICON_SIZE, objectFit: 'contain' }}
-      />
-    );
-  }
-
-  return <Icon fill={cssVar.colorText} icon={icon} size={SKILL_ICON_SIZE} />;
-});
-
-/**
- * LobeHub Skill Provider 图标组件
- */
-const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
-  ({ icon, label }) => {
-    if (typeof icon === 'string') {
-      return (
-        <img
-          alt={label}
-          src={icon}
-          style={{ maxHeight: SKILL_ICON_SIZE, maxWidth: SKILL_ICON_SIZE, objectFit: 'contain' }}
-        />
-      );
-    }
-
-    return <Icon fill={cssVar.colorText} icon={icon} size={SKILL_ICON_SIZE} />;
-  },
-);
 
 export interface AgentToolProps {
   /**
@@ -263,7 +224,7 @@ const AgentTool = memo<AgentToolProps>(
       () =>
         isKlavisEnabledInEnv
           ? KLAVIS_SERVER_TYPES.map((type) => ({
-              icon: <KlavisIcon icon={type.icon} label={type.label} />,
+              icon: <KlavisSkillIcon icon={type.icon} label={type.label} size={SKILL_ICON_SIZE} />,
               key: type.identifier,
               label: (
                 <KlavisServerItem
@@ -283,7 +244,13 @@ const AgentTool = memo<AgentToolProps>(
       () =>
         isLobehubSkillEnabled
           ? LOBEHUB_SKILL_PROVIDERS.map((provider) => ({
-              icon: <LobehubSkillIcon icon={provider.icon} label={provider.label} />,
+              icon: (
+                <LobehubSkillIcon
+                  icon={provider.icon}
+                  label={provider.label}
+                  size={SKILL_ICON_SIZE}
+                />
+              ),
               key: provider.id, // 使用 provider.id 作为 key，与 pluginId 保持一致
               label: <LobehubSkillServerItem label={provider.label} provider={provider.id} />,
             }))

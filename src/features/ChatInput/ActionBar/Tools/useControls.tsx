@@ -1,16 +1,13 @@
 import {
   KLAVIS_SERVER_TYPES,
-  type KlavisServerType,
   LOBEHUB_SKILL_PROVIDERS,
-  type LobehubSkillProviderType,
   RECOMMENDED_SKILLS,
   RecommendedSkillType,
 } from '@lobechat/const';
 import { Avatar, Icon, type ItemType } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ToyBrick } from 'lucide-react';
-import { memo, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
@@ -29,54 +26,12 @@ import {
 
 import { useAgentId } from '../../hooks/useAgentId';
 import KlavisServerItem from './KlavisServerItem';
+import KlavisSkillIcon from './KlavisSkillIcon';
+import LobehubSkillIcon from './LobehubSkillIcon';
 import LobehubSkillServerItem from './LobehubSkillServerItem';
 import ToolItem from './ToolItem';
 
 const SKILL_ICON_SIZE = 20;
-
-/**
- * Klavis 服务器图标组件
- */
-const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
-  if (typeof icon === 'string') {
-    return (
-      <Avatar
-        alt={label}
-        avatar={icon}
-        shape={'square'}
-        size={SKILL_ICON_SIZE}
-        style={{ flex: 'none' }}
-      />
-    );
-  }
-
-  return <Icon fill={cssVar.colorText} icon={icon} size={SKILL_ICON_SIZE} />;
-});
-
-KlavisIcon.displayName = 'KlavisIcon';
-
-/**
- * LobeHub Skill Provider 图标组件
- */
-const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
-  ({ icon, label }) => {
-    if (typeof icon === 'string') {
-      return (
-        <Avatar
-          alt={label}
-          avatar={icon}
-          shape={'square'}
-          size={SKILL_ICON_SIZE}
-          style={{ flex: 'none' }}
-        />
-      );
-    }
-
-    return <Icon fill={cssVar.colorText} icon={icon} size={SKILL_ICON_SIZE} />;
-  },
-);
-
-LobehubSkillIcon.displayName = 'LobehubSkillIcon';
 
 export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) => void }) => {
   const { t } = useTranslation('setting');
@@ -172,7 +127,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             (type) =>
               installedKlavisIds.has(type.identifier) || recommendedKlavisIds.has(type.identifier),
           ).map((type) => ({
-            icon: <KlavisIcon icon={type.icon} label={type.label} />,
+            icon: <KlavisSkillIcon icon={type.icon} label={type.label} size={SKILL_ICON_SIZE} />,
             key: type.identifier,
             label: (
               <KlavisServerItem
@@ -195,7 +150,13 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             (provider) =>
               installedLobehubIds.has(provider.id) || recommendedLobehubIds.has(provider.id),
           ).map((provider) => ({
-            icon: <LobehubSkillIcon icon={provider.icon} label={provider.label} />,
+            icon: (
+              <LobehubSkillIcon
+                icon={provider.icon}
+                label={provider.label}
+                size={SKILL_ICON_SIZE}
+              />
+            ),
             key: provider.id, // 使用 provider.id 作为 key，与 pluginId 保持一致
             label: <LobehubSkillServerItem label={provider.label} provider={provider.id} />,
           }))
