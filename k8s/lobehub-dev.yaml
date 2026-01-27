@@ -1,0 +1,290 @@
+# LobeHub K8S Dev Deployment (PostgreSQL + Redis + LobeHub)
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lobehub
+  labels:
+    name: lobehub
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: lobe-secrets
+  namespace: lobehub
+type: Opaque
+stringData:
+  POSTGRES_PASSWORD: postgres
+  POSTGRES_DB: lobehub
+  DATABASE_URL: postgresql://postgres:postgres@postgres:5432/lobehub
+
+  # Core authentication configuration
+  AUTH_SECRET: NX2kaPE923dt6BL2U8e9oSre5RfoT7hg
+  KEY_VAULTS_SECRET: Kix2wcUONd4CX51E/ZPAd36BqM4wzJgKjPtz2sGztqQ=
+
+  # Redis configuration
+  REDIS_URL: redis://redis:6379
+  REDIS_PREFIX: lobehub
+  REDIS_TLS: "0"
+
+  # S3 storage configuration (disabled but requires valid values)
+  S3_ENDPOINT: http://localhost:9000
+  S3_PUBLIC_DOMAIN: http://localhost:9000
+  S3_ENABLE_PATH_STYLE: "0"
+  S3_SET_ACL: "0"
+
+  # Other feature configuration
+  LLM_VISION_IMAGE_USE_BASE64: "1"
+  AUTH_SSO_PROVIDERS: ""
+  SEARXNG_URL: http://localhost:8080
+  LOBE_PORT: "3210"
+  APP_URL: http://localhost:3210
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: lobehub
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: pgvector/pgvector:pg17
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: POSTGRES_DB
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: POSTGRES_PASSWORD
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - postgres
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: lobehub
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: lobehub
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        command: ["redis-server", "--save", "60", "1000", "--appendonly", "yes"]
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: lobehub
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lobehub
+  namespace: lobehub
+  labels:
+    app: lobehub
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: lobehub
+  template:
+    metadata:
+      labels:
+        app: lobehub
+    spec:
+      containers:
+      - name: lobehub
+        image: lobehub/lobehub:latest
+        ports:
+        - containerPort: 3210
+        env:
+        # Core authentication configuration
+        - name: AUTH_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: AUTH_SECRET
+        - name: KEY_VAULTS_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: KEY_VAULTS_SECRET
+
+        # Database configuration
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: DATABASE_URL
+
+        # Redis configuration
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: REDIS_URL
+        - name: REDIS_PREFIX
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: REDIS_PREFIX
+        - name: REDIS_TLS
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: REDIS_TLS
+
+        # S3 storage configuration (disabled but requires valid values)
+        - name: S3_ENDPOINT
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: S3_ENDPOINT
+        - name: S3_PUBLIC_DOMAIN
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: S3_PUBLIC_DOMAIN
+        - name: S3_ENABLE_PATH_STYLE
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: S3_ENABLE_PATH_STYLE
+        - name: S3_SET_ACL
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: S3_SET_ACL
+
+        # Other feature configuration
+        - name: LLM_VISION_IMAGE_USE_BASE64
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: LLM_VISION_IMAGE_USE_BASE64
+        - name: AUTH_SSO_PROVIDERS
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: AUTH_SSO_PROVIDERS
+        - name: SEARXNG_URL
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: SEARXNG_URL
+        - name: PORT
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: LOBE_PORT
+        - name: APP_URL
+          valueFrom:
+            secretKeyRef:
+              name: lobe-secrets
+              key: APP_URL
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          /bin/node /app/startServer.js
+        livenessProbe:
+          tcpSocket:
+            port: 3210
+          initialDelaySeconds: 60
+          periodSeconds: 30
+        readinessProbe:
+          tcpSocket:
+            port: 3210
+          initialDelaySeconds: 30
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lobehub
+  namespace: lobehub
+spec:
+  selector:
+    app: lobehub
+  ports:
+  - port: 3210
+    targetPort: 3210
+  type: ClusterIP
