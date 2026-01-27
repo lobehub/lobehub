@@ -195,6 +195,7 @@
   "plans.fileStorage.tooltip": "Dateispeicher für Dateien, Bilder und andere Daten",
   "plans.free": "Kostenlos",
   "plans.freeTrail": "Registrieren Sie sich für eine kostenlose Testversion von {{name}}, keine Kreditkarte erforderlich",
+  "plans.image.count": "Ungefähr {{number}} Bilder",
   "plans.includes": "Enthaltene Vorteile:",
   "plans.includesExtra": "Alle Vorteile von {{name}}, plus:",
   "plans.knowledgeBase.desc": "Verwenden Sie Dateien und Wissensdatenbank in Gesprächen",

@@ -195,6 +195,7 @@
   "plans.fileStorage.tooltip": "ファイル、画像、その他データの保存用ストレージ",
   "plans.free": "無料",
   "plans.freeTrail": "登録で{{name}}の無料トライアルを利用可能。クレジットカード不要",
+  "plans.image.count": "約{{number}}枚の画像",
   "plans.includes": "主な特典：",
   "plans.includesExtra": "{{name}}のすべての特典に加えて：",
   "plans.knowledgeBase.desc": "会話でファイルやナレッジベースを使用可能",

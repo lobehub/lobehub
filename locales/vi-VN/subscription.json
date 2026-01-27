@@ -195,6 +195,7 @@
   "plans.fileStorage.tooltip": "Lưu trữ tệp, hình ảnh và dữ liệu khác",
   "plans.free": "Miễn phí",
   "plans.freeTrail": "Đăng ký để dùng thử miễn phí {{name}}, không cần thẻ tín dụng",
+  "plans.image.count": "Khoảng {{number}} hình ảnh",
   "plans.includes": "Bao gồm các lợi ích:",
   "plans.includesExtra": "Tất cả lợi ích trong {{name}}, cộng thêm:",
   "plans.knowledgeBase.desc": "Sử dụng tệp và cơ sở tri thức trong hội thoại",

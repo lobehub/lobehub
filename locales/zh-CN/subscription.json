@@ -195,6 +195,7 @@
   "plans.fileStorage.tooltip": "用于存储文件、图片等数据的空间",
   "plans.free": "免费",
   "plans.freeTrail": "注册即可免费试用 {{name}}，无需信用卡",
+  "plans.image.count": "约 {{number}} 张图",
   "plans.includes": "包含以下权益：",
   "plans.includesExtra": "包含 {{name}} 的所有权益，另加：",
   "plans.knowledgeBase.desc": "在对话中使用文件和知识库",

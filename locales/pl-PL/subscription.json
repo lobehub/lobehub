@@ -195,6 +195,7 @@
   "plans.fileStorage.tooltip": "Przechowywanie plików, obrazów i innych danych",
   "plans.free": "Darmowy",
   "plans.freeTrail": "Zarejestruj się, aby otrzymać darmowy okres próbny {{name}}, bez potrzeby karty kredytowej",
+  "plans.image.count": "Około {{number}} obrazów",
   "plans.includes": "Korzyści obejmują:",
   "plans.includesExtra": "Wszystkie korzyści z {{name}}, plus:",
   "plans.knowledgeBase.desc": "Używaj plików i bazy wiedzy w rozmowach",

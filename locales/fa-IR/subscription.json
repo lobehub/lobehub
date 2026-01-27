@@ -195,6 +195,7 @@
   "plans.fileStorage.tooltip": "ذخیره‌سازی فایل برای نگهداری فایل‌ها، تصاویر و سایر داده‌ها",
   "plans.free": "رایگان",
   "plans.freeTrail": "با ثبت‌نام، آزمایش رایگان {{name}} را دریافت کنید، بدون نیاز به کارت اعتباری",
+  "plans.image.count": "حدوداً {{number}} تصویر",
   "plans.includes": "مزایا شامل:",
   "plans.includesExtra": "همه مزایای {{name}}، به‌علاوه:",
   "plans.knowledgeBase.desc": "استفاده از فایل‌ها و پایگاه دانش در گفتگوها",
