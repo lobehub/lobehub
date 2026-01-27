@@ -62,7 +62,7 @@
     "@lobechat/file-loaders": "workspace:*",
     "@lobehub/i18n-cli": "^1.25.1",
     "@modelcontextprotocol/sdk": "^1.24.3",
-    "@t3-oss/env-core": "^0.13.8",
+    "@t3-oss/env-core": "^0.13.10",
     "@types/async-retry": "^1.4.9",
     "@types/resolve": "^1.20.6",
     "@types/semver": "^7.7.1",
