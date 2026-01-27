@@ -351,6 +351,10 @@ When configuring SSO connections (e.g., GitHub in Auth0), make sure to enable **
 
 For identity providers like Casdoor or Logto, users may not have an email configured.
 
+<Callout type={'warning'}>
+  **Note for Casdoor Users**: Casdoor does not require users to have an email configured, but LobeChat strongly depends on email for authentication. If you find migration difficult due to many users without email addresses, we recommend staying on [v2.0.0-next.344](https://github.com/lobehub/lobe-chat/releases/tag/v2.0.0-next.344) for now. We plan to provide a self-service migration feature in the future, where users without email will be redirected to a bind-email page when they log in.
+</Callout>
+
 Solution:
 
 1. First configure the Webhook in LobeChat to sync user data from the identity provider:

@@ -185,6 +185,22 @@ const DEPRECATED_CHECKS = [
       'Microsoft Entra ID provider has been renamed to Microsoft. Please update your environment variables.',
     name: 'Microsoft Entra ID',
   },
+  {
+    docUrl: MIGRATION_DOC_BASE,
+    getVars: () => {
+      const hasEmailService =
+        process.env['SMTP_HOST'] || process.env['EMAIL_SERVICE_PROVIDER'] === 'resend';
+      const hasEmailVerification = process.env['AUTH_EMAIL_VERIFICATION'] === '1';
+      if (hasEmailService && !hasEmailVerification) {
+        return ['AUTH_EMAIL_VERIFICATION'];
+      }
+      return [];
+    },
+    message:
+      'Email service is configured but email verification is disabled. Consider setting AUTH_EMAIL_VERIFICATION=1 to verify user email ownership during registration.',
+    name: 'Email Verification',
+    severity: 'warning',
+  },
 ];
 
 /**

@@ -461,8 +461,6 @@ LobeHub 支持多用户管理，提供了灵活的用户认证方案：
 
 - **Better Auth**：LobeHub 集成了 `Better Auth`，一个现代化且灵活的身份验证库，支持多种身份验证方式，包括 OAuth、邮件登录、凭证登录、魔法链接等。通过 `Better Auth`，您可以轻松实现用户的注册、登录、会话管理、社交登录、多因素认证 (MFA) 等功能，确保用户数据的安全性和隐私性。
 
-- **next-auth**：LobeHub 还支持 `next-auth`，一个广泛使用的身份验证库，具有丰富的 OAuth 提供商支持和灵活的会话管理选项。
-
 <div align="right">
 
 [![][back-to-top]](#readme-top)

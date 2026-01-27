@@ -345,6 +345,10 @@ npx tsx scripts/nextauth-to-betterauth/verify.ts
 
 对于 Casdoor、Logto 等身份提供商，用户可能没有配置邮箱。
 
+<Callout type={'warning'}>
+  **Casdoor 用户注意**：Casdoor 不要求用户必须配置邮箱，但 LobeChat 强依赖邮箱进行身份认证。如果因为大量用户没有邮箱而感觉迁移困难，建议暂时停留在 [v2.0.0-next.344](https://github.com/lobehub/lobe-chat/releases/tag/v2.0.0-next.344) 版本。后续官方计划提供用户端自助迁移功能，届时没有邮箱的用户登录时会被重定向到绑定邮箱页面。
+</Callout>
+
 解决方案：
 
 1. 先在 LobeChat 中配置身份提供商的 Webhook 以同步用户数据：
