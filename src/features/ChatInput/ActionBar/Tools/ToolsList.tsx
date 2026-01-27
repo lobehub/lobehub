@@ -38,10 +38,6 @@ export const toolsListStyles = createStaticStyles(({ css }) => ({
 
     width: 24px;
     height: 24px;
-
-    .ant-avatar {
-      margin-inline-end: 0;
-    }
   `,
 }));
 

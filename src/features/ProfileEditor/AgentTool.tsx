@@ -316,9 +316,8 @@ const AgentTool = memo<AgentToolProps>(
           icon: (
             <Avatar
               avatar={item.meta.avatar}
-              shape={'square'}
               size={SKILL_ICON_SIZE}
-              style={{ flex: 'none' }}
+              style={{ marginInlineEnd: 0 }}
             />
           ),
           key: item.identifier,
@@ -351,7 +350,11 @@ const AgentTool = memo<AgentToolProps>(
     const mapPluginToItem = useCallback(
       (item: (typeof installedPluginList)[0]) => ({
         icon: item?.avatar ? (
-          <PluginAvatar avatar={item.avatar} size={SKILL_ICON_SIZE} />
+          <PluginAvatar
+            avatar={item.avatar}
+            size={SKILL_ICON_SIZE}
+            style={{ marginInlineEnd: 0 }}
+          />
         ) : (
           <Icon icon={ToyBrick} size={SKILL_ICON_SIZE} />
         ),
@@ -435,9 +438,8 @@ const AgentTool = memo<AgentToolProps>(
           icon: (
             <Avatar
               avatar={item.meta.avatar}
-              shape={'square'}
               size={SKILL_ICON_SIZE}
-              style={{ flex: 'none' }}
+              style={{ marginInlineEnd: 0 }}
             />
           ),
           key: item.identifier,
