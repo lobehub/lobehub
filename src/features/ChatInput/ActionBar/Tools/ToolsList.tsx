@@ -59,51 +59,62 @@ interface ToolsListProps {
   items: ItemType[];
 }
 
-const ToolsList = memo<ToolsListProps>(({ items }) => {
-  const renderItem = (item: ToolItemData, index: number) => {
-    if (item.type === 'divider') {
-      return <Divider key={`divider-${index}`} style={{ margin: '4px 0' }} />;
-    }
+const DividerItem = memo<{ index: number }>(({ index }) => (
+  <Divider key={`divider-${index}`} style={{ margin: '4px 0' }} />
+));
 
-    if (item.type === 'group') {
-      return (
-        <Fragment key={item.key || `group-${index}`}>
-          <Text className={toolsListStyles.groupLabel} fontSize={12} type="secondary">
-            {item.label}
-          </Text>
-          {item.children?.map((child, childIndex) => renderItem(child, childIndex))}
-        </Fragment>
-      );
-    }
-
-    // Regular item
-    // icon can be: ReactNode (already rendered), LucideIcon/ForwardRef (needs Icon wrapper), or undefined
-    const iconNode = item.icon ? (
-      isValidElement(item.icon) ? (
-        item.icon
-      ) : (
-        <Icon icon={item.icon as any} size={20} />
-      )
-    ) : null;
-
-    return (
-      <div
-        className={toolsListStyles.item}
-        key={item.key || `item-${index}`}
-        onClick={item.onClick}
-        role="button"
-        tabIndex={0}
-      >
-        {iconNode && <div className={toolsListStyles.itemIcon}>{iconNode}</div>}
-        <div className={toolsListStyles.itemContent}>{item.label}</div>
-        {item.extra}
-      </div>
-    );
-  };
+const RegularItem = memo<{ index: number; item: ToolItemData }>(({ item, index }) => {
+  const iconNode = item.icon ? (
+    isValidElement(item.icon) ? (
+      item.icon
+    ) : (
+      <Icon icon={item.icon as any} size={20} />
+    )
+  ) : null;
 
   return (
+    <div
+      className={toolsListStyles.item}
+      key={item.key || `item-${index}`}
+      onClick={item.onClick}
+      role="button"
+      tabIndex={0}
+    >
+      {iconNode && <div className={toolsListStyles.itemIcon}>{iconNode}</div>}
+      <div className={toolsListStyles.itemContent}>{item.label}</div>
+      {item.extra}
+    </div>
+  );
+});
+
+const GroupItem = memo<{ index: number; item: ToolItemData }>(({ item, index }) => (
+  <Fragment key={item.key || `group-${index}`}>
+    <Text className={toolsListStyles.groupLabel} fontSize={12} type="secondary">
+      {item.label}
+    </Text>
+    {item.children?.map((child, childIndex) => (
+      <ToolListItem index={childIndex} item={child} key={child.key || `item-${childIndex}`} />
+    ))}
+  </Fragment>
+));
+
+const ToolListItem = memo<{ index: number; item: ToolItemData | null }>(({ item, index }) => {
+  if (!item) return null;
+  if (item.type === 'divider') return <DividerItem index={index} />;
+  if (item.type === 'group') return <GroupItem index={index} item={item} />;
+  return <RegularItem index={index} item={item} />;
+});
+
+const ToolsList = memo<ToolsListProps>(({ items }) => {
+  return (
     <Flexbox gap={0} padding={4}>
-      {items.map((item, index) => renderItem(item as ToolItemData, index))}
+      {items.map((item, index) => (
+        <ToolListItem
+          index={index}
+          item={item as ToolItemData | null}
+          key={item?.key || `item-${index}`}
+        />
+      ))}
     </Flexbox>
   );
 });
