@@ -213,7 +213,7 @@
     "@neondatabase/serverless": "^1.0.2",
     "@next/third-parties": "^16.1.4",
     "@opentelemetry/exporter-jaeger": "^2.5.0",
-    "@opentelemetry/winston-transport": "^0.19.0",
+    "@opentelemetry/winston-transport": "^0.21.0",
     "@react-pdf/renderer": "^4.3.2",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
