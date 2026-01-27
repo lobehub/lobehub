@@ -190,7 +190,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v2
         with:
-          version: 10
+          version: 10.28.2
 
       - name: Install deps
         run: pnpm install
