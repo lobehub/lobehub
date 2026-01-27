@@ -37,6 +37,9 @@ import UpdateProviderInfo from './UpdateProviderInfo';
 
 const prefixCls = 'ant';
 
+// Define the set of providers that support client-side fetching in desktop app
+const desktopClientFetchProviders = new Set(['lmstudio', 'ollama']);
+
 const styles = createStaticStyles(({ css, cssVar }) => ({
   aceGcm: css`
     padding-block: 0 !important;
@@ -341,10 +344,8 @@ const ProviderConfig = memo<ProviderConfigProps>(
      * 3. Provider allow to edit endpoint and the value of endpoint is not empty
      * 4. There is an apikey provided by user
      */
-    const desktopClientFetchProviders = ['lmstudio', 'ollama'];
-
     const showClientFetch =
-      (!isDesktop || desktopClientFetchProviders.includes(id)) &&
+      (!isDesktop || desktopClientFetchProviders.has(id)) &&
       !disableBrowserRequest &&
       (defaultShowBrowserRequest ||
         (showEndpoint && isProviderEndpointNotEmpty) ||
