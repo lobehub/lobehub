@@ -6,7 +6,7 @@ import {
   getKlavisServerByServerIdentifier,
   getLobehubSkillProviderById,
 } from '@lobechat/const';
-import { Avatar, Flexbox, Icon, Tag, Text, Typography, useModalContext } from '@lobehub/ui';
+import { Flexbox, Icon, Tag, Text, Typography, useModalContext } from '@lobehub/ui';
 import { Button, Divider } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { Klavis } from 'klavis';
@@ -184,7 +184,13 @@ export const IntegrationDetailContent = ({
 
   const renderIcon = () => {
     if (typeof icon === 'string') {
-      return <Avatar avatar={icon} shape={'square'} size={ICON_SIZE} />;
+      return (
+        <img
+          alt={label}
+          src={icon}
+          style={{ maxHeight: ICON_SIZE, maxWidth: ICON_SIZE, objectFit: 'contain' }}
+        />
+      );
     }
     return <Icon fill={cssVar.colorText} icon={icon} size={ICON_SIZE} />;
   };
@@ -228,11 +234,7 @@ export const IntegrationDetailContent = ({
         style={{ flexWrap: 'nowrap' }}
       >
         <Flexbox align="center" gap={16} horizontal>
-          {typeof icon === 'string' ? (
-            renderIcon()
-          ) : (
-            <div className={styles.icon}>{renderIcon()}</div>
-          )}
+          <div className={styles.icon}>{renderIcon()}</div>
           <Flexbox gap={4}>
             <span className={styles.title}>{label}</span>
             <Text style={{ fontSize: 14 }} type="secondary">
