@@ -97,14 +97,10 @@ const ModelSelect = memo<ModelSelectProps>(
         .filter(Boolean) as LobeSelectProps['options'];
     }, [enabledList, requiredAbilities, showAbility]);
 
-    // Memoize the value string to prevent creating new references on every render
-    const selectValue = useMemo(() => {
-      return value?.provider && value?.model ? `${value.provider}/${value.model}` : undefined;
-    }, [value?.provider, value?.model]);
-
     return (
       <TooltipGroup>
         <LobeSelect
+          defaultValue={`${value?.provider}/${value?.model}`}
           loading={loading}
           onChange={(value, option) => {
             if (!value) return;
@@ -132,7 +128,7 @@ const ModelSelect = memo<ModelSelectProps>(
             width: initialWidth ? 'initial' : undefined,
             ...style,
           }}
-          value={selectValue}
+          value={`${value?.provider}/${value?.model}`}
           variant={variant}
           virtual
         />
