@@ -2266,7 +2266,7 @@ export class MemoryExtractionWorkflowService {
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.personaUpdate, baseUrl);
     return this.getClient().trigger({
-      body: { userId },
+      body: { userIds: [userId] },
       flowControl: {
         key: `memory-user-memory.pipelines.persona.update-write.${userId}`,
         parallelism: 1,
