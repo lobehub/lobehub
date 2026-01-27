@@ -30,7 +30,7 @@
     "langfuse-core": "^3.38.6",
     "model-bank": "workspace:*",
     "nanoid": "^5.1.6",
-    "ollama": "^0.6.2",
+    "ollama": "^0.6.3",
     "openai": "^4.104.0",
     "replicate": "^1.4.0",
     "type-fest": "^5.2.0",
