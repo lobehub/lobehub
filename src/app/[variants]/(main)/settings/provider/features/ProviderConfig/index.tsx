@@ -335,14 +335,16 @@ const ProviderConfig = memo<ProviderConfigProps>(
 
     /*
      * Conditions to show Client Fetch Switch
-     * 0. is not desktop app
+     * 0. is not desktop app OR is in desktopClientFetchProviders list
      * 1. provider is not disabled browser request
      * 2. provider show browser request by default
      * 3. Provider allow to edit endpoint and the value of endpoint is not empty
      * 4. There is an apikey provided by user
      */
+    const desktopClientFetchProviders = ['lmstudio', 'ollama'];
+
     const showClientFetch =
-      !isDesktop &&
+      (!isDesktop || desktopClientFetchProviders.includes(id)) &&
       !disableBrowserRequest &&
       (defaultShowBrowserRequest ||
         (showEndpoint && isProviderEndpointNotEmpty) ||
