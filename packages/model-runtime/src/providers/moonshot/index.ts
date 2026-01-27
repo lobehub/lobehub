@@ -16,7 +16,7 @@ export const params = {
   baseURL: 'https://api.moonshot.cn/v1',
   chatCompletion: {
     handlePayload: (payload: ChatStreamPayload) => {
-      const { enabledSearch, messages, temperature, tools, ...rest } = payload;
+      const { enabledSearch, messages, model, temperature, tools, ...rest } = payload;
 
       const filteredMessages = messages.map((message: any) => {
         let normalizedMessage = message;
@@ -51,13 +51,16 @@ export const params = {
           ]
         : tools;
 
+      // kimi-k2.5 only supports temperature=1
+      const isK25Model = model?.startsWith('kimi-k2.5');
       // Resolve parameters with normalization
       const resolvedParams = resolveParameters({ temperature }, { normalizeTemperature: true });
 
       return {
         ...rest,
         messages: filteredMessages,
-        temperature: resolvedParams.temperature,
+        model,
+        temperature: isK25Model ? 1 : resolvedParams.temperature,
         tools: moonshotTools,
       } as any;
     },
