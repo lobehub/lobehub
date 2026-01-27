@@ -48,12 +48,10 @@ const SKILL_ICON_SIZE = 20;
 const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
   if (typeof icon === 'string') {
     return (
-      <Avatar
+      <img
         alt={label}
-        avatar={icon}
-        shape={'square'}
-        size={SKILL_ICON_SIZE}
-        style={{ flex: 'none' }}
+        src={icon}
+        style={{ maxHeight: SKILL_ICON_SIZE, maxWidth: SKILL_ICON_SIZE, objectFit: 'contain' }}
       />
     );
   }
@@ -68,12 +66,10 @@ const LobehubSkillIcon = memo<Pick<LobehubSkillProviderType, 'icon' | 'label'>>(
   ({ icon, label }) => {
     if (typeof icon === 'string') {
       return (
-        <Avatar
+        <img
           alt={label}
-          avatar={icon}
-          shape={'square'}
-          size={SKILL_ICON_SIZE}
-          style={{ flex: 'none' }}
+          src={icon}
+          style={{ maxHeight: SKILL_ICON_SIZE, maxWidth: SKILL_ICON_SIZE, objectFit: 'contain' }}
         />
       );
     }
