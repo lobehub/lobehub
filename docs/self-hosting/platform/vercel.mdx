@@ -1,40 +1,344 @@
 ---
-title: Deploy LobeHub with Vercel
+title: Deploy LobeHub with database on Vercel
 description: >-
-  Learn how to deploy LobeHub on Vercel with ease. Follow the provided steps to
-  prepare your OpenAI API Key, deploy the project, and start using it
-  efficiently.
+  Learn how to deploy LobeHub with database on Vercel with ease, including:
+  database, authentication and S3 storage service.
 tags:
   - Deploy LobeHub
   - Vercel Deployment
-  - Custom Domain Binding
+  - Better Auth
+  - S3 Storage
 ---
 
-# Deploy LobeHub with Vercel
+# Deploying Server Database Version on Vercel
 
-If you want to deploy LobeHub on Vercel, you can follow the steps below:
+This article will detail how to deploy the server database version of LobeHub on Vercel, including: 1) database configuration; 2) identity authentication service configuration; 3) steps for setting up the S3 storage service.
 
-## Vercel Deployment Process
+<Callout type={'warning'}>
+  Before proceeding, please make sure of the following:
+
+  - Export all data, as after deploying the server-side database, existing user data cannot be automatically migrated and can only be manually imported after backup!
+  - When configuring the environment variables required for the server-side database, make sure to fill in all of them before deployment, otherwise you may encounter database migration issues!
+</Callout>
+
+## 1. Configure the Database
 
 <Steps>
-  ### Click the button below to deploy
+  ### Prepare the Server Database Instance and Obtain the Connection URL
 
-  [![](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2Flobehub%2Flobe-chat\&project-name=lobe-chat\&repository-name=lobe-chat)
+  Before deployment, make sure you have prepared a Postgres database instance. You can choose one of the following methods:
 
-  Simply log in with your GitHub account to complete the deployment.
+  - `A.` Use Serverless Postgres instances like Vercel / Neon;
+  - `B.` Use self-deployed Postgres instances like Docker.
 
-  ### After deployment, you can start using it
+  The configuration for both methods is slightly different, and will be distinguished in the next step.
 
-  ### Bind a custom domain (optional)
+  ### Add Environment Variables in Vercel
 
-  Vercel's assigned domain DNS may be polluted in some regions, so binding a custom domain can establish a direct connection.
+  In Vercel's deployment environment variables, add `DATABASE_URL` and other environment variables, and fill in the Postgres database connection URL prepared in the previous step. The typical format for the database connection URL is `postgres://username:password@host:port/database`.
+
+  <Tabs items={['Serverless Postgres', 'Node Postgres']}>
+    <Tab>
+      <Callout type={'warning'}>
+        Please confirm the `Postgres` type provided by your vendor. If it is `Node Postgres`, switch to
+        the `Node Postgres` Tab.
+      </Callout>
+
+      Variables to be filled for Serverless Postgres are as follows:
+
+      ```shell
+      # Serverless Postgres DB Url
+      DATABASE_URL=
+      ```
+
+      An example of filling in Vercel is as follows:
+
+      <Image alt={'Add Serverless Postgres DATABASE_URL'} src={'/blog/assets28616219/d4a710cd-6404-4196-90d0-cd08ca385074.webp'} />
+    </Tab>
+
+    <Tab>
+      Variables to be filled for Node Postgres are as follows:
+
+      ```shell
+      # Node Postgres DB Url
+      DATABASE_URL=
+
+      # Specify Postgres database driver as node
+      DATABASE_DRIVER=node
+      ```
+
+      An example of filling in Vercel is as follows:
+
+      <Image alt={'Add Node Postgres DATABASE_URL'} src={'/blog/assets28616219/1c689738-809b-4199-b305-ba5770d39da7.webp'} />
+    </Tab>
+  </Tabs>
+
+  <Callout type={'info'}>
+    If you wish to enable SSL when connecting to the database, please refer to the
+    [link](https://stackoverflow.com/questions/14021998/using-psql-to-connect-to-postgresql-in-ssl-mode)
+    for setup instructions.
+  </Callout>
+
+  ### Add the `KEY_VAULTS_SECRET` Environment Variable
+
+  After adding the `DATABASE_URL` environment variable for the database, you need to add a `KEY_VAULTS_SECRET` environment variable. This variable is used to encrypt sensitive information such as apikeys stored by users. Click the button below to generate:
+
+  <GenerateSecret envName="KEY_VAULTS_SECRET" />
+
+  Make sure to add this to the Vercel environment variables as well.
+
+  ### Add the `APP_URL` Environment Variable
+
+  Finally, you need to add the `APP_URL` environment variable, which specifies the URL address of the LobeHub application.
 </Steps>
 
-## Automatic Synchronization of Updates
+## 2. Configure Authentication Service
 
-If you have deployed your project using the one-click deployment steps mentioned above, you may find that you are always prompted with "updates available." This is because Vercel creates a new project for you by default instead of forking this project, which causes the inability to accurately detect updates.
+The server-side database needs to be paired with a user authentication service to function properly. Therefore, the corresponding authentication service needs to be configured.
 
-<Callout>
-  We recommend following the [Self-Hosting Upstream Sync](/docs/self-hosting/advanced/upstream-sync)
-  steps to Redeploy.
+<Steps>
+  ### Add Authentication Environment Variables
+
+  In Vercel's deployment environment variables, add the following environment variables to enable authentication (powered by [Better Auth](https://www.better-auth.com)):
+
+  Click the button below to generate `AUTH_SECRET` (session encryption key):
+
+  <GenerateSecret envName="AUTH_SECRET" />
+
+  You also need to configure the `JWKS_KEY` environment variable for signing and verifying JWTs. Click the button below to generate:
+
+  <GenerateJWKSKey />
+
+  With these variables, users can register and login with email and password.
+
+  <Callout type={'info'}>
+    For advanced features like SSO providers, magic link login, and email verification, see [Authentication Service](/docs/self-hosting/advanced/auth).
+  </Callout>
+
+  ### Add Public and Private Key Environment Variables in Vercel
+
+  In Vercel's deployment environment variables, add the `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` environment variables. You can click on "API Keys" in the menu, then copy the corresponding values and paste them into Vercel's environment variables.
+
+  <Image alt={'Find the corresponding public and private key environment variables in Clerk'} src={'/blog/assets28616219/89883703-7a1a-4a11-b944-5d804544e57c.webp'} />
+
+  The environment variables required for this step are as follows:
+
+  ```shell
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_xxxxxxxxxxx
+  CLERK_SECRET_KEY=sk_live_xxxxxxxxxxxxxxxxxxxxxx
+  ```
+
+  Add the above variables to Vercel:
+
+  <Image alt={'Add Clerk public and private key environment variables in Vercel'} src={'/blog/assets28616219/2bfa13df-6e20-4768-97c0-4dad06c85a2f.webp'} />
+
+  ### Create and Configure Webhook in Clerk
+
+  Since we let Clerk fully handle user authentication and management, we need Clerk to notify our application and store data in the database when there are changes in the user's lifecycle (create, update, delete). We achieve this requirement through the Webhook provided by Clerk.
+
+  We need to add an endpoint in Clerk's Webhooks to inform Clerk to send notifications to this endpoint when a user's information changes.
+
+  <Image alt={'Add Webhooks endpoint in Clerk'} src={'/blog/assets28616219/f50f47fb-5e8e-4930-bf4e-8cf6f5b8afb9.webp'} />
+
+  Fill in the endpoint with the URL of your Vercel project, such as `https://your-project.vercel.app/api/webhooks/clerk`. Then, subscribe to events by checking the three user events (`user.created`, `user.deleted`, `user.updated`), and click create.
+
+  <Callout type={'warning'}>
+    The `https://` in the URL is essential to maintain the integrity of the URL.
+  </Callout>
+
+  <Image alt={'Configure URL and user events when adding Clerk Webhooks'} src={'/blog/assets28616219/0249ea56-ab17-4aa9-a56c-9ebd556c2645.webp'} />
+
+  ### Add Webhook Secret to Vercel Environment Variables
+
+  After creation, you can find the secret of this Webhook in the bottom right corner:
+
+  <Image alt={'View Clerk Webhooks secret'} src={'/blog/assets28616219/fab4abb2-584b-49de-9340-813382951635.webp'} />
+
+  The environment variable corresponding to this secret is `CLERK_WEBHOOK_SECRET`:
+
+  ```shell
+  CLERK_WEBHOOK_SECRET=whsec_xxxxxxxxxxxxxxxxxxxxxx
+  ```
+
+  Add it to Vercel's environment variables:
+
+  <Image alt={'Add Clerk Webhooks secret in Vercel'} src={'/blog/assets28616219/5fdc9479-007f-46ab-9d6e-a9603e949116.webp'} />
+</Steps>
+
+By completing these steps, you have successfully configured the authentication service. Next, we will configure the S3 storage service.
+
+## 3. Configure S3 Storage Service
+
+In the server-side database, we need to configure the S3 storage service to store files.
+
+<Callout type={'info'}>
+  In this article, S3 refers to a compatible S3 storage solution, which supports object storage
+  systems that comply with the Amazon S3 API. Common examples include Cloudflare R2, Alibaba Cloud
+  OSS, etc., all of which support S3-compatible APIs.
 </Callout>
+
+<Steps>
+  ### Configure and Obtain S3 Bucket
+
+  You need to go to your S3 service provider (such as AWS S3, Cloudflare R2, etc.) and create a new storage bucket. The following steps will use Cloudflare R2 as an example to explain the creation process.
+
+  The interface of Cloudflare R2 is shown below:
+
+  <Image alt={'Cloudflare R2 Storage Interface'} src={'/blog/assets28616219/41f7f677-0153-4a96-b849-5ac9b7ebefee.webp'} />
+
+  When creating a storage bucket, specify its name and then click create.
+
+  <Image alt={'Create Storage Bucket in R2'} src={'/blog/assets28616219/9c0d184c-3169-40fa-9115-011cfffb9ca7.webp'} />
+
+  ### Obtain Environment Variables for the Bucket
+
+  In the settings of the R2 storage bucket, you can view the bucket configuration information:
+
+  <Image alt={'View Storage Bucket Information'} src={'/blog/assets28616219/2ceb210c-eca0-4439-ba27-8734d4ebb3ee.webp'} />
+
+  The corresponding environment variables are:
+
+  ```shell
+  # Storage bucket name
+  S3_BUCKET=LobeHub
+  # Storage bucket request endpoint (note that the path in this link includes the bucket name, which must be removed, or use the link provided on the S3 API token application page)
+  S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
+  # Public access domain for the storage bucket
+  S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com
+  ```
+
+  <Callout type={'warning'}>
+    `S3_ENDPOINT` must have its path removed, otherwise uploaded files will not be accessible
+  </Callout>
+
+  ### Obtain S3 Key Environment Variables
+
+  You need to obtain the access key for S3 so that the LobeHub server has permission to access the S3 storage service. In R2, you can configure the access key in the account details:
+
+  <Image alt={'View Storage Bucket Access Key'} src={'/blog/assets28616219/be0c95c0-6693-44ee-a490-7e8dfaa8b34d.webp'} />
+
+  Click the button in the upper right corner to create an API token and enter the create API Token page.
+
+  <Image alt={'Create Corresponding API Token'} src={'/blog/assets28616219/7b0ea46c-5157-40a8-888f-f47664a4884f.webp'} />
+
+  Since our server-side database needs to read and write to the S3 storage service, the permission needs to be set to `Object Read and Write`, then click create.
+
+  <Image alt={'Configure API Token Permissions'} src={'/blog/assets28616219/d6f5a918-7b50-4d6e-83a6-3894ab930ddf.webp'} />
+
+  After creation, you can see the corresponding S3 API token.
+
+  <Image alt={'Copy API Token'} src={'/blog/assets28616219/763b18f9-2b5f-44bb-a479-9b56d46f7397.webp'} />
+
+  The corresponding environment variables are:
+
+  ```shell
+  S3_ACCESS_KEY_ID=9998d6757e276cf9f1edbd325b7083a6
+  S3_SECRET_ACCESS_KEY=55af75d8eb6b99f189f6a35f855336ea62cd9c4751a5cf4337c53c1d3f497ac2
+  ```
+
+  ### Adding Corresponding Environment Variables in Vercel
+
+  The steps to obtain the required environment variables may vary for different S3 service providers, but the obtained environment variables should be consistent:
+
+  <Callout type={'warning'}>
+    The `https://` in the URL is essential and must be maintained for the completeness of the URL.
+  </Callout>
+
+  ```shell
+  # S3 Keys
+  S3_ACCESS_KEY_ID=9998d6757e276cf9f1edbd325b7083a6
+  S3_SECRET_ACCESS_KEY=55af75d8eb6b99f189f6a35f855336ea62cd9c4751a5cf4337c53c1d3f497ac2
+
+  # Bucket name
+  S3_BUCKET=LobeHub
+  # Bucket request endpoint
+  S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
+  # Public domain for bucket access
+  S3_PUBLIC_DOMAIN=https://s3-dev.your-domain.com
+
+  # Bucket region, such as us-west-1, generally not required, but some providers may need to configure
+  # S3_REGION=us-west-1
+  ```
+
+  Then, insert the above environment variables into Vercel's environment variables:
+
+  <Image alt={'Adding S3 environment variables in Vercel'} src={'/blog/assets28616219/cd74152d-0ae8-44fd-b815-3307c56a3c18.webp'} />
+
+  ### Configuring Cross-Origin Resource Sharing (CORS)
+
+  Since S3 storage services are often on a separate domain, cross-origin access needs to be configured.
+
+  In R2, you can find the CORS configuration in the bucket settings:
+
+  <Image alt={'Cloudflare R2 CORS settings'} src={'/blog/assets28616219/ab008be7-26b2-4b78-8bd9-24301bf34d23.webp'} />
+
+  Add a CORS rule to allow requests from your domain (in this case, `https://your-project.vercel.app`):
+
+  <Image alt={'Configuring allowed site domain'} src={'/blog/assets28616219/dfcc2cb3-2958-4498-a8a4-51bec584fe7d.webp'} />
+
+  Example configuration:
+
+  ```json
+  [
+    {
+      "AllowedOrigins": ["https://your-project.vercel.app"],
+      "AllowedMethods": ["GET", "PUT", "HEAD", "POST", "DELETE"],
+      "AllowedHeaders": ["*"]
+    }
+  ]
+  ```
+
+  After configuring, click save.
+</Steps>
+
+## Four, Deployment and Verification
+
+After completing the steps above, the configuration of the server-side database should be done. Next, we can deploy LobeHub to Vercel and then visit your Vercel link to verify if the server-side database is working correctly.
+
+<Steps>
+  ### Redeploy the latest commit
+
+  After configuring the environment variables, you need to redeploy the latest commit and wait for the deployment to complete.
+
+  <Image alt={'Redeploy the latest commit'} src={'/blog/assets28616219/b3a78112-adc8-4837-b4e3-48f67058f16e.webp'} />
+
+  ### Check if the features are working properly
+
+  If you click on the login button in the top left corner and the login popup appears normally, then you have successfully configured it. Enjoy using it\~
+
+  <Image alt={'User login popup'} src={'/blog/assets28616219/da84edc3-46f7-4e2b-a0cd-dc33a98bf5cb.webp'} />
+
+  <Image alt={'Login successful state'} src={'/blog/assets28616219/9cb5150d-6e1e-4c59-9a18-4e418dce1a5d.webp'} />
+</Steps>
+
+## Appendix
+
+### Overview of Server-side Database Environment Variables
+
+For easy copying, here is a summary of the environment variables required to configure the server-side database:
+
+```shell
+APP_URL=https://your-project.com
+
+# Postgres database URL
+DATABASE_URL=
+KEY_VAULTS_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+
+# Authentication
+AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
+JWKS_KEY='{"keys":[...]}'
+
+# S3 related configurations
+# S3 keys
+S3_ACCESS_KEY_ID=9998d6757e276cf9f1edbd325b7083a6
+S3_SECRET_ACCESS_KEY=55af75d8eb6b99f189f6a35f855336ea62cd9c4751a5cf4337c53c1d3f497ac2
+
+# Bucket name
+S3_BUCKET=LobeHub
+# Bucket request endpoint
+S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
+# Public access domain for the bucket
+S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com
+# Bucket region, such as us-west-1, generally not needed to add, but some service providers may require configuration
+# S3_REGION=us-west-1
+```
