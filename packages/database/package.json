@@ -24,7 +24,7 @@
     "ws": "^8.18.3"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.3.14",
+    "@electric-sql/pglite": "^0.3.15",
     "dotenv": "^17.2.3",
     "fake-indexeddb": "^6.2.5"
   },
