@@ -16,6 +16,7 @@ import { LobeCometAPIAI } from './providers/cometapi';
 import { LobeComfyUI } from './providers/comfyui';
 import { LobeDeepSeekAI } from './providers/deepseek';
 import { LobeFalAI } from './providers/fal';
+import { LobeFeatherlessAI } from './providers/featherlessai';
 import { LobeFireworksAI } from './providers/fireworksai';
 import { LobeGiteeAI } from './providers/giteeai';
 import { LobeGithubAI } from './providers/github';
@@ -83,6 +84,7 @@ export const providerRuntimeMap = {
   comfyui: LobeComfyUI,
   deepseek: LobeDeepSeekAI,
   fal: LobeFalAI,
+  featherlessai: LobeFeatherlessAI,
   fireworksai: LobeFireworksAI,
   giteeai: LobeGiteeAI,
   github: LobeGithubAI,

@@ -1,0 +1,50 @@
+---
+title: 在 LobeChat 中使用 Featherless AI API 密钥
+description: 学习如何在 LobeChat 中配置和使用 Featherless AI 模型，获取 API 密钥并开始对话。
+tags:
+  - LobeChat
+  - Featherless AI
+  - API 密钥
+  - Web UI
+---
+
+# 在 LobeChat 中使用 Featherless AI
+
+<Image alt={'在 LobeChat 中使用 Featherless AI'} cover src={'https://github.com/user-attachments/assets/1028aa1a-6c19-4191-b28a-2020e5637155'} />
+
+[Featherless](https://featherless.ai/) 是一个无服务器 AI 推理平台。我们的目标是让所有 AI 模型都可以进行无服务器推理，我们已经从大型语言模型开始（例如 Qwen、Llama、Mistral、DeepSeek、RWKV）。我们通过 API 为持续扩展的开源权重模型库提供推理服务，包括用于角色扮演、创意写作、编程辅助等最受欢迎的模型。
+
+本文档将指导您如何在 LobeChat 中使用 Featherless AI：
+
+<Steps>
+  ### 步骤 1：获取 Featherless AI API 密钥
+
+  - 首先，您需要注册并登录到 [Featherless AI Cloud](https://featherless.ai/)
+  - 在您的仪表板中创建一个 API 密钥
+
+  <Image alt={'获取 Featherless AI API 密钥'} inStep src={'https://github.com/user-attachments/assets/ed6965c8-6884-4adf-a457-573a96755f55'} />
+
+  - 复制获得的 API 密钥并安全保存
+
+  <Callout type={'warning'}>
+    请安全保存生成的 API 密钥，因为它只会出现一次。如果您意外丢失了它，您需要创建一个新的 API 密钥。
+  </Callout>
+
+  ### 步骤 2：在 LobeChat 中配置 Featherless AI
+
+  - 访问 LobeChat 的 `应用设置` 界面
+  - 在 `语言模型` 下找到 `Featherless AI` 设置项
+
+  <Image alt={'填入 Featherless AI API 密钥'} inStep src={'https://github.com/user-attachments/assets/328e9755-8da9-4849-8569-e099924822fe'} />
+
+  - 开启 Featherless AI 并填入获得的 API 密钥
+  - 为您的助手选择一个 Featherless AI 模型以开始对话
+
+  <Image alt={'选择 Featherless AI 模型'} inStep src={'https://github.com/user-attachments/assets/6dbf4560-3f62-4b33-9f41-96e12b5087b1'} />
+
+  <Callout type={'warning'}>
+    在使用过程中您可能需要向 API 服务提供商付费，请参考 Featherless AI 的相关费用政策。
+  </Callout>
+</Steps>
+
+现在您可以在 LobeChat 中使用 Featherless AI 提供的模型进行对话了。

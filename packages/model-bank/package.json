@@ -22,6 +22,7 @@
     "./comfyui": "./src/aiModels/comfyui.ts",
     "./deepseek": "./src/aiModels/deepseek.ts",
     "./fal": "./src/aiModels/fal.ts",
+    "./featherlessai": "./src/aiModels/featherlessai.ts",
     "./fireworksai": "./src/aiModels/fireworksai.ts",
     "./giteeai": "./src/aiModels/giteeai.ts",
     "./github": "./src/aiModels/github.ts",

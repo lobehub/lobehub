@@ -69,6 +69,7 @@ export interface UserKeyVaults extends SearchEngineKeyVaults {
   comfyui?: ComfyUIKeyVault;
   deepseek?: OpenAICompatibleKeyVault;
   fal?: FalKeyVault;
+  featherlessai?: OpenAICompatibleKeyVault;
   fireworksai?: OpenAICompatibleKeyVault;
   giteeai?: OpenAICompatibleKeyVault;
   github?: OpenAICompatibleKeyVault;

@@ -17,6 +17,7 @@ export enum ModelProvider {
   ComfyUI = 'comfyui',
   DeepSeek = 'deepseek',
   Fal = 'fal',
+  FeatherlessAI = 'featherlessai',
   FireworksAI = 'fireworksai',
   GiteeAI = 'giteeai',
   Github = 'github',
