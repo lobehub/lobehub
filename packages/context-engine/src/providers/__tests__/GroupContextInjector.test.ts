@@ -12,7 +12,7 @@ describe('GroupContextInjector', () => {
   });
 
   describe('Basic Scenarios', () => {
-    it('should inject group context into system message', async () => {
+    it('should inject group context before first user message', async () => {
       const injector = new GroupContextInjector({
         currentAgentId: 'agt_editor',
         currentAgentName: 'Editor',
@@ -35,31 +35,39 @@ describe('GroupContextInjector', () => {
       const context = createContext(input);
       const result = await injector.process(context);
 
-      const systemContent = result.messages[0].content;
+      // System message should be unchanged
+      expect(result.messages[0].content).toBe('You are a helpful editor.');
 
-      // Original content should be preserved
-      expect(systemContent).toContain('You are a helpful editor.');
+      // Should have 3 messages now (system, injected, user)
+      expect(result.messages).toHaveLength(3);
+
+      // Check injected message (second message)
+      const injectedContent = result.messages[1].content;
+      expect(result.messages[1].role).toBe('user');
 
       // Agent identity (plain text, no wrapper)
-      expect(systemContent).toContain('You are "Editor"');
-      expect(systemContent).toContain('acting as a participant');
-      expect(systemContent).toContain('"Writing Team"');
-      expect(systemContent).toContain('agt_editor');
-      expect(systemContent).not.toContain('<agent_identity>');
+      expect(injectedContent).toContain('You are "Editor"');
+      expect(injectedContent).toContain('acting as a participant');
+      expect(injectedContent).toContain('"Writing Team"');
+      expect(injectedContent).toContain('agt_editor');
+      expect(injectedContent).not.toContain('<agent_identity>');
 
       // Group context section with system prompt
-      expect(systemContent).toContain('<group_context>');
-      expect(systemContent).toContain('A team for collaborative writing');
+      expect(injectedContent).toContain('<group_context>');
+      expect(injectedContent).toContain('A team for collaborative writing');
 
       // Participants section with XML format
-      expect(systemContent).toContain('<group_participants>');
-      expect(systemContent).toContain('<member name="Supervisor" id="agt_supervisor" />');
-      expect(systemContent).toContain('<member name="Writer" id="agt_writer" />');
-      expect(systemContent).toContain('<member name="Editor" id="agt_editor" you="true" />');
+      expect(injectedContent).toContain('<group_participants>');
+      expect(injectedContent).toContain('<member name="Supervisor" id="agt_supervisor" />');
+      expect(injectedContent).toContain('<member name="Writer" id="agt_writer" />');
+      expect(injectedContent).toContain('<member name="Editor" id="agt_editor" you="true" />');
 
       // Identity rules
-      expect(systemContent).toContain('<identity_rules>');
-      expect(systemContent).toContain('NEVER expose or display agent IDs');
+      expect(injectedContent).toContain('<identity_rules>');
+      expect(injectedContent).toContain('NEVER expose or display agent IDs');
+
+      // Original user message should be third
+      expect(result.messages[2].content).toBe('Please review this.');
 
       // Metadata should be updated
       expect(result.metadata.groupContextInjected).toBe(true);
@@ -72,35 +80,37 @@ describe('GroupContextInjector', () => {
         enabled: false, // Disabled
       });
 
-      const input: any[] = [{ role: 'system', content: 'You are a helpful editor.' }];
+      const input: any[] = [
+        { role: 'system', content: 'You are a helpful editor.' },
+        { role: 'user', content: 'Hello' },
+      ];
 
       const context = createContext(input);
       const result = await injector.process(context);
 
-      // Should be unchanged
+      // Should be unchanged - no injection
+      expect(result.messages).toHaveLength(2);
       expect(result.messages[0].content).toBe('You are a helpful editor.');
+      expect(result.messages[1].content).toBe('Hello');
       expect(result.metadata.groupContextInjected).toBeUndefined();
     });
 
-    it('should skip injection when no system message exists', async () => {
+    it('should skip injection when no user message exists', async () => {
       const injector = new GroupContextInjector({
         currentAgentId: 'agt_editor',
         currentAgentName: 'Editor',
         enabled: true,
       });
 
-      const input: any[] = [
-        { role: 'user', content: 'Hello' },
-        { role: 'assistant', content: 'Hi there!' },
-      ];
+      const input: any[] = [{ role: 'system', content: 'You are a helpful editor.' }];
 
       const context = createContext(input);
       const result = await injector.process(context);
 
-      // Messages should be unchanged
-      expect(result.messages[0].content).toBe('Hello');
-      expect(result.messages[1].content).toBe('Hi there!');
-      expect(result.metadata.groupContextInjected).toBeUndefined();
+      // Messages should be unchanged - no user message to inject before
+      expect(result.messages).toHaveLength(1);
+      expect(result.messages[0].content).toBe('You are a helpful editor.');
+      expect(result.metadata.groupContextInjected).toBe(true);
     });
   });
 
@@ -113,12 +123,16 @@ describe('GroupContextInjector', () => {
         enabled: true,
       });
 
-      const input: any[] = [{ content: 'You are an editor.', role: 'system' }];
+      const input: any[] = [
+        { content: 'You are an editor.', role: 'system' },
+        { content: 'Hello', role: 'user' },
+      ];
 
       const context = createContext(input);
       const result = await injector.process(context);
 
-      expect(result.messages[0].content).toMatchSnapshot();
+      // Check injected message content
+      expect(result.messages[1].content).toMatchSnapshot();
     });
 
     it('should handle config with only group info', async () => {
@@ -129,12 +143,16 @@ describe('GroupContextInjector', () => {
         systemPrompt: 'Test group description',
       });
 
-      const input: any[] = [{ content: 'System prompt.', role: 'system' }];
+      const input: any[] = [
+        { content: 'System prompt.', role: 'system' },
+        { content: 'Hello', role: 'user' },
+      ];
 
       const context = createContext(input);
       const result = await injector.process(context);
 
-      expect(result.messages[0].content).toMatchSnapshot();
+      // Check injected message content
+      expect(result.messages[1].content).toMatchSnapshot();
     });
 
     it('should handle empty config', async () => {
@@ -142,12 +160,16 @@ describe('GroupContextInjector', () => {
         enabled: true,
       });
 
-      const input: any[] = [{ content: 'Base prompt.', role: 'system' }];
+      const input: any[] = [
+        { content: 'Base prompt.', role: 'system' },
+        { content: 'Hello', role: 'user' },
+      ];
 
       const context = createContext(input);
       const result = await injector.process(context);
 
-      expect(result.messages[0].content).toMatchSnapshot();
+      // Check injected message content
+      expect(result.messages[1].content).toMatchSnapshot();
     });
   });
 
@@ -158,15 +180,19 @@ describe('GroupContextInjector', () => {
         // Minimal config
       });
 
-      const input: any[] = [{ role: 'system', content: 'Base prompt.' }];
+      const input: any[] = [
+        { role: 'system', content: 'Base prompt.' },
+        { role: 'user', content: 'Hello' },
+      ];
 
       const context = createContext(input);
       const result = await injector.process(context);
 
-      const systemContent = result.messages[0].content;
+      // Check injected message content
+      const injectedContent = result.messages[1].content;
 
       // Even with minimal config, identity rules should be present
-      expect(systemContent).toMatchSnapshot();
+      expect(injectedContent).toMatchSnapshot();
     });
   });
 
@@ -179,12 +205,16 @@ describe('GroupContextInjector', () => {
         systemPrompt: 'Empty group description',
       });
 
-      const input: any[] = [{ content: 'Prompt.', role: 'system' }];
+      const input: any[] = [
+        { content: 'Prompt.', role: 'system' },
+        { content: 'Hello', role: 'user' },
+      ];
 
       const context = createContext(input);
       const result = await injector.process(context);
 
-      expect(result.messages[0].content).toMatchSnapshot();
+      // Check injected message content
+      expect(result.messages[1].content).toMatchSnapshot();
     });
 
     it('should preserve other messages unchanged', async () => {
@@ -204,10 +234,16 @@ describe('GroupContextInjector', () => {
       const context = createContext(input);
       const result = await injector.process(context);
 
-      // Only system message should be modified
-      expect(result.messages[0].content).toContain('<group_context>');
-      expect(result.messages[1].content).toBe('User message.');
-      expect(result.messages[2].content).toBe('Assistant response.');
+      // System message should be unchanged
+      expect(result.messages[0].content).toBe('System prompt.');
+
+      // Injected message should be second
+      expect(result.messages[1].role).toBe('user');
+      expect(result.messages[1].content).toContain('<group_context>');
+
+      // Original messages should be preserved
+      expect(result.messages[2].content).toBe('User message.');
+      expect(result.messages[3].content).toBe('Assistant response.');
     });
   });
 });

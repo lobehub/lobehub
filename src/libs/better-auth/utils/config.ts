@@ -50,8 +50,8 @@ export const getTrustedOrigins = (enabledSSOProviders: string[]) => {
 
   const defaults = [
     normalizeOrigin(appEnv.APP_URL),
-    normalizeOrigin(process.env.VERCEL_BRANCH_URL),
     normalizeOrigin(process.env.VERCEL_URL),
+    normalizeOrigin(process.env.VERCEL_BRANCH_URL),
     MOBILE_APP_SCHEME,
     // Add expo URL in development
     ...(isDev ? [EXPO_DEV_SCHEME] : []),

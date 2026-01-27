@@ -6,31 +6,31 @@ import { marketApiService } from '@/services/marketApi';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 interface AgentOwnershipResult {
-  // null = loading, true = 是用户的, false = 不是用户的
+  // null = loading, true = user owns it, false = user doesn't own it
   error?: string;
   isOwnAgent: boolean | null;
 }
 
-// 简单的缓存机制避免重复 API 调用
+// Simple cache mechanism to avoid duplicate API calls
 const agentOwnershipCache = new Map<string, { result: boolean; timestamp: number }>();
-const CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
+const CACHE_DURATION = 5 * 60 * 1000; // 5-minute cache
 
 const buildCacheKey = (marketIdentifier: string, accountId?: string | number | null) =>
   `${marketIdentifier}::${accountId ?? 'unknown'}`;
 
 /**
- * 获取当前用户 ID
+ * Get current user ID
  */
 function getCurrentAccountId(marketAuth: MarketAuthContextType): string | number | null {
   try {
-    // 首先尝试从 marketAuth 中获取用户信息
+    // First try to get user info from marketAuth
     const userInfo = marketAuth.getCurrentUserInfo?.();
     if (userInfo?.accountId !== null) {
       console.log('[useAgentOwnershipCheck] User ID from userInfo:', userInfo?.accountId);
       return userInfo?.accountId ?? null;
     }
 
-    // 如果没有，尝试从 sessionStorage 中获取
+    // If not available, try to get from sessionStorage
     const userInfoData = sessionStorage.getItem('market_user_info');
     if (userInfoData) {
       const parsedUserInfo = JSON.parse(userInfoData);
@@ -53,7 +53,7 @@ interface CheckOwnershipParams {
   accessToken?: string;
   accountId?: string | number | null;
   /**
-   * 是否启用了 trustedClient 模式，启用时不需要 accessToken
+   * Whether trustedClient mode is enabled; when enabled, accessToken is not required
    */
   enableMarketTrustedClient?: boolean;
   marketIdentifier?: string;
@@ -61,7 +61,7 @@ interface CheckOwnershipParams {
 }
 
 /**
- * 校验当前账号是否为指定 agent 的 owner
+ * Verify if the current account is the owner of the specified agent
  */
 export const checkOwnership = async ({
   accountId,
@@ -70,7 +70,7 @@ export const checkOwnership = async ({
   marketIdentifier,
   skipCache = false,
 }: CheckOwnershipParams): Promise<boolean> => {
-  // 在 trustedClient 模式下，不需要 accessToken；否则需要
+  // In trustedClient mode, accessToken is not required; otherwise it is required
   if (!marketIdentifier || !accountId || (!enableMarketTrustedClient && !accessToken)) {
     console.warn('[checkOwnership] Missing required parameters', {
       accessToken: Boolean(accessToken),
@@ -88,7 +88,7 @@ export const checkOwnership = async ({
     return cached.result;
   }
 
-  // 只有在非 trustedClient 模式下才设置 accessToken
+  // Only set accessToken when not in trustedClient mode
   if (!enableMarketTrustedClient && accessToken) {
     marketApiService.setAccessToken(accessToken);
   }
@@ -106,14 +106,14 @@ export const checkOwnership = async ({
 };
 
 /**
- * 检查当前用户是否拥有指定的 agent
+ * Check if the current user owns the specified agent
  */
 export const useAgentOwnershipCheck = (marketIdentifier?: string): AgentOwnershipResult => {
   const [result, setResult] = useState<AgentOwnershipResult>({ isOwnAgent: null });
   const marketAuth = useMarketAuth();
   const { isAuthenticated } = marketAuth;
 
-  // 检查是否启用了 Market Trusted Client 认证
+  // Check if Market Trusted Client authentication is enabled
   const enableMarketTrustedClient = useServerConfigStore(
     serverConfigSelectors.enableMarketTrustedClient,
   );
@@ -128,7 +128,7 @@ export const useAgentOwnershipCheck = (marketIdentifier?: string): AgentOwnershi
       try {
         console.log('[useAgentOwnershipCheck] Checking ownership for:', marketIdentifier);
 
-        // 获取当前用户 ID
+        // Get current user ID
         const currentAccountId = getCurrentAccountId(marketAuth);
         console.log('[useAgentOwnershipCheck] Current user ID:', currentAccountId);
 
@@ -138,7 +138,7 @@ export const useAgentOwnershipCheck = (marketIdentifier?: string): AgentOwnershi
           return;
         }
 
-        // trustedClient 模式下不需要获取 accessToken
+        // No need to get accessToken in trustedClient mode
         const accessToken = enableMarketTrustedClient
           ? undefined
           : (marketAuth.getAccessToken() ?? undefined);

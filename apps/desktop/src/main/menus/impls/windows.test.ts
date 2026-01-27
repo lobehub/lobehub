@@ -150,7 +150,7 @@ describe('WindowsMenu', () => {
     });
 
     it('should pass data to context menu', () => {
-      const data = { text: 'selected text' };
+      const data = { selectionText: 'selected text', x: 100, y: 200 };
       windowsMenu.buildContextMenu('editor', data);
 
       expect(Menu.buildFromTemplate).toHaveBeenCalled();

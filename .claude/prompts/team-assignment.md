@@ -3,15 +3,15 @@
 ## Quick Reference by Name
 
 - **@arvinxx**: Last resort only, mention for priority:high issues, tool calling , mcp
-- **@canisminor1990**: Design, UI components, editor
-- **@tjx666**: Image/video generation, vision, cloud, documentation, TTS
+- **@canisminor1990**: Design, UI components, editor, markdown rendering
+- **@tjx666**: Image/video generation, vision, cloud version, documentation, TTS, auth, login/register
 - **@ONLY-yours**: Performance, streaming, settings, general bugs, web platform, marketplace
 - **@RiverTwilight**: Knowledge base, files (KB-related), group chat
 - **@nekomeowww**: Memory, backend, deployment, DevOps
 - **@sudongyuer**: Mobile app (React Native)
 - **@sxjeru**: Model providers and configuration
-- **@cy948**: Auth Modules
 - **@rdmclin2**: Team workspace
+- **@tcmonster**: Subscription, refund, recharge, business cooperation
 
 Quick reference for assigning issues based on labels.
 
@@ -41,7 +41,10 @@ Quick reference for assigning issues based on labels.
 | `feature:knowledge-base` | @RiverTwilight  | Knowledge base and RAG                                                  |
 | `feature:files`          | @RiverTwilight  | File upload/management (when KB-related)<br>@ONLY-yours (general files) |
 | `feature:editor`         | @canisminor1990 | Lobe Editor                                                             |
-| `feature:auth`           | @cy948          | Authentication/authorization                                            |
+| `feature:markdown`       | @canisminor1990 | Markdown rendering                                                      |
+| `feature:auth`           | @tjx666         | Authentication/authorization                                            |
+| `feature:login`          | @tjx666         | Login issues                                                            |
+| `feature:register`       | @tjx666         | Registration issues                                                     |
 | `feature:api`            | @nekomeowww     | Backend API                                                             |
 | `feature:streaming`      | @arvinxx        | Streaming response                                                      |
 | `feature:settings`       | @ONLY-yours     | Settings and configuration                                              |
@@ -57,6 +60,10 @@ Quick reference for assigning issues based on labels.
 | `feature:group-chat`     | @RiverTwilight  | Group chat functionality                                                |
 | `feature:memory`         | @nekomeowww     | Memory feature                                                          |
 | `feature:team-workspace` | @rdmclin2       | Team workspace application                                              |
+| `feature:subscription`   | @tcmonster      | Subscription and billing                                                |
+| `feature:refund`         | @tcmonster      | Refund requests                                                         |
+| `feature:recharge`       | @tcmonster      | Recharge and payment                                                    |
+| `feature:business`       | @tcmonster      | Business cooperation and partnership                                    |
 
 ### Deployment Labels (deployment:\*)
 
@@ -79,7 +86,7 @@ Quick reference for assigning issues based on labels.
 | Label              | Owner                | Notes                        |
 | ------------------ | -------------------- | ---------------------------- |
 | 💄 Design          | @canisminor1990      | Design and styling           |
-| 📝 Documentation   | @tjx666              | Documentation                |
+| 📝 Documentation   | @canisminor1990 / @tjx666 | Official docs website issues |
 | ⚡️ Performance     | @ONLY-yours          | Performance optimization     |
 | 🐛 Bug             | (depends on feature) | Assign based on other labels |
 | 🌠 Feature Request | (depends on feature) | Assign based on other labels |

@@ -26,6 +26,16 @@ const styles = createStaticStyles(({ css, cssVar }) => {
     nav: css`
       border-block-end: 1px solid ${cssVar.colorBorder};
     `,
+    tabsWrapper: css`
+      scrollbar-width: none;
+      overflow-x: auto;
+      flex: 1;
+      min-width: 0;
+
+      &::-webkit-scrollbar {
+        display: none;
+      }
+    `,
   };
 });
 interface NavProps {
@@ -101,8 +111,8 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = AssistantNavKey.
     nav
   ) : (
     <Flexbox align={'center'} className={styles.nav} horizontal justify={'space-between'}>
-      {nav}
-      <Flexbox gap={12} horizontal>
+      <div className={styles.tabsWrapper}>{nav}</div>
+      <Flexbox flex="none" gap={12} horizontal style={{ marginInlineStart: 12 }}>
         <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
           {t('mcp.details.nav.needHelp')}
         </a>

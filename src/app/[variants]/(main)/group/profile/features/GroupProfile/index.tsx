@@ -2,8 +2,9 @@
 
 import { Button, Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
-import { PlayIcon } from 'lucide-react';
-import { memo, useCallback, useMemo } from 'react';
+import { useTheme } from 'antd-style';
+import { PlayIcon, Settings2Icon } from 'lucide-react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
@@ -13,12 +14,17 @@ import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useGroupProfileStore } from '@/store/groupProfile';
 
+import AgentSettings from '../AgentSettings';
 import AutoSaveHint from '../Header/AutoSaveHint';
 import GroupPublishButton from '../Header/GroupPublishButton';
+import GroupForkTag from './GroupForkTag';
 import GroupHeader from './GroupHeader';
+import GroupStatusTag from './GroupStatusTag';
 
 const GroupProfile = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
+  const theme = useTheme();
+  const [showAgentSetting, setShowAgentSetting] = useState(false);
   const groupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
   const currentGroup = useAgentGroupStore(agentGroupSelectors.currentGroup);
   const updateGroup = useAgentGroupStore((s) => s.updateGroup);
@@ -26,6 +32,8 @@ const GroupProfile = memo(() => {
 
   const editor = useGroupProfileStore((s) => s.editor);
   const handleContentChange = useGroupProfileStore((s) => s.handleContentChange);
+  const agentBuilderContentUpdate = useGroupProfileStore((s) => s.agentBuilderContentUpdate);
+  const setAgentBuilderContent = useGroupProfileStore((s) => s.setAgentBuilderContent);
 
   // Create save callback that captures latest groupId
   const saveContent = useCallback(
@@ -52,6 +60,18 @@ const GroupProfile = memo(() => {
     [currentGroup?.content, currentGroup?.editorData],
   );
 
+  // Watch for agent builder content updates and apply them directly to the editor
+  useEffect(() => {
+    if (!editor || !agentBuilderContentUpdate || !groupId) return;
+    if (agentBuilderContentUpdate.entityId !== groupId) return;
+
+    // Directly set the editor content
+    editor.setDocument('markdown', agentBuilderContentUpdate.content);
+
+    // Clear the update after processing to prevent re-applying
+    setAgentBuilderContent('', '');
+  }, [editor, agentBuilderContentUpdate, groupId, setAgentBuilderContent]);
+
   return (
     <>
       <Flexbox
@@ -61,8 +81,10 @@ const GroupProfile = memo(() => {
         style={{ cursor: 'default', marginBottom: 12 }}
       >
         <Flexbox height={66} width={'100%'}>
-          <Flexbox paddingBlock={12}>
+          <Flexbox gap={8} horizontal paddingBlock={12}>
             <AutoSaveHint />
+            <GroupStatusTag />
+            <GroupForkTag />
           </Flexbox>
         </Flexbox>
         {/* Header: Group Avatar + Title */}
@@ -86,6 +108,15 @@ const GroupProfile = memo(() => {
             {t('startConversation')}
           </Button>
           <GroupPublishButton />
+          <Button
+            icon={Settings2Icon}
+            onClick={() => setShowAgentSetting(true)}
+            size={'small'}
+            style={{ color: theme.colorTextSecondary }}
+            type={'text'}
+          >
+            {t('advancedSettings')}
+          </Button>
         </Flexbox>
       </Flexbox>
       <Divider />
@@ -97,6 +128,8 @@ const GroupProfile = memo(() => {
         onContentChange={onContentChange}
         placeholder={t('group.profile.contentPlaceholder', { ns: 'chat' })}
       />
+      {/* Advanced Settings Modal */}
+      <AgentSettings onCancel={() => setShowAgentSetting(false)} open={showAgentSetting} />
     </>
   );
 });

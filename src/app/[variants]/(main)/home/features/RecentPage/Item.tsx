@@ -3,12 +3,12 @@
 import { Avatar, Block, Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { FileTextIcon } from 'lucide-react';
-import markdownToTxt from 'markdown-to-txt';
 import { memo } from 'react';
 
 import Time from '@/app/[variants]/(main)/home/features/components/Time';
 import { RECENT_BLOCK_SIZE } from '@/app/[variants]/(main)/home/features/const';
 import { type FileListItem } from '@/types/files';
+import markdownToTxt from '@/utils/markdownToTxt';
 
 // Helper to extract title from markdown content
 const extractTitle = (content: string): string | null => {
@@ -24,7 +24,7 @@ const getPreviewText = (item: FileListItem): string => {
   if (!item.content) return '';
 
   // Convert markdown to plain text
-  let plainText = markdownToTxt(item.content);
+  let plainText = markdownToTxt(item.content.slice(0, 120));
 
   // Remove the title line if it exists
   const title = extractTitle(item.content);

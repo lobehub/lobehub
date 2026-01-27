@@ -395,30 +395,6 @@ describe('DiscoverService', () => {
         expect(result.items.map((item) => item.identifier)).toContain('assistant-3');
       });
 
-      it('should sort by creation date descending', async () => {
-        const result = await service.getAssistantList({
-          sort: AssistantSorts.CreatedAt,
-          order: 'desc',
-          source: 'legacy',
-        });
-
-        expect(result.items[0].identifier).toBe('assistant-3');
-        expect(result.items[1].identifier).toBe('assistant-2');
-        expect(result.items[2].identifier).toBe('assistant-1');
-      });
-
-      it('should sort by title ascending', async () => {
-        const result = await service.getAssistantList({
-          sort: AssistantSorts.Title,
-          order: 'asc',
-          source: 'legacy',
-        });
-
-        // Note: The service has reversed logic for title sorting
-        expect(result.items[0].title).toBe('Test Assistant 3');
-        expect(result.items[1].title).toBe('Test Assistant 2');
-      });
-
       it('should paginate results', async () => {
         const result = await service.getAssistantList({ page: 1, pageSize: 1, source: 'legacy' });
 

@@ -129,6 +129,28 @@ export class CompressionRepository {
   }
 
   /**
+   * Update compression group metadata (UI state like expanded)
+   */
+  async updateMetadata(
+    groupId: string,
+    metadata: Partial<CompressionGroupMetadata>,
+  ): Promise<void> {
+    // Get existing metadata and merge
+    const existing = await this.db
+      .select({ metadata: messageGroups.metadata })
+      .from(messageGroups)
+      .where(and(eq(messageGroups.id, groupId), eq(messageGroups.userId, this.userId)));
+
+    const existingData = (existing[0]?.metadata as Record<string, unknown>) || {};
+    const newMetadata = { ...existingData, ...metadata };
+
+    await this.db
+      .update(messageGroups)
+      .set({ metadata: newMetadata, updatedAt: new Date() })
+      .where(and(eq(messageGroups.id, groupId), eq(messageGroups.userId, this.userId)));
+  }
+
+  /**
    * Mark messages as compressed by associating them with a compression group
    */
   async markMessagesAsCompressed(messageIds: string[], groupId: string): Promise<void> {

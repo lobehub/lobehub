@@ -15,29 +15,38 @@ import InstructionAccordion from './InstructionAccordion';
 import ProcessingState from './ProcessingState';
 
 interface ClientTaskDetailProps {
+  /** Agent ID from the task message (use task's agentId, not activeAgentId) */
+  agentId?: string;
   content?: string;
+  /** Group ID from the task message (use task's groupId, not activeGroupId) */
+  groupId?: string;
   messageId: string;
   taskDetail?: TaskDetail;
 }
 
-const ClientTaskDetail = memo<ClientTaskDetailProps>(({ taskDetail }) => {
+const ClientTaskDetail = memo<ClientTaskDetailProps>(({ agentId: propAgentId, groupId, taskDetail }) => {
   const threadId = taskDetail?.threadId;
   const isExecuting = taskDetail?.status === ThreadStatus.Processing;
 
+  // Use task message's agentId to query with the correct SubAgent ID that created the thread
+  // Fall back to activeAgentId if task message doesn't have agentId (shouldn't happen normally)
   const [activeAgentId, activeTopicId, useFetchMessages] = useChatStore((s) => [
     s.activeAgentId,
     s.activeTopicId,
     s.useFetchMessages,
   ]);
 
+  const agentId = propAgentId || activeAgentId;
+
   const threadContext = useMemo(
     () => ({
-      agentId: activeAgentId,
+      agentId,
+      groupId,
       scope: 'thread' as const,
       threadId,
       topicId: activeTopicId,
     }),
-    [activeAgentId, activeTopicId, threadId],
+    [agentId, groupId, activeTopicId, threadId],
   );
 
   const threadMessageKey = useMemo(

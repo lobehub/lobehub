@@ -55,7 +55,7 @@ export const SignInPasswordStep = ({
         </>
       }
       subtitle={t('betterAuth.signin.passwordStep.subtitle')}
-      title={t('signin.title')}
+      title={'Agent teams that grow with you'}
     >
       <Text fontSize={20}>{email}</Text>
       <Form

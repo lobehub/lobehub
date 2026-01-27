@@ -7,6 +7,7 @@ import type {
   SupervisorInstructionCallSupervisor,
   SupervisorInstructionDelegate,
   SupervisorInstructionExecAsyncTask,
+  SupervisorInstructionExecClientAsyncTask,
   SupervisorInstructionFinish,
   SupervisorInstructionParallelCallAgents,
 } from './types';
@@ -76,6 +77,8 @@ export class GroupOrchestrationSupervisor implements IGroupOrchestrationSupervis
             return {
               payload: {
                 agentIds: params.agentIds as string[],
+                // Broadcast agents should not call tools by default
+                disableTools: true,
                 instruction: params.instruction as string | undefined,
                 toolMessageId: params.toolMessageId as string,
               },
@@ -94,14 +97,24 @@ export class GroupOrchestrationSupervisor implements IGroupOrchestrationSupervis
           }
 
           case 'execute_task': {
+            const instructionPayload = {
+              agentId: params.agentId as string,
+              task: params.task as string,
+              timeout: params.timeout as number | undefined,
+              title: params.title as string | undefined,
+              toolMessageId: params.toolMessageId as string,
+            };
+
+            // Return different instruction type based on runInClient flag
+            if (params.runInClient) {
+              return {
+                payload: instructionPayload,
+                type: 'exec_client_async_task',
+              } as SupervisorInstructionExecClientAsyncTask;
+            }
+
             return {
-              payload: {
-                agentId: params.agentId as string,
-                task: params.task as string,
-                timeout: params.timeout as number | undefined,
-                title: params.title as string | undefined,
-                toolMessageId: params.toolMessageId as string,
-              },
+              payload: instructionPayload,
               type: 'exec_async_task',
             } as SupervisorInstructionExecAsyncTask;
           }

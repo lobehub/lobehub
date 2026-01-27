@@ -67,8 +67,19 @@ export interface LobeAgentChatConfig {
   enableHistoryCount?: boolean;
   /**
    * Enable history message compression threshold
+   * @deprecated Use enableContextCompression instead
    */
   enableCompressHistory?: boolean;
+
+  /**
+   * Enable context compression
+   * When enabled, old messages will be compressed into summaries when token threshold is reached
+   */
+  enableContextCompression?: boolean;
+  /**
+   * Model ID to use for generating compression summaries
+   */
+  compressionModelId?: string;
 
   inputTemplate?: string;
 
@@ -76,6 +87,13 @@ export interface LobeAgentChatConfig {
   searchFCModel?: WorkingModel;
   urlContext?: boolean;
   useModelBuiltinSearch?: boolean;
+
+  /**
+   * Maximum length for tool execution result content (in characters)
+   * This prevents context overflow when sending tool results back to LLM
+   * @default 6000
+   */
+  toolResultMaxLength?: number;
 }
 /* eslint-enable */
 
@@ -88,9 +106,11 @@ export const LocalSystemConfigSchema = z.object({
 
 export const AgentChatConfigSchema = z.object({
   autoCreateTopicThreshold: z.number().default(2),
+  compressionModelId: z.string().optional(),
   disableContextCaching: z.boolean().optional(),
   enableAutoCreateTopic: z.boolean().optional(),
   enableCompressHistory: z.boolean().optional(),
+  enableContextCompression: z.boolean().optional(),
   enableHistoryCount: z.boolean().optional(),
   enableMaxTokens: z.boolean().optional(),
   enableReasoning: z.boolean().optional(),
@@ -117,6 +137,7 @@ export const AgentChatConfigSchema = z.object({
   thinking: z.enum(['disabled', 'auto', 'enabled']).optional(),
   thinkingBudget: z.number().optional(),
   thinkingLevel: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
+  toolResultMaxLength: z.number().default(6000),
   urlContext: z.boolean().optional(),
   useModelBuiltinSearch: z.boolean().optional(),
 });

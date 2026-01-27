@@ -1,27 +1,27 @@
 ---
-title: 在 LobeChat 中使用 GitHub Models
-description: 学习如何在 LobeChat 中配置和使用 GitHub 的 API Key，以便开始对话和交互。
+title: 在 LobeHub 中使用 GitHub Models
+description: 学习如何在 LobeHub 中配置和使用 GitHub 的 API Key，以便开始对话和交互。
 tags:
-  - LobeChat
+  - LobeHub
   - GitHub
   - GitHub Models
   - API密钥
   - Web UI
 ---
 
-# 在 LobeChat 中使用 GitHub Models
+# 在 LobeHub 中使用 GitHub Models
 
-<Image cover src={'https://github.com/user-attachments/assets/3050839a-cb16-485d-8bae-1bc2f9ade632'} />
+<Image cover src={'/blog/assetsf117203c39294f45930785d85773c83e.webp'} />
 
 [GitHub Models](https://github.com/marketplace/models) 是 GitHub 最近推出的一项新功能，旨在为开发者提供一个免费的平台来访问和实验多种 AI 模型。GitHub Models 提供了一个互动沙盒环境，用户可以在此测试不同的模型参数和提示语，观察模型的响应。该平台支持多种先进的语言模型，包括 OpenAI 的 GPT-4o、Meta 的 Llama 3.1 和 Mistral 的 Large 2 等，覆盖了从大规模语言模型到特定任务模型的广泛应用。
 
-本文将指导你如何在 LobeChat 中使用 GitHub Models。
+本文将指导你如何在 LobeHub 中使用 GitHub Models。
 
 ## GitHub Models 速率限制
 
 当前 Playground 和免费 API 的使用受到每分钟请求数、每日请求数、每个请求的令牌数以及并发请求数的限制。若达到速率限制，则需等待限制重置后方可继续发出请求。不同模型（低、高及嵌入模型）的速率限制有所不同。 模型类型信息请参阅 GitHub Marketplace。
 
-<Image alt={'GitHub Models 速率限制'} inStep src={'https://github.com/user-attachments/assets/21c52e2a-b2f8-4de8-a5d4-cf3444608db7'} />
+<Image alt={'GitHub Models 速率限制'} inStep src={'/blog/assets50607dece1bbffe80fdcbe76324ff9b6.webp'} />
 
 <Callout type="note">
   这些限制可能随时更改，具体信息请参考 [GitHub
@@ -38,11 +38,11 @@ tags:
   - 登录 GitHub 并打开 [访问令牌](https://github.com/settings/tokens) 页面
   - 创建并设置一个新的访问令牌
 
-  <Image alt={'创建访问令牌'} inStep src={'https://github.com/user-attachments/assets/8570db14-dac6-4279-ab71-04a072c15490'} />
+  <Image alt={'创建访问令牌'} inStep src={'/blog/assetsc376d2e9e97f9ea9d788589f0a9e23d6.webp'} />
 
   - 在返回的结果中复制并保存生成的令牌
 
-  <Image alt={'保存访问令牌'} inStep src={'https://github.com/user-attachments/assets/3c1a492d-a3d4-4570-9e74-785c2942ca41'} />
+  <Image alt={'保存访问令牌'} inStep src={'/blog/assets9880145be3e52b8f9dcd8343cd34a6ca.webp'} />
 
   <Callout type={"warning"}>
     - GitHub Models 测试期间，要使用 GitHub Models，用户需要申请加入[等待名单（waitlist）](https://github.com/marketplace/models/waitlist/join) 通过后才能获得访问权限。
@@ -50,17 +50,17 @@ tags:
     - 请安全地存储访问令牌，因为它只会出现一次。如果您意外丢失它，您将需要创建一个新令牌。
   </Callout>
 
-  ### 步骤二：在 LobeChat 中配置 GitHub Models
+  ### 步骤二：在 LobeHub 中配置 GitHub Models
 
-  - 访问 LobeChat 的`设置`界面
+  - 访问 LobeHub 的`设置`界面
   - 在`AI 服务商`下找到 `GitHub` 的设置项
 
-  <Image alt={'填入访问令牌'} inStep src={'https://github.com/user-attachments/assets/a00f06cc-da7c-41e8-a4d5-d4b675a22673'} />
+  <Image alt={'填入访问令牌'} inStep src={'/blog/assetse0d53ba2bfb6ba5bf33f2b8a547f4e41.webp'} />
 
   - 填入获得的访问令牌
   - 为你的 AI 助手选择一个 GitHub 的模型即可开始对话
 
-    <Image alt={'选择 GitHub 模型并开始对话'} inStep src={'https://github.com/user-attachments/assets/aead3c6c-891e-47c3-9f34-bdc33875e0c2'} />
+    <Image alt={'选择 GitHub 模型并开始对话'} inStep src={'/blog/assetsb6959f725c38f86053e4b07c9188d825.webp'} />
 </Steps>
 
-至此你已经可以在 LobeChat 中使用 GitHub 提供的模型进行对话了。
+至此你已经可以在 LobeHub 中使用 GitHub 提供的模型进行对话了。

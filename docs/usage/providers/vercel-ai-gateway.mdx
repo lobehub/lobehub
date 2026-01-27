@@ -1,59 +1,57 @@
 ---
-title: Using Vercel AI Gateway in LobeChat
-description: >-
-  Learn how to integrate and utilize Vercel AI Gateway's unified API in LobeChat.
-
+title: Using Vercel AI Gateway in LobeHub
+description: Learn how to integrate and use the unified API of Vercel AI Gateway in LobeHub
 tags:
-  - LobeChat
+  - LobeHub
   - Vercel AI Gateway
   - API Key
-  - Web UI
+  - Web Interface
 ---
 
-# Using Vercel AI Gateway in LobeChat
+# Using Vercel AI Gateway in LobeHub
 
-[Vercel AI Gateway](https://vercel.com/ai-gateway) is a unified API that provides access to 100+ AI models through a single endpoint. It offers features like budget management, usage monitoring, load balancing, and fallback handling.
+[Vercel AI Gateway](https://vercel.com/ai-gateway) is a unified API that provides access to over 100 AI models through a single endpoint. It offers features such as budget management, usage monitoring, load balancing, and fallback handling.
 
-This article will guide you on how to use Vercel AI Gateway in LobeChat.
+This guide will walk you through how to use Vercel AI Gateway within LobeHub.
 
 <Steps>
   ### Step 1: Create an API Key in Vercel AI Gateway
 
-  - Go to [Vercel Dashboard](https://vercel.com/dashboard)
-  - Click on the **AI Gateway** tab on the left side
-  - Click on **API keys** in the left sidebar
-  - Click **Create key** and then **Create key** in the dialog to complete
+  - Go to the [Vercel Dashboard](https://vercel.com/dashboard)
+  - Click on the **AI Gateway** tab on the left sidebar
+  - Select **API Keys** from the sidebar
+  - Click **Create Key**, then confirm by clicking **Create Key** in the dialog
 
-  ### Step 2: Configure Vercel AI Gateway in LobeChat
+  ### Step 2: Configure Vercel AI Gateway in LobeHub
 
-  - Go to the `Settings` page in LobeChat
-  - Under `AI Service Provider`, find the setting for `Vercel AI Gateway`
-  - Enter the API Key you obtained
-  - Choose a model from Vercel AI Gateway for your AI assistant to start the conversation
+  - Navigate to the `Settings` page in LobeHub
+  - Under `AI Service Provider`, find the `Vercel AI Gateway` section
+  - Enter the API key you obtained
+  - Choose a model from Vercel AI Gateway and start chatting with the AI assistant
 
   <Callout type={'warning'}>
-    During usage, you may need to pay the API service provider, so please refer to Vercel AI Gateway's
-    [pricing policy](https://vercel.com/docs/ai-gateway/models).
+    You may incur charges from the API service provider during usage. Please refer to the
+    [Vercel AI Gateway pricing policy](https://vercel.com/docs/ai-gateway/models) for details.
   </Callout>
 </Steps>
 
-At this point, you can start chatting using the models provided by Vercel AI Gateway in LobeChat.
+That's it! You can now start chatting in LobeHub using models provided by Vercel AI Gateway.
 
 ## Model Selection
 
-Vercel AI Gateway supports various model providers including:
+Vercel AI Gateway supports a variety of model providers, including:
 
-- **OpenAI**: `openai/gpt-4o`, `openai/gpt-4o-mini`, `openai/o1`, etc.
-- **Anthropic**: `anthropic/claude-3-5-sonnet`, `anthropic/claude-3-opus`, etc.
-- **Google**: `google/gemini-2.5-pro`, `google/gemini-2.0-flash`, etc.
-- **DeepSeek**: `deepseek/deepseek-chat`, `deepseek/deepseek-reasoner`, etc.
-- And many more...
+- **OpenAI**: `openai/gpt-4o`, `openai/gpt-4o-mini`, `openai/o1`, and more
+- **Anthropic**: `anthropic/claude-3-5-sonnet`, `anthropic/claude-3-opus`, and more
+- **Google**: `google/gemini-2.5-pro`, `google/gemini-2.0-flash`, and more
+- **DeepSeek**: `deepseek/deepseek-chat`, `deepseek/deepseek-reasoner`, and more
+- And many others...
 
-For a complete list of supported models, visit [Vercel AI Gateway Models](https://vercel.com/ai-gateway/models).
+To view the full list of supported models, visit the [Vercel AI Gateway Models](https://vercel.com/ai-gateway/models) page.
 
 ## API Configuration
 
-Vercel AI Gateway uses OpenAI-compatible API format. The base URL is:
+Vercel AI Gateway uses an OpenAI-compatible API format. The base URL is:
 
 ```
 https://ai-gateway.vercel.sh/v1

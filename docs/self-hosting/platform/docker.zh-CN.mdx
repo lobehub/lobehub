@@ -1,9 +1,9 @@
 ---
-title: 通过 Docker 部署 LobeChat
-description: 学习如何使用 Docker 部署 LobeChat 服务，包括安装 Docker 容器环境和使用指令一键启动服务。详细说明如何配置环境变量和使用代理地址。
+title: 通过 Docker 部署 LobeHub
+description: 学习如何使用 Docker 部署 LobeHub 服务，包括安装 Docker 容器环境和使用指令一键启动服务。详细说明如何配置环境变量和使用代理地址。
 tags:
   - Docker
-  - LobeChat
+  - LobeHub
   - 部署指引
   - 环境变量
   - 代理地址
@@ -20,7 +20,7 @@ tags:
   [![][docker-pulls-shield]][docker-pulls-link]
 </div>
 
-我们提供了 [Docker 镜像][docker-release-link]，供你在自己的私有设备上部署 LobeChat 服务。
+我们提供了 [Docker 镜像][docker-release-link]，供你在自己的私有设备上部署 LobeHub 服务。
 
 ## 部署指南
 
@@ -45,7 +45,7 @@ tags:
 
   ### Docker 指令部署
 
-  使用以下命令即可使用一键启动 LobeChat 服务：
+  使用以下命令即可使用一键启动 LobeHub 服务：
 
   ```fish
   $ docker run -d -p 3210:3210 \
@@ -60,7 +60,7 @@ tags:
   - 使用你的 OpenAI API Key 替换上述命令中的 `sk-xxxx` ，获取 API Key 的方式详见最后一节。
 
   <Callout type={'tip'}>
-    LobeChat 支持的完整环境变量列表请参考 [📘 环境变量](/zh/docs/self-hosting/environment-variables)
+    LobeHub 支持的完整环境变量列表请参考 [📘 环境变量](/zh/docs/self-hosting/environment-variables)
     部分
   </Callout>
 
@@ -151,7 +151,7 @@ tags:
 
 ## 获取 OpenAI API Key
 
-API Key 是使用 LobeChat 进行大语言模型会话的必要信息，本节以 OpenAI 模型服务商为例，简要介绍获取 API Key 的方式。
+API Key 是使用 LobeHub 进行大语言模型会话的必要信息，本节以 OpenAI 模型服务商为例，简要介绍获取 API Key 的方式。
 
 ### `A` 通过 OpenAI 官方渠道
 
@@ -172,7 +172,7 @@ API Key 是使用 LobeChat 进行大语言模型会话的必要信息，本节�
   <Image alt={'获取 API Key'} height={600} src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/296255167-f2745f2b-f083-4ba8-bc78-9b558e0002de.png" />
 </Steps>
 
-将此 API Key 填写到 LobeChat 的 API Key 配置中，即可开始使用。
+将此 API Key 填写到 LobeHub 的 API Key 配置中，即可开始使用。
 
 <Callout type={'tip'}>
   账户注册后，一般有 5 美元的免费额度，但有效期只有三个月。如果你希望长期使用你的 API

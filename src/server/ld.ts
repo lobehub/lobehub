@@ -34,7 +34,7 @@ export const AUTHOR_LIST = {
 
 export class Ld {
   generate({
-    image = '/og/cover.png',
+    image = '/og/og.webp',
     article,
     url,
     title,
@@ -94,7 +94,8 @@ export class Ld {
         'email': BRANDING_EMAIL.support,
       },
       'description':
-        'We are a group of e/acc design-engineers, hoping to provide modern design components and tools for AIGC, and creating a technology-driven forum, fostering knowledge interaction and the exchange of ideas that may culminate in mutual inspiration and collaborative innovation.',
+        'Agent teams that grow with you\n' +
+        'LobeHub is a work-and-lifestyle space to find, build, and collaborate with agent teams that grow with you.',
       'email': BRANDING_EMAIL.business,
       'founders': [this.getAuthors(['arvinxx']), this.getAuthors(['canisminor'])],
       'image': urlJoin(OFFICIAL_SITE, '/icon-512x512.png'),
@@ -255,7 +256,7 @@ export class Ld {
         '@id': this.getId(fixedUrl, '#primaryimage'),
       },
       'inLanguage': locale,
-      'keywords': tags?.join(' ') || 'LobeHub LobeChat',
+      'keywords': tags?.join(' ') || 'LobeHub',
       'mainEntityOfPage': fixedUrl,
       'name': title,
       'publisher': {

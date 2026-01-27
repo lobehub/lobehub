@@ -90,6 +90,7 @@ export default {
     'Sign in to sync Agents, Groups, settings, and Context across all devices.',
   'screen5.errors.desktopOnlyOidc':
     'OIDC authorization is only available in the desktop app runtime.',
+  'screen5.errors.timedOut': 'Authorization timed out, please try again',
   'screen5.legacyLocalDb.link': 'Migrate legacy local database',
   'screen5.methods.cloud.description':
     'Sign in with your LobeHub Cloud account to sync everything seamlessly',

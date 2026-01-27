@@ -1,18 +1,24 @@
 ---
 title: 国际化实现指南
+description: 了解 LobeHub 的国际化机制，支持多语言体验。
+tags:
+  - 国际化
+  - LobeHub
+  - i18next
+  - 多语言支持
 ---
 
 # 国际化实现指南
 
-欢迎阅读 LobeChat 国际化实现指南。本文档将指导你了解 LobeChat 的国际化机制，包括文件结构、如何添加新语种。LobeChat 采用 `i18next` 和 `lobe-i18n` 作为国际化解决方案，旨在为用户提供流畅的多语言支持。
+欢迎阅读 LobeHub 国际化实现指南。本文档将指导你了解 LobeHub 的国际化机制，包括文件结构、如何添加新语种。LobeHub 采用 `i18next` 和 `lobe-i18n` 作为国际化解决方案，旨在为用户提供流畅的多语言支持。
 
 ## 国际化概述
 
-国际化（Internationalization，简称为 i18n）是一个让应用能够适应不同语言和地区的过程。在 LobeChat 中，我们支持多种语言，并通过 `i18next` 库来实现语言的动态切换和内容的本地化。我们的目标是让 LobeChat 能够为全球用户提供本地化的体验。
+国际化（Internationalization，简称为 i18n）是一个让应用能够适应不同语言和地区的过程。在 LobeHub 中，我们支持多种语言，并通过 `i18next` 库来实现语言的动态切换和内容的本地化。我们的目标是让 LobeHub 能够为全球用户提供本地化的体验。
 
 ## 文件结构
 
-在 LobeChat 的项目中，国际化相关的文件被组织如下：
+在 LobeHub 的项目中，国际化相关的文件被组织如下：
 
 - `src/locales/default`: 包含默认开发语言（中文）的翻译文件，我们作为中文。
 - `locales`: 包含所有支持的语言文件夹，每个语言文件夹中包含相应语言的翻译文件，这些翻译文件通过 lobe-i18n 自动生成。
@@ -58,14 +64,14 @@ locales
 
 ## 核心实现逻辑
 
-LobeChat 的国际化核心实现逻辑如下：
+LobeHub 的国际化核心实现逻辑如下：
 
 - 使用 `i18next` 库进行初始化和配置。
 - 使用 `i18next-browser-languagedetector` 自动检测用户的语言偏好。
 - 使用 `i18next-resources-to-backend` 动态加载翻译资源。
 - 根据用户的语言偏好，设置 HTML 文档的方向（LTR 或 RTL）。
 
-以下是一个简化的伪代码示例，用以说明 LobeChat 国际化的核心实现逻辑：
+以下是一个简化的伪代码示例，用以说明 LobeHub 国际化的核心实现逻辑：
 
 ```ts
 import i18n from 'i18next';
@@ -99,7 +105,7 @@ const createI18nInstance = (lang) => {
 };
 ```
 
-在这个示例中，我们展示了如何使用 `i18next` 和相关插件来初始化国际化设置。我们动态导入了翻译资源，并响应语言变化事件来调整页面的文本方向。这个过程为 LobeChat 提供了灵活的多语言支持能力。
+在这个示例中，我们展示了如何使用 `i18next` 和相关插件来初始化国际化设置。我们动态导入了翻译资源，并响应语言变化事件来调整页面的文本方向。这个过程为 LobeHub 提供了灵活的多语言支持能力。
 
 ## 添加新的语言支持
 
@@ -118,4 +124,4 @@ const createI18nInstance = (lang) => {
 - [i18next 官方文档](https://www.i18next.com/)
 - [lobe-i18n 工具说明](https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-i18n)
 
-通过遵循本指南，你可以更好地理解和参与到 LobeChat 的国际化工作中，为全球用户提供无缝的多语言体验。
+通过遵循本指南，你可以更好地理解和参与到 LobeHub 的国际化工作中，为全球用户提供无缝的多语言体验。

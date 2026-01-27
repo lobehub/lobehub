@@ -4,6 +4,7 @@ import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
 import { type UserMemoryStoreState, initialState } from './initialState';
+import { type ActivityAction, createActivitySlice } from './slices/activity';
 import { type AgentMemoryAction, createAgentMemorySlice } from './slices/agent';
 import { type BaseAction, createBaseSlice } from './slices/base';
 import { type ContextAction, createContextSlice } from './slices/context';
@@ -13,6 +14,7 @@ import { type IdentityAction, createIdentitySlice } from './slices/identity';
 import { type PreferenceAction, createPreferenceSlice } from './slices/preference';
 
 export type UserMemoryStore = UserMemoryStoreState &
+  ActivityAction &
   AgentMemoryAction &
   BaseAction &
   ContextAction &
@@ -27,6 +29,7 @@ const createStore: StateCreator<UserMemoryStore, [['zustand/devtools', never]]> 
   store,
 ) => ({
   ...initialState,
+  ...createActivitySlice(set, get, store),
   ...createAgentMemorySlice(set, get, store),
   ...createBaseSlice(set, get, store),
   ...createContextSlice(set, get, store),

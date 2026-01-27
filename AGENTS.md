@@ -4,11 +4,9 @@ This document serves as a comprehensive guide for all team members when developi
 
 ## Project Description
 
-You are developing an open-source, modern-design AI Agent Workspace: LobeHub(previous LobeChat).
+You are developing an open-source, modern-design AI Agent Workspace: LobeHub (previously LobeChat).
 
 ## Tech Stack
-
-Built with modern technologies:
 
 - **Frontend**: Next.js 16, React 19, TypeScript
 - **UI Components**: Ant Design, @lobehub/ui, antd-style
@@ -19,24 +17,33 @@ Built with modern technologies:
 
 ## Directory Structure
 
-The project follows a well-organized monorepo structure:
-
-- `apps/` - Main applications
-- `packages/` - Shared packages and libraries
-- `src/` - Main source code
-- `docs/` - Documentation
-- `.cursor/rules/` - Development rules and guidelines
-- PR titles starting with `✨ feat/` or `🐛 fix` will trigger the release workflow upon merge. Only use these prefixes for significant user-facing feature changes or bug fixes
+```
+lobe-chat/
+├── apps/desktop/           # Electron desktop app
+├── packages/               # Shared packages (@lobechat/*)
+│   ├── database/           # Database schemas, models, repositories
+│   ├── agent-runtime/      # Agent runtime
+│   └── ...
+├── src/
+│   ├── app/                # Next.js app router
+│   ├── store/              # Zustand stores
+│   ├── services/           # Client services
+│   ├── server/             # Server services and routers
+│   └── ...
+├── .agents/skills/         # AI development skills
+└── e2e/                    # E2E tests (Cucumber + Playwright)
+```
 
 ## Development Workflow
 
 ### Git Workflow
 
-- The current release branch is `next` instead of `main` until v2.0.0 is officially released
+- The current release branch is `next` until v2.0.0 is officially released
 - Use rebase for git pull
 - Git commit messages should prefix with gitmoji
 - Git branch name format: `username/feat/feature-name`
 - Use `.github/PULL_REQUEST_TEMPLATE.md` for PR descriptions
+- PR titles with `✨ feat/` or `🐛 fix` trigger releases
 
 ### Package Management
 
@@ -52,17 +59,18 @@ The project follows a well-organized monorepo structure:
 
 ### Testing Strategy
 
-**Required Rule**: `testing-guide/testing-guide.mdc`
+```bash
+# Web tests
+bunx vitest run --silent='passed-only' '[file-path-pattern]'
 
-**Commands**:
-
-- Web: `bunx vitest run --silent='passed-only' '[file-path-pattern]'`
-- Packages: `cd packages/[package-name] && bunx vitest run --silent='passed-only' '[file-path-pattern]'` (each subpackage contains its own vitest.config.mts)
+# Package tests (e.g., database)
+cd packages/[package-name] && bunx vitest run --silent='passed-only' '[file-path-pattern]'
+```
 
 **Important Notes**:
 
 - Wrap file paths in single quotes to avoid shell expansion
-- Never run `bun run test` - this runs all tests and takes \~10 minutes
+- Never run `bun run test` - this runs all tests and takes ~10 minutes
 
 ### Type Checking
 
@@ -78,40 +86,19 @@ The project follows a well-organized monorepo structure:
 
 Follow [Linear rules in CLAUDE.md](CLAUDE.md#linear-issue-management-ignore-if-not-installed-linear-mcp) when working with Linear issues.
 
-## Project Rules Index
+## Skills (Auto-loaded)
 
-All following rules are saved under `.cursor/rules/` directory:
+All AI development skills are available in `.agents/skills/` directory:
 
-### Backend
-
-- `drizzle-schema-style-guide.mdc` – Style guide for defining Drizzle ORM schemas
-
-### Frontend
-
-- `react.mdc` – React component style guide and conventions
-- `i18n.mdc` – Internationalization guide using react-i18next
-- `typescript.mdc` – TypeScript code style guide
-- `packages/react-layout-kit.mdc` – Usage guide for Flexbox and Center components from @lobehub/ui
-
-### State Management
-
-- `zustand-action-patterns.mdc` – Recommended patterns for organizing Zustand actions
-- `zustand-slice-organization.mdc` – Best practices for structuring Zustand slices
-
-### Desktop (Electron)
-
-- `desktop-feature-implementation.mdc` – Implementing new Electron desktop features
-- `desktop-controller-tests.mdc` – Desktop controller unit testing guide
-- `desktop-local-tools-implement.mdc` – Workflow to add new desktop local tools
-- `desktop-menu-configuration.mdc` – Desktop menu configuration guide
-- `desktop-window-management.mdc` – Desktop window management guide
-
-### Debugging
-
-- `debug-usage.mdc` – Using the debug package and namespace conventions
-
-### Testing
-
-- `testing-guide/testing-guide.mdc` – Comprehensive testing guide for Vitest
-- `testing-guide/electron-ipc-test.mdc` – Electron IPC interface testing strategy
-- `testing-guide/db-model-test.mdc` – Database Model testing guide
+| Category | Skills |
+|----------|--------|
+| Frontend | `react`, `typescript`, `i18n`, `microcopy` |
+| State | `zustand` |
+| Backend | `drizzle` |
+| Desktop | `desktop` |
+| Testing | `testing` |
+| UI | `modal`, `hotkey`, `recent-data` |
+| Config | `add-provider-doc`, `add-setting-env` |
+| Workflow | `linear`, `debug` |
+| Performance | `vercel-react-best-practices` |
+| Overview | `project-overview` |

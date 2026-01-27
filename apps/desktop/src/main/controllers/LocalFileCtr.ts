@@ -15,11 +15,13 @@ import {
   OpenLocalFileParams,
   OpenLocalFolderParams,
   RenameLocalFileResult,
+  ShowSaveDialogParams,
+  ShowSaveDialogResult,
   WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
 import { SYSTEM_FILES_TO_IGNORE, loadFile } from '@lobechat/file-loaders';
 import { createPatch } from 'diff';
-import { shell } from 'electron';
+import { dialog, shell } from 'electron';
 import fg from 'fast-glob';
 import { Stats, constants } from 'node:fs';
 import { access, mkdir, readFile, readdir, rename, stat, writeFile } from 'node:fs/promises';
@@ -76,6 +78,28 @@ export default class LocalFileCtr extends ControllerModule {
       logger.error(`Failed to open folder ${folderPath}:`, error);
       return { error: (error as Error).message, success: false };
     }
+  }
+
+  @IpcMethod()
+  async handleShowSaveDialog({
+    defaultPath,
+    filters,
+    title,
+  }: ShowSaveDialogParams): Promise<ShowSaveDialogResult> {
+    logger.debug('Showing save dialog:', { defaultPath, filters, title });
+
+    const result = await dialog.showSaveDialog({
+      defaultPath,
+      filters,
+      title,
+    });
+
+    logger.debug('Save dialog result:', { canceled: result.canceled, filePath: result.filePath });
+
+    return {
+      canceled: result.canceled,
+      filePath: result.filePath,
+    };
   }
 
   @IpcMethod()
@@ -548,7 +572,13 @@ export default class LocalFileCtr extends ControllerModule {
         filesToSearch = [searchPath];
       } else {
         // Use glob pattern if provided, otherwise search all files
-        const globPattern = params.glob || '**/*';
+        // If glob doesn't contain directory separator and doesn't start with **,
+        // auto-prefix with **/ to make it recursive
+        let globPattern = params.glob || '**/*';
+        if (params.glob && !params.glob.includes('/') && !params.glob.startsWith('**')) {
+          globPattern = `**/${params.glob}`;
+        }
+
         filesToSearch = await fg(globPattern, {
           absolute: true,
           cwd: searchPath,

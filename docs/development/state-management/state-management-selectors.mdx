@@ -1,10 +1,19 @@
 ---
 title: Data Store Selector
+description: >-
+  Explore the role of selectors in LobeHub for efficient data retrieval and
+  management.
+tags:
+  - Data Store
+  - Selectors
+  - LobeHub
+  - TypeScript
+  - State Management
 ---
 
 # Data Store Selector
 
-Selectors are data retrieval modules under the LobeChat data flow development framework. Their role is to extract data from the store using specific business logic for consumption by components.
+Selectors are data retrieval modules under the LobeHub data flow development framework. Their role is to extract data from the store using specific business logic for consumption by components.
 
 Taking `src/store/plugin/selectors.ts` as an example:
 
@@ -65,9 +74,9 @@ The benefits of implementing this approach are:
 1. **Decoupling and reusability**: By separating selectors from components, we can reuse these selectors across multiple components without rewriting data retrieval logic. This reduces duplicate code, improves development efficiency, and makes the codebase cleaner and easier to maintain.
 2. **Performance optimization**: Selectors can be used to compute derived data, avoiding redundant calculations in each component. When the state changes, only the selectors dependent on that part of the state will recalculate, reducing unnecessary rendering and computation.
 3. **Ease of testing**: Selectors are pure functions, relying only on the passed parameters. This means they can be tested in an isolated environment without the need to simulate the entire store or component tree.
-4. **Type safety**: As LobeChat uses TypeScript, each selector has explicit input and output type definitions. This provides developers with the advantage of auto-completion and compile-time checks, reducing runtime errors.
+4. **Type safety**: As LobeHub uses TypeScript, each selector has explicit input and output type definitions. This provides developers with the advantage of auto-completion and compile-time checks, reducing runtime errors.
 5. **Maintainability**: Selectors centralize the logic for reading state, making it more intuitive to track state changes and management. If the state structure changes, only the relevant selectors need to be updated, rather than searching and replacing in multiple places throughout the codebase.
 6. **Composability**: Selectors can be composed with other selectors to create more complex selection logic. This pattern allows developers to build a hierarchy of selectors, making state selection more flexible and powerful.
 7. **Simplified component logic**: Components do not need to know the structure of the state or how to retrieve and compute the required data. Components only need to call selectors to obtain the data needed for rendering, simplifying and clarifying component logic.
 
-With this design, LobeChat developers can focus more on building the user interface and business logic without worrying about the details of data retrieval and processing. This pattern also provides better adaptability and scalability for potential future changes in state structure.
+With this design, LobeHub developers can focus more on building the user interface and business logic without worrying about the details of data retrieval and processing. This pattern also provides better adaptability and scalability for potential future changes in state structure.

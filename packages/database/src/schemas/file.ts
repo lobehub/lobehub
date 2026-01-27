@@ -166,6 +166,8 @@ export const files = pgTable(
       fileHashIdx: index('file_hash_idx').on(table.fileHash),
       userIdIdx: index('files_user_id_idx').on(table.userId),
       parentIdIdx: index('files_parent_id_idx').on(table.parentId),
+      chunkTaskIdIdx: index('files_chunk_task_id_idx').on(table.chunkTaskId),
+      embeddingTaskIdIdx: index('files_embedding_task_id_idx').on(table.embeddingTaskId),
       clientIdUnique: uniqueIndex('files_client_id_user_id_unique').on(
         table.clientId,
         table.userId,
@@ -231,5 +233,7 @@ export const knowledgeBaseFiles = pgTable(
   (t) => [
     primaryKey({ columns: [t.knowledgeBaseId, t.fileId] }),
     index('knowledge_base_files_kb_id_idx').on(t.knowledgeBaseId),
+    index('knowledge_base_files_user_id_idx').on(t.userId),
+    index('knowledge_base_files_file_id_idx').on(t.fileId),
   ],
 );

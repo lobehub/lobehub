@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { createStyles } from 'antd-style';
+import { createStaticStyles } from 'antd-style';
 import { Crown, Users } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -17,7 +17,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import AgentBuilderToggle from './AgentBuilderToggle';
 import ChromeTabs, { type ChromeTabItem } from './ChromeTabs';
 
-const useStyles = createStyles(({ css, token }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   header: css`
     overflow: hidden;
     flex: none;
@@ -26,7 +26,7 @@ const useStyles = createStyles(({ css, token }) => ({
     height: 44px;
     padding-block: 8px;
     padding-inline: 12px;
-    border-block-end: 1px solid ${token.colorBorderSecondary};
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
   tabsWrapper: css`
     scrollbar-width: none;
@@ -42,7 +42,6 @@ const useStyles = createStyles(({ css, token }) => ({
 
 const Header = memo(() => {
   const { t } = useTranslation('chat');
-  const { styles } = useStyles();
 
   const [showAddModal, setShowAddModal] = useState(false);
 

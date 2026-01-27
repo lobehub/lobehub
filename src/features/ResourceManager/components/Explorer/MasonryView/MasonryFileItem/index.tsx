@@ -1,17 +1,16 @@
 import { Checkbox, showContextMenu } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import {
   getTransparentDragImage,
   useDragActive,
   useDragState,
 } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
-import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import { documentService } from '@/services/document';
 import { type FileListItem } from '@/types/files';
 
+import { useFileItemClick } from '../../hooks/useFileItemClick';
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import DefaultFileItem from './DefaultFileItem';
@@ -45,10 +44,19 @@ const isMarkdownFile = (name: string, fileType?: string) => {
 };
 
 // Helper to check if it's a custom page that should be rendered
-// PDF files should not be treated as pages even if they have fileType='custom/document'
+// PDF and Office files should not be treated as pages even if they have fileType='custom/document'
 const isCustomPage = (fileType?: string, name?: string) => {
-  const isPDF = fileType?.toLowerCase() === 'pdf' || name?.toLowerCase().endsWith('.pdf');
-  return !isPDF && fileType === CUSTOM_NOTE_TYPE;
+  const lowerName = name?.toLowerCase();
+  const isPDF = fileType?.toLowerCase() === 'pdf' || lowerName?.endsWith('.pdf');
+  const isOfficeFile =
+    lowerName?.endsWith('.xls') ||
+    lowerName?.endsWith('.xlsx') ||
+    lowerName?.endsWith('.doc') ||
+    lowerName?.endsWith('.docx') ||
+    lowerName?.endsWith('.ppt') ||
+    lowerName?.endsWith('.pptx') ||
+    lowerName?.endsWith('.odt');
+  return !isPDF && !isOfficeFile && fileType === CUSTOM_NOTE_TYPE;
 };
 
 // Helper function to extract text from editor's JSON format for preview
@@ -194,10 +202,6 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
   }) => {
     const [markdownContent, setMarkdownContent] = useState<string>('');
     const [isLoadingMarkdown, setIsLoadingMarkdown] = useState(false);
-    const navigate = useNavigate();
-    const [searchParams, setSearchParams] = useSearchParams();
-    const setMode = useResourceManagerStore((s) => s.setMode);
-    const setCurrentViewItemId = useResourceManagerStore((s) => s.setCurrentViewItemId);
 
     const isDragActive = useDragActive();
     const { setCurrentDrag } = useDragState();
@@ -216,6 +220,16 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
     );
 
     const { isImage, isMarkdown, isPage, isFolder } = computedValues;
+
+    // Use shared click handler hook
+    const handleItemClick = useFileItemClick({
+      id,
+      isFolder,
+      isPage,
+      libraryId: knowledgeBaseId,
+      onOpen,
+      slug,
+    });
 
     // Memoize drag data to prevent recreation
     const dragData = useMemo(
@@ -401,41 +415,7 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
             styles.content,
             !isImage && !isMarkdown && !isPage && styles.contentWithPadding,
           )}
-          onClick={() => {
-            if (isFolder) {
-              // Navigate to folder using slug-based routing (Google Drive style)
-              const folderSlug = slug || id;
-              if (knowledgeBaseId) {
-                // Preserve existing query parameters (view and sort preferences)
-                const newParams = new URLSearchParams(searchParams);
-                // Remove 'file' parameter when navigating to folder
-                newParams.delete('file');
-
-                const queryString = newParams.toString();
-                const basePath = `/resource/library/${knowledgeBaseId}/${folderSlug}`;
-                navigate(queryString ? `${basePath}?${queryString}` : basePath);
-              }
-            } else if (isPage) {
-              // Switch to page view mode instead of opening modal
-              setCurrentViewItemId(id);
-              setMode('page');
-            } else {
-              // Set mode to file and store the file ID
-              setCurrentViewItemId(id);
-              setMode('editor');
-              // Also update URL query parameter for shareable links
-              setSearchParams(
-                (prev) => {
-                  const newParams = new URLSearchParams(prev);
-                  newParams.set('file', id);
-                  return newParams;
-                },
-                { replace: true },
-              );
-              // Still call onOpen if provided for backwards compatibility
-              onOpen?.(id);
-            }
-          }}
+          onClick={handleItemClick}
         >
           {(() => {
             switch (true) {

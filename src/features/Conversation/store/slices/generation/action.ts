@@ -206,8 +206,16 @@ export const generationSlice: StateCreator<
   },
 
   delAndRegenerateMessage: async (messageId: string) => {
-    const { context } = get();
+    const { context, displayMessages } = get();
     const chatStore = useChatStore.getState();
+
+    // Find the assistant message and get parent user message ID before deletion
+    // This is needed because after deletion, we can't find the parent anymore
+    const currentMessage = displayMessages.find((c) => c.id === messageId);
+    if (!currentMessage) return;
+
+    const userId = currentMessage.parentId;
+    if (!userId) return;
 
     // Create operation to track context (use 'regenerate' type since this is a regenerate action)
     const { operationId } = chatStore.startOperation({
@@ -215,9 +223,12 @@ export const generationSlice: StateCreator<
       type: 'regenerate',
     });
 
-    // Regenerate first, then delete
-    await get().regenerateAssistantMessage(messageId);
+    // IMPORTANT: Delete first, then regenerate (LOBE-2533)
+    // If we regenerate first, it switches to a new branch, causing the original
+    // message to no longer appear in displayMessages. Then deleteMessage cannot
+    // find the message and fails silently.
     await chatStore.deleteMessage(messageId, { operationId });
+    await get().regenerateUserMessage(userId);
     chatStore.completeOperation(operationId);
   },
 

@@ -1,7 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
+// import { PencilLineIcon } from 'lucide-react';
 import { type FC } from 'react';
 
-import MemoryEmpty from '@/app/[variants]/(main)/memory/features/MemoryEmpty';
 import { SCROLL_PARENT_ID } from '@/app/[variants]/(main)/memory/features/TimeLineView/useScrollParent';
 import Loading from '@/components/Loading/BrandTextLoading';
 import NavHeader from '@/features/NavHeader';
@@ -9,23 +9,38 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
 import { useUserMemoryStore } from '@/store/userMemory';
 
+import MemoryAnalysis from '@/app/[variants]/(main)/memory/features/MemoryAnalysis';
+import MemoryEmpty from '@/app/[variants]/(main)/memory/features/MemoryEmpty';
+import Persona from './features/Persona';
+import PersonaHeader from './features/Persona/PersonaHeader';
 import RoleTagCloud from './features/RoleTagCloud';
 
 const Home: FC = () => {
   const useFetchTags = useUserMemoryStore((s) => s.useFetchTags);
   const roles = useUserMemoryStore((s) => s.roles);
   const { isLoading } = useFetchTags();
+  // const { EditorModalElement, openEditor } = usePersonaEditor();
 
   if (isLoading) return <Loading debugId={'Home'} />;
 
   if (!roles || roles.length === 0) {
-    return <MemoryEmpty />;
+    return (
+      <MemoryEmpty>
+        <MemoryAnalysis />
+      </MemoryEmpty>
+    );
   }
 
   return (
     <Flexbox flex={1} height={'100%'}>
       <NavHeader
-        right={<WideScreenButton />}
+        right={
+          <Flexbox gap={8} horizontal>
+            {/* <ActionIcon icon={PencilLineIcon} onClick={openEditor} /> */}
+            <MemoryAnalysis iconOnly />
+            <WideScreenButton />
+          </Flexbox>
+        }
         style={{
           zIndex: 1,
         }}
@@ -37,9 +52,12 @@ const Home: FC = () => {
         width={'100%'}
       >
         <WideScreenContainer gap={32} paddingBlock={48}>
+          <PersonaHeader />
           <RoleTagCloud tags={roles} />
+          <Persona />
         </WideScreenContainer>
       </Flexbox>
+      {/* {EditorModalElement} */}
     </Flexbox>
   );
 };

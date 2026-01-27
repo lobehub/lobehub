@@ -1,13 +1,13 @@
 ---
-title: Deploy LobeChat using aaPanel
+title: Deploy LobeHub using aaPanel
 description: >-
-  Learn how to deploy the LobeChat service using aaPanel-Docker, including
+  Learn how to deploy the LobeHub service using aaPanel-Docker, including
   installing the Docker container environment and using the command to start the
   service with one click. Detailed instructions on how to configure environment
   variables and use proxy addresses.
 tags:
   - Docker
-  - LobeChat
+  - LobeHub
   - Deployment guidelines
 ---
 
@@ -17,18 +17,18 @@ To install aaPanel, go to the [aaPanel](https://www.aapanel.com/new/download.htm
 
 ## Deployment
 
-1. Log in to aaPanel and click `Docker` in the menu bar ![install](https://github.com/user-attachments/assets/f67180c2-47ba-4b04-9f12-d274c7821085)
+1. Log in to aaPanel and click `Docker` in the menu bar ![install](/blog/assetscbda3a61a2d158eeb6046e1d1bf9972f.webp)
 
-2. The first time you will be prompted to install the `Docker` and `Docker Compose` services, click Install Now. If it is already installed, please ignore it. ![install2](https://github.com/user-attachments/assets/e269bd27-d323-43ba-811b-c0f5e4137903)
+2. The first time you will be prompted to install the `Docker` and `Docker Compose` services, click Install Now. If it is already installed, please ignore it. ![install2](/blog/assetse12925fba0dda232168e695e6a5e4384.webp)
 
-3. After the installation is complete, find `LobeChat` in `One-Click Install` and click `install`\
-   ![install-LobeChat](https://github.com/user-attachments/assets/9f989104-bb8e-4acd-9721-6b1db1017d2b)
+3. After the installation is complete, find `LobeHub` in `One-Click Install` and click `install`\
+   ![install-LobeHub](/blog/assets5d3551635c580d8781e31256e1fb0f2e.webp)
 
-4. configure basic information such as the domain name, OpenAI API key, and port to complete the installation Note: The domain name is optional, if the domain name is filled, it can be managed through \[Website]--> \[Proxy Project], and you do not need to check \[Allow external access] after filling in the domain name, otherwise you need to check it before you can access it through the port ![addLobeChat](https://github.com/user-attachments/assets/f0b2e72d-9eee-46a8-b094-4834b78764df)
+4. configure basic information such as the domain name, OpenAI API key, and port to complete the installation Note: The domain name is optional, if the domain name is filled, it can be managed through \[Website]--> \[Proxy Project], and you do not need to check \[Allow external access] after filling in the domain name, otherwise you need to check it before you can access it through the port ![addLobeHub](/blog/assets8d6bb40d21d74cfa0312bdec347a11d0.webp)
 
 5. After installation, enter the domain name or IP+ port set in the previous step in the browser to access.
 
-- Name: application name, default `LobeChat-random characters`
+- Name: application name, default `LobeHub-random characters`
 - Version selection: default `latest`
 - Domain name: If you need to access directly through the domain name, please configure the domain name here and resolve the domain name to the server
 - Allow external access: If you need direct access through `IP+Port`, please check. If you have set up a domain name, please do not check here.
@@ -42,7 +42,7 @@ To install aaPanel, go to the [aaPanel](https://www.aapanel.com/new/download.htm
   [https://github.com/lobehub/lobe-chat/discussions/5986](https://github.com/lobehub/lobe-chat/discussions/5986)
 </Callout>
 
-## Visit LobeChat
+## Visit LobeHub
 
-- If you have set a domain name, please directly enter the domain name in the browser address bar, such as `http://demo.lobechat`, to access the `LobeChat` console.
-- If you choose to access through `IP+Port`, please enter the domain name in the browser address bar to access `http://<aaPanelIP>:3210` to access the `HertzBeat` console. ![console](https://github.com/user-attachments/assets/a1af5778-f47a-4fdc-baf5-ca2a1e66f48e)
+- If you have set a domain name, please directly enter the domain name in the browser address bar, such as `http://demo.LobeHub`, to access the `LobeHub` console.
+- If you choose to access through `IP+Port`, please enter the domain name in the browser address bar to access `http://<aaPanelIP>:3210` to access the `HertzBeat` console. ![console](/blog/assets97ac48dab1a35e45e034fefe0a1a1006.webp)

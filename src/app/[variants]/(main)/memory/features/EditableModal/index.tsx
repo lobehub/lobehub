@@ -12,6 +12,7 @@ const EditableModal = memo(() => {
   const updateMemory = useUserMemoryStore((s) => s.updateMemory);
 
   const layerMap = {
+    activity: LayersEnum.Activity,
     context: LayersEnum.Context,
     experience: LayersEnum.Experience,
     identity: LayersEnum.Identity,

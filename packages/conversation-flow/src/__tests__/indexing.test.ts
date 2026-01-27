@@ -390,6 +390,120 @@ describe('buildHelperMaps', () => {
     });
   });
 
+  describe('compressedGroup lastMessageId redirection', () => {
+    it('should redirect parentId to compressedGroup when pointing to lastMessageId', () => {
+      // This tests the scenario after compression:
+      // 1. compressedGroup contains messages with lastMessageId='msg-3'
+      // 2. New assistant message is created with parentId='msg-3'
+      // 3. msg-3 is hidden inside the compressedGroup, not in the message list
+      // 4. childrenMap should redirect: assistant becomes child of compressedGroup
+      const messages: Message[] = [
+        {
+          content: 'Summary of conversation',
+          createdAt: 1000,
+          id: 'comp-group-1',
+          lastMessageId: 'msg-3', // Last compressed message (hidden)
+          pinnedMessages: [],
+          role: 'compressedGroup',
+          updatedAt: 1000,
+        } as any,
+        {
+          content: 'New assistant response after compression',
+          createdAt: 2000,
+          id: 'msg-new',
+          parentId: 'msg-3', // Points to compressed message (not in list!)
+          role: 'assistant',
+          updatedAt: 2000,
+        },
+      ];
+
+      const result = buildHelperMaps(messages);
+
+      // Without redirection: childrenMap.get('msg-3') = ['msg-new']
+      // With redirection: childrenMap.get('comp-group-1') = ['msg-new']
+      expect(result.childrenMap.get('comp-group-1')).toEqual(['msg-new']);
+      expect(result.childrenMap.get('msg-3')).toBeUndefined();
+    });
+
+    it('should not redirect when parentId is a normal message', () => {
+      const messages: Message[] = [
+        {
+          content: 'Summary',
+          createdAt: 1000,
+          id: 'comp-group-1',
+          lastMessageId: 'msg-3',
+          pinnedMessages: [],
+          role: 'compressedGroup',
+          updatedAt: 1000,
+        } as any,
+        {
+          content: 'User message',
+          createdAt: 2000,
+          id: 'msg-4',
+          role: 'user',
+          updatedAt: 2000,
+        },
+        {
+          content: 'Response to user',
+          createdAt: 3000,
+          id: 'msg-5',
+          parentId: 'msg-4', // Normal parentId, should not redirect
+          role: 'assistant',
+          updatedAt: 3000,
+        },
+      ];
+
+      const result = buildHelperMaps(messages);
+
+      // msg-5 should be child of msg-4, not redirected
+      expect(result.childrenMap.get('msg-4')).toEqual(['msg-5']);
+    });
+
+    it('should handle multiple compressedGroups with different lastMessageIds', () => {
+      const messages: Message[] = [
+        {
+          content: 'First summary',
+          createdAt: 1000,
+          id: 'comp-group-1',
+          lastMessageId: 'msg-a',
+          pinnedMessages: [],
+          role: 'compressedGroup',
+          updatedAt: 1000,
+        } as any,
+        {
+          content: 'Second summary',
+          createdAt: 2000,
+          id: 'comp-group-2',
+          lastMessageId: 'msg-b',
+          pinnedMessages: [],
+          role: 'compressedGroup',
+          updatedAt: 2000,
+        } as any,
+        {
+          content: 'Child of first group',
+          createdAt: 3000,
+          id: 'msg-new-1',
+          parentId: 'msg-a',
+          role: 'user',
+          updatedAt: 3000,
+        },
+        {
+          content: 'Child of second group',
+          createdAt: 4000,
+          id: 'msg-new-2',
+          parentId: 'msg-b',
+          role: 'assistant',
+          updatedAt: 4000,
+        },
+      ];
+
+      const result = buildHelperMaps(messages);
+
+      expect(result.childrenMap.get('comp-group-1')).toEqual(['msg-new-1']);
+      expect(result.childrenMap.get('comp-group-2')).toEqual(['msg-new-2']);
+    });
+  });
+
   describe('integration scenarios', () => {
     it('should build all maps correctly in complex conversation', () => {
       const messages: Message[] = [

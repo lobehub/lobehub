@@ -32,10 +32,6 @@ FROM base AS builder
 
 ARG USE_CN_MIRROR
 ARG NEXT_PUBLIC_BASE_PATH
-ARG NEXT_PUBLIC_ENABLE_BETTER_AUTH
-ARG NEXT_PUBLIC_ENABLE_NEXT_AUTH
-ARG NEXT_PUBLIC_ENABLE_CLERK_AUTH
-ARG NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
 ARG NEXT_PUBLIC_SENTRY_DSN
 ARG NEXT_PUBLIC_ANALYTICS_POSTHOG
 ARG NEXT_PUBLIC_POSTHOG_HOST
@@ -48,15 +44,11 @@ ARG FEATURE_FLAGS
 ENV NEXT_PUBLIC_BASE_PATH="${NEXT_PUBLIC_BASE_PATH}" \
     FEATURE_FLAGS="${FEATURE_FLAGS}"
 
-ENV NEXT_PUBLIC_ENABLE_BETTER_AUTH="${NEXT_PUBLIC_ENABLE_BETTER_AUTH:-0}" \
-    NEXT_PUBLIC_ENABLE_NEXT_AUTH="${NEXT_PUBLIC_ENABLE_NEXT_AUTH:-1}" \
-    NEXT_PUBLIC_ENABLE_CLERK_AUTH="${NEXT_PUBLIC_ENABLE_CLERK_AUTH:-0}" \
-    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY="${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}" \
-    CLERK_WEBHOOK_SECRET="whsec_xxx" \
-    APP_URL="http://app.com" \
+ENV APP_URL="http://app.com" \
     DATABASE_DRIVER="node" \
     DATABASE_URL="postgres://postgres:password@localhost:5432/postgres" \
-    KEY_VAULTS_SECRET="use-for-build"
+    KEY_VAULTS_SECRET="use-for-build" \
+    AUTH_SECRET="use-for-build"
 
 # Sentry
 ENV NEXT_PUBLIC_SENTRY_DSN="${NEXT_PUBLIC_SENTRY_DSN}" \
@@ -142,8 +134,9 @@ COPY --from=builder /deps/node_modules/.pnpm /app/node_modules/.pnpm
 COPY --from=builder /deps/node_modules/pg /app/node_modules/pg
 COPY --from=builder /deps/node_modules/drizzle-orm /app/node_modules/drizzle-orm
 
-# Copy server launcher
+# Copy server launcher and shared scripts
 COPY --from=builder /app/scripts/serverLauncher/startServer.js /app/startServer.js
+COPY --from=builder /app/scripts/_shared /app/scripts/_shared
 
 RUN <<'EOF'
 set -e
@@ -189,11 +182,33 @@ ENV KEY_VAULTS_SECRET="" \
 
 # Better Auth
 ENV AUTH_SECRET="" \
-    AUTH_SSO_PROVIDERS=""
+    AUTH_SSO_PROVIDERS="" \
+    AUTH_ALLOWED_EMAILS="" \
+    # Google
+    AUTH_GOOGLE_ID="" \
+    AUTH_GOOGLE_SECRET="" \
+    # GitHub
+    AUTH_GITHUB_ID="" \
+    AUTH_GITHUB_SECRET="" \
+    # Microsoft
+    AUTH_MICROSOFT_ID="" \
+    AUTH_MICROSOFT_SECRET=""
 
-# Clerk
-ENV CLERK_SECRET_KEY="" \
-    CLERK_WEBHOOK_SECRET=""
+# Redis
+ENV REDIS_URL="" \
+    REDIS_PREFIX="" \
+    REDIS_TLS=""
+
+# Email
+ENV EMAIL_SERVICE_PROVIDER="" \
+    SMTP_HOST="" \
+    SMTP_PORT="" \
+    SMTP_SECURE="" \
+    SMTP_USER="" \
+    SMTP_PASS="" \
+    SMTP_FROM="" \
+    RESEND_API_KEY="" \
+    RESEND_FROM=""
 
 # S3
 ENV NEXT_PUBLIC_S3_DOMAIN="" \

@@ -17,6 +17,7 @@ export const modifyRoutes = async (TEMP_DIR: string) => {
 
     // Auth & User routes
     'src/app/[variants]/(auth)',
+    'src/app/[variants]/(mobile)',
     'src/app/[variants]/(main)/(mobile)/me',
     'src/app/[variants]/(main)/changelog',
     'src/app/[variants]/oauth',
@@ -45,13 +46,25 @@ export const modifyRoutes = async (TEMP_DIR: string) => {
     });
   }
 
-  // 2. Modify desktopRouter.config.tsx
+  // 2. Delete root loading.tsx files(not needed in Electron SPA)
+  const loadingFiles = ['src/app/loading.tsx', 'src/app/[variants]/loading.tsx'];
+  console.log(`  Removing ${loadingFiles.length} root loading.tsx files...`);
+  for (const file of loadingFiles) {
+    const fullPath = path.join(TEMP_DIR, file);
+    await removePathEnsuring({
+      name: `modifyRoutes:delete:loading:${file}`,
+      path: fullPath,
+    });
+  }
+
+  // 3. Modify desktopRouter.config.tsx
   const routerConfigPath = path.join(
     TEMP_DIR,
     'src/app/[variants]/router/desktopRouter.config.tsx',
   );
   console.log('  Processing src/app/[variants]/router/desktopRouter.config.tsx...');
   await updateFile({
+    assertAfter: (code) => !/\bchangelog\b/.test(code),
     filePath: routerConfigPath,
     name: 'modifyRoutes:desktopRouterConfig',
     transformer: (code) => {
@@ -86,7 +99,6 @@ export const modifyRoutes = async (TEMP_DIR: string) => {
 
       return root.text();
     },
-    assertAfter: (code) => !/\bchangelog\b/.test(code),
   });
 };
 

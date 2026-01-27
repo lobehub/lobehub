@@ -43,6 +43,18 @@ export interface MessageMapKeyInput {
 const toMessageMapContext = (input: MessageMapKeyInput): MessageMapContext => {
   const { agentId, topicId, threadId, isNew, scope, groupId, subAgentId } = input;
 
+  // If threadId is present and scope is explicitly 'thread', use thread scope
+  // Thread scope takes priority when explicitly requested, even with groupId
+  // This is important for Group Chat where tasks create threads with SubAgent's agentId
+  if (threadId && scope === 'thread') {
+    return {
+      scope: 'thread',
+      scopeId: agentId,
+      subTopicId: threadId,
+      topicId,
+    };
+  }
+
   // If groupId is present, it's a group conversation
   if (groupId) {
     // group_agent scope: Agent's independent message stream within a group

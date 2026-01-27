@@ -21,48 +21,48 @@ tags:
 
   下图是 Cloudflare R2 的界面：
 
-  <Image alt={'Cloudflare R2 存储界面'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/41f7f677-0153-4a96-b849-5ac9b7ebefee'} />
+  <Image alt={'Cloudflare R2 存储界面'} src={'/blog/assets28616219/41f7f677-0153-4a96-b849-5ac9b7ebefee.webp'} />
 
   创建存储桶时将指定其名称，然后点击创建。
 
-  <Image alt={'R2 创建存储桶'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/9c0d184c-3169-40fa-9115-011cfffb9ca7'} />
+  <Image alt={'R2 创建存储桶'} src={'/blog/assets28616219/9c0d184c-3169-40fa-9115-011cfffb9ca7.webp'} />
 
   ### 获取存储桶相关环境变量
 
   在 R2 存储桶的设置中，可以看到桶配置的信息：
 
-  <Image alt={'查看存储桶的相关信息'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/2ceb210c-eca0-4439-ba27-8734d4ebb3ee'} />
+  <Image alt={'查看存储桶的相关信息'} src={'/blog/assets28616219/2ceb210c-eca0-4439-ba27-8734d4ebb3ee.webp'} />
 
   其对应的环境变量为：
 
   ```shell
   # 存储桶的名称
-  S3_BUCKET=lobechat
+  S3_BUCKET=LobeHub
   # 存储桶的请求端点(注意此处链接的路径带存储桶名称，必须删除该路径，或使用申请 S3 API token 页面所提供的链接)
   S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
   # 存储桶对外的访问域名
-  S3_PUBLIC_DOMAIN=https://s3-for-lobechat.your-domain.com
+  S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com
   ```
 
   <Callout type={'warning'}>`S3_ENDPOINT`必须删除其路径，否则会无法访问所上传文件</Callout>
 
   ### 获取 S3 密钥环境变量
 
-  你需要获取 S3 的访问密钥，以便 LobeChat 的服务端有权限访问 S3 存储服务。在 R2 中，你可以在账户详情中配置访问密钥：
+  你需要获取 S3 的访问密钥，以便 LobeHub 的服务端有权限访问 S3 存储服务。在 R2 中，你可以在账户详情中配置访问密钥：
 
-  <Image alt={'查看存储桶的访问秘钥'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/be0c95c0-6693-44ee-a490-7e8dfaa8b34d'} />
+  <Image alt={'查看存储桶的访问秘钥'} src={'/blog/assets28616219/be0c95c0-6693-44ee-a490-7e8dfaa8b34d.webp'} />
 
   点击右上角按钮创建 API token，进入创建 API Token 页面
 
-  <Image alt={'创建对应 API token'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/7b0ea46c-5157-40a8-888f-f47664a4884f'} />
+  <Image alt={'创建对应 API token'} src={'/blog/assets28616219/7b0ea46c-5157-40a8-888f-f47664a4884f.webp'} />
 
   鉴于我们的服务端数据库需要读写 S3 存储服务，因此权限需要选择`对象读与写`，然后点击创建。
 
-  <Image alt={'配置 API token 权限'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/d6f5a918-7b50-4d6e-83a6-3894ab930ddf'} />
+  <Image alt={'配置 API token 权限'} src={'/blog/assets28616219/d6f5a918-7b50-4d6e-83a6-3894ab930ddf.webp'} />
 
   创建完成后，就可以看到对应的 S3 API token
 
-  <Image alt={'复制 API token'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/763b18f9-2b5f-44bb-a479-9b56d46f7397'} />
+  <Image alt={'复制 API token'} src={'/blog/assets28616219/763b18f9-2b5f-44bb-a479-9b56d46f7397.webp'} />
 
   其对应的环境变量为：
 
@@ -77,11 +77,11 @@ tags:
 
   在 R2 中，你可以在存储桶的设置中找到跨域配置：
 
-  <Image alt={'Cloudflare R2 的跨域设置'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/ab008be7-26b2-4b78-8bd9-24301bf34d23'} />
+  <Image alt={'Cloudflare R2 的跨域设置'} src={'/blog/assets28616219/ab008be7-26b2-4b78-8bd9-24301bf34d23.webp'} />
 
   添加跨域规则，允许你的域名（在上文是 `https://your-project.vercel.app`）来源的请求：
 
-  <Image alt={'配置允许你的站点域名'} src={'https://github.com/lobehub/lobe-chat/assets/28616219/dfcc2cb3-2958-4498-a8a4-51bec584fe7d'} />
+  <Image alt={'配置允许你的站点域名'} src={'/blog/assets28616219/dfcc2cb3-2958-4498-a8a4-51bec584fe7d.webp'} />
 
   <Callout type={'info'}>
     如果你还需要在桌面端使用，请在 <code>AllowedOrigins</code> 中额外添加 <code>[http://localhost:3015](http://localhost:3015)</code>，以便桌面端（本地运行）能够访问 R2。
@@ -112,7 +112,7 @@ S3_ACCESS_KEY_ID=9998d6757e276cf9f1edbd325b7083a6
 S3_SECRET_ACCESS_KEY=55af75d8eb6b99f189f6a35f855336ea62cd9c4751a5cf4337c53c1d3f497ac2
 
 # 存储桶的名称
-S3_BUCKET=lobechat
+S3_BUCKET=LobeHub
 # 存储桶的请求端点
 S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
 # 存储桶对外的访问域名

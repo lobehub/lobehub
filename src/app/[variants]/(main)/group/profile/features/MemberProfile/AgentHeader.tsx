@@ -75,7 +75,6 @@ const AgentHeader = memo<AgentHeaderProps>(({ readOnly }) => {
       setUploading(true);
       try {
         const result = await uploadWithProgress({ file });
-        console.log('result', result);
         if (result?.url) {
           optimisticUpdateAgentMeta(agentId, { avatar: result.url });
         }

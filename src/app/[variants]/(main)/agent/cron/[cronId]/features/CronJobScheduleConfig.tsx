@@ -81,7 +81,7 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
       if (scheduleType === 'weekly' && weekdays.length > 0) {
         result.push({
           key: 'weekdays',
-          label: weekdays.map((day) => WEEKDAY_LABELS[day]).join(', '),
+          label: weekdays.map((day) => t(WEEKDAY_LABELS[day] as any)).join(', '),
         });
       }
 
@@ -126,7 +126,10 @@ const CronJobScheduleConfig = memo<CronJobScheduleConfigProps>(
                 maxTagCount="responsive"
                 mode="multiple"
                 onChange={(values: number[]) => onScheduleChange({ weekdays: values })}
-                options={WEEKDAY_OPTIONS}
+                options={WEEKDAY_OPTIONS.map((opt) => ({
+                  label: t(opt.label as any),
+                  value: opt.value,
+                }))}
                 placeholder="Select days"
                 size="small"
                 style={{ minWidth: 150 }}

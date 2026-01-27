@@ -7,7 +7,6 @@ import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon, FileText, FolderIcon } from 'lucide-react';
 import { type DragEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router-dom';
 import { shallow } from 'zustand/shallow';
 
 import {
@@ -24,6 +23,7 @@ import { type FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 
+import { useFileItemClick } from '../../hooks/useFileItemClick';
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
 import ChunksBadge from './ChunkTag';
@@ -41,7 +41,6 @@ const styles = createStaticStyles(({ css }) => {
       cursor: pointer;
       min-width: 800px;
 
-      /* Hover effect for individual rows */
       &:hover {
         background: ${cssVar.colorFillTertiary};
       }
@@ -160,9 +159,6 @@ const FileListItem = memo<FileListItemProps>(
   }) => {
     const { t } = useTranslation(['components', 'file']);
     const { message } = App.useApp();
-    const navigate = useNavigate();
-    const [, setSearchParams] = useSearchParams();
-
     // Consolidate all FileStore subscriptions with shallow equality
     const fileStoreState = useFileStore(
       (s) => ({
@@ -178,8 +174,6 @@ const FileListItem = memo<FileListItemProps>(
     const resourceManagerState = useResourceManagerStore(
       (s) => ({
         libraryId: s.libraryId,
-        setCurrentViewItemId: s.setCurrentViewItemId,
-        setMode: s.setMode,
         setPendingRenameItemId: s.setPendingRenameItemId,
       }),
       shallow,
@@ -194,21 +188,30 @@ const FileListItem = memo<FileListItemProps>(
     const [isDragging, setIsDragging] = useState(false);
     const [isOver, setIsOver] = useState(false);
 
-    // Memoize computed values that don't change
     const computedValues = useMemo(() => {
-      const isPDF = fileType?.toLowerCase() === 'pdf' || name?.toLowerCase().endsWith('.pdf');
+      const lowerFileType = fileType?.toLowerCase();
+      const lowerName = name?.toLowerCase();
+      const isPDF = lowerFileType === 'pdf' || lowerName?.endsWith('.pdf');
+      // Office files should use the MSDoc viewer, not the page editor
+      const isOfficeFile =
+        lowerName?.endsWith('.xls') ||
+        lowerName?.endsWith('.xlsx') ||
+        lowerName?.endsWith('.doc') ||
+        lowerName?.endsWith('.docx') ||
+        lowerName?.endsWith('.ppt') ||
+        lowerName?.endsWith('.pptx') ||
+        lowerName?.endsWith('.odt');
       return {
         emoji: sourceType === 'document' || fileType === PAGE_FILE_TYPE ? metadata?.emoji : null,
         isFolder: fileType === 'custom/folder',
-        // PDF files should not be treated as pages, even if they have sourceType='document'
-        isPage: !isPDF && (sourceType === 'document' || fileType === PAGE_FILE_TYPE),
+        // PDF and Office files should not be treated as pages, even if they have sourceType='document'
+        isPage: !isPDF && !isOfficeFile && (sourceType === 'document' || fileType === PAGE_FILE_TYPE),
         isSupportedForChunking: !isChunkingUnsupported(fileType),
       };
     }, [fileType, sourceType, metadata?.emoji, name]);
 
     const { isSupportedForChunking, isPage, isFolder, emoji } = computedValues;
 
-    // Memoize drag data to prevent recreation
     const dragData = useMemo(
       () => ({
         fileType,
@@ -219,7 +222,6 @@ const FileListItem = memo<FileListItemProps>(
       [fileType, isFolder, name, sourceType],
     );
 
-    // Native HTML5 drag event handlers
     const handleDragStart = useCallback(
       (e: DragEvent) => {
         if (!resourceManagerState.libraryId) {
@@ -264,7 +266,6 @@ const FileListItem = memo<FileListItemProps>(
     }, []);
 
     const handleDrop = useCallback(() => {
-      // Clear the highlight after drop
       setIsOver(false);
     }, []);
 
@@ -338,47 +339,19 @@ const FileListItem = memo<FileListItemProps>(
       setRenamingValue(name);
     }, [name]);
 
-    // Memoize click handler to prevent recreation on every render
-    const handleItemClick = useCallback(() => {
-      if (isFolder) {
-        // Navigate to folder using slug-based routing (Google Drive style)
-        const folderSlug = slug || id;
-
-        if (resourceManagerState.libraryId) {
-          navigate(`/resource/library/${resourceManagerState.libraryId}/${folderSlug}`);
-        }
-      } else if (isPage) {
-        resourceManagerState.setCurrentViewItemId(id);
-        resourceManagerState.setMode('page');
-        setSearchParams(
-          (prev) => {
-            const newParams = new URLSearchParams(prev);
-            newParams.set('file', id);
-            return newParams;
-          },
-          { replace: true },
-        );
-      } else {
-        // Set mode to file and store the file ID
-        resourceManagerState.setCurrentViewItemId(id);
-        resourceManagerState.setMode('editor');
-        // Also update URL query parameter for shareable links
-        setSearchParams(
-          (prev) => {
-            const newParams = new URLSearchParams(prev);
-            newParams.set('file', id);
-            return newParams;
-          },
-          { replace: true },
-        );
-      }
-    }, [isFolder, slug, id, resourceManagerState, navigate, isPage, setSearchParams]);
+    // Use shared click handler hook
+    const handleItemClick = useFileItemClick({
+      id,
+      isFolder,
+      isPage,
+      libraryId: resourceManagerState.libraryId,
+      slug,
+    });
 
     // Auto-start renaming if this is the pending rename item
     useEffect(() => {
       if (pendingRenameItemId === id && isFolder && !isRenaming) {
         handleRenameStart();
-        // Clear the pending rename item after triggering
         resourceManagerState.setPendingRenameItemId(null);
       }
     }, [pendingRenameItemId, id, isFolder, resourceManagerState]);
@@ -575,7 +548,6 @@ const FileListItem = memo<FileListItemProps>(
   },
   // Custom comparison function to prevent unnecessary re-renders
   (prevProps, nextProps) => {
-    // Only re-render if these critical props change
     return (
       prevProps.id === nextProps.id &&
       prevProps.name === nextProps.name &&

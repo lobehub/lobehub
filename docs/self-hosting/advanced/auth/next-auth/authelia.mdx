@@ -1,13 +1,13 @@
 ---
-title: Configuring Authelia Authentication Service for LobeChat
+title: Configuring Authelia Authentication Service for LobeHub
 description: >-
-  Learn how to configure Authelia authentication service in LobeChat, including
-  creating a provider, configuring environment variables, and deploying
-  LobeChat. Detailed steps and necessary environment variable settings.
+  Learn how to configure Authelia authentication service in LobeHub, including
+  creating a provider, configuring environment variables, and deploying LobeHub.
+  Detailed steps and necessary environment variable settings.
 tags:
   - Authelia Configuration
   - Single Sign-On (SSO)
-  - LobeChat Authentication
+  - LobeHub Authentication
   - Environment Variables
   - Deployment Instructions
 ---
@@ -19,7 +19,7 @@ tags:
 <Steps>
   ### Create an Authelia Identity Provider
 
-  We assume you are already familiar with using Authelia. Let's say your LobeChat instance is deployed at [https://lobe.example.com/](https://lobe.example.com/). Note that currently only localhost supports HTTP access; other domains need to enable TLS, otherwise Authelia will actively interrupt authentication by default.
+  We assume you are already familiar with using Authelia. Let's say your LobeHub instance is deployed at [https://lobe.example.com/](https://lobe.example.com/). Note that currently only localhost supports HTTP access; other domains need to enable TLS, otherwise Authelia will actively interrupt authentication by default.
 
   Now, let's open and edit the configuration file of your Authelia instance:
 
@@ -32,7 +32,7 @@ tags:
       ## The other portions of the mandatory OpenID Connect 1.0 configuration go here.
       ## See: https://www.authelia.com/c/oidc
       - id: lobe-chat
-        description: LobeChat
+        description: LobeHub
         secret: '$pbkdf2-sha512$310000$c8p78n7pUMln0jzvd4aK4Q$JNRBzwAo0ek5qKn50cFzzvE9RXV88h1wJn5KGiHrD0YKtZaR/nCb2CJPOsKaPK0hjf.9yHxzQGZziziccp6Yng'  # The digest of 'insecure_secret'.
         public: false
         authorization_policy: two_factor
@@ -45,13 +45,13 @@ tags:
         userinfo_signing_algorithm: none
   ```
 
-  Make sure to replace secret and `redirect_urls` with your own values. Note! The secret configured in Authelia is ciphertext, i.e., a salted hash value. Its corresponding plaintext needs to be filled in LobeChat later.
+  Make sure to replace secret and `redirect_urls` with your own values. Note! The secret configured in Authelia is ciphertext, i.e., a salted hash value. Its corresponding plaintext needs to be filled in LobeHub later.
 
   Save the configuration file and restart the Authelia service. Now we have completed the Authelia configuration.
 
   ### Configure Environment Variables
 
-  When deploying LobeChat, you need to configure the following environment variables:
+  When deploying LobeHub, you need to configure the following environment variables:
 
   | Environment Variable      | Type     | Description                                                                                                                                                                                                                                               |
   | ------------------------- | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -68,6 +68,6 @@ tags:
 </Steps>
 
 <Callout type={'info'}>
-  After a successful deployment, users will be able to use LobeChat by authenticating with the users
+  After a successful deployment, users will be able to use LobeHub by authenticating with the users
   configured in Authelia.
 </Callout>

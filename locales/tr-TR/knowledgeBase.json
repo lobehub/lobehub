@@ -1,5 +1,5 @@
 {
-  "addToKnowledgeBase.addSuccess": "Dosya başarıyla eklendi, <1>şimdi görüntüle</1>",
+  "addToKnowledgeBase.addSuccess": "Dosya başarıyla eklendi",
   "addToKnowledgeBase.confirm": "Ekle",
   "addToKnowledgeBase.error": "Dosya Kütüphane'ye eklenemedi",
   "addToKnowledgeBase.id.placeholder": "Eklenecek bir kütüphane seçin",

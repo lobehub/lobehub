@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MemoryAnalysis from '@/app/[variants]/(main)/memory/features/MemoryAnalysis';
 import MemoryEmpty from '@/app/[variants]/(main)/memory/features/MemoryEmpty';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useGlobalStore } from '@/store/global';
@@ -31,7 +32,14 @@ const ContextsList = memo<ContextsListProps>(({ isLoading, searchValue, viewMode
   const isEmpty = contexts.length === 0;
 
   if (isEmpty) {
-    return <MemoryEmpty search={Boolean(searchValue)} title={t('context.empty')} />;
+    return (
+      <MemoryEmpty
+        search={Boolean(searchValue)}
+        title={t('context.empty')}
+      >
+        <MemoryAnalysis />
+      </MemoryEmpty>
+    );
   }
 
   return viewMode === 'timeline' ? (

@@ -8,6 +8,7 @@ export interface LobeChatGroupMetaConfig {
   avatar?: string;
   backgroundColor?: string;
   description: string;
+  marketIdentifier?: string;
   title: string;
 }
 
@@ -44,6 +45,7 @@ export const InsertChatGroupSchema = z.object({
   editorData: z.record(z.string(), z.any()).optional().nullable(),
   groupId: z.string().optional().nullable(),
   id: z.string().optional(),
+  marketIdentifier: z.string().optional().nullable(),
   pinned: z.boolean().optional().nullable(),
   title: z.string().optional().nullable(),
 });
@@ -86,6 +88,7 @@ export interface NewChatGroup {
   description?: string | null;
   groupId?: string | null;
   id?: string;
+  marketIdentifier?: string | null;
   pinned?: boolean | null;
   title?: string | null;
   userId: string;
@@ -104,6 +107,7 @@ export interface ChatGroupItem {
   editorData?: Record<string, any> | null;
   groupId?: string | null;
   id: string;
+  marketIdentifier?: string | null;
   pinned?: boolean | null;
   title?: string | null;
   updatedAt: Date;
@@ -352,6 +356,11 @@ export interface TaskStatusResult {
   currentActivity?: TaskCurrentActivity;
   /** Error message if task failed */
   error?: string;
+  /**
+   * Parsed UI messages from conversation-flow
+   * Used for displaying intermediate steps in server task
+   */
+  messages?: UIChatMessage[];
   /** Task result content (last assistant message) */
   result?: string;
   /** Current task status */

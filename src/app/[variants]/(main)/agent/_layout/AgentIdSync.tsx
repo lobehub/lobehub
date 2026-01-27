@@ -1,4 +1,4 @@
-import { usePrevious, useUnmount } from 'ahooks';
+import { useMount, usePrevious, useUnmount } from 'ahooks';
 import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { createStoreUpdater } from 'zustand-utils';
@@ -23,6 +23,10 @@ const AgentIdSync = () => {
       useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
     }
   }, [params.aid, prevAgentId]);
+
+  useMount(() => {
+    useChatStore.setState({ activeAgentId: params.aid }, false, 'AgentIdSync/mountAgentId');
+  });
 
   // Clear activeAgentId when unmounting (leaving chat page)
   useUnmount(() => {

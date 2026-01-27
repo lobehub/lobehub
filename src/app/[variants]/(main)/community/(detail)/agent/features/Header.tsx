@@ -7,6 +7,7 @@ import {
   Button,
   Flexbox,
   Icon,
+  Tag,
   Text,
   Tooltip,
   TooltipGroup,
@@ -20,7 +21,6 @@ import {
   CoinsIcon,
   DotIcon,
   GitBranchIcon,
-  GitForkIcon,
   HeartIcon,
 } from 'lucide-react';
 import qs from 'query-string';
@@ -31,12 +31,12 @@ import useSWR from 'swr';
 import urlJoin from 'url-join';
 
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
-import { marketApiService } from '@/services/marketApi';
 import { socialService } from '@/services/social';
 import { formatIntergerNumber } from '@/utils/format';
 
 import { useCategory } from '../../../(list)/agent/features/Category/useCategory';
 import PublishedTime from '../../../../../../../components/PublishedTime';
+import AgentForkTag from './AgentForkTag';
 import { useDetailContext } from './DetailProvider';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -61,7 +61,6 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     knowledgeCount,
     userName,
     forkCount,
-    forkedFromAgentId,
   } = useDetailContext();
   const { mobile = isMobile } = useResponsive();
   const { isAuthenticated, signIn, session } = useMarketAuth();
@@ -89,13 +88,6 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     { revalidateOnFocus: false },
   );
   const isLiked = likeStatus?.isLiked ?? false;
-
-  // Fetch fork source info
-  const { data: forkSource } = useSWR(
-    identifier && forkedFromAgentId ? ['fork-source', identifier] : null,
-    () => marketApiService.getAgentForkSource(identifier!),
-    { revalidateOnFocus: false },
-  );
 
   const handleFavoriteClick = async () => {
     if (!isAuthenticated) {
@@ -220,7 +212,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               />
             </Tooltip>
           </Flexbox>
-          <Flexbox align={'center'} gap={4} horizontal>
+          <Flexbox align={'center'} gap={8} horizontal wrap={'wrap'}>
             {author && userName ? (
               <Link style={{ color: 'inherit' }} to={urlJoin('/community/user', userName)}>
                 {author}
@@ -234,32 +226,13 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               date={createdAt as string}
               template={'MMM DD, YYYY'}
             />
+            <AgentForkTag />
+            {!!forkCount && forkCount > 0 && (
+              <Tag bordered={false} color="default" icon={<Icon icon={GitBranchIcon} />}>
+                {forkCount} {t('fork.forks')}
+              </Tag>
+            )}
           </Flexbox>
-
-          {/* Fork information */}
-          {(forkSource?.source || (forkCount && forkCount > 0)) && (
-            <Flexbox align={'center'} gap={12} horizontal>
-              {forkSource?.source && (
-                <Flexbox align={'center'} gap={6} horizontal>
-                  <Icon icon={GitForkIcon} size={'small'} />
-                  <Text className={styles.time} type={'secondary'}>
-                    {t('fork.forkedFrom')}:{' '}
-                    <Link to={urlJoin('/community/agent', forkSource.source.identifier)}>
-                      {forkSource.source.name}
-                    </Link>
-                  </Text>
-                </Flexbox>
-              )}
-              {forkCount && forkCount > 0 && (
-                <Flexbox align={'center'} gap={6} horizontal>
-                  <Icon icon={GitBranchIcon} size={'small'} />
-                  <Text className={styles.time} type={'secondary'}>
-                    {forkCount} {t('fork.forks')}
-                  </Text>
-                </Flexbox>
-              )}
-            </Flexbox>
-          )}
         </Flexbox>
       </Flexbox>
       <TooltipGroup>

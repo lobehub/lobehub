@@ -4,6 +4,10 @@ import debug from 'debug';
 
 import { type CloudMCPParams, type ToolCallContent } from '@/libs/mcp';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
+import {
+  DEFAULT_TOOL_RESULT_MAX_LENGTH,
+  truncateToolResult,
+} from '@/server/utils/truncateToolResult';
 
 import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
@@ -70,8 +74,26 @@ export class ToolExecutionService {
 
       const executionTime = Date.now() - startTime;
 
+      // Truncate result content to prevent context overflow
+      // Use agent-specific config if provided, otherwise use default
+      const truncatedContent = truncateToolResult(data.content, context.toolResultMaxLength);
+
+      // Log if content was truncated
+      if (truncatedContent !== data.content) {
+        const maxLength = context.toolResultMaxLength ?? DEFAULT_TOOL_RESULT_MAX_LENGTH;
+        log(
+          'Tool result truncated for %s:%s - original: %d chars, truncated: %d chars (limit: %d)',
+          identifier,
+          apiName,
+          data.content.length,
+          truncatedContent.length,
+          maxLength,
+        );
+      }
+
       return {
         ...data,
+        content: truncatedContent,
         executionTime,
       };
 
@@ -79,10 +101,12 @@ export class ToolExecutionService {
     } catch (error) {
       const executionTime = Date.now() - startTime;
       log('Error executing tool %s:%s: %O', identifier, apiName, error);
+      const errorMessage = (error as Error).message;
+
       return {
-        content: (error as Error).message,
+        content: truncateToolResult(errorMessage),
         error: {
-          message: (error as Error).message,
+          message: errorMessage,
         },
         executionTime,
         success: false,

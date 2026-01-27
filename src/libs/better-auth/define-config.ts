@@ -12,6 +12,7 @@ import { verifyPassword as defaultVerifyPassword } from 'better-auth/crypto';
 import { type BetterAuthOptions, betterAuth } from 'better-auth/minimal';
 import { admin, emailOTP, genericOAuth, magicLink } from 'better-auth/plugins';
 import { type BetterAuthPlugin } from 'better-auth/types';
+import { ProxyAgent, setGlobalDispatcher } from 'undici';
 
 import { businessEmailValidator } from '@/business/server/better-auth';
 import { appEnv } from '@/envs/app';
@@ -22,11 +23,28 @@ import {
   getVerificationEmailTemplate,
   getVerificationOTPEmailTemplate,
 } from '@/libs/better-auth/email-templates';
+import { emailWhitelist } from '@/libs/better-auth/plugins/email-whitelist';
 import { initBetterAuthSSOProviders } from '@/libs/better-auth/sso';
 import { createSecondaryStorage, getTrustedOrigins } from '@/libs/better-auth/utils/config';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { EmailService } from '@/server/services/email';
 import { UserService } from '@/server/services/user';
+
+// Configure HTTP proxy for OAuth provider requests in development (e.g., Google token exchange)
+// Node.js native fetch doesn't respect system proxy settings
+// Ref: https://github.com/better-auth/better-auth/issues/7396
+if (process.env.NODE_ENV === 'development') {
+  const proxyUrl =
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy;
+
+  if (proxyUrl) {
+    const proxyAgent = new ProxyAgent(proxyUrl);
+    setGlobalDispatcher(proxyAgent);
+  }
+}
 
 // Email verification link expiration time (in seconds)
 // Default is 1 hour (3600 seconds) as per Better Auth documentation
@@ -60,7 +78,7 @@ const getPasskeyOrigins = (): string[] | undefined => {
 const MAGIC_LINK_EXPIRES_IN = 900;
 // OTP expiration time (in seconds) - 5 minutes for mobile OTP verification
 const OTP_EXPIRES_IN = 300;
-const enableMagicLink = authEnv.ENABLE_MAGIC_LINK;
+const enableMagicLink = authEnv.AUTH_ENABLE_MAGIC_LINK;
 const enabledSSOProviders = parseSSOProviders(authEnv.AUTH_SSO_PROVIDERS);
 
 const { socialProviders, genericOAuthProviders } = initBetterAuthSSOProviders();
@@ -222,6 +240,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
     },
     plugins: [
       ...customOptions.plugins,
+      emailWhitelist(),
       expo(),
       emailHarmony({ allowNormalizedSignin: false, validator: customEmailValidator }),
       admin(),

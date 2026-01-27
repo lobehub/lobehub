@@ -3,7 +3,7 @@
 import { Avatar } from '@lobehub/ui';
 import { Command } from 'cmdk';
 import { CornerDownLeft } from 'lucide-react';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
@@ -37,8 +37,28 @@ const CommandMenuContent = memo(() => {
     selectedAgent,
   } = useCommandMenu();
 
-  const { setPages, page, pages, search, setTypeFilter, setSelectedAgent, typeFilter } =
+  const { setPages, page, pages, search, setSearch, setTypeFilter, setSelectedAgent, typeFilter } =
     useCommandMenuContext();
+
+  // Ref for Command.List to control scroll position
+  const listRef = useRef<HTMLDivElement>(null);
+  // State for controlled selection value (undefined lets cmdk auto-select first item)
+  const [value, setValue] = useState<string | undefined>();
+
+  // Reset scroll position and selection when search, page, or selectedAgent changes
+  useEffect(() => {
+    if (listRef.current) {
+      listRef.current.scrollTop = 0;
+    }
+    setValue(undefined);
+  }, [search, page, selectedAgent]);
+
+  // Clear search input when entering certain submenu pages (but not ask-ai)
+  useEffect(() => {
+    if (page && page !== 'ask-ai') {
+      setSearch('');
+    }
+  }, [page, setSearch]);
 
   return (
     <div className={styles.overlay} onClick={closeCommandMenu}>
@@ -80,11 +100,13 @@ const CommandMenuContent = memo(() => {
               }
             }
           }}
+          onValueChange={setValue}
           shouldFilter={page !== 'ask-ai' && !selectedAgent && !search.trimStart().startsWith('@')}
+          value={value}
         >
           <CommandInput />
 
-          <Command.List>
+          <Command.List ref={listRef}>
             <Command.Empty>{t('cmdk.noResults')}</Command.Empty>
 
             {/* Show send command when agent is selected */}

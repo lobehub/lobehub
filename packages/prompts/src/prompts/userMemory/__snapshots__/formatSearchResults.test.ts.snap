@@ -1,5 +1,17 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
+exports[`formatMemorySearchResults > should format activity memories with scheduling and feedback details 1`] = `
+"<memories query="meeting" total="1">
+<activities count="1">
+  <activity id="act-1" type="meeting" status="scheduled" startsAt="2024-01-01T10:00:00.000Z" endsAt="2024-01-01T11:00:00.000Z" timezone="UTC">
+    <feedback>Great alignment</feedback>
+    <narrative>Covered Q1 roadmap and risks</narrative>
+    <notes>Share slides after the call</notes>
+  </activity>
+</activities>
+</memories>"
+`;
+
 exports[`formatMemorySearchResults > should format context memories with full content 1`] = `
 "<memories query="project" total="1">
 <contexts count="1">

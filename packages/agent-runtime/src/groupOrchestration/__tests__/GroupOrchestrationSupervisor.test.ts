@@ -96,7 +96,7 @@ describe('GroupOrchestrationSupervisor', () => {
       });
     });
 
-    it('should return parallel_call_agents instruction for broadcast decision', async () => {
+    it('should return parallel_call_agents instruction for broadcast decision with disableTools: true', async () => {
       const supervisor = new GroupOrchestrationSupervisor(defaultConfig);
       const state = createMockState();
 
@@ -119,6 +119,8 @@ describe('GroupOrchestrationSupervisor', () => {
         type: 'parallel_call_agents',
         payload: {
           agentIds: ['agent-1', 'agent-2'],
+          // Broadcast agents should have tools disabled by default
+          disableTools: true,
           instruction: 'Discuss',
           toolMessageId: 'tool-msg-1',
         },

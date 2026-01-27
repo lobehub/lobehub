@@ -108,6 +108,12 @@ CLAUDE.local.md
 # MCP tools
 .serena/**
 
+# Migration scripts data
+scripts/clerk-to-betterauth/test/*.csv
+scripts/clerk-to-betterauth/test/*.json
+scripts/clerk-to-betterauth/prod/*.csv
+scripts/clerk-to-betterauth/prod/*.json
+
 # Misc
 ./packages/lobe-ui
 *.ppt*

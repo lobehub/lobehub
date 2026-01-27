@@ -17,6 +17,7 @@ const SignInPage = () => {
     handleForgotPassword,
     handleSignIn,
     handleSocialSignIn,
+    isSocialOnly,
     loading,
     oAuthSSOProviders,
     serverConfigInit,
@@ -29,9 +30,11 @@ const SignInPage = () => {
       {step === 'email' ? (
         <SignInEmailStep
           form={form as any}
+          isSocialOnly={isSocialOnly}
           loading={loading}
           oAuthSSOProviders={oAuthSSOProviders}
           onCheckUser={handleCheckUser}
+          onSetPassword={handleForgotPassword}
           onSocialSignIn={handleSocialSignIn}
           serverConfigInit={serverConfigInit}
           socialLoading={socialLoading}

@@ -1,5 +1,5 @@
 {
-  "addToKnowledgeBase.addSuccess": "Tệp đã được thêm thành công, <1>xem ngay</1>",
+  "addToKnowledgeBase.addSuccess": "Tệp đã được thêm thành công",
   "addToKnowledgeBase.confirm": "Thêm",
   "addToKnowledgeBase.error": "Không thể thêm tệp vào Thư viện",
   "addToKnowledgeBase.id.placeholder": "Vui lòng chọn thư viện để thêm vào",

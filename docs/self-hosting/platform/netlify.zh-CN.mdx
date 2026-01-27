@@ -1,24 +1,25 @@
 ---
-title: 在 Netlify 上部署 LobeChat
+title: 在 Netlify 上部署 LobeHub
 description: >-
-  学习如何在 Netlify 上部署 LobeChat，包括 Fork 仓库、导入到 Netlify 工作台、配置站点名称与环境变量等步骤。
+  学习如何在 Netlify 上部署 LobeHub，包括 Fork 仓库、准备 OpenAI API Key、导入到 Netlify
+  工作台、配置站点名称与环境变量等步骤。
 tags:
   - Netlify
-  - LobeChat
+  - LobeHub
   - 部署教程
   - 环境配置
 ---
 
 # 使用 Netlify 部署
 
-如果想在 Netlify 上部署 LobeChat，可以按照以下步骤进行操作：
+如果想在 Netlify 上部署 LobeHub，可以按照以下步骤进行操作：
 
-## Netlify 部署 LobeChat
+## Netlify 部署 LobeHub
 
 <Steps>
-  ### Fork LobeChat 仓库
+  ### Fork LobeHub 仓库
 
-  点击 Fork 按钮，将 LobeChat 仓库 Fork 到你的 GitHub 账号下。
+  点击 Fork 按钮，将 LobeHub 仓库 Fork 到你的 GitHub 账号下。
 
   ### 在 Netlify 工作台导入
 
@@ -26,58 +27,58 @@ tags:
 
   点击 「Import from git」
 
-  <Image alt={'在 Netflix 工作台点击 「Import from git」'} height={362} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/31b999e5-2a74-45fc-935b-f036e72a684d'} />
+  <Image alt={'在 Netflix 工作台点击 「Import from git」'} height={362} inStep src={'/blog/assets28616219/31b999e5-2a74-45fc-935b-f036e72a684d.webp'} />
 
   然后点击 「Deploy with Github」，并授权 Netlify 访问你的 GitHub 账号
 
-  <Image alt={'授权 Netlify 访问你的 GitHub 账号'} height={273} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/c9c58141-5ec6-43f1-8d97-0a84a04dcdba'} />
+  <Image alt={'授权 Netlify 访问你的 GitHub 账号'} height={273} inStep src={'/blog/assets28616219/c9c58141-5ec6-43f1-8d97-0a84a04dcdba.webp'} />
 
-  然后选择 LobeChat 项目：
+  然后选择 LobeHub 项目：
 
-  <Image alt={'选择 LobeChat github 项目'} height={228} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/6c3968a8-fbbb-4268-a587-edaced2d96af'} />
+  <Image alt={'选择 LobeHub github 项目'} height={228} inStep src={'/blog/assets28616219/6c3968a8-fbbb-4268-a587-edaced2d96af.webp'} />
 
   ### 配置站点名称与环境变量
 
   在这一步，你需要配置你的站点，包括站点名称、构建命令、发布目录等。在「Site Name」字段填写上你的站点名称。其余配置如果没有特殊要求，无需修改，我们已经设定好了默认配置。
 
-  <Image alt={'配置 LobeChat 站点名称'} height={712} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/f3885537-6d43-422f-b1b8-e70732401025'} />
+  <Image alt={'配置 LobeHub 站点名称'} height={712} inStep src={'/blog/assets28616219/f3885537-6d43-422f-b1b8-e70732401025.webp'} />
 
   如需要，点击 「Add environment variables」按钮添加站点环境变量：
 
-  <Image alt={'添加 LobeChat 站点环境变量'} height={537} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/3b607482-4d99-455a-bc10-3090dd4fe3c5'} />
+  <Image alt={'添加 LobeHub 站点环境变量'} height={537} inStep src={'/blog/assets28616219/3b607482-4d99-455a-bc10-3090dd4fe3c5.webp'} />
 
   <Callout type={'tip'}>
-    LobeChat 支持的完整环境变量列表请参考 [📘 环境变量](/zh/docs/self-hosting/environment-variables)
+    LobeHub 支持的完整环境变量列表请参考 [📘 环境变量](/zh/docs/self-hosting/environment-variables)
     部分
   </Callout>
 
   最后点击「Deploy lobe-chat」进入部署阶段。
 
-  <Image alt={'环境变量添加完成'} height={600} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/c9f74ec4-ce63-4ce9-b9e2-34bda6fda10b'} />
+  <Image alt={'环境变量添加完成'} height={600} inStep src={'/blog/assets28616219/c9f74ec4-ce63-4ce9-b9e2-34bda6fda10b.webp'} />
 
   ### 等待部署完成
 
   点击部署后，会进入站点详情页面，你可以点击青色字样的「Deploying your site」或者 「Building」 黄色标签查看部署进度。
 
-  <Image alt={'Netlify 站点详情页'} height={396} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/a7fd85d5-fd32-4756-814e-ff7ab7567fe1'} />
+  <Image alt={'Netlify 站点详情页'} height={396} inStep src={'/blog/assets28616219/a7fd85d5-fd32-4756-814e-ff7ab7567fe1.webp'} />
 
-  进入部署详情，你会看到下述界面，这意味着你的 LobeChat 正在部署中，只需等待部署完成即可。
+  进入部署详情，你会看到下述界面，这意味着你的 LobeHub 正在部署中，只需等待部署完成即可。
 
-  <Image alt={'LobeChat 部署构建中'} height={325} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/1ed8b13d-046e-47c8-bd61-116ffdf5d01b'} />
+  <Image alt={'LobeHub 部署构建中'} height={325} inStep src={'/blog/assets28616219/1ed8b13d-046e-47c8-bd61-116ffdf5d01b.webp'} />
 
   部署构建过程中：
 
-  <Image alt={'部署构建中'} height={558} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/1c82d707-cb6f-4924-b246-a5235a919864'} />
+  <Image alt={'部署构建中'} height={558} inStep src={'/blog/assets28616219/1c82d707-cb6f-4924-b246-a5235a919864.webp'} />
 
   ### 部署成功，开始使用
 
-  如果你的界面中的 Deploy Log 如下所示，意味着你的 LobeChat 部署成功了。
+  如果你的界面中的 Deploy Log 如下所示，意味着你的 LobeHub 部署成功了。
 
-  <Image alt={'部署成功'} height={558} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/c1f945d1-f3e2-4100-b6bb-24d4cb13c438'} />
+  <Image alt={'部署成功'} height={558} inStep src={'/blog/assets28616219/c1f945d1-f3e2-4100-b6bb-24d4cb13c438.webp'} />
 
-  此时，你可以点击「Open production deploy」，即可访问你的 LobeChat 站点
+  此时，你可以点击「Open production deploy」，即可访问你的 LobeHub 站点
 
-  <Image alt={'访问你的 LobeChat 站点'} height={527} inStep src={'https://github.com/lobehub/lobe-chat/assets/28616219/b04723eb-64ad-4028-a901-dc4e4ee2d0c1'} />
+  <Image alt={'访问你的 LobeHub 站点'} height={527} inStep src={'/blog/assets28616219/b04723eb-64ad-4028-a901-dc4e4ee2d0c1.webp'} />
 </Steps>
 
 ## 绑定自定义域名（可选）

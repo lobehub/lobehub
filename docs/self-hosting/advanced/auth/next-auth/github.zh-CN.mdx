@@ -1,12 +1,12 @@
 ---
-title: 在 LobeChat 中配置 Github 身份验证服务
-description: 学习如何在 LobeChat 中配置 Github 身份验证服务，包括创建新的 Github App、设置权限和环境变量。
+title: 在 LobeHub 中配置 Github 身份验证服务
+description: 学习如何在 LobeHub 中配置 Github 身份验证服务，包括创建新的 Github App、设置权限和环境变量。
 tags:
   - Github 身份验证
   - Github App
   - 环境变量配置
   - 单点登录
-  - LobeChat
+  - LobeHub
 ---
 
 # 配置 Github 身份验证服务
@@ -20,35 +20,35 @@ tags:
 
   填写 Github App name、Homepage URL、Callbak URL
 
-  <Image alt="创建 Github 提供程序" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/2f919f99-2aaa-4fa7-9938-169d3ed09db7" />
+  <Image alt="创建 Github 提供程序" inStep src="/blog/assets64475363/2f919f99-2aaa-4fa7-9938-169d3ed09db7.webp" />
 
   按照自己所需设置 Webhook 回调地址
 
-  <Image alt="填写其他字段" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/d7ef5ad1-b1a3-435e-b1bc-4436d2b6fecd" />
+  <Image alt="填写其他字段" inStep src="/blog/assets64475363/d7ef5ad1-b1a3-435e-b1bc-4436d2b6fecd.webp" />
 
   设置读取邮件地址权限
 
-  <Image alt="设置所需权限" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/23131ca1-9e84-4a89-a840-ef79c4bc0251" />
+  <Image alt="设置所需权限" inStep src="/blog/assets64475363/23131ca1-9e84-4a89-a840-ef79c4bc0251.webp" />
 
-  <Image alt="设置读取邮件地址权限" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/358bca8d-3d82-4e76-9a5e-90d16a39efde" />
+  <Image alt="设置读取邮件地址权限" inStep src="/blog/assets64475363/358bca8d-3d82-4e76-9a5e-90d16a39efde.webp" />
 
   设置公开访问还是仅自己访问
 
-  <Image alt="设置公开访问还是仅自己访问" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/995780cb-9096-4a36-ab17-d422703ab970" />
+  <Image alt="设置公开访问还是仅自己访问" inStep src="/blog/assets64475363/995780cb-9096-4a36-ab17-d422703ab970.webp" />
 
   点击「Create Github App」
 
   创建成功后，点击「Generate a new client secret」创建客户端 Secret
 
-  <Image alt="创建新的客户端密钥" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/6d69bdca-7d18-4cbc-b3e0-220d8815cd29" />
+  <Image alt="创建新的客户端密钥" inStep src="/blog/assets64475363/6d69bdca-7d18-4cbc-b3e0-220d8815cd29.webp" />
 
   创建成功后， 将 `客户端 ID` 和 `客户端 Secret` 保存下来。
 
-  <Image alt="创建新的客户端密钥" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/c6108133-a918-48b0-ab1a-e3fa607572a4" />
+  <Image alt="创建新的客户端密钥" inStep src="/blog/assets64475363/c6108133-a918-48b0-ab1a-e3fa607572a4.webp" />
 
   ### 配置环境变量
 
-  在部署 LobeChat 时，你需要配置以下环境变量：
+  在部署 LobeHub 时，你需要配置以下环境变量：
 
   | 环境变量                      | 类型 | 描述                                                                                          |
   | ------------------------- | -- | ------------------------------------------------------------------------------------------- |
@@ -63,4 +63,4 @@ tags:
   </Callout>
 </Steps>
 
-<Callout type={'info'}>部署成功后，用户将可以通过 Github 身份认证并使用 LobeChat。</Callout>
+<Callout type={'info'}>部署成功后，用户将可以通过 Github 身份认证并使用 LobeHub。</Callout>

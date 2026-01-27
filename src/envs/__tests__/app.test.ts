@@ -117,7 +117,7 @@ describe('APP_URL fallback', () => {
       expect(config.APP_URL).toBe('https://lobechat.vercel.app');
     });
 
-    it('should use VERCEL_BRANCH_URL in preview environment', async () => {
+    it('should use VERCEL_URL in preview environment', async () => {
       process.env.VERCEL = '1';
       process.env.VERCEL_ENV = 'preview';
       process.env.VERCEL_BRANCH_URL = 'lobechat-git-feature-org.vercel.app';
@@ -125,41 +125,35 @@ describe('APP_URL fallback', () => {
 
       const { getAppConfig } = await import('../app');
       const config = getAppConfig();
-      expect(config.APP_URL).toBe('https://lobechat-git-feature-org.vercel.app');
+      expect(config.APP_URL).toBe('https://lobechat-abc123.vercel.app');
     });
 
-    it('should fallback to VERCEL_URL when VERCEL_BRANCH_URL is not set', async () => {
+    it('should fallback to VERCEL_BRANCH_URL when VERCEL_URL is not set', async () => {
       process.env.VERCEL = '1';
       process.env.VERCEL_ENV = 'preview';
-      process.env.VERCEL_URL = 'lobechat-abc123.vercel.app';
+      process.env.VERCEL_BRANCH_URL = 'lobechat-git-feature-org.vercel.app';
 
       const { getAppConfig } = await import('../app');
       const config = getAppConfig();
-      expect(config.APP_URL).toBe('https://lobechat-abc123.vercel.app');
+      expect(config.APP_URL).toBe('https://lobechat-git-feature-org.vercel.app');
     });
   });
 
   describe('local environment', () => {
     it('should use localhost:3010 in development', async () => {
-      
       vi.stubEnv('NODE_ENV', 'development');
 
       const { getAppConfig } = await import('../app');
       const config = getAppConfig();
       expect(config.APP_URL).toBe('http://localhost:3010');
-
-      
     });
 
     it('should use localhost:3210 in non-development', async () => {
-      
       vi.stubEnv('NODE_ENV', 'test');
 
       const { getAppConfig } = await import('../app');
       const config = getAppConfig();
       expect(config.APP_URL).toBe('http://localhost:3210');
-
-      
     });
   });
 });

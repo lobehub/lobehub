@@ -10,8 +10,6 @@ const FollowStats = memo(() => {
   const { t } = useTranslation('discover');
   const { user } = useUserDetailContext();
 
-  console.log(user);
-
   const followingCount = user.followingCount ?? 0;
   const followersCount = user.followersCount ?? 0;
 

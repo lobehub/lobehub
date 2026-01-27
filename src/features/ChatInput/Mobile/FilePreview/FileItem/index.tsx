@@ -20,8 +20,6 @@ const FileItem = memo<FileItemProps>((props) => {
   const { file, id, previewUrl, status } = props;
   const [removeFile] = useFileStore((s) => [s.removeChatUploadFile]);
 
-  console.log('file', file);
-
   if (file.type.startsWith('image')) {
     return (
       <Image

@@ -164,6 +164,79 @@ describe('DataSlice', () => {
       const displayMsg = state.displayMessages.find((m) => m.id === 'msg-1');
       expect(displayMsg?.metadata?.collapsed).toBe(true);
     });
+
+    it('should update messageGroup metadata (compressedGroup)', () => {
+      const store = createTestStore();
+
+      // Simulate a compressedGroup in displayMessages (injected during query, not in dbMessages)
+      const compressedGroup: UIChatMessage = {
+        id: 'group-1',
+        content: 'Summary content',
+        role: 'compressedGroup' as any,
+        createdAt: 1000,
+        updatedAt: 1000,
+        metadata: { expanded: false } as any,
+      };
+
+      // Manually set displayMessages to include compressedGroup
+      store.setState({ displayMessages: [compressedGroup] });
+
+      // Update messageGroup metadata
+      store.getState().internal_dispatchMessage({
+        type: 'updateMessageGroupMetadata',
+        id: 'group-1',
+        value: { expanded: true },
+      });
+
+      const state = store.getState();
+      // compressedGroup should only be in displayMessages, not dbMessages
+      expect(state.dbMessages).toHaveLength(0);
+      expect(state.displayMessages).toHaveLength(1);
+      expect((state.displayMessages[0].metadata as any)?.expanded).toBe(true);
+    });
+
+    it('should not update messageGroup metadata if message does not exist', () => {
+      const store = createTestStore();
+
+      const initialDisplayMessages = store.getState().displayMessages;
+
+      store.getState().internal_dispatchMessage({
+        type: 'updateMessageGroupMetadata',
+        id: 'nonexistent',
+        value: { expanded: true },
+      });
+
+      // State should remain unchanged
+      expect(store.getState().displayMessages).toBe(initialDisplayMessages);
+    });
+
+    it('should merge messageGroup metadata with existing values', () => {
+      const store = createTestStore();
+
+      // Simulate a compressedGroup with existing metadata
+      const compressedGroup: UIChatMessage = {
+        id: 'group-1',
+        content: 'Summary content',
+        role: 'compressedGroup' as any,
+        createdAt: 1000,
+        updatedAt: 1000,
+        metadata: { expanded: false, someOtherField: 'preserved' } as any,
+      };
+
+      store.setState({ displayMessages: [compressedGroup] });
+
+      // Update only expanded
+      store.getState().internal_dispatchMessage({
+        type: 'updateMessageGroupMetadata',
+        id: 'group-1',
+        value: { expanded: true },
+      });
+
+      const state = store.getState();
+      const metadata = state.displayMessages[0].metadata as any;
+      expect(metadata?.expanded).toBe(true);
+      expect(metadata?.someOtherField).toBe('preserved');
+    });
   });
 
   describe('replaceMessages', () => {

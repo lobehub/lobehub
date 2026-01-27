@@ -1,8 +1,8 @@
 {
   "changelog.description": "Blijf op de hoogte van de nieuwe functies en verbeteringen van {{appName}}",
   "changelog.title": "Wijzigingslogboek",
-  "chat.description": "{{appName}} biedt je de beste gebruikerservaring voor ChatGPT, Claude, Gemini en OLLaMA.",
-  "chat.title": "{{appName}} · Voor Samenwerkende Agenten",
+  "chat.description": "{{appName}} is een werk- en leefruimte om agententeams te vinden, op te bouwen en samen te werken die met je meegroeien.",
+  "chat.title": "{{appName}} · Agententeams die met je meegroeien",
   "discover.assistants.description": "Inhoud, Q&A, afbeeldingen, video, spraak, workflows—blader door en voeg Agenten toe vanuit de Community.",
   "discover.assistants.title": "Agentencommunity",
   "discover.description": "Ontdek Agenten, Vaardigheden, Providers, modellen en MCP-servers.",

@@ -1,0 +1,192 @@
+{
+  "description": "Create a context memory that captures ongoing situations, projects, or environments. Include actors, resources, statuses, urgency/impact, and a clear description.",
+  "name": "addContextMemory",
+  "parameters": {
+    "additionalProperties": false,
+    "properties": {
+      "details": {
+        "description": "Optional detailed information",
+        "type": "string"
+      },
+      "memoryCategory": {
+        "description": "Memory category",
+        "type": "string"
+      },
+      "memoryType": {
+        "description": "Memory type",
+        "enum": [
+          "activity",
+          "context",
+          "event",
+          "fact",
+          "location",
+          "other",
+          "people",
+          "preference",
+          "technology",
+          "topic"
+        ],
+        "type": "string"
+      },
+      "summary": {
+        "description": "Concise overview of this specific memory",
+        "type": "string"
+      },
+      "tags": {
+        "description": "User defined tags that summarize the context facets",
+        "items": {
+          "type": "string"
+        },
+        "type": "array"
+      },
+      "title": {
+        "description": "Brief descriptive title",
+        "type": "string"
+      },
+      "withContext": {
+        "additionalProperties": false,
+        "properties": {
+          "associatedObjects": {
+            "description": "Array of objects describing involved roles, entities, or resources, [] empty if none",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "extra": {
+                  "description": "Additional metadata about the object, should always be a valid JSON string if present",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "description": "Name of the associated object",
+                  "type": "string"
+                },
+                "type": {
+                  "description": "Type/category of the associated object",
+                  "enum": [
+                    "application",
+                    "item",
+                    "knowledge",
+                    "other",
+                    "person",
+                    "place"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "extra",
+                "name",
+                "type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "associatedSubjects": {
+            "description": "Array of JSON objects describing involved subjects or participants, [] empty if none",
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "extra": {
+                  "description": "Additional metadata about the subject, should always be a valid JSON string if present",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "description": "Name of the associated subject",
+                  "type": "string"
+                },
+                "type": {
+                  "description": "Type/category of the associated subject",
+                  "enum": [
+                    "item",
+                    "other",
+                    "person",
+                    "pet"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "extra",
+                "name",
+                "type"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "currentStatus": {
+            "description": "High level status markers (must be one of 'planned', 'ongoing', 'completed', 'aborted', 'on_hold', 'cancelled')",
+            "enum": [
+              "aborted",
+              "cancelled",
+              "completed",
+              "on_hold",
+              "ongoing",
+              "planned"
+            ],
+            "type": "string"
+          },
+          "description": {
+            "description": "Rich narrative describing the situation, timeline, or environment",
+            "type": "string"
+          },
+          "labels": {
+            "description": "Model generated tags that summarize the context themes",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "scoreImpact": {
+            "description": "Numeric score (0-1 (0% to 100%)) describing importance",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "scoreUrgency": {
+            "description": "Numeric score (0-1 (0% to 100%)) describing urgency",
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "title": {
+            "description": "Optional synthesized context headline",
+            "type": "string"
+          },
+          "type": {
+            "description": "High level context archetype (e.g., 'project', 'relationship', 'goal')",
+            "type": "string"
+          }
+        },
+        "required": [
+          "associatedObjects",
+          "associatedSubjects",
+          "currentStatus",
+          "description",
+          "labels",
+          "scoreImpact",
+          "scoreUrgency",
+          "title",
+          "type"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "details",
+      "memoryCategory",
+      "memoryType",
+      "summary",
+      "tags",
+      "title",
+      "withContext"
+    ],
+    "type": "object"
+  }
+}

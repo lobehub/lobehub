@@ -1,5 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
-import { boolean, jsonb, pgTable, primaryKey, text, varchar } from 'drizzle-orm/pg-core';
+import { boolean, index, jsonb, pgTable, primaryKey, text, varchar } from 'drizzle-orm/pg-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-zod';
 
 import { timestamps, timestamptz } from './_helpers';
@@ -9,68 +9,92 @@ import { users } from './user';
  * OIDC authorization code
  * One of the models that oidc-provider needs to persist
  */
-export const oidcAuthorizationCodes = pgTable('oidc_authorization_codes', {
-  id: varchar('id', { length: 255 }).primaryKey(),
-  data: jsonb('data').notNull(),
-  expiresAt: timestamptz('expires_at').notNull(),
-  consumedAt: timestamptz('consumed_at'),
-  userId: text('user_id')
-    .references(() => users.id, { onDelete: 'cascade' })
-    .notNull(),
-  clientId: varchar('client_id', { length: 255 }).notNull(),
-  grantId: varchar('grant_id', { length: 255 }),
-  ...timestamps,
-});
+export const oidcAuthorizationCodes = pgTable(
+  'oidc_authorization_codes',
+  {
+    id: varchar('id', { length: 255 }).primaryKey(),
+    data: jsonb('data').notNull(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    consumedAt: timestamptz('consumed_at'),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    clientId: varchar('client_id', { length: 255 }).notNull(),
+    grantId: varchar('grant_id', { length: 255 }),
+    ...timestamps,
+  },
+  (t) => ({
+    userIdIdx: index('oidc_authorization_codes_user_id_idx').on(t.userId),
+  }),
+);
 
 /**
  * OIDC access token
  * One of the models that oidc-provider needs to persist
  */
-export const oidcAccessTokens = pgTable('oidc_access_tokens', {
-  id: varchar('id', { length: 255 }).primaryKey(),
-  data: jsonb('data').notNull(),
-  expiresAt: timestamptz('expires_at').notNull(),
-  consumedAt: timestamptz('consumed_at'),
-  userId: text('user_id')
-    .references(() => users.id, { onDelete: 'cascade' })
-    .notNull(),
-  clientId: varchar('client_id', { length: 255 }).notNull(),
-  grantId: varchar('grant_id', { length: 255 }),
-  ...timestamps,
-});
+export const oidcAccessTokens = pgTable(
+  'oidc_access_tokens',
+  {
+    id: varchar('id', { length: 255 }).primaryKey(),
+    data: jsonb('data').notNull(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    consumedAt: timestamptz('consumed_at'),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    clientId: varchar('client_id', { length: 255 }).notNull(),
+    grantId: varchar('grant_id', { length: 255 }),
+    ...timestamps,
+  },
+  (t) => ({
+    userIdIdx: index('oidc_access_tokens_user_id_idx').on(t.userId),
+  }),
+);
 
 /**
  * OIDC refresh token
  * One of the models that oidc-provider needs to persist
  */
-export const oidcRefreshTokens = pgTable('oidc_refresh_tokens', {
-  id: varchar('id', { length: 255 }).primaryKey(),
-  data: jsonb('data').notNull(),
-  expiresAt: timestamptz('expires_at').notNull(),
-  consumedAt: timestamptz('consumed_at'),
-  userId: text('user_id')
-    .references(() => users.id, { onDelete: 'cascade' })
-    .notNull(),
-  clientId: varchar('client_id', { length: 255 }).notNull(),
-  grantId: varchar('grant_id', { length: 255 }),
-  ...timestamps,
-});
+export const oidcRefreshTokens = pgTable(
+  'oidc_refresh_tokens',
+  {
+    id: varchar('id', { length: 255 }).primaryKey(),
+    data: jsonb('data').notNull(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    consumedAt: timestamptz('consumed_at'),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    clientId: varchar('client_id', { length: 255 }).notNull(),
+    grantId: varchar('grant_id', { length: 255 }),
+    ...timestamps,
+  },
+  (t) => ({
+    userIdIdx: index('oidc_refresh_tokens_user_id_idx').on(t.userId),
+  }),
+);
 
 /**
  * OIDC device code
  * One of the models that oidc-provider needs to persist
  */
-export const oidcDeviceCodes = pgTable('oidc_device_codes', {
-  id: varchar('id', { length: 255 }).primaryKey(),
-  data: jsonb('data').notNull(),
-  expiresAt: timestamptz('expires_at').notNull(),
-  consumedAt: timestamptz('consumed_at'),
-  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
-  clientId: varchar('client_id', { length: 255 }).notNull(),
-  grantId: varchar('grant_id', { length: 255 }),
-  userCode: varchar('user_code', { length: 255 }),
-  ...timestamps,
-});
+export const oidcDeviceCodes = pgTable(
+  'oidc_device_codes',
+  {
+    id: varchar('id', { length: 255 }).primaryKey(),
+    data: jsonb('data').notNull(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    consumedAt: timestamptz('consumed_at'),
+    userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+    clientId: varchar('client_id', { length: 255 }).notNull(),
+    grantId: varchar('grant_id', { length: 255 }),
+    userCode: varchar('user_code', { length: 255 }),
+    ...timestamps,
+  },
+  (t) => ({
+    userIdIdx: index('oidc_device_codes_user_id_idx').on(t.userId),
+  }),
+);
 
 /**
  * OIDC interaction session
@@ -87,17 +111,23 @@ export const oidcInteractions = pgTable('oidc_interactions', {
  * OIDC grant record
  * One of the models that oidc-provider needs to persist
  */
-export const oidcGrants = pgTable('oidc_grants', {
-  id: varchar('id', { length: 255 }).primaryKey(),
-  data: jsonb('data').notNull(),
-  expiresAt: timestamptz('expires_at').notNull(),
-  consumedAt: timestamptz('consumed_at'),
-  userId: text('user_id')
-    .references(() => users.id, { onDelete: 'cascade' })
-    .notNull(),
-  clientId: varchar('client_id', { length: 255 }).notNull(),
-  ...timestamps,
-});
+export const oidcGrants = pgTable(
+  'oidc_grants',
+  {
+    id: varchar('id', { length: 255 }).primaryKey(),
+    data: jsonb('data').notNull(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    consumedAt: timestamptz('consumed_at'),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    clientId: varchar('client_id', { length: 255 }).notNull(),
+    ...timestamps,
+  },
+  (t) => ({
+    userIdIdx: index('oidc_grants_user_id_idx').on(t.userId),
+  }),
+);
 
 /**
  * OIDC client configuration
@@ -126,15 +156,21 @@ export const oidcClients = pgTable('oidc_clients', {
  * OIDC session
  * One of the models that oidc-provider needs to persist
  */
-export const oidcSessions = pgTable('oidc_sessions', {
-  id: varchar('id', { length: 255 }).primaryKey(),
-  data: jsonb('data').notNull(),
-  expiresAt: timestamptz('expires_at').notNull(),
-  userId: text('user_id')
-    .references(() => users.id, { onDelete: 'cascade' })
-    .notNull(),
-  ...timestamps,
-});
+export const oidcSessions = pgTable(
+  'oidc_sessions',
+  {
+    id: varchar('id', { length: 255 }).primaryKey(),
+    data: jsonb('data').notNull(),
+    expiresAt: timestamptz('expires_at').notNull(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    ...timestamps,
+  },
+  (t) => ({
+    userIdIdx: index('oidc_sessions_user_id_idx').on(t.userId),
+  }),
+);
 
 /**
  * OIDC authorization consent record

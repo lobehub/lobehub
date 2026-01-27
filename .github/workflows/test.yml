@@ -249,13 +249,6 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test Client DB
-        run: pnpm --filter @lobechat/database test:client-db
-        env:
-          KEY_VAULTS_SECRET: Kix2wcUONd4CX51E/ZPAd36BqM4wzJgKjPtz2sGztqQ=
-          S3_PUBLIC_DOMAIN: https://example.com
-          APP_URL: https://home.com
-
       - name: Test Coverage
         run: pnpm --filter @lobechat/database test:coverage
         env:

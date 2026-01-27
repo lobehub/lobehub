@@ -124,16 +124,19 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
     params: ExecuteTaskParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
+    const { agentId, task, timeout, skipCallSupervisor, runInClient } = params;
+
     // Register afterCompletion callback to trigger async task execution after AgentRuntime completes
     // This follows the same pattern as speak/broadcast - trigger mode, not blocking
     if (ctx.groupOrchestration && ctx.agentId && ctx.registerAfterCompletion) {
       ctx.registerAfterCompletion(() =>
         ctx.groupOrchestration!.triggerExecuteTask({
-          agentId: params.agentId,
-          skipCallSupervisor: params.skipCallSupervisor,
+          agentId,
+          runInClient,
+          skipCallSupervisor,
           supervisorAgentId: ctx.agentId!,
-          task: params.task,
-          timeout: params.timeout,
+          task,
+          timeout,
           toolMessageId: ctx.messageId,
         }),
       );
@@ -141,12 +144,13 @@ class GroupManagementExecutor extends BaseExecutor<typeof GroupManagementApiName
 
     // Returns stop: true to indicate the supervisor should stop and let the task execute
     return {
-      content: `Triggered async task for agent "${params.agentId}".`,
+      content: `Triggered async task for agent "${agentId}"${runInClient ? ' (client-side)' : ''}.`,
       state: {
-        agentId: params.agentId,
-        skipCallSupervisor: params.skipCallSupervisor,
-        task: params.task,
-        timeout: params.timeout,
+        agentId,
+        runInClient,
+        skipCallSupervisor,
+        task,
+        timeout,
         type: 'executeAgentTask',
       },
       stop: true,

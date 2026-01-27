@@ -48,6 +48,7 @@ export enum SettingsTabs {
   Provider = 'provider',
   Proxy = 'proxy',
   Security = 'security',
+  Skill = 'skill',
   Stats = 'stats',
   Storage = 'storage',
   TTS = 'tts',
@@ -100,6 +101,7 @@ export interface SystemStatus {
   hideGemini2_5FlashImagePreviewChineseWarning?: boolean;
   hidePWAInstaller?: boolean;
   hideThreadLimitAlert?: boolean;
+  hideTopicSharePrivacyWarning?: boolean;
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   /**
@@ -136,6 +138,7 @@ export interface SystemStatus {
    */
   pagePageSize?: number;
   portalWidth: number;
+  readNotificationSlugs?: string[];
   /**
    * Resource Manager column widths
    */
@@ -179,9 +182,18 @@ export interface GlobalState {
    */
   initClientDBStage: DatabaseLoadingState;
   isMobile?: boolean;
+  /**
+   * 服务端版本过旧，不支持 /api/version 接口
+   * 需要提示用户更新服务端
+   */
+  isServerVersionOutdated?: boolean;
   isStatusInit?: boolean;
   latestVersion?: string;
   navigate?: NavigateFunction;
+  /**
+   * 服务端版本号，用于检测客户端与服务端版本是否一致
+   */
+  serverVersion?: string;
   sidebarKey: SidebarTabKey;
   status: SystemStatus;
   statusStorage: AsyncLocalStorage<SystemStatus>;
@@ -201,6 +213,7 @@ export const INITIAL_STATUS = {
   hideGemini2_5FlashImagePreviewChineseWarning: false,
   hidePWAInstaller: false,
   hideThreadLimitAlert: false,
+  hideTopicSharePrivacyWarning: false,
   imagePanelWidth: 320,
   imageTopicPanelWidth: 80,
   knowledgeBaseModalViewMode: 'list' as const,
@@ -212,6 +225,7 @@ export const INITIAL_STATUS = {
   pageAgentPanelWidth: 360,
   pagePageSize: 20,
   portalWidth: 400,
+  readNotificationSlugs: [],
   resourceManagerColumnWidths: {
     date: 160,
     name: 574,

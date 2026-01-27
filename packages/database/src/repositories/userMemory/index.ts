@@ -1,4 +1,5 @@
 import {
+  UserMemoryActivitiesWithoutVectors,
   UserMemoryContextsWithoutVectors,
   UserMemoryExperiencesWithoutVectors,
   UserMemoryIdentitiesWithoutVectors,
@@ -25,3 +26,7 @@ export interface DisplayPreferenceMemory extends UserMemoryPreferencesWithoutVec
 export type DisplayContextMemory = UserMemoryContextsWithoutVectors;
 
 export type DisplayIdentityMemory = UserMemoryIdentitiesWithoutVectors;
+
+export interface DisplayActivityMemory extends UserMemoryActivitiesWithoutVectors {
+  title: string | null;
+}

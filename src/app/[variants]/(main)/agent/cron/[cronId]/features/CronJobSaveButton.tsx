@@ -22,7 +22,7 @@ const CronJobSaveButton = memo<CronJobSaveButtonProps>(({ disabled, loading, onS
         style={{ width: 200 }}
         type="primary"
       >
-        {t('agentCronJobs.saveAsNew', { defaultValue: 'Save as New Scheduled Task' })}
+        {t('agentCronJobs.saveAsNew')}
       </Button>
     </Flexbox>
   );

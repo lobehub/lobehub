@@ -3,10 +3,9 @@ import type { Redis } from 'ioredis';
 
 import {
   type BaseRedisProvider,
-  type IoRedisConfig,
+  type RedisConfig,
   type RedisKey,
   type RedisMSetArgument,
-  type RedisProviderName,
   type RedisSetResult,
   type RedisValue,
   type SetOptions,
@@ -16,10 +15,9 @@ import { buildIORedisSetArgs, normalizeMsetValues } from './utils';
 const log = debug('lobe:redis');
 
 export class IoRedisRedisProvider implements BaseRedisProvider {
-  provider: RedisProviderName = 'redis';
   private client: Redis | null = null;
 
-  constructor(private config: IoRedisConfig) {}
+  constructor(private config: RedisConfig) {}
 
   async initialize() {
     const IORedis = await import('ioredis');

@@ -1,4 +1,5 @@
 import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
+import { parse } from '@lobechat/conversation-flow';
 import {
   type TaskCurrentActivity,
   type TaskStatusResult,
@@ -161,7 +162,7 @@ const ExecSubAgentTaskSchema = z.object({
 
 /**
  * Schema for createClientTaskThread - create Thread for client-side task execution
- * This is used when runInClient=true on desktop client
+ * This is used when runInClient=true on desktop client (single agent mode)
  */
 const CreateClientTaskThreadSchema = z.object({
   /** The Agent ID to execute the task */
@@ -172,6 +173,25 @@ const CreateClientTaskThreadSchema = z.object({
   instruction: z.string(),
   /** The parent message ID (task message) */
   parentMessageId: z.string(),
+  /** Task title (shown in UI, used as thread title) */
+  title: z.string().optional(),
+  /** The Topic ID */
+  topicId: z.string(),
+});
+
+/**
+ * Schema for createClientGroupAgentTaskThread - create Thread for client-side task execution in Group mode
+ * This is specifically for Group Chat where messages may have different agentIds
+ */
+const CreateClientGroupAgentTaskThreadSchema = z.object({
+  /** The Group ID (required for Group mode) */
+  groupId: z.string(),
+  /** Initial user message content (task instruction) */
+  instruction: z.string(),
+  /** The parent message ID (task message) */
+  parentMessageId: z.string(),
+  /** The Sub-Agent ID that will execute the task (worker agent in group) */
+  subAgentId: z.string(),
   /** Task title (shown in UI, used as thread title) */
   title: z.string().optional(),
   /** The Topic ID */
@@ -233,6 +253,100 @@ const aiAgentProcedure = authedProcedure.use(serverDatabase).use(async (opts) =>
 
 export const aiAgentRouter = router({
   /**
+   * Create Thread for client-side task execution in Group mode
+   *
+   * This endpoint is specifically designed for Group Chat scenarios where:
+   * - Messages in the thread may have different agentIds (supervisor, workers)
+   * - The subAgentId is the worker agent that executes the task
+   * - Thread messages query should not filter by agentId to include all parent messages
+   */
+  createClientGroupAgentTaskThread: aiAgentProcedure
+    .input(CreateClientGroupAgentTaskThreadSchema)
+    .mutation(async ({ input, ctx }) => {
+      const { groupId, instruction, parentMessageId, subAgentId, title, topicId } = input;
+
+      log('createClientGroupAgentTaskThread: subAgentId=%s, groupId=%s', subAgentId, groupId);
+
+      try {
+        // 1. Create Thread for isolated task execution
+        // Use subAgentId as the thread's agentId (the executing agent)
+        const startedAt = new Date().toISOString();
+        const thread = await ctx.threadModel.create({
+          agentId: subAgentId,
+          groupId,
+          metadata: { clientMode: true, startedAt },
+          sourceMessageId: parentMessageId,
+          status: ThreadStatus.Processing,
+          title,
+          topicId,
+          type: ThreadType.Isolation,
+        });
+
+        if (!thread) {
+          throw new TRPCError({
+            code: 'INTERNAL_SERVER_ERROR',
+            message: 'Failed to create thread for task execution',
+          });
+        }
+
+        log('createClientGroupAgentTaskThread: created thread %s', thread.id);
+
+        // 2. Create initial user message (persisted to database)
+        // Use subAgentId as the message's agentId
+        const userMessage = await ctx.messageModel.create({
+          agentId: subAgentId,
+          content: instruction,
+          groupId,
+          parentId: parentMessageId,
+          role: 'user',
+          threadId: thread.id,
+          topicId,
+        });
+
+        log('createClientGroupAgentTaskThread: created user message %s', userMessage.id);
+
+        // 3. Query thread messages and main chat messages in parallel
+        const [threadMessages, messages] = await Promise.all([
+          // Thread messages (messages within this thread)
+          // DON'T pass agentId - thread query fetches parent messages via sourceMessageId
+          // which may have different agentIds (supervisor vs worker in group chat)
+          ctx.messageModel.query({ threadId: thread.id, topicId }),
+          // Main chat messages (messages without threadId)
+          // Only filter by groupId + topicId (not agentId) to include all agents' messages
+          ctx.messageModel.query({ groupId, topicId }),
+        ]);
+
+        log(
+          'createClientGroupAgentTaskThread: queried %d thread messages, %d main messages',
+          threadMessages.length,
+          messages.length,
+        );
+
+        // 4. Return Thread, userMessageId, threadMessages and messages
+        return {
+          messages,
+          startedAt,
+          success: true,
+          threadId: thread.id,
+          threadMessages,
+          userMessageId: userMessage.id,
+        };
+      } catch (error: any) {
+        log('createClientGroupAgentTaskThread failed: %O', error);
+
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to create client group agent task thread: ${error.message}`,
+        });
+      }
+    }),
+
+  /**
    * Create Thread for client-side task execution
    *
    * This endpoint is called by desktop client when runInClient=true.
@@ -272,6 +386,7 @@ export const aiAgentRouter = router({
         const userMessage = await ctx.messageModel.create({
           agentId,
           content: instruction,
+          groupId,
           parentId: parentMessageId,
           role: 'user',
           threadId: thread.id,
@@ -283,17 +398,10 @@ export const aiAgentRouter = router({
         // 3. Query thread messages and main chat messages in parallel
         const [threadMessages, messages] = await Promise.all([
           // Thread messages (messages within this thread)
-          ctx.messageModel.query({
-            agentId,
-            threadId: thread.id,
-            topicId,
-          }),
+          ctx.messageModel.query({ agentId, threadId: thread.id, topicId }),
           // Main chat messages (messages without threadId, includes updated taskDetail)
-          ctx.messageModel.query({
-            agentId,
-            topicId,
-            // No threadId - matchThread will filter for threadId IS NULL (main chat)
-          }),
+          // Pass both agentId and groupId - query() prioritizes groupId when present
+          ctx.messageModel.query({ agentId, groupId, topicId }),
         ]);
 
         log(
@@ -800,6 +908,9 @@ export const aiAgentRouter = router({
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
 
+      // 6.1 Parse messages using conversation-flow for UI display
+      const { flatList: parsedMessages } = parse(threadMessages);
+
       // 7. Get result content when task is completed or failed
       let resultContent: string | undefined;
       if (updatedTaskStatus === 'completed' || updatedTaskStatus === 'failed') {
@@ -867,6 +978,7 @@ export const aiAgentRouter = router({
           (updatedMetadata?.totalCost ? { total: updatedMetadata.totalCost } : undefined),
         currentActivity,
         error: updatedMetadata?.error ?? realtimeStatus?.currentState?.error,
+        messages: parsedMessages,
         result: resultContent,
         status: updatedTaskStatus,
         stepCount: realtimeStatus?.currentState?.stepCount,

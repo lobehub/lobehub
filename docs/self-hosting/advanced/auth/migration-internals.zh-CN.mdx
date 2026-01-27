@@ -1,0 +1,200 @@
+---
+title: 认证迁移原理 - 技术深入解析
+description: >-
+  LobeChat 认证迁移的技术原理解析，包括数据库 Schema、迁移原理和问题排查指南。
+tags:
+  - 认证
+  - 迁移
+  - 数据库
+  - 问题排查
+---
+
+# 认证迁移原理
+
+本文档解释 LobeChat 认证迁移的技术原理，适合有数据库和开发经验的用户，帮助理解迁移的底层逻辑。
+
+<Callout type={'info'}>
+  如需分步迁移指南，请参阅 [NextAuth 迁移](/docs/self-hosting/advanced/auth/nextauth-to-betterauth) 或 [Clerk 迁移](/docs/self-hosting/advanced/auth/clerk-to-betterauth)。
+</Callout>
+
+## 核心数据库 Schema
+
+理解数据库 Schema 是排查迁移问题的关键。
+
+### Users 表
+
+`users` 表是**认证框架无关**的通用用户表，适用于任何认证系统。每条记录代表一个唯一的用户身份及其关联的个人信息。
+
+关键字段：
+
+| 字段                                | 说明         |
+| --------------------------------- | ---------- |
+| `id`                              | 用户唯一标识（主键） |
+| `email`                           | 用户邮箱地址（唯一） |
+| `avatar`, `firstName`, `lastName` | 个人资料信息     |
+
+### Accounts 表
+
+`accounts` 表存储认证提供商连接。不同的 SSO 提供商和邮箱密码认证都被视为独立的「账号」，关联到同一个用户。
+
+账号示例：
+
+- Google SSO 登录
+- GitHub SSO 登录
+- 邮箱密码凭证
+- Auth0（即使通过 Auth0 使用 Google 登录，也与直接使用 Google SSO 是不同的账号）
+
+**关系**：一个用户可以有多个账号（1:N 关系）。
+
+```
+┌─────────────────┐         ┌─────────────────┐
+│     users       │         │    accounts     │
+├─────────────────┤         ├─────────────────┤
+│ id (PK)         │◄───────┤│ user_id (FK)    │
+│ email (unique)  │         │ provider        │
+│ avatar          │         │ provider_id     │
+│ ...             │         │ ...             │
+└─────────────────┘         └─────────────────┘
+                                    │
+                            ┌───────┴───────┐
+                            │               │
+                    ┌───────▼──┐     ┌──────▼───┐
+                    │ Google   │     │ GitHub   │
+                    │ Account  │     │ Account  │
+                    └──────────┘     └──────────┘
+```
+
+## 迁移原理
+
+<Callout type={'warning'}>
+  迁移不会保留登录会话。用户在迁移后必须重新登录。
+</Callout>
+
+### 简单迁移
+
+简单迁移**只**迁移 `users` 表，忽略 `accounts` 表。
+
+**工作原理：**
+
+1. 迁移后用户使用邮箱密码或 SSO 登录
+2. Better Auth 检查该邮箱是否存在于 `users` 表中
+3. 如果找到，用户将关联到其现有数据
+4. 在 `accounts` 表中创建新的账号记录
+
+**为什么有效：**
+
+当你重置密码或使用 SSO 登录时，如果提供商返回的邮箱与 `users` 表中的现有邮箱匹配，系统会将你关联到该现有用户。
+
+**局限性：**
+
+由于没有迁移 `accounts` 表，系统不知道之前关联的账号信息。
+
+**示例场景：**
+
+- 迁移前：用户将 Google（`a@gmail.com`）和 Microsoft（`b@outlook.com`）关联到同一个用户
+- `users` 表存储主邮箱：`a@gmail.com`
+- 简单迁移后：
+  - 使用 `a@gmail.com` 登录 → ✅ 关联到现有用户
+  - 使用 `b@outlook.com` 登录 → ❌ 创建**新用户**（没有账号记录将 `b@outlook.com` 关联到原用户）
+
+### 完整迁移
+
+完整迁移将账号数据从之前的认证系统迁移到 Better Auth 的 `accounts` 表。
+
+**迁移的数据：**
+
+- NextAuth：`nextauth_accounts` 表 → Better Auth `accounts` 表
+- Clerk：Clerk API 中的 externalAccounts → Better Auth `accounts` 表
+
+**结果：**
+
+所有之前关联的账号继续有效。使用 `b@outlook.com` 登录将正确关联到现有用户。
+
+## 问题排查
+
+### 问题：登录创建了新用户而不是关联到现有数据
+
+这通常发生在简单迁移后使用副邮箱登录时。
+
+**诊断步骤：**
+
+1. **找到你的原始用户记录**
+
+   通过主邮箱查询 `users` 表：
+
+   ```sql
+   SELECT id, email FROM users WHERE email = 'your-primary-email@example.com';
+   ```
+
+   记下 `id` 值。
+
+2. **检查关联到该用户的账号**
+
+   使用用户 ID 查询 `accounts` 表：
+
+   ```sql
+   SELECT * FROM accounts WHERE user_id = 'your-user-id';
+   ```
+
+3. **找到错误创建的账号**
+
+   如果你使用副邮箱登录并创建了新用户，找到该账号：
+
+   ```sql
+   SELECT * FROM accounts WHERE provider_account_id = 'secondary-email@example.com';
+   -- 或者对于 SSO 提供商，按提供商的用户 ID 搜索
+   ```
+
+**修复方法：**
+
+1. 删除错误创建的账号记录：
+
+   ```sql
+   DELETE FROM accounts WHERE id = 'incorrect-account-id';
+   ```
+
+2. 如果创建了新用户，可能还需要删除它：
+
+   ```sql
+   DELETE FROM users WHERE id = 'new-user-id';
+   ```
+
+3. 使用你的**主邮箱**（存储在 `users` 表中的邮箱）登录
+
+4. 登录后，进入 **设置 → 个人资料 → 关联账号** 重新关联你的副账号
+
+![个人资料页面 - 关联账号](https://hub-apac-1.lobeobjects.space/docs/d9b41a1607d49319fd670e88529199cf.png)
+
+### 问题：迁移后 SSO 登录不工作
+
+**检查：**
+
+1. 确保 SSO 提供商已在 `AUTH_SSO_PROVIDERS` 中配置
+2. 验证提供商凭证（`AUTH_<PROVIDER>_ID`、`AUTH_<PROVIDER>_SECRET`）
+3. 对于完整迁移，验证账号记录是否正确创建：
+
+   ```sql
+   SELECT * FROM accounts WHERE provider = 'google';  -- 或你的提供商
+   ```
+
+### 问题：找不到原始用户数据
+
+**检查：**
+
+1. 验证你使用的邮箱与 `users` 表中的邮箱匹配
+2. 检查你最初是否使用了不同的邮箱或 SSO 提供商
+3. 直接查询数据库查找符合条件的用户：
+
+   ```sql
+   SELECT * FROM users WHERE email LIKE '%your-domain.com';
+   ```
+
+## 相关阅读
+
+<Cards>
+  <Card href={'/docs/self-hosting/advanced/auth/nextauth-to-betterauth'} title={'NextAuth 迁移指南'} />
+
+  <Card href={'/docs/self-hosting/advanced/auth/clerk-to-betterauth'} title={'Clerk 迁移指南'} />
+
+  <Card href={'/docs/self-hosting/advanced/auth'} title={'认证服务配置'} />
+</Cards>

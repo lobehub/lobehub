@@ -1,5 +1,5 @@
 {
-  "addToKnowledgeBase.addSuccess": "Файлът беше добавен успешно, <1>виж сега</1>",
+  "addToKnowledgeBase.addSuccess": "Файлът беше добавен успешно",
   "addToKnowledgeBase.confirm": "Добави",
   "addToKnowledgeBase.error": "Неуспешно добавяне на файла в библиотеката",
   "addToKnowledgeBase.id.placeholder": "Моля, изберете библиотека, към която да добавите",

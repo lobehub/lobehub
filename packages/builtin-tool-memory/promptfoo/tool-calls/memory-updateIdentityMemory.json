@@ -1,0 +1,153 @@
+{
+  "description": "Update an existing identity memory with refined details, relationships, roles, or tags. Use mergeStrategy to control replacement vs merge.",
+  "name": "updateIdentityMemory",
+  "parameters": {
+    "additionalProperties": false,
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "mergeStrategy": {
+        "enum": [
+          "merge",
+          "replace"
+        ],
+        "type": "string"
+      },
+      "set": {
+        "additionalProperties": false,
+        "properties": {
+          "details": {
+            "description": "Optional detailed information, use null for omitting the field",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "memoryCategory": {
+            "description": "Memory category, use null for omitting the field",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "memoryType": {
+            "description": "Memory type, use null for omitting the field",
+            "enum": [
+              "activity",
+              "context",
+              "event",
+              "fact",
+              "location",
+              "other",
+              "people",
+              "preference",
+              "technology",
+              "topic",
+              null
+            ]
+          },
+          "summary": {
+            "description": "Concise overview of this specific memory, use null for omitting the field",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tags": {
+            "description": "Model generated tags that summarize the identity facets, use null for omitting the field",
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "title": {
+            "description": "Honorific-style, concise descriptor (strength + domain/milestone), avoid bare job titles; e.g., \"Trusted open-source maintainer\", \"Specializes in low-latency infra\", \"Former Aliyun engineer\", \"Cares for rescue cats\"; use null for omitting the field",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "withIdentity": {
+            "additionalProperties": false,
+            "properties": {
+              "description": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "episodicDate": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "extractedLabels": {
+                "items": {
+                  "type": "string"
+                },
+                "type": [
+                  "array",
+                  "null"
+                ]
+              },
+              "relationship": {
+                "description": "Possible values: aunt | brother | classmate | colleague | couple | coworker | daughter | father | friend | granddaughter | grandfather | grandmother | grandson | husband | manager | mentee | mentor | mother | nephew | niece | other | partner | self | sibling | sister | son | spouse | teammate | uncle | wife",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "role": {
+                "description": "Role explicitly mentioned for this identity entry (e.g., \"platform engineer\", \"caregiver\"); keep existing when not updated; use null for omitting the field",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "scoreConfidence": {
+                "type": [
+                  "number",
+                  "null"
+                ]
+              },
+              "sourceEvidence": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "type": {
+                "description": "Possible values: demographic | personal | professional",
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "description",
+              "extractedLabels",
+              "role"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "withIdentity"
+        ],
+        "type": "object"
+      }
+    },
+    "required": [
+      "id",
+      "mergeStrategy",
+      "set"
+    ],
+    "type": "object"
+  }
+}

@@ -1,18 +1,15 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { Alert, Button, Drawer, Flexbox, Icon, Segmented, Tag } from '@lobehub/ui';
+import { Button, Drawer, Flexbox, Segmented, Tag } from '@lobehub/ui';
 import { App, Form, Popconfirm } from 'antd';
 import { useResponsive } from 'antd-style';
-import { MoveUpRight } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
-import { Trans, useTranslation } from 'react-i18next';
+import { useTranslation } from 'react-i18next';
 
-import { WIKI_PLUGIN_GUIDE } from '@/const/url';
 import { isDesktop } from '@/const/version';
 import { type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
 import MCPManifestForm from './MCPManifestForm';
 import PluginPreview from './PluginPreview';
-import UrlManifestForm from './UrlManifestForm';
 
 interface DevModalProps {
   mode?: 'edit' | 'create';
@@ -27,7 +24,7 @@ interface DevModalProps {
 const DevModal = memo<DevModalProps>(
   ({ open, mode = 'create', value, onValueChange, onSave, onOpenChange, onDelete }) => {
     const isEditMode = mode === 'edit';
-    const [configMode, setConfigMode] = useState<'url' | 'mcp'>('mcp');
+    const [configMode, setConfigMode] = useState<'mcp' | 'claude'>('mcp');
     const { t } = useTranslation('plugin');
     const { message } = App.useApp();
 
@@ -129,7 +126,7 @@ const DevModal = memo<DevModalProps>(
               height: '100%',
             },
           }}
-          title={t(isEditMode ? 'dev.title.edit' : 'dev.title.create')}
+          title={t(isEditMode ? 'dev.title.skillSettings' : 'dev.title.create')}
           width={mobile ? '100%' : 800}
         >
           <Flexbox
@@ -144,55 +141,34 @@ const DevModal = memo<DevModalProps>(
               <Segmented
                 block
                 onChange={(e) => {
-                  setConfigMode(e as 'url' | 'mcp');
+                  if (e === 'claude') return; // Claude Skill is disabled
+                  setConfigMode(e as 'mcp' | 'claude');
                 }}
                 options={[
                   {
+                    label: t('dev.manifest.mode.mcp'),
+                    value: 'mcp',
+                  },
+                  {
+                    disabled: true,
                     label: (
                       <Flexbox align={'center'} gap={4} horizontal justify={'center'}>
-                        {t('dev.manifest.mode.mcp')}
+                        {t('dev.manifest.mode.claude')}
                         <div>
-                          <Tag color={'warning'} variant={'filled'}>
-                            {t('dev.manifest.mode.mcpExp')}
+                          <Tag variant={'filled'}>
+                            {t('dev.manifest.mode.claudeWip')}
                           </Tag>
                         </div>
                       </Flexbox>
                     ),
-                    value: 'mcp',
-                  },
-                  {
-                    label: t('dev.manifest.mode.url'),
-                    value: 'url',
+                    value: 'claude',
                   },
                 ]}
                 value={configMode}
                 variant={'filled'}
               />
 
-              {configMode === 'url' && (
-                <>
-                  <Alert
-                    showIcon
-                    title={
-                      <Trans i18nKey={'dev.modalDesc'} ns={'plugin'}>
-                        添加自定义插件后，可用于插件开发验证，也可直接在会话中使用。插件开发文档请参考：
-                        <a
-                          href={WIKI_PLUGIN_GUIDE}
-                          rel="noreferrer"
-                          style={{ paddingInline: 8 }}
-                          target={'_blank'}
-                        >
-                          文档
-                        </a>
-                        <Icon icon={MoveUpRight} />
-                      </Trans>
-                    }
-                    type={'info'}
-                  />
-                  <UrlManifestForm form={form} isEditMode={isEditMode} />
-                </>
-              )}
-              {configMode === 'mcp' && <MCPManifestForm form={form} isEditMode={isEditMode} />}
+              <MCPManifestForm form={form} isEditMode={isEditMode} />
             </Flexbox>
             <PluginPreview form={form} />
           </Flexbox>

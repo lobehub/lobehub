@@ -37,24 +37,24 @@ export interface McpSchema {
   homepage?: string;
   /** Plugin icon */
   icon?: string;
-  /** Plugin unique identifier，必须与URL中的id参数匹配 */
+  /** Plugin unique identifier, must match the id parameter in the URL */
   identifier: string;
-  /** 插件名称 */
+  /** Plugin name */
   name: string;
-  /** 插件版本 (semver) */
+  /** Plugin version (semver) */
   version: string;
 }
 
 /**
- * 协议URL解析结果
+ * Protocol URL parsing result
  */
 export interface ProtocolUrlParsed {
   /** Action type (e.g., 'install') */
   action: string;
-  /** 原始URL */
+  /** Original URL */
   originalUrl: string;
-  /** 解析后的所有查询参数 */
+  /** All parsed query parameters */
   params: Record<string, string>;
-  /** URL类型 (如: 'plugin') */
+  /** URL type (e.g., 'plugin') */
   urlType: string;
 }

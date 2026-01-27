@@ -1,6 +1,6 @@
 ---
 title: ComfyUI 扩展开发指南
-description: 学习如何为 LobeChat ComfyUI 集成添加新模型、工作流和功能扩展
+description: 学习如何为 LobeHub ComfyUI 集成添加新模型、工作流和功能扩展
 tags:
   - ComfyUI
   - 开发指南
@@ -10,11 +10,11 @@ tags:
 
 # ComfyUI 扩展开发指南
 
-本指南基于实际代码实现，帮助开发者扩展 LobeChat 的 ComfyUI 集成功能。
+本指南基于实际代码实现，帮助开发者扩展 LobeHub 的 ComfyUI 集成功能。
 
 ## 架构概览
 
-LobeChat ComfyUI 集成采用四层服务架构，围绕 `LobeComfyUI` 主类构建：
+LobeHub ComfyUI 集成采用四层服务架构，围绕 `LobeComfyUI` 主类构建：
 
 ```plaintext
 packages/model-runtime/src/providers/comfyui/
@@ -995,4 +995,4 @@ const optimizedResult = await comfyUI.createImage({
 - 添加新模型时，请遵循测试架构指南确保测试完整性
 - 在提交代码前务必运行相关测试确保覆盖率达标
 
-通过遵循这些指南，开发者可以有效地在 LobeChat 中使用和扩展 ComfyUI 功能，为用户提供强大的图像生成和处理能力。
+通过遵循这些指南，开发者可以有效地在 LobeHub 中使用和扩展 ComfyUI 功能，为用户提供强大的图像生成和处理能力。

@@ -1,13 +1,13 @@
 import dayjs from 'dayjs';
 import { template } from 'es-toolkit/compat';
 import matter from 'gray-matter';
-import { markdownToTxt } from 'markdown-to-txt';
 import semver from 'semver';
 import urlJoin from 'url-join';
 
 import { FetchCacheTag } from '@/const/cacheControl';
 import { type Locales } from '@/locales/resources';
 import { type ChangelogIndexItem } from '@/types/changelog';
+import { markdownToTxt } from '@/utils/markdownToTxt';
 
 const URL_TEMPLATE = 'https://raw.githubusercontent.com/{{user}}/{{repo}}/{{branch}}/{{path}}';
 const LAST_MODIFIED = new Date().toISOString();
@@ -185,7 +185,7 @@ export class ChangelogService {
   }
 
   private genUrl(path: string) {
-    // 自定义分隔符为 {{}}
+    // Custom delimiter set to {{}}
     const compiledTemplate = template(this.config.urlTemplate, { interpolate: /{{([\S\s]+?)}}/g });
 
     return compiledTemplate({ ...this.config, path });
@@ -214,9 +214,7 @@ export class ChangelogService {
   }
 
   private replaceCdnUrl(url: string) {
-    if (!docCdnPrefix || !this.cdnUrls?.[url]) {
-      return url;
-    }
-    return urlJoin(docCdnPrefix, this.cdnUrls[url]);
+    if (url?.startsWith('/blog')) return urlJoin('https://hub-apac-1.lobeobjects.space/', url);
+    return url;
   }
 }

@@ -1,8 +1,8 @@
 {
   "changelog.description": "{{appName}}의 새로운 기능과 개선 사항을 지속적으로 추적하세요",
   "changelog.title": "업데이트 로그",
-  "chat.description": "{{appName}}는 ChatGPT, Claude, Gemini, OLLaMA WebUI의 최고의 사용 경험을 제공합니다",
-  "chat.title": "{{appName}} · 협업 에이전트를 위한 플랫폼",
+  "chat.description": "{{appName}}는 함께 성장하는 에이전트 팀을 찾고, 구축하고, 협업할 수 있는 워크 앤 라이프스타일 공간입니다.",
+  "chat.title": "{{appName}} · 함께 성장하는 에이전트 팀",
   "discover.assistants.description": "콘텐츠 제작, 카피라이팅, Q&A, 이미지 생성, 영상 생성, 음성 생성, 지능형 도우미, 자동화 워크플로우 등 나만의 AI / GPTs / OLLaMA 스마트 도우미를 맞춤 설정하세요",
   "discover.assistants.title": "도우미 커뮤니티",
   "discover.description": "콘텐츠 제작, 카피라이팅, Q&A, 이미지 생성, 영상 생성, 음성 생성, 지능형 도우미, 자동화 워크플로우, 맞춤형 AI 애플리케이션으로 나만의 AI 워크스테이션을 구축하세요",

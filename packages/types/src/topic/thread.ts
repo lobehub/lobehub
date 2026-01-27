@@ -23,6 +23,7 @@ export enum ThreadStatus {
  * Metadata for Thread, used for agent task execution
  */
 export interface ThreadMetadata {
+  [key: string]: unknown;
   /** Whether this thread runs in client mode (local execution) */
   clientMode?: boolean;
   /** Task completion time */

@@ -96,9 +96,9 @@ services:
 
     environment:
       - 'APP_URL=http://localhost:3210'
-      - 'NEXT_AUTH_SSO_PROVIDERS=logto'
+      - 'AUTH_SSO_PROVIDERS=logto'
       - 'KEY_VAULTS_SECRET=Kix2wcUONd4CX51E/ZPAd36BqM4wzJgKjPtz2sGztqQ='
-      - 'NEXT_AUTH_SECRET=NX2kaPE923dt6BL2U8e9oSre5RfoT7hg'
+      - 'AUTH_SECRET=NX2kaPE923dt6BL2U8e9oSre5RfoT7hg'
       - 'NEXTAUTH_URL=http://localhost:${LOBE_PORT}/api/auth'
       - 'AUTH_LOGTO_ISSUER=http://localhost:${LOGTO_PORT}/oidc'
       - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'

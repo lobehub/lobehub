@@ -9,7 +9,7 @@ import { SCROLL_PARENT_ID } from '@/app/[variants]/(main)/community/features/con
 import { withSuspense } from '@/components/withSuspense';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
-import { AssistantCategory } from '@/types/discover';
+import { AssistantCategory, AssistantSorts } from '@/types/discover';
 
 import CategoryMenu from '../../../../components/CategoryMenu';
 import { useCategory } from './useCategory';
@@ -17,7 +17,7 @@ import { useCategory } from './useCategory';
 const Category = memo(() => {
   const useAssistantCategories = useDiscoverStore((s) => s.useAssistantCategories);
   const {
-    category = 'all',
+    category = AssistantCategory.Discover,
     q,
     source,
   } = useQuery() as { category?: AssistantCategory; q?: string; source?: string };
@@ -28,7 +28,11 @@ const Category = memo(() => {
   const genUrl = (key: AssistantCategory) =>
     qs.stringifyUrl(
       {
-        query: { category: key === AssistantCategory.All ? null : key, q, source },
+        query: {
+          category: key === AssistantCategory.Discover ? null : key,
+          q,
+          sort: key === AssistantCategory.Discover ? AssistantSorts.Recommended : null,
+        },
         url: '/community/agent',
       },
       { skipNull: true },

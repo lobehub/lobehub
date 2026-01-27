@@ -3,7 +3,7 @@ import { type ModelProviderCard } from '@/types/llm';
 // ref https://cloud.tencent.com/document/product/1729/104753
 const Hunyuan: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'hunyuan-lite',
+  checkModel: 'hunyuan-t1-latest',
   description:
     'A Tencent-developed LLM with strong Chinese writing, solid reasoning in complex contexts, and reliable task execution.',
   disableBrowserRequest: true,

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { getTestDB } from '../../../core/getTestDB';
 import {
   agents,
   agentsToSessions,
@@ -11,7 +12,6 @@ import {
 } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
 import { TopicModel } from '../../topic';
-import { getTestDB } from '../../../core/getTestDB';
 
 const userId = 'topic-query-user';
 const userId2 = 'topic-query-user-2';
@@ -1281,6 +1281,11 @@ describe('TopicModel - Query', () => {
   });
 
   describe('listTopicsForMemoryExtractor', () => {
+    beforeEach(async () => {
+      // Clear topics from previous tests to ensure isolation
+      await serverDB.delete(topics);
+    });
+
     it('should paginate pending topics and skip extracted ones by default', async () => {
       await serverDB.insert(topics).values([
         {
@@ -1299,14 +1304,16 @@ describe('TopicModel - Query', () => {
         { createdAt: new Date('2024-01-04T00:00:00Z'), id: 't4', userId: userId2 },
       ] satisfies Array<typeof topics.$inferInsert>);
 
+      // t1 is skipped because it has userMemoryExtractStatus: 'completed'
+      // t4 is skipped because it belongs to a different user
       const page1 = await topicModel.listTopicsForMemoryExtractor({ limit: 1 });
-      expect(page1.map((t) => t.id)).toEqual(['t1']);
+      expect(page1.map((t) => t.id)).toEqual(['t2']);
 
       const page2 = await topicModel.listTopicsForMemoryExtractor({
         cursor: { createdAt: page1[0].createdAt, id: page1[0].id },
         limit: 5,
       });
-      expect(page2.map((t) => t.id)).toEqual(['t2', 't3']);
+      expect(page2.map((t) => t.id)).toEqual(['t3']);
     });
 
     it('should include extracted topics when ignoreExtracted is true', async () => {

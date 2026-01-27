@@ -22,6 +22,7 @@ const groupMeta = (groupId: string) => (s: ChatGroupStore) => {
     avatar: group?.avatar || undefined,
     backgroundColor: group?.backgroundColor || undefined,
     description: group?.description || '',
+    marketIdentifier: group?.marketIdentifier || undefined,
     title: group?.title || '',
   });
 };

@@ -6,13 +6,21 @@ import {
   Button,
   Flexbox,
   Icon,
+  Tag,
   Text,
   Tooltip,
   TooltipGroup,
 } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
-import { BookmarkCheckIcon, BookmarkIcon, DotIcon, HeartIcon, UsersIcon } from 'lucide-react';
+import {
+  BookmarkCheckIcon,
+  BookmarkIcon,
+  DotIcon,
+  GitBranchIcon,
+  HeartIcon,
+  UsersIcon,
+} from 'lucide-react';
 import qs from 'query-string';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -25,6 +33,7 @@ import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { socialService } from '@/services/social';
 
 import { useDetailContext } from './DetailProvider';
+import GroupAgentForkTag from './GroupAgentForkTag';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   time: css`
@@ -51,6 +60,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     identifier,
     createdAt,
     userName,
+    forkCount,
   } = data;
 
   const displayAvatar = avatar || title?.[0] || '👥';
@@ -199,7 +209,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               />
             </Tooltip>
           </Flexbox>
-          <Flexbox align={'center'} gap={4} horizontal>
+          <Flexbox align={'center'} gap={8} horizontal wrap={'wrap'}>
             {(() => {
               // API returns author as object {avatar, name, userName}, but type definition says string
               const authorObj =
@@ -220,6 +230,12 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               date={createdAt as string}
               template={'MMM DD, YYYY'}
             />
+            <GroupAgentForkTag />
+            {!!forkCount && forkCount > 0 && (
+              <Tag bordered={false} color="default" icon={<Icon icon={GitBranchIcon} />}>
+                {forkCount} {t('fork.forks')}
+              </Tag>
+            )}
           </Flexbox>
         </Flexbox>
       </Flexbox>

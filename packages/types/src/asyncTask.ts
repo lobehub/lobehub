@@ -2,6 +2,7 @@ export enum AsyncTaskType {
   Chunking = 'chunk',
   Embedding = 'embedding',
   ImageGeneration = 'image_generation',
+  UserMemoryExtractionWithChatTopic = 'user_memory_extraction:chat_topic',
 }
 
 export enum AsyncTaskStatus {
@@ -66,4 +67,18 @@ export interface FileParsingTask {
   embeddingError?: IAsyncTaskError | null;
   embeddingStatus?: AsyncTaskStatus | null;
   finishEmbedding?: boolean;
+}
+
+export interface UserMemoryExtractionProgress {
+  completedTopics: number;
+  totalTopics: number | null;
+}
+
+export interface UserMemoryExtractionMetadata {
+  progress: UserMemoryExtractionProgress;
+  range?: {
+    from?: string;
+    to?: string;
+  };
+  source: 'chat_topic';
 }
