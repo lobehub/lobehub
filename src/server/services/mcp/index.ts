@@ -156,15 +156,18 @@ export class MCPService {
   }
 
   // callTool now accepts an object with clientParams, toolName, argsStr, and processContentBlocks
-  async callTool(options: {
-    argsStr: any;
-    clientParams: MCPClientParams;
-    processContentBlocks?: ProcessContentBlocksFn;
-    toolName: string;
-  }): Promise<any> {
+  async callTool(
+    options: {
+      argsStr: any;
+      clientParams: MCPClientParams;
+      processContentBlocks?: ProcessContentBlocksFn;
+      toolName: string;
+    },
+    { retryTime, skipCache }: { retryTime?: number; skipCache?: boolean } = {},
+  ): Promise<any> {
     const { clientParams, toolName, argsStr, processContentBlocks } = options;
 
-    const client = await this.getClient(clientParams); // Get client using params
+    const client = await this.getClient(clientParams, skipCache); // Get client using params
 
     const args = safeParseJSON(argsStr);
     const loggableParams = this.sanitizeForLogging(clientParams);
@@ -200,6 +203,25 @@ export class MCPService {
 
       return { content, state, success: true };
     } catch (error) {
+      // Retry on session-related errors (same pattern as listTools)
+      let nextReTryTime = retryTime || 0;
+      const errMsg = (error as Error).message || '';
+      const isSessionError =
+        errMsg === 'NoValidSessionId' ||
+        errMsg.includes('No valid session ID') ||
+        errMsg.includes('Server not initialized');
+
+      if (isSessionError && nextReTryTime <= 3) {
+        if (!nextReTryTime) {
+          nextReTryTime = 1;
+        } else {
+          nextReTryTime += 1;
+        }
+
+        log(`Session error calling tool "${toolName}", retrying (attempt ${nextReTryTime}/3)...`);
+        return this.callTool(options, { retryTime: nextReTryTime, skipCache: true });
+      }
+
       if (error instanceof McpError) {
         const mcpError = error as McpError;
 
