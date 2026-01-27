@@ -284,21 +284,24 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
       justify="space-between"
     >
       <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
-        <div className={sharedStyles.icon}>{renderIcon()}</div>
-        <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-          <span
-            className={sharedStyles.title}
-            onClick={() =>
-              createIntegrationDetailModal({
-                identifier: serverType.identifier,
-                serverName: serverType.serverName,
-                type: 'klavis',
-              })
-            }
-          >
-            {serverType.label}
-          </span>
-          {!isConnected && renderStatus()}
+        <Flexbox
+          align="center"
+          gap={16}
+          horizontal
+          onClick={() =>
+            createIntegrationDetailModal({
+              identifier: serverType.identifier,
+              serverName: serverType.serverName,
+              type: 'klavis',
+            })
+          }
+          style={{ cursor: 'pointer' }}
+        >
+          <div className={sharedStyles.icon}>{renderIcon()}</div>
+          <Flexbox gap={4} style={{ overflow: 'hidden' }}>
+            <span className={sharedStyles.title}>{serverType.label}</span>
+            {!isConnected && renderStatus()}
+          </Flexbox>
         </Flexbox>
       </Flexbox>
       <Flexbox align="center" gap={12} horizontal>

@@ -270,22 +270,29 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
       justify="space-between"
     >
       <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
-        <div className={`${sharedStyles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
-          {renderIcon()}
-        </div>
-        <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-          <span
-            className={`${sharedStyles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}
-            onClick={() =>
-              createIntegrationDetailModal({
-                identifier: provider.id,
-                type: 'lobehub',
-              })
-            }
-          >
-            {provider.label}
-          </span>
-          {!isConnected && renderStatus()}
+        <Flexbox
+          align="center"
+          gap={16}
+          horizontal
+          onClick={() =>
+            createIntegrationDetailModal({
+              identifier: provider.id,
+              type: 'lobehub',
+            })
+          }
+          style={{ cursor: 'pointer' }}
+        >
+          <div className={`${sharedStyles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
+            {renderIcon()}
+          </div>
+          <Flexbox gap={4} style={{ overflow: 'hidden' }}>
+            <span
+              className={`${sharedStyles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}
+            >
+              {provider.label}
+            </span>
+            {!isConnected && renderStatus()}
+          </Flexbox>
         </Flexbox>
       </Flexbox>
       <Flexbox align="center" gap={12} horizontal>

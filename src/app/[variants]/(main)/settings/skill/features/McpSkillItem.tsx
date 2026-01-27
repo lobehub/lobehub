@@ -45,15 +45,19 @@ const McpSkillItem = memo<McpSkillItemProps>(
           justify="space-between"
         >
           <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
-            <div className={sharedStyles.icon}>
-              <PluginAvatar avatar={avatar} size={32} />
-            </div>
-            <Flexbox align="center" gap={8} horizontal style={{ overflow: 'hidden' }}>
-              <span className={sharedStyles.title} onClick={() => setDetailOpen(true)}>
-                {title}
-              </span>
-              <PluginTag author={author} isMCP={isMCP} type={type} />
+            <Flexbox
+              align="center"
+              gap={16}
+              horizontal
+              onClick={() => setDetailOpen(true)}
+              style={{ cursor: 'pointer' }}
+            >
+              <div className={sharedStyles.icon}>
+                <PluginAvatar avatar={avatar} size={32} />
+              </div>
+              <span className={sharedStyles.title}>{title}</span>
             </Flexbox>
+            <PluginTag author={author} isMCP={isMCP} type={type} />
           </Flexbox>
           <Actions identifier={identifier} isMCP={isMCP} type={type} />
         </Flexbox>
