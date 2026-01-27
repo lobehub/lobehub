@@ -320,7 +320,23 @@ const Controls = memo<ControlsProps>(({ setUpdating }) => {
       : []),
   ];
 
-  const allItems = [...baseItems, ...maxTokensItems];
+  // Context Compression items
+  const contextCompressionItems: FormItemProps[] = [
+    {
+      children: <Switch />,
+      label: (
+        <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
+          {t('settingModel.enableContextCompression.title')}
+          <InfoTooltip title={t('settingModel.enableContextCompression.desc')} />
+        </Flexbox>
+      ),
+      name: ['chatConfig', 'enableContextCompression'],
+      tag: 'compression',
+      valuePropName: 'checked',
+    },
+  ];
+
+  const allItems = [...baseItems, ...maxTokensItems, ...contextCompressionItems];
 
   return (
     <Form
