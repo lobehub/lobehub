@@ -446,6 +446,8 @@
   "settingImage.defaultCount.desc": "新しいタスクを作成する際に、画像生成パネルでのデフォルト画像数を設定します。",
   "settingImage.defaultCount.label": "デフォルト画像数",
   "settingImage.defaultCount.title": "AI画像設定",
+  "settingModel.enableContextCompression.desc": "会話が64,000トークンを超えた場合に、過去のメッセージを自動的に要約して圧縮し、トークン使用量を60〜80％節約します",
+  "settingModel.enableContextCompression.title": "自動コンテキスト圧縮を有効にする",
   "settingModel.enableMaxTokens.title": "単一応答制限を有効にする",
   "settingModel.enableReasoningEffort.title": "推論強度の調整を有効にする",
   "settingModel.frequencyPenalty.desc": "値が大きいほど、言葉がより豊かで多様になります。値が小さいほど、言葉はより素朴でシンプルになります。",
