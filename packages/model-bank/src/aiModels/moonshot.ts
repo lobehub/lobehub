@@ -15,7 +15,7 @@ const moonshotChatModels: AIChatModelCard[] = [
     displayName: 'Kimi K2.5',
     enabled: true,
     id: 'kimi-k2.5',
-    maxOutput: 65_536,
+    maxOutput: 32_768,
     pricing: {
       currency: 'CNY',
       units: [
@@ -25,6 +25,9 @@ const moonshotChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-01-27',
+    settings: {
+      extendParams: ['enableReasoning'],
+    },
     type: 'chat',
   },
   {
