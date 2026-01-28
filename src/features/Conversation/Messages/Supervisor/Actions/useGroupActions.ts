@@ -123,8 +123,8 @@ export const useGroupActions = ({
       regenerate: {
         disabled: isRegenerating,
         handleClick: () => {
-          regenerateAssistantMessage(id);
-          if (data.error) deleteMessage(id);
+          if (data.error) return delAndRegenerateMessage(id);
+          return regenerateAssistantMessage(id);
         },
         icon: RotateCcw,
         key: 'regenerate',

@@ -246,12 +246,16 @@ export const useChatItemContextMenu = ({
           if (inPortalThread) {
             resendThreadMessage(id);
           } else if (role === 'assistant') {
+            if (item.error) {
+              delAndRegenerateMessage(id);
+              break;
+            }
+
             regenerateAssistantMessage(id);
           } else {
             regenerateUserMessage(id);
           }
 
-          if (item.error) deleteMessage(id);
           break;
         }
         case 'delAndRegenerate': {
