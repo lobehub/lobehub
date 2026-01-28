@@ -122,7 +122,8 @@ export interface LobeChatPluginApi {
    * Examples:
    * - 'always' - always require intervention
    * - [{ match: { command: "git add:*" }, policy: "never" }, { policy: "always" }]
-   * - { dynamic: { pathParams: ['path'], default: 'never', outOfScopePolicy: 'always' } }
+   * - { dynamic: { default: 'never', policy: 'required', type: 'exampleResolver' } } - exampleResolver should register in `GeneralChatAgent.dynamicInterventionResolvers`
+   *
    */
   humanIntervention?: ExtendedHumanInterventionConfig;
   name: string;

@@ -1,13 +1,13 @@
 import type { DynamicInterventionResolver } from '@lobechat/types';
 
+import { normalizePathForScope } from './utils/path';
+
 /**
  * Check if a path is within the working directory
  */
 const isPathWithinWorkingDirectory = (targetPath: string, workingDirectory: string): boolean => {
-  const normalizedTarget = targetPath.startsWith('/') ? targetPath : `/${targetPath}`;
-  const normalizedWorkingDir = workingDirectory.startsWith('/')
-    ? workingDirectory
-    : `/${workingDirectory}`;
+  const normalizedTarget = normalizePathForScope(targetPath);
+  const normalizedWorkingDir = normalizePathForScope(workingDirectory);
 
   return (
     normalizedTarget === normalizedWorkingDir ||

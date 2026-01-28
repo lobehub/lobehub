@@ -18,3 +18,4 @@ export {
   LocalSystemIdentifier,
   type RunCommandState,
 } from './types';
+export { normalizePathForScope } from './utils/path';
