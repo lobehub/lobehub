@@ -3,7 +3,6 @@ import { enableMapSet, produce } from 'immer';
 import useSWR, { type SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
 
-import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { toolsClient } from '@/libs/trpc/client';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -366,7 +365,7 @@ export const createLobehubSkillStoreSlice: StateCreator<
     ),
 
   useFetchProviderTools: (provider) =>
-    useOnlyFetchOnceSWR<LobehubSkillTool[]>(
+    useSWR<LobehubSkillTool[]>(
       provider ? `lobehub-skill-tools-${provider}` : null,
       async () => {
         const response = await toolsClient.market.connectListTools.query({ provider: provider! });

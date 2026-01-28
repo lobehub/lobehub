@@ -7,7 +7,7 @@ import Header from './Header';
 import { LobehubDetailProvider } from './LobehubDetailProvider';
 import Nav, { type TabKey } from './Nav';
 import Overview from './Overview';
-import ToolList from './ToolList';
+import Schema from './Schema';
 
 export interface LobehubSkillDetailContentProps {
   identifier: string;
@@ -21,7 +21,7 @@ export const LobehubSkillDetailContent = ({ identifier }: LobehubSkillDetailCont
       <Flexbox gap={16}>
         <Header type="lobehub" />
         <Nav activeTab={activeTab} setActiveTab={setActiveTab} />
-        {activeTab === 'overview' ? <Overview /> : <ToolList />}
+        {activeTab === 'overview' ? <Overview /> : <Schema />}
       </Flexbox>
     </LobehubDetailProvider>
   );

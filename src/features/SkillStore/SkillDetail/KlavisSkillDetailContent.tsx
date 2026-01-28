@@ -8,7 +8,7 @@ import Header from './Header';
 import { KlavisDetailProvider } from './KlavisDetailProvider';
 import Nav, { type TabKey } from './Nav';
 import Overview from './Overview';
-import ToolList from './ToolList';
+import Schema from './Schema';
 
 export interface KlavisSkillDetailContentProps {
   identifier: string;
@@ -26,7 +26,7 @@ export const KlavisSkillDetailContent = ({
       <Flexbox gap={16}>
         <Header type="klavis" />
         <Nav activeTab={activeTab} setActiveTab={setActiveTab} />
-        {activeTab === 'overview' ? <Overview /> : <ToolList />}
+        {activeTab === 'overview' ? <Overview /> : <Schema />}
       </Flexbox>
     </KlavisDetailProvider>
   );
