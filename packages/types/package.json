@@ -12,7 +12,7 @@
     "@lobehub/market-types": "^1.12.3",
     "model-bank": "workspace:*",
     "type-fest": "^4.41.0",
-    "zustand": "5.0.4"
+    "zustand": "5.0.10"
   },
   "peerDependencies": {
     "@lobehub/ui": "^4",

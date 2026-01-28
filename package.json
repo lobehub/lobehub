@@ -356,7 +356,7 @@
     "yaml": "^2.8.2",
     "zod": "^3.25.76",
     "zod-to-json-schema": "^3.25.1",
-    "zustand": "5.0.4",
+    "zustand": "5.0.10",
     "zustand-utils": "^2.1.1"
   },
   "devDependencies": {
