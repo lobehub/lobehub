@@ -2,6 +2,7 @@ import { enableMapSet, produce } from 'immer';
 import useSWR, { type SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
 
+import { useOnlyFetchOnceSWR } from '@/libs/swr';
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -326,7 +327,7 @@ export const createKlavisStoreSlice: StateCreator<
   },
 
   useFetchServerTools: (serverName) =>
-    useSWR<KlavisTool[]>(
+    useOnlyFetchOnceSWR<KlavisTool[]>(
       serverName ? `klavis-server-tools-${serverName}` : null,
       async () => {
         const response = await toolsClient.klavis.getTools.query({ serverName: serverName! });
