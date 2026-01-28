@@ -32,11 +32,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     display: flex;
     gap: 16px;
     align-items: center;
-
-    padding: 16px;
     border-radius: 12px;
 
-    background: ${cssVar.colorFillTertiary};
+    /* background: ${cssVar.colorFillTertiary}; */
   `,
   icon: css`
     display: flex;
