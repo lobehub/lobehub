@@ -21,7 +21,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
       'GPT-5.2 is a flagship model for coding and agentic workflows with stronger reasoning and long-context performance.',
     displayName: 'GPT-5.2',
     enabled: true,
-    id: 'gpt-5.2',
+    id: 'openai/gpt-5.2',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -48,7 +48,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     description:
       'GPT-5.2 Pro: a smarter, more precise GPT-5.2 variant (Responses API only), suited for harder problems and longer multi-turn reasoning.',
     displayName: 'GPT-5.2 pro',
-    id: 'gpt-5.2-pro',
+    id: 'openai/gpt-5.2-pro',
     maxOutput: 128_000,
     pricing: {
       units: [
@@ -69,10 +69,10 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 128_000,
     description:
-      'GPT-5.2 Chat is the ChatGPT variant (chat-latest) for experiencing the newest conversation improvements.',
+      'GPT-5.2 Chat is the ChatGPT variant for experiencing the newest conversation improvements.',
     displayName: 'GPT-5.2 Chat',
     enabled: true,
-    id: 'gpt-5.2-chat-latest',
+    id: 'openai/gpt-5.2-chat',
     maxOutput: 16_384,
     pricing: {
       units: [
