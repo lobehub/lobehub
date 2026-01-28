@@ -5,4 +5,5 @@ export { default as ErrorState } from './ErrorState';
 export { default as InitializingState } from './InitializingState';
 export type { ProcessingStateVariant } from './ProcessingState';
 export { default as ProcessingState } from './ProcessingState';
+export { default as TaskMessages } from './TaskMessages';
 export * from './utils';
