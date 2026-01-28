@@ -1,5 +1,5 @@
 {
-  "addToKnowledgeBase.addSuccess": "File aggiunto con successo, <1>visualizza ora</1>",
+  "addToKnowledgeBase.addSuccess": "File aggiunto con successo",
   "addToKnowledgeBase.confirm": "Aggiungi",
   "addToKnowledgeBase.error": "Impossibile aggiungere il file alla Libreria",
   "addToKnowledgeBase.id.placeholder": "Seleziona una libreria a cui aggiungere",

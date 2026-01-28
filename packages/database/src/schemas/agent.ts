@@ -105,6 +105,8 @@ export const agentsKnowledgeBases = pgTable(
   (t) => [
     primaryKey({ columns: [t.agentId, t.knowledgeBaseId] }),
     index('agents_knowledge_bases_agent_id_idx').on(t.agentId),
+    index('agents_knowledge_bases_knowledge_base_id_idx').on(t.knowledgeBaseId),
+    index('agents_knowledge_bases_user_id_idx').on(t.userId),
   ],
 );
 
@@ -127,5 +129,7 @@ export const agentsFiles = pgTable(
   (t) => [
     primaryKey({ columns: [t.fileId, t.agentId, t.userId] }),
     index('agents_files_agent_id_idx').on(t.agentId),
+    index('agents_files_file_id_idx').on(t.fileId),
+    index('agents_files_user_id_idx').on(t.userId),
   ],
 );

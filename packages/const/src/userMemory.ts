@@ -3,6 +3,7 @@ import { DEFAULT_EMBEDDING_PROVIDER } from '@lobechat/business-const';
 import { DEFAULT_EMBEDDING_MODEL } from './settings';
 
 export const DEFAULT_SEARCH_USER_MEMORY_TOP_K = {
+  activities: 3,
   contexts: 0,
   experiences: 0,
   preferences: 3,

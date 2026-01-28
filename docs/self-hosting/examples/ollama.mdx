@@ -1,12 +1,12 @@
 ---
-title: Integrating LobeChat with Ollama for Enhanced Language Models
+title: Integrating LobeHub with Ollama for Enhanced Language Models
 description: >-
-  Learn how to configure and deploy LobeChat to leverage Ollama's powerful
-  language models locally. Follow the guide to run Ollama and LobeChat on your
+  Learn how to configure and deploy LobeHub to leverage Ollama's powerful
+  language models locally. Follow the guide to run Ollama and LobeHub on your
   system.
 tags:
   - Ollama integration
-  - LobeChat configuration
+  - LobeHub configuration
   - Local deployment
   - Language models
   - Ollama usage
@@ -14,25 +14,25 @@ tags:
 
 # Integrating with Ollama
 
-Ollama is a powerful framework for running large language models (LLMs) locally, supporting various language models including Llama 2, Mistral, and more. Now, LobeChat supports integration with Ollama, meaning you can easily use the language models provided by Ollama to enhance your application within LobeChat.
+Ollama is a powerful framework for running large language models (LLMs) locally, supporting various language models including Llama 2, Mistral, and more. Now, LobeHub supports integration with Ollama, meaning you can easily use the language models provided by Ollama to enhance your application within LobeHub.
 
-This document will guide you on how to configure and deploy LobeChat to use Ollama:
+This document will guide you on how to configure and deploy LobeHub to use Ollama:
 
 ## Running Ollama Locally
 
 First, you need to install Ollama. For detailed steps on installing and configuring Ollama, please refer to the [Ollama Website](https://ollama.com).
 
-## Running LobeChat Locally
+## Running LobeHub Locally
 
-Assuming you have already started the Ollama service locally on port `11434`. Run the following Docker command to start LobeChat locally:
+Assuming you have already started the Ollama service locally on port `11434`. Run the following Docker command to start LobeHub locally:
 
 ```bash
 docker run -d -p 3210:3210 -e OLLAMA_PROXY_URL=http://host.docker.internal:11434 lobehub/lobe-chat
 ```
 
-Now, you can use LobeChat to converse with the local LLM.
+Now, you can use LobeHub to converse with the local LLM.
 
-For more information on using Ollama in LobeChat, please refer to [Ollama Usage](/docs/usage/providers/ollama).
+For more information on using Ollama in LobeHub, please refer to [Ollama Usage](/docs/usage/providers/ollama).
 
 ## Accessing Ollama from Non-Local Locations
 

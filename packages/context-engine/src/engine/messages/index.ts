@@ -18,6 +18,7 @@ export type {
   ToolsConfig,
   UIChatMessage,
   UserMemoryConfig,
+  UserMemoryActivityItem,
   UserMemoryContextItem,
   UserMemoryData,
   UserMemoryExperienceItem,

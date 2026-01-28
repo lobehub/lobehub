@@ -85,7 +85,6 @@ export interface UserInitializationState {
   interests?: string[];
   isFreePlan?: boolean;
   isInviteCodeRequired?: boolean;
-  isInWaitList?: boolean;
   /** @deprecated Use onboarding field instead */
   isOnboard?: boolean;
   lastName?: string;
@@ -101,7 +100,7 @@ export interface UserInitializationState {
   username?: string;
 }
 
-export const NextAuthAccountSchame = z.object({
+export const OAuthAccountSchema = z.object({
   provider: z.string(),
   providerAccountId: z.string(),
 });
@@ -111,7 +110,7 @@ export const NextAuthAccountSchame = z.object({
  */
 export interface SSOProvider {
   email?: string;
-  /** Expiration time - Date for better-auth, number (Unix timestamp) for next-auth */
+  /** Expiration time - Date for better-auth */
   expiresAt?: Date | number | null;
   provider: string;
   providerAccountId: string;

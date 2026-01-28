@@ -5,6 +5,7 @@ export { styles as containerStyles } from './useContainerStyles';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
+    height: 100%;
     ${responsive.sm} {
       padding-block-end: 68px;
     }

@@ -1,34 +1,15 @@
 export type RedisKey = string | Buffer;
 export type RedisValue = string | Buffer | number;
-export type RedisProvider = false | 'redis' | 'upstash';
-export type RedisProviderName = Exclude<RedisProvider, false>;
 
-export type IoRedisConfig = {
+export type RedisConfig = {
   database?: number;
   enabled: boolean;
   password?: string;
   prefix: string;
-  provider: 'redis';
   tls: boolean;
   url: string;
   username?: string;
 };
-
-export type UpstashConfig = {
-  enabled: boolean;
-  prefix: string;
-  provider: 'upstash';
-  token: string;
-  url: string;
-};
-
-export type DisabledRedisConfig = {
-  enabled: false;
-  prefix: string;
-  provider: false;
-};
-
-export type RedisConfig = IoRedisConfig | UpstashConfig | DisabledRedisConfig;
 
 export interface SetOptions {
   ex?: number;
@@ -41,8 +22,7 @@ export interface SetOptions {
   xx?: boolean;
 }
 
-// NOTICE: number comes from upstash
-export type RedisSetResult = 'OK' | null | string | number;
+export type RedisSetResult = 'OK' | null | string;
 export type RedisMSetArgument = Record<string, RedisValue> | Map<RedisKey, RedisValue>;
 
 export interface RedisClient {
@@ -65,7 +45,5 @@ export interface RedisClient {
 
 export interface BaseRedisProvider extends RedisClient {
   disconnect(): Promise<void>;
-
   initialize(): Promise<void>;
-  provider: RedisProviderName;
 }

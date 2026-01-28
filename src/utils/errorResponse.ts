@@ -1,3 +1,4 @@
+import { AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
 import { AgentRuntimeErrorType, type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { ChatErrorType, type ErrorResponse, type ErrorType } from '@lobechat/types';
 
@@ -6,10 +7,7 @@ import { ChatErrorType, type ErrorResponse, type ErrorType } from '@lobechat/typ
  * When these errors occur, the response will include X-Auth-Required header
  * to signal the client that re-authentication is needed.
  */
-const AUTH_REQUIRED_ERROR_TYPES = new Set<ErrorType>([
-  ChatErrorType.Unauthorized,
-  ChatErrorType.InvalidClerkUser,
-]);
+const AUTH_REQUIRED_ERROR_TYPES = new Set<ErrorType>([ChatErrorType.Unauthorized]);
 
 const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
   // InvalidAccessCode / InvalidAzureAPIKey / InvalidOpenAIAPIKey / InvalidZhipuAPIKey ....
@@ -88,7 +86,7 @@ export const createErrorResponse = (
   // Add X-Auth-Required header for real authentication failures
   // This allows the client to distinguish between auth failures and other 401 errors (e.g., invalid API keys)
   if (AUTH_REQUIRED_ERROR_TYPES.has(errorType as ErrorType)) {
-    headers['X-Auth-Required'] = 'true';
+    headers[AUTH_REQUIRED_HEADER] = 'true';
   }
 
   return new Response(JSON.stringify(data), { headers, status: statusCode });

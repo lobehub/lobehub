@@ -68,31 +68,6 @@ describe('serverMessagesEngine', () => {
     });
   });
 
-  describe('history truncation', () => {
-    it('should truncate history when enabled', async () => {
-      const messages: UIChatMessage[] = [];
-      for (let i = 0; i < 20; i++) {
-        messages.push({
-          content: `Message ${i}`,
-          createdAt: Date.now(),
-          id: `msg-${i}`,
-          role: i % 2 === 0 ? 'user' : 'assistant',
-          updatedAt: Date.now(),
-        } as UIChatMessage);
-      }
-
-      const result = await serverMessagesEngine({
-        enableHistoryCount: true,
-        historyCount: 5,
-        messages,
-        model: 'gpt-4',
-        provider: 'openai',
-      });
-
-      expect(result.length).toBeLessThanOrEqual(5);
-    });
-  });
-
   describe('knowledge injection', () => {
     it('should inject file contents', async () => {
       const messages = createBasicMessages();

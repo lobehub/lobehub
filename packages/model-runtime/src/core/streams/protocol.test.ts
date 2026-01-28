@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
+  FIRST_CHUNK_ERROR_KEY,
+  convertIterableToStream,
   createCallbacksTransformer,
+  createFirstErrorHandleTransformer,
   createSSEDataExtractor,
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
@@ -236,6 +239,32 @@ describe('createTokenSpeedCalculator', async () => {
     // tps and ttft should be numeric (avoid flakiness if interval is 0ms)
     expect(speedChunk.data.tps).not.toBeNaN();
     expect(speedChunk.data.ttft).not.toBeNaN();
+  });
+});
+
+describe('convertIterableToStream', () => {
+  it('should surface errors from subsequent pulls as error chunks', async () => {
+    async function* erroringStream() {
+      yield 'first';
+      throw new Error('rate limit');
+    }
+
+    const readable = convertIterableToStream(erroringStream()).pipeThrough(
+      createFirstErrorHandleTransformer(),
+    );
+
+    const reader = readable.getReader();
+    const chunks: any[] = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+
+    expect(chunks[0]).toBe('first');
+    expect(chunks[1][FIRST_CHUNK_ERROR_KEY]).toBe(true);
+    expect(chunks[1].message).toBe('rate limit');
   });
 });
 

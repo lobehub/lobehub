@@ -205,9 +205,6 @@ export const createMCPPluginStoreSlice: StateCreator<
     const normalizedConfig = toNonEmptyStringRecord(config);
     let plugin = mcpStoreSelectors.getPluginById(identifier)(get());
 
-    // @ts-expect-error
-    const { haveCloudEndpoint } = plugin || {};
-
     if (!plugin || !plugin.manifestUrl) {
       const data = await discoverService.getMcpDetail({ identifier });
       if (!data) return;
@@ -216,6 +213,10 @@ export const createMCPPluginStoreSlice: StateCreator<
     }
 
     if (!plugin) return;
+
+    // Extract haveCloudEndpoint after plugin is loaded
+    // @ts-expect-error
+    const { haveCloudEndpoint } = plugin || {};
 
     const { updateInstallLoadingState, refreshPlugins, updateMCPInstallProgress } = get();
 
@@ -293,17 +294,14 @@ export const createMCPPluginStoreSlice: StateCreator<
             (!option?.connection?.type && !option?.connection?.url),
         );
 
-        const hasNonHttpDeployment = deploymentOptions.some((option) => {
-          const type = option?.connection?.type;
-          if (!type && option?.connection?.url) return false;
+        // Check if cloudEndPoint is available: stdio type + haveCloudEndpoint exists
+        // Both desktop and web should use cloud endpoint if available
+        const hasCloudEndpoint = stdioOption && haveCloudEndpoint;
 
-          return type && type !== 'http';
-        });
-
-        // Check if cloudEndPoint is available: web + stdio type + haveCloudEndpoint exists
-        const hasCloudEndpoint = !isDesktop && stdioOption && haveCloudEndpoint;
-
-        let shouldUseHttpDeployment = !!httpOption && (!hasNonHttpDeployment || !isDesktop);
+        // Prioritize endpoint (http/cloud) over stdio in all environments
+        // Desktop: endpoint > stdio
+        // Web: endpoint only (stdio not supported)
+        let shouldUseHttpDeployment = !!httpOption;
 
         if (hasCloudEndpoint) {
           // Use cloudEndPoint, create cloud type connection
@@ -731,6 +729,7 @@ export const createMCPPluginStoreSlice: StateCreator<
         draft.mcpPluginItems = [];
         draft.currentPage = 1;
         draft.mcpSearchKeywords = keywords;
+        draft.isMcpListInit = false;
       }),
       false,
       n('resetMCPPluginList'),

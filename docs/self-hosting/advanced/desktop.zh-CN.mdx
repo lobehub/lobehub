@@ -1,21 +1,21 @@
 ---
-title: 与 LobeChat 桌面端自动同步
-description: 配置 LobeChat 桌面端，获取端同步体验
+title: 与 LobeHub 桌面端自动同步
+description: 配置 LobeHub 桌面端，获取端同步体验
 tags:
-  - LobeChat
+  - LobeHub
   - 桌面端
   - 自托管
   - OIDC
   - 配置指南
 ---
 
-# 与 LobeChat 桌面端自动同步
+# 与 LobeHub 桌面端自动同步
 
-LobeChat 桌面端为用户提供了更好的使用体验，同时也扩展了 LobeChat 的能力边界，允许用户在离线环境下使用 LobeChat。本文档将指导您如何配置 LobeChat 桌面端以及如何将其与自托管实例连接。
+LobeHub 桌面端为用户提供了更好的使用体验，同时也扩展了 LobeHub 的能力边界，允许用户在离线环境下使用 LobeHub。本文档将指导您如何配置 LobeHub 桌面端以及如何将其与自托管实例连接。
 
 ## 系统要求
 
-LobeChat 桌面端使用 Electron 构建，支持以下操作系统：
+LobeHub 桌面端使用 Electron 构建，支持以下操作系统：
 
 - Windows
 - macOS
@@ -23,16 +23,16 @@ LobeChat 桌面端使用 Electron 构建，支持以下操作系统：
 
 ## 桌面端版本说明
 
-LobeChat 桌面端的版本发布遵循以下逻辑：
+LobeHub 桌面端的版本发布遵循以下逻辑：
 
-- **Beta 版本**：所有合并到 main 分支并自动发布版本，都会自动创建为 LobeChat 桌面端的 Beta 版本
+- **Beta 版本**：所有合并到 main 分支并自动发布版本，都会自动创建为 LobeHub 桌面端的 Beta 版本
 - **Stable 版本**：开发团队会通过手动打标来定期发布稳定版本
 
 如果您希望获得最新功能，可以使用 Beta 版本；如果您注重稳定性，请使用 Stable 版本。
 
 ## 与自托管实例连接
 
-LobeChat 桌面端可以与您自托管的 LobeChat 实例连接，以便您可以在桌面端使用您的自托管配置。
+LobeHub 桌面端可以与您自托管的 LobeHub 实例连接，以便您可以在桌面端使用您的自托管配置。
 
 ### 准备工作
 
@@ -56,16 +56,16 @@ ENABLE_OIDC=1
 
 <Callout>如果您之前已配置 `OIDC_JWKS_KEY`，无需修改。系统会自动回退使用 `OIDC_JWKS_KEY`（向后兼容）。</Callout>
 
-如果您使用一键部署方式（如 Vercel、Railway 等平台）部署 LobeChat，您需要：
+如果您使用一键部署方式（如 Vercel、Railway 等平台）部署 LobeHub，您需要：
 
 1. 将上述环境变量添加到部署平台的环境变量配置中
 2. 对于 Vercel 部署，请确保 `APP_URL` 环境变量设置为你的域名 URL，这对于正确处理认证回调至关重要
 
 ### 连接步骤
 
-1. 打开 LobeChat 桌面端
+1. 打开 LobeHub 桌面端
 2. 点击右上角 wifi 图标
-3. 输入您的自托管实例地址（例如：`https://your-lobechat-instance.com`）
+3. 输入您的自托管实例地址（例如：`https://your-LobeHub-instance.com`）
 4. 点击 "连接" 按钮
 5. 您将被重定向到登录页面，完成授权后即可使用您的自托管配置
 

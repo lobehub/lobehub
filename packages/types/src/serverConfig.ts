@@ -10,7 +10,7 @@ import {
   UserSystemAgentConfig,
 } from './user/settings';
 
-export type GlobalMemoryLayer = 'context' | 'experience' | 'identity' | 'preference';
+export type GlobalMemoryLayer = 'activity' | 'context' | 'experience' | 'identity' | 'preference';
 
 export interface MemoryAgentPublicConfig {
   baseURL?: string;

@@ -31,13 +31,11 @@ export const config = {
     '/desktop-onboarding(.*)',
     '/onboarding',
 
-    '/login(.*)',
     '/signup(.*)',
     '/signin(.*)',
     '/verify-email(.*)',
     '/reset-password(.*)',
     '/auth-error(.*)',
-    '/next-auth/(.*)',
     '/oauth(.*)',
     '/oidc(.*)',
     '/market-auth-callback(.*)',

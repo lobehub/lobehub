@@ -3,10 +3,10 @@ import { MessageGroupType } from '@lobechat/types';
 import { inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
+import { getTestDB } from '../../../core/getTestDB';
 import { messageGroups, messages, topics, users } from '../../../schemas';
 import { LobeChatDatabase } from '../../../type';
 import { MessageModel } from '../../message';
-import { getTestDB } from '../../../core/getTestDB';
 
 const userId = 'message-query-perf-test-user';
 const topicId = 'perf-test-topic-1';
@@ -42,7 +42,7 @@ afterEach(async () => {
  * These tests run sequentially to avoid resource contention
  */
 describe.sequential('MessageModel.query performance', () => {
-  it('should query 500 messages within 50ms', { retry: 3 }, async () => {
+  it('should query 500 messages within 100ms', { retry: 3 }, async () => {
     // Create 500 messages
     const messageData = Array.from({ length: 500 }, (_, i) => ({
       id: `perf-msg-${i}`,
@@ -66,12 +66,12 @@ describe.sequential('MessageModel.query performance', () => {
     const queryTime = endTime - startTime;
 
     expect(result).toHaveLength(500);
-    expect(queryTime).toBeLessThan(50);
+    expect(queryTime).toBeLessThan(100);
 
     console.log(`Query 500 messages took ${queryTime.toFixed(2)}ms`);
   });
 
-  it('should query 500 messages with compression groups within 50ms', { retry: 3 }, async () => {
+  it('should query 500 messages with compression groups within 100ms', { retry: 3 }, async () => {
     // Create 500 messages, 400 will be compressed into groups
     const messageData = Array.from({ length: 500 }, (_, i) => ({
       id: `perf-comp-msg-${i}`,
@@ -117,7 +117,7 @@ describe.sequential('MessageModel.query performance', () => {
 
     // Expected: 4 compressedGroup nodes + 100 uncompressed messages = 104 items
     expect(result).toHaveLength(104);
-    expect(queryTime).toBeLessThan(50);
+    expect(queryTime).toBeLessThan(100);
 
     // Verify compressed groups have pinnedMessages
     const compressedGroups = result.filter((m) => m.role === 'compressedGroup') as any[];

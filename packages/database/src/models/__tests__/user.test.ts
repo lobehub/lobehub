@@ -389,6 +389,105 @@ describe('UserModel', () => {
         const page2 = await UserModel.listUsersForMemoryExtractor(serverDB, { cursor, limit: 10 });
         expect(page2.map((u) => u.id)).toEqual(['u2', 'u3']);
       });
+
+      it('should filter by whitelist when provided', async () => {
+        await serverDB.delete(users);
+        await serverDB.insert(users).values([
+          { id: 'user-a', createdAt: new Date('2024-01-01T00:00:00Z') },
+          { id: 'user-b', createdAt: new Date('2024-01-02T00:00:00Z') },
+          { id: 'user-c', createdAt: new Date('2024-01-03T00:00:00Z') },
+          { id: 'user-d', createdAt: new Date('2024-01-04T00:00:00Z') },
+        ]);
+
+        const result = await UserModel.listUsersForMemoryExtractor(serverDB, {
+          whitelist: ['user-b', 'user-d'],
+        });
+
+        expect(result.map((u) => u.id)).toEqual(['user-b', 'user-d']);
+      });
+
+      it('should combine whitelist with cursor', async () => {
+        await serverDB.delete(users);
+        await serverDB.insert(users).values([
+          { id: 'user-a', createdAt: new Date('2024-01-01T00:00:00Z') },
+          { id: 'user-b', createdAt: new Date('2024-01-02T00:00:00Z') },
+          { id: 'user-c', createdAt: new Date('2024-01-03T00:00:00Z') },
+          { id: 'user-d', createdAt: new Date('2024-01-04T00:00:00Z') },
+        ]);
+
+        const result = await UserModel.listUsersForMemoryExtractor(serverDB, {
+          cursor: { createdAt: new Date('2024-01-02T00:00:00Z'), id: 'user-b' },
+          whitelist: ['user-a', 'user-c', 'user-d'],
+        });
+
+        // Only users in whitelist that are after cursor
+        expect(result.map((u) => u.id)).toEqual(['user-c', 'user-d']);
+      });
+
+      it('should return all users when whitelist is empty array', async () => {
+        await serverDB.delete(users);
+        await serverDB.insert(users).values([
+          { id: 'user-1', createdAt: new Date('2024-01-01T00:00:00Z') },
+          { id: 'user-2', createdAt: new Date('2024-01-02T00:00:00Z') },
+        ]);
+
+        const result = await UserModel.listUsersForMemoryExtractor(serverDB, {
+          whitelist: [],
+        });
+
+        // Empty whitelist should not filter (same as no whitelist)
+        expect(result.map((u) => u.id)).toEqual(['user-1', 'user-2']);
+      });
+    });
+
+    describe('getInfoForAIGeneration', () => {
+      it('should return user info with language preference', async () => {
+        await serverDB.insert(userSettings).values({
+          id: userId,
+          general: { responseLanguage: 'zh-CN' },
+        });
+
+        const result = await UserModel.getInfoForAIGeneration(serverDB, userId);
+
+        expect(result.userName).toBe('Test User');
+        expect(result.responseLanguage).toBe('zh-CN');
+      });
+
+      it('should default to en-US when no language preference set', async () => {
+        const result = await UserModel.getInfoForAIGeneration(serverDB, userId);
+
+        expect(result.responseLanguage).toBe('en-US');
+      });
+
+      it('should use firstName when fullName is not available', async () => {
+        await serverDB.delete(users);
+        await serverDB.insert(users).values({
+          id: userId,
+          firstName: 'John',
+        });
+
+        const result = await UserModel.getInfoForAIGeneration(serverDB, userId);
+
+        expect(result.userName).toBe('John');
+      });
+
+      it('should default to User when no name is available', async () => {
+        await serverDB.delete(users);
+        await serverDB.insert(users).values({
+          id: userId,
+        });
+
+        const result = await UserModel.getInfoForAIGeneration(serverDB, userId);
+
+        expect(result.userName).toBe('User');
+      });
+
+      it('should handle non-existent user', async () => {
+        const result = await UserModel.getInfoForAIGeneration(serverDB, 'non-existent-user');
+
+        expect(result.userName).toBe('User');
+        expect(result.responseLanguage).toBe('en-US');
+      });
     });
   });
 });

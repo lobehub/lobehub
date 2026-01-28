@@ -60,7 +60,11 @@ const ShareModal = memo<ModalProps>(({ onCancel, open }) => {
       title={t('share', { ns: 'common' })}
       width={'min(90vw, 1024px)'}
     >
-      <Flexbox gap={isMobile ? 8 : 24} style={{ overflow: 'hidden', position: 'relative' }}>
+      <Flexbox
+        gap={isMobile ? 8 : 24}
+        height={'100%'}
+        style={{ overflow: 'hidden', position: 'relative' }}
+      >
         <Segmented
           block
           onChange={(value) => setTab(value as Tab)}

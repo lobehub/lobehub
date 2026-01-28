@@ -1,41 +1,50 @@
 ---
 title: Architecture Design
+description: >-
+  Explore the architecture of LobeHub, an AI chat app built on Next.js,
+  featuring frontend, APIs, and markets.
+tags:
+  - LobeHub
+  - AI Chat Application
+  - Next.js
+  - Architecture Design
+  - Frontend Development
 ---
 
 # Architecture Design
 
-LobeChat is an AI chat application built on the Next.js framework, aiming to provide an AI productivity platform that enables users to interact with AI through natural language. The following is an overview of the architecture design of LobeChat:
+LobeHub is an AI chat application built on the Next.js framework, aiming to provide an AI productivity platform that enables users to interact with AI through natural language. The following is an overview of the architecture design of LobeHub:
 
 ## Application Architecture Overview
 
-The overall architecture of LobeChat consists of the frontend, EdgeRuntime API, Agents Market, Plugin Market, and independent plugins. These components collaborate to provide a complete AI experience.
+The overall architecture of LobeHub consists of the frontend, EdgeRuntime API, Agents Market, Plugin Market, and independent plugins. These components collaborate to provide a complete AI experience.
 
 ## Frontend Architecture
 
-The frontend of LobeChat adopts the Next.js framework, leveraging its powerful server-side rendering (SSR) capability and routing functionality. The frontend utilizes a stack of technologies, including the antd component library, lobe-ui AIGC component library, zustand state management, swr request library, i18next internationalization library, and more. These technologies collectively support the functionality and features of LobeChat.
+The frontend of LobeHub adopts the Next.js framework, leveraging its powerful server-side rendering (SSR) capability and routing functionality. The frontend utilizes a stack of technologies, including the antd component library, lobe-ui AIGC component library, zustand state management, swr request library, i18next internationalization library, and more. These technologies collectively support the functionality and features of LobeHub.
 
 The components in the frontend architecture include app, components, config, const, features, helpers, hooks, layout, locales, migrations, prompts, services, store, styles, types, and utils. Each component has specific responsibilities and collaborates with others to achieve different functionalities.
 
 ## Edge Runtime API
 
-The Edge Runtime API is one of the core components of LobeChat, responsible for handling the core logic of AI conversations. It provides interaction interfaces with the AI engine, including natural language processing, intent recognition, and response generation. The EdgeRuntime API communicates with the frontend, receiving user input and returning corresponding responses.
+The Edge Runtime API is one of the core components of LobeHub, responsible for handling the core logic of AI conversations. It provides interaction interfaces with the AI engine, including natural language processing, intent recognition, and response generation. The EdgeRuntime API communicates with the frontend, receiving user input and returning corresponding responses.
 
 ## Agents Market
 
-The Agents Market is a crucial part of LobeChat, providing various AI agents for different scenarios to handle specific tasks and domains. The Agents Market also offers functionality for discovering and uploading agents, allowing users to find agents created by others and easily share their own agents in the market.
+The Agents Market is a crucial part of LobeHub, providing various AI agents for different scenarios to handle specific tasks and domains. The Agents Market also offers functionality for discovering and uploading agents, allowing users to find agents created by others and easily share their own agents in the market.
 
 ## Plugin Market
 
-The Plugin Market is another key component of LobeChat, offering various plugins to extend the functionality and features of LobeChat. Plugins can be independent functional modules or integrated with agents from the Agents Market. During conversations, the assistant automatically identifies user input, recognizes suitable plugins, and passes them to the corresponding plugins for processing and returns the results.
+The Plugin Market is another key component of LobeHub, offering various plugins to extend the functionality and features of LobeHub. Plugins can be independent functional modules or integrated with agents from the Agents Market. During conversations, the assistant automatically identifies user input, recognizes suitable plugins, and passes them to the corresponding plugins for processing and returns the results.
 
 ## Security and Performance Optimization
 
-LobeChat's security strategy includes authentication and permission management. Users need to authenticate before using LobeChat, and operations are restricted based on the user's permissions.
+LobeHub's security strategy includes authentication and permission management. Users need to authenticate before using LobeHub, and operations are restricted based on the user's permissions.
 
-To optimize performance, LobeChat utilizes Next.js SSR functionality to achieve fast page loading and response times. Additionally, a series of performance optimization measures are implemented, including code splitting, caching, and resource compression.
+To optimize performance, LobeHub utilizes Next.js SSR functionality to achieve fast page loading and response times. Additionally, a series of performance optimization measures are implemented, including code splitting, caching, and resource compression.
 
 ## Development and Deployment Process
 
-LobeChat's development process includes version control, testing, continuous integration, and continuous deployment. The development team uses version control systems for code management and conducts unit and integration testing to ensure code quality. Continuous integration and deployment processes ensure rapid delivery and deployment of code.
+LobeHub's development process includes version control, testing, continuous integration, and continuous deployment. The development team uses version control systems for code management and conducts unit and integration testing to ensure code quality. Continuous integration and deployment processes ensure rapid delivery and deployment of code.
 
-The above is a brief introduction to the architecture design of LobeChat, detailing the responsibilities and collaboration of each component, as well as the impact of design decisions on application functionality and performance.
+The above is a brief introduction to the architecture design of LobeHub, detailing the responsibilities and collaboration of each component, as well as the impact of design decisions on application functionality and performance.

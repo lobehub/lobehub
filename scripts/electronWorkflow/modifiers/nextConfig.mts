@@ -1,3 +1,4 @@
+/* eslint-disable no-undef */
 import { Lang, parse } from '@ast-grep/napi';
 import fs from 'fs-extra';
 import path from 'node:path';

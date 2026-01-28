@@ -184,18 +184,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node & pnpm
-        uses: ./.github/actions/setup-node-pnpm
+      - name: Setup build environment
+        uses: ./.github/actions/desktop-build-setup
         with:
           node-version: ${{ env.NODE_VERSION }}
-          package-manager-cache: 'false'
-
-      - name: Install dependencies
-        shell: pwsh
-        run: |
-          $job1 = Start-Job -ScriptBlock { pnpm install --node-linker=hoisted }
-          $job2 = Start-Job -ScriptBlock { npm run install-isolated --prefix=./apps/desktop }
-          $job1, $job2 | Wait-Job | Receive-Job
 
       - name: Set package version
         run: npm run workflow:set-desktop-version ${{ needs.version.outputs.version }} ${{ inputs.channel }}

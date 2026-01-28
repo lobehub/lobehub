@@ -1,5 +1,5 @@
 import { Checkbox, Flexbox, Icon } from '@lobehub/ui';
-import { Loader2, SquareArrowOutUpRight, Unplug } from 'lucide-react';
+import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -42,7 +42,6 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
     const userId = useUserStore(userProfileSelectors.userId);
     const createKlavisServer = useToolStore((s) => s.createKlavisServer);
     const refreshKlavisServerTools = useToolStore((s) => s.refreshKlavisServerTools);
-    const removeKlavisServer = useToolStore((s) => s.removeKlavisServer);
 
     // 清理所有定时器
     const cleanup = useCallback(() => {
@@ -89,7 +88,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
           try {
             await refreshKlavisServerTools(serverName);
           } catch (error) {
-            console.error('[Klavis] Failed to check auth status:', error);
+            console.debug('[Klavis] Polling check (expected during auth):', error);
           }
         }, POLL_INTERVAL_MS);
 
@@ -122,8 +121,8 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
               }
               oauthWindowRef.current = null;
 
-              // 窗口关闭后立即检查一次认证状态
-              refreshKlavisServerTools(serverName);
+              // 窗口关闭后开始轮询检查认证状态
+              startFallbackPolling(serverName);
             }
           } catch {
             // COOP 阻止了访问，降级到轮询方案
@@ -212,18 +211,6 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
       setIsToggling(false);
     };
 
-    const handleDisconnect = async () => {
-      if (!server) return;
-      setIsToggling(true);
-      // 如果当前已启用，先禁用
-      if (checked) {
-        await togglePlugin(pluginId);
-      }
-      // 删除服务器（使用 identifier）
-      await removeKlavisServer(server.identifier);
-      setIsToggling(false);
-    };
-
     // 渲染右侧控件
     const renderRightControl = () => {
       // 正在连接中
@@ -262,24 +249,13 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
             return <Icon icon={Loader2} spin />;
           }
           return (
-            <Flexbox align="center" gap={8} horizontal>
-              <Icon
-                icon={Unplug}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleDisconnect();
-                }}
-                size="small"
-                style={{ cursor: 'pointer', opacity: 0.5 }}
-              />
-              <Checkbox
-                checked={checked}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleToggle();
-                }}
-              />
-            </Flexbox>
+            <Checkbox
+              checked={checked}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleToggle();
+              }}
+            />
           );
         }
         case KlavisServerStatus.PENDING_AUTH: {

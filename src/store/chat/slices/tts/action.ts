@@ -29,7 +29,15 @@ export const chatTTS: StateCreator<ChatStore, [['zustand/devtools', never]], [],
   },
 
   updateMessageTTS: async (id, data) => {
+    // Optimistic update
+    get().internal_dispatchMessage({
+      id,
+      key: 'tts',
+      type: 'updateMessageExtra',
+      value: data === false ? undefined : data,
+    });
+
+    // Persist to database
     await messageService.updateMessageTTS(id, data);
-    await get().refreshMessages();
   },
 });

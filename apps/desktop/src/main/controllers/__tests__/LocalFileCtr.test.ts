@@ -552,4 +552,265 @@ describe('LocalFileCtr', () => {
       expect(result.diffText).toContain('+modified line 2');
     });
   });
+
+  describe('handleGrepContent', () => {
+    it('should search content in a single file', async () => {
+      vi.mocked(mockFsPromises.stat).mockResolvedValue({
+        isFile: () => true,
+        isDirectory: () => false,
+      } as any);
+      vi.mocked(mockFsPromises.readFile).mockResolvedValue('Hello world\nTest line\nAnother test');
+
+      const result = await localFileCtr.handleGrepContent({
+        'pattern': 'test',
+        'path': '/test/file.txt',
+        '-i': true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.matches).toContain('/test/file.txt');
+      expect(result.total_matches).toBe(1);
+    });
+
+    it('should search content in directory with default glob pattern', async () => {
+      vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath) => {
+        if (filePath === '/test') {
+          return { isFile: () => false, isDirectory: () => true } as any;
+        }
+        return { isFile: () => true, isDirectory: () => false } as any;
+      });
+      vi.mocked(mockFg).mockResolvedValue(['/test/file1.txt', '/test/file2.txt']);
+      vi.mocked(mockFsPromises.readFile).mockImplementation(async (filePath) => {
+        if (filePath === '/test/file1.txt') return 'Hello world';
+        if (filePath === '/test/file2.txt') return 'Test content';
+        return '';
+      });
+
+      const result = await localFileCtr.handleGrepContent({
+        pattern: 'Hello',
+        path: '/test',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.matches).toContain('/test/file1.txt');
+      expect(result.total_matches).toBe(1);
+      expect(mockFg).toHaveBeenCalledWith('**/*', expect.objectContaining({ cwd: '/test' }));
+    });
+
+    it('should auto-prefix glob pattern with **/ for non-recursive patterns', async () => {
+      vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath) => {
+        if (filePath === '/test') {
+          return { isFile: () => false, isDirectory: () => true } as any;
+        }
+        return { isFile: () => true, isDirectory: () => false } as any;
+      });
+      vi.mocked(mockFg).mockResolvedValue(['/test/src/file1.ts', '/test/lib/file2.tsx']);
+      vi.mocked(mockFsPromises.readFile).mockResolvedValue('const test = "hello";');
+
+      const result = await localFileCtr.handleGrepContent({
+        pattern: 'test',
+        path: '/test',
+        glob: '*.{ts,tsx}',
+      });
+
+      expect(result.success).toBe(true);
+      // Should auto-prefix *.{ts,tsx} with **/ to make it recursive
+      expect(mockFg).toHaveBeenCalledWith(
+        '**/*.{ts,tsx}',
+        expect.objectContaining({ cwd: '/test' }),
+      );
+    });
+
+    it('should not modify glob pattern that already contains path separator', async () => {
+      vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath) => {
+        if (filePath === '/test') {
+          return { isFile: () => false, isDirectory: () => true } as any;
+        }
+        return { isFile: () => true, isDirectory: () => false } as any;
+      });
+      vi.mocked(mockFg).mockResolvedValue(['/test/src/file1.ts']);
+      vi.mocked(mockFsPromises.readFile).mockResolvedValue('const test = "hello";');
+
+      const result = await localFileCtr.handleGrepContent({
+        pattern: 'test',
+        path: '/test',
+        glob: 'src/*.ts',
+      });
+
+      expect(result.success).toBe(true);
+      // Should not modify glob pattern that already contains /
+      expect(mockFg).toHaveBeenCalledWith('src/*.ts', expect.objectContaining({ cwd: '/test' }));
+    });
+
+    it('should not modify glob pattern that starts with **', async () => {
+      vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath) => {
+        if (filePath === '/test') {
+          return { isFile: () => false, isDirectory: () => true } as any;
+        }
+        return { isFile: () => true, isDirectory: () => false } as any;
+      });
+      vi.mocked(mockFg).mockResolvedValue(['/test/src/file1.ts']);
+      vi.mocked(mockFsPromises.readFile).mockResolvedValue('const test = "hello";');
+
+      const result = await localFileCtr.handleGrepContent({
+        pattern: 'test',
+        path: '/test',
+        glob: '**/components/*.tsx',
+      });
+
+      expect(result.success).toBe(true);
+      // Should not modify glob pattern that already starts with **
+      expect(mockFg).toHaveBeenCalledWith(
+        '**/components/*.tsx',
+        expect.objectContaining({ cwd: '/test' }),
+      );
+    });
+
+    it('should filter by type when provided', async () => {
+      vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath) => {
+        if (filePath === '/test') {
+          return { isFile: () => false, isDirectory: () => true } as any;
+        }
+        return { isFile: () => true, isDirectory: () => false } as any;
+      });
+      // fast-glob returns all files, then type filter is applied
+      vi.mocked(mockFg).mockResolvedValue(['/test/file1.ts', '/test/file2.js', '/test/file3.ts']);
+      vi.mocked(mockFsPromises.readFile).mockResolvedValue('unique_pattern');
+
+      const result = await localFileCtr.handleGrepContent({
+        pattern: 'unique_pattern',
+        path: '/test',
+        type: 'ts',
+      });
+
+      expect(result.success).toBe(true);
+      // Type filter should exclude .js files from being searched
+      // Only .ts files should be in the results
+      expect(result.matches).not.toContain('/test/file2.js');
+      // At least one .ts file should match
+      expect(result.matches.length).toBeGreaterThan(0);
+      expect(result.matches.every((m) => m.endsWith('.ts'))).toBe(true);
+    });
+
+    it('should return content mode with line numbers', async () => {
+      vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath) => {
+        if (filePath === '/test') {
+          return { isFile: () => false, isDirectory: () => true } as any;
+        }
+        return { isFile: () => true, isDirectory: () => false } as any;
+      });
+      vi.mocked(mockFg).mockResolvedValue(['/test/file.txt']);
+      vi.mocked(mockFsPromises.readFile).mockResolvedValue('line 1\ntest line\nline 3');
+
+      const result = await localFileCtr.handleGrepContent({
+        'pattern': 'test',
+        'path': '/test',
+        'output_mode': 'content',
+        '-n': true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.matches.some((m) => m.includes('2:'))).toBe(true);
+    });
+
+    it('should return count mode', async () => {
+      vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath) => {
+        if (filePath === '/test') {
+          return { isFile: () => false, isDirectory: () => true } as any;
+        }
+        return { isFile: () => true, isDirectory: () => false } as any;
+      });
+      vi.mocked(mockFg).mockResolvedValue(['/test/file.txt']);
+      vi.mocked(mockFsPromises.readFile).mockResolvedValue('test one\ntest two\ntest three');
+
+      const result = await localFileCtr.handleGrepContent({
+        pattern: 'test',
+        path: '/test',
+        output_mode: 'count',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.matches).toContain('/test/file.txt:3');
+      expect(result.total_matches).toBe(3);
+    });
+
+    it('should respect head_limit', async () => {
+      vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath) => {
+        if (filePath === '/test') {
+          return { isFile: () => false, isDirectory: () => true } as any;
+        }
+        return { isFile: () => true, isDirectory: () => false } as any;
+      });
+      vi.mocked(mockFg).mockResolvedValue([
+        '/test/file1.txt',
+        '/test/file2.txt',
+        '/test/file3.txt',
+        '/test/file4.txt',
+        '/test/file5.txt',
+      ]);
+      vi.mocked(mockFsPromises.readFile).mockResolvedValue('test content');
+
+      const result = await localFileCtr.handleGrepContent({
+        pattern: 'test',
+        path: '/test',
+        head_limit: 2,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.matches.length).toBe(2);
+    });
+
+    it('should handle case insensitive search', async () => {
+      vi.mocked(mockFsPromises.stat).mockResolvedValue({
+        isFile: () => true,
+        isDirectory: () => false,
+      } as any);
+      vi.mocked(mockFsPromises.readFile).mockResolvedValue('Hello World\nHELLO world\nhello WORLD');
+
+      const result = await localFileCtr.handleGrepContent({
+        'pattern': 'hello',
+        'path': '/test/file.txt',
+        '-i': true,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.matches).toContain('/test/file.txt');
+    });
+
+    it('should handle grep error gracefully', async () => {
+      vi.mocked(mockFsPromises.stat).mockRejectedValue(new Error('Path not found'));
+
+      const result = await localFileCtr.handleGrepContent({
+        pattern: 'test',
+        path: '/nonexistent',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.matches).toEqual([]);
+      expect(result.total_matches).toBe(0);
+    });
+
+    it('should skip unreadable files gracefully', async () => {
+      vi.mocked(mockFsPromises.stat).mockImplementation(async (filePath) => {
+        if (filePath === '/test') {
+          return { isFile: () => false, isDirectory: () => true } as any;
+        }
+        return { isFile: () => true, isDirectory: () => false } as any;
+      });
+      vi.mocked(mockFg).mockResolvedValue(['/test/file1.txt', '/test/file2.txt']);
+      vi.mocked(mockFsPromises.readFile).mockImplementation(async (filePath) => {
+        if (filePath === '/test/file1.txt') throw new Error('Permission denied');
+        return 'test content';
+      });
+
+      const result = await localFileCtr.handleGrepContent({
+        pattern: 'test',
+        path: '/test',
+      });
+
+      expect(result.success).toBe(true);
+      // Should still find match in file2.txt despite file1.txt error
+      expect(result.matches).toContain('/test/file2.txt');
+    });
+  });
 });

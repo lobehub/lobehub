@@ -181,7 +181,7 @@ export default class AuthCtr extends ControllerModule {
 
 2. **桌面端特定认证**：
    - 在桌面应用中使用固定的用户 ID
-   - 支持与 Clerk 和 NextAuth 等认证系统集成
+   - 支持与 Better Auth 认证系统集成
 
 ### 存储模块 (Store)
 

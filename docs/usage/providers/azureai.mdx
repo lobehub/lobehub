@@ -1,71 +1,71 @@
 ---
-title: Using Azure AI API Key in LobeChat
-description: Learn how to configure and use Azure AI models in LobeChat, get the API key, and start a conversation.
+title: Using Azure AI API Key in LobeHub
+description: >-
+  Learn how to configure and use Azure AI models in LobeHub, obtain your API
+  key, and start chatting.
 tags:
-  - LobeChat
+  - LobeHub
   - Azure AI
   - API Key
   - Web UI
 ---
 
-# Using Azure AI in LobeChat
+# Using Azure AI in LobeHub
 
-<Image alt={'Using Azure AI in LobeChat'} cover src={'https://github.com/user-attachments/assets/81d0349a-44fe-4dfc-bbc4-8e9a1e09567d'} />
+<Image alt={'Using Azure AI in LobeHub'} cover src={'/blog/assets29de82efbe7657a8b9ba7daf0904585d.webp'} />
 
-[Azure AI](https://azure.microsoft.com) is an open artificial intelligence technology platform based on the Microsoft Azure cloud platform. It provides various AI functionalities, including natural language processing, machine learning, and computer vision, helping businesses easily develop and deploy AI applications.
+[Azure AI](https://azure.microsoft.com) is an open AI technology platform built on Microsoft Azure's cloud infrastructure. It offers a wide range of AI capabilities including natural language processing, machine learning, and computer vision, enabling businesses to easily develop and deploy AI-powered applications.
 
-This document will guide you on how to integrate Azure AI models into LobeChat:
+This guide will walk you through how to integrate Azure AI models into LobeHub:
 
 <Steps>
-  ### Step 1: Deploy Azure AI Project and Model
+  ### Step 1: Deploy an Azure AI Project and Model
 
-  - First, visit [Azure AI Foundry](https://ai.azure.com/) and complete the registration and login process.
-  - After logging in, select `Browse models` on the homepage.
+  - First, visit [Azure AI Foundry](https://ai.azure.com/) and sign up or log in.
+  - Once logged in, go to the homepage and select `Browse Models`.
 
-  <Image alt={'Accessing Azure AI Foundry'} inStep src={'https://github.com/user-attachments/assets/1c6a3e42-8e24-4148-b2c3-0bfe60a8cf77'} />
+  <Image alt={'Accessing Azure AI Foundry'} inStep src={'/blog/assets8096422e62e10dcd58efe75c616f9e88.webp'} />
 
-  - Choose the model you want in the model marketplace.
-  - Enter the model details and click the `Deploy` button.
+  - In the model marketplace, choose the model you want to use.
+  - On the model details page, click the `Deploy` button.
 
-  <Image alt={'Browsing Models'} inStep src={'https://github.com/user-attachments/assets/3ed3226c-3d4c-49ef-b2c0-8953dac8a92e'} />
+  <Image alt={'Browsing Models'} inStep src={'/blog/assets7dbd100dac8e2614ef6b297885b3c9e2.webp'} />
 
   - In the pop-up dialog, create a new project.
 
-  <Image alt={'Creating a New Project'} inStep src={'https://github.com/user-attachments/assets/199b862a-5de4-4a54-83b2-f4dbf69be902'} />
+  <Image alt={'Creating a New Project'} inStep src={'/blog/assetsb9d1f02ab6c26f8a2c7873a949b4dd3c.webp'} />
 
   <Callout type={'note'}>
-    For detailed configuration of Azure AI Foundry, please refer to the [official
-    documentation](https://learn.microsoft.com/azure/ai-foundry/model-inference/).
+    For detailed configuration of Azure AI Foundry, please refer to the [official documentation](https://learn.microsoft.com/azure/ai-foundry/model-inference/).
   </Callout>
 
-  ### Step 2: Obtain the Model's API Key and Endpoint
+  ### Step 2: Retrieve the Model's API Key and Endpoint
 
-  - In the details of the deployed model, you can find the Endpoint and API Key information.
-  - Copy and save the obtained information.
+  - In the deployed model's details page, you can find the Endpoint and API Key.
+  - Copy and securely save this information.
 
-  <Image alt={'Obtaining API Key'} inStep src={'https://github.com/user-attachments/assets/30c33426-412d-4dec-b096-317fe5880e79'} />
+  <Image alt={'Retrieving API Key'} inStep src={'/blog/assets66829206b15b6c36fa3344835659c041.webp'} />
 
-  ### Step 3: Configure Azure AI in LobeChat
+  ### Step 3: Configure Azure AI in LobeHub
 
-  - Visit the `App Settings` and `AI Service Provider` interface in LobeChat.
-  - Find the settings for `Azure AI` in the list of providers.
+  - Go to the `App Settings` section in LobeHub and navigate to `AI Service Providers`.
+  - Find the `Azure AI` option in the list of providers.
 
-  <Image alt={'Entering Azure AI API Key'} inStep src={'https://github.com/user-attachments/assets/eb41f77f-ccdd-4a48-a8a2-7badac868c03'} />
+  <Image alt={'Entering Azure AI API Key'} inStep src={'/blog/assets0a81d34f707bd87cee3852f26a3d14f0.webp'} />
 
-  - Enable the Azure AI service provider and fill in the obtained Endpoint and API Key.
+  - Open the Azure AI provider settings and enter the Endpoint and API Key you obtained.
 
   <Callout type={'warning'}>
-    For the Endpoint, you only need to fill in the first part:
-    `https://xxxxxx.services.ai.azure.com/models`.
+    Only enter the base part of the Endpoint, e.g., `https://xxxxxx.services.ai.azure.com/models`.
   </Callout>
 
-  - Choose an Azure AI model for your assistant and start the conversation.
+  - Select an Azure AI model for your assistant to start chatting.
 
-  <Image alt={'Selecting Azure AI Model'} inStep src={'https://github.com/user-attachments/assets/a1ba8ec0-e259-4da4-8980-0cf82ca5f52b'} />
+  <Image alt={'Selecting Azure AI Model'} inStep src={'/blog/assetsbd69842ebb37848ecd50c242aad835b0.webp'} />
 
   <Callout type={'warning'}>
-    You may need to pay the API service provider for usage. Please refer to Azure AI's relevant pricing policies.
+    You may incur charges from the API service provider during usage. Please refer to Azure AI's pricing policy for more details.
   </Callout>
 </Steps>
 
-Now you can use the models provided by Azure AI in LobeChat for conversations.
+That's it! You're now ready to use Azure AI models for conversations in LobeHub.

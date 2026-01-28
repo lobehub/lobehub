@@ -1,16 +1,16 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { BrowserWindow, nativeTheme } from 'electron';
+import { BrowserWindow, BrowserWindowConstructorOptions, nativeTheme } from 'electron';
 import { join } from 'node:path';
 
 import { buildDir } from '@/const/dir';
-import { isDev, isWindows } from '@/const/env';
+import { isDev, isMac, isWindows } from '@/const/env';
 import {
   BACKGROUND_DARK,
   BACKGROUND_LIGHT,
   SYMBOL_COLOR_DARK,
   SYMBOL_COLOR_LIGHT,
   THEME_CHANGE_DELAY,
-} from '@/const/theme';
+} from '../../const/theme';
 import { createLogger } from '@/utils/logger';
 
 const logger = createLogger('core:WindowThemeManager');
@@ -38,6 +38,15 @@ export class WindowThemeManager {
   constructor(identifier: string) {
     this.identifier = identifier;
     this.boundHandleThemeChange = this.handleThemeChange.bind(this);
+  }
+
+  private getWindowsTitleBarOverlay(isDarkMode: boolean): WindowsThemeConfig['titleBarOverlay'] {
+    return {
+      color: '#00000000',
+      // Reduce 2px to prevent blocking the container border edge
+      height: TITLE_BAR_HEIGHT - 2,
+      symbolColor: isDarkMode ? SYMBOL_COLOR_DARK : SYMBOL_COLOR_LIGHT,
+    };
   }
 
   // ==================== Lifecycle ====================
@@ -75,9 +84,17 @@ export class WindowThemeManager {
   /**
    * Get platform-specific theme configuration for window creation
    */
-  getPlatformConfig(): Partial<WindowsThemeConfig> {
+  getPlatformConfig(): Partial<BrowserWindowConstructorOptions> {
     if (isWindows) {
       return this.getWindowsConfig(this.isDarkMode);
+    }
+    if (isMac) {
+      // Calculate traffic light position to center vertically in title bar
+      // Traffic light buttons are approximately 12px tall
+      const trafficLightY = Math.round((TITLE_BAR_HEIGHT - 12) / 2);
+      return {
+        trafficLightPosition: { x: 12, y: trafficLightY },
+      };
     }
     return {};
   }
@@ -89,12 +106,7 @@ export class WindowThemeManager {
     return {
       backgroundColor: isDarkMode ? BACKGROUND_DARK : BACKGROUND_LIGHT,
       icon: isDev ? join(buildDir, 'icon-dev.ico') : undefined,
-      titleBarOverlay: {
-        color: isDarkMode ? BACKGROUND_DARK : BACKGROUND_LIGHT,
-        // Reduce 2px to prevent blocking the container border edge
-        height: TITLE_BAR_HEIGHT - 2,
-        symbolColor: isDarkMode ? SYMBOL_COLOR_DARK : SYMBOL_COLOR_LIGHT,
-      },
+      titleBarOverlay: this.getWindowsTitleBarOverlay(isDarkMode),
       titleBarStyle: 'hidden',
     };
   }
@@ -123,10 +135,40 @@ export class WindowThemeManager {
     logger.debug(`[${this.identifier}] App theme mode changed, reapplying visual effects.`);
     setTimeout(() => {
       this.applyVisualEffects();
+      this.applyWindowsTitleBarOverlay();
     }, THEME_CHANGE_DELAY);
   }
 
   // ==================== Visual Effects ====================
+
+  private resolveWindowsIsDarkModeFromElectron(): boolean {
+    if (nativeTheme.themeSource === 'dark') return true;
+    if (nativeTheme.themeSource === 'light') return false;
+    return nativeTheme.shouldUseDarkColors;
+  }
+
+  /**
+   * Apply Windows title bar overlay based on Electron theme mode.
+   * Mirror the structure of `applyVisualEffects`, but only updates title bar overlay.
+   */
+  private applyWindowsTitleBarOverlay(): void {
+    if (!this.browserWindow || this.browserWindow.isDestroyed()) return;
+
+    logger.debug(`[${this.identifier}] Applying Windows title bar overlay`);
+    const isDarkMode = this.resolveWindowsIsDarkModeFromElectron();
+
+    try {
+      if (!isWindows) return;
+
+      this.browserWindow.setTitleBarOverlay(this.getWindowsTitleBarOverlay(isDarkMode));
+
+      logger.debug(
+        `[${this.identifier}] Windows title bar overlay applied successfully (dark mode: ${isDarkMode})`,
+      );
+    } catch (error) {
+      logger.error(`[${this.identifier}] Failed to apply Windows title bar overlay:`, error);
+    }
+  }
 
   /**
    * Apply visual effects based on current theme

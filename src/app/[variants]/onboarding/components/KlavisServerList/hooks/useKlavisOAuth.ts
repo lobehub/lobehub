@@ -5,6 +5,7 @@ import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 
 const POLL_INTERVAL_MS = 1000;
 const POLL_TIMEOUT_MS = 15_000;
+const WINDOW_CLOSED_POLL_TIMEOUT_MS = 4000; // Shorter timeout when window is closed
 
 interface UseKlavisOAuthProps {
   serverStatus?: KlavisServerStatus;
@@ -50,14 +51,14 @@ export const useKlavisOAuth = ({ serverStatus }: UseKlavisOAuthProps) => {
   }, [serverStatus, isWaitingAuth, cleanup]);
 
   const startFallbackPolling = useCallback(
-    (serverName: string) => {
+    (serverName: string, timeoutMs: number = POLL_TIMEOUT_MS) => {
       if (pollIntervalRef.current) return;
 
       pollIntervalRef.current = setInterval(async () => {
         try {
           await refreshKlavisServerTools(serverName);
         } catch (error) {
-          console.error('[Klavis] Failed to check auth status:', error);
+          console.debug('[Klavis] Polling check (expected during auth):', error);
         }
       }, POLL_INTERVAL_MS);
 
@@ -67,7 +68,7 @@ export const useKlavisOAuth = ({ serverStatus }: UseKlavisOAuthProps) => {
           pollIntervalRef.current = null;
         }
         setIsWaitingAuth(false);
-      }, POLL_TIMEOUT_MS);
+      }, timeoutMs);
     },
     [refreshKlavisServerTools],
   );
@@ -77,23 +78,29 @@ export const useKlavisOAuth = ({ serverStatus }: UseKlavisOAuthProps) => {
       windowCheckIntervalRef.current = setInterval(() => {
         try {
           if (oauthWindow.closed) {
+            // Stop monitoring window
             if (windowCheckIntervalRef.current) {
               clearInterval(windowCheckIntervalRef.current);
               windowCheckIntervalRef.current = null;
             }
             oauthWindowRef.current = null;
-            refreshKlavisServerTools(serverName);
+
+            // Start polling to check auth status after window closes
+            // Use shorter timeout since user has closed the window
+            // Keep loading state until we confirm success or timeout
+            startFallbackPolling(serverName, WINDOW_CLOSED_POLL_TIMEOUT_MS);
           }
         } catch {
           if (windowCheckIntervalRef.current) {
             clearInterval(windowCheckIntervalRef.current);
             windowCheckIntervalRef.current = null;
           }
+          // Use default timeout for fallback polling
           startFallbackPolling(serverName);
         }
       }, 500);
     },
-    [refreshKlavisServerTools, startFallbackPolling],
+    [startFallbackPolling],
   );
 
   const openOAuthWindow = useCallback(

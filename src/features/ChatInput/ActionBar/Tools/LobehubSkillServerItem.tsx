@@ -1,5 +1,5 @@
 import { Checkbox, Flexbox, Icon } from '@lobehub/ui';
-import { Loader2, SquareArrowOutUpRight, Unplug } from 'lucide-react';
+import { Loader2, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -36,7 +36,6 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
 
   const server = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(provider));
   const checkStatus = useToolStore((s) => s.checkLobehubSkillStatus);
-  const revokeConnect = useToolStore((s) => s.revokeLobehubSkill);
   const getAuthorizeUrl = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
 
   const cleanup = useCallback(() => {
@@ -196,16 +195,6 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
     setIsToggling(false);
   };
 
-  const handleDisconnect = async () => {
-    if (!server) return;
-    setIsToggling(true);
-    if (checked) {
-      await togglePlugin(pluginId);
-    }
-    await revokeConnect(server.identifier);
-    setIsToggling(false);
-  };
-
   const renderRightControl = () => {
     if (isConnecting) {
       return (
@@ -239,24 +228,13 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
           return <Icon icon={Loader2} spin />;
         }
         return (
-          <Flexbox align="center" gap={8} horizontal>
-            <Icon
-              icon={Unplug}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleDisconnect();
-              }}
-              size="small"
-              style={{ cursor: 'pointer', opacity: 0.5 }}
-            />
-            <Checkbox
-              checked={checked}
-              onClick={(e) => {
-                e.stopPropagation();
-                handleToggle();
-              }}
-            />
-          </Flexbox>
+          <Checkbox
+            checked={checked}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggle();
+            }}
+          />
         );
       }
       case LobehubSkillStatus.CONNECTING: {

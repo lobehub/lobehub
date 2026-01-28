@@ -142,7 +142,7 @@ export const messageOptimisticUpdate: StateCreator<
 
     let tempId = context?.tempMessageId;
     if (!tempId) {
-      tempId = optimisticCreateTmpMessage(message as any);
+      tempId = optimisticCreateTmpMessage(message as any, context);
       internal_toggleMessageLoading(true, tempId);
     }
 

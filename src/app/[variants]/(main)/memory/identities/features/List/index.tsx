@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MemoryAnalysis from '@/app/[variants]/(main)/memory/features/MemoryAnalysis';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useGlobalStore } from '@/store/global';
 import { useUserMemoryStore } from '@/store/userMemory';
@@ -30,7 +31,14 @@ const IdentitiesList = memo<IdentitiesListProps>(({ isLoading, searchValue, view
   };
 
   if (!identities || identities.length === 0)
-    return <MemoryEmpty search={Boolean(searchValue)} title={t('identity.empty')} />;
+    return (
+      <MemoryEmpty
+        search={Boolean(searchValue)}
+        title={t('identity.empty')}
+      >
+        <MemoryAnalysis />
+      </MemoryEmpty>
+    );
 
   if (viewMode === 'timeline')
     return <TimelineView identities={identities} isLoading={isLoading} onClick={handleCardClick} />;

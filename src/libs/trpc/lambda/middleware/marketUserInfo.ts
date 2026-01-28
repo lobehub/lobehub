@@ -6,6 +6,7 @@ import type { TrustedClientUserInfo } from '@/libs/trusted-client';
 import { trpc } from '../init';
 
 interface ContextWithServerDB {
+  marketAccessToken?: string;
   serverDB?: LobeChatDatabase;
   userId?: string | null;
 }
@@ -39,8 +40,19 @@ export const marketUserInfo = trpc.middleware(async (opts) => {
       userId: ctx.userId,
     };
 
+    // Fetch market access token from user_settings.market
+    const userModel = new UserModel(ctx.serverDB, ctx.userId);
+    const userSettings = await userModel.getUserSettings();
+    const marketTokenFromDB = (userSettings?.market as any)?.accessToken;
+
+    // Prioritize database token over cookie token
+    const marketAccessToken = marketTokenFromDB || ctx.marketAccessToken;
+
     return opts.next({
-      ctx: { marketUserInfo },
+      ctx: {
+        marketAccessToken,
+        marketUserInfo,
+      },
     });
   } catch {
     // If fetching user info fails, continue without it

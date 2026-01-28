@@ -1,0 +1,281 @@
+---
+title: Plugin Development
+description: >-
+  Learn how to add and use custom plugins in LobeHub, including creating a
+  plugin project, adding local plugins in role settings, testing plugin
+  functionality, and understanding the development and deployment process.
+tags:
+  - LobeHub
+  - LobeHub
+  - Plugin Development
+  - Custom Plugins
+  - Plugin Deployment
+  - Plugin Publishing
+  - Plugin UI
+  - Plugin SDK
+---
+
+# Plugin Development
+
+## Plugin Structure
+
+A LobeHub plugin consists of the following components:
+
+1. **Plugin Index**: Displays basic plugin information, including name, description, author, version, and a link to the plugin manifest. The official plugin index is hosted at [lobe-chat-plugins](https://github.com/lobehub/lobe-chat-plugins). To publish your plugin to the official marketplace, you need to [submit a PR](https://github.com/lobehub/lobe-chat-plugins/pulls) to this repository.
+2. **Plugin Manifest**: Describes the plugin's functionality, including backend services, frontend UI, version, and more. For a detailed explanation, see \[manifest]\[manifest-docs-url].
+3. **Plugin Services**: Implements the backend and optional frontend modules described in the manifest:
+   - **Backend**: Implements the `api` section defined in the manifest.
+   - **Frontend UI** (optional): Implements the `ui` section, allowing for richer message displays beyond plain text.
+
+## Custom Plugin Workflow
+
+This section walks you through how to add and use a custom plugin in LobeHub.
+
+<Steps>
+  ### Create and Start a Plugin Project
+
+  First, create a local plugin project using our template: \[lobe-chat-plugin-template]\[lobe-chat-plugin-template-url]
+
+  ```bash
+  $ git clone https://github.com/lobehub/chat-plugin-template.git
+  $ cd chat-plugin-template
+  $ npm i
+  $ npm run dev
+  ```
+
+  Once you see `ready started server on 0.0.0.0:3400, url: http://localhost:3400`, your plugin service is running locally.
+
+  <Image alt="Create and Start Plugin Project" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265259526-9ef25272-4312-429b-93bc-a95515727ed3.png" />
+
+  ### Add Local Plugin in LobeHub Role Settings
+
+  Next, go to LobeHub, create a new assistant, and open its session settings:
+
+  <Image alt="Add Local Plugin in LobeHub Role Settings S1" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265259643-1a9cc34a-76f3-4ccf-928b-129654670efd.png" />
+
+  Click the <kbd>Add</kbd> button on the right side of the plugin list to open the custom plugin dialog:
+
+  <Image alt="Add Local Plugin in LobeHub Role Settings S2" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265259748-2ef6a244-39bb-483c-b359-f156ffcbe1a4.png" />
+
+  Enter `http://localhost:3400/manifest-dev.json` in the **Plugin Manifest URL** field. This is the local address of your plugin manifest.
+
+  You should now see the plugin identifier auto-filled as `chat-plugin-template`. Fill in the remaining fields (only the title is required), then click <kbd>Save</kbd> to complete the setup.
+
+  <Image alt="Add Local Plugin in LobeHub Role Settings S3" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265259964-59f4906d-ae2e-4ec0-8b43-db36871d0869.png" />
+
+  Once added, the plugin will appear in the list. To edit its configuration, click the <kbd>Settings</kbd> button on the far right.
+
+  <Image alt="Add Local Plugin in LobeHub Role Settings S4" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265260093-a0363c74-0b5b-48dd-b103-2db6b4a8262e.png" />
+
+  ### Test Plugin Functionality in Chat
+
+  Now let’s test if the plugin works as expected.
+
+  Click <kbd>Back</kbd> to return to the chat area, and send a message like: “What should I wear?” The assistant will ask for your gender and current mood.
+
+  <Image alt="Test Plugin Functionality S1" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265260291-f0aa0e7c-0ffb-486c-a834-08e73d49896f.png" />
+
+  After you respond, the assistant will call the plugin, fetch clothing recommendations based on your gender and mood, and present the results along with a summary.
+
+  <Image alt="Test Plugin Functionality S2" height={483} inStep src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265260461-c22ae797-2809-464b-96fc-d0c020f4807b.png" />
+
+  After completing these steps, you now understand the basic process of adding and using a custom plugin in LobeHub.
+</Steps>
+
+## Local Plugin Development
+
+Now that you know how to add and use a plugin, let’s dive into the development process.
+
+### Manifest
+
+The `manifest` defines how the plugin works. The key fields are `api` and `ui`, which describe the backend API and frontend UI respectively.
+
+Here’s an example from the template:
+
+```json
+{
+  "api": [
+    {
+      "url": "http://localhost:3400/api/clothes",
+      "name": "recommendClothes",
+      "description": "Recommend clothes based on the user's mood",
+      "parameters": {
+        "properties": {
+          "mood": {
+            "description": "User's current mood. Options: happy, sad, anger, fear, surprise, disgust",
+            "enums": ["happy", "sad", "anger", "fear", "surprise", "disgust"],
+            "type": "string"
+          },
+          "gender": {
+            "type": "string",
+            "enum": ["man", "woman"],
+            "description": "User's gender, must be asked before calling the API"
+          }
+        },
+        "required": ["mood", "gender"],
+        "type": "object"
+      }
+    }
+  ],
+  "gateway": "http://localhost:3400/api/gateway",
+  "identifier": "chat-plugin-template",
+  "ui": {
+    "url": "http://localhost:3400",
+    "height": 200
+  },
+  "version": "1"
+}
+```
+
+Key fields:
+
+1. `identifier`: Unique plugin ID. Must be globally unique.
+2. `api`: Array of API definitions. Each includes `url`, `name`, `description`, and `parameters`. The `description` and `parameters` are used in GPT’s [Function Call](https://sspai.com/post/81986) and must follow [JSON Schema](https://json-schema.org/).
+3. `ui`: Defines the plugin’s frontend interface, loaded via iframe. You can specify height and width.
+4. `gateway`: Specifies the API gateway. LobeHub’s default is a cloud service, but for local plugins, this should point to your local server.
+5. `version`: Plugin version (currently unused).
+
+For a full breakdown of manifest fields, see: \[manifest]\[manifest-docs-url].
+
+### Project Structure
+
+The \[lobe-chat-plugin-template]\[lobe-chat-plugin-template-url] uses Next.js. Its structure:
+
+```
+➜  chat-plugin-template
+├── public
+│   └── manifest-dev.json            # Manifest file
+├── src
+│   └── pages
+│   │   ├── api                      # Next.js API routes
+│   │   │   ├── clothes.ts           # recommendClothes API
+│   │   │   └── gateway.ts           # Local plugin gateway
+│   │   └── index.tsx                # Frontend UI
+```
+
+You can use any framework or language, as long as it implements the manifest functionality.
+
+We also welcome contributions of templates in other frameworks and languages.
+
+### Backend
+
+The backend implements the APIs defined in the manifest. The template uses Vercel’s [Edge Runtime](https://nextjs.org/docs/pages/api-reference/edge) for serverless deployment.
+
+#### API Implementation
+
+We provide a `createErrorResponse` method in `@lobehub/chat-plugin-sdk` for handling errors. See \[PluginErrorType]\[plugin-error-type-url] for available types.
+
+Example implementation of the clothes API:
+
+```ts
+export default async (req: Request) => {
+  if (req.method !== 'POST') return createErrorResponse(PluginErrorType.MethodNotAllowed);
+
+  const { gender, mood } = (await req.json()) as RequestData;
+
+  const clothes = gender === 'man' ? manClothes : womanClothes;
+
+  const result: ResponseData = {
+    clothes: clothes[mood] || [],
+    mood,
+    today: Date.now(),
+  };
+
+  return new Response(JSON.stringify(result));
+};
+```
+
+`manClothes` and `womanClothes` are mock data. Replace with real data sources as needed.
+
+#### Plugin Gateway
+
+LobeHub’s default plugin gateway is `/api/plugins`, which sends requests to the `api.url` in the manifest.
+
+For local plugins, set the `gateway` to a local address (e.g., `http://localhost:3400/api/gateway`). Then implement the gateway:
+
+```ts
+import { createLobeHubPluginGateway } from '@lobehub/chat-plugins-gateway';
+
+export const config = {
+  runtime: 'edge',
+};
+
+export default createLobeHubPluginGateway();
+```
+
+[`@lobehub/chat-plugins-gateway`](https://github.com/lobehub/chat-plugins-gateway) provides the gateway implementation used in LobeHub. Use it to route requests to your local plugin service.
+
+### Plugin UI
+
+The UI is optional. For example, the official plugin [🧩 / 🕸 Web Content Extractor](https://github.com/lobehub/chat-plugin-web-crawler) has no UI.
+
+<Image alt="Plugin UI Example S1" height={483} src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265263241-0e765fdc-3463-4c36-a398-aef177a30df9.png" />
+
+If you want to display rich content or interactive elements, you can build a custom UI. For example, the [Search Engine](https://github.com/lobehub/chat-plugin-search-engine) plugin:
+
+<Image alt="Plugin UI Example S2" height={483} src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265263427-9bdc03d5-aa61-4f62-a2ce-88683f3308d8.png" />
+
+#### Implementing the UI
+
+LobeHub loads plugin UIs via `iframe` and uses `postMessage` for communication. You can use any frontend framework or language.
+
+<Image alt="Plugin UI Implementation" height={483} src="https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/265263653-4ea87abc-249a-49f3-a241-7ed93ddb1ddf.png" />
+
+The template uses React + Next.js + [antd](https://ant.design/). See [`src/pages/index.tsx`](https://github.com/lobehub/chat-plugin-template/blob/main/src/pages/index.tsx) for the UI implementation.
+
+To simplify communication, use `fetchPluginMessage` from [`@lobehub/chat-plugin-sdk`](https://github.com/lobehub/chat-plugin-sdk). It fetches the current plugin message from LobeHub. See \[fetchPluginMessage]\[fetch-plugin-message-url] for details.
+
+```tsx
+import { fetchPluginMessage } from '@lobehub/chat-plugin-sdk';
+import { memo, useEffect, useState } from 'react';
+
+import { ResponseData } from '@/type';
+
+const Render = memo(() => {
+  const [data, setData] = useState<ResponseData>();
+
+  useEffect(() => {
+    fetchPluginMessage().then((e: ResponseData) => {
+      setData(e);
+    });
+  }, []);
+
+  return <>...</>;
+});
+
+export default Render;
+```
+
+## Plugin Deployment & Publishing
+
+Once your plugin is ready, deploy it using your preferred method—Vercel, Docker, etc.
+
+To share your plugin with others, consider [submitting it](https://github.com/lobehub/lobe-chat-plugins) to the official plugin marketplace.
+
+\[!\[]\[submit-plugin-shield]]\[submit-plugin-url]
+
+### Plugin Shield
+
+[![lobe-chat-plugin](https://img.shields.io/badge/%F0%9F%A4%AF%20%26%20%F0%9F%A7%A9%20LobeHub-Plugin-95f3d9?labelColor=black\&style=flat-square)](https://github.com/lobehub/lobe-chat-plugins)
+
+```markdown
+[![lobe-chat-plugin](https://img.shields.io/badge/%F0%9F%A4%AF%20%26%20%F0%9F%A7%A9%20LobeHub-Plugin-95f3d9?labelColor=black&style=flat-square)](https://github.com/lobehub/lobe-chat-plugins)
+```
+
+## Links
+
+- **📘 Plugin SDK Docs**: [https://chat-plugin-sdk.lobehub.com](https://chat-plugin-sdk.lobehub.com)
+- **🚀 chat-plugin-template**: [https://github.com/lobehub/chat-plugin-template](https://github.com/lobehub/chat-plugin-template)
+- **🧩 chat-plugin-sdk**: [https://github.com/lobehub/chat-plugin-sdk](https://github.com/lobehub/chat-plugin-sdk)
+- **🚪 chat-plugin-gateway**: [https://github.com/lobehub/chat-plugins-gateway](https://github.com/lobehub/chat-plugins-gateway)
+- **🏪 lobe-chat-plugins**: [https://github.com/lobehub/lobe-chat-plugins](https://github.com/lobehub/lobe-chat-plugins)
+
+```
+
+[fetch-plugin-message-url]: https://github.com/lobehub/chat-plugin-template
+[lobe-chat-plugin-template-url]: https://github.com/lobehub/chat-plugin-template
+[manifest-docs-url]: https://chat-plugin-sdk.lobehub.com/guides/plugin-manifest
+[plugin-error-type-url]: https://github.com/lobehub/chat-plugin-template
+[submit-plugin-shield]: https://img.shields.io/badge/🧩/🏪_submit_plugin-%E2%86%92-95f3d9?labelColor=black&style=for-the-badge
+[submit-plugin-url]: https://github.com/lobehub/lobe-chat-plugins
+```

@@ -4,7 +4,6 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
-import { enableAuth } from '@/envs/auth';
 import DataStatistics from '@/features/User/DataStatistics';
 import UserInfo from '@/features/User/UserInfo';
 import UserLoginOrSignup from '@/features/User/UserLoginOrSignup/Community';
@@ -17,7 +16,7 @@ const UserBanner = memo(() => {
 
   return (
     <Flexbox gap={12} paddingBlock={8}>
-      {!enableAuth || (enableAuth && isLoginWithAuth) ? (
+      {isLoginWithAuth ? (
         <>
           <Link style={{ color: 'inherit' }} to="/settings/profile">
             <UserInfo />

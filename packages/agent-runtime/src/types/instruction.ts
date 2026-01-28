@@ -209,6 +209,7 @@ export interface AgentInstructionResolveAbortedTools {
 
 /**
  * Instruction to execute context compression
+ * When triggered, compresses ALL messages into a single MessageGroup summary
  */
 export interface AgentInstructionCompressContext {
   payload: {
@@ -216,12 +217,8 @@ export interface AgentInstructionCompressContext {
     currentTokenCount: number;
     /** Existing summary to incorporate (for incremental compression) */
     existingSummary?: string;
-    /** Number of recent messages to keep uncompressed */
-    keepRecentCount: number;
     /** Messages to compress */
     messages: any[];
-    /** Topic ID for the conversation */
-    topicId: string;
   };
   type: 'compress_context';
 }

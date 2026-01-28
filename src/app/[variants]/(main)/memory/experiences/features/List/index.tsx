@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MemoryAnalysis from '@/app/[variants]/(main)/memory/features/MemoryAnalysis';
 import MemoryEmpty from '@/app/[variants]/(main)/memory/features/MemoryEmpty';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useGlobalStore } from '@/store/global';
@@ -30,7 +31,14 @@ const ExperiencesList = memo<ExperiencesListProps>(({ isLoading, searchValue, vi
   const isEmpty = experiences.length === 0;
 
   if (isEmpty) {
-    return <MemoryEmpty search={Boolean(searchValue)} title={t('experience.empty')} />;
+    return (
+      <MemoryEmpty
+        search={Boolean(searchValue)}
+        title={t('experience.empty')}
+      >
+        <MemoryAnalysis />
+      </MemoryEmpty>
+    );
   }
 
   return viewMode === 'timeline' ? (

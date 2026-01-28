@@ -1,17 +1,15 @@
 ---
-title: Configuration of Google SSO Authentication Service for LobeChat
+title: Configuration of Google SSO Authentication Service for LobeHub
 description: >-
-  Learn how to configure Google SSO Authentication Service for LobeChat, create
+  Learn how to configure Google SSO Authentication Service for LobeHub, create
   OAuth applications, add users, and set up environment variables for seamless
   integration.
 tags:
   - Google SSO
-  - Authentication Service
+  - OAuth 2.0
+  - LobeHub
+  - Authentication
   - Google Cloud
-  - OAuth
-  - SSO
-  - Environment Variables
-  - LobeChat
 ---
 
 # Configuration of Google SSO Authentication Service
@@ -34,8 +32,8 @@ tags:
   ```
 
   <Callout type={'info'}>
-    \- You can add or modify redirect URIs after registration, but make sure the URL matches your deployed LobeChat instance.
-    \- Replace "your-domain" with your actual domain.
+    - You can add or modify redirect URIs after registration, but make sure the URL matches your deployed LobeHub instance.
+    - Replace "your-domain" with your actual domain.
   </Callout>
 
   Click **Create**.
@@ -51,12 +49,12 @@ tags:
 
   ### Configure Environment Variables
 
-  When deploying LobeChat, configure the following environment variables:
+  When deploying LobeHub, configure the following environment variables:
 
   | Environment Variable      | Type     | Description                                                                                                          |
   | ------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------- |
   | `NEXT_AUTH_SECRET`        | Required | Key to encrypt Auth.js session tokens. Generate using: `openssl rand -base64 32`                                     |
-  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the single sign-on provider for LobeChat. Use `google` for Google SSO.                                        |
+  | `NEXT_AUTH_SSO_PROVIDERS` | Required | Select the single sign-on provider for LobeHub. Use `google` for Google SSO.                                         |
   | `AUTH_GOOGLE_ID`          | Required | Client ID from Google Cloud OAuth.                                                                                   |
   | `AUTH_GOOGLE_SECRET`      | Required | Client Secret from Google Cloud OAuth.                                                                               |
   | `AUTH_URL`                | Required | Specifies the callback address for Auth.js when performing OAuth authentication. E.g. `https://your-domain/api/auth` |
@@ -67,7 +65,7 @@ tags:
 </Steps>
 
 <Callout>
-  After successful deployment, users can sign in to LobeChat using their Google accounts (those added as Test Users, if not in production).
+  After successful deployment, users can sign in to LobeHub using their Google accounts (those added as Test Users, if not in production).
 </Callout>
 
 ## Advanced Configuration

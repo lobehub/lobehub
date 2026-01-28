@@ -1,10 +1,17 @@
 ---
 title: 如何开发一个新功能：前端实现
+description: 学习如何在 LobeHub 中实现会话消息功能，使用 Next.js 和 TypeScript。
+tags:
+  - 前端开发
+  - Next.js
+  - TypeScript
+  - Zustand
+  - 功能实现
 ---
 
 # 如何开发一个新功能：前端实现
 
-LobeChat 基于 Next.js 框架构建，使用 TypeScript 作为主要开发语言。在开发新功能时，我们需要遵循一定的开发流程，以确保代码的质量和稳定性。大致的流程分为以下五步：
+LobeHub 基于 Next.js 框架构建，使用 TypeScript 作为主要开发语言。在开发新功能时，我们需要遵循一定的开发流程，以确保代码的质量和稳定性。大致的流程分为以下五步：
 
 1. 路由：定义路由 (`src/app`)
 2. 数据结构： 定义数据结构 ( `src/types` )
@@ -80,7 +87,7 @@ const ChatPage = () => {
       renderItem={(message) => (
         <List.Item>
           <Typography.Text>{message.content}</Typography.Text>
-       
+
 </List.Item>
       )}
     />
@@ -90,7 +97,7 @@ const ChatPage = () => {
 export default ChatPage;
 ```
 
-> **关于功能组件组织方式的说明**：LobeChat 使用两种模式来组织功能组件：
+> **关于功能组件组织方式的说明**：LobeHub 使用两种模式来组织功能组件：
 >
 > - **全局功能**（`src/features/`）：跨应用共享的组件，如 `ChatInput`、`Conversation` 等
 > - **页面专属功能**（`src/app/<page>/features/`）：仅在特定页面路由中使用的组件
@@ -119,12 +126,12 @@ const ChatPage = () => {
         renderItem={(message) => (
           <List.Item>
             <Typography.Text>{message.content}</Typography.Text>
-         
+
 </List.Item>
         )}
       />
       <Button onClick={handleSend}>Send</Button>
-   
+
 </>
   );
 };
@@ -132,4 +139,4 @@ const ChatPage = () => {
 export default ChatPage;
 ```
 
-以上就是在 LobeChat 中实现 "会话消息" 功能的步骤。当然，在 LobeChat 的实际开发中，真实场景所面临的业务诉求和场景远比上述 demo 复杂，请根据实际情况进行开发。
+以上就是在 LobeHub 中实现 "会话消息" 功能的步骤。当然，在 LobeHub 的实际开发中，真实场景所面临的业务诉求和场景远比上述 demo 复杂，请根据实际情况进行开发。

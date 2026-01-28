@@ -1,5 +1,5 @@
 import { Block, Empty, Flexbox } from '@lobehub/ui';
-import { Plug2 } from 'lucide-react';
+import { BlocksIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,7 +16,7 @@ const Plugin = memo(() => {
         <Empty
           description={t('assistants.details.capabilities.plugin.desc')}
           descriptionProps={{ fontSize: 14 }}
-          icon={Plug2}
+          icon={BlocksIcon}
         />
       </Block>
     );

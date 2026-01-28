@@ -314,4 +314,226 @@ describe('UserMemoryExperienceModel', () => {
       expect(otherExperience).toBeDefined();
     });
   });
+
+  describe('queryList', () => {
+    beforeEach(async () => {
+      // Create user memories for joining
+      await serverDB.insert(userMemories).values([
+        {
+          id: 'exp-memory-1',
+          userId,
+          title: 'Experience Memory 1',
+          lastAccessedAt: new Date(),
+        },
+        {
+          id: 'exp-memory-2',
+          userId,
+          title: 'Experience Memory 2',
+          lastAccessedAt: new Date(),
+        },
+        {
+          id: 'exp-memory-3',
+          userId,
+          title: 'Searchable Title',
+          lastAccessedAt: new Date(),
+        },
+        {
+          id: 'other-exp-memory',
+          userId: otherUserId,
+          title: 'Other Memory',
+          lastAccessedAt: new Date(),
+        },
+      ]);
+
+      // Create test experiences with user memories
+      await serverDB.insert(userMemoriesExperiences).values([
+        {
+          id: 'list-exp-1',
+          userId,
+          userMemoryId: 'exp-memory-1',
+          type: 'lesson',
+          situation: 'First situation',
+          keyLearning: 'First key learning',
+          action: 'First action',
+          tags: ['tag1'],
+          scoreConfidence: 0.8,
+          capturedAt: new Date('2024-01-15T10:00:00Z'),
+          createdAt: new Date('2024-01-01T10:00:00Z'),
+          updatedAt: new Date('2024-01-01T10:00:00Z'),
+        },
+        {
+          id: 'list-exp-2',
+          userId,
+          userMemoryId: 'exp-memory-2',
+          type: 'insight',
+          situation: 'Second situation',
+          keyLearning: 'Second key learning',
+          action: 'Searchable action content',
+          tags: ['tag2'],
+          scoreConfidence: 0.9,
+          capturedAt: new Date('2024-01-16T10:00:00Z'),
+          createdAt: new Date('2024-01-02T10:00:00Z'),
+          updatedAt: new Date('2024-01-02T10:00:00Z'),
+        },
+        {
+          id: 'list-exp-3',
+          userId,
+          userMemoryId: 'exp-memory-3',
+          type: 'lesson',
+          situation: 'Searchable situation content',
+          keyLearning: 'Searchable learning',
+          tags: [],
+          scoreConfidence: 0.7,
+          capturedAt: new Date('2024-01-17T10:00:00Z'),
+          createdAt: new Date('2024-01-03T10:00:00Z'),
+          updatedAt: new Date('2024-01-03T10:00:00Z'),
+        },
+        {
+          id: 'other-list-exp',
+          userId: otherUserId,
+          userMemoryId: 'other-exp-memory',
+          type: 'lesson',
+          situation: 'Other user experience',
+          capturedAt: new Date('2024-01-18T10:00:00Z'),
+          createdAt: new Date('2024-01-04T10:00:00Z'),
+        },
+      ]);
+    });
+
+    it('should return paginated list with default parameters', async () => {
+      const result = await experienceModel.queryList();
+
+      expect(result.items).toHaveLength(3);
+      expect(result.page).toBe(1);
+      expect(result.pageSize).toBe(20);
+      expect(result.total).toBe(3);
+    });
+
+    it('should return correct page and pageSize', async () => {
+      const result = await experienceModel.queryList({ page: 1, pageSize: 2 });
+
+      expect(result.items).toHaveLength(2);
+      expect(result.page).toBe(1);
+      expect(result.pageSize).toBe(2);
+      expect(result.total).toBe(3);
+    });
+
+    it('should return second page correctly', async () => {
+      const result = await experienceModel.queryList({ page: 2, pageSize: 2 });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.page).toBe(2);
+    });
+
+    it('should normalize invalid page to 1', async () => {
+      const result = await experienceModel.queryList({ page: -1 });
+
+      expect(result.page).toBe(1);
+    });
+
+    it('should cap pageSize at 100', async () => {
+      const result = await experienceModel.queryList({ pageSize: 200 });
+
+      expect(result.pageSize).toBe(100);
+    });
+
+    it('should search by query in title', async () => {
+      const result = await experienceModel.queryList({ q: 'Searchable Title' });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('list-exp-3');
+    });
+
+    it('should search by query in situation', async () => {
+      const result = await experienceModel.queryList({ q: 'Searchable situation' });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('list-exp-3');
+    });
+
+    it('should search by query in keyLearning', async () => {
+      const result = await experienceModel.queryList({ q: 'Searchable learning' });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('list-exp-3');
+    });
+
+    it('should search by query in action', async () => {
+      const result = await experienceModel.queryList({ q: 'Searchable action' });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('list-exp-2');
+    });
+
+    it('should filter by types', async () => {
+      const result = await experienceModel.queryList({ types: ['lesson'] });
+
+      expect(result.items).toHaveLength(2);
+      expect(result.items.every((e) => e.type === 'lesson')).toBe(true);
+    });
+
+    it('should filter by multiple types', async () => {
+      const result = await experienceModel.queryList({ types: ['lesson', 'insight'] });
+
+      expect(result.items).toHaveLength(3);
+    });
+
+    it('should filter by tags', async () => {
+      const result = await experienceModel.queryList({ tags: ['tag1'] });
+
+      expect(result.items).toHaveLength(1);
+      expect(result.items[0].id).toBe('list-exp-1');
+    });
+
+    it('should sort by capturedAt desc by default', async () => {
+      const result = await experienceModel.queryList({ order: 'desc' });
+
+      expect(result.items[0].id).toBe('list-exp-3');
+      expect(result.items[2].id).toBe('list-exp-1');
+    });
+
+    it('should sort by capturedAt asc', async () => {
+      const result = await experienceModel.queryList({ order: 'asc' });
+
+      expect(result.items[0].id).toBe('list-exp-1');
+      expect(result.items[2].id).toBe('list-exp-3');
+    });
+
+    it('should sort by scoreConfidence', async () => {
+      const result = await experienceModel.queryList({ sort: 'scoreConfidence', order: 'desc' });
+
+      expect(result.items[0].id).toBe('list-exp-2'); // 0.9
+      expect(result.items[1].id).toBe('list-exp-1'); // 0.8
+      expect(result.items[2].id).toBe('list-exp-3'); // 0.7
+    });
+
+    it('should not return other users experiences', async () => {
+      const result = await experienceModel.queryList();
+
+      const otherExperience = result.items.find((e) => e.id === 'other-list-exp');
+      expect(otherExperience).toBeUndefined();
+    });
+
+    it('should return correct fields structure', async () => {
+      const result = await experienceModel.queryList({ pageSize: 1 });
+
+      expect(result.items[0]).toHaveProperty('id');
+      expect(result.items[0]).toHaveProperty('title');
+      expect(result.items[0]).toHaveProperty('situation');
+      expect(result.items[0]).toHaveProperty('keyLearning');
+      expect(result.items[0]).toHaveProperty('action');
+      expect(result.items[0]).toHaveProperty('type');
+      expect(result.items[0]).toHaveProperty('tags');
+      expect(result.items[0]).toHaveProperty('scoreConfidence');
+      expect(result.items[0]).toHaveProperty('capturedAt');
+      expect(result.items[0]).toHaveProperty('createdAt');
+      expect(result.items[0]).toHaveProperty('updatedAt');
+    });
+
+    it('should handle empty query string', async () => {
+      const result = await experienceModel.queryList({ q: '   ' });
+
+      expect(result.items).toHaveLength(3);
+    });
+  });
 });

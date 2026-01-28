@@ -195,6 +195,7 @@
   "plans.fileStorage.tooltip": "File storage for storing files, images, and other data",
   "plans.free": "Free",
   "plans.freeTrail": "Register to get free trial of {{name}}, no credit card required",
+  "plans.image.count": "Approximately {{number}} images",
   "plans.includes": "Benefits include:",
   "plans.includesExtra": "All benefits in {{name}}, plus:",
   "plans.knowledgeBase.desc": "Use files and knowledge base in conversations",

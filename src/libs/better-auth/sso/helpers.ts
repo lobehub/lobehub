@@ -2,17 +2,6 @@ import type { GenericOAuthConfig } from 'better-auth/plugins';
 
 export const DEFAULT_OIDC_SCOPES = ['openid', 'email', 'profile'];
 
-export const pickEnv = (...values: (string | undefined | null)[]) => {
-  for (const value of values) {
-    const trimmed = value?.trim();
-    if (trimmed) {
-      return trimmed;
-    }
-  }
-
-  return undefined;
-};
-
 const createDiscoveryUrl = (issuer: string) => {
   const normalized = issuer.replace(/\/$/, '');
   return normalized.includes('/.well-known/')

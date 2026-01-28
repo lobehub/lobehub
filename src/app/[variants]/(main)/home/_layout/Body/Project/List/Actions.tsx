@@ -8,7 +8,7 @@ interface ActionsProps {
 
 const Actions = memo<ActionsProps>(({ dropdownMenu }) => {
   return (
-    <DropdownMenu items={dropdownMenu} nativeButton={false}>
+    <DropdownMenu items={dropdownMenu}>
       <ActionIcon icon={MoreHorizontalIcon} size={'small'} />
     </DropdownMenu>
   );

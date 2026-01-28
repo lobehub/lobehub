@@ -1,7 +1,5 @@
 import { TRPCError } from '@trpc/server';
 
-import { enableBetterAuth, enableClerk, enableNextAuth } from '@/envs/auth';
-
 import { trpc } from '../lambda/init';
 
 export const userAuth = trpc.middleware(async (opts) => {
@@ -9,13 +7,6 @@ export const userAuth = trpc.middleware(async (opts) => {
 
   // `ctx.user` is nullable
   if (!ctx.userId) {
-    if (enableClerk) {
-      console.log('clerk auth:', ctx.clerkAuth);
-    } else if (enableBetterAuth) {
-      console.log('better auth: no session found in context');
-    } else if (enableNextAuth) {
-      console.log('next auth:', ctx.nextAuth);
-    }
     throw new TRPCError({ code: 'UNAUTHORIZED' });
   }
 

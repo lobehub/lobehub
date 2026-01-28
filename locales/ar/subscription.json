@@ -195,6 +195,7 @@
   "plans.fileStorage.tooltip": "تخزين الملفات والصور والبيانات الأخرى",
   "plans.free": "مجاني",
   "plans.freeTrail": "سجل للحصول على تجربة مجانية لـ {{name}}، لا حاجة لبطاقة ائتمان",
+  "plans.image.count": "حوالي {{number}} صورة",
   "plans.includes": "تشمل المزايا:",
   "plans.includesExtra": "جميع مزايا {{name}}، بالإضافة إلى:",
   "plans.knowledgeBase.desc": "استخدم الملفات وقاعدة المعرفة في المحادثات",

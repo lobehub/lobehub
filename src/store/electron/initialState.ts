@@ -26,6 +26,7 @@ export interface ElectronState extends NavigationHistoryState {
   desktopHotkeys: Record<string, string>;
   isAppStateInit?: boolean;
   isConnectingServer?: boolean;
+  isConnectionDrawerOpen?: boolean;
   isDesktopHotkeysInit: boolean;
   isInitRemoteServerConfig: boolean;
   isSyncActive?: boolean;
@@ -40,6 +41,7 @@ export const initialState: ElectronState = {
   desktopHotkeys: {},
   isAppStateInit: false,
   isConnectingServer: false,
+  isConnectionDrawerOpen: false,
   isDesktopHotkeysInit: false,
   isInitRemoteServerConfig: false,
   isSyncActive: false,

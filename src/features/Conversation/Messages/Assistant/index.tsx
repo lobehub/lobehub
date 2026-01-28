@@ -58,7 +58,11 @@ const AssistantMessage = memo<AssistantMessageProps>(
     const editing = useConversationStore(messageStateSelectors.isMessageEditing(id));
     const generating = useConversationStore(messageStateSelectors.isMessageGenerating(id));
     const creating = useConversationStore(messageStateSelectors.isMessageCreating(id));
-    const newScreen = useNewScreen({ creating: creating || generating, isLatestItem });
+    const { minHeight } = useNewScreen({
+      creating: creating || generating,
+      isLatestItem,
+      messageId: id,
+    });
 
     const errorContent = useErrorContent(error);
 
@@ -114,7 +118,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
             usage={usage! || metadata}
           />
         }
-        newScreen={newScreen}
+        newScreenMinHeight={minHeight}
         onDoubleClick={onDoubleClick}
         onMouseEnter={onMouseEnter}
         placement={'left'}

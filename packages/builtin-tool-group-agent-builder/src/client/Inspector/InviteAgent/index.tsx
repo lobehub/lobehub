@@ -1,19 +1,31 @@
 'use client';
 
 import type { BuiltinInspectorProps } from '@lobechat/types';
+import { Avatar, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Check } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
+import { shinyTextStyles } from '@/styles';
 
 import type { InviteAgentParams, InviteAgentState } from '../../../types';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar: cv }) => ({
+  root: css`
+    overflow: hidden;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  `,
   statusIcon: css`
+    flex-shrink: 0;
     margin-block-end: -2px;
-    margin-inline-start: 4px;
+  `,
+  title: css`
+    flex-shrink: 0;
+    color: ${cv.colorTextSecondary};
+    white-space: nowrap;
   `,
 }));
 
@@ -24,11 +36,12 @@ export const InviteAgentInspector = memo<
 
   const agentId = args?.agentId || partialArgs?.agentId;
   const displayName = pluginState?.agentName || agentId;
+  const avatar = pluginState?.agentAvatar;
 
   // Initial streaming state
   if (isArgumentsStreaming && !agentId) {
     return (
-      <div className={cx(inspectorTextStyles.root, shinyTextStyles.shinyText)}>
+      <div className={cx(styles.root, shinyTextStyles.shinyText)}>
         <span>{t('builtins.lobe-group-agent-builder.apiName.inviteAgent')}</span>
       </div>
     );
@@ -37,18 +50,21 @@ export const InviteAgentInspector = memo<
   const isSuccess = pluginState?.success;
 
   return (
-    <div
-      className={cx(
-        inspectorTextStyles.root,
-        (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText,
-      )}
+    <Flexbox
+      align={'center'}
+      className={cx(styles.root, (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}
+      gap={8}
+      horizontal
     >
-      <span>{t('builtins.lobe-group-agent-builder.apiName.inviteAgent')}: </span>
-      {displayName && <span className={highlightTextStyles.primary}>{displayName}</span>}
+      <span className={styles.title}>
+        {t('builtins.lobe-group-agent-builder.apiName.inviteAgent')}:
+      </span>
+      {avatar && <Avatar avatar={avatar} shape={'square'} size={20} title={displayName || undefined} />}
+      {displayName && <span>{displayName}</span>}
       {!isLoading && isSuccess && (
         <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />
       )}
-    </div>
+    </Flexbox>
   );
 });
 

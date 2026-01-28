@@ -195,6 +195,7 @@
   "plans.fileStorage.tooltip": "Opslag voor bestanden, afbeeldingen en andere gegevens",
   "plans.free": "Gratis",
   "plans.freeTrail": "Registreer voor een gratis proefperiode van {{name}}, geen creditcard nodig",
+  "plans.image.count": "Ongeveer {{number}} afbeeldingen",
   "plans.includes": "Voordelen zijn onder andere:",
   "plans.includesExtra": "Alle voordelen van {{name}}, plus:",
   "plans.knowledgeBase.desc": "Gebruik bestanden en kennisbank in gesprekken",

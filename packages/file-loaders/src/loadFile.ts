@@ -2,10 +2,8 @@ import debug from 'debug';
 import { stat } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { fileLoaders } from './loaders';
-import { TextLoader } from './loaders/text';
-import { FileDocument, FileMetadata, SupportedFileType } from './types';
-import type { DocumentPage, FileLoaderInterface } from './types';
+import { getFileLoader } from './loaders';
+import type { DocumentPage, FileDocument, FileMetadata, SupportedFileType } from './types';
 import { isTextReadableFile } from './utils/isTextReadableFile';
 
 const log = debug('file-loaders:loadFile');
@@ -64,9 +62,6 @@ const getFileType = (filePath: string): SupportedFileType | undefined => {
   }
 };
 
-// Default fallback loader class
-const DefaultLoader = TextLoader;
-
 /**
  * Loads a file from the specified path, automatically detecting the file type
  * and using the appropriate loader class.
@@ -113,18 +108,18 @@ export const loadFile = async (
     source,
   });
 
-  const paserType = getFileType(filePath);
-  log('Parser type determined as:', paserType);
+  const parserType = getFileType(filePath);
+  log('Parser type determined as:', parserType);
 
-  // Select the loader CLASS based on the determined fileType, fallback to DefaultLoader
-  const LoaderClass: new () => FileLoaderInterface = paserType
-    ? fileLoaders[paserType]
-    : DefaultLoader;
+  // Use lazy loading to get the loader class - this prevents heavy dependencies
+  // like pdfjs-dist from being loaded until they're actually needed
+  const loaderType = parserType ?? 'txt';
+  const LoaderClass = await getFileLoader(loaderType);
   log('Selected loader class:', LoaderClass.name);
 
-  if (!paserType) {
+  if (!parserType) {
     console.warn(
-      `No specific loader found for file type '${fileType}'. Using default loader (${DefaultLoader.name}) as fallback.`,
+      `No specific loader found for file type '${fileType}'. Using default loader (TextLoader) as fallback.`,
     );
   }
 

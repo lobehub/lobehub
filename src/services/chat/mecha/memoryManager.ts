@@ -6,6 +6,7 @@ import { getUserMemoryStoreState } from '@/store/userMemory';
 import { agentMemorySelectors, identitySelectors } from '@/store/userMemory/selectors';
 
 const EMPTY_MEMORIES: RetrieveMemoryResult = {
+  activities: [],
   contexts: [],
   experiences: [],
   preferences: [],
@@ -69,6 +70,7 @@ export const combineUserMemoryData = (
   topicMemories: RetrieveMemoryResult,
   identities: UserMemoryIdentityItem[],
 ): UserMemoryData => ({
+  activities: topicMemories.activities,
   contexts: topicMemories.contexts,
   experiences: topicMemories.experiences,
   identities,

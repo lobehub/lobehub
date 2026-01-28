@@ -1,13 +1,18 @@
 'use client';
 
-import { type FC, type PropsWithChildren } from 'react';
+import type React from 'react';
+import { type FC, type PropsWithChildren, useEffect, useState } from 'react';
 
-import { useMounted } from '@/hooks/useMounted';
+const ClientOnly: FC<PropsWithChildren<{ fallback?: React.ReactNode }>> = ({
+  children,
+  fallback = null,
+}) => {
+  const [mounted, setMounted] = useState(false);
 
 const ClientOnly: FC<PropsWithChildren> = ({ children }) => {
   const mounted = useMounted();
 
-  if (!mounted) return null;
+  if (!mounted) return fallback;
 
   return children;
 };

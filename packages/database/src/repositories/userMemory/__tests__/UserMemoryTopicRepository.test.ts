@@ -50,9 +50,30 @@ describe('UserMemoryTopicRepository', () => {
 
     it('should return concatenated user message content', async () => {
       await serverDB.insert(messages).values([
-        { id: 'msg-1', content: 'Hello', role: 'user', topicId, userId },
-        { id: 'msg-2', content: 'Hi there!', role: 'assistant', topicId, userId },
-        { id: 'msg-3', content: 'How are you?', role: 'user', topicId, userId },
+        {
+          id: 'msg-1',
+          content: 'Hello',
+          role: 'user',
+          topicId,
+          userId,
+          createdAt: new Date('2024-01-01'),
+        },
+        {
+          id: 'msg-2',
+          content: 'Hi there!',
+          role: 'assistant',
+          topicId,
+          userId,
+          createdAt: new Date('2024-01-02'),
+        },
+        {
+          id: 'msg-3',
+          content: 'How are you?',
+          role: 'user',
+          topicId,
+          userId,
+          createdAt: new Date('2024-01-03'),
+        },
       ]);
 
       const result = await repo.getUserMessagesQueryForTopic(topicId);

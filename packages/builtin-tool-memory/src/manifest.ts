@@ -1,5 +1,6 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 import {
+  ACTIVITY_TYPES,
   CONTEXT_OBJECT_TYPES,
   CONTEXT_STATUS,
   CONTEXT_SUBJECT_TYPES,
@@ -8,6 +9,7 @@ import {
   MERGE_STRATEGIES,
   RELATIONSHIPS,
 } from '@lobechat/types';
+import { JSONSchema7 } from 'json-schema';
 
 import { systemPrompt } from './systemRole';
 import { MemoryApiName } from './types';
@@ -23,21 +25,45 @@ export const MemoryManifest: BuiltinToolManifest = {
       parameters: {
         additionalProperties: false,
         properties: {
-          query: { type: 'string' },
+          query: {
+            description: 'The search query to find relevant memories',
+            type: 'string',
+          },
           topK: {
             additionalProperties: false,
+            description:
+              'Optional. Limits on number of memories to return per layer. If omitted entirely, uses defaults (3 activities, 3 preferences). Set a layer to 0 to exclude it.',
             properties: {
-              contexts: { minimum: 0, type: 'integer' },
-              experiences: { minimum: 0, type: 'integer' },
-              preferences: { minimum: 0, type: 'integer' },
+              activities: {
+                description: 'Number of activity memories (what happened, when, where). Default: 3',
+                minimum: 0,
+                type: 'integer',
+              },
+              contexts: {
+                description:
+                  'Number of context memories (ongoing situations, projects). Default: 0',
+                minimum: 0,
+                type: 'integer',
+              },
+              experiences: {
+                description:
+                  'Number of experience memories (lessons learned, insights). Default: 0',
+                minimum: 0,
+                type: 'integer',
+              },
+              preferences: {
+                description:
+                  'Number of preference memories (user preferences, directives). Default: 3',
+                minimum: 0,
+                type: 'integer',
+              },
             },
-            required: ['contexts', 'experiences', 'preferences'],
             type: 'object',
           },
         },
-        required: ['query', 'topK'],
+        required: ['query'],
         type: 'object',
-      },
+      } satisfies JSONSchema7,
     },
     {
       description:
@@ -186,6 +212,164 @@ export const MemoryManifest: BuiltinToolManifest = {
           'tags',
           'title',
           'withContext',
+        ],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Record an activity memory capturing what happened, when, where, with whom, and how it felt. Include narrative, feedback, timing, associations, and tags.',
+      name: MemoryApiName.addActivityMemory,
+      parameters: {
+        additionalProperties: false,
+        properties: {
+          details: {
+            description: 'Optional detailed information or longer notes supporting the summary.',
+            type: 'string',
+          },
+          memoryCategory: {
+            description: 'Memory category best matching the activity (e.g., work, health).',
+            type: 'string',
+          },
+          memoryType: {
+            const: 'activity',
+            description: 'Memory type; always activity.',
+            type: 'string',
+          },
+          summary: {
+            description: 'Concise overview of this activity.',
+            type: 'string',
+          },
+          tags: {
+            description: 'Model generated tags summarizing key facets of the activity.',
+            items: { type: 'string' },
+            type: 'array',
+          },
+          title: {
+            description: 'Brief descriptive title for the activity.',
+            type: 'string',
+          },
+          withActivity: {
+            additionalProperties: false,
+            properties: {
+              associatedLocations: {
+                description: 'Places linked to this activity.',
+                items: {
+                  additionalProperties: false,
+                  properties: {
+                    address: { type: ['string', 'null'] },
+                    extra: { type: ['string', 'null'] },
+                    name: { type: 'string' },
+                    tags: { items: { type: 'string' }, type: ['array', 'null'] },
+                    type: { type: 'string' },
+                  },
+                  required: ['name'],
+                  type: 'object',
+                },
+                type: 'array',
+              },
+              associatedObjects: {
+                description: 'Non-living entities or items tied to the activity.',
+                items: {
+                  additionalProperties: false,
+                  properties: {
+                    extra: { type: ['string', 'null'] },
+                    name: { type: 'string' },
+                    type: { type: 'string' },
+                  },
+                  required: ['name'],
+                  type: 'object',
+                },
+                type: 'array',
+              },
+              associatedSubjects: {
+                description: 'Living beings involved (people, pets, groups).',
+                items: {
+                  additionalProperties: false,
+                  properties: {
+                    extra: { type: ['string', 'null'] },
+                    name: { type: 'string' },
+                    type: { type: 'string' },
+                  },
+                  required: ['name'],
+                  type: 'object',
+                },
+                type: 'array',
+              },
+              endsAt: {
+                description: 'ISO 8601 end time if provided.',
+                format: 'date-time',
+                type: ['string', 'null'],
+              },
+              feedback: {
+                description: 'Subjective feelings or evaluation of how the activity went.',
+                type: ['string', 'null'],
+              },
+              metadata: {
+                additionalProperties: true,
+                description: 'Additional structured metadata to keep raw hints (JSON object).',
+                type: ['object', 'null'],
+              },
+              narrative: {
+                description: 'Factual story of what happened; required for recall.',
+                type: 'string',
+              },
+              notes: {
+                description: 'Short annotations distinct from narrative.',
+                type: ['string', 'null'],
+              },
+              startsAt: {
+                description: 'ISO 8601 start time if provided.',
+                format: 'date-time',
+                type: ['string', 'null'],
+              },
+              status: {
+                description:
+                  'Lifecycle status when mentioned. Use planned/completed/cancelled/ongoing/on_hold/pending. Omit if unclear.',
+                enum: ['planned', 'completed', 'cancelled', 'ongoing', 'on_hold', 'pending'],
+                type: ['string', 'null'],
+              },
+              tags: {
+                description: 'Optional activity-specific tags or facets.',
+                items: { type: 'string' },
+                type: ['array', 'null'],
+              },
+              timezone: {
+                description: 'IANA timezone string for the start/end times when provided.',
+                type: ['string', 'null'],
+              },
+              type: {
+                description: 'Activity type enum; choose the closest match.',
+                enum: ACTIVITY_TYPES,
+                type: 'string',
+              },
+            },
+            required: [
+              'narrative',
+              'type',
+              'associatedLocations',
+              'associatedObjects',
+              'associatedSubjects',
+              'startsAt',
+              'endsAt',
+              'status',
+              'tags',
+              'timezone',
+              'metadata',
+              'feedback',
+              'notes',
+            ],
+            type: 'object',
+          },
+        },
+        required: [
+          'title',
+          'summary',
+          'details',
+          'memoryType',
+          'memoryCategory',
+          'tags',
+          'withActivity',
         ],
         type: 'object',
       },
@@ -555,6 +739,7 @@ export const MemoryManifest: BuiltinToolManifest = {
               memoryType: {
                 description: 'Memory type, use null for omitting the field',
                 enum: [...MEMORY_TYPES, null],
+                type: ['string', 'null'],
               },
               summary: {
                 description:

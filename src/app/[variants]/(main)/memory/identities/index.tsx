@@ -3,6 +3,7 @@ import { BrainCircuitIcon } from 'lucide-react';
 import { type FC, memo, useCallback, useEffect, useState } from 'react';
 
 import CommonFilterBar from '@/app/[variants]/(main)/memory/features/FilterBar';
+import MemoryAnalysis from '@/app/[variants]/(main)/memory/features/MemoryAnalysis';
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
@@ -75,6 +76,7 @@ const IdentitiesArea = memo(() => {
         }
         right={
           <>
+            <MemoryAnalysis iconOnly />
             <ViewModeSwitcher onChange={setViewMode} value={viewMode} />
             <WideScreenButton />
           </>

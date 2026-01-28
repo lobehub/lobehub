@@ -40,8 +40,11 @@ export const shareRouter = router({
           ? {
               avatar: share.groupAvatar,
               backgroundColor: share.groupBackgroundColor,
+              createdAt: share.groupCreatedAt,
               members: share.groupMembers,
               title: share.groupTitle,
+              updatedAt: share.groupUpdatedAt,
+              userId: share.groupUserId,
             }
           : undefined,
         shareId: share.shareId,

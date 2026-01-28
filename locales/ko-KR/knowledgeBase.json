@@ -1,5 +1,5 @@
 {
-  "addToKnowledgeBase.addSuccess": "파일이 성공적으로 추가되었습니다. <1>지금 보기</1>",
+  "addToKnowledgeBase.addSuccess": "파일이 성공적으로 추가되었습니다",
   "addToKnowledgeBase.confirm": "추가",
   "addToKnowledgeBase.error": "파일을 지식 베이스에 추가하지 못했습니다",
   "addToKnowledgeBase.id.placeholder": "추가할 지식 베이스를 선택하세요",

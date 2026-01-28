@@ -5,8 +5,7 @@ export const ChatErrorType = {
   // ******* Business Error Semantics ******* //
 
   InvalidAccessCode: 'InvalidAccessCode', // is in valid password
-  InvalidClerkUser: 'InvalidClerkUser', // is not Clerk User
-  FreePlanLimit: 'FreePlanLimit', // is not Clerk User
+  FreePlanLimit: 'FreePlanLimit', // Free plan usage limit
   SubscriptionPlanLimit: 'SubscriptionPlanLimit', // Subscription user limit exceeded
   SubscriptionKeyMismatch: 'SubscriptionKeyMismatch', // Subscription key mismatch
 

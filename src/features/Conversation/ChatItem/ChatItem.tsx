@@ -39,7 +39,7 @@ const ChatItem = memo<ChatItemProps>(
     disabled = false,
     id,
     style,
-    newScreen,
+    newScreenMinHeight,
     ...rest
   }) => {
     const isUser = placement === 'right';
@@ -63,15 +63,12 @@ const ChatItem = memo<ChatItemProps>(
     return (
       <Flexbox
         align={isUser ? 'flex-end' : 'flex-start'}
-        className={cx(
-          'message-wrapper',
-          styles.container,
-          newScreen && styles.newScreen,
-          className,
-        )}
+        className={cx('message-wrapper', styles.container, className)}
+        data-message-id={id}
         gap={8}
         paddingBlock={8}
         style={{
+          minHeight: newScreenMinHeight,
           paddingInlineStart: isUser ? 36 : 0,
           ...style,
         }}

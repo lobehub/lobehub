@@ -155,8 +155,11 @@ export interface SharedTopicData {
   groupMeta?: {
     avatar?: string | null;
     backgroundColor?: string | null;
-    members?: { avatar: string | null; backgroundColor: string | null }[];
+    createdAt?: Date | null;
+    members?: { avatar: string | null; backgroundColor: string | null; id: string; title: string | null }[];
     title?: string | null;
+    updatedAt?: Date | null;
+    userId?: string | null;
   };
   shareId: string;
   title: string | null;

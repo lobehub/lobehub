@@ -175,7 +175,7 @@ describe('LinuxMenu', () => {
     });
 
     it('should pass data to context menu', () => {
-      const data = { selection: 'text' };
+      const data = { selectionText: 'test selection', x: 100, y: 200 };
       linuxMenu.buildContextMenu('chat', data);
 
       expect(Menu.buildFromTemplate).toHaveBeenCalled();

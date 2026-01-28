@@ -1,7 +1,3 @@
-import { SignUp } from '@clerk/nextjs';
-
-import { enableBetterAuth, enableClerk } from '@/envs/auth';
-import { notFound } from '@/libs/next/navigation';
 import { metadataModule } from '@/server/metadata';
 import { translation } from '@/server/translation';
 import { type DynamicLayoutProps } from '@/types/next';
@@ -11,41 +7,17 @@ import BetterAuthSignUpForm from './BetterAuthSignUpForm';
 
 export const generateMetadata = async (props: DynamicLayoutProps) => {
   const locale = await RouteVariants.getLocale(props);
-
-  if (enableClerk) {
-    const { t } = await translation('clerk', locale);
-    return metadataModule.generate({
-      description: t('signUp.start.subtitle'),
-      title: t('signUp.start.title'),
-      url: '/signup',
-    });
-  }
-
-  if (enableBetterAuth) {
-    const { t } = await translation('auth', locale);
-    return metadataModule.generate({
-      description: t('betterAuth.signup.subtitle'),
-      title: t('betterAuth.signup.title'),
-      url: '/signup',
-    });
-  }
+  const { t } = await translation('auth', locale);
 
   return metadataModule.generate({
-    title: 'Sign Up',
+    description: t('betterAuth.signup.subtitle'),
+    title: t('betterAuth.signup.title'),
     url: '/signup',
   });
 };
 
 const Page = () => {
-  if (enableClerk) {
-    return <SignUp path="/signup" />;
-  }
-
-  if (enableBetterAuth) {
-    return <BetterAuthSignUpForm />;
-  }
-
-  return notFound();
+  return <BetterAuthSignUpForm />;
 };
 
 export default Page;

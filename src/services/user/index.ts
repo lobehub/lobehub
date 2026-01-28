@@ -27,10 +27,6 @@ export class UserService {
     return lambdaClient.user.getUserSSOProviders.query();
   };
 
-  unlinkSSOProvider = async (provider: string, providerAccountId: string) => {
-    return lambdaClient.user.unlinkSSOProvider.mutate({ provider, providerAccountId });
-  };
-
   makeUserOnboarded = async () => {
     return lambdaClient.user.makeUserOnboarded.mutate();
   };

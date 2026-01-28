@@ -1,6 +1,6 @@
 ---
 title: 配置联网搜索功能 - 增强 AI 的网络信息获取能力
-description: 了解如何为 LobeChat 配置 SearXNG 联网搜索功能，使 AI 能够获取最新的网络信息。
+description: 了解如何为 LobeHub 配置 SearXNG 联网搜索功能，使 AI 能够获取最新的网络信息。
 tags:
   - 联网搜索
   - SearXNG
@@ -10,7 +10,7 @@ tags:
 
 # 配置联网搜索功能
 
-LobeChat 支持为 AI 配置**联网搜索功能**，使其能够实时获取互联网信息，从而提供更准确、最新的回答。联网搜索支持多个搜索引擎提供商，包括 [SearXNG](https://github.com/searxng/searxng)、[Search1API](https://www.search1api.com)、[Google](https://programmablesearchengine.google.com)、[Brave](https://brave.com/search/api) 等。
+LobeHub 支持为 AI 配置**联网搜索功能**，使其能够实时获取互联网信息，从而提供更准确、最新的回答。联网搜索支持多个搜索引擎提供商，包括 [SearXNG](https://github.com/searxng/searxng)、[Search1API](https://www.search1api.com)、[Google](https://programmablesearchengine.google.com)、[Brave](https://brave.com/search/api) 等。
 
 <Callout type="info">
   联网搜索可以让 AI 获取时效性内容，如最新新闻、技术动态或产品信息。你可以使用开源的 SearXNG
@@ -18,7 +18,7 @@ LobeChat 支持为 AI 配置**联网搜索功能**，使其能够实时获取互
   等，根据你的使用场景自由组合。
 </Callout>
 
-通过设置搜索服务环境变量 `SEARCH_PROVIDERS` 和对应的 API Key，LobeChat 将在多个搜索源中查询并返回结果。你还可以搭配配置爬虫服务环境变量 `CRAWLER_IMPLS`（如 `browserless`、`firecrawl`、`tavily` 等）以提取网页内容，实现搜索 + 阅读的增强能力。
+通过设置搜索服务环境变量 `SEARCH_PROVIDERS` 和对应的 API Key，LobeHub 将在多个搜索源中查询并返回结果。你还可以搭配配置爬虫服务环境变量 `CRAWLER_IMPLS`（如 `browserless`、`firecrawl`、`tavily` 等）以提取网页内容，实现搜索 + 阅读的增强能力。
 
 # 核心环境变量
 
@@ -184,7 +184,7 @@ SEARXNG_URL=https://searxng-instance.com
 
 这个 URL 应该指向一个可用的 SearXNG 实例。您可以选择自行部署 SearXNG，或使用公共可用的 SearXNG 实例。
 
-您可以在 [SearXNG 实例列表](https://searx.space/) 中找到公开可用的 SearXNG 实例。选择一个响应速度快、可靠性高的实例，然后将其 URL 配置到 LobeChat 中。
+您可以在 [SearXNG 实例列表](https://searx.space/) 中找到公开可用的 SearXNG 实例。选择一个响应速度快、可靠性高的实例，然后将其 URL 配置到 LobeHub 中。
 
 > 注意，使用的 `searxng` 必须开启 `json` 输出，否则 `lobe-chat` 调用会报错。如果是自托管，类似下面这样，找到 `searxng` 的配置文件，追加 `json` 即可。
 
@@ -201,7 +201,7 @@ formats:
 
 配置完成后，您可以通过以下步骤验证联网搜索功能是否正常工作：
 
-1. 重启 LobeChat 服务
+1. 重启 LobeHub 服务
 2. 启动一个新的聊天，启动智能联网，之后向 AI 提问一个需要最新信息的问题，例如："今天的实时金价是多少？" 或 "最近的重大新闻有哪些？"
 3. 观察 AI 是否能够返回基于互联网搜索的最新信息
 
@@ -209,6 +209,6 @@ formats:
 
 ## 参考资料
 
-- [LobeChat 联网搜索 RFC 讨论](https://github.com/lobehub/lobe-chat/discussions/6447)
+- [LobeHub 联网搜索 RFC 讨论](https://github.com/lobehub/lobe-chat/discussions/6447)
 - [SearXNG GitHub 仓库](https://github.com/searxng/searxng)
 - [SearXNG 开启 json 输出的讨论](https://github.com/searxng/searxng/discussions/3542)

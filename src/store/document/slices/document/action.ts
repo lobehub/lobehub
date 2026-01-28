@@ -194,6 +194,7 @@ export const createDocumentSlice: StateCreator<
             // Check if this response is still for the current active document
             // This prevents race conditions when quickly switching between documents
             const currentActiveId = get().activeDocumentId;
+
             if (currentActiveId && currentActiveId !== documentId) {
               // User has already switched to another document, discard this stale response
               return;

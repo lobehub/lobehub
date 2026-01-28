@@ -62,7 +62,7 @@ const CouncilList = memo<CouncilListProps>(({ members, displayMode, activeTab })
               minWidth: MIN_WIDTH * members.length + 32 + 32 * (members.length - 1),
             }}
           >
-            {members.map((member, idx) => {
+            {members?.map((member, idx) => {
               if (!member) return null;
               return (
                 <Fragment key={member.id}>
@@ -77,7 +77,7 @@ const CouncilList = memo<CouncilListProps>(({ members, displayMode, activeTab })
                   >
                     <CouncilMember index={idx} item={member} />
                   </Flexbox>
-                  {idx < members.length - 1 && (
+                  {idx < members?.length - 1 && (
                     <Divider
                       dashed
                       orientation={'vertical'}

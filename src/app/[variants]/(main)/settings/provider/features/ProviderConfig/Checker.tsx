@@ -6,12 +6,12 @@ import { ModelIcon } from '@lobehub/icons';
 import { Alert, Button, Flexbox, Highlighter, Icon, LobeSelect as Select } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
-import { type ReactNode, memo, useEffect, useState } from 'react';
+import { type ReactNode, memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useProviderName } from '@/hooks/useProviderName';
 import { chatService } from '@/services/chat';
-import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 const Error = memo<{ error: ChatMessageError }>(({ error }) => {
   const { t } = useTranslation('error');
@@ -62,7 +62,36 @@ const Checker = memo<ConnectionCheckerProps>(
       aiProviderSelectors.isProviderConfigUpdating(provider)(s),
       s.updateAiProviderConfig,
     ]);
-    const totalModels = useAiInfraStore(aiModelSelectors.aiProviderChatModelListIds);
+    const aiProviderModelList = useAiInfraStore((s) => s.aiProviderModelList);
+
+    // Sort models for better UX:
+    // 1. checkModel first (provider's recommended test model)
+    // 2. enabled models (user is actively using)
+    // 3. by releasedAt descending (newer models first)
+    // 4. models without releasedAt last
+    const sortedModels = useMemo(() => {
+      const chatModels = aiProviderModelList.filter((m) => m.type === 'chat');
+
+      const sorted = [...chatModels].sort((a, b) => {
+        // checkModel always first
+        if (a.id === model) return -1;
+        if (b.id === model) return 1;
+
+        // enabled models come before disabled
+        if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+
+        // sort by releasedAt descending, models without releasedAt go last
+        if (a.releasedAt && b.releasedAt) {
+          return new Date(b.releasedAt).getTime() - new Date(a.releasedAt).getTime();
+        }
+        if (a.releasedAt && !b.releasedAt) return -1;
+        if (!a.releasedAt && b.releasedAt) return 1;
+
+        return 0;
+      });
+
+      return sorted.map((m) => m.id);
+    }, [aiProviderModelList, model]);
 
     const [loading, setLoading] = useState(false);
     const [pass, setPass] = useState(false);
@@ -154,7 +183,7 @@ const Checker = memo<ConnectionCheckerProps>(
                 </Flexbox>
               );
             }}
-            options={totalModels.map((id) => ({ label: id, value: id }))}
+            options={sortedModels.map((id) => ({ label: id, value: id }))}
             style={{
               flex: 1,
               overflow: 'hidden',

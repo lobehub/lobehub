@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { UIChatMessage } from './message';
+import { PageSelection, PageSelectionSchema } from './message/ui/params';
 import { OpenAIChatMessage } from './openai/chat';
 import { LobeUniformTool, LobeUniformToolSchema } from './tool';
 import { ChatTopic } from './topic';
@@ -10,6 +11,8 @@ export interface SendNewMessage {
   content: string;
   // if message has attached with files, then add files to message and the agent
   files?: string[];
+  /** Page selections attached to this message (for Ask AI functionality) */
+  pageSelections?: PageSelection[];
   parentId?: string;
 }
 
@@ -83,6 +86,7 @@ export const AiSendMessageServerSchema = z.object({
   newUserMessage: z.object({
     content: z.string(),
     files: z.array(z.string()).optional(),
+    pageSelections: z.array(PageSelectionSchema).optional(),
     parentId: z.string().optional(),
   }),
   sessionId: z.string().optional(),

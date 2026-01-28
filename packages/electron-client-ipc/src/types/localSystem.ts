@@ -225,3 +225,30 @@ export interface EditLocalFileResult {
   replacements: number;
   success: boolean;
 }
+
+// Save Dialog types
+export interface ShowSaveDialogParams {
+  /**
+   * Default file name
+   */
+  defaultPath?: string;
+  /**
+   * File type filters
+   */
+  filters?: { extensions: string[]; name: string }[];
+  /**
+   * Dialog title
+   */
+  title?: string;
+}
+
+export interface ShowSaveDialogResult {
+  /**
+   * Whether the dialog was cancelled
+   */
+  canceled: boolean;
+  /**
+   * The selected file path (undefined if cancelled)
+   */
+  filePath?: string;
+}

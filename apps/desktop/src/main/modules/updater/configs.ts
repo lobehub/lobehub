@@ -18,7 +18,7 @@ export const githubConfig = {
 };
 
 export const updaterConfig = {
-  // 应用Update configuration
+  // Application update configuration
   app: {
     // Whether to auto-check for updates
     autoCheckUpdate: true,

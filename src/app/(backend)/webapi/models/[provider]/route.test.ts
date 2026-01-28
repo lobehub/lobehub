@@ -9,16 +9,27 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
 import { GET } from './route';
 
-vi.mock('@clerk/nextjs/server', () => ({
-  getAuth: vi.fn(),
-}));
-
 vi.mock('@/app/(backend)/middleware/auth/utils', () => ({
   checkAuthMethod: vi.fn(),
 }));
 
 vi.mock('@lobechat/utils/server', () => ({
   getXorPayload: vi.fn(),
+}));
+
+vi.mock('@/envs/auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/envs/auth')>();
+  return {
+    ...actual,
+  };
+});
+
+vi.mock('@/auth', () => ({
+  auth: {
+    api: {
+      getSession: vi.fn().mockResolvedValue(null),
+    },
+  },
 }));
 
 vi.mock('@/server/modules/ModelRuntime', () => ({

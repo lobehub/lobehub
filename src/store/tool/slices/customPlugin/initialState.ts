@@ -1,6 +1,7 @@
 import { type LobeToolCustomPlugin } from '@/types/tool/plugin';
 
 export interface CustomPluginState {
+  customPluginSearchKeywords?: string;
   newCustomPlugin: Partial<LobeToolCustomPlugin>;
 }
 export const defaultCustomPlugin: Partial<LobeToolCustomPlugin> = {
@@ -13,5 +14,6 @@ export const defaultCustomPlugin: Partial<LobeToolCustomPlugin> = {
 };
 
 export const initialCustomPluginState: CustomPluginState = {
+  customPluginSearchKeywords: '',
   newCustomPlugin: defaultCustomPlugin,
 };

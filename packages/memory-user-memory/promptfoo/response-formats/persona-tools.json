@@ -1,0 +1,30 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "commit_user_persona",
+      "description": "Persist an updated user persona document that summarizes the user, preferences, relationships, and recent events.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "persona": { "type": "string", "description": "Complete Markdown persona for the user" },
+          "summary": { "type": "string", "description": "Executive summary (2-3 lines)" },
+          "diff": { "type": "string", "description": "Bullet list of changes applied this run" },
+          "reasoning": { "type": "string", "description": "Why these changes were applied" },
+          "memoryIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Related memory IDs used to craft the persona"
+          },
+          "sourceIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Source or topic IDs tied to this update"
+          }
+        },
+        "required": ["persona"],
+        "additionalProperties": false
+      }
+    }
+  }
+]

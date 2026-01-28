@@ -16,7 +16,7 @@ export interface ContextQueryParams {
   page?: number;
   pageSize?: number;
   q?: string;
-  sort?: 'scoreImpact' | 'scoreUrgency';
+  sort?: 'capturedAt' | 'scoreImpact' | 'scoreUrgency';
 }
 
 export interface ContextAction {

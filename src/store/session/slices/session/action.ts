@@ -292,6 +292,8 @@ export const createSessionSlice: StateCreator<
               groupId: session.group || null,
               id: session.id, // Add the missing groupId property
 
+              marketIdentifier: null,
+
               // Will be set by the backend
               pinned: session.pinned || false,
 

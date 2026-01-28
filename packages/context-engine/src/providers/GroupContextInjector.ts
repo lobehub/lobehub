@@ -5,7 +5,7 @@ import {
 } from '@lobechat/prompts';
 import debug from 'debug';
 
-import { BaseProvider } from '../base/BaseProvider';
+import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
 import type { PipelineContext, ProcessorOptions } from '../types';
 
 const log = debug('context-engine:provider:GroupContextInjector');
@@ -59,13 +59,13 @@ export interface GroupContextInjectorConfig {
 /**
  * Group Context Injector
  *
- * Responsible for injecting group context information into the system role
+ * Responsible for injecting group context information before the first user message
  * for multi-agent group chat scenarios. This helps the model understand:
  * - Its own identity within the group
  * - The group composition and other members
  * - Rules for handling system metadata
  *
- * The injector appends a GROUP CONTEXT block at the end of the system message,
+ * The injector creates a system injection message before the first user message,
  * containing:
  * - Agent's identity (name, role, ID)
  * - Group info (name, member list)
@@ -87,7 +87,7 @@ export interface GroupContextInjectorConfig {
  * });
  * ```
  */
-export class GroupContextInjector extends BaseProvider {
+export class GroupContextInjector extends BaseFirstUserContentProvider {
   readonly name = 'GroupContextInjector';
 
   constructor(
@@ -97,44 +97,32 @@ export class GroupContextInjector extends BaseProvider {
     super(options);
   }
 
-  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
-    const clonedContext = this.cloneContext(context);
-
-    // Skip if not enabled or missing required config
+  protected buildContent(): string | null {
+    // Skip if not enabled
     if (!this.config.enabled) {
       log('Group context injection disabled, skipping');
-      return this.markAsExecuted(clonedContext);
+      return null;
     }
 
-    // Find the system message to append to
-    const systemMessageIndex = clonedContext.messages.findIndex((msg) => msg.role === 'system');
+    const content = this.buildGroupContextBlock();
+    log('Group context prepared for injection');
 
-    if (systemMessageIndex === -1) {
-      log('No system message found, skipping group context injection');
-      return this.markAsExecuted(clonedContext);
-    }
+    return content;
+  }
 
-    const systemMessage = clonedContext.messages[systemMessageIndex];
-    const groupContext = this.buildGroupContextBlock();
-
-    // Append group context to system message content
-    if (typeof systemMessage.content === 'string') {
-      clonedContext.messages[systemMessageIndex] = {
-        ...systemMessage,
-        content: systemMessage.content + groupContext,
-      };
-
-      log('Group context injected into system message');
-    }
+  protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
+    const result = await super.doProcess(context);
 
     // Update metadata
-    clonedContext.metadata.groupContextInjected = true;
+    if (this.config.enabled) {
+      result.metadata.groupContextInjected = true;
+    }
 
-    return this.markAsExecuted(clonedContext);
+    return result;
   }
 
   /**
-   * Build the group context block to append to system message
+   * Build the group context block
    * Uses template from @lobechat/prompts with direct variable replacement
    */
   private buildGroupContextBlock(): string {
@@ -159,9 +147,7 @@ export class GroupContextInjector extends BaseProvider {
       .replace('{{SYSTEM_PROMPT}}', systemPrompt || '')
       .replace('{{GROUP_MEMBERS}}', membersText);
 
-    return `
-
-<group_context>
+    return `<group_context>
 ${groupContextContent}
 </group_context>`;
   }

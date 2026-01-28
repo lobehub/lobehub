@@ -86,6 +86,16 @@ export interface UserMemoryPreferenceItem {
   [key: string]: unknown;
 }
 
+export interface UserMemoryActivityItem {
+  endsAt?: string | Date | null;
+  id?: string;
+  startsAt?: string | Date | null;
+  status?: string | null;
+  timezone?: string | null;
+  type?: string | null;
+  [key: string]: unknown;
+}
+
 export interface UserMemoryIdentityItem {
   description?: string | null;
   id?: string;
@@ -100,6 +110,7 @@ export interface UserMemoryIdentityItem {
  * Compatible with SearchMemoryResult from @lobechat/types
  */
 export interface UserMemoryData {
+  activities?: UserMemoryActivityItem[];
   contexts: UserMemoryContextItem[];
   experiences: UserMemoryExperienceItem[];
   identities?: UserMemoryIdentityItem[];

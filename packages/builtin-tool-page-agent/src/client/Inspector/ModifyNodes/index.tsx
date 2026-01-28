@@ -29,8 +29,11 @@ export const ModifyNodesInspector = memo<BuiltinInspectorProps<ModifyNodesArgs, 
 
     // Count operations by type
     const counts = useMemo(() => {
-      const operations = args?.operations || partialArgs?.operations || [];
-      return operations.reduce(
+      const ops = args?.operations || partialArgs?.operations;
+      // During streaming, operations may be a partial object instead of array
+      if (!Array.isArray(ops)) return { insert: 0, modify: 0, remove: 0 };
+
+      return ops.reduce(
         (acc, op) => {
           switch (op.action) {
             case 'insert': {

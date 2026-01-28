@@ -14,7 +14,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       border: 1px solid ${cssVar.colorBorder};
       border-radius: ${cssVar.borderRadiusLG};
 
-      background: ${cssVar.colorBgLayout};
+      background: ${cssVar.colorBgContainer};
 
       /* stylelint-disable selector-class-pattern */
       .react-pdf__Document *,

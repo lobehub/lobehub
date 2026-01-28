@@ -90,6 +90,7 @@ const CronJobDetailPage = memo(() => {
   const isNewJob = cronId === 'new';
 
   const [draft, setDraft] = useState<CronJobDraft | null>(null);
+  const [isTogglingEnabled, setIsTogglingEnabled] = useState(false);
   const draftRef = useRef<CronJobDraft | null>(null);
   const contentRef = useRef('');
   const pendingSaveRef = useRef(false);
@@ -108,7 +109,10 @@ const CronJobDetailPage = memo(() => {
     s.switchTopic,
   ]);
 
-  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const [activeAgentId, internal_refreshCronTopics] = useAgentStore((s) => [
+    s.activeAgentId,
+    s.internal_refreshCronTopics,
+  ]);
   const cronListAgentId = activeAgentId || aid;
 
   const { data: cronJob, isLoading } = useSWR(
@@ -263,17 +267,26 @@ const CronJobDetailPage = memo(() => {
   const handleToggleEnabled = useCallback(
     async (enabled: boolean) => {
       if (!cronId) return;
+      setIsTogglingEnabled(true);
       setAutoSaveState({ status: 'saving' });
       try {
         await agentCronJobService.update(cronId, { enabled });
+        await mutate(
+          ['cronJob', cronId],
+          (current) => (current ? { ...current, enabled } : current),
+          false,
+        );
+        await internal_refreshCronTopics();
         setAutoSaveState({ lastUpdatedTime: new Date(), status: 'saved' });
       } catch (error) {
         console.error('Failed to update cron job status:', error);
         setAutoSaveState({ status: 'idle' });
         message.error('Failed to update scheduled task');
+      } finally {
+        setIsTogglingEnabled(false);
       }
     },
-    [cronId, mutate, refreshCronList],
+    [cronId, internal_refreshCronTopics],
   );
 
   const handleDeleteCronJob = useCallback(async () => {
@@ -472,6 +485,7 @@ const CronJobDetailPage = memo(() => {
               <CronJobHeader
                 enabled={cronJob?.enabled ?? false}
                 isNewJob={isNewJob}
+                isTogglingEnabled={isTogglingEnabled}
                 name={draft.name}
                 onNameChange={(name) => updateDraft({ name })}
                 onToggleEnabled={handleToggleEnabled}

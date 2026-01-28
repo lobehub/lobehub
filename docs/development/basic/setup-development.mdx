@@ -1,10 +1,21 @@
 ---
 title: Environment Setup Guide
+description: >-
+  Step-by-step guide to set up LobeHub development environment locally or
+  online.
+tags:
+  - LobeHub
+  - Development Setup
+  - Node.js
+  - PNPM
+  - Bun
+  - Git
+  - VSCode
 ---
 
 # Environment Setup Guide
 
-Welcome to the LobeChat development environment setup guide.
+Welcome to the LobeHub development environment setup guide.
 
 ## Online Development
 
@@ -14,13 +25,13 @@ If you have access to GitHub Codespaces, you can click the button below to enter
 
 ## Local Development
 
-Before starting development on LobeChat, you need to install and configure some necessary software and tools in your local environment. This document will guide you through these steps.
+Before starting development on LobeHub, you need to install and configure some necessary software and tools in your local environment. This document will guide you through these steps.
 
 ### Development Environment Requirements
 
 First, you need to install the following software:
 
-- Node.js: LobeChat is built on Node.js, so you need to install Node.js. We recommend installing the latest stable version.
+- Node.js: LobeHub is built on Node.js, so you need to install Node.js. We recommend installing the latest stable version.
 - PNPM: We use PNPM as the preferred package manager. You can download and install it from the [PNPM official website](https://pnpm.io/installation).
 - Bun: We use Bun as the npm scripts runner. You can download and install it from the [Bun official website](https://bun.com/docs/installation).
 - Git: We use Git for version control. You can download and install it from the Git official website.
@@ -32,9 +43,9 @@ We recommend installing the extensions listed in [.vscode/extensions.json](https
 
 ### Project Setup
 
-After installing the above software, you can start setting up the LobeChat project.
+After installing the above software, you can start setting up the LobeHub project.
 
-1. **Get the code**: First, you need to clone the LobeChat codebase from GitHub. Run the following command in the terminal:
+1. **Get the code**: First, you need to clone the LobeHub codebase from GitHub. Run the following command in the terminal:
 
 ```bash
 git clone https://github.com/lobehub/lobe-chat.git
@@ -53,13 +64,13 @@ pnpm i
 bun run dev
 ```
 
-Now, you can open `http://localhost:3010` in your browser, and you should see the welcome page of LobeChat. This indicates that you have successfully set up the development environment.
+Now, you can open `http://localhost:3010` in your browser, and you should see the welcome page of LobeHub. This indicates that you have successfully set up the development environment.
 
 ![](https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/274655364-414bc31e-8511-47a3-af17-209b530effc7.png)
 
 ## Working with Server-Side Features
 
-The basic setup above uses LobeChat's client-side database mode. If you need to work with server-side features such as:
+The basic setup above uses LobeHub's client-side database mode. If you need to work with server-side features such as:
 
 - Database persistence
 - File uploads and storage
@@ -69,7 +80,7 @@ The basic setup above uses LobeChat's client-side database mode. If you need to 
 
 Please refer to the [Work with Server-Side Database](/docs/development/basic/work-with-server-side-database) guide for complete setup instructions.
 
-During the development process, if you encounter any issues with environment setup or have any questions about LobeChat development, feel free to ask us at any time. We look forward to seeing your contributions!
+During the development process, if you encounter any issues with environment setup or have any questions about LobeHub development, feel free to ask us at any time. We look forward to seeing your contributions!
 
 [codespaces-link]: https://codespaces.new/lobehub/lobe-chat
 [codespaces-shield]: https://github.com/codespaces/badge.svg

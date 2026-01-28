@@ -22,14 +22,10 @@ export enum AssistantCategory {
 }
 
 export enum AssistantSorts {
-  CreatedAt = 'createdAt',
-  Identifier = 'identifier',
-  KnowledgeCount = 'knowledgeCount',
-  MyOwn = 'myown',
-  PluginCount = 'pluginCount',
+  HaveSkills = 'haveSkills',
+  MostUsage = 'mostUsage',
   Recommended = 'recommended',
-  Title = 'title',
-  TokenUsage = 'tokenUsage',
+  UpdatedAt = 'updatedAt',
 }
 
 export enum AssistantNavKey {
@@ -60,6 +56,7 @@ export interface DiscoverAssistantItem extends Omit<LobeAgentSettings, 'meta'>, 
   homepage: string;
   identifier: string;
   installCount?: number;
+  isValidated?: boolean;
   knowledgeCount: number;
   pluginCount: number;
   status?: AgentStatus;
@@ -72,6 +69,7 @@ export type AssistantMarketSource = 'legacy' | 'new';
 
 export interface AssistantQueryParams {
   category?: string;
+  haveSkills?: boolean;
   includeAgentGroup?: boolean;
   locale?: string;
   order?: 'asc' | 'desc';
@@ -95,6 +93,7 @@ export interface DiscoverAssistantDetail extends DiscoverAssistantItem {
   currentVersion?: string;
   editorData?: any;
   examples?: FewShots;
+  isValidated?: boolean;
   related: DiscoverAssistantItem[];
   summary?: string;
   versions?: DiscoverAssistantVersion[];

@@ -5,10 +5,12 @@ import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { useCreateMenuItems } from '@/app/[variants]/(main)/home/_layout/hooks';
+import { isDesktop } from '@/const/version';
 import type { SearchResult } from '@/database/repositories/search';
 import { useCreateNewModal } from '@/features/LibraryModal';
 import { useGroupWizard } from '@/layout/GlobalProvider/GroupWizardProvider';
 import { lambdaClient } from '@/libs/trpc/client';
+import { electronSystemService } from '@/services/electron/system';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelectors';
 import { useChatStore } from '@/store/chat';
@@ -107,8 +109,12 @@ export const useCommandMenu = () => {
   );
 
   const handleExternalLink = useCallback(
-    (url: string) => {
-      window.open(url, '_blank', 'noopener,noreferrer');
+    async (url: string) => {
+      if (isDesktop) {
+        await electronSystemService.openExternalLink(url);
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
       setOpen({ showCommandMenu: false });
     },
     [setOpen],

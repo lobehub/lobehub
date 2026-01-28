@@ -1,6 +1,7 @@
 export * from './agentBuilder';
 export * from './agentGroup';
 export * from './chatMessages';
+export * from './compressContext';
 export * from './files';
 export * from './fileSystem';
 export * from './groupChat';

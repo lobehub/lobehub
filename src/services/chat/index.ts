@@ -10,7 +10,6 @@ import {
 import { AgentRuntimeError, type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
 import {
   ChatErrorType,
-  type MessageMapScope,
   type RuntimeInitialContext,
   type RuntimeStepContext,
   type TracePayload,
@@ -25,9 +24,7 @@ import { merge } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
-import { enableAuth } from '@/envs/auth';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
-import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { getAgentStoreState } from '@/store/agent';
 import {
   agentByIdSelectors,
@@ -75,7 +72,6 @@ interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'mess
    * Required to ensure config consistency and proper isSubTask filtering.
    */
   resolvedAgentConfig: ResolvedAgentConfig;
-  scope?: MessageMapScope;
   topicId?: string;
 }
 
@@ -132,25 +128,22 @@ class ChatService {
 
     // =================== 1. use pre-resolved agent config =================== //
     // Config is resolved in AgentRuntime layer (internal_createAgentState)
-    // which handles isSubTask filtering and other runtime modifications
+    // which handles isSubTask filtering, disableTools, and tools generation
 
     const targetAgentId = getTargetAgentId(agentId);
 
-    const { agentConfig, chatConfig, plugins: pluginIds } = resolvedAgentConfig;
+    // Tools are pre-generated in internal_createAgentState and passed via resolvedAgentConfig
+    // This avoids duplicate toolsEngine creation and ensures disableTools is properly handled
+    const {
+      agentConfig,
+      chatConfig,
+      enabledManifests = [],
+      enabledToolIds = [],
+      tools,
+    } = resolvedAgentConfig;
 
     // Get search config with agentId for agent-specific settings
     const searchConfig = getSearchConfig(payload.model, payload.provider!, targetAgentId);
-
-    const toolsEngine = createAgentToolsEngine({
-      model: payload.model,
-      provider: payload.provider!,
-    });
-
-    const { tools, enabledToolIds, enabledManifests } = toolsEngine.generateToolsDetailed({
-      model: payload.model,
-      provider: payload.provider!,
-      toolIds: pluginIds,
-    });
 
     // =================== 1.1 process user memories =================== //
 
@@ -287,7 +280,7 @@ class ChatService {
         stream: chatConfig.enableStreaming !== false,
         tools,
       },
-      options,
+      { ...options, agentId: targetAgentId, topicId },
     );
   };
 
@@ -317,7 +310,7 @@ class ChatService {
   };
 
   getChatCompletion = async (params: Partial<ChatStreamPayload>, options?: FetchOptions) => {
-    const { signal, responseAnimation } = options ?? {};
+    const { agentId, signal, responseAnimation, topicId } = options ?? {};
 
     const { provider = ModelProvider.OpenAI, ...res } = params;
 
@@ -348,6 +341,8 @@ class ChatService {
 
     // Get the chat config to check streaming preference
     const chatConfig = agentChatConfigSelectors.currentChatConfig(getAgentStoreState());
+
+    delete (res as any).scope;
 
     const payload = merge(
       {
@@ -402,7 +397,12 @@ class ChatService {
     const traceHeader = createTraceHeader({ ...options?.trace });
 
     const headers = await createHeaderWithAuth({
-      headers: { 'Content-Type': 'application/json', ...traceHeader },
+      headers: {
+        'Content-Type': 'application/json',
+        ...traceHeader,
+        ...(agentId && { 'x-agent-id': agentId }),
+        ...(topicId && { 'x-topic-id': topicId }),
+      },
       provider,
     });
 
@@ -542,7 +542,7 @@ class ChatService {
      * if enable login and not signed in, return unauthorized error
      */
     const userStore = useUserStore.getState();
-    if (enableAuth && !userStore.isSignedIn) {
+    if (!userStore.isSignedIn) {
       throw AgentRuntimeError.createError(ChatErrorType.InvalidAccessCode);
     }
 

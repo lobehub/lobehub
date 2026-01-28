@@ -446,18 +446,20 @@ describe('StreamingExecutor actions', () => {
     });
 
     describe('effectiveAgentId for group orchestration', () => {
-      it('should pass pre-resolved config for sub-agent when subAgentId is set in operation context', async () => {
+      it('should use subAgentId as agentId when groupId is present (group orchestration)', async () => {
         const { result } = renderHook(() => useChatStore());
         const messages = [createMockMessage({ role: 'user' })];
         const supervisorAgentId = 'supervisor-agent-id';
         const subAgentId = 'sub-agent-id';
+        const groupId = 'test-group-id';
 
-        // Create operation with subAgentId in context (simulating group orchestration)
+        // Create operation with groupId and subAgentId (group orchestration scenario)
         const { operationId } = result.current.startOperation({
           type: 'execAgentRuntime',
           context: {
             agentId: supervisorAgentId,
             subAgentId: subAgentId,
+            groupId: groupId, // groupId present = group orchestration
             topicId: TEST_IDS.TOPIC_ID,
             messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
           },
@@ -484,15 +486,59 @@ describe('StreamingExecutor actions', () => {
           });
         });
 
-        // With the new architecture:
-        // - agentId param is for context/tracing (supervisor ID)
-        // - resolvedAgentConfig contains the sub-agent's config (passed in by caller)
+        // In group orchestration (groupId present), subAgentId should be used as agentId
         expect(streamSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             params: expect.objectContaining({
-              agentId: supervisorAgentId, // For context/tracing purposes
-              resolvedAgentConfig: subAgentConfig, // Pre-resolved sub-agent config
+              agentId: subAgentId, // subAgentId used for context injection in group orchestration
+              resolvedAgentConfig: subAgentConfig,
             }),
+          }),
+        );
+
+        streamSpy.mockRestore();
+      });
+
+      it('should use agentId when subAgentId is present but groupId is not (non-group scenario)', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const messages = [createMockMessage({ role: 'user' })];
+        const agentId = 'normal-agent-id';
+        const subAgentId = 'sub-agent-id';
+
+        // Create operation with subAgentId but NO groupId (not a group orchestration scenario)
+        const { operationId } = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: {
+            agentId: agentId,
+            subAgentId: subAgentId, // subAgentId present but no groupId
+            topicId: TEST_IDS.TOPIC_ID,
+            messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          },
+          label: 'Test Non-Group with SubAgentId',
+        });
+
+        const streamSpy = vi
+          .spyOn(chatService, 'createAssistantMessageStream')
+          .mockImplementation(async ({ onFinish }) => {
+            await onFinish?.(TEST_CONTENT.AI_RESPONSE, {});
+          });
+
+        await act(async () => {
+          await result.current.internal_fetchAIChatMessage({
+            messages,
+            messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            model: 'gpt-4o-mini',
+            provider: 'openai',
+            operationId,
+            agentConfig: createMockResolvedAgentConfig(),
+          });
+        });
+
+        // Without groupId, should use agentId even if subAgentId is present
+        expect(streamSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            // agentId used since no groupId
+            params: expect.objectContaining({ agentId }),
           }),
         );
 
@@ -545,7 +591,7 @@ describe('StreamingExecutor actions', () => {
         streamSpy.mockRestore();
       });
 
-      it('should pass resolvedAgentConfig through chatService when subAgentId is present', async () => {
+      it('should pass resolvedAgentConfig through chatService in group orchestration speak scenario', async () => {
         const { result } = renderHook(() => useChatStore());
         const messages = [createMockMessage({ role: 'user' })];
         const supervisorAgentId = 'supervisor-agent-id';
@@ -588,15 +634,13 @@ describe('StreamingExecutor actions', () => {
           });
         });
 
-        // With the new architecture, config is pre-resolved and passed via resolvedAgentConfig.
-        // The agentId param is for context/tracing only.
-        // The speaking agent's config is ensured by the caller (internal_createAgentState)
-        // resolving config with subAgentId and passing it as agentConfig param.
+        // In group orchestration (groupId present), subAgentId is used as agentId for context injection
+        // The speaking agent's config is passed via resolvedAgentConfig
         expect(streamSpy).toHaveBeenCalledWith(
           expect.objectContaining({
             params: expect.objectContaining({
-              // agentId is supervisor for context purposes
-              agentId: supervisorAgentId,
+              // subAgentId used as agentId in group orchestration
+              agentId: subAgentId,
               // resolvedAgentConfig contains the speaking agent's config
               resolvedAgentConfig: speakingAgentConfig,
             }),
@@ -1448,6 +1492,113 @@ describe('StreamingExecutor actions', () => {
       });
 
       streamSpy.mockRestore();
+    });
+  });
+
+  describe('internal_createAgentState with disableTools', () => {
+    it('should return empty toolManifestMap when disableTools is true', async () => {
+      act(() => {
+        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: TEST_CONTENT.USER_MESSAGE,
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      // Get actual internal_createAgentState result with disableTools: true
+      const { state } = result.current.internal_createAgentState({
+        messages: [userMessage],
+        parentMessageId: userMessage.id,
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+        disableTools: true,
+      });
+
+      // toolManifestMap should be empty when disableTools is true
+      expect(state.toolManifestMap).toEqual({});
+    });
+
+    it('should return empty tools in agentConfig when disableTools is true', async () => {
+      act(() => {
+        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: TEST_CONTENT.USER_MESSAGE,
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      // Get actual internal_createAgentState result with disableTools: true
+      const { agentConfig } = result.current.internal_createAgentState({
+        messages: [userMessage],
+        parentMessageId: userMessage.id,
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+        disableTools: true,
+      });
+
+      // agentConfig should have empty tools-related fields when disableTools is true
+      expect(agentConfig.tools).toBeUndefined();
+      expect(agentConfig.enabledToolIds).toEqual([]);
+      expect(agentConfig.enabledManifests).toEqual([]);
+    });
+
+    it('should include tools in toolManifestMap when disableTools is false or undefined', async () => {
+      act(() => {
+        useChatStore.setState({ internal_execAgentRuntime: realExecAgentRuntime });
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const userMessage = {
+        id: TEST_IDS.USER_MESSAGE_ID,
+        role: 'user',
+        content: TEST_CONTENT.USER_MESSAGE,
+        sessionId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+      } as UIChatMessage;
+
+      // Mock resolveAgentConfig to return plugins
+      vi.spyOn(agentConfigResolver, 'resolveAgentConfig').mockReturnValue({
+        agentConfig: {
+          ...createMockAgentConfig(),
+          plugins: ['test-plugin'],
+        },
+        chatConfig: createMockChatConfig(),
+        isBuiltinAgent: false,
+        plugins: ['test-plugin'],
+      });
+
+      // Get actual internal_createAgentState result without disableTools
+      const { state: stateWithoutDisable } = result.current.internal_createAgentState({
+        messages: [userMessage],
+        parentMessageId: userMessage.id,
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+        // disableTools not set (undefined)
+      });
+
+      // Get actual internal_createAgentState result with disableTools: false
+      const { state: stateWithDisableFalse } = result.current.internal_createAgentState({
+        messages: [userMessage],
+        parentMessageId: userMessage.id,
+        agentId: TEST_IDS.SESSION_ID,
+        topicId: TEST_IDS.TOPIC_ID,
+        disableTools: false,
+      });
+
+      // Both should have the same toolManifestMap (tools enabled)
+      // Note: The actual content depends on what plugins are resolved,
+      // but the key point is they should not be empty (unless no plugins are configured)
+      expect(stateWithoutDisable.toolManifestMap).toEqual(stateWithDisableFalse.toolManifestMap);
     });
   });
 

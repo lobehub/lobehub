@@ -57,6 +57,13 @@ const getAgentSystemRoleExpanded =
 const disabledModelProvidersSortType = (s: GlobalState) =>
   s.status.disabledModelProvidersSortType || 'default';
 const disabledModelsSortType = (s: GlobalState) => s.status.disabledModelsSortType || 'default';
+
+const isNotificationRead =
+  (slug: string) =>
+  (s: GlobalState): boolean => {
+    const slugs = s.status.readNotificationSlugs || [];
+    return slugs.includes(slug);
+  };
 const tokenDisplayFormatShort = (s: GlobalState) =>
   s.status.tokenDisplayFormatShort !== undefined ? s.status.tokenDisplayFormatShort : true;
 
@@ -74,6 +81,7 @@ export const systemStatusSelectors = {
   imagePanelWidth,
   imageTopicPanelWidth,
   inZenMode,
+  isNotificationRead,
   isShowCredit,
   isStatusInit,
   language,

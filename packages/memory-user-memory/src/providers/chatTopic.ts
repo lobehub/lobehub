@@ -47,7 +47,7 @@ export class LobeChatTopicContextProvider implements MemoryContextProvider<
     this.options = options;
   }
 
-  async buildContext(job: MemoryExtractionJob): Promise<BuiltContext> {
+  async buildContext(userId: string): Promise<BuiltContext> {
     const messageChildren: Child[] = [];
 
     this.options.conversations.forEach((message, index) => {
@@ -118,7 +118,7 @@ export class LobeChatTopicContextProvider implements MemoryContextProvider<
       context: topicContext,
       metadata: {},
       sourceId: this.options.topicId,
-      userId: job.userId,
+      userId: userId,
     } satisfies BuiltContext;
   }
 }

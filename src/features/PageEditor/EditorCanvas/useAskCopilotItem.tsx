@@ -12,6 +12,8 @@ import { useTranslation } from 'react-i18next';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 
+import { usePageEditorStore } from '../store';
+
 const styles = createStaticStyles(({ css }) => ({
   askCopilot: css`
     border-radius: 6px;
@@ -26,6 +28,7 @@ const styles = createStaticStyles(({ css }) => ({
 export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActionsProps['items'] => {
   const { t } = useTranslation('common');
   const addSelectionContext = useFileStore((s) => s.addChatContextSelection);
+  const pageId = usePageEditorStore((s) => s.documentId);
 
   return useMemo(() => {
     if (!editor) return [];
@@ -60,6 +63,7 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
                 content,
                 format,
                 id: `selection-${nanoid(6)}`,
+                pageId,
                 preview,
                 title: 'Selection',
                 type: 'text',
@@ -95,5 +99,5 @@ export const useAskCopilotItem = (editor: IEditor | undefined): ChatInputActions
         onClick: () => {},
       },
     ];
-  }, [addSelectionContext, editor, t]);
+  }, [addSelectionContext, editor, pageId, t]);
 };

@@ -195,6 +195,7 @@
   "plans.fileStorage.tooltip": "用於儲存檔案、圖片及其他資料",
   "plans.free": "免費",
   "plans.freeTrail": "註冊即可免費試用 {{name}}，無需信用卡",
+  "plans.image.count": "約有 {{number}} 張圖片",
   "plans.includes": "包含以下內容：",
   "plans.includesExtra": "包含 {{name}} 所有功能，並額外提供：",
   "plans.knowledgeBase.desc": "可於對話中使用檔案與知識庫",

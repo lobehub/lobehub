@@ -134,6 +134,7 @@ export const generations = pgTable(
   (t) => [
     index('generations_user_id_idx').on(t.userId),
     index('generations_batch_id_idx').on(t.generationBatchId),
+    index('generations_file_id_idx').on(t.fileId),
   ],
 );
 

@@ -89,9 +89,9 @@ export const useUserActions = ({ id, data }: UseUserActionsParams): UserActions 
       },
       translate: {
         children: localeOptions.map((i) => ({
-          handleClick: () => translateMessage(id, i.value),
           key: i.value,
           label: t(`lang.${i.value}`),
+          onClick: () => translateMessage(id, i.value),
         })),
         icon: LanguagesIcon,
         key: 'translate',

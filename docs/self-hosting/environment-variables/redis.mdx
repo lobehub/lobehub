@@ -1,0 +1,68 @@
+---
+title: Configure Redis Cache Service
+description: Learn how to configure Redis cache service to optimize performance and session management.
+tags:
+  - Redis
+  - Cache
+  - Session Storage
+  - Environment Variables
+---
+
+# Configure Redis Cache Service
+
+LobeChat uses Redis as a high-performance cache and session storage service. Configuring Redis can optimize authentication session management, file proxy caching, and more.
+
+## Core Environment Variables
+
+### `REDIS_URL`
+
+- Type: Optional
+- Description: Redis server connection URL
+- Default: -
+- Example: `redis://localhost:6379`
+
+Supported URL formats:
+
+- Standard: `redis://localhost:6379`
+- With authentication: `redis://username:password@localhost:6379`
+- With database: `redis://localhost:6379/0`
+
+### `REDIS_PREFIX`
+
+- Type: Optional
+- Description: Prefix for Redis keys, used to isolate data in a shared Redis instance
+- Default: `lobechat`
+- Example: `my-lobechat`
+
+### `REDIS_TLS`
+
+- Type: Optional
+- Description: Whether to enable TLS/SSL encrypted connection
+- Default: `false`
+- Example: `true`
+
+<Callout type={'tip'}>
+  Redis services from cloud providers usually require TLS enabled to ensure secure data
+  transmission.
+</Callout>
+
+### `REDIS_PASSWORD`
+
+- Type: Optional
+- Description: Redis authentication password
+- Default: -
+- Example: `your-password`
+
+### `REDIS_USERNAME`
+
+- Type: Optional
+- Description: Redis authentication username (Redis 6.0+ ACL authentication)
+- Default: -
+- Example: `default`
+
+### `REDIS_DATABASE`
+
+- Type: Optional
+- Description: Redis database index (0-15)
+- Default: `0`
+- Example: `1`

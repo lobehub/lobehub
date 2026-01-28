@@ -1,7 +1,7 @@
 'use client';
 
 import { DraggablePanel, type DraggablePanelProps } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, useResponsive } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Activity, type PropsWithChildren, memo, useState } from 'react';
 
@@ -52,6 +52,8 @@ const PortalPanel = memo(({ children }: PropsWithChildren) => {
   const [tmpWidth, setWidth] = useState(portalWidth);
   if (tmpWidth !== portalWidth) setWidth(portalWidth);
 
+  const { lg } = useResponsive();
+
   const handleSizeChange: DraggablePanelProps['onSizeChange'] = (_, size) => {
     if (!size) return;
     const nextWidth = typeof size.width === 'string' ? Number.parseInt(size.width) : size.width;
@@ -75,6 +77,7 @@ const PortalPanel = memo(({ children }: PropsWithChildren) => {
       minWidth={
         showArtifactUI || showToolUI || showThread ? CHAT_PORTAL_TOOL_UI_WIDTH : CHAT_PORTAL_WIDTH
       }
+      mode={lg ? 'fixed' : 'float'}
       onSizeChange={handleSizeChange}
       placement={'right'}
       showHandleWhenCollapsed={false}

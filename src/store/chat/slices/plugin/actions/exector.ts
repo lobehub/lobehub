@@ -1,4 +1,5 @@
 import { type MCPToolCallResult } from '@/libs/mcp';
+import { truncateToolResult } from '@/server/utils/truncateToolResult';
 import { useToolStore } from '@/store/tool';
 import { type ChatToolPayload } from '@/types/message';
 import { safeParseJSON } from '@/utils/safeParseJSON';
@@ -51,7 +52,7 @@ export const klavisExecutor: RemoteToolExecutor = async (p) => {
   const toolResult = result.data;
   if (toolResult) {
     return {
-      content: toolResult.content,
+      content: truncateToolResult(toolResult.content),
       error: toolResult.state?.isError ? toolResult.state : undefined,
       state: toolResult.state,
       success: toolResult.success,
@@ -82,7 +83,9 @@ export const lobehubSkillExecutor: RemoteToolExecutor = async (p) => {
   }
 
   // Convert to MCPToolCallResult format
-  const content = typeof result.data === 'string' ? result.data : JSON.stringify(result.data);
+  const rawContent = typeof result.data === 'string' ? result.data : JSON.stringify(result.data);
+  const content = truncateToolResult(rawContent);
+
   return {
     content,
     error: undefined,

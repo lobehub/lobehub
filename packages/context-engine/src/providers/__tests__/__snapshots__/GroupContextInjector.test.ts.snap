@@ -1,9 +1,7 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`GroupContextInjector > Edge Cases > should handle empty members array 1`] = `
-"Prompt.
-
-<group_context>
+"<group_context>
 You are "", acting as a  in the multi-agent group "Empty Group".
 Your internal agent ID is  (for system use only, never expose to users).
 
@@ -24,9 +22,7 @@ Empty group description
 `;
 
 exports[`GroupContextInjector > Identity Rules Section > should always include identity rules 1`] = `
-"Base prompt.
-
-<group_context>
+"<group_context>
 You are "", acting as a  in the multi-agent group "".
 Your internal agent ID is  (for system use only, never expose to users).
 
@@ -47,9 +43,7 @@ Your internal agent ID is  (for system use only, never expose to users).
 `;
 
 exports[`GroupContextInjector > Variable Replacement > should handle config with only group info 1`] = `
-"System prompt.
-
-<group_context>
+"<group_context>
 You are "", acting as a  in the multi-agent group "Test Group".
 Your internal agent ID is  (for system use only, never expose to users).
 
@@ -70,9 +64,7 @@ Test group description
 `;
 
 exports[`GroupContextInjector > Variable Replacement > should handle config with only identity info 1`] = `
-"You are an editor.
-
-<group_context>
+"<group_context>
 You are "Editor", acting as a participant in the multi-agent group "".
 Your internal agent ID is agt_editor (for system use only, never expose to users).
 
@@ -93,9 +85,7 @@ Your internal agent ID is agt_editor (for system use only, never expose to users
 `;
 
 exports[`GroupContextInjector > Variable Replacement > should handle empty config 1`] = `
-"Base prompt.
-
-<group_context>
+"<group_context>
 You are "", acting as a  in the multi-agent group "".
 Your internal agent ID is  (for system use only, never expose to users).
 

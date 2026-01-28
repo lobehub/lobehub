@@ -31,7 +31,7 @@ describe('UserMemoryGateKeeper', () => {
     expect(schema?.strict).toBe(true);
 
     const properties = (schema?.schema as any).properties;
-    const requiredLayers = ['context', 'experience', 'identity', 'preference'];
+    const requiredLayers = ['activity', 'context', 'experience', 'identity', 'preference'];
 
     requiredLayers.forEach((layer) => {
       const layerSchema = properties[layer];
@@ -78,6 +78,7 @@ describe('UserMemoryGateKeeper', () => {
     const extractor = new UserMemoryGateKeeper(extractorConfig);
 
     const llmResult = {
+      activity: { reasoning: 'reasoning', shouldExtract: true },
       context: { reasoning: 'reasoning', shouldExtract: true },
       experience: { reasoning: 'reasoning', shouldExtract: false },
       identity: { reasoning: 'reasoning', shouldExtract: true },

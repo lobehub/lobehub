@@ -81,7 +81,7 @@ export const BatchCreateAgentsInspector = memo<
       {displayInfo && (
         <>
           <div className={styles.avatarGroup}>
-            {displayInfo.displayAgents.map((agent, index) => (
+            {displayInfo.displayAgents?.map((agent, index) => (
               <Avatar
                 avatar={agent.avatar}
                 key={index}

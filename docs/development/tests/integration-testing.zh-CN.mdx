@@ -1,5 +1,11 @@
 ---
 title: 集成测试指南
+description: 了解集成测试的重要性及最佳实践，确保系统模块协同工作。
+tags:
+  - 集成测试
+  - 测试指南
+  - 软件测试
+  - 模块协作
 ---
 
 # 集成测试指南
@@ -83,13 +89,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '@/database/models/__tests__/_util';
 import { messages, sessions, users } from '@/database/schemas';
-import { LobeChatDatabase } from '@/database/type';
+import { LobeHubDatabase } from '@/database/type';
 import { messageRouter } from '@/server/routers/lambda/message';
 
 import { cleanupTestUser, createTestContext, createTestUser } from '../setup';
 
 describe('Your Feature Integration Tests', () => {
-  let serverDB: LobeChatDatabase;
+  let serverDB: LobeHubDatabase;
   let userId: string;
 
   beforeEach(async () => {
