@@ -49,21 +49,24 @@ const StatusContent = memo<StatusContentProps>(({ taskDetail, messageId }) => {
     return <InitializingState />;
   }
 
-  // Error states: Failed, Cancel
-  if (status === ThreadStatus.Failed || status === ThreadStatus.Cancel) {
-    return <ErrorState taskDetail={taskDetail!} />;
-  }
-
   // Processing or Completed state with messages
   if (messages && messages.length > 0) {
     return (
-      <TaskMessages
-        duration={taskDetail?.duration}
-        isProcessing={isProcessing}
-        messages={messages}
-        startTime={taskDetail?.startedAt ? new Date(taskDetail.startedAt).getTime() : undefined}
-        totalCost={taskDetail?.totalCost}
-      />
+      <>
+        <TaskMessages
+          duration={taskDetail?.duration}
+          isProcessing={isProcessing}
+          messages={messages}
+          startTime={taskDetail?.startedAt ? new Date(taskDetail.startedAt).getTime() : undefined}
+          totalCost={taskDetail?.totalCost}
+        />
+        {
+          // Error states: Failed, Cancel
+          (status === ThreadStatus.Failed || status === ThreadStatus.Cancel) && (
+            <ErrorState taskDetail={taskDetail!} />
+          )
+        }
+      </>
     );
   }
 

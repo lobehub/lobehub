@@ -655,8 +655,10 @@ describe('RuntimeExecutors', () => {
 
       const result = await executors.call_tools_batch!(instruction, state);
 
-      // Should query messages from database
+      // Should query messages from database with agentId, threadId, and topicId
       expect(mockMessageModel.query).toHaveBeenCalledWith({
+        agentId: 'agent-123',
+        threadId: 'thread-123',
         topicId: 'topic-123',
       });
 
@@ -951,6 +953,109 @@ describe('RuntimeExecutors', () => {
           isSuccess: true,
         }),
       );
+    });
+
+    it('should query messages with correct metadata fields when state.metadata is defined', async () => {
+      const executors = createRuntimeExecutors(ctx);
+      const state = createMockState({
+        metadata: {
+          agentId: 'agent-abc',
+          threadId: 'thread-xyz',
+          topicId: 'topic-abc-123',
+        },
+      });
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolsCalling: [
+            {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-1',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          ],
+        },
+        type: 'call_tools_batch' as const,
+      };
+
+      await executors.call_tools_batch!(instruction, state);
+
+      // Should query messages with agentId, threadId, and topicId from state.metadata
+      expect(mockMessageModel.query).toHaveBeenCalledWith({
+        agentId: 'agent-abc',
+        threadId: 'thread-xyz',
+        topicId: 'topic-abc-123',
+      });
+    });
+
+    it('should preserve messages in newState even when state.metadata.topicId is undefined', async () => {
+      // Regression test: When state.metadata.topicId is undefined, previously the query
+      // only passed topicId, which caused isNull(topicId) condition and returned 0 messages.
+      // This led to "messages: at least one message is required" error in the next call_llm step.
+      //
+      // Fix: Now we also pass agentId and threadId, so even when topicId is undefined,
+      // the query can still find messages by agentId scope.
+
+      // Mock: query returns messages when agentId is provided (regardless of topicId)
+      mockMessageModel.query = vi
+        .fn()
+        .mockImplementation((params: { agentId?: string; topicId?: string }) => {
+          // With the fix, agentId is always passed, so we can find messages
+          if (params.agentId) {
+            return Promise.resolve([
+              { id: 'msg-1', content: 'Hello', role: 'user' },
+              { id: 'msg-2', content: 'Response', role: 'assistant', tool_calls: [] },
+            ]);
+          }
+          // Without agentId (old buggy behavior), return empty
+          return Promise.resolve([]);
+        });
+
+      const executors = createRuntimeExecutors(ctx);
+      // State with undefined topicId but has agentId
+      const state = createMockState({
+        messages: [
+          { content: 'Hello', role: 'user' },
+          { content: 'Response', role: 'assistant', tool_calls: [] },
+        ],
+        metadata: {
+          agentId: 'agent-123',
+          threadId: 'thread-123',
+          topicId: undefined, // topicId is undefined
+        },
+      });
+
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-123',
+          toolsCalling: [
+            {
+              apiName: 'search',
+              arguments: '{}',
+              id: 'tool-call-1',
+              identifier: 'web-search',
+              type: 'default' as const,
+            },
+          ],
+        },
+        type: 'call_tools_batch' as const,
+      };
+
+      const result = await executors.call_tools_batch!(instruction, state);
+
+      // Verify agentId is passed in the query
+      expect(mockMessageModel.query).toHaveBeenCalledWith({
+        agentId: 'agent-123',
+        threadId: 'thread-123',
+        topicId: undefined,
+      });
+
+      // Expected: newState.messages should NOT be empty
+      // The next call_llm step needs messages to work properly
+      expect(result.newState.messages.length).toBeGreaterThan(0);
     });
   });
 
