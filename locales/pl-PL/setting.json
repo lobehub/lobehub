@@ -446,6 +446,8 @@
   "settingImage.defaultCount.desc": "Ustaw domyślną liczbę obrazów generowanych podczas tworzenia nowego zadania w panelu generowania obrazów.",
   "settingImage.defaultCount.label": "Domyślna liczba obrazów",
   "settingImage.defaultCount.title": "Sztuka AI",
+  "settingModel.enableContextCompression.desc": "Automatycznie kompresuj wcześniejsze wiadomości do podsumowań, gdy rozmowa przekroczy 64 000 tokenów, oszczędzając 60–80% zużycia tokenów",
+  "settingModel.enableContextCompression.title": "Włącz automatyczną kompresję kontekstu",
   "settingModel.enableMaxTokens.title": "Włącz limit tokenów",
   "settingModel.enableReasoningEffort.title": "Włącz regulację wysiłku rozumowania",
   "settingModel.frequencyPenalty.desc": "Im wyższa wartość, tym bardziej zróżnicowane i bogate słownictwo; im niższa, tym prostszy i bardziej bezpośredni język.",

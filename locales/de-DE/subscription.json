@@ -140,6 +140,8 @@
   "models.output": "Ausgabe",
   "models.title": "Modelle",
   "payDiffPrice": "Differenz bezahlen",
+  "payDiffPriceApprox": "Ca.",
+  "payDiffPriceTip": "Der tatsächliche Betrag richtet sich nach der Zahlungsseite",
   "payment.error.actions.billing": "Abrechnungsverwaltung",
   "payment.error.actions.home": "Zur Startseite",
   "payment.error.desc": "Abonnement-ID: {{id}} nicht gefunden. Bei Fragen kontaktieren Sie uns bitte per E-Mail",

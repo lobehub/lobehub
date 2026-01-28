@@ -140,6 +140,8 @@
   "models.output": "خروجی",
   "models.title": "مدل‌ها",
   "payDiffPrice": "پرداخت مابه‌التفاوت",
+  "payDiffPriceApprox": "تقریباً",
+  "payDiffPriceTip": "مبلغ نهایی در صفحه پرداخت مشخص می‌شود",
   "payment.error.actions.billing": "مدیریت صورتحساب",
   "payment.error.actions.home": "بازگشت به خانه",
   "payment.error.desc": "شناسه اشتراک: {{id}} یافت نشد. در صورت وجود سوال، لطفاً از طریق ایمیل با ما تماس بگیرید",

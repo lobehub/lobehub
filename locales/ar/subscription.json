@@ -140,6 +140,8 @@
   "models.output": "إخراج",
   "models.title": "النماذج",
   "payDiffPrice": "دفع الفرق",
+  "payDiffPriceApprox": "تقريبًا",
+  "payDiffPriceTip": "المبلغ الفعلي يعتمد على صفحة الدفع",
   "payment.error.actions.billing": "إدارة الفوترة",
   "payment.error.actions.home": "العودة إلى الصفحة الرئيسية",
   "payment.error.desc": "معرّف الاشتراك: {{id}} غير موجود. إذا كانت لديك أسئلة، يرجى التواصل معنا عبر البريد الإلكتروني",

@@ -140,6 +140,8 @@
   "models.output": "Output",
   "models.title": "Modelli",
   "payDiffPrice": "Paga la differenza",
+  "payDiffPriceApprox": "Circa",
+  "payDiffPriceTip": "Importo effettivo soggetto alla pagina di pagamento",
   "payment.error.actions.billing": "Gestione fatturazione",
   "payment.error.actions.home": "Torna alla home",
   "payment.error.desc": "ID abbonamento: {{id}} non trovato. In caso di domande, contattaci via email",

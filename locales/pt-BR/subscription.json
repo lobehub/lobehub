@@ -140,6 +140,8 @@
   "models.output": "Saída",
   "models.title": "Modelos",
   "payDiffPrice": "Pagar Diferença",
+  "payDiffPriceApprox": "Aprox.",
+  "payDiffPriceTip": "Valor real sujeito à página de pagamento",
   "payment.error.actions.billing": "Gerenciar Cobrança",
   "payment.error.actions.home": "Voltar para Início",
   "payment.error.desc": "ID da assinatura: {{id}} não encontrado. Se tiver dúvidas, entre em contato conosco por e-mail",

@@ -140,6 +140,8 @@
   "models.output": "출력",
   "models.title": "모델",
   "payDiffPrice": "차액 결제",
+  "payDiffPriceApprox": "약",
+  "payDiffPriceTip": "실제 결제 금액은 결제 페이지에서 확인하세요",
   "payment.error.actions.billing": "결제 관리",
   "payment.error.actions.home": "홈으로 돌아가기",
   "payment.error.desc": "구독 ID: {{id}}를 찾을 수 없습니다. 문의 사항이 있으시면 이메일로 연락해 주세요.",

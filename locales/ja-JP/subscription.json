@@ -140,6 +140,8 @@
   "models.output": "出力",
   "models.title": "モデル",
   "payDiffPrice": "差額を支払う",
+  "payDiffPriceApprox": "約",
+  "payDiffPriceTip": "実際の金額は支払いページでご確認ください",
   "payment.error.actions.billing": "請求管理",
   "payment.error.actions.home": "ホームに戻る",
   "payment.error.desc": "サブスクリプションID：{{id}} が見つかりません。ご不明な点がある場合は、メールでお問い合わせください。",

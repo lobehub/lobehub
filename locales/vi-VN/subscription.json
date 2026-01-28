@@ -140,6 +140,8 @@
   "models.output": "Đầu ra",
   "models.title": "Mô hình",
   "payDiffPrice": "Thanh toán phần chênh lệch",
+  "payDiffPriceApprox": "Xấp xỉ",
+  "payDiffPriceTip": "Số tiền thực tế sẽ hiển thị trên trang thanh toán",
   "payment.error.actions.billing": "Quản lý thanh toán",
   "payment.error.actions.home": "Quay về trang chủ",
   "payment.error.desc": "Không tìm thấy ID gói đăng ký: {{id}}. Nếu bạn có thắc mắc, vui lòng liên hệ với chúng tôi qua email",

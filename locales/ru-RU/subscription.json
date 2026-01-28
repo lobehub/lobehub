@@ -140,6 +140,8 @@
   "models.output": "Вывод",
   "models.title": "Модели",
   "payDiffPrice": "Оплатить разницу",
+  "payDiffPriceApprox": "Приблизительно",
+  "payDiffPriceTip": "Фактическая сумма указывается на странице оплаты",
   "payment.error.actions.billing": "Управление оплатой",
   "payment.error.actions.home": "На главную",
   "payment.error.desc": "Подписка с ID: {{id}} не найдена. Если у вас есть вопросы, свяжитесь с нами по электронной почте",

@@ -140,6 +140,8 @@
   "models.output": "Çıktı",
   "models.title": "Modeller",
   "payDiffPrice": "Farkı Öde",
+  "payDiffPriceApprox": "Yaklaşık",
+  "payDiffPriceTip": "Gerçek tutar ödeme sayfasında geçerlidir",
   "payment.error.actions.billing": "Fatura Yönetimi",
   "payment.error.actions.home": "Ana Sayfaya Dön",
   "payment.error.desc": "Abonelik ID'si: {{id}} bulunamadı. Sorularınız varsa lütfen e-posta yoluyla bizimle iletişime geçin",

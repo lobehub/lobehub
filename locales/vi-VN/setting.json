@@ -446,6 +446,8 @@
   "settingImage.defaultCount.desc": "Đặt số lượng hình ảnh mặc định được tạo khi tạo tác vụ mới trong bảng tạo hình ảnh.",
   "settingImage.defaultCount.label": "Số Lượng Hình Ảnh Mặc Định",
   "settingImage.defaultCount.title": "Nghệ Thuật AI",
+  "settingModel.enableContextCompression.desc": "Tự động nén các tin nhắn lịch sử thành bản tóm tắt khi cuộc trò chuyện vượt quá 64.000 token, giúp tiết kiệm 60-80% lượng token sử dụng",
+  "settingModel.enableContextCompression.title": "Bật Tự Động Nén Ngữ Cảnh",
   "settingModel.enableMaxTokens.title": "Bật Giới Hạn Số Token",
   "settingModel.enableReasoningEffort.title": "Bật Điều Chỉnh Nỗ Lực Lý Luận",
   "settingModel.frequencyPenalty.desc": "Giá trị càng cao, từ vựng càng phong phú và đa dạng; giá trị càng thấp, ngôn ngữ càng đơn giản và trực tiếp.",
