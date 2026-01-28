@@ -161,7 +161,7 @@
     "@henrygd/queue": "^1.2.0",
     "@huggingface/inference": "^4.13.10",
     "@icons-pack/react-simple-icons": "^13.8.0",
-    "@khmyznikov/pwa-install": "0.3.9",
+    "@khmyznikov/pwa-install": "0.6.2",
     "@langchain/community": "^0.3.59",
     "@lobechat/agent-runtime": "workspace:*",
     "@lobechat/builtin-agents": "workspace:*",
