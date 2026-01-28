@@ -73,9 +73,13 @@ export const useWebUserStateRedirect = () =>
     }
 
     // Redirect away from invite-code page if no longer required
+    // Skip redirect if force=true is present (for re-entering invite code)
     if (pathname.startsWith('/invite-code')) {
-      window.location.href = '/';
-      return;
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('force') !== 'true') {
+        window.location.href = '/';
+        return;
+      }
     }
 
     if (!onboardingSelectors.needsOnboarding(state)) return;
