@@ -162,6 +162,20 @@ These settings are required for email verification and password reset features.
 - Default: `-`
 - Example: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
 
+#### `AUTH_MICROSOFT_AUTHORITY_URL`
+
+- Type: Optional
+- Description: Authority URL for the Microsoft Entra ID. This is used to specify the endpoint for authentication requests.
+- Default: `https://login.microsoftonline.com`
+- Example: `https://login.partner.microsoftonline.cn`
+
+#### `AUTH_MICROSOFT_TENANT_ID`
+
+- Type: Optional
+- Description: Directory (tenant) ID for single-tenant Microsoft Entra ID applications.
+- Default: `common`
+- Example: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
+
 ### AWS Cognito
 
 #### `AUTH_COGNITO_ID`

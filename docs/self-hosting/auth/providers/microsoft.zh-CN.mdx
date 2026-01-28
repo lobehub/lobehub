@@ -68,12 +68,14 @@ tags:
 
   ### 配置环境变量
 
-  | 环境变量                    | 类型 | 描述                                     |
-  | ----------------------- | -- | -------------------------------------- |
-  | `AUTH_SECRET`           | 必选 | 会话加密密钥，使用 `openssl rand -base64 32` 生成 |
-  | `AUTH_SSO_PROVIDERS`    | 必选 | 填写 `microsoft`                         |
-  | `AUTH_MICROSOFT_ID`     | 必选 | Application (client) ID                |
-  | `AUTH_MICROSOFT_SECRET` | 必选 | 客户端密钥值                                 |
+  | 环境变量                           | 类型 | 描述                                     |
+  | ------------------------------ | -- | -------------------------------------- |
+  | `AUTH_SECRET`                  | 必选 | 会话加密密钥，使用 `openssl rand -base64 32` 生成 |
+  | `AUTH_SSO_PROVIDERS`           | 必选 | 填写 `microsoft`                         |
+  | `AUTH_MICROSOFT_ID`            | 必选 | Application (client) ID                |
+  | `AUTH_MICROSOFT_SECRET`        | 必选 | 客户端密钥值                                 |
+  | `AUTH_MICROSOFT_AUTHORITY_URL` | 可选 | Microsoft Entra ID 的 Authority URL     |
+  | `AUTH_MICROSOFT_TENANT_ID`     | 可选 | 单租户应用的 Directory (tenant) ID           |
 
   <Callout type={'info'}>
     **兼容的环境变量**：为了向后兼容，以下别名也支持：
@@ -94,10 +96,6 @@ tags:
 </Callout>
 
 ## 常见问题
-
-### 租户配置
-
-默认情况下，LobeHub 使用 `common` 租户，允许组织帐户和个人 Microsoft 帐户登录。如果需要单租户配置，可能需要自定义租户设置。
 
 ### 客户端密钥过期
 

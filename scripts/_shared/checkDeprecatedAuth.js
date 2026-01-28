@@ -86,10 +86,10 @@ const DEPRECATED_CHECKS = [
       const mapping = {
         AUTH_AZURE_AD_ID: 'AUTH_MICROSOFT_ID',
         AUTH_AZURE_AD_SECRET: 'AUTH_MICROSOFT_SECRET',
-        AUTH_AZURE_AD_TENANT_ID: 'No longer needed',
+        AUTH_AZURE_AD_TENANT_ID: 'AUTH_MICROSOFT_TENANT_ID',
         AZURE_AD_CLIENT_ID: 'AUTH_MICROSOFT_ID',
         AZURE_AD_CLIENT_SECRET: 'AUTH_MICROSOFT_SECRET',
-        AZURE_AD_TENANT_ID: 'No longer needed',
+        AZURE_AD_TENANT_ID: 'AUTH_MICROSOFT_TENANT_ID',
       };
       return `${envVar} → ${mapping[envVar]}`;
     },
@@ -167,10 +167,10 @@ const DEPRECATED_CHECKS = [
     docUrl: `${MIGRATION_DOC_BASE}/nextauth-to-betterauth`,
     formatVar: (envVar) => {
       const mapping = {
-        AUTH_MICROSOFT_ENTRA_ID_BASE_URL: 'No longer needed',
+        AUTH_MICROSOFT_ENTRA_ID_BASE_URL: 'AUTH_MICROSOFT_AUTHORITY_URL',
         AUTH_MICROSOFT_ENTRA_ID_ID: 'AUTH_MICROSOFT_ID',
         AUTH_MICROSOFT_ENTRA_ID_SECRET: 'AUTH_MICROSOFT_SECRET',
-        AUTH_MICROSOFT_ENTRA_ID_TENANT_ID: 'No longer needed',
+        AUTH_MICROSOFT_ENTRA_ID_TENANT_ID: 'AUTH_MICROSOFT_TENANT_ID',
       };
       return `${envVar} → ${mapping[envVar]}`;
     },
@@ -213,7 +213,11 @@ function printIssueBlock(name, vars, message, docUrl, formatVar, severity = 'err
 
   log(`\n${icon} ${name}`);
   log('─'.repeat(50));
-  log(isWarning ? 'Missing recommended environment variables:' : 'Detected deprecated environment variables:');
+  log(
+    isWarning
+      ? 'Missing recommended environment variables:'
+      : 'Detected deprecated environment variables:',
+  );
   for (const envVar of vars) {
     log(`  • ${formatVar ? formatVar(envVar) : envVar}`);
   }
@@ -253,7 +257,14 @@ function checkDeprecatedAuth(options = {}) {
     console.warn('═'.repeat(70));
 
     for (const issue of warnings) {
-      printIssueBlock(issue.name, issue.foundVars, issue.message, issue.docUrl, issue.formatVar, 'warning');
+      printIssueBlock(
+        issue.name,
+        issue.foundVars,
+        issue.message,
+        issue.docUrl,
+        issue.formatVar,
+        'warning',
+      );
     }
 
     console.warn('\n' + '═'.repeat(70));
@@ -264,13 +275,18 @@ function checkDeprecatedAuth(options = {}) {
   // Print errors and exit (blocking)
   if (errors.length > 0) {
     console.error('\n' + '═'.repeat(70));
-    console.error(
-      `❌ ERROR: Found ${errors.length} deprecated environment variable issue(s)!`,
-    );
+    console.error(`❌ ERROR: Found ${errors.length} deprecated environment variable issue(s)!`);
     console.error('═'.repeat(70));
 
     for (const issue of errors) {
-      printIssueBlock(issue.name, issue.foundVars, issue.message, issue.docUrl, issue.formatVar, 'error');
+      printIssueBlock(
+        issue.name,
+        issue.foundVars,
+        issue.message,
+        issue.docUrl,
+        issue.formatVar,
+        'error',
+      );
     }
 
     console.error('\n' + '═'.repeat(70));

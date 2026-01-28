@@ -54,23 +54,23 @@ This guide helps you migrate your existing NextAuth-based LobeHub deployment to 
 
 SSO provider environment variables follow the same format: `AUTH_<PROVIDER>_ID` and `AUTH_<PROVIDER>_SECRET`.
 
-| NextAuth (Old)                      | Better Auth (New)       | Notes               |
-| ----------------------------------- | ----------------------- | ------------------- |
-| `AUTH_GITHUB_ID`                    | `AUTH_GITHUB_ID`        | ✅ Unchanged         |
-| `AUTH_GITHUB_SECRET`                | `AUTH_GITHUB_SECRET`    | ✅ Unchanged         |
-| `AUTH_GOOGLE_ID`                    | `AUTH_GOOGLE_ID`        | ✅ Unchanged         |
-| `AUTH_GOOGLE_SECRET`                | `AUTH_GOOGLE_SECRET`    | ✅ Unchanged         |
-| `AUTH_AUTH0_ID`                     | `AUTH_AUTH0_ID`         | ✅ Unchanged         |
-| `AUTH_AUTH0_SECRET`                 | `AUTH_AUTH0_SECRET`     | ✅ Unchanged         |
-| `AUTH_AUTH0_ISSUER`                 | `AUTH_AUTH0_ISSUER`     | ✅ Unchanged         |
-| `AUTH_AUTHENTIK_ID`                 | `AUTH_AUTHENTIK_ID`     | ✅ Unchanged         |
-| `AUTH_AUTHENTIK_SECRET`             | `AUTH_AUTHENTIK_SECRET` | ✅ Unchanged         |
-| `AUTH_AUTHENTIK_ISSUER`             | `AUTH_AUTHENTIK_ISSUER` | ✅ Unchanged         |
-| `microsoft-entra-id`                | `microsoft`             | ⚠️ Provider renamed |
-| `AUTH_MICROSOFT_ENTRA_ID_ID`        | `AUTH_MICROSOFT_ID`     | ⚠️ Variable renamed |
-| `AUTH_MICROSOFT_ENTRA_ID_SECRET`    | `AUTH_MICROSOFT_SECRET` | ⚠️ Variable renamed |
-| `AUTH_MICROSOFT_ENTRA_ID_TENANT_ID` | -                       | ❌ No longer needed  |
-| `AUTH_MICROSOFT_ENTRA_ID_BASE_URL`  | -                       | ❌ No longer needed  |
+| NextAuth (Old)                      | Better Auth (New)              | Notes               |
+| ----------------------------------- | ------------------------------ | ------------------- |
+| `AUTH_GITHUB_ID`                    | `AUTH_GITHUB_ID`               | ✅ Unchanged         |
+| `AUTH_GITHUB_SECRET`                | `AUTH_GITHUB_SECRET`           | ✅ Unchanged         |
+| `AUTH_GOOGLE_ID`                    | `AUTH_GOOGLE_ID`               | ✅ Unchanged         |
+| `AUTH_GOOGLE_SECRET`                | `AUTH_GOOGLE_SECRET`           | ✅ Unchanged         |
+| `AUTH_AUTH0_ID`                     | `AUTH_AUTH0_ID`                | ✅ Unchanged         |
+| `AUTH_AUTH0_SECRET`                 | `AUTH_AUTH0_SECRET`            | ✅ Unchanged         |
+| `AUTH_AUTH0_ISSUER`                 | `AUTH_AUTH0_ISSUER`            | ✅ Unchanged         |
+| `AUTH_AUTHENTIK_ID`                 | `AUTH_AUTHENTIK_ID`            | ✅ Unchanged         |
+| `AUTH_AUTHENTIK_SECRET`             | `AUTH_AUTHENTIK_SECRET`        | ✅ Unchanged         |
+| `AUTH_AUTHENTIK_ISSUER`             | `AUTH_AUTHENTIK_ISSUER`        | ✅ Unchanged         |
+| `microsoft-entra-id`                | `microsoft`                    | ⚠️ Provider renamed |
+| `AUTH_MICROSOFT_ENTRA_ID_ID`        | `AUTH_MICROSOFT_ID`            | ⚠️ Variable renamed |
+| `AUTH_MICROSOFT_ENTRA_ID_SECRET`    | `AUTH_MICROSOFT_SECRET`        | ⚠️ Variable renamed |
+| `AUTH_MICROSOFT_ENTRA_ID_TENANT_ID` | `AUTH_MICROSOFT_TENANT_ID`     | ⚠️ Variable renamed |
+| `AUTH_MICROSOFT_ENTRA_ID_BASE_URL`  | `AUTH_MICROSOFT_AUTHORITY_URL` | ⚠️ Variable renamed |
 
 <Callout type={'warning'}>
   **Note**: Microsoft Entra ID provider name changed from `microsoft-entra-id` to `microsoft`, and the environment variable prefix changed from `AUTH_MICROSOFT_ENTRA_ID_` to `AUTH_MICROSOFT_`.

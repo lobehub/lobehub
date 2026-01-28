@@ -33,8 +33,10 @@ declare global {
       AUTH_COGNITO_REGION?: string;
       AUTH_COGNITO_USERPOOL_ID?: string;
 
+      AUTH_MICROSOFT_AUTHORITY_URL?: string;
       AUTH_MICROSOFT_ID?: string;
       AUTH_MICROSOFT_SECRET?: string;
+      AUTH_MICROSOFT_TENANT_ID?: string;
 
       AUTH_AUTH0_ID?: string;
       AUTH_AUTH0_SECRET?: string;
@@ -132,8 +134,10 @@ export const getAuthConfig = () => {
       AUTH_COGNITO_REGION: z.string().optional(),
       AUTH_COGNITO_USERPOOL_ID: z.string().optional(),
 
+      AUTH_MICROSOFT_AUTHORITY_URL: z.string().optional(),
       AUTH_MICROSOFT_ID: z.string().optional(),
       AUTH_MICROSOFT_SECRET: z.string().optional(),
+      AUTH_MICROSOFT_TENANT_ID: z.string().optional(),
 
       AUTH_AUTH0_ID: z.string().optional(),
       AUTH_AUTH0_SECRET: z.string().optional(),
@@ -219,8 +223,10 @@ export const getAuthConfig = () => {
       AUTH_GITHUB_ID: process.env.AUTH_GITHUB_ID,
       AUTH_GITHUB_SECRET: process.env.AUTH_GITHUB_SECRET,
 
+      AUTH_MICROSOFT_AUTHORITY_URL: process.env.AUTH_MICROSOFT_AUTHORITY_URL,
       AUTH_MICROSOFT_ID: process.env.AUTH_MICROSOFT_ID,
       AUTH_MICROSOFT_SECRET: process.env.AUTH_MICROSOFT_SECRET,
+      AUTH_MICROSOFT_TENANT_ID: process.env.AUTH_MICROSOFT_TENANT_ID,
 
       AUTH_COGNITO_ID: process.env.AUTH_COGNITO_ID,
       AUTH_COGNITO_SECRET: process.env.AUTH_COGNITO_SECRET,
