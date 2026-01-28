@@ -1,9 +1,10 @@
 'use client';
 
-import { Flexbox, Segmented } from '@lobehub/ui';
+import { Flexbox, Segmented, Tag } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import Title from '@/app/[variants]/(main)/community/features/Title';
 import { DetailProvider } from '@/features/MCPPluginDetail/DetailProvider';
 import Tools from '@/features/MCPPluginDetail/Schema/Tools';
 import { ModeType } from '@/features/MCPPluginDetail/Schema/types';
@@ -15,13 +16,15 @@ const Schema = memo(() => {
   const { tools } = useDetailContext();
   const [activeKey, setActiveKey] = useState<string[]>([]);
   const [mode, setMode] = useState<ModeType>(ModeType.Docs);
+  const toolsCount = tools.length;
 
   return (
-    <DetailProvider config={{ tools, toolsCount: tools.length }}>
+    <DetailProvider config={{ tools, toolsCount }}>
       <Flexbox gap={8}>
         <Flexbox align="center" gap={12} horizontal justify="space-between">
-          <div>{t('mcp.details.schema.tools.desc')}</div>
-
+          <Title level={3} tag={<Tag>{toolsCount}</Tag>}>
+            {t('mcp.details.schema.tools.title')}
+          </Title>
           <Segmented
             onChange={(v) => setMode(v as ModeType)}
             options={[
@@ -33,6 +36,7 @@ const Schema = memo(() => {
             variant="outlined"
           />
         </Flexbox>
+        <p style={{ marginBottom: 24 }}>{t('mcp.details.schema.tools.desc')}</p>
         <Tools activeKey={activeKey} mode={mode} setActiveKey={setActiveKey} />
       </Flexbox>
     </DetailProvider>

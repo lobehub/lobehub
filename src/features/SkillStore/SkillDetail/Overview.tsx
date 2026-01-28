@@ -26,7 +26,7 @@ const Overview = memo(() => {
       {/* Developed by */}
       <Flexbox gap={8}>
         <Flexbox align="center" gap={4} horizontal>
-          <span className={styles.sectionTitle}>{t('integrationDetail.developedBy')}</span>
+          <span className={styles.sectionTitle}>{t('skillDetail.developedBy')}</span>
           <span
             className={styles.authorLink}
             onClick={handleAuthorClick}
@@ -37,16 +37,16 @@ const Overview = memo(() => {
           </span>
         </Flexbox>
         <Text className={styles.trustWarning} type="secondary">
-          {t('integrationDetail.trustWarning')}
+          {t('skillDetail.trustWarning')}
         </Text>
       </Flexbox>
 
       {/* Details */}
       <Flexbox gap={12}>
-        <span className={styles.sectionTitle}>{t('integrationDetail.details')}</span>
+        <span className={styles.sectionTitle}>{t('skillDetail.details')}</span>
         <Flexbox gap={16} horizontal>
           <div className={styles.detailItem}>
-            <span className={styles.detailLabel}>{t('integrationDetail.author')}</span>
+            <span className={styles.detailLabel}>{t('skillDetail.author')}</span>
             <span
               className={styles.authorLink}
               onClick={handleAuthorClick}
