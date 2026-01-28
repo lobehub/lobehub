@@ -244,6 +244,103 @@ describe('LobeOpenAI', () => {
   });
 
   describe('chatCompletion.handlePayload', () => {
+    it('should transform reasoning object to reasoning_content string', () => {
+      const payload = {
+        messages: [
+          { content: 'Hello', role: 'user' as const },
+          {
+            content: 'Hi there',
+            reasoning: { content: 'Let me think...', duration: 1000 },
+            role: 'assistant' as const,
+          },
+          { content: 'How are you?', role: 'user' as const },
+        ],
+        model: 'deepseek-reasoner',
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.messages).toEqual([
+        { content: 'Hello', role: 'user' },
+        {
+          content: 'Hi there',
+          reasoning_content: 'Let me think...',
+          role: 'assistant',
+        },
+        { content: 'How are you?', role: 'user' },
+      ]);
+    });
+
+    it('should transform reasoning in assistant messages with tool calls', () => {
+      const payload = {
+        messages: [
+          { content: 'Hello', role: 'user' as const },
+          {
+            content: '',
+            reasoning: { content: 'I need to call a tool', duration: 500 },
+            role: 'assistant' as const,
+            tool_calls: [
+              {
+                function: { arguments: '{}', name: 'test_tool' },
+                id: 'call_123',
+                type: 'function' as const,
+              },
+            ],
+          },
+        ],
+        model: 'deepseek-reasoner',
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.messages[1]).toEqual({
+        content: '',
+        reasoning_content: 'I need to call a tool',
+        role: 'assistant',
+        tool_calls: [
+          {
+            function: { arguments: '{}', name: 'test_tool' },
+            id: 'call_123',
+            type: 'function',
+          },
+        ],
+      });
+    });
+
+    it('should not modify messages without reasoning field', () => {
+      const payload = {
+        messages: [
+          { content: 'Hello', role: 'user' as const },
+          { content: 'Hi there', role: 'assistant' as const },
+        ],
+        model: 'gpt-4o',
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.messages).toEqual(payload.messages);
+    });
+
+    it('should handle empty reasoning content', () => {
+      const payload = {
+        messages: [
+          {
+            content: 'Response',
+            reasoning: { duration: 1000 },
+            role: 'assistant' as const,
+          },
+        ],
+        model: 'deepseek-reasoner',
+      };
+
+      const result = params.chatCompletion!.handlePayload!(payload as any);
+
+      expect(result.messages[0]).toEqual({
+        content: 'Response',
+        role: 'assistant',
+      });
+    });
+
     it('should use responses API for responsesAPIModels without enabledSearch', async () => {
       const payload = {
         messages: [{ content: 'Hello', role: 'user' as const }],
@@ -317,6 +414,31 @@ describe('LobeOpenAI', () => {
   });
 
   describe('responses.handlePayload', () => {
+    it('should transform reasoning object to reasoning_content string in responses API', () => {
+      const payload = {
+        messages: [
+          { content: 'Hello', role: 'user' as const },
+          {
+            content: 'Hi there',
+            reasoning: { content: 'Let me think...', duration: 1000 },
+            role: 'assistant' as const,
+          },
+        ],
+        model: 'o1-pro',
+      };
+
+      const result = params.responses!.handlePayload!(payload as any);
+
+      expect(result.messages).toEqual([
+        { content: 'Hello', role: 'user' },
+        {
+          content: 'Hi there',
+          reasoning_content: 'Let me think...',
+          role: 'assistant',
+        },
+      ]);
+    });
+
     it('should add web_search tool when enabledSearch is true', async () => {
       const payload = {
         enabledSearch: true,

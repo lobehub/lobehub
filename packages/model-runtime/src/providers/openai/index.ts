@@ -32,18 +32,38 @@ export const params = {
     handlePayload: (payload) => {
       const { enabledSearch, model, ...rest } = payload;
 
+      // Transform reasoning object to reasoning_content string for models that require it
+      // This is needed for models like deepseek-reasoner and kimi when used under OpenAI provider
+      const messages = payload.messages.map((message: any) => {
+        // Only transform if message has reasoning.content
+        if (message.reasoning?.content) {
+          const { reasoning, ...restMessage } = message;
+          return {
+            ...restMessage,
+            reasoning_content: reasoning.content,
+          };
+        }
+        // If message has reasoning but no content, remove reasoning field entirely
+        if (message.reasoning) {
+          const { reasoning, ...restMessage } = message;
+          return restMessage;
+        }
+        return message;
+      });
+
       if (responsesAPIModels.has(model) || enabledSearch) {
-        return { ...rest, apiMode: 'responses', enabledSearch, model } as ChatStreamPayload;
+        return { ...rest, apiMode: 'responses', enabledSearch, messages, model } as ChatStreamPayload;
       }
 
       if (prunePrefixes.some((prefix) => model.startsWith(prefix))) {
-        return pruneReasoningPayload(payload) as any;
+        return pruneReasoningPayload({ ...payload, messages }) as any;
       }
 
       if (model.includes('-search-')) {
         return {
           ...rest,
           frequency_penalty: undefined,
+          messages,
           model,
           presence_penalty: undefined,
           stream: payload.stream ?? true,
@@ -60,6 +80,7 @@ export const params = {
 
       return {
         ...rest,
+        messages,
         model,
         ...(enableServiceTierFlex && supportsFlexTier(model) && { service_tier: 'flex' }),
         stream: payload.stream ?? true,
@@ -82,6 +103,24 @@ export const params = {
     handlePayload: (payload) => {
       const { enabledSearch, model, tools, verbosity, ...rest } = payload;
 
+      // Transform reasoning object to reasoning_content string for models that require it
+      const messages = payload.messages.map((message: any) => {
+        // Only transform if message has reasoning.content
+        if (message.reasoning?.content) {
+          const { reasoning, ...restMessage } = message;
+          return {
+            ...restMessage,
+            reasoning_content: reasoning.content,
+          };
+        }
+        // If message has reasoning but no content, remove reasoning field entirely
+        if (message.reasoning) {
+          const { reasoning, ...restMessage } = message;
+          return restMessage;
+        }
+        return message;
+      });
+
       const openaiTools = enabledSearch
         ? [
             ...(tools || []),
@@ -103,6 +142,7 @@ export const params = {
         }
         return pruneReasoningPayload({
           ...rest,
+          messages,
           model,
           reasoning,
           ...(enableServiceTierFlex && supportsFlexTier(model) && { service_tier: 'flex' }),
@@ -116,6 +156,7 @@ export const params = {
 
       return {
         ...rest,
+        messages,
         model,
         ...(enableServiceTierFlex && supportsFlexTier(model) && { service_tier: 'flex' }),
         stream: payload.stream ?? true,
