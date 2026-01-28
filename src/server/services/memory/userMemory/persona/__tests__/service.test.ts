@@ -75,10 +75,8 @@ vi.mock('@lobechat/memory-user-memory', () => ({
   })),
 }));
 
-vi.mock('@lobechat/model-runtime', () => ({
-  ModelRuntime: {
-    initializeWithProvider: vi.fn().mockResolvedValue({}),
-  },
+vi.mock('@/server/services/memory/userMemory/extract', () => ({
+  resolveRuntimeAgentConfig: vi.fn().mockResolvedValue({}),
 }));
 
 let db: LobeChatDatabase;
