@@ -53,6 +53,61 @@ export type RenderDisplayControl = 'alwaysExpand' | 'collapsed' | 'expand';
 
 export const RenderDisplayControlSchema = z.enum(['collapsed', 'expand', 'alwaysExpand']);
 
+/**
+ * Dynamic intervention resolver function type
+ * Receives tool args and state metadata to determine if condition is met
+ * @returns true if intervention is required, false otherwise
+ */
+export type DynamicInterventionResolver = (
+  toolArgs: Record<string, any>,
+  metadata?: Record<string, any>,
+) => boolean;
+
+/**
+ * Dynamic intervention configuration
+ * Used to dynamically determine intervention policy based on runtime context
+ *
+ * The resolver is referenced by type identifier and looked up from
+ * the dynamicInterventionResolvers registry at runtime.
+ */
+export interface DynamicInterventionConfig {
+  /**
+   * Default policy when resolver returns false or no resolver is available
+   * @default 'never'
+   */
+  default?: HumanInterventionPolicy;
+
+  /**
+   * Policy to apply when resolver condition is met
+   * @default 'always'
+   */
+  policy?: HumanInterventionPolicy;
+
+  /**
+   * Resolver type identifier for external resolver lookup
+   * The resolver function is registered in dynamicInterventionResolvers
+   */
+  type: string;
+}
+
+export const DynamicInterventionConfigSchema = z.object({
+  default: HumanInterventionPolicySchema.optional(),
+  policy: HumanInterventionPolicySchema.optional(),
+  type: z.string(),
+});
+
+/**
+ * Extended human intervention config that supports dynamic evaluation
+ */
+export type ExtendedHumanInterventionConfig =
+  | HumanInterventionConfig
+  | { dynamic: DynamicInterventionConfig };
+
+export const ExtendedHumanInterventionConfigSchema = z.union([
+  HumanInterventionConfigSchema,
+  z.object({ dynamic: DynamicInterventionConfigSchema }),
+]);
+
 export interface LobeChatPluginApi {
   description: string;
   /**
@@ -60,14 +115,16 @@ export interface LobeChatPluginApi {
    * Controls when and how the tool requires human approval/selection
    *
    * Can be either:
-   * - Simple: A policy string ('never', 'always', 'first')
+   * - Simple: A policy string ('never', 'always', 'required')
    * - Complex: Array of rules for parameter-level control
+   * - Dynamic: { dynamic: DynamicInterventionConfig } for runtime evaluation
    *
    * Examples:
    * - 'always' - always require intervention
    * - [{ match: { command: "git add:*" }, policy: "never" }, { policy: "always" }]
+   * - { dynamic: { pathParams: ['path'], default: 'never', outOfScopePolicy: 'always' } }
    */
-  humanIntervention?: HumanInterventionConfig;
+  humanIntervention?: ExtendedHumanInterventionConfig;
   name: string;
   parameters: Record<string, any>;
   /**
@@ -84,7 +141,7 @@ export interface LobeChatPluginApi {
 
 export const LobeChatPluginApiSchema = z.object({
   description: z.string(),
-  humanIntervention: HumanInterventionConfigSchema.optional(),
+  humanIntervention: ExtendedHumanInterventionConfigSchema.optional(),
   name: z.string(),
   parameters: z.record(z.string(), z.any()),
   renderDisplayControl: RenderDisplayControlSchema.optional(),
@@ -121,7 +178,7 @@ export interface BuiltinToolManifest {
 
 export const BuiltinToolManifestSchema = z.object({
   api: z.array(LobeChatPluginApiSchema),
-  humanIntervention: HumanInterventionPolicySchema.optional(),
+  humanIntervention: ExtendedHumanInterventionConfigSchema.optional(),
   identifier: z.string(),
   meta: MetaSchema,
   systemRole: z.string(),
@@ -357,6 +414,12 @@ export interface BuiltinToolContext {
    * Used by tools that need to create messages or operations within a topic
    */
   topicId?: string | null;
+
+  /**
+   * The working directory configured for file operations
+   * When set, file operations should be restricted to this directory
+   */
+  workingDirectory?: string;
 }
 
 /**

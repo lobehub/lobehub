@@ -19,6 +19,7 @@ import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
+import { dynamicInterventionResolvers } from '@/tools/dynamicInterventionResolvers';
 
 import {
   type AgentExecutionParams,
@@ -244,6 +245,7 @@ export class AgentRuntimeService {
           // need be removed
           modelRuntimeConfig,
           userId,
+          workingDirectory: agentConfig?.chatConfig?.localSystem?.workingDirectory,
           ...appContext,
         },
         // modelRuntimeConfig at state level for executor fallback
@@ -834,6 +836,7 @@ export class AgentRuntimeService {
       compressionConfig: {
         enabled: metadata?.agentConfig?.chatConfig?.enableContextCompression ?? true,
       },
+      dynamicInterventionResolvers,
       modelRuntimeConfig: metadata?.modelRuntimeConfig,
       operationId,
       userId: metadata?.userId,

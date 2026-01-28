@@ -1,4 +1,4 @@
-import type { HumanInterventionConfig } from '@/types/index';
+import type { ExtendedHumanInterventionConfig } from '@/types/index';
 
 export interface LobeChatPluginApi {
   description: string;
@@ -14,7 +14,7 @@ export interface LobeChatPluginApi {
    * - 'always' - always require intervention
    * - [{ match: { command: "git add:*" }, policy: "never" }, { policy: "always" }]
    */
-  humanIntervention?: HumanInterventionConfig;
+  humanIntervention?: ExtendedHumanInterventionConfig;
   name: string;
   parameters: Record<string, any>;
   url?: string;

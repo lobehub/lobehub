@@ -3,12 +3,14 @@ import type { BuiltinInterventionProps } from '@lobechat/types';
 import { CodeDiff, Flexbox, Icon, Skeleton, Text } from '@lobehub/ui';
 import { ChevronRight } from 'lucide-react';
 import path from 'path-browserify-esm';
-import React, { memo, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { LocalFile, LocalFolder } from '@/features/LocalFile';
 import { localFileService } from '@/services/electron/localFileService';
+
+import OutOfScopeWarning from '../OutOfScopeWarning';
 
 const EditLocalFile = memo<BuiltinInterventionProps<EditLocalFileParams>>(({ args }) => {
   const { t } = useTranslation('tool');
@@ -38,6 +40,7 @@ const EditLocalFile = memo<BuiltinInterventionProps<EditLocalFileParams>>(({ arg
 
   return (
     <Flexbox gap={12}>
+      <OutOfScopeWarning paths={[args.file_path]} />
       <Flexbox horizontal>
         <LocalFolder path={dir} />
         <Icon icon={ChevronRight} />
