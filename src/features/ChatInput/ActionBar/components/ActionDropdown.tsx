@@ -17,6 +17,7 @@ import { createStaticStyles, cx } from 'antd-style';
 import {
   type CSSProperties,
   type ReactNode,
+  Suspense,
   isValidElement,
   memo,
   useCallback,
@@ -26,6 +27,7 @@ import {
   useState,
 } from 'react';
 
+import DebugNode from '@/components/DebugNode';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -271,7 +273,11 @@ const ActionDropdown = memo<ActionDropdownProps>(
             hoverTrigger={Boolean(resolvedTriggerProps?.openOnHover)}
             placement={isMobile ? 'top' : placement}
           >
-            <DropdownMenuPopup {...resolvedPopupProps}>{menuContent}</DropdownMenuPopup>
+            <DropdownMenuPopup {...resolvedPopupProps}>
+              <Suspense fallback={<DebugNode trace="ActionDropdown > popup" />}>
+                {menuContent}
+              </Suspense>
+            </DropdownMenuPopup>
           </DropdownMenuPositioner>
         </DropdownMenuPortal>
       </DropdownMenuRoot>

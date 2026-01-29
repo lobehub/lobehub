@@ -1,6 +1,2646 @@
 [
   {
     "children": {
+      "fixes": ["Tts and translate error."]
+    },
+    "date": "2026-01-27",
+    "version": "2.0.0-next.389"
+  },
+  {
+    "children": {
+      "fixes": ["Fix page count issue."]
+    },
+    "date": "2026-01-26",
+    "version": "2.0.0-next.388"
+  },
+  {
+    "children": {},
+    "date": "2026-01-26",
+    "version": "2.0.0-next.387"
+  },
+  {
+    "children": {
+      "features": ["Group builder not set true edit data."],
+      "fixes": ["Fix resource pages."]
+    },
+    "date": "2026-01-26",
+    "version": "2.0.0-next.386"
+  },
+  {
+    "children": {
+      "features": ["Share page improvements and pg17 docs update."]
+    },
+    "date": "2026-01-26",
+    "version": "2.0.0-next.385"
+  },
+  {
+    "children": {
+      "fixes": ["Group builder not set true edit data."]
+    },
+    "date": "2026-01-26",
+    "version": "2.0.0-next.384"
+  },
+  {
+    "children": {
+      "features": ["Add the fork tag show in community detail page."],
+      "fixes": ["Slove the agentbuilder install market tools not work."]
+    },
+    "date": "2026-01-26",
+    "version": "2.0.0-next.383"
+  },
+  {
+    "children": {},
+    "date": "2026-01-26",
+    "version": "2.0.0-next.382"
+  },
+  {
+    "children": {
+      "fixes": ["Fix cron job issue, fix share single message."]
+    },
+    "date": "2026-01-26",
+    "version": "2.0.0-next.381"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-26",
+    "version": "2.0.0-next.380"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Fix update memory tools, resolve server version check issue for desktop app, slove the descktop use offical endpoint mcp not use stdio."
+      ]
+    },
+    "date": "2026-01-25",
+    "version": "2.0.0-next.379"
+  },
+  {
+    "children": {
+      "improvements": ["Improve popover trigger styles and component consistency."],
+      "fixes": ["Library cannot nav."]
+    },
+    "date": "2026-01-25",
+    "version": "2.0.0-next.378"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Show fallback title for custom assistant in chat messages, webhook user service compatibility for old nextauth users."
+      ]
+    },
+    "date": "2026-01-25",
+    "version": "2.0.0-next.377"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor search model implement."],
+      "fixes": ["Fix add message and improve local system tool."]
+    },
+    "date": "2026-01-25",
+    "version": "2.0.0-next.376"
+  },
+  {
+    "children": {
+      "fixes": ["Broadcast tools calling and improve auto scroll."]
+    },
+    "date": "2026-01-25",
+    "version": "2.0.0-next.375"
+  },
+  {
+    "children": {
+      "features": ["Update the discover page sort, add haveSkill、mostUsage params."],
+      "improvements": ["Update share action bar."]
+    },
+    "date": "2026-01-25",
+    "version": "2.0.0-next.374"
+  },
+  {
+    "children": {
+      "fixes": ["Slove group member plugin is lost & not use the plugins."]
+    },
+    "date": "2026-01-25",
+    "version": "2.0.0-next.373"
+  },
+  {
+    "children": {},
+    "date": "2026-01-25",
+    "version": "2.0.0-next.372"
+  },
+  {
+    "children": {},
+    "date": "2026-01-25",
+    "version": "2.0.0-next.371"
+  },
+  {
+    "children": {
+      "features": ["Support history context auto compress."]
+    },
+    "date": "2026-01-25",
+    "version": "2.0.0-next.370"
+  },
+  {
+    "children": {
+      "features": ["Add the agent/group profiles page the states and forked by tag."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.369"
+  },
+  {
+    "children": {
+      "features": ["Optimize profile editor."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.368"
+  },
+  {
+    "children": {
+      "fixes": ["Add cron pages enables change should reload the state."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.367"
+  },
+  {
+    "children": {
+      "fixes": ["Prevent recently viewed items from shrinking."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.366"
+  },
+  {
+    "children": {
+      "fixes": ["Docker deploy REDIS_URL check, fix sub task issue."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.365"
+  },
+  {
+    "children": {
+      "fixes": ["Fixed when windows withd low the protal will resize."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.364"
+  },
+  {
+    "children": {},
+    "date": "2026-01-24",
+    "version": "2.0.0-next.363"
+  },
+  {
+    "children": {
+      "fixes": ["Fix page selection not display correctly."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.362"
+  },
+  {
+    "children": {},
+    "date": "2026-01-24",
+    "version": "2.0.0-next.361"
+  },
+  {
+    "children": {
+      "fixes": ["Login success callback url error."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.360"
+  },
+  {
+    "children": {
+      "fixes": ["Surface streaming errors during mid-stream pulls."]
+    },
+    "date": "2026-01-24",
+    "version": "2.0.0-next.359"
+  },
+  {
+    "children": {},
+    "date": "2026-01-23",
+    "version": "2.0.0-next.358"
+  },
+  {
+    "children": {
+      "fixes": ["Page content switch mismatch."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.357"
+  },
+  {
+    "children": {
+      "features": ["Remove NextAuth."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.356"
+  },
+  {
+    "children": {
+      "fixes": ["Fix favorite refresh bug and group topic refresh issue."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.355"
+  },
+  {
+    "children": {
+      "improvements": ["Migrate AI Rules to Claude Code Skills."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.354"
+  },
+  {
+    "children": {},
+    "date": "2026-01-23",
+    "version": "2.0.0-next.353"
+  },
+  {
+    "children": {},
+    "date": "2026-01-23",
+    "version": "2.0.0-next.352"
+  },
+  {
+    "children": {
+      "fixes": ["Fix auto scroll."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.351"
+  },
+  {
+    "children": {},
+    "date": "2026-01-23",
+    "version": "2.0.0-next.350"
+  },
+  {
+    "children": {
+      "fixes": ["When use market group, the group sys role was not used."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.349"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Fixed the agent group builder tools excaution edge case crash, fixed the group topic copy not right."
+      ]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.348"
+  },
+  {
+    "children": {
+      "fixes": ["Add advace config back in agent/group profiles."],
+      "improvements": ["Move plugin store button outside scroll container."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.347"
+  },
+  {
+    "children": {},
+    "date": "2026-01-23",
+    "version": "2.0.0-next.346"
+  },
+  {
+    "children": {
+      "features": ["Remove Clerk authentication code."],
+      "fixes": ["Slove the agents header switch agents the lobeAI not show problem."],
+      "improvements": ["Improve auto scroll and group profile."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.345"
+  },
+  {
+    "children": {
+      "fixes": ["Fixed the sandbox tools call when error should use right callback."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.344"
+  },
+  {
+    "children": {
+      "improvements": ["Update share style."],
+      "fixes": ["Fix scope issue."]
+    },
+    "date": "2026-01-23",
+    "version": "2.0.0-next.343"
+  },
+  {
+    "children": {},
+    "date": "2026-01-22",
+    "version": "2.0.0-next.342"
+  },
+  {
+    "children": {
+      "features": ["Add server version check for desktop app."]
+    },
+    "date": "2026-01-22",
+    "version": "2.0.0-next.341"
+  },
+  {
+    "children": {
+      "improvements": ["Update og."]
+    },
+    "date": "2026-01-22",
+    "version": "2.0.0-next.340"
+  },
+  {
+    "children": {
+      "improvements": ["Move vercel-react-best-practices skills to .agents directory."],
+      "features": ["Skill setting page and skill store."],
+      "fixes": ["Fix group broadcast trigger tool use, fix local system tools."]
+    },
+    "date": "2026-01-22",
+    "version": "2.0.0-next.339"
+  },
+  {
+    "children": {
+      "fixes": ["Updata cron job ui & fixed commnuity pagenation goto error."]
+    },
+    "date": "2026-01-22",
+    "version": "2.0.0-next.338"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Fix memory schema, update the agentbuilder tools not always use humanIntervention."
+      ]
+    },
+    "date": "2026-01-22",
+    "version": "2.0.0-next.337"
+  },
+  {
+    "children": {
+      "features": ["Support agent group unpublish agents."],
+      "fixes": ["Fix tool argument scape and improve multi task run."]
+    },
+    "date": "2026-01-22",
+    "version": "2.0.0-next.336"
+  },
+  {
+    "children": {},
+    "date": "2026-01-22",
+    "version": "2.0.0-next.335"
+  },
+  {
+    "children": {
+      "features": ["Add platform-aware download client menu option."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.334"
+  },
+  {
+    "children": {
+      "features": ["Update the sandbox preinstall libs in sys role."],
+      "fixes": ["Fix multi tasks no summary issue."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.333"
+  },
+  {
+    "children": {
+      "fixes": ["Improve e2e server and complete i18n resources."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.332"
+  },
+  {
+    "children": {
+      "fixes": ["Slove the agent group editor not focus in editdata area."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.331"
+  },
+  {
+    "children": {
+      "fixes": ["Fix multi agent tasks issue."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.330"
+  },
+  {
+    "children": {
+      "fixes": ["Sloved the old removeSessionTopics not work."]
+    },
+    "date": "2026-01-21",
+    "version": "2.0.0-next.329"
+  },
+  {
+    "children": {
+      "features": ["Support client tasks mode."]
+    },
+    "date": "2026-01-20",
+    "version": "2.0.0-next.328"
+  },
+  {
+    "children": {},
+    "date": "2026-01-20",
+    "version": "2.0.0-next.327"
+  },
+  {
+    "children": {},
+    "date": "2026-01-20",
+    "version": "2.0.0-next.326"
+  },
+  {
+    "children": {},
+    "date": "2026-01-20",
+    "version": "2.0.0-next.325"
+  },
+  {
+    "children": {
+      "fixes": ["TypewriterEffect not refreshing on language change."]
+    },
+    "date": "2026-01-20",
+    "version": "2.0.0-next.324"
+  },
+  {
+    "children": {
+      "improvements": ["Optimize profile settings skeleton screen."],
+      "features": ["Add the agents and agents group fork feature."],
+      "fixes": [
+        "Fix Topic component causing stack overflow and freezing the app, simplify updater config logic, slove the nuqs error in commnuity agent group page."
+      ]
+    },
+    "date": "2026-01-20",
+    "version": "2.0.0-next.323"
+  },
+  {
+    "children": {},
+    "date": "2026-01-20",
+    "version": "2.0.0-next.322"
+  },
+  {
+    "children": {},
+    "date": "2026-01-20",
+    "version": "2.0.0-next.321"
+  },
+  {
+    "children": {},
+    "date": "2026-01-20",
+    "version": "2.0.0-next.320"
+  },
+  {
+    "children": {
+      "fixes": ["Slove commnuity user avatarUrl is wrong, should update others in profile."]
+    },
+    "date": "2026-01-20",
+    "version": "2.0.0-next.319"
+  },
+  {
+    "children": {
+      "fixes": ["Fix parallel tools calling race issue."]
+    },
+    "date": "2026-01-20",
+    "version": "2.0.0-next.318"
+  },
+  {
+    "children": {},
+    "date": "2026-01-19",
+    "version": "2.0.0-next.317"
+  },
+  {
+    "children": {
+      "fixes": ["When use trpc client should include the credentials cookies."]
+    },
+    "date": "2026-01-19",
+    "version": "2.0.0-next.316"
+  },
+  {
+    "children": {
+      "features": ["Add the cloudEndpoint & Klavis Tools Call in Excuation Task."]
+    },
+    "date": "2026-01-19",
+    "version": "2.0.0-next.315"
+  },
+  {
+    "children": {
+      "features": ["Improve desktop onboarding window management and footer actions."]
+    },
+    "date": "2026-01-19",
+    "version": "2.0.0-next.314"
+  },
+  {
+    "children": {
+      "fixes": ["Fix server agent task run with headless, internlm provider base url and homepage."]
+    },
+    "date": "2026-01-19",
+    "version": "2.0.0-next.313"
+  },
+  {
+    "children": {
+      "improvements": ["Change the /community/assistant to /agent routes."],
+      "features": ["Improve the agentbuilder systemRole."]
+    },
+    "date": "2026-01-19",
+    "version": "2.0.0-next.312"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor market sdk into market servers."]
+    },
+    "date": "2026-01-19",
+    "version": "2.0.0-next.311"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-19",
+    "version": "2.0.0-next.310"
+  },
+  {
+    "children": {
+      "fixes": ["Fix group sub task execution."]
+    },
+    "date": "2026-01-18",
+    "version": "2.0.0-next.309"
+  },
+  {
+    "children": {
+      "fixes": ["Fix group subagent task issue."],
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-18",
+    "version": "2.0.0-next.308"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Fixed the createGroupWithSupervisor function test, slove when use copy & install group from market, the member system Role is lost."
+      ]
+    },
+    "date": "2026-01-18",
+    "version": "2.0.0-next.307"
+  },
+  {
+    "children": {
+      "fixes": ["Fix supervisor id issue."]
+    },
+    "date": "2026-01-18",
+    "version": "2.0.0-next.306"
+  },
+  {
+    "children": {},
+    "date": "2026-01-18",
+    "version": "2.0.0-next.305"
+  },
+  {
+    "children": {
+      "improvements": ["Improve auto scroll and loading hint."]
+    },
+    "date": "2026-01-18",
+    "version": "2.0.0-next.304"
+  },
+  {
+    "children": {
+      "improvements": ["Improve operation hint and fix scroll issue."]
+    },
+    "date": "2026-01-18",
+    "version": "2.0.0-next.303"
+  },
+  {
+    "children": {
+      "fixes": ["Try to fix group supervisor id not sync successful."],
+      "improvements": ["Fix left panel on group page."]
+    },
+    "date": "2026-01-17",
+    "version": "2.0.0-next.302"
+  },
+  {
+    "children": {},
+    "date": "2026-01-17",
+    "version": "2.0.0-next.301"
+  },
+  {
+    "children": {
+      "fixes": ["Fix supervisor group prompt."]
+    },
+    "date": "2026-01-17",
+    "version": "2.0.0-next.300"
+  },
+  {
+    "children": {
+      "fixes": ["Fix topic messages display error when switch topic quickly."]
+    },
+    "date": "2026-01-17",
+    "version": "2.0.0-next.299"
+  },
+  {
+    "children": {
+      "fixes": ["Fix switch skill in home."]
+    },
+    "date": "2026-01-16",
+    "version": "2.0.0-next.298"
+  },
+  {
+    "children": {
+      "features": ["Add agent group publish into market & use market group agents in lobehub."]
+    },
+    "date": "2026-01-16",
+    "version": "2.0.0-next.297"
+  },
+  {
+    "children": {
+      "improvements": ["Improve todo list."]
+    },
+    "date": "2026-01-16",
+    "version": "2.0.0-next.296"
+  },
+  {
+    "children": {
+      "improvements": ["Migrate Next.js navigation APIs to React Router for SPA."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.295"
+  },
+  {
+    "children": {},
+    "date": "2026-01-15",
+    "version": "2.0.0-next.294"
+  },
+  {
+    "children": {},
+    "date": "2026-01-15",
+    "version": "2.0.0-next.293"
+  },
+  {
+    "children": {
+      "improvements": ["Use fallbackData to prevent useActionSWR auto-fetch."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.292"
+  },
+  {
+    "children": {
+      "fixes": ["Click lobe ai topic trigger create new agent."],
+      "improvements": ["Improve agent loading state."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.291"
+  },
+  {
+    "children": {
+      "fixes": ["Fix internal editor onTextChange issue and add test case."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.290"
+  },
+  {
+    "children": {
+      "fixes": ["Fix page content mismatch when switch quickly."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.289"
+  },
+  {
+    "children": {
+      "features": ["Improve group prompt context engine and fix group supervisor response issue."]
+    },
+    "date": "2026-01-15",
+    "version": "2.0.0-next.288"
+  },
+  {
+    "children": {},
+    "date": "2026-01-14",
+    "version": "2.0.0-next.287"
+  },
+  {
+    "children": {
+      "fixes": ["Prevent auto navigation to profile when clicking topic."]
+    },
+    "date": "2026-01-14",
+    "version": "2.0.0-next.286"
+  },
+  {
+    "children": {
+      "features": [
+        "Update the agent profiles tools check & agentbuilder tools & publish to market button."
+      ]
+    },
+    "date": "2026-01-14",
+    "version": "2.0.0-next.285"
+  },
+  {
+    "children": {
+      "improvements": ["Remove the old lobehub plugins."],
+      "fixes": ["Slove the settings/profile change but not refresh the profiles."]
+    },
+    "date": "2026-01-14",
+    "version": "2.0.0-next.284"
+  },
+  {
+    "children": {
+      "improvements": ["Fix UI issues with tooltip wrapping and dropdown type."]
+    },
+    "date": "2026-01-14",
+    "version": "2.0.0-next.283"
+  },
+  {
+    "children": {
+      "improvements": ["Update readFile content."]
+    },
+    "date": "2026-01-14",
+    "version": "2.0.0-next.282"
+  },
+  {
+    "children": {
+      "fixes": ["Fix group ux and memory retriever."]
+    },
+    "date": "2026-01-14",
+    "version": "2.0.0-next.281"
+  },
+  {
+    "children": {
+      "improvements": ["Add MiniMax-M2.1 and GLM-4.7 for Qiniu provider."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.280"
+  },
+  {
+    "children": {
+      "fixes": ["Fix new topic flick issue, fix thread portal not open correctly."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.279"
+  },
+  {
+    "children": {},
+    "date": "2026-01-13",
+    "version": "2.0.0-next.278"
+  },
+  {
+    "children": {
+      "features": [
+        "Update the community user layout action button, update the cron job visiual way."
+      ]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.277"
+  },
+  {
+    "children": {},
+    "date": "2026-01-13",
+    "version": "2.0.0-next.276"
+  },
+  {
+    "children": {
+      "features": ["Improve PageEditor header UX with DropdownMenu and i18n support."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.275"
+  },
+  {
+    "children": {
+      "features": ["Improve group profile builder, update model definitions and sync i18n."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.274"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.273"
+  },
+  {
+    "children": {
+      "fixes": ["Refresh sidebar after sendAsGroup and add E2E tests."]
+    },
+    "date": "2026-01-13",
+    "version": "2.0.0-next.272"
+  },
+  {
+    "children": {
+      "features": ["Improve baseline alignment for tool items."]
+    },
+    "date": "2026-01-12",
+    "version": "2.0.0-next.271"
+  },
+  {
+    "children": {},
+    "date": "2026-01-12",
+    "version": "2.0.0-next.270"
+  },
+  {
+    "children": {},
+    "date": "2026-01-12",
+    "version": "2.0.0-next.269"
+  },
+  {
+    "children": {},
+    "date": "2026-01-12",
+    "version": "2.0.0-next.268"
+  },
+  {
+    "children": {},
+    "date": "2026-01-12",
+    "version": "2.0.0-next.267"
+  },
+  {
+    "children": {
+      "improvements": ["Improve cron jobs style."]
+    },
+    "date": "2026-01-11",
+    "version": "2.0.0-next.266"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Fix duplicate agent and group, Fix Windows desktop build error with macOS native module, force plain text paste in ChatInput editor."
+      ]
+    },
+    "date": "2026-01-11",
+    "version": "2.0.0-next.265"
+  },
+  {
+    "children": {
+      "fixes": ["Handle will-prevent-unload event to allow app quit."]
+    },
+    "date": "2026-01-11",
+    "version": "2.0.0-next.264"
+  },
+  {
+    "children": {
+      "improvements": [
+        "ModelParse support to get model settings params & Customize extendParams UI."
+      ]
+    },
+    "date": "2026-01-11",
+    "version": "2.0.0-next.263"
+  },
+  {
+    "children": {
+      "improvements": ["Rename chat folder to agent."]
+    },
+    "date": "2026-01-11",
+    "version": "2.0.0-next.262"
+  },
+  {
+    "children": {},
+    "date": "2026-01-10",
+    "version": "2.0.0-next.261"
+  },
+  {
+    "children": {},
+    "date": "2026-01-10",
+    "version": "2.0.0-next.260"
+  },
+  {
+    "children": {
+      "features": ["Update the cron patterns fields values."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.259"
+  },
+  {
+    "children": {
+      "fixes": ["Fix memory search context."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.258"
+  },
+  {
+    "children": {
+      "improvements": ["Remember page agent panel width."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.257"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor page and notebook document usage."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.256"
+  },
+  {
+    "children": {
+      "fixes": ["Fix auto add group member crash."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.255"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-10",
+    "version": "2.0.0-next.254"
+  },
+  {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.253"
+  },
+  {
+    "children": {
+      "features": ["Add the agent cron job."]
+    },
+    "date": "2026-01-09",
+    "version": "2.0.0-next.252"
+  },
+  {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.251"
+  },
+  {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.250"
+  },
+  {
+    "children": {
+      "improvements": ["Force gpt-5.2 use response api."]
+    },
+    "date": "2026-01-09",
+    "version": "2.0.0-next.249"
+  },
+  {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.248"
+  },
+  {
+    "children": {},
+    "date": "2026-01-09",
+    "version": "2.0.0-next.247"
+  },
+  {
+    "children": {
+      "features": ["Generate agent_cron_jobs in agents."]
+    },
+    "date": "2026-01-09",
+    "version": "2.0.0-next.246"
+  },
+  {
+    "children": {
+      "improvements": ["Improve Tools popover component structure and fix UI consistency."]
+    },
+    "date": "2026-01-09",
+    "version": "2.0.0-next.245"
+  },
+  {
+    "children": {},
+    "date": "2026-01-08",
+    "version": "2.0.0-next.244"
+  },
+  {
+    "children": {},
+    "date": "2026-01-08",
+    "version": "2.0.0-next.243"
+  },
+  {
+    "children": {},
+    "date": "2026-01-08",
+    "version": "2.0.0-next.242"
+  },
+  {
+    "children": {},
+    "date": "2026-01-08",
+    "version": "2.0.0-next.241"
+  },
+  {
+    "children": {},
+    "date": "2026-01-08",
+    "version": "2.0.0-next.240"
+  },
+  {
+    "children": {
+      "features": ["Add the twitter lobehub skill."]
+    },
+    "date": "2026-01-08",
+    "version": "2.0.0-next.239"
+  },
+  {
+    "children": {
+      "features": ["Change the klavis Linear to LobeHub oauth Linear."],
+      "fixes": ["Topic renaming input focus issue in context menu."]
+    },
+    "date": "2026-01-08",
+    "version": "2.0.0-next.238"
+  },
+  {
+    "children": {},
+    "date": "2026-01-08",
+    "version": "2.0.0-next.237"
+  },
+  {
+    "children": {},
+    "date": "2026-01-08",
+    "version": "2.0.0-next.236"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-08",
+    "version": "2.0.0-next.235"
+  },
+  {
+    "children": {
+      "features": [
+        "Add browser compatibility detection and fallback page, add the lobehub market tools servers."
+      ]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.234"
+  },
+  {
+    "children": {},
+    "date": "2026-01-07",
+    "version": "2.0.0-next.233"
+  },
+  {
+    "children": {
+      "fixes": ["Correct BrandTextLoading position after removing SSG CSS-in-JS injection."]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.232"
+  },
+  {
+    "children": {
+      "fixes": ["Update desktop onboarding privacy description."]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.231"
+  },
+  {
+    "children": {
+      "fixes": ["Fix edit rich render codeblock."]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.230"
+  },
+  {
+    "children": {
+      "fixes": ["Update mobile topicRouter import path to lambda directory."]
+    },
+    "date": "2026-01-07",
+    "version": "2.0.0-next.229"
+  },
+  {
+    "children": {
+      "fixes": ["Add separate border-radius for bottom-right corner on macOS 26 Chrome."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.228"
+  },
+  {
+    "children": {
+      "fixes": ["Allow zero-byte files and add business hooks for error handling."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.227"
+  },
+  {
+    "children": {
+      "improvements": ["Change all market routes & api call into lambda trpc client call."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.226"
+  },
+  {
+    "children": {},
+    "date": "2026-01-06",
+    "version": "2.0.0-next.225"
+  },
+  {
+    "children": {},
+    "date": "2026-01-06",
+    "version": "2.0.0-next.224"
+  },
+  {
+    "children": {
+      "fixes": ["Fix callback url error during signin period."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.223"
+  },
+  {
+    "children": {
+      "fixes": ["Fix editor modal and refactor ModelSwitchPanel."]
+    },
+    "date": "2026-01-06",
+    "version": "2.0.0-next.222"
+  },
+  {
+    "children": {
+      "improvements": ["Convert glossary from JSON to Markdown table format."],
+      "fixes": ["Resolve desktop upload CORS issue."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.221"
+  },
+  {
+    "children": {
+      "fixes": ["Restore getBounds mock in Browser test beforeEach."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.220"
+  },
+  {
+    "children": {
+      "fixes": ["Resolve BaseUI dropdown compatibility issue."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.219"
+  },
+  {
+    "children": {
+      "features": ["Update the sandbox export files & save files way."],
+      "fixes": ["Fix editor modal when Markdown rendering off."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.218"
+  },
+  {
+    "children": {},
+    "date": "2026-01-05",
+    "version": "2.0.0-next.217"
+  },
+  {
+    "children": {
+      "fixes": ["Restore window position safely."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.216"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Update CI bun version to v1.2.4, when the document filetype is agent/plan, not show the saveinto docs button."
+      ]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.215"
+  },
+  {
+    "children": {},
+    "date": "2026-01-05",
+    "version": "2.0.0-next.214"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.213"
+  },
+  {
+    "children": {},
+    "date": "2026-01-05",
+    "version": "2.0.0-next.212"
+  },
+  {
+    "children": {
+      "fixes": ["Add lost like button in discover detail page."]
+    },
+    "date": "2026-01-05",
+    "version": "2.0.0-next.211"
+  },
+  {
+    "children": {},
+    "date": "2026-01-04",
+    "version": "2.0.0-next.210"
+  },
+  {
+    "children": {
+      "fixes": ["Use configured embedding provider instead of hardcoded OpenAI."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.209"
+  },
+  {
+    "children": {
+      "fixes": ["Auto jump to group."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.208"
+  },
+  {
+    "children": {
+      "fixes": ["Slove the old agents open profiles error problem."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.207"
+  },
+  {
+    "children": {
+      "fixes": ["Fix data inconsistency in ai provider config."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.206"
+  },
+  {
+    "children": {},
+    "date": "2026-01-04",
+    "version": "2.0.0-next.205"
+  },
+  {
+    "children": {
+      "features": ["Add new provider Xiaomi MiMo."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.204"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-04",
+    "version": "2.0.0-next.203"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor and fix model runtime initialize."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.202"
+  },
+  {
+    "children": {
+      "fixes": ["Restore window resizable before hard reload in desktop onboarding."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.201"
+  },
+  {
+    "children": {
+      "features": ["Add work path for local system."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.200"
+  },
+  {
+    "children": {
+      "fixes": ["Filter empty assistant messages for Anthropic API."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.199"
+  },
+  {
+    "children": {
+      "fixes": ["Support thoughtSignature for openrouter."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.198"
+  },
+  {
+    "children": {
+      "improvements": ["Remove client db and refactor test."],
+      "fixes": ["Fix file upload issue."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.197"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor to remove access code."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.196"
+  },
+  {
+    "children": {
+      "fixes": ["Fix tool call message content missing."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.195"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-03",
+    "version": "2.0.0-next.194"
+  },
+  {
+    "children": {},
+    "date": "2026-01-02",
+    "version": "2.0.0-next.193"
+  },
+  {
+    "children": {
+      "fixes": ["Fix model edit icon missing."]
+    },
+    "date": "2026-01-02",
+    "version": "2.0.0-next.192"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor to remove meta in message."]
+    },
+    "date": "2026-01-02",
+    "version": "2.0.0-next.191"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-02",
+    "version": "2.0.0-next.190"
+  },
+  {
+    "children": {
+      "improvements": ["Migrate to new DropdownMenuV2 and showContextMenu API."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.189"
+  },
+  {
+    "children": {
+      "improvements": ["Improve tools UI and fix Google schema compatibility."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.188"
+  },
+  {
+    "children": {
+      "improvements": ["Add Gemini 3 Flash & Doubao Seed 1.8 models."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.187"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor oidc env to auth env."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.186"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.185"
+  },
+  {
+    "children": {
+      "improvements": ["Improve loading and local-system render."]
+    },
+    "date": "2026-01-01",
+    "version": "2.0.0-next.184"
+  },
+  {
+    "children": {},
+    "date": "2025-12-31",
+    "version": "2.0.0-next.183"
+  },
+  {
+    "children": {
+      "features": ["Brand new 2.0 ui for next."]
+    },
+    "date": "2025-12-31",
+    "version": "2.0.0-next.182"
+  },
+  {
+    "children": {
+      "improvements": [
+        "Improve ExecTask and task message UI, improve gtd tool inspector and todo list, improve page document tool inspector UI, improve RunCommand Inspector, rebranding chat ui, refactor UI in features, rerun i18n, setting style, support streaming and display ui for group mode, support tool streaming and title custom render, update i18n, Update i18n microcopy, update ui."
+      ],
+      "features": [
+        "Add a white waitlist in edge config env, add always show tools render in createPlan & createDoc tools, add batch tasks ui, add Bundle Analyzer workflow for detailed bundle size analysis, add business features support with new components and hooks, add business settings features with dynamic loading for Plans, Funds, Usage, Billing, and Referral tabs, add db and schema feature, add home page create group builder button, Add i18n UI locales and improve tool types, add like action in community detail, add memory implement, add subscription settings group with dynamic loading for Plans, Funds, Usage, Billing, and Referral tabs, add the market auth auto generate way, Add turbopack configuration support to CustomNextConfig, add user memory, agent builder, agent builder, agent builder and group builder, app ui page, brand new 2.0 ui for next, buildin some tools should save into docs, code-interpreter tool, code-interpreter tool, code-interpreter tool, desktop feature, enhance desktop onboarding with sign out and localization, enhance macOS desktop permissions and onboarding, enhance onboarding process by removing mode selection step and adding export functionality in advanced settings, file search feature, gtd create plan support streaming render, implement agent builder, implement builtin agents packages, implement memories package, implement Redis caching for presigned URLs in file proxy service, implement server data feature, include Subscription settings group in the Accordion component, Integrate bcryptjs for password verification in BetterAuth, integrate BrandingProviderCard and update Provider components for branding support, onboarding ui, page and knowledge base, rebranding total UI of app, refactor authentication handler to support dynamic loading of better-auth and next-auth, refactor desktop implement with brand new 2.0, rename codeinterpreter into lobe sandbox, server implement, support CMD K, support exec async sub agent task, support export and import topic JSON, support files upload in chat input, support notebook tool, support swr local cache, topic message swr cache, translate AI model descriptions to English, update agent builder ui, update create group chat use builder, update gtd tools( use editor & update metadata ), update user memory embedding model selection based on business features, user memory, user memory, user onboarding, when use usesend to create agent/group, the model should override by lobeAi, wrap ConversationArea and ModelSwitchPanel in TooltipGroup for enhanced UI."
+      ],
+      "fixes": [
+        "Agent profiles update, agent tools config set, editor placeholder, bump charts 3.0.4 to fix import es path, fix anthropic thinking budget, fix async task and improve tool style, fix default waitlist bug, fix delete agent group bug, Fix desktop test cases and refactor translations, Fix desktop test cases and refactor translations, fix gemini 3 model thinking issue, fix gemini 3 pro parallel tool use, fix gemini 3 thinking params, fix identity memory not working, fix supervisor flag, fix thread not working issue, fix when use branch topic,the branch index error problem, fixed the welcome card the create button not work, handle session invalidation on 401 error by logging out signed-in users, improve test infrastructure and mock configurations, locale resolve bug with ESM module loading, page agent editor, prevent redundant login redirect when already on auth pages, redis read json object, remove openapi pkg patch file, slove input editor on pause emit, slove swr mutate not work in Cache Provider, slove the group add member checkbox not work, slove the model select null problem, slove the mutate not work problem, slove when click agentbuilder should clean topic, slove when first call thread, not show ai chat message, support retry error message and fix continueGenerationMessage, update contextMenu in group tools message, update OFFICIAL_URL to app.lobehub.com, update PlanTag link paths for subscription settings, update test snapshots for model description changes, when use agentbuilder the topic id should use new & clear topic…."
+      ]
+    },
+    "date": "2025-12-31",
+    "version": "2.0.0-next.181"
+  },
+  {
+    "children": {},
+    "date": "2025-12-26",
+    "version": "2.0.0-next.180"
+  },
+  {
+    "children": {},
+    "date": "2025-12-25",
+    "version": "2.0.0-next.179"
+  },
+  {
+    "children": {},
+    "date": "2025-12-24",
+    "version": "2.0.0-next.178"
+  },
+  {
+    "children": {},
+    "date": "2025-12-24",
+    "version": "2.0.0-next.177"
+  },
+  {
+    "children": {
+      "features": ["Mobile native better auth support."]
+    },
+    "date": "2025-12-23",
+    "version": "2.0.0-next.176"
+  },
+  {
+    "children": {},
+    "date": "2025-12-21",
+    "version": "2.0.0-next.175"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor database schema."]
+    },
+    "date": "2025-12-20",
+    "version": "2.0.0-next.174"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Request to gpt5 series should not with top_p, temperature when reasoning effort is not none."
+      ]
+    },
+    "date": "2025-12-16",
+    "version": "2.0.0-next.173"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-12-15",
+    "version": "2.0.0-next.172"
+  },
+  {
+    "children": {
+      "improvements": ["Update GPT-5.2 models."]
+    },
+    "date": "2025-12-14",
+    "version": "2.0.0-next.171"
+  },
+  {
+    "children": {},
+    "date": "2025-12-12",
+    "version": "2.0.0-next.170"
+  },
+  {
+    "children": {
+      "fixes": ["Fix CVE errors."]
+    },
+    "date": "2025-12-12",
+    "version": "2.0.0-next.169"
+  },
+  {
+    "children": {
+      "fixes": ["Slove market oidc error."]
+    },
+    "date": "2025-12-12",
+    "version": "2.0.0-next.168"
+  },
+  {
+    "children": {
+      "features": ["Add Replicate image provider."]
+    },
+    "date": "2025-12-11",
+    "version": "2.0.0-next.167"
+  },
+  {
+    "children": {},
+    "date": "2025-12-09",
+    "version": "2.0.0-next.166"
+  },
+  {
+    "children": {},
+    "date": "2025-12-09",
+    "version": "2.0.0-next.165"
+  },
+  {
+    "children": {
+      "improvements": ["Update link handling in PlanTag component to use react-router-dom."]
+    },
+    "date": "2025-12-08",
+    "version": "2.0.0-next.164"
+  },
+  {
+    "children": {
+      "fixes": ["Add smooth scroll to top on 'More' button click in Title component."]
+    },
+    "date": "2025-12-06",
+    "version": "2.0.0-next.163"
+  },
+  {
+    "children": {},
+    "date": "2025-12-05",
+    "version": "2.0.0-next.162"
+  },
+  {
+    "children": {
+      "features": ["Support klavis mcp connector."]
+    },
+    "date": "2025-12-05",
+    "version": "2.0.0-next.161"
+  },
+  {
+    "children": {},
+    "date": "2025-12-05",
+    "version": "2.0.0-next.160"
+  },
+  {
+    "children": {
+      "features": ["Betterauth username signin."]
+    },
+    "date": "2025-12-04",
+    "version": "2.0.0-next.159"
+  },
+  {
+    "children": {
+      "fixes": ["Limit check-user response surface."]
+    },
+    "date": "2025-12-04",
+    "version": "2.0.0-next.158"
+  },
+  {
+    "children": {
+      "improvements": ["Update Spark X1.5 model."]
+    },
+    "date": "2025-12-04",
+    "version": "2.0.0-next.157"
+  },
+  {
+    "children": {
+      "fixes": ["Fix React CVE issue."]
+    },
+    "date": "2025-12-04",
+    "version": "2.0.0-next.156"
+  },
+  {
+    "children": {
+      "fixes": ["Missing init user after user creation."]
+    },
+    "date": "2025-12-03",
+    "version": "2.0.0-next.155"
+  },
+  {
+    "children": {
+      "fixes": ["Udpate discover detail tools get & more link."]
+    },
+    "date": "2025-12-03",
+    "version": "2.0.0-next.154"
+  },
+  {
+    "children": {},
+    "date": "2025-12-03",
+    "version": "2.0.0-next.153"
+  },
+  {
+    "children": {
+      "features": ["Optimize betterauth UX."]
+    },
+    "date": "2025-12-03",
+    "version": "2.0.0-next.152"
+  },
+  {
+    "children": {
+      "improvements": ["Unify retry logic to async-retry."]
+    },
+    "date": "2025-12-03",
+    "version": "2.0.0-next.151"
+  },
+  {
+    "children": {
+      "fixes": ["Better-auth add apple sso icon and label."]
+    },
+    "date": "2025-12-03",
+    "version": "2.0.0-next.150"
+  },
+  {
+    "children": {},
+    "date": "2025-12-03",
+    "version": "2.0.0-next.149"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Remove apiMode param from Azure and Cloudflare provider requests, when desktop use contextMenu not work."
+      ]
+    },
+    "date": "2025-12-03",
+    "version": "2.0.0-next.148"
+  },
+  {
+    "children": {
+      "features": ["Support apple sso auth."]
+    },
+    "date": "2025-12-02",
+    "version": "2.0.0-next.147"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor agent slug schema."]
+    },
+    "date": "2025-12-02",
+    "version": "2.0.0-next.146"
+  },
+  {
+    "children": {
+      "features": ["Email provider support resend."]
+    },
+    "date": "2025-12-02",
+    "version": "2.0.0-next.145"
+  },
+  {
+    "children": {
+      "fixes": ["User email unique migration error."]
+    },
+    "date": "2025-12-02",
+    "version": "2.0.0-next.144"
+  },
+  {
+    "children": {
+      "features": ["Support market cloud endpoint mcp."]
+    },
+    "date": "2025-12-02",
+    "version": "2.0.0-next.143"
+  },
+  {
+    "children": {
+      "fixes": ["Remove internal apiMode param from chat completion API requests."]
+    },
+    "date": "2025-12-01",
+    "version": "2.0.0-next.142"
+  },
+  {
+    "children": {
+      "fixes": ["Drop user.phoneNumber and reuse user.phone."]
+    },
+    "date": "2025-12-01",
+    "version": "2.0.0-next.141"
+  },
+  {
+    "children": {
+      "features": ["Integrate better-auth admin plugin."]
+    },
+    "date": "2025-12-01",
+    "version": "2.0.0-next.140"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-12-01",
+    "version": "2.0.0-next.139"
+  },
+  {
+    "children": {},
+    "date": "2025-11-30",
+    "version": "2.0.0-next.138"
+  },
+  {
+    "children": {
+      "fixes": ["Update apiMode handling in ChatService to prioritize user preferences."]
+    },
+    "date": "2025-11-30",
+    "version": "2.0.0-next.137"
+  },
+  {
+    "children": {
+      "fixes": ["Refresh custom AI provider on selection."]
+    },
+    "date": "2025-11-30",
+    "version": "2.0.0-next.136"
+  },
+  {
+    "children": {
+      "fixes": ["Fix BetterAuth Unable to link account - untrusted provider."]
+    },
+    "date": "2025-11-30",
+    "version": "2.0.0-next.135"
+  },
+  {
+    "children": {
+      "fixes": ["Betterauth public url auto detect from VERCEL_URL."]
+    },
+    "date": "2025-11-29",
+    "version": "2.0.0-next.134"
+  },
+  {
+    "children": {
+      "fixes": ["Betterauth name should mapped to fullName."]
+    },
+    "date": "2025-11-29",
+    "version": "2.0.0-next.133"
+  },
+  {
+    "children": {
+      "fixes": ["Unable to switch to default topic."]
+    },
+    "date": "2025-11-29",
+    "version": "2.0.0-next.132"
+  },
+  {
+    "children": {
+      "fixes": ["Implement uniform callback URL for SSO providers."]
+    },
+    "date": "2025-11-28",
+    "version": "2.0.0-next.131"
+  },
+  {
+    "children": {
+      "fixes": ["Add handling for content_part and reasoning_part events in fetchSSE."]
+    },
+    "date": "2025-11-28",
+    "version": "2.0.0-next.130"
+  },
+  {
+    "children": {
+      "fixes": ["Filter out file with sourceType = file."]
+    },
+    "date": "2025-11-28",
+    "version": "2.0.0-next.129"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-28",
+    "version": "2.0.0-next.128"
+  },
+  {
+    "children": {
+      "fixes": ["Better-auth fallback next-auth providers env."]
+    },
+    "date": "2025-11-27",
+    "version": "2.0.0-next.127"
+  },
+  {
+    "children": {
+      "fixes": ["Align docker auth defaults and better-auth docs."]
+    },
+    "date": "2025-11-27",
+    "version": "2.0.0-next.126"
+  },
+  {
+    "children": {
+      "features": ["Support better-auth."]
+    },
+    "date": "2025-11-27",
+    "version": "2.0.0-next.125"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Fixed the agent settings plugins pages error problem, improve topic item interaction and editing behavior."
+      ]
+    },
+    "date": "2025-11-27",
+    "version": "2.0.0-next.124"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-27",
+    "version": "2.0.0-next.123"
+  },
+  {
+    "children": {
+      "fixes": ["Slove the publish to market the agent config error."]
+    },
+    "date": "2025-11-26",
+    "version": "2.0.0-next.122"
+  },
+  {
+    "children": {
+      "improvements": ["Add image aspect ratio and resolution settings for Nano Banana Pro."]
+    },
+    "date": "2025-11-26",
+    "version": "2.0.0-next.121"
+  },
+  {
+    "children": {
+      "fixes": ["Try to fix “TypeError: Response body object should not be disturbed or locked”."]
+    },
+    "date": "2025-11-26",
+    "version": "2.0.0-next.120"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-26",
+    "version": "2.0.0-next.119"
+  },
+  {
+    "children": {
+      "fixes": ["Showing compatibility with both new and old versions of Plugins."]
+    },
+    "date": "2025-11-26",
+    "version": "2.0.0-next.118"
+  },
+  {
+    "children": {
+      "features": ["Bedrock claude model thinking support."]
+    },
+    "date": "2025-11-25",
+    "version": "2.0.0-next.117"
+  },
+  {
+    "children": {
+      "features": ["Support nano banana pro."]
+    },
+    "date": "2025-11-25",
+    "version": "2.0.0-next.116"
+  },
+  {
+    "children": {
+      "features": ["Add Claude Opus 4.5 model."]
+    },
+    "date": "2025-11-25",
+    "version": "2.0.0-next.115"
+  },
+  {
+    "children": {
+      "fixes": ["Fixed the topic link dropdown error."]
+    },
+    "date": "2025-11-25",
+    "version": "2.0.0-next.114"
+  },
+  {
+    "children": {
+      "fixes": ["Fixed when desktop userId was change manytimes the aimodel not right."]
+    },
+    "date": "2025-11-25",
+    "version": "2.0.0-next.113"
+  },
+  {
+    "children": {
+      "improvements": ["Add Kimi K2 Thinking to Qwen Provider."]
+    },
+    "date": "2025-11-24",
+    "version": "2.0.0-next.112"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Fix db migration snapshot not align with db schema, Separate agent file injection from knowledge base RAG search."
+      ]
+    },
+    "date": "2025-11-24",
+    "version": "2.0.0-next.111"
+  },
+  {
+    "children": {
+      "improvements": [
+        "Add hyperlink to each topic & pinned agent, support ContextMenu on ChatItem."
+      ]
+    },
+    "date": "2025-11-24",
+    "version": "2.0.0-next.110"
+  },
+  {
+    "children": {
+      "fixes": ["Fixed the knowledge files cant open error."],
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-24",
+    "version": "2.0.0-next.109"
+  },
+  {
+    "children": {
+      "fixes": ["Fixed the pinned session not work."]
+    },
+    "date": "2025-11-24",
+    "version": "2.0.0-next.108"
+  },
+  {
+    "children": {
+      "improvements": ["Optimize nana banana pro error message."]
+    },
+    "date": "2025-11-23",
+    "version": "2.0.0-next.107"
+  },
+  {
+    "children": {
+      "features": ["Add nano-banana-pro model support and optimization."]
+    },
+    "date": "2025-11-23",
+    "version": "2.0.0-next.106"
+  },
+  {
+    "children": {},
+    "date": "2025-11-23",
+    "version": "2.0.0-next.105"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-22",
+    "version": "2.0.0-next.104"
+  },
+  {
+    "children": {
+      "fixes": ["Hide ai image config item in settings category."]
+    },
+    "date": "2025-11-22",
+    "version": "2.0.0-next.103"
+  },
+  {
+    "children": {
+      "features": ["Add new provider ZenMux & Gemini 3 Pro Image Preview."]
+    },
+    "date": "2025-11-22",
+    "version": "2.0.0-next.102"
+  },
+  {
+    "children": {
+      "features": ["Support bedrok prompt cache and usage compute."]
+    },
+    "date": "2025-11-22",
+    "version": "2.0.0-next.101"
+  },
+  {
+    "children": {
+      "fixes": ["Gemini 3 Pro does not display thought summaries."]
+    },
+    "date": "2025-11-21",
+    "version": "2.0.0-next.100"
+  },
+  {
+    "children": {
+      "features": ["Refactor to use kb search tool."]
+    },
+    "date": "2025-11-21",
+    "version": "2.0.0-next.99"
+  },
+  {
+    "children": {
+      "fixes": ["Fixed changelog pages and open again."],
+      "improvements": ["Fix some translations."]
+    },
+    "date": "2025-11-21",
+    "version": "2.0.0-next.98"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-21",
+    "version": "2.0.0-next.97"
+  },
+  {
+    "children": {
+      "features": ["Support Command Menu (CMD + J)."]
+    },
+    "date": "2025-11-20",
+    "version": "2.0.0-next.96"
+  },
+  {
+    "children": {
+      "features": ["Add Security Blacklist for agent runtime."]
+    },
+    "date": "2025-11-20",
+    "version": "2.0.0-next.95"
+  },
+  {
+    "children": {
+      "fixes": ["Provider settings button unable to redirect."]
+    },
+    "date": "2025-11-20",
+    "version": "2.0.0-next.94"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-20",
+    "version": "2.0.0-next.93"
+  },
+  {
+    "children": {
+      "improvements": ["Remove debug console logs and add loading state."]
+    },
+    "date": "2025-11-19",
+    "version": "2.0.0-next.92"
+  },
+  {
+    "children": {
+      "fixes": ["Fixed the hydrated false problem."]
+    },
+    "date": "2025-11-19",
+    "version": "2.0.0-next.91"
+  },
+  {
+    "children": {
+      "improvements": ["Extract StatusIndicator component and improve tools display."]
+    },
+    "date": "2025-11-19",
+    "version": "2.0.0-next.90"
+  },
+  {
+    "children": {
+      "features": ["Support gemini 3.0 tools calling."]
+    },
+    "date": "2025-11-19",
+    "version": "2.0.0-next.89"
+  },
+  {
+    "children": {
+      "improvements": ["Fully support Gemini 3.0 model."]
+    },
+    "date": "2025-11-19",
+    "version": "2.0.0-next.88"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor chat selectors."]
+    },
+    "date": "2025-11-19",
+    "version": "2.0.0-next.87"
+  },
+  {
+    "children": {
+      "features": ["Support user abort in the agent runtime."]
+    },
+    "date": "2025-11-19",
+    "version": "2.0.0-next.86"
+  },
+  {
+    "children": {
+      "fixes": ["Slove discover pagination router."]
+    },
+    "date": "2025-11-19",
+    "version": "2.0.0-next.85"
+  },
+  {
+    "children": {
+      "improvements": ["Add Gemini 3.0 Pro Preview to Google Provider."]
+    },
+    "date": "2025-11-19",
+    "version": "2.0.0-next.84"
+  },
+  {
+    "children": {
+      "features": ["New API support switch Responses API mode."],
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-19",
+    "version": "2.0.0-next.83"
+  },
+  {
+    "children": {
+      "fixes": ["Fix noisy error notification."]
+    },
+    "date": "2025-11-18",
+    "version": "2.0.0-next.82"
+  },
+  {
+    "children": {
+      "fixes": ["Slove when logout always show loading."]
+    },
+    "date": "2025-11-18",
+    "version": "2.0.0-next.81"
+  },
+  {
+    "children": {},
+    "date": "2025-11-18",
+    "version": "2.0.0-next.80"
+  },
+  {
+    "children": {
+      "fixes": ["Fixed the discover page categray sider link error."]
+    },
+    "date": "2025-11-18",
+    "version": "2.0.0-next.79"
+  },
+  {
+    "children": {},
+    "date": "2025-11-18",
+    "version": "2.0.0-next.78"
+  },
+  {
+    "children": {
+      "improvements": ["Delete /settings/newapi pages in nextjs build."]
+    },
+    "date": "2025-11-18",
+    "version": "2.0.0-next.77"
+  },
+  {
+    "children": {
+      "features": ["Support Interleaved thinking in MiniMax."]
+    },
+    "date": "2025-11-18",
+    "version": "2.0.0-next.76"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-18",
+    "version": "2.0.0-next.75"
+  },
+  {
+    "children": {
+      "features": ["Edit local file render & intervention."]
+    },
+    "date": "2025-11-17",
+    "version": "2.0.0-next.74"
+  },
+  {
+    "children": {
+      "features": ["Support parallel topic agent runtime."]
+    },
+    "date": "2025-11-17",
+    "version": "2.0.0-next.73"
+  },
+  {
+    "children": {
+      "improvements": ["Add model information for the Qiniu provider."]
+    },
+    "date": "2025-11-17",
+    "version": "2.0.0-next.72"
+  },
+  {
+    "children": {
+      "fixes": ["Fix desktop user panel."]
+    },
+    "date": "2025-11-17",
+    "version": "2.0.0-next.71"
+  },
+  {
+    "children": {},
+    "date": "2025-11-17",
+    "version": "2.0.0-next.70"
+  },
+  {
+    "children": {
+      "improvements": ["Remove language_model_settings and remove isDeprecatedEdition."]
+    },
+    "date": "2025-11-17",
+    "version": "2.0.0-next.69"
+  },
+  {
+    "children": {
+      "fixes": ["The tool to fail execution on ollama when a message contains b…."]
+    },
+    "date": "2025-11-16",
+    "version": "2.0.0-next.68"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor to virtua."]
+    },
+    "date": "2025-11-16",
+    "version": "2.0.0-next.67"
+  },
+  {
+    "children": {
+      "features": ["Support to collapse message."]
+    },
+    "date": "2025-11-16",
+    "version": "2.0.0-next.66"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-16",
+    "version": "2.0.0-next.65"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor package types."]
+    },
+    "date": "2025-11-15",
+    "version": "2.0.0-next.64"
+  },
+  {
+    "children": {
+      "features": ["Show orphaned tool message and support delete tool message."]
+    },
+    "date": "2025-11-15",
+    "version": "2.0.0-next.63"
+  },
+  {
+    "children": {},
+    "date": "2025-11-15",
+    "version": "2.0.0-next.62"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-15",
+    "version": "2.0.0-next.61"
+  },
+  {
+    "children": {
+      "fixes": ["Reduce threshold."]
+    },
+    "date": "2025-11-14",
+    "version": "2.0.0-next.60"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-14",
+    "version": "2.0.0-next.59"
+  },
+  {
+    "children": {
+      "features": ["Support DeepSeek Interleaved thinking."]
+    },
+    "date": "2025-11-14",
+    "version": "2.0.0-next.58"
+  },
+  {
+    "children": {
+      "improvements": ["Revert background style."]
+    },
+    "date": "2025-11-14",
+    "version": "2.0.0-next.57"
+  },
+  {
+    "children": {
+      "features": ["Add folder creation UI and clean up debug code."]
+    },
+    "date": "2025-11-14",
+    "version": "2.0.0-next.56"
+  },
+  {
+    "children": {
+      "features": ["Create Pages in Knowledge Base."]
+    },
+    "date": "2025-11-14",
+    "version": "2.0.0-next.55"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor and support move locale file intervention."]
+    },
+    "date": "2025-11-14",
+    "version": "2.0.0-next.54"
+  },
+  {
+    "children": {
+      "features": ["Add GPT-5.1 models."],
+      "improvements": ["Fix approving render and improve Conversation style."]
+    },
+    "date": "2025-11-14",
+    "version": "2.0.0-next.53"
+  },
+  {
+    "children": {
+      "fixes": ["Filter out reasoning fields from messages in ChatCompletion API."]
+    },
+    "date": "2025-11-13",
+    "version": "2.0.0-next.52"
+  },
+  {
+    "children": {
+      "improvements": ["Update ERNIE-5.0-Thinking-Preview model."]
+    },
+    "date": "2025-11-13",
+    "version": "2.0.0-next.51"
+  },
+  {
+    "children": {
+      "fixes": ["Fix oidc accountId mismatch."]
+    },
+    "date": "2025-11-13",
+    "version": "2.0.0-next.50"
+  },
+  {
+    "children": {
+      "features": ["Support tool invention."],
+      "fixes": ["Update lost i18n files."]
+    },
+    "date": "2025-11-13",
+    "version": "2.0.0-next.49"
+  },
+  {
+    "children": {},
+    "date": "2025-11-12",
+    "version": "2.0.0-next.48"
+  },
+  {
+    "children": {
+      "fixes": ["Fix mcp server return image error."]
+    },
+    "date": "2025-11-11",
+    "version": "2.0.0-next.47"
+  },
+  {
+    "children": {
+      "improvements": ["Fix thread display."]
+    },
+    "date": "2025-11-11",
+    "version": "2.0.0-next.46"
+  },
+  {
+    "children": {
+      "improvements": ["Edge to node runtime."]
+    },
+    "date": "2025-11-10",
+    "version": "2.0.0-next.45"
+  },
+  {
+    "children": {
+      "fixes": ["Fix reasoning issue with claude and Response API thinking."]
+    },
+    "date": "2025-11-10",
+    "version": "2.0.0-next.44"
+  },
+  {
+    "children": {
+      "fixes": ["Abnormal animation of tokens."]
+    },
+    "date": "2025-11-09",
+    "version": "2.0.0-next.43"
+  },
+  {
+    "children": {
+      "fixes": ["Fix missing messages when finish runtime."]
+    },
+    "date": "2025-11-09",
+    "version": "2.0.0-next.42"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-09",
+    "version": "2.0.0-next.41"
+  },
+  {
+    "children": {},
+    "date": "2025-11-08",
+    "version": "2.0.0-next.40"
+  },
+  {
+    "children": {},
+    "date": "2025-11-08",
+    "version": "2.0.0-next.39"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-08",
+    "version": "2.0.0-next.38"
+  },
+  {
+    "children": {
+      "fixes": ["Don't include runtimeProvider in JWT for non-image operations."]
+    },
+    "date": "2025-11-07",
+    "version": "2.0.0-next.37"
+  },
+  {
+    "children": {
+      "features": ["Refactor to use agent runtime as the generation core and support branch mode."]
+    },
+    "date": "2025-11-07",
+    "version": "2.0.0-next.36"
+  },
+  {
+    "children": {
+      "improvements": ["Use react-router-dom change /chat page to spa mode."]
+    },
+    "date": "2025-11-07",
+    "version": "2.0.0-next.35"
+  },
+  {
+    "children": {
+      "improvements": [
+        "Add sorting functionality for disabled models and model providers with tooltip support."
+      ]
+    },
+    "date": "2025-11-07",
+    "version": "2.0.0-next.34"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor message create name."],
+      "fixes": ["Model name display in the assistant panel disappears."]
+    },
+    "date": "2025-11-06",
+    "version": "2.0.0-next.33"
+  },
+  {
+    "children": {
+      "fixes": ["Should install new version after quit this instance."]
+    },
+    "date": "2025-11-05",
+    "version": "2.0.0-next.32"
+  },
+  {
+    "children": {},
+    "date": "2025-11-05",
+    "version": "2.0.0-next.31"
+  },
+  {
+    "children": {
+      "improvements": ["Enhance message router with service layer and comprehensive tests."]
+    },
+    "date": "2025-11-05",
+    "version": "2.0.0-next.30"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor chat message model to speed up."]
+    },
+    "date": "2025-11-04",
+    "version": "2.0.0-next.29"
+  },
+  {
+    "children": {
+      "features": ["Support install sreamable http mcp server on web."]
+    },
+    "date": "2025-11-04",
+    "version": "2.0.0-next.28"
+  },
+  {
+    "children": {
+      "improvements": ["Refactor services to a more clean structure."]
+    },
+    "date": "2025-11-04",
+    "version": "2.0.0-next.27"
+  },
+  {
+    "children": {
+      "improvements": ["Add settings (jsonb) column to ai_models table."]
+    },
+    "date": "2025-11-04",
+    "version": "2.0.0-next.26"
+  },
+  {
+    "children": {
+      "features": ["Display assistant message in group."]
+    },
+    "date": "2025-11-04",
+    "version": "2.0.0-next.25"
+  },
+  {
+    "children": {
+      "improvements": ["Improve lab style."]
+    },
+    "date": "2025-11-04",
+    "version": "2.0.0-next.24"
+  },
+  {
+    "children": {
+      "fixes": ["Fix send message."]
+    },
+    "date": "2025-11-04",
+    "version": "2.0.0-next.23"
+  },
+  {
+    "children": {},
+    "date": "2025-11-04",
+    "version": "2.0.0-next.22"
+  },
+  {
+    "children": {
+      "fixes": ["Fix oidc auth timeout issue on the desktop."]
+    },
+    "date": "2025-11-04",
+    "version": "2.0.0-next.21"
+  },
+  {
+    "children": {
+      "improvements": ["Improve oidc layout style."]
+    },
+    "date": "2025-11-03",
+    "version": "2.0.0-next.20"
+  },
+  {
+    "children": {
+      "improvements": ["Remove NEXT_PUBLIC_SERVICE_MODE env and use server by default."]
+    },
+    "date": "2025-11-03",
+    "version": "2.0.0-next.19"
+  },
+  {
+    "children": {
+      "improvements": ["Improve built-in client OIDC user flow."]
+    },
+    "date": "2025-11-03",
+    "version": "2.0.0-next.18"
+  },
+  {
+    "children": {
+      "fixes": ["Fix regex ReDoS."]
+    },
+    "date": "2025-11-03",
+    "version": "2.0.0-next.17"
+  },
+  {
+    "children": {
+      "improvements": ["Remove deperated code."]
+    },
+    "date": "2025-11-03",
+    "version": "2.0.0-next.16"
+  },
+  {
+    "children": {},
+    "date": "2025-11-03",
+    "version": "2.0.0-next.15"
+  },
+  {
+    "children": {
+      "improvements": ["Remove client service."]
+    },
+    "date": "2025-11-02",
+    "version": "2.0.0-next.14"
+  },
+  {
+    "children": {
+      "fixes": ["Fix image prompt form."]
+    },
+    "date": "2025-11-02",
+    "version": "2.0.0-next.13"
+  },
+  {
+    "children": {
+      "improvements": ["Add padding to TopicList component."]
+    },
+    "date": "2025-11-02",
+    "version": "2.0.0-next.12"
+  },
+  {
+    "children": {
+      "improvements": ["Smoothed model descriptions in ko-KR locales."]
+    },
+    "date": "2025-11-02",
+    "version": "2.0.0-next.11"
+  },
+  {
+    "children": {},
+    "date": "2025-11-02",
+    "version": "2.0.0-next.10"
+  },
+  {
+    "children": {
+      "improvements": ["Remove dalle builtin plugin."]
+    },
+    "date": "2025-11-02",
+    "version": "2.0.0-next.9"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-11-02",
+    "version": "2.0.0-next.8"
+  },
+  {
+    "children": {
+      "features": ["Upgrade to Next 16."]
+    },
+    "date": "2025-11-01",
+    "version": "2.0.0-next.7"
+  },
+  {
+    "children": {},
+    "date": "2025-10-31",
+    "version": "2.0.0-next.6"
+  },
+  {
+    "children": {
+      "improvements": ["Migrating Firecrawl to v2."]
+    },
+    "date": "2025-10-31",
+    "version": "2.0.0-next.5"
+  },
+  {
+    "children": {
+      "improvements": ["Update i18n."]
+    },
+    "date": "2025-10-31",
+    "version": "2.0.0-next.4"
+  },
+  {
+    "children": {
+      "improvements": [
+        "Add new bedrock model support, add pricing info for Azure GPT-5 series models."
+      ]
+    },
+    "date": "2025-10-30",
+    "version": "2.0.0-next.3"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Hide marketplace link from Plugin List when market disabled, OIDC error when connecting to self-host instance, only include input_fidelity parameter for gpt-image-1.."
+      ]
+    },
+    "date": "2025-10-30",
+    "version": "2.0.0-next.2"
+  },
+  {
+    "children": {
+      "features": ["2.0 next baseline."],
+      "improvements": ["starting V2"]
+    },
+    "date": "2025-10-30",
+    "version": "2.0.0-next.1"
+  },
+  {
+    "children": {
       "features": ["2.0 next init."]
     },
     "date": "2025-10-30",

@@ -13,12 +13,6 @@ const createCaller = createCallerFactory(configRouter);
 let ctx: AuthContext;
 let router: ReturnType<typeof createCaller>;
 
-vi.mock('@/libs/next-auth/edge', () => {
-  return {
-    auth: vi.fn().mockResolvedValue(undefined),
-  };
-});
-
 beforeEach(async () => {
   vi.resetAllMocks();
   ctx = await createContextInner();

@@ -1,4 +1,4 @@
-name: lobe-chat-database
+name: lobehub
 services:
   network-service:
     image: alpine
@@ -157,8 +157,8 @@ services:
       - ENDPOINT=127.0.0.1:4317
 
   lobe:
-    image: lobehub/lobe-chat-database
-    container_name: lobe-chat
+    image: lobehub/lobehub
+    container_name: lobehub
     network_mode: 'service:network-service'
     depends_on:
       postgresql:

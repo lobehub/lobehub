@@ -446,6 +446,8 @@
   "settingImage.defaultCount.desc": "Imposta il numero predefinito di immagini generate quando si crea un nuovo compito nel pannello di generazione immagini.",
   "settingImage.defaultCount.label": "Numero Immagini Predefinito",
   "settingImage.defaultCount.title": "Arte AI",
+  "settingModel.enableContextCompression.desc": "Comprimi automaticamente i messaggi storici in riepiloghi quando la conversazione supera i 64.000 token, risparmiando dal 60 all'80% nell'uso dei token",
+  "settingModel.enableContextCompression.title": "Abilita Compressione Automatica del Contesto",
   "settingModel.enableMaxTokens.title": "Abilita Limite Massimo Token",
   "settingModel.enableReasoningEffort.title": "Abilita Regolazione Sforzo di Ragionamento",
   "settingModel.frequencyPenalty.desc": "Valori più alti aumentano la varietà del vocabolario; valori più bassi rendono il linguaggio più semplice e diretto.",

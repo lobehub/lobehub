@@ -1,31 +1,97 @@
 ---
-title: Deploy LobeHub on Sealos
+title: Deploy Lobe Chat Database Version on Sealos
 description: >-
   Learn how to deploy LobeHub on Sealos with ease. Follow the provided steps to
   set up LobeHub and start using it efficiently.
 tags:
   - Deploy LobeHub
   - Sealos Deployment
+  - OpenAI API Key
   - Custom Domain Binding
 ---
 
-# Deploy LobeHub with Sealos
+# Deploying Lobe Chat Database Version on Sealos
 
-If you want to deploy LobeHub on Sealos, you can follow the steps below:
+<Callout type="info">
+  This article assumes that you are familiar with the basic principles and processes of deploying
+  the LobeHub server database version, so it only includes content related to core environment
+  variable configuration. If you are not familiar with the deployment principles of the LobeHub
+  server database version, please refer to [Deploying Server
+  Database](/docs/self-hosting/server-database) first.
+</Callout>
 
-## Sealos Deployment Process
+The application on Sealos includes 4 services:
 
-<Steps>
-  ### Click the button below to deploy
+- Logto for authrization(need to deploy separately).
+- PostgreSQL with Vector plugin for data storage and indexing.
+- One object storage Bucket.
+- Lobe Chat database version.
 
-  [![][deploy-button-image]][deploy-link]
+Here is the process for deploying the Lobe Chat server database version on Sealos:
 
-  ### After deployment, you can start using it
+## Pre-Deployment Setup
 
-  ### Bind a custom domain (optional)
+**Step 1**：Click the button below to deploy a Logto service:
 
-  You can use the subdomain provided by Sealos, or choose to bind a custom domain. Currently, the domains provided by Sealos have not been contaminated, and can be directly accessed in most regions.
-</Steps>
+[![](https://raw.githubusercontent.com/labring-actions/templates/main/Deploy-on-Sealos.svg)](https://template.usw.sealos.io/deploy?templateName=logto)
 
-[deploy-button-image]: https://raw.githubusercontent.com/labring-actions/templates/main/Deploy-on-Sealos.svg
-[deploy-link]: https://template.usw.sealos.io/deploy?templateName=lobe-chat
+> Logto is an open-source identity and access management (IAM) platform, an open-source alternative to Auth0, designed to help developers quickly build secure and scalable login and registration systems and user identity systems.
+
+**Step 2**：After the deployment is complete, wait for all the components of the application to be in the "Running" state, click the application's "Details" button to enter the application details page.
+
+![Logto application deployment status on Sealos](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-app-deployment-status-sealos-en.png)
+
+Click the public address corresponding to port 3002, you can use the public address to access the Logto service.
+
+![Logto service public address](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-public-address-en.png)
+
+**Step 3**：Register a management account, then click the `Applications` menu on the left, enter the application list page. Click the `Create application` button in the upper right corner to create an application.
+
+![Logto application list page](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-application-list.png)
+
+Select `Next.js (App Router)` as the framework, then click the `Start building` button.
+
+![Logto create application page](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-create-application.png)
+
+**Step 4**：In the pop-up window, fill in the application name as `Lobe Chat`, then click the `Create application` button. Next, do not fill in anything, just click the bottom `Finish and done` button to create it.
+
+![Logto create application done page](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-create-application-done.png)
+
+**Step 5**：In the `Lobe Chat` application, find the following three parameters, which will be used later when deploying the Lobe Chat database version.
+
+![Logto application detail page](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-app-detail.png)
+
+## Deploy Lobe Chat Database Version
+
+**Step 1**：Click the button below to visit the Lobe Chat database version application deployment page:
+
+[![](https://raw.githubusercontent.com/labring-actions/templates/main/Deploy-on-Sealos.svg)](https://template.usw.sealos.io/deploy?templateName=lobe-chat-db)
+
+Fill in the following three required parameters:
+
+- `AUTH_LOGTO_ID`：The App ID of the Logto application
+- `AUTH_LOGTO_SECRET`：The App Secret of the Logto application
+- `AUTH_LOGTO_ISSUER`：The Issuer endpoint of the Logto application
+
+**Step 2**：Click the `Deploy App` button, after the deployment is complete, wait for all the components of the application to be in the "Running" state, click the application's "Details" button to enter the application details page.
+
+![Lobe Chat database version deployment done page](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-deployment-done-en.png)
+
+**Step 3**：Find the public address, copy it, and use it later.
+
+## Post-Deployment Configuration
+
+**Step 1**：Enter the `Applications` page of Logto, find the `Lobe Chat` application, click to enter the application details page.
+
+**Step 2**：In the `Settings` page, find the `Redirect URI` and `Post sign-out redirect URI` parameters, fill in the following values:
+
+- Redirect URI: `https://<lobe-chat-db-public-address>/api/auth/callback/logto`
+- Post sign-out redirect URI: `https://<lobe-chat-db-public-address>`
+
+**Step 3**：Click the `Save changes` button to save the configuration.
+
+**Step 4**：Now, access the Lobe Chat database version through `https://<lobe-chat-db-public-address>`, click the avatar in the upper left corner, and then click the \[Log in / Sign up] button.
+
+**Step 5**：Next, you will be redirected to the Logto login page, click the \[Create account] button to register an account.
+
+**Step 6**：After registration, you can use Logto to login to the Lobe Chat database version.

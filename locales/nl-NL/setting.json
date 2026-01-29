@@ -446,6 +446,8 @@
   "settingImage.defaultCount.desc": "Stel het standaard aantal afbeeldingen in dat wordt gegenereerd bij het aanmaken van een nieuwe taak in het afbeeldingspaneel.",
   "settingImage.defaultCount.label": "Standaard aantal afbeeldingen",
   "settingImage.defaultCount.title": "AI-kunst",
+  "settingModel.enableContextCompression.desc": "Comprimeer automatisch historische berichten tot samenvattingen wanneer het gesprek meer dan 64.000 tokens bevat, wat 60-80% aan tokengebruik bespaart",
+  "settingModel.enableContextCompression.title": "Automatische Contextcompressie Inschakelen",
   "settingModel.enableMaxTokens.title": "Maximaal aantal tokens inschakelen",
   "settingModel.enableReasoningEffort.title": "Redeneerinspanning aanpassen",
   "settingModel.frequencyPenalty.desc": "Hoe hoger de waarde, hoe rijker en gevarieerder de woordenschat; hoe lager, hoe eenvoudiger de taal.",

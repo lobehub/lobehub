@@ -1,4 +1,4 @@
-import { CHAT_MODEL_IMAGE_GENERATION_PARAMS, ModelParamsSchema } from '../standard-parameters';
+import { ModelParamsSchema } from '../standard-parameters';
 import { AIChatModelCard, AIImageModelCard } from '../types';
 
 /**
@@ -487,32 +487,6 @@ const googleChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      imageOutput: true,
-      vision: true,
-    },
-    contextWindowTokens: 32_768 + 8192,
-    description:
-      'Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.',
-    displayName: 'Nano Banana (Preview)',
-    id: 'gemini-2.5-flash-image-preview',
-    maxOutput: 8192,
-    pricing: {
-      approximatePricePerImage: 0.039,
-      units: [
-        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'imageInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-08-26',
-    settings: {
-      extendParams: ['imageAspectRatio'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
       functionCall: true,
       reasoning: true,
       search: true,
@@ -958,23 +932,6 @@ const googleImageModels: AIImageModelCard[] = [
       'Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.',
     releasedAt: '2025-08-26',
     parameters: nanoBananaParameters,
-    pricing: {
-      approximatePricePerImage: 0.039,
-      units: [
-        { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-  },
-  {
-    displayName: 'Nano Banana (Preview)',
-    id: 'gemini-2.5-flash-image-preview:image',
-    type: 'image',
-    description:
-      'Nano Banana is Google’s newest, fastest, and most efficient native multimodal model, enabling conversational image generation and editing.',
-    releasedAt: '2025-08-26',
-    parameters: CHAT_MODEL_IMAGE_GENERATION_PARAMS,
     pricing: {
       approximatePricePerImage: 0.039,
       units: [

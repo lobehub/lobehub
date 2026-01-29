@@ -58,14 +58,6 @@ describe('createRouteMatcher', () => {
       expect(matcher(createMockRequest('/trpc/chat.create'))).toBe(true);
     });
 
-    it('should match /next-auth/(.*) pattern', () => {
-      const matcher = createRouteMatcher(['/next-auth/(.*)']);
-
-      expect(matcher(createMockRequest('/next-auth/'))).toBe(true);
-      expect(matcher(createMockRequest('/next-auth/signin'))).toBe(true);
-      expect(matcher(createMockRequest('/next-auth/callback/github'))).toBe(true);
-      expect(matcher(createMockRequest('/next-auth'))).toBe(false); // no trailing slash or path
-    });
   });
 
   describe('multiple patterns', () => {

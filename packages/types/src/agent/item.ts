@@ -8,6 +8,7 @@ import { LobeAgentTTSConfig } from './tts';
 
 export interface LobeAgentConfig {
   avatar?: string;
+  backgroundColor?: string;
 
   chatConfig: LobeAgentChatConfig;
 
@@ -58,6 +59,11 @@ export interface LobeAgentConfig {
    * System role
    */
   systemRole: string;
+
+  /**
+   * Agent title/name
+   */
+  title?: string;
 
   /**
    * Text-to-speech service

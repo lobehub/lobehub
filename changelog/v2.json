@@ -1,5 +1,71 @@
 [
   {
+    "children": {
+      "fixes": ["Add ExtendParamsTypeSchema for enhanced model settings."]
+    },
+    "date": "2026-01-29",
+    "version": "2.0.10"
+  },
+  {
+    "children": {},
+    "date": "2026-01-29",
+    "version": "2.0.9"
+  },
+  {
+    "children": {
+      "fixes": ["Fix inbox agent in mobile."]
+    },
+    "date": "2026-01-28",
+    "version": "2.0.8"
+  },
+  {
+    "children": {},
+    "date": "2026-01-28",
+    "version": "2.0.7"
+  },
+  {
+    "children": {
+      "fixes": ["The klavis in onboarding connect timeout fixed."]
+    },
+    "date": "2026-01-27",
+    "version": "2.0.6"
+  },
+  {
+    "children": {
+      "fixes": ["Update the artifact prompt."]
+    },
+    "date": "2026-01-27",
+    "version": "2.0.5"
+  },
+  {
+    "children": {
+      "fixes": ["Rename docker image and update docs for v2."]
+    },
+    "date": "2026-01-27",
+    "version": "2.0.4"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Fixed compressed group message & open the switch config to control compression config enabled, fixed the onboarding crash problem."
+      ]
+    },
+    "date": "2026-01-27",
+    "version": "2.0.3"
+  },
+  {
+    "children": {
+      "fixes": ["Slove the recentTopicLinkError."]
+    },
+    "date": "2026-01-27",
+    "version": "2.0.2"
+  },
+  {
+    "children": {},
+    "date": "2026-01-27",
+    "version": "2.0.1"
+  },
+  {
     "children": {},
     "date": "2026-01-27",
     "version": "2.0.0-next.389"

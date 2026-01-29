@@ -1,72 +1,76 @@
 ---
-title: Deploy LobeHub on Zeabur
+title: Deploying LobeHub Database on Zeabur
 description: >-
   Learn how to deploy LobeHub on Zeabur with ease. Follow the provided steps to
   set up your chat application seamlessly.
 tags:
   - Deploy LobeHub
   - Zeabur Deployment
+  - OpenAI API Key
   - Custom Domain Binding
 ---
 
-# Deploy LobeHub with Zeabur
+# Deploying LobeHub Database on Zeabur
 
-If you want to deploy LobeHub on Zeabur, you can follow the steps below:
+<Callout type="info">
+  This article assumes that you are familiar with the basic principles and processes of deploying
+  the LobeHub server database version, so it only includes content related to core environment
+  variable configuration. If you are not familiar with the deployment principles of the LobeHub
+  server database version, please refer to [Deploying Server
+  Database](/docs/self-hosting/server-database) first.
+</Callout>
 
-## Zeabur Deployment Process
+The template on Zeabur includes 4 services:
 
-<Steps>
-  ### Click the button below to deploy
+- Logto for authrization.
+- PostgreSQL with Vector plugin for data storage and indexing.
+- MinIO for image storage.
+- LobeHub database version.
 
-  [![][deploy-button-image]][deploy-link]
+## Deploying on Zeabur
 
-  ### Once deployed, you can start using it
-
-  ### Bind a custom domain (optional)
-
-  You can use the subdomain provided by Zeabur, or choose to bind a custom domain. Currently, the domains provided by Zeabur have not been contaminated, and most regions can connect directly.
-</Steps>
-
-# Deploy LobeHub with Zeabur as serverless function
-
-> Note: There are still issues with [middlewares and rewrites of next.js on Zeabur](https://github.com/lobehub/lobe-chat/pull/2775?notification_referrer_id=NT_kwDOAdi2DrQxMDkyODQ4MDc2NTozMDk3OTU5OA#issuecomment-2146713899), use at your own risk!
-
-Since Zeabur does NOT officially support FREE users deploy containerized service, you may wish to deploy LobeHub as a serverless function service. To deploy LobeHub as a serverless function service on Zeabur, you can follow the steps below:
-
-## Zeabur Deployment Process
+Here is the process for deploying the LobeHub server database version on Zeabur:
 
 <Steps>
-  ### Fork LobeHub
+  ### Go to the template page on Zeabur
 
-  ### Add Zeabur pack config file
+  Go to the [LobeHub Database template page](https://zeabur.com/templates/RRSPSD) on Zeabur and click on the "Deploy" button.
 
-  Add a `zbpack.json` configuration file with the following content to the root dir of your fork:
+  ### Fill in the required environment variables
 
-  ```json
-  {
-    "ignore_dockerfile": true,
-    "serverless": true
-  }
-  ```
+  After you click on the "Deploy" button, you will see a modal pop-up where you can fill in the required environment variables.
 
-  ### Login to your [Zeabur dashboard](https://dash.zeabur.com)
+  Here are the environment variables you need to fill in:
 
-  If you do not already have an account, you will need to register one.
+  - OpenAI API key: Your OpenAI API key to get responses from OpenAI.
 
-  ### Create a project and service
+  - LobeHub Domain: A free subdomain with `.zeabur.app` suffix.
 
-  Create a project, then create a service under this project.
+  - MinIO Public Domain: A free subdomain with `.zeabur.app` suffix for yout MinIO web port to enable public access for the uploaded files.
 
-  ### Link your fork of LobeHub to the just created Zeabur service.
+  - Logto Console Domain: A free subdomain with `.zeabur.app` suffix for your Logto console.
 
-  When adding service, choose github. This may triger a oAuth depend on varies factors like how you login to Zeabur and if you have already authorized Zeabur to access all your repos
+  - Logto API Domain: A free subdomain with `.zeabur.app` suffix for your Logto api.
 
-  ### Bind a custom domain (optional)
+  ### Select a region and deploy
 
-  You can create a subdomain provided by Zeabur, or choose to bind a custom domain. Currently, the domains provided by Zeabur have not been contaminated, and most regions can connect directly.
+  After you fill all the required environment variables, select a region where you want to deploy your LobeHub Database and click on the "Deploy" button.
 
-  ### Zeabur shall start auto build and you should be able to access it by the domain of your choice after a while.
+  You will see another modal pop-up where you can see the deployment progress.
+
+  ### Configure Logto
+
+  After the deployment is done, you need to configure your Logto service to enable authrization.
+
+  Access your Logto console with the console domain you just binded, and then create a `Next.js 14(App router)` application to get the client ID and client secret, and fill in the cors and callback URLs. You can check [this document](../advanced/auth.mdx) for a more detailed guide.
+
+  Fill in those variables into your LobeHub service on Zeabur, here is a more detailed guide for [editing environment variables on Zeabur](https://zeabur.com/docs/deploy/variables).
+
+  For detailed configuration of Logto, refer to [this document](/docs/self-hosting/advanced/auth/providers/logto).
+
+  ### Access your LobeHub Instance
+
+  Press on the `LobeHub-Database` and you can see the public domain you just created, click on it to access your LobeHub Database.
+
+  You can also bind a custom domain for your services if you want, here is a guide on how to [bind a custom domain on Zeabur](https://zeabur.com/docs/deploy/domain-binding).
 </Steps>
-
-[deploy-button-image]: https://zeabur.com/button.svg
-[deploy-link]: https://zeabur.com/templates/VZGGTI

@@ -1,4 +1,4 @@
-name: lobe-chat-database
+name: lobehub
 services:
   postgresql:
     image: pgvector/pgvector:pg16
@@ -52,8 +52,8 @@ services:
     entrypoint: ['sh', '-c', 'npm run cli db seed -- --swe && npm start']
 
   lobe:
-    image: lobehub/lobe-chat-database
-    container_name: lobe-chat
+    image: lobehub/lobehub
+    container_name: lobehub
     ports:
       - '3210:3210'
     depends_on:
