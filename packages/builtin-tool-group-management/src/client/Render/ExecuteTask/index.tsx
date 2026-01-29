@@ -54,10 +54,10 @@ const ExecuteTaskRender = memo<BuiltinRenderProps<ExecuteTaskParams, ExecuteTask
           </Flexbox>
         </Flexbox>
 
-        {/* Task content (read-only) */}
-        {args?.task && (
+        {/* Instruction content (read-only) */}
+        {args?.instruction && (
           <Text className={styles.taskContent} style={{ margin: 0 }}>
-            {args.task}
+            {args.instruction}
           </Text>
         )}
       </Flexbox>
