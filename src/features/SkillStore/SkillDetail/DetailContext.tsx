@@ -5,7 +5,11 @@ import type { Klavis } from 'klavis';
 import type React from 'react';
 import { createContext, useContext } from 'react';
 
+import { type DiscoverAssistantItem } from '@/types/discover';
+
 export interface DetailContextValue {
+  agents: DiscoverAssistantItem[];
+  agentsLoading: boolean;
   author: string;
   authorUrl?: string;
   config: KlavisServerType | LobehubSkillProviderType;

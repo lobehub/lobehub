@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useClientDataSWR } from '@/libs/swr';
+import { discoverService } from '@/services/discover';
 import { useToolStore } from '@/store/tool';
 import { lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
@@ -36,6 +38,12 @@ export const LobehubDetailProvider = ({ children, identifier }: LobehubDetailPro
   const useFetchProviderTools = useToolStore((s) => s.useFetchProviderTools);
   const { data: tools = [], isLoading: toolsLoading } = useFetchProviderTools(identifier);
 
+  // Fetch agents that use this skill
+  const { data: agentsData, isLoading: agentsLoading } = useClientDataSWR(
+    identifier ? ['skill-agents', identifier] : null,
+    () => discoverService.getAgentsByPlugin({ pageSize: 6, pluginId: identifier }),
+  );
+
   if (!config) return null;
 
   const { author, authorUrl, description, icon, introduction, label } = config;
@@ -48,6 +56,8 @@ export const LobehubDetailProvider = ({ children, identifier }: LobehubDetailPro
   });
 
   const value: DetailContextValue = {
+    agents: agentsData?.items || [],
+    agentsLoading,
     author,
     authorUrl,
     config,

@@ -6,6 +6,8 @@ import type { ReactNode } from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useClientDataSWR } from '@/libs/swr';
+import { discoverService } from '@/services/discover';
 import { useToolStore } from '@/store/tool';
 import { klavisStoreSelectors } from '@/store/tool/selectors';
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
@@ -42,6 +44,12 @@ export const KlavisDetailProvider = ({
   const useFetchServerTools = useToolStore((s) => s.useFetchServerTools);
   const { data: tools = [], isLoading: toolsLoading } = useFetchServerTools(serverName);
 
+  // Fetch agents that use this skill
+  const { data: agentsData, isLoading: agentsLoading } = useClientDataSWR(
+    identifier ? ['skill-agents', identifier] : null,
+    () => discoverService.getAgentsByPlugin({ pageSize: 6, pluginId: identifier }),
+  );
+
   if (!config) return null;
 
   const { author, authorUrl, description, icon, introduction, label } = config;
@@ -54,6 +62,8 @@ export const KlavisDetailProvider = ({
   });
 
   const value: DetailContextValue = {
+    agents: agentsData?.items || [],
+    agentsLoading,
     author,
     authorUrl,
     config,
