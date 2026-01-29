@@ -1,13 +1,20 @@
 'use client';
 
+import { ThreadStatus } from '@lobechat/types';
+import type { UIChatMessage } from '@lobechat/types';
 import { AccordionItem, Block } from '@lobehub/ui';
 import { memo, useMemo, useState } from 'react';
 
+import { useAgentGroupStore } from '@/store/agentGroup';
+import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 import { useChatStore } from '@/store/chat';
-import { ThreadStatus } from '@/types/index';
-import type { UIChatMessage } from '@/types/index';
 
-import { ErrorState, InitializingState, TaskMessages, isProcessingStatus } from '../shared';
+import {
+  ErrorState,
+  InitializingState,
+  TaskMessages,
+  isProcessingStatus,
+} from '../../Tasks/shared';
 import TaskTitle, { type TaskMetrics } from './TaskTitle';
 
 interface ServerTaskItemProps {
@@ -15,7 +22,7 @@ interface ServerTaskItemProps {
 }
 
 const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
-  const { id, metadata, taskDetail } = item;
+  const { id, agentId, metadata, taskDetail } = item;
   const [expanded, setExpanded] = useState(false);
 
   const title = taskDetail?.title || metadata?.taskTitle;
@@ -25,6 +32,14 @@ const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
   const isProcessing = isProcessingStatus(status);
   const isCompleted = status === ThreadStatus.Completed;
   const isError = status === ThreadStatus.Failed || status === ThreadStatus.Cancel;
+
+  // Get agent info from store
+  const activeGroupId = useAgentGroupStore(agentGroupSelectors.activeGroupId);
+  const agent = useAgentGroupStore((s) =>
+    activeGroupId && agentId
+      ? agentGroupSelectors.getAgentByIdFromGroup(activeGroupId, agentId)(s)
+      : null,
+  );
 
   // Get polling hook - poll for task status to get messages
   const [useEnablePollingTaskStatus, operations] = useChatStore((s) => [
@@ -97,7 +112,18 @@ const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
       onExpandChange={setExpanded}
       paddingBlock={4}
       paddingInline={4}
-      title={<TaskTitle metrics={metrics} status={status} title={title} />}
+      title={
+        <TaskTitle
+          agent={
+            agent
+              ? { avatar: agent.avatar || undefined, backgroundColor: agent.backgroundColor }
+              : undefined
+          }
+          metrics={metrics}
+          status={status}
+          title={title}
+        />
+      }
     >
       <Block gap={16} padding={12} style={{ marginBlock: 8 }} variant={'outlined'}>
         {renderContent()}
