@@ -232,14 +232,15 @@ describe('execAgent', () => {
         })
         .returning();
 
-      const [thread] = await serverDB
+      const threadResult = (await serverDB
         .insert(threads)
         .values({
           topicId: topic.id,
           type: 'standalone',
           userId,
         })
-        .returning();
+        .returning()) as { id: string }[];
+      const thread = threadResult[0];
 
       const caller = aiAgentRouter.createCaller(createTestContext());
 
