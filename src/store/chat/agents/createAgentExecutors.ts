@@ -688,7 +688,13 @@ export const createAgentExecutors = (context: {
       } catch (error) {
         log('[%s][call_tool] ERROR: Tool execution failed: %O', sessionLogId, error);
 
-        events.push({ error: error, type: 'error' });
+        events.push({
+          error: {
+            message: error instanceof Error ? error.message : String(error),
+            type: error instanceof Error ? error.name : 'UnknownError',
+          },
+          type: 'error',
+        });
 
         // Return current state on error (no state change)
         return { events, newState: state };

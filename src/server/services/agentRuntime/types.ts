@@ -110,7 +110,12 @@ export interface OperationStatusResult {
   currentState: {
     cost?: any;
     costLimit?: any;
-    error?: string;
+    /** Structured error information */
+    error?: {
+      body?: any;
+      message: string;
+      type?: string;
+    };
     interruption?: any;
     lastModified: string;
     maxSteps?: number;

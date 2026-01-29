@@ -112,11 +112,28 @@ export interface AgentState {
 
   // --- Metadata ---
   createdAt: string;
-  error?: any;
+  /**
+   * Error information when status is 'error'.
+   * Structured format compatible with ChatMessageError for serialization.
+   */
+  error?: AgentStateError;
   lastModified: string;
 
   // --- Extensible metadata ---
   metadata?: Record<string, any>;
+}
+
+/**
+ * Structured error type for AgentState.
+ * Compatible with ChatMessageError for consistent error handling across the system.
+ */
+export interface AgentStateError {
+  /** Detailed error body (e.g., API response, stack trace) */
+  body?: any;
+  /** Human-readable error message */
+  message: string;
+  /** Error type/category for classification */
+  type?: string;
 }
 
 /**

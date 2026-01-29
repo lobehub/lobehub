@@ -608,7 +608,10 @@ export const createRuntimeExecutors = (
       });
 
       events.push({
-        error: error,
+        error: {
+          message: error instanceof Error ? error.message : String(error),
+          type: error instanceof Error ? error.name : 'UnknownError',
+        },
         type: 'error',
       });
 
