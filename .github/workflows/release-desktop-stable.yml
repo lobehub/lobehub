@@ -316,7 +316,7 @@ jobs:
         run: ls -R release
 
       - name: Upload to Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           # 手动触发时使用输入的版本号创建 tag
           tag_name: ${{ github.event_name == 'workflow_dispatch' && format('v{0}', needs.check-stable.outputs.version) || github.event.release.tag_name }}
