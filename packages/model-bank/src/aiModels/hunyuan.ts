@@ -5,6 +5,45 @@ const hunyuanChatModels: AIChatModelCard[] = [
   {
     abilities: {
       reasoning: true,
+    },
+    contextWindowTokens: 128_000,
+    description:
+      'Model foundation upgraded from TurboS to Hunyuan 2.0, comprehensively enhancing model capabilities. Significantly strengthens complex instruction following, multi-turn and long-text understanding, code, Agent, and reasoning abilities.',
+    displayName: 'Tencent HY 2.0 Think',
+    enabled: true,
+    id: 'hunyuan-2.0-thinking-20251109',
+    maxOutput: 64_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-11-09',
+    type: 'chat',
+  },
+  {
+    contextWindowTokens: 128_000,
+    description:
+      'Model foundation upgraded from TurboS to Hunyuan 2.0, comprehensively enhancing model capabilities. Significantly strengthens instruction following, multi-turn and long-text understanding, literary creation, knowledge accuracy, code, and reasoning abilities.',
+    displayName: 'Tencent HY 2.0 Instruct',
+    enabled: true,
+    id: 'hunyuan-2.0-instruct-20251111',
+    maxOutput: 16_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-11-11',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      reasoning: true,
       search: true,
     },
     contextWindowTokens: 256_000,
@@ -14,6 +53,13 @@ const hunyuanChatModels: AIChatModelCard[] = [
     enabled: true,
     id: 'hunyuan-a13b',
     maxOutput: 32_000,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
     releasedAt: '2025-06-25',
     settings: {
       extendParams: ['enableReasoning'],
@@ -214,7 +260,6 @@ const hunyuanChatModels: AIChatModelCard[] = [
     description:
       'Hunyuan-large has ~389B total parameters and ~52B activated, the largest and strongest open MoE model in a Transformer architecture.',
     displayName: 'Hunyuan Large',
-    enabled: true,
     id: 'hunyuan-large',
     maxOutput: 4000,
     pricing: {
@@ -334,7 +379,6 @@ const hunyuanChatModels: AIChatModelCard[] = [
     description:
       'The latest Hunyuan TurboS flagship model with stronger reasoning and a better overall experience.',
     displayName: 'Hunyuan TurboS',
-    enabled: true,
     id: 'hunyuan-turbos-latest',
     maxOutput: 16_000,
     pricing: {
@@ -452,8 +496,8 @@ const hunyuanChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 24_000,
     description:
-      '基于文本 TurboS 基座生产的图生文快思考模型，相比上一版本在图像基础识别、图像分析推理等维度都有明显的效果提升。',
-    displayName: '混元图生文',
+      'An image-to-text fast thinking model based on the text TurboS foundation, with significant improvements in basic image recognition and image analysis reasoning compared to the previous version.',
+    displayName: 'Hunyuan Vision 1.5 Instruct',
     id: 'hunyuan-vision-1.5-instruct',
     maxOutput: 16_000,
     pricing: {
@@ -484,7 +528,8 @@ const hunyuanChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 8000,
-    description: 'Latest multimodal model with multilingual responses and balanced Chinese/English ability.',
+    description:
+      'Latest multimodal model with multilingual responses and balanced Chinese/English ability.',
     displayName: 'Hunyuan Standard Vision',
     id: 'hunyuan-standard-vision',
     maxOutput: 2000,

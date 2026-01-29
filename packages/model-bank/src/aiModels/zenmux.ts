@@ -110,27 +110,6 @@ const zenmuxChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-      imageOutput: true,
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 65_536,
-    description: 'Gemini 3 Pro Image free tier with limited-quota multimodal generation.',
-    displayName: 'Gemini 3 Pro Image (Nano Banana) Free',
-    enabled: true,
-    id: 'google/gemini-3-pro-image-preview-free',
-    maxOutput: 32_768,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       reasoning: true,
       vision: true,
     },
@@ -147,33 +126,6 @@ const zenmuxChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-11-20',
-    settings: {
-      extendParams: ['thinkingLevel2', 'urlContext'],
-      searchImpl: 'params',
-      searchProvider: 'google',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_050_000,
-    description:
-      'Gemini 3 Pro Preview Free offers the same multimodal understanding and reasoning as the standard version, but with quota and rate limits, making it better for trials and low-frequency use.',
-    displayName: 'Gemini 3 Pro Preview Free',
-    enabled: true,
-    id: 'google/gemini-3-pro-preview-free',
-    maxOutput: 65_530,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
     settings: {
       extendParams: ['thinkingLevel2', 'urlContext'],
       searchImpl: 'params',
@@ -651,7 +603,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      reasoning: true,
+      functionCall: true,
     },
     contextWindowTokens: 128_000,
     description:
@@ -739,33 +691,7 @@ const zenmuxChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 1_050_000,
     description:
-      'Gemini 2.5 Pro free tier offers limited-quota multimodal long-context, suitable for trials and light workflows.',
-    displayName: 'Gemini 2.5 Pro Free',
-    id: 'google/gemini-2.5-pro-free',
-    maxOutput: 65_530,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['thinkingBudget', 'urlContext'],
-      searchImpl: 'params',
-      searchProvider: 'google',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      search: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_050_000,
-    description:
-      'Gemini 2.5 Flash (Lite/Pro/Flash) is Google’s family spanning low latency to high-performance reasoning.',
+      "The Gemini 2.5 Flash (Lite/Pro/Flash) series are Google's medium-to-low latency to high-performance reasoning models.",
     displayName: 'Gemini 2.5 Flash',
     id: 'google/gemini-2.5-flash',
     maxOutput: 65_530,
@@ -1191,26 +1117,6 @@ const zenmuxChatModels: AIChatModelCard[] = [
         { name: 'imageOutput', rate: 30, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      imageOutput: true,
-      reasoning: true,
-      vision: true,
-    },
-    contextWindowTokens: 32_768,
-    description: 'Gemini 2.5 Flash Image free tier with limited-quota multimodal generation.',
-    displayName: 'Gemini 2.5 Flash Image (Nano Banana) Free',
-    id: 'google/gemini-2.5-flash-image-free',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',

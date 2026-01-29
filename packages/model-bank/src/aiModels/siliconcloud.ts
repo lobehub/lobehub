@@ -5,6 +5,73 @@ const siliconcloudChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'GLM-4.6V achieves SOTA visual understanding accuracy at the same parameter scale and for the first time integrates Function Call (tool calling) capabilities natively into the visual model architecture, opening the path from "visual perception" to "executable actions", providing a unified technical foundation for multimodal Agents in real business scenarios.',
+    displayName: 'GLM-4.6V',
+    id: 'zai-org/GLM-4.6V',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-08',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 163_840,
+    description:
+      "DeepSeek-V3.2 is a model that combines high computational efficiency with excellent reasoning and Agent performance. Its approach is based on three major technological breakthroughs: DeepSeek Sparse Attention (DSA), an efficient attention mechanism that significantly reduces computational complexity while maintaining model performance, and is specifically optimized for long-context scenarios; a scalable reinforcement learning framework, through which the model's performance can rival GPT-5, and its high-compute version can rival Gemini-3.0-Pro in reasoning capabilities; and a large-scale Agent task synthesis pipeline, designed to integrate reasoning capabilities into tool-using scenarios, thereby improving instruction-following and generalization abilities in complex interactive environments. The model achieved gold medal results in the 2025 International Mathematical Olympiad (IMO) and International Informatics Olympiad (IOI).",
+    displayName: 'DeepSeek V3.2',
+    enabled: true,
+    id: 'deepseek-ai/DeepSeek-V3.2',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-01',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      reasoning: true,
+    },
+    contextWindowTokens: 163_840,
+    description:
+      'DeepSeek-V3.2 is a model that combines high computational efficiency with excellent reasoning and Agent performance. Its approach is built on three key technological breakthroughs: DeepSeek Sparse Attention (DSA), an efficient attention mechanism that significantly reduces computational complexity while maintaining model performance, and is specifically optimized for long-context scenarios; a scalable reinforcement learning framework through which model performance can rival GPT-5, with its high-compute version matching Gemini-3.0-Pro in reasoning capabilities; and a large-scale Agent task synthesis pipeline aimed at integrating reasoning capabilities into tool use scenarios, thereby improving instruction following and generalization in complex interactive environments. The model achieved gold medal performance in the 2025 International Mathematical Olympiad (IMO) and International Olympiad in Informatics (IOI).',
+    displayName: 'DeepSeek V3.2 (Pro)',
+    id: 'Pro/deepseek-ai/DeepSeek-V3.2',
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-12-01',
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 200_000,
@@ -69,7 +136,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 262_144,
     description:
-      "Kimi K2 Thinking is the latest and most powerful open-source thinking model. It greatly extends multi-step reasoning depth and sustains stable tool use across 200–300 consecutive calls, setting new records on Humanity's Last Exam (HLE), BrowseComp, and other benchmarks. It excels in coding, math, logic, and agent scenarios. Built on an MoE architecture with ~1T total parameters, it supports a 256K context window and tool calling.",
+      "Kimi K2 Thinking is the latest and most powerful open-source thinking model. It greatly extends multi-step reasoning depth and sustains stable tool use across 200–300 consecutive calls, setting new records on Humanity's Last Exam (HLE), BrowseComp, and other benchmarks. 'It excels in coding, math, logic, and agent scenarios. Built on an MoE architecture with ~1T total parameters, it supports a 256K context window and tool calling.",
     displayName: 'Kimi K2 Thinking',
     id: 'moonshotai/Kimi-K2-Thinking',
     pricing: {
@@ -113,7 +180,7 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
     },
-    contextWindowTokens: 128_000,
+    contextWindowTokens: 131_072,
     description:
       'MiniMax-M2 redefines agent efficiency. It is a compact, fast, cost-effective MoE model with 230B total and 10B active parameters, built for top-tier coding and agent tasks while retaining strong general intelligence. With only 10B active parameters, it rivals much larger models, making it ideal for high-efficiency applications.',
     displayName: 'MiniMax-M2',
@@ -437,55 +504,8 @@ const siliconcloudChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 163_840,
     description:
-      'DeepSeek-V3.2-Exp is an experimental V3.2 release bridging to the next architecture. It adds DeepSeek Sparse Attention (DSA) on top of V3.1-Terminus to improve long-context training and inference efficiency, with optimizations for tool use, long-document understanding, and multi-step reasoning. It is ideal for exploring higher reasoning efficiency with large context budgets.',
-    displayName: 'DeepSeek V3.2 Exp',
-    id: 'deepseek-ai/DeepSeek-V3.2-Exp',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-29',
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 163_840,
-    description:
-      'DeepSeek-V3.2-Exp is an experimental V3.2 release bridging to the next architecture. It adds DeepSeek Sparse Attention (DSA) on top of V3.1-Terminus to improve long-context training and inference efficiency, with optimizations for tool use, long-document understanding, and multi-step reasoning. It is ideal for exploring higher reasoning efficiency with large context budgets.',
-    displayName: 'DeepSeek V3.2 Exp (Pro)',
-    id: 'Pro/deepseek-ai/DeepSeek-V3.2-Exp',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-09-29',
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 163_840,
-    description:
-      'DeepSeek-V3.1-Terminus is an updated V3.1 model positioned as a hybrid agent LLM. It fixes user-reported issues and improves stability, language consistency, and reduces mixed Chinese/English and abnormal characters. It integrates Thinking and Non-thinking modes with chat templates for flexible switching. It also improves Code Agent and Search Agent performance for more reliable tool use and multi-step tasks.',
+      'DeepSeek-V3.1-Terminus is an updated version of the V3.1 model released by DeepSeek, positioned as a hybrid agent large language model. This update focuses on fixing user-reported issues and improving stability while maintaining the model\'s original capabilities. It significantly improves language consistency, reduces mixed Chinese/English and abnormal characters. The model integrates "Thinking Mode" and "Non-thinking Mode", allowing users to flexibly switch via chat templates to adapt to different tasks. As an important optimization, V3.1-Terminus enhances the performance of Code Agent and Search Agent, making them more reliable in tool calling and executing multi-step complex tasks.',
     displayName: 'DeepSeek V3.1 Terminus',
-    enabled: true,
     id: 'deepseek-ai/DeepSeek-V3.1-Terminus',
     pricing: {
       currency: 'CNY',
@@ -729,29 +749,6 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-08-11',
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'GLM-4.5 is a base model built for agent applications using a Mixture-of-Experts architecture. It is deeply optimized for tool use, web browsing, software engineering, and frontend coding, and integrates with code agents like Claude Code and Roo Code. It uses hybrid reasoning to handle both complex reasoning and everyday scenarios.',
-    displayName: 'GLM-4.5',
-    id: 'zai-org/GLM-4.5',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 3.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 14, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-07-28',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
@@ -1027,30 +1024,6 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2025-07-29',
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Qwen3 is a next-gen Tongyi Qwen model with major gains in reasoning, general ability, agent capability, and multilingual performance, and supports switching thinking modes.',
-    displayName: 'Qwen3 235B A22B',
-    id: 'Qwen/Qwen3-235B-A22B',
-    organization: 'Qwen',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-04-28',
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-    },
     type: 'chat',
   },
   {

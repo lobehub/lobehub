@@ -167,19 +167,6 @@ const groqChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    contextWindowTokens: 32_768,
-    displayName: 'Mistral Saba 24B',
-    id: 'mistral-saba-24b',
-    maxOutput: 32_768,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.79, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.79, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
     contextWindowTokens: 131_072,
     displayName: 'Llama Guard 4 12B',
     id: 'meta-llama/llama-guard-4-12b',

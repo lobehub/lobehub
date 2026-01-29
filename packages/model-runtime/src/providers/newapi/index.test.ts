@@ -16,8 +16,8 @@ vi.spyOn(console, 'debug').mockImplementation(() => {});
 
 // Type definitions for test data
 interface MockPricingResponse {
-  success?: boolean;
   data?: NewAPIPricing[];
+  success?: boolean;
 }
 
 describe('NewAPI Runtime - 100% Branch Coverage', () => {
@@ -79,8 +79,8 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       testResponsesAPIModels = new Set(['o1-pro']);
 
       const payload: ChatStreamPayload = {
+        messages: [{ content: 'test', role: 'user' }],
         model: 'o1-pro',
-        messages: [{ role: 'user', content: 'test' }],
         temperature: 0.5,
       };
 
@@ -93,8 +93,8 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       testResponsesAPIModels = new Set(); // Empty set to test gpt- logic
 
       const payload: ChatStreamPayload = {
+        messages: [{ content: 'test', role: 'user' }],
         model: 'gpt-4o',
-        messages: [{ role: 'user', content: 'test' }],
         temperature: 0.5,
       };
 
@@ -107,8 +107,8 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       testResponsesAPIModels = new Set(); // Empty set to test o-series logic
 
       const payload: ChatStreamPayload = {
+        messages: [{ content: 'test', role: 'user' }],
         model: 'o1-mini',
-        messages: [{ role: 'user', content: 'test' }],
         temperature: 0.5,
       };
 
@@ -121,8 +121,8 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       testResponsesAPIModels = new Set(); // Empty set to test o3 logic
 
       const payload: ChatStreamPayload = {
+        messages: [{ content: 'test', role: 'user' }],
         model: 'o3-turbo',
-        messages: [{ role: 'user', content: 'test' }],
         temperature: 0.5,
       };
 
@@ -135,8 +135,8 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       testResponsesAPIModels = new Set(); // Empty set to test fallback logic
 
       const payload: ChatStreamPayload = {
+        messages: [{ content: 'test', role: 'user' }],
         model: 'claude-3-sonnet',
-        messages: [{ role: 'user', content: 'test' }],
         temperature: 0.5,
       };
 
@@ -222,7 +222,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       });
 
       it('should handle valid data from models.list (Branch 3.1: data exists)', () => {
-        const data = [{ id: 'test-model', object: 'model', created: 123, owned_by: 'openai' }];
+        const data = [{ created: 123, id: 'test-model', object: 'model', owned_by: 'openai' }];
         const modelList = data || [];
         expect(modelList).toEqual(data);
       });
@@ -253,7 +253,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     describe('Pricing Data Validation Branches', () => {
       it('should handle pricingData.success = false (Branch 3.3)', () => {
-        const pricingData = { success: false, data: [] };
+        const pricingData = { data: [], success: false };
         const shouldProcess = pricingData.success && pricingData.data;
         expect(shouldProcess).toBeFalsy();
       });
@@ -265,7 +265,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       });
 
       it('should process valid pricing data (Branch 3.5: success && data = true)', () => {
-        const pricingData = { success: true, data: [{ model_name: 'test' }] };
+        const pricingData = { data: [{ model_name: 'test' }], success: true };
         const shouldProcess = pricingData.success && pricingData.data;
         expect(shouldProcess).toBeTruthy();
       });
@@ -279,13 +279,13 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       });
 
       it('should skip quota_type = 1 (Branch 3.7: quota_type !== 0)', () => {
-        const pricing = { quota_type: 1, model_price: 10 };
+        const pricing = { model_price: 10, quota_type: 1 };
         const shouldProcess = pricing.quota_type === 0;
         expect(shouldProcess).toBe(false);
       });
 
       it('should process quota_type = 0 (Branch 3.7: quota_type === 0)', () => {
-        const pricing = { quota_type: 0, model_price: 10 };
+        const pricing = { model_price: 10, quota_type: 0 };
         const shouldProcess = pricing.quota_type === 0;
         expect(shouldProcess).toBe(true);
       });
@@ -359,10 +359,12 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
         const model = { supported_endpoint_types: ['anthropic'] };
         let detectedProvider = 'openai';
 
-        if (model.supported_endpoint_types && model.supported_endpoint_types.length > 0) {
-          if (model.supported_endpoint_types.includes('anthropic')) {
-            detectedProvider = 'anthropic';
-          }
+        if (
+          model.supported_endpoint_types &&
+          model.supported_endpoint_types.length > 0 &&
+          model.supported_endpoint_types.includes('anthropic')
+        ) {
+          detectedProvider = 'anthropic';
         }
 
         expect(detectedProvider).toBe('anthropic');
@@ -372,10 +374,12 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
         const model = { supported_endpoint_types: ['gemini'] };
         let detectedProvider = 'openai';
 
-        if (model.supported_endpoint_types && model.supported_endpoint_types.length > 0) {
-          if (model.supported_endpoint_types.includes('gemini')) {
-            detectedProvider = 'google';
-          }
+        if (
+          model.supported_endpoint_types &&
+          model.supported_endpoint_types.length > 0 &&
+          model.supported_endpoint_types.includes('gemini')
+        ) {
+          detectedProvider = 'google';
         }
 
         expect(detectedProvider).toBe('google');
@@ -385,10 +389,12 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
         const model = { supported_endpoint_types: ['xai'] };
         let detectedProvider = 'openai';
 
-        if (model.supported_endpoint_types && model.supported_endpoint_types.length > 0) {
-          if (model.supported_endpoint_types.includes('xai')) {
-            detectedProvider = 'xai';
-          }
+        if (
+          model.supported_endpoint_types &&
+          model.supported_endpoint_types.length > 0 &&
+          model.supported_endpoint_types.includes('xai')
+        ) {
+          detectedProvider = 'xai';
         }
 
         expect(detectedProvider).toBe('xai');
@@ -396,8 +402,8 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
       it('should fallback to owned_by when supported_endpoint_types is empty (Branch 3.11: length > 0 = false, Branch 3.15: owned_by = true)', () => {
         const model: Partial<NewAPIModelCard> = {
-          supported_endpoint_types: [],
           owned_by: 'anthropic',
+          supported_endpoint_types: [],
         };
         let detectedProvider = 'openai';
 
@@ -443,9 +449,9 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
       it('should cleanup _detectedProvider field (Branch 3.16: _detectedProvider exists = true)', () => {
         const model: any = {
-          id: 'test-model',
-          displayName: 'Test Model',
           _detectedProvider: 'openai',
+          displayName: 'Test Model',
+          id: 'test-model',
         };
 
         if (model._detectedProvider) {
@@ -457,8 +463,8 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
       it('should skip cleanup when no _detectedProvider field (Branch 3.16: _detectedProvider exists = false)', () => {
         const model: any = {
-          id: 'test-model',
           displayName: 'Test Model',
+          id: 'test-model',
         };
 
         const hadDetectedProvider = '_detectedProvider' in model;
@@ -474,13 +480,13 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
     describe('URL Processing Branch Coverage', () => {
       it('should remove trailing API version paths from baseURL', () => {
         const testURLs = [
-          { input: 'https://api.newapi.com/v1', expected: 'https://api.newapi.com' },
-          { input: 'https://api.newapi.com/v1/', expected: 'https://api.newapi.com' },
-          { input: 'https://api.newapi.com/v1beta', expected: 'https://api.newapi.com' },
-          { input: 'https://api.newapi.com/v1beta/', expected: 'https://api.newapi.com' },
-          { input: 'https://api.newapi.com/v2', expected: 'https://api.newapi.com' },
-          { input: 'https://api.newapi.com/v1alpha', expected: 'https://api.newapi.com' },
-          { input: 'https://api.newapi.com', expected: 'https://api.newapi.com' },
+          { expected: 'https://api.newapi.com', input: 'https://api.newapi.com/v1' },
+          { expected: 'https://api.newapi.com', input: 'https://api.newapi.com/v1/' },
+          { expected: 'https://api.newapi.com', input: 'https://api.newapi.com/v1beta' },
+          { expected: 'https://api.newapi.com', input: 'https://api.newapi.com/v1beta/' },
+          { expected: 'https://api.newapi.com', input: 'https://api.newapi.com/v2' },
+          { expected: 'https://api.newapi.com', input: 'https://api.newapi.com/v1alpha' },
+          { expected: 'https://api.newapi.com', input: 'https://api.newapi.com' },
         ];
 
         testURLs.forEach(({ input, expected }) => {
@@ -499,20 +505,20 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     it('should validate NewAPI type definitions', () => {
       const mockModel: NewAPIModelCard = {
+        created: 1_234_567_890,
         id: 'test-model',
         object: 'model',
-        created: 1234567890,
         owned_by: 'openai',
         supported_endpoint_types: ['openai'],
       };
 
       const mockPricing: NewAPIPricing = {
-        model_name: 'test-model',
-        quota_type: 0,
-        model_price: 10,
-        model_ratio: 5,
         completion_ratio: 1.5,
         enable_groups: ['default'],
+        model_name: 'test-model',
+        model_price: 10,
+        model_ratio: 5,
+        quota_type: 0,
         supported_endpoint_types: ['openai'],
       };
 
@@ -540,9 +546,9 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       ];
 
       const pricingData = [
-        { model_name: 'anthropic-claude', quota_type: 0, model_price: 20, completion_ratio: 3 },
-        { model_name: 'google-gemini', quota_type: 0, model_ratio: 5 },
-        { model_name: 'openai-gpt4', quota_type: 1, model_price: 30 }, // Should be skipped
+        { completion_ratio: 3, model_name: 'anthropic-claude', model_price: 20, quota_type: 0 },
+        { model_name: 'google-gemini', model_ratio: 5, quota_type: 0 },
+        { model_name: 'openai-gpt4', model_price: 30, quota_type: 1 }, // Should be skipped
       ];
 
       const pricingMap = new Map(pricingData.map((p) => [p.model_name, p]));
@@ -567,15 +573,15 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
               units: [
                 {
                   name: 'textInput',
-                  unit: 'millionTokens',
-                  strategy: 'fixed',
                   rate: inputPrice,
+                  strategy: 'fixed',
+                  unit: 'millionTokens',
                 },
                 {
                   name: 'textOutput',
-                  unit: 'millionTokens',
-                  strategy: 'fixed',
                   rate: outputPrice,
+                  strategy: 'fixed',
+                  unit: 'millionTokens',
                 },
               ],
             };
@@ -599,14 +605,14 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       // Verify pricing results
       expect(enrichedModels[0].pricing).toEqual({
         units: [
-          { name: 'textInput', unit: 'millionTokens', strategy: 'fixed', rate: 40 },
-          { name: 'textOutput', unit: 'millionTokens', strategy: 'fixed', rate: 120 },
+          { name: 'textInput', rate: 40, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
         ],
       }); // model_price * 2, input * completion_ratio
       expect(enrichedModels[1].pricing).toEqual({
         units: [
-          { name: 'textInput', unit: 'millionTokens', strategy: 'fixed', rate: 10 },
-          { name: 'textOutput', unit: 'millionTokens', strategy: 'fixed', rate: 10 },
+          { name: 'textInput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+          { name: 'textOutput', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
         ],
       }); // model_ratio * 2, input * 1 (default)
       expect(enrichedModels[2].pricing).toBeUndefined(); // quota_type = 1, skipped
@@ -814,15 +820,15 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     it('should fetch models and process with processMultiProviderModelList', async () => {
       const mockClient = {
-        baseURL: 'https://api.newapi.com/v1',
         apiKey: 'test-key',
+        baseURL: 'https://api.newapi.com/v1',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [
               {
+                created: 123,
                 id: 'test-model',
                 object: 'model',
-                created: 123,
                 owned_by: 'openai',
               },
             ],
@@ -836,8 +842,8 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
       mockProcessMultiProviderModelList.mockReturnValue([
         {
-          id: 'test-model',
           displayName: 'Test Model',
+          id: 'test-model',
         },
       ]);
 
@@ -857,15 +863,15 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     it('should handle successful pricing fetch and enrich models', async () => {
       const mockClient = {
-        baseURL: 'https://api.newapi.com/v1',
         apiKey: 'test-key',
+        baseURL: 'https://api.newapi.com/v1',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [
               {
+                created: 123,
                 id: 'test-model',
                 object: 'model',
-                created: 123,
                 owned_by: 'openai',
               },
             ],
@@ -874,19 +880,19 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       };
 
       mockFetch.mockResolvedValue({
-        ok: true,
         json: async () => ({
-          success: true,
           data: [
             {
-              model_name: 'test-model',
-              quota_type: 0,
-              model_price: 10,
               completion_ratio: 1.5,
               enable_groups: ['default'],
+              model_name: 'test-model',
+              model_price: 10,
+              quota_type: 0,
             },
           ],
+          success: true,
         }),
+        ok: true,
       });
 
       mockProcessMultiProviderModelList.mockImplementation((models) => models);
@@ -895,6 +901,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
       expect(mockFetch).toHaveBeenCalledWith('https://api.newapi.com/api/pricing', {
         headers: {
+          Accept: 'application/json; charset=utf-8',
           Authorization: 'Bearer test-key',
         },
       });
@@ -919,15 +926,15 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     it('should handle pricing fetch with model_ratio instead of model_price', async () => {
       const mockClient = {
-        baseURL: 'https://api.newapi.com/v1',
         apiKey: 'test-key',
+        baseURL: 'https://api.newapi.com/v1',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [
               {
+                created: 123,
                 id: 'test-model',
                 object: 'model',
-                created: 123,
                 owned_by: 'openai',
               },
             ],
@@ -936,18 +943,18 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       };
 
       mockFetch.mockResolvedValue({
-        ok: true,
         json: async () => ({
-          success: true,
           data: [
             {
-              model_name: 'test-model',
-              quota_type: 0,
-              model_ratio: 5,
               enable_groups: ['default'],
+              model_name: 'test-model',
+              model_ratio: 5,
+              quota_type: 0,
             },
           ],
+          success: true,
         }),
+        ok: true,
       });
 
       mockProcessMultiProviderModelList.mockImplementation((models) => models);
@@ -974,15 +981,15 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     it('should skip pricing for quota_type = 1 (pay-per-call)', async () => {
       const mockClient = {
-        baseURL: 'https://api.newapi.com/v1',
         apiKey: 'test-key',
+        baseURL: 'https://api.newapi.com/v1',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [
               {
+                created: 123,
                 id: 'test-model',
                 object: 'model',
-                created: 123,
                 owned_by: 'openai',
               },
             ],
@@ -991,18 +998,20 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       };
 
       mockFetch.mockResolvedValue({
-        ok: true,
         json: async () => ({
-          success: true,
           data: [
             {
-              model_name: 'test-model',
-              quota_type: 1, // Pay-per-call, not supported
-              model_price: 10,
               enable_groups: ['default'],
+
+              model_name: 'test-model',
+              // Pay-per-call, not supported
+              model_price: 10,
+              quota_type: 1,
             },
           ],
+          success: true,
         }),
+        ok: true,
       });
 
       mockProcessMultiProviderModelList.mockImplementation((models) => models);
@@ -1014,15 +1023,15 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     it('should handle pricing fetch failure gracefully', async () => {
       const mockClient = {
-        baseURL: 'https://api.newapi.com/v1',
         apiKey: 'test-key',
+        baseURL: 'https://api.newapi.com/v1',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [
               {
+                created: 123,
                 id: 'test-model',
                 object: 'model',
-                created: 123,
                 owned_by: 'openai',
               },
             ],
@@ -1043,15 +1052,15 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     it('should handle pricing fetch network error gracefully', async () => {
       const mockClient = {
-        baseURL: 'https://api.newapi.com/v1',
         apiKey: 'test-key',
+        baseURL: 'https://api.newapi.com/v1',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [
               {
+                created: 123,
                 id: 'test-model',
                 object: 'model',
-                created: 123,
                 owned_by: 'openai',
               },
             ],
@@ -1074,15 +1083,15 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     it('should handle pricing data with success=false', async () => {
       const mockClient = {
-        baseURL: 'https://api.newapi.com/v1',
         apiKey: 'test-key',
+        baseURL: 'https://api.newapi.com/v1',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [
               {
+                created: 123,
                 id: 'test-model',
                 object: 'model',
-                created: 123,
                 owned_by: 'openai',
               },
             ],
@@ -1091,11 +1100,11 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       };
 
       mockFetch.mockResolvedValue({
-        ok: true,
         json: async () => ({
-          success: false,
           data: [],
+          success: false,
         }),
+        ok: true,
       });
 
       mockProcessMultiProviderModelList.mockImplementation((models) => models);
@@ -1107,15 +1116,15 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     it('should handle pricing data with missing data field', async () => {
       const mockClient = {
-        baseURL: 'https://api.newapi.com/v1',
         apiKey: 'test-key',
+        baseURL: 'https://api.newapi.com/v1',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [
               {
+                created: 123,
                 id: 'test-model',
                 object: 'model',
-                created: 123,
                 owned_by: 'openai',
               },
             ],
@@ -1124,11 +1133,11 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       };
 
       mockFetch.mockResolvedValue({
-        ok: true,
         json: async () => ({
           success: true,
           // Missing data field
         }),
+        ok: true,
       });
 
       mockProcessMultiProviderModelList.mockImplementation((models) => models);
@@ -1140,8 +1149,8 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     it('should handle empty model list', async () => {
       const mockClient = {
-        baseURL: 'https://api.newapi.com/v1',
         apiKey: 'test-key',
+        baseURL: 'https://api.newapi.com/v1',
         models: {
           list: vi.fn().mockResolvedValue({
             data: [],
@@ -1162,8 +1171,8 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     it('should handle undefined model data', async () => {
       const mockClient = {
-        baseURL: 'https://api.newapi.com/v1',
         apiKey: 'test-key',
+        baseURL: 'https://api.newapi.com/v1',
         models: {
           list: vi.fn().mockResolvedValue({
             data: undefined,
@@ -1185,17 +1194,17 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
 
     it('should strip version paths from baseURL correctly', async () => {
       const testCases = [
-        { input: 'https://api.com/v1', expected: 'https://api.com' },
-        { input: 'https://api.com/v1/', expected: 'https://api.com' },
-        { input: 'https://api.com/v1beta', expected: 'https://api.com' },
-        { input: 'https://api.com/v2alpha/', expected: 'https://api.com' },
-        { input: 'https://api.com', expected: 'https://api.com' },
+        { expected: 'https://api.com', input: 'https://api.com/v1' },
+        { expected: 'https://api.com', input: 'https://api.com/v1/' },
+        { expected: 'https://api.com', input: 'https://api.com/v1beta' },
+        { expected: 'https://api.com', input: 'https://api.com/v2alpha/' },
+        { expected: 'https://api.com', input: 'https://api.com' },
       ];
 
       for (const testCase of testCases) {
         const mockClient = {
-          baseURL: testCase.input,
           apiKey: 'test-key',
+          baseURL: testCase.input,
           models: {
             list: vi.fn().mockResolvedValue({ data: [] }),
           },
@@ -1213,6 +1222,188 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
           );
         }
       }
+    });
+
+    it('should add models from pricing list that are not in models list', async () => {
+      const mockClient = {
+        apiKey: 'test-key',
+        baseURL: 'https://api.newapi.com/v1',
+        models: {
+          list: vi.fn().mockResolvedValue({
+            data: [
+              {
+                created: 123,
+                id: 'model-a',
+                object: 'model',
+                owned_by: 'openai',
+              },
+            ],
+          }),
+        },
+      };
+
+      mockFetch.mockResolvedValue({
+        json: async () => ({
+          data: [
+            {
+              enable_groups: ['default'],
+              model_name: 'model-a',
+              model_price: 10,
+              quota_type: 0,
+            },
+            {
+              completion_ratio: 2,
+              enable_groups: ['default'],
+
+              model_name: 'model-b',
+
+              model_price: 20,
+              // Only in pricing, not in models
+              quota_type: 0,
+            },
+          ],
+          success: true,
+        }),
+        ok: true,
+      });
+
+      mockProcessMultiProviderModelList.mockImplementation((models) => models);
+
+      const result = await params.models({ client: mockClient as any });
+
+      // Should have 2 models: model-a from /v1/models and model-b from pricing
+      expect(result).toHaveLength(2);
+      expect(result.find((m: any) => m.id === 'model-a')).toBeDefined();
+      expect(result.find((m: any) => m.id === 'model-b')).toBeDefined();
+
+      // model-b should have pricing info
+      const modelB = result.find((m: any) => m.id === 'model-b') as any;
+      expect(modelB).toBeDefined();
+      expect(modelB.pricing).toEqual({
+        units: [
+          {
+            name: 'textInput',
+            rate: 40, // model_price * 2
+            strategy: 'fixed',
+            unit: 'millionTokens',
+          },
+          {
+            name: 'textOutput',
+            rate: 80, // 40 * 2
+            strategy: 'fixed',
+            unit: 'millionTokens',
+          },
+        ],
+      });
+    });
+
+    it('should not duplicate models that exist in both lists', async () => {
+      const mockClient = {
+        apiKey: 'test-key',
+        baseURL: 'https://api.newapi.com/v1',
+        models: {
+          list: vi.fn().mockResolvedValue({
+            data: [
+              {
+                created: 123,
+                id: 'model-a',
+                object: 'model',
+                owned_by: 'openai',
+              },
+            ],
+          }),
+        },
+      };
+
+      mockFetch.mockResolvedValue({
+        json: async () => ({
+          data: [
+            {
+              enable_groups: ['default'],
+              model_name: 'model-a',
+
+              model_price: 10,
+              // Same as in models list
+              quota_type: 0,
+            },
+          ],
+          success: true,
+        }),
+        ok: true,
+      });
+
+      mockProcessMultiProviderModelList.mockImplementation((models) => models);
+
+      const result = await params.models({ client: mockClient as any });
+
+      // Should have only 1 model, not duplicated
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('model-a');
+    });
+
+    it('should verify that additionalModels get processed with displayName and type through processMultiProviderModelList', async () => {
+      const mockClient = {
+        apiKey: 'test-key',
+        baseURL: 'https://api.newapi.com/v1',
+        models: {
+          list: vi.fn().mockResolvedValue({
+            data: [],
+          }),
+        },
+      };
+
+      mockFetch.mockResolvedValue({
+        json: async () => ({
+          data: [
+            {
+              enable_groups: ['default'],
+              model_name: 'new-model-from-pricing',
+              model_price: 15,
+              quota_type: 0,
+            },
+          ],
+          success: true,
+        }),
+        ok: true,
+      });
+
+      // Mock processMultiProviderModelList to simulate the real behavior of adding displayName and type
+      mockProcessMultiProviderModelList.mockImplementation((models) =>
+        models.map((m: any) => ({
+          ...m,
+          displayName: m.displayName || m.id, // processModelCard adds displayName
+          enabled: m.enabled || false,
+          type: m.type || 'chat', // processModelCard adds type
+        })),
+      );
+
+      const result = await params.models({ client: mockClient as any });
+
+      // Verify the model was added from pricing
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('new-model-from-pricing');
+
+      // Verify that processMultiProviderModelList was called with the additionalModels
+      expect(mockProcessMultiProviderModelList).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'new-model-from-pricing',
+            pricing: expect.objectContaining({
+              units: expect.arrayContaining([
+                expect.objectContaining({ name: 'textInput' }),
+                expect.objectContaining({ name: 'textOutput' }),
+              ]),
+            }),
+          }),
+        ]),
+        'newapi',
+      );
+
+      // Verify that after processing, the model has the required fields
+      expect(result[0]).toHaveProperty('displayName');
+      expect(result[0]).toHaveProperty('type');
+      expect(result[0].displayName).toBe('new-model-from-pricing'); // Falls back to id
+      expect(result[0].type).toBe('chat'); // Default type
     });
   });
 
