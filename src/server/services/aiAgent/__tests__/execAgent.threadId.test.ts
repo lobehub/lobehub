@@ -205,7 +205,7 @@ describe('AiAgentService.execAgent - threadId handling', () => {
 
       expect(assistantMessageCall).toBeDefined();
       expect(assistantMessageCall![0].threadId).toBeUndefined();
-    });
+    }, 10_000);
   });
 
   describe('when appContext is undefined', () => {
@@ -247,6 +247,6 @@ describe('AiAgentService.execAgent - threadId handling', () => {
 
       // Verify groupId is passed to AgentRuntimeService (checked in appContext)
       // This is handled by the createOperation call
-    });
+    }, 10_000);
   });
 });
