@@ -4,14 +4,12 @@ import { Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { useSessionStore } from '@/store/session';
-import { sessionSelectors } from '@/store/session/selectors';
+import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 
 import Avatar from './Avatar';
 
 const HeaderInfo = memo(() => {
-  const isInbox = useSessionStore(sessionSelectors.isInboxSession);
+  const isInbox = useAgentStore(builtinAgentSelectors.isInboxAgent);
   const title = useAgentStore(agentSelectors.currentAgentTitle);
 
   const displayTitle = isInbox ? 'Lobe AI' : title;
