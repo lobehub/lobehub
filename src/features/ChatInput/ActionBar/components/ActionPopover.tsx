@@ -2,8 +2,9 @@
 
 import { Flexbox, Popover, type PopoverProps } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { type ReactNode, memo } from 'react';
+import { type ReactNode, Suspense, memo } from 'react';
 
+import DebugNode from '@/components/DebugNode';
 import UpdateLoading from '@/components/Loading/UpdateLoading';
 import { useIsMobile } from '@/hooks/useIsMobile';
 
@@ -65,16 +66,18 @@ const ActionPopover = memo<ActionPopoverProps>(
 
     // Compose content with optional title
     const popoverContent = (
-      <>
-        {title && (
-          <Flexbox gap={8} horizontal justify={'space-between'} style={{ marginBottom: 16 }}>
-            {title}
-            {extra}
-            {loading && <UpdateLoading style={{ color: cssVar.colorTextSecondary }} />}
-          </Flexbox>
-        )}
-        {content}
-      </>
+      <Suspense fallback={<DebugNode trace="ActionPopover > content" />}>
+        <>
+          {title && (
+            <Flexbox gap={8} horizontal justify={'space-between'} style={{ marginBottom: 16 }}>
+              {title}
+              {extra}
+              {loading && <UpdateLoading style={{ color: cssVar.colorTextSecondary }} />}
+            </Flexbox>
+          )}
+          {content}
+        </>
+      </Suspense>
     );
 
     return (

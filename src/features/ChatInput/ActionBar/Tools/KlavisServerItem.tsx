@@ -88,7 +88,7 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
           try {
             await refreshKlavisServerTools(serverName);
           } catch (error) {
-            console.error('[Klavis] Failed to check auth status:', error);
+            console.debug('[Klavis] Polling check (expected during auth):', error);
           }
         }, POLL_INTERVAL_MS);
 
@@ -121,8 +121,8 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
               }
               oauthWindowRef.current = null;
 
-              // 窗口关闭后立即检查一次认证状态
-              refreshKlavisServerTools(serverName);
+              // 窗口关闭后开始轮询检查认证状态
+              startFallbackPolling(serverName);
             }
           } catch {
             // COOP 阻止了访问，降级到轮询方案

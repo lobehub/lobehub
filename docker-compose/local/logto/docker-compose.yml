@@ -1,4 +1,4 @@
-name: lobe-chat-database
+name: lobehub
 services:
   network-service:
     image: alpine
@@ -79,8 +79,8 @@ services:
     entrypoint: ['sh', '-c', 'npm run cli db seed -- --swe && npm start']
 
   lobe:
-    image: lobehub/lobe-chat-database
-    container_name: lobe-chat
+    image: lobehub/lobehub
+    container_name: lobehub
     network_mode: 'service:network-service'
     depends_on:
       postgresql:
@@ -99,7 +99,6 @@ services:
       - 'AUTH_SSO_PROVIDERS=logto'
       - 'KEY_VAULTS_SECRET=Kix2wcUONd4CX51E/ZPAd36BqM4wzJgKjPtz2sGztqQ='
       - 'AUTH_SECRET=NX2kaPE923dt6BL2U8e9oSre5RfoT7hg'
-      - 'NEXTAUTH_URL=http://localhost:${LOBE_PORT}/api/auth'
       - 'AUTH_LOGTO_ISSUER=http://localhost:${LOGTO_PORT}/oidc'
       - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
       - 'S3_ENDPOINT=http://localhost:${MINIO_PORT}'

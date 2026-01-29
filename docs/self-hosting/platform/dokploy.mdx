@@ -32,7 +32,7 @@ curl -sSL https://dokploy.com/install.sh | sh
 
 ### Configure S3 Storage Service
 
-In the server-side database, we need to configure the S3 storage service to store files. For detailed configuration instructions, please refer to the section [Configure S3 Storage Service](https://lobehub.com/docs/self-hosting/server-database/vercel#3-configure-s-3-storage-service) in the Vercel deployment guide。After the configuration is complete, you will obtain the following environment variables:
+In the server-side database, we need to configure the S3 storage service to store files. For detailed configuration instructions, please refer to the section [Configure S3 Storage Service](https://lobehub.com/docs/self-hosting/platform/vercel#3-configure-s-3-storage-service) in the Vercel deployment guide。After the configuration is complete, you will obtain the following environment variables:
 
 ```shell
 S3_ACCESS_KEY_ID=
@@ -43,7 +43,7 @@ S3_PUBLIC_DOMAIN=
 S3_ENABLE_PATH_STYLE=
 ```
 
-### Configure KEY_VAULTS_SECRET Environment Variable
+### Configure KEY\_VAULTS\_SECRET Environment Variable
 
 `KEY_VAULTS_SECRET` is used to encrypt sensitive information such as API keys stored by users. Click the button below to generate:
 

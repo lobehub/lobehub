@@ -1,13 +1,5 @@
-import type {
-  Span,
-  Context as OtContext,
-  TextMapGetter
-} from '@lobechat/observability-otel/api';
-import {
-  context as otContext,
-  propagation,
-  trace,
-} from '@lobechat/observability-otel/api';
+import type { Context as OtContext, Span, TextMapGetter } from '@lobechat/observability-otel/api';
+import { context as otContext, propagation, trace } from '@lobechat/observability-otel/api';
 
 // NOTICE: do not try to optimize this into .repeat(...) or similar,
 // here served for better search / semantic search purpose for further diagnostic
@@ -45,6 +37,16 @@ export const getActiveTraceparent = () => {
   if (!isValidContext(span)) return undefined;
 
   return toTraceparent(span as Span);
+};
+
+/**
+ * Get the traceId from the active span.
+ */
+export const getActiveTraceId = () => {
+  const span = trace.getActiveSpan();
+  if (!isValidContext(span)) return undefined;
+
+  return span!.spanContext().traceId;
 };
 
 /**

@@ -702,6 +702,9 @@ export const streamingExecutor: StateCreator<
 
     const agent = new GeneralChatAgent({
       agentConfig: { maxSteps: 1000 },
+      compressionConfig: {
+        enabled: agentConfigData.chatConfig?.enableContextCompression ?? true, // Default to enabled
+      },
       operationId: `${messageKey}/${params.parentMessageId}`,
       modelRuntimeConfig,
     });

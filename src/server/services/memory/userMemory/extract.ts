@@ -227,7 +227,7 @@ export interface TopicBatchWorkflowPayload extends MemoryExtractionPayloadInput 
   userId: string;
 }
 
-type ProviderKeyVaultMap = Record<
+export type ProviderKeyVaultMap = Record<
   string,
   AiProviderRuntimeState['runtimeConfig'][string]['keyVaults'] | undefined
 >;
@@ -296,27 +296,90 @@ const maskSecret = (value?: string) => {
   return `${value.slice(0, 6)}***${value.slice(-4)}`;
 };
 
-const resolveRuntimeAgentConfig = (agent: MemoryAgentConfig, keyVaults?: ProviderKeyVaultMap) => {
-  const provider = agent.provider || 'openai';
-  const { apiKey: userApiKey, baseURL: userBaseURL } = extractCredentialsFromVault(
-    keyVaults?.[normalizeProvider(provider)],
+export type ProviderCredential = { apiKey?: string; baseURL?: string };
+
+export type RuntimeResolveOptions = {
+  fallback?: ProviderCredential;
+  preferred?: {
+    providerIds?: string[];
+  };
+};
+
+export const resolveRuntimeAgentConfig = (
+  agent: MemoryAgentConfig,
+  keyVaults?: ProviderKeyVaultMap,
+  options?: RuntimeResolveOptions,
+) => {
+  const normalizedPreferredProviders = (options?.preferred?.providerIds || [])
+    .map(normalizeProvider)
+    .filter(Boolean);
+
+  const providerOrder = Array.from(
+    new Set([
+      ...normalizedPreferredProviders,
+      normalizeProvider(agent.provider || 'openai'),
+      ...Object.keys(keyVaults || {}),
+    ]),
   );
 
-  // Only use the user baseURL if we are also using their API key; otherwise fall back entirely
-  // to system config to avoid mixing credentials.
-  const useUserCredential = !!userApiKey;
-  const apiKey = useUserCredential ? userApiKey : agent.apiKey;
-  const baseURL = useUserCredential ? userBaseURL || agent.baseURL : agent.baseURL;
-  const source = useUserCredential ? 'user-keyvault' : 'system-config';
+  for (const provider of providerOrder) {
+    if (provider === 'lobehub') {
+      debugRuntimeInit(agent, {
+        provider,
+        source: 'user-vault' as const,
+      });
 
-  return { apiKey, baseURL, provider, source };
+      return ModelRuntime.initializeWithProvider(provider, {});
+    }
+
+    const { apiKey: userApiKey, baseURL: userBaseURL } = extractCredentialsFromVault(
+      keyVaults?.[provider],
+    );
+    if (!userApiKey) {
+      console.warn(
+        `[memory-extraction] skipping provider ${provider} due to missing API key in user vault`,
+      );
+      continue;
+    }
+
+    debugRuntimeInit(agent, {
+      apiKey: userApiKey,
+      baseURL: userBaseURL,
+      provider,
+      source: 'user-vault' as const,
+    });
+
+    // Only use the user baseURL if we are also using their API key; otherwise fall back entirely
+    // to system config to avoid mixing credentials.
+    return ModelRuntime.initializeWithProvider(provider, {
+      apiKey: userApiKey,
+      baseURL: userBaseURL,
+    });
+  }
+
+  debugRuntimeInit(agent, {
+    apiKey: agent.apiKey || options?.fallback?.apiKey,
+    baseURL: agent.baseURL || options?.fallback?.baseURL,
+    provider: agent.provider || 'openai',
+    source: 'system-config' as const,
+  });
+
+  return ModelRuntime.initializeWithProvider(agent.provider || 'openai', {
+    apiKey: agent.apiKey || options?.fallback?.apiKey,
+    baseURL: agent.baseURL || options?.fallback?.baseURL,
+  });
 };
 
 const logRuntime = debug('lobe-server:memory:user-memory:runtime');
 
 const debugRuntimeInit = (
   agent: MemoryAgentConfig,
-  resolved: ReturnType<typeof resolveRuntimeAgentConfig>,
+  resolved: {
+    apiKey?: string;
+    baseURL?: string;
+    provider: string;
+    source: 'user-vault' | 'system-config';
+  },
 ) => {
   if (!logRuntime.enabled) return;
   logRuntime('init runtime', {
@@ -326,20 +389,6 @@ const debugRuntimeInit = (
     baseURL: resolved.baseURL,
     provider: resolved.provider,
     source: resolved.source,
-  });
-};
-
-const initRuntimeForAgent = async (agent: MemoryAgentConfig, keyVaults?: ProviderKeyVaultMap) => {
-  const resolved = resolveRuntimeAgentConfig(agent, keyVaults);
-  debugRuntimeInit(agent, resolved);
-
-  if (!resolved.apiKey) {
-    throw new Error(`Missing API key for ${resolved.provider} memory extraction runtime`);
-  }
-
-  return ModelRuntime.initializeWithProvider(resolved.provider, {
-    apiKey: resolved.apiKey,
-    baseURL: resolved.baseURL,
   });
 };
 
@@ -1142,7 +1191,7 @@ export class MemoryExtractionExecutor {
             userModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults),
             this.getAiProviderRuntimeState(job.userId),
           ]);
-          const keyVaults = this.resolveRuntimeKeyVaults(aiProviderRuntimeState);
+          const keyVaults = await this.resolveRuntimeKeyVaults(aiProviderRuntimeState);
           const language = userState.settings?.general?.responseLanguage;
 
           const runtimes = await this.getRuntime(job.userId, keyVaults);
@@ -1827,7 +1876,9 @@ export class MemoryExtractionExecutor {
     return aiInfraRepos.getAiProviderRuntimeState(KeyVaultsGateKeeper.getUserKeyVaults);
   }
 
-  private resolveRuntimeKeyVaults(runtimeState: AiProviderRuntimeState): ProviderKeyVaultMap {
+  private async resolveRuntimeKeyVaults(
+    runtimeState: AiProviderRuntimeState,
+  ): Promise<ProviderKeyVaultMap> {
     const normalizedRuntimeConfig = Object.fromEntries(
       Object.entries(runtimeState.runtimeConfig || {}).map(([providerId, config]) => [
         normalizeProvider(providerId),
@@ -1835,98 +1886,46 @@ export class MemoryExtractionExecutor {
       ]),
     );
 
-    const providerModels = runtimeState.enabledAiModels.reduce<Record<string, Set<string>>>(
-      (acc, model) => {
-        const providerId = normalizeProvider(model.providerId);
-        acc[providerId] = acc[providerId] || new Set<string>();
-        acc[providerId].add(model.id);
-        return acc;
-      },
-      {},
-    );
-
-    const resolveProviderForModel = (
-      modelId: string,
-      fallbackProvider?: string,
-      preferredProviders?: string[],
-      preferredModels?: string[],
-      label?: string,
-    ) => {
-      const providerOrder = Array.from(
-        new Set(
-          [
-            ...(preferredProviders?.map(normalizeProvider) || []),
-            fallbackProvider ? normalizeProvider(fallbackProvider) : undefined,
-            ...Object.keys(providerModels),
-          ].filter(Boolean) as string[],
-        ),
-      );
-
-      const candidateModels = preferredModels && preferredModels.length > 0 ? preferredModels : [];
-
-      for (const providerId of providerOrder) {
-        const models = providerModels[providerId];
-        if (!models) continue;
-        if (models.has(modelId)) return providerId;
-
-        const preferredMatch = candidateModels.find((preferredModel) => models.has(preferredModel));
-        if (preferredMatch) return providerId;
-      }
-      if (fallbackProvider) {
-        console.warn(
-          `[memory-extraction] no enabled provider found for ${label || 'model'} "${modelId}"`,
-          `(preferred ${preferredProviders}), falling back to server-configured provider "${fallbackProvider}".`,
-        );
-
-        return normalizeProvider(fallbackProvider);
-      }
-
-      throw new Error(
-        `Unable to resolve provider for ${label || 'model'} "${modelId}". ` +
-          `Check preferred providers/models configuration.`,
-      );
-    };
-
     const keyVaults: ProviderKeyVaultMap = {};
 
-    const gatekeeperProvider = resolveProviderForModel(
-      this.modelConfig.gateModel,
-      this.privateConfig.agentGateKeeper.provider,
-      this.gatekeeperPreferredProviders,
-      this.gatekeeperPreferredModels,
-      'gatekeeper',
-    );
+    const gatekeeperProvider = await AiInfraRepos.tryMatchingProviderFrom(runtimeState, {
+      fallbackProvider: this.privateConfig.agentGateKeeper.provider,
+      label: 'gatekeeper',
+      modelId: this.modelConfig.gateModel,
+      preferredModels: this.gatekeeperPreferredModels,
+      preferredProviders: this.gatekeeperPreferredProviders,
+    });
     const gatekeeperRuntime = normalizedRuntimeConfig[gatekeeperProvider];
     if (gatekeeperRuntime?.keyVaults) {
       keyVaults[gatekeeperProvider] = gatekeeperRuntime.keyVaults;
     }
 
-    const embeddingProvider = resolveProviderForModel(
-      this.modelConfig.embeddingsModel,
-      this.privateConfig.embedding.provider,
-      this.embeddingPreferredProviders,
-      this.embeddingPreferredModels,
-      'embedding',
-    );
+    const embeddingProvider = await AiInfraRepos.tryMatchingProviderFrom(runtimeState, {
+      fallbackProvider: this.privateConfig.embedding.provider,
+      label: 'embedding',
+      modelId: this.modelConfig.embeddingsModel,
+      preferredModels: this.embeddingPreferredModels,
+      preferredProviders: this.embeddingPreferredProviders,
+    });
     const embeddingRuntime = normalizedRuntimeConfig[embeddingProvider];
     if (embeddingRuntime?.keyVaults) {
       keyVaults[embeddingProvider] = embeddingRuntime.keyVaults;
     }
 
-    Object.values(this.modelConfig.layerModels).forEach((model) => {
-      if (!model) return;
-      const providerId = resolveProviderForModel(
-        model,
-        this.privateConfig.agentLayerExtractor.provider,
-        this.layerPreferredProviders,
-        this.layerPreferredModels,
-        'layer extractor',
-      );
+    for (const model of Object.values(this.modelConfig.layerModels)) {
+      if (!model) continue;
+      const providerId = await AiInfraRepos.tryMatchingProviderFrom(runtimeState, {
+        fallbackProvider: this.privateConfig.agentLayerExtractor.provider,
+        label: 'layer extractor',
+        modelId: model,
+        preferredModels: this.layerPreferredModels,
+        preferredProviders: this.layerPreferredProviders,
+      });
       const runtime = normalizedRuntimeConfig[providerId];
       if (runtime?.keyVaults) {
         keyVaults[providerId] = runtime.keyVaults;
       }
-    });
+    }
 
     return keyVaults;
   }
@@ -1944,10 +1943,46 @@ export class MemoryExtractionExecutor {
     const cached = this.runtimeCache.get(userId);
     if (cached) return cached;
 
+    const embeddingOptions: RuntimeResolveOptions = {
+      fallback: {
+        apiKey: this.privateConfig.embedding.apiKey,
+        baseURL: this.privateConfig.embedding.baseURL,
+      },
+      preferred: { providerIds: this.embeddingPreferredProviders },
+    };
+
+    const gatekeeperOptions: RuntimeResolveOptions = {
+      fallback: {
+        apiKey: this.privateConfig.agentGateKeeper.apiKey,
+        baseURL: this.privateConfig.agentGateKeeper.baseURL,
+      },
+      preferred: { providerIds: this.gatekeeperPreferredProviders },
+    };
+
+    const layerExtractorOptions: RuntimeResolveOptions = {
+      fallback: {
+        apiKey: this.privateConfig.agentLayerExtractor.apiKey,
+        baseURL: this.privateConfig.agentLayerExtractor.baseURL,
+      },
+      preferred: { providerIds: this.layerPreferredProviders },
+    };
+
     const runtimes: RuntimeBundle = {
-      embeddings: await initRuntimeForAgent(this.privateConfig.embedding, keyVaults),
-      gatekeeper: await initRuntimeForAgent(this.privateConfig.agentGateKeeper, keyVaults),
-      layerExtractor: await initRuntimeForAgent(this.privateConfig.agentLayerExtractor, keyVaults),
+      embeddings: await resolveRuntimeAgentConfig(
+        { ...this.privateConfig.embedding },
+        keyVaults,
+        embeddingOptions,
+      ),
+      gatekeeper: await resolveRuntimeAgentConfig(
+        { ...this.privateConfig.agentGateKeeper },
+        keyVaults,
+        gatekeeperOptions,
+      ),
+      layerExtractor: await resolveRuntimeAgentConfig(
+        { ...this.privateConfig.agentLayerExtractor },
+        keyVaults,
+        layerExtractorOptions,
+      ),
     };
 
     this.runtimeCache.set(userId, runtimes);
@@ -1986,7 +2021,7 @@ export class MemoryExtractionExecutor {
             userModel.getUserState(KeyVaultsGateKeeper.getUserKeyVaults),
             this.getAiProviderRuntimeState(params.userId),
           ]);
-          const keyVaults = this.resolveRuntimeKeyVaults(aiProviderRuntimeState);
+          const keyVaults = await this.resolveRuntimeKeyVaults(aiProviderRuntimeState);
           const language = params.language || userState.settings?.general?.responseLanguage;
 
           const runtimes = await this.getRuntime(params.userId, keyVaults);
@@ -2266,7 +2301,7 @@ export class MemoryExtractionWorkflowService {
 
     const url = getWorkflowUrl(WORKFLOW_PATHS.personaUpdate, baseUrl);
     return this.getClient().trigger({
-      body: { userId },
+      body: { userIds: [userId] },
       flowControl: {
         key: `memory-user-memory.pipelines.persona.update-write.${userId}`,
         parallelism: 1,

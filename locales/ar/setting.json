@@ -446,6 +446,8 @@
   "settingImage.defaultCount.desc": "تحديد عدد الصور الافتراضي الذي يتم إنشاؤه عند بدء مهمة جديدة في لوحة توليد الصور.",
   "settingImage.defaultCount.label": "عدد الصور الافتراضي",
   "settingImage.defaultCount.title": "فن الذكاء الاصطناعي",
+  "settingModel.enableContextCompression.desc": "ضغط الرسائل التاريخية تلقائيًا إلى ملخصات عند تجاوز المحادثة 64,000 رمز، مما يوفر من 60٪ إلى 80٪ من استخدام الرموز",
+  "settingModel.enableContextCompression.title": "تفعيل ضغط السياق التلقائي",
   "settingModel.enableMaxTokens.title": "تفعيل حد الرموز القصوى",
   "settingModel.enableReasoningEffort.title": "تفعيل ضبط جهد الاستدلال",
   "settingModel.frequencyPenalty.desc": "كلما زادت القيمة، زادت تنوع وغنى المفردات؛ وكلما انخفضت، أصبحت اللغة أبسط وأكثر مباشرة.",

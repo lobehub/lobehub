@@ -63,6 +63,8 @@ For small self-hosted deployments, the simplest approach is to let users reset t
 
    Remove Clerk variables and add Better Auth variables:
 
+   <GenerateSecret envName="AUTH_SECRET" />
+
    ```bash
    # Remove these
    # NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=xxx

@@ -94,7 +94,7 @@
   "response.InvalidComfyUIArgs": "ComfyUI 配置不正确。请检查配置后重试",
   "response.InvalidGithubToken": "GitHub PAT 为空或不正确。请检查后重试",
   "response.InvalidOllamaArgs": "Ollama 配置不正确。请检查配置后重试",
-  "response.InvalidProviderAPIKey": "LobeHub API Key 为空或不正确。请检查后重试",
+  "response.InvalidProviderAPIKey": "{{provider}} API Key 为空或不正确，请检查 {{provider}} API Key 后重试",
   "response.InvalidVertexCredentials": "Vertex 鉴权失败。请检查凭证后重试",
   "response.LocationNotSupportError": "当前地区暂不支持该模型服务（可能受区域限制或服务未开通）。请切换可用地区或更换模型服务商后重试",
   "response.ModelNotFound": "未找到可用模型或无访问权限。请更换 API Key 或调整权限后重试",

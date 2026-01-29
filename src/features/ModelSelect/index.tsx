@@ -113,7 +113,7 @@ const ModelSelect = memo<ModelSelectProps>(
               <ModelItemRender
                 displayName={data.displayName}
                 id={data.id}
-                showInfoTag
+                showInfoTag={false}
                 {...data.abilities}
               />
             );

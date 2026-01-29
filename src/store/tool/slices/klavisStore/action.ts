@@ -210,10 +210,30 @@ export const createKlavisStoreSlice: StateCreator<
         instanceId: server.instanceId,
       });
 
+      // If server returned an auth error (during polling), silently return
+      // This happens when user is still in the process of authorizing
+      if (instanceStatus.error === 'AUTH_ERROR') {
+        set(
+          produce((draft: KlavisStoreState) => {
+            draft.loadingServerIds.delete(identifier);
+          }),
+          false,
+          n('refreshKlavisServerTools/pendingAuth'),
+        );
+        return;
+      }
+
       // If authentication failed, remove server and reset status
       if (!instanceStatus.isAuthenticated) {
         if (!instanceStatus.authNeeded) {
           // If no authentication needed, all is well
+          set(
+            produce((draft: KlavisStoreState) => {
+              draft.loadingServerIds.delete(identifier);
+            }),
+            false,
+            n('refreshKlavisServerTools/noAuthNeeded'),
+          );
           return;
         }
 
