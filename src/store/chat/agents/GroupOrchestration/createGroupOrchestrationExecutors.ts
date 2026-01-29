@@ -893,6 +893,7 @@ export const createGroupOrchestrationExecutors = (
               {
                 agentId: tracker.agentId,
                 content: '',
+                createdAt: Date.now() + index,
                 groupId,
                 metadata: { instruction: tracker.instruction, taskTitle: tracker.title },
                 parentId: toolMessageId,
