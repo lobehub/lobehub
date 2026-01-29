@@ -66,7 +66,8 @@ describe('exec_tasks executor', () => {
       expect(result.nextContext).toBeDefined();
       expect((result.nextContext as AgentRuntimeContext).phase).toBe('tasks_batch_result');
 
-      const payload = (result.nextContext as AgentRuntimeContext).payload as TasksBatchResultPayload;
+      const payload = (result.nextContext as AgentRuntimeContext)
+        .payload as TasksBatchResultPayload;
       expect(payload.results).toHaveLength(1);
       expect(payload.results[0].success).toBe(true);
       expect(payload.results[0].threadId).toBe('thread_1');
@@ -131,7 +132,8 @@ describe('exec_tasks executor', () => {
 
       // Then
       expect(result.nextContext).toBeDefined();
-      const payload = (result.nextContext as AgentRuntimeContext).payload as TasksBatchResultPayload;
+      const payload = (result.nextContext as AgentRuntimeContext)
+        .payload as TasksBatchResultPayload;
       expect(payload.results).toHaveLength(3);
       expect(payload.results.every((r) => r.success)).toBe(true);
     });
@@ -170,7 +172,8 @@ describe('exec_tasks executor', () => {
 
       // Then
       expect(result.nextContext).toBeDefined();
-      const payload = (result.nextContext as AgentRuntimeContext).payload as TasksBatchResultPayload;
+      const payload = (result.nextContext as AgentRuntimeContext)
+        .payload as TasksBatchResultPayload;
       expect(payload.results).toHaveLength(1);
       expect(payload.results[0].success).toBe(false);
       expect(payload.results[0].error).toBe('No valid context available');
@@ -196,7 +199,8 @@ describe('exec_tasks executor', () => {
       });
 
       // Then
-      const payload = (result.nextContext as AgentRuntimeContext).payload as TasksBatchResultPayload;
+      const payload = (result.nextContext as AgentRuntimeContext)
+        .payload as TasksBatchResultPayload;
       expect(payload.results[0].success).toBe(false);
       expect(payload.results[0].error).toBe('Failed to create task message');
     });
@@ -228,7 +232,8 @@ describe('exec_tasks executor', () => {
       });
 
       // Then
-      const payload = (result.nextContext as AgentRuntimeContext).payload as TasksBatchResultPayload;
+      const payload = (result.nextContext as AgentRuntimeContext)
+        .payload as TasksBatchResultPayload;
       expect(payload.results[0].success).toBe(false);
       expect(payload.results[0].error).toBe('API error');
       expect(mockStore.optimisticUpdateMessageContent).toHaveBeenCalledWith(
@@ -270,7 +275,8 @@ describe('exec_tasks executor', () => {
       });
 
       // Then
-      const payload = (result.nextContext as AgentRuntimeContext).payload as TasksBatchResultPayload;
+      const payload = (result.nextContext as AgentRuntimeContext)
+        .payload as TasksBatchResultPayload;
       expect(payload.results[0].success).toBe(false);
       expect(payload.results[0].error).toBe('Execution error');
     });
@@ -318,7 +324,8 @@ describe('exec_tasks executor', () => {
         },
         { operationId: 'test-op' },
       );
-      const payload = (result.nextContext as AgentRuntimeContext).payload as TasksBatchResultPayload;
+      const payload = (result.nextContext as AgentRuntimeContext)
+        .payload as TasksBatchResultPayload;
       expect(payload.results[0].success).toBe(true);
     });
 
@@ -353,7 +360,8 @@ describe('exec_tasks executor', () => {
       });
 
       // Then
-      const payload = (result.nextContext as AgentRuntimeContext).payload as TasksBatchResultPayload;
+      const payload = (result.nextContext as AgentRuntimeContext)
+        .payload as TasksBatchResultPayload;
       expect(payload.results[0].success).toBe(false);
       expect(payload.results[0].error).toBe('Task was cancelled');
       expect(mockStore.optimisticUpdateMessageContent).toHaveBeenCalledWith(
@@ -402,7 +410,8 @@ describe('exec_tasks executor', () => {
       });
 
       // Then
-      const payload = (result.nextContext as AgentRuntimeContext).payload as TasksBatchResultPayload;
+      const payload = (result.nextContext as AgentRuntimeContext)
+        .payload as TasksBatchResultPayload;
       expect(payload.results[0].success).toBe(false);
       expect(payload.results[0].error).toBe('Operation cancelled');
       // getSubAgentTaskStatus should not be called since operation was cancelled before poll
@@ -532,6 +541,7 @@ describe('exec_tasks executor', () => {
         {
           agentId: 'agent_1',
           content: '',
+          createdAt: expect.any(Number),
           metadata: { instruction: 'Do something important' },
           parentId: 'msg_parent',
           role: 'task',
@@ -588,7 +598,8 @@ describe('exec_tasks executor', () => {
       });
 
       // Then
-      const payload = (result.nextContext as AgentRuntimeContext).payload as TasksBatchResultPayload;
+      const payload = (result.nextContext as AgentRuntimeContext)
+        .payload as TasksBatchResultPayload;
       expect(payload.results).toHaveLength(2);
       expect(payload.results[0].success).toBe(true);
       expect(payload.results[1].success).toBe(false);
