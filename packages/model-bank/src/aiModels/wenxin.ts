@@ -1679,22 +1679,6 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     type: 'chat',
   },
-  {
-    contextWindowTokens: 32_768,
-    description:
-      'GLM-4 32B 0414 is a general GLM model supporting multi-task text generation and understanding.',
-    displayName: 'GLM-4 32B 0414',
-    id: 'glm-4-32b-0414',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
 ];
 
 const wenxinImageModels: AIImageModelCard[] = [

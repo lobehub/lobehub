@@ -446,6 +446,8 @@
   "settingImage.defaultCount.desc": "Görsel oluşturma panelinde yeni bir görev oluştururken varsayılan olarak üretilecek görsel sayısını ayarlayın.",
   "settingImage.defaultCount.label": "Varsayılan Görsel Sayısı",
   "settingImage.defaultCount.title": "Yapay Zeka Sanatı",
+  "settingModel.enableContextCompression.desc": "Konuşma 64.000 token'ı aştığında geçmiş mesajları otomatik olarak özetlere dönüştürerek %60-80 oranında token tasarrufu sağlar",
+  "settingModel.enableContextCompression.title": "Otomatik Bağlam Sıkıştırmayı Etkinleştir",
   "settingModel.enableMaxTokens.title": "Maksimum Token Sınırını Etkinleştir",
   "settingModel.enableReasoningEffort.title": "Akıl Yürütme Çabası Ayarını Etkinleştir",
   "settingModel.frequencyPenalty.desc": "Değer ne kadar yüksekse, kelime dağarcığı o kadar çeşitli ve zengin olur; değer ne kadar düşükse, dil o kadar sade ve doğrudan olur.",

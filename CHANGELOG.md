@@ -2,6 +2,81 @@
 
 # Changelog
 
+### [Version 2.0.10](https://github.com/lobehub/lobe-chat/compare/v2.0.9...v2.0.10)
+
+<sup>Released on **2026-01-29**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Add ExtendParamsTypeSchema for enhanced model settings.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Add ExtendParamsTypeSchema for enhanced model settings, closes [#11437](https://github.com/lobehub/lobe-chat/issues/11437) ([f58c980](https://github.com/lobehub/lobe-chat/commit/f58c980))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.0.9](https://github.com/lobehub/lobe-chat/compare/v2.0.8...v2.0.9)
+
+<sup>Released on **2026-01-29**</sup>
+
+#### 🐛 Bug Fixes
+
+- **model-bank**: Fix ZenMux model IDs by adding provider prefixes.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **model-bank**: Fix ZenMux model IDs by adding provider prefixes, closes [#11947](https://github.com/lobehub/lobe-chat/issues/11947) ([17f8a5c](https://github.com/lobehub/lobe-chat/commit/17f8a5c))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.0.8](https://github.com/lobehub/lobe-chat/compare/v2.0.7...v2.0.8)
+
+<sup>Released on **2026-01-28**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix inbox agent in mobile.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fix inbox agent in mobile, closes [#11929](https://github.com/lobehub/lobe-chat/issues/11929) ([42f5c0b](https://github.com/lobehub/lobe-chat/commit/42f5c0b))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.0.7](https://github.com/lobehub/lobe-chat/compare/v2.0.6...v2.0.7)
 
 <sup>Released on **2026-01-28**</sup>

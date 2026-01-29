@@ -140,6 +140,8 @@
   "models.output": "Sortie",
   "models.title": "Modèles",
   "payDiffPrice": "Payer la différence",
+  "payDiffPriceApprox": "Env.",
+  "payDiffPriceTip": "Montant réel selon la page de paiement",
   "payment.error.actions.billing": "Gestion de la facturation",
   "payment.error.actions.home": "Retour à l'accueil",
   "payment.error.desc": "ID d’abonnement : {{id}} introuvable. Si vous avez des questions, veuillez nous contacter par e-mail",

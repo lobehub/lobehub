@@ -140,6 +140,8 @@
   "models.output": "Изход",
   "models.title": "Модели",
   "payDiffPrice": "Плати разликата",
+  "payDiffPriceApprox": "Приблизително",
+  "payDiffPriceTip": "Действителната сума се определя на страницата за плащане",
   "payment.error.actions.billing": "Управление на плащания",
   "payment.error.actions.home": "Обратно към началната страница",
   "payment.error.desc": "Абонамент с ID: {{id}} не е намерен. Ако имаш въпроси, свържи се с нас по имейл",

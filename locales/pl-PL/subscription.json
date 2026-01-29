@@ -140,6 +140,8 @@
   "models.output": "Wyjście",
   "models.title": "Modele",
   "payDiffPrice": "Dopłać różnicę",
+  "payDiffPriceApprox": "Około",
+  "payDiffPriceTip": "Rzeczywista kwota zgodna ze stroną płatności",
   "payment.error.actions.billing": "Zarządzanie rozliczeniami",
   "payment.error.actions.home": "Powrót do strony głównej",
   "payment.error.desc": "Nie znaleziono ID subskrypcji: {{id}}. W razie pytań skontaktuj się z nami mailowo",

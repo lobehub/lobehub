@@ -140,6 +140,8 @@
   "models.output": "輸出",
   "models.title": "模型",
   "payDiffPrice": "支付差額",
+  "payDiffPriceApprox": "約",
+  "payDiffPriceTip": "實際金額以付款頁面為準",
   "payment.error.actions.billing": "帳單管理",
   "payment.error.actions.home": "返回首頁",
   "payment.error.desc": "找不到訂閱 ID：{{id}}。如有疑問，請透過電子郵件與我們聯繫",

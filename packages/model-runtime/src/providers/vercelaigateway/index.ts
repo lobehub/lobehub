@@ -125,8 +125,14 @@ export const params = {
         // Merge all applicable extendParams for settings
         ...(() => {
           const extendParams: string[] = [];
-          if (tags.includes('reasoning') && m.id.includes('gpt-5')) {
+          if (tags.includes('reasoning') && m.id.includes('gpt-5') && !m.id.includes('gpt-5.1') && !m.id.includes('gpt-5.2')) {
             extendParams.push('gpt5ReasoningEffort', 'textVerbosity');
+          }
+          if (tags.includes('reasoning') && m.id.includes('gpt-5.1') && !m.id.includes('gpt-5.2')) {
+            extendParams.push('gpt5_1ReasoningEffort', 'textVerbosity');
+          }
+          if (tags.includes('reasoning') && m.id.includes('gpt-5.2')) {
+            extendParams.push('gpt5_2ReasoningEffort', 'textVerbosity');
           }
           if (tags.includes('reasoning') && m.id.includes('openai') && !m.id.includes('gpt-5')) {
             extendParams.push('reasoningEffort', 'textVerbosity');

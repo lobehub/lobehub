@@ -1,5 +1,24 @@
 [
   {
+    "children": {
+      "fixes": ["Add ExtendParamsTypeSchema for enhanced model settings."]
+    },
+    "date": "2026-01-29",
+    "version": "2.0.10"
+  },
+  {
+    "children": {},
+    "date": "2026-01-29",
+    "version": "2.0.9"
+  },
+  {
+    "children": {
+      "fixes": ["Fix inbox agent in mobile."]
+    },
+    "date": "2026-01-28",
+    "version": "2.0.8"
+  },
+  {
     "children": {},
     "date": "2026-01-28",
     "version": "2.0.7"

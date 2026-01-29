@@ -140,6 +140,8 @@
   "models.output": "输出",
   "models.title": "模型",
   "payDiffPrice": "支付差价",
+  "payDiffPriceApprox": "约",
+  "payDiffPriceTip": "实际金额以支付页面为准",
   "payment.error.actions.billing": "账单管理",
   "payment.error.actions.home": "返回首页",
   "payment.error.desc": "未找到订阅 ID：{{id}}。如有疑问，请通过电子邮件联系我们",

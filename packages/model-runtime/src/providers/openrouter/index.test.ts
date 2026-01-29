@@ -34,6 +34,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
 
@@ -331,6 +332,107 @@ describe('LobeOpenRouterAI - custom features', () => {
           reasoning: { max_tokens: -100 },
         }),
         expect.anything(),
+      );
+    });
+
+    it('should map thinkingLevel to reasoning effort', async () => {
+      await instance.chat({
+        messages: [{ content: 'Think level', role: 'user' }],
+        model: 'openai/gpt-4',
+        thinkingLevel: 'medium',
+      } as any);
+
+      expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
+        expect.objectContaining({ reasoning: { effort: 'medium' } }),
+        expect.anything(),
+      );
+    });
+  });
+
+  describe('models mapping', () => {
+    it('should map extendParams for gpt-5.x reasoning and verbosity', async () => {
+      const mockModels = [
+        {
+          architecture: { input_modalities: ['text'] },
+          created: 1_700_000_000,
+          description: 'Test model',
+          id: 'openai/gpt-5.2-mini',
+          name: 'openai/gpt-5.2-mini',
+          pricing: { completion: '0.00001', prompt: '0.00001' },
+          supported_parameters: ['reasoning'],
+          top_provider: { context_length: 8192, max_completion_tokens: 1024 },
+        },
+        {
+          architecture: { input_modalities: ['text'] },
+          created: 1_700_000_000,
+          description: 'Test model',
+          id: 'openai/gpt-5.1-mini',
+          name: 'openai/gpt-5.1-mini',
+          pricing: { completion: '0.00001', prompt: '0.00001' },
+          supported_parameters: ['reasoning'],
+          top_provider: { context_length: 8192, max_completion_tokens: 1024 },
+        },
+      ];
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ data: mockModels }),
+        } as any),
+      );
+
+      const models = await params.models();
+      const gpt52 = models.find((m) => m.id === 'openai/gpt-5.2-mini');
+      const gpt51 = models.find((m) => m.id === 'openai/gpt-5.1-mini');
+
+      expect(gpt52?.settings?.extendParams).toEqual(
+        expect.arrayContaining(['gpt5_2ReasoningEffort', 'textVerbosity']),
+      );
+      expect(gpt51?.settings?.extendParams).toEqual(
+        expect.arrayContaining(['gpt5_1ReasoningEffort', 'textVerbosity']),
+      );
+    });
+
+    it('should map thinkingLevel for gemini-3 flash/pro reasoning', async () => {
+      const mockModels = [
+        {
+          architecture: { input_modalities: ['text'] },
+          created: 1_700_000_000,
+          description: 'Test model',
+          id: 'google/gemini-3-pro',
+          name: 'google/gemini-3-pro',
+          pricing: { completion: '0.00001', prompt: '0.00001' },
+          supported_parameters: ['reasoning'],
+          top_provider: { context_length: 8192, max_completion_tokens: 1024 },
+        },
+        {
+          architecture: { input_modalities: ['text'] },
+          created: 1_700_000_000,
+          description: 'Test model',
+          id: 'google/gemini-3-flash',
+          name: 'google/gemini-3-flash',
+          pricing: { completion: '0.00001', prompt: '0.00001' },
+          supported_parameters: ['reasoning'],
+          top_provider: { context_length: 8192, max_completion_tokens: 1024 },
+        },
+      ];
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({ data: mockModels }),
+        } as any),
+      );
+
+      const models = await params.models();
+      const geminiPro = models.find((m) => m.id === 'google/gemini-3-pro');
+      const geminiFlash = models.find((m) => m.id === 'google/gemini-3-flash');
+
+      expect(geminiPro?.settings?.extendParams).toEqual(expect.arrayContaining(['thinkingLevel2']));
+      expect(geminiFlash?.settings?.extendParams).toEqual(
+        expect.arrayContaining(['thinkingLevel']),
       );
     });
   });

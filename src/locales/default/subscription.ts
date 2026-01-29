@@ -160,6 +160,8 @@ export default {
   'models.output': 'Output',
   'models.title': 'Models',
   'payDiffPrice': 'Pay Difference',
+  'payDiffPriceApprox': 'Approx.',
+  'payDiffPriceTip': 'Actual amount subject to payment page',
   'payment.error.actions.billing': 'Billing Management',
   'payment.error.actions.home': 'Back to Home',
   'payment.error.desc':

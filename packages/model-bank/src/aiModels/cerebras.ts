@@ -5,27 +5,6 @@ const cerebrasModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
       reasoning: true,
-      structuredOutput: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'Performs well on coding and reasoning tasks, supports streaming and tool calls, and fits agentic coding and complex reasoning.',
-    displayName: 'GLM-4.6',
-    enabled: true,
-    id: 'zai-glm-4.6',
-    maxOutput: 40_000,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 2.25, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 2.75, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
     },
     contextWindowTokens: 131_072,
     displayName: 'GPT OSS 120B',
@@ -96,7 +75,8 @@ const cerebrasModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 32_768,
-    description: 'Llama 3.1 8B: a small, low-latency Llama variant for lightweight online inference and chat.',
+    description:
+      'Llama 3.1 8B: a small, low-latency Llama variant for lightweight online inference and chat.',
     displayName: 'Llama 3.1 8B',
     id: 'llama3.1-8b',
     pricing: {

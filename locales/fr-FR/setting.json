@@ -446,6 +446,8 @@
   "settingImage.defaultCount.desc": "Définissez le nombre d’images générées par défaut lors de la création d’une nouvelle tâche dans le panneau de génération d’images.",
   "settingImage.defaultCount.label": "Nombre d’images par défaut",
   "settingImage.defaultCount.title": "Art IA",
+  "settingModel.enableContextCompression.desc": "Compresse automatiquement les messages historiques en résumés lorsque la conversation dépasse 64 000 jetons, permettant d’économiser 60 à 80 % de l’utilisation des jetons",
+  "settingModel.enableContextCompression.title": "Activer la compression automatique du contexte",
   "settingModel.enableMaxTokens.title": "Activer la limite de jetons",
   "settingModel.enableReasoningEffort.title": "Activer l’ajustement de l’effort de raisonnement",
   "settingModel.frequencyPenalty.desc": "Plus la valeur est élevée, plus le vocabulaire est riche et varié ; plus la valeur est faible, plus le langage est simple et direct.",

@@ -140,6 +140,8 @@
   "models.output": "Uitvoer",
   "models.title": "Modellen",
   "payDiffPrice": "Betaal Verschil",
+  "payDiffPriceApprox": "Ca.",
+  "payDiffPriceTip": "Het werkelijke bedrag wordt getoond op de betaalpagina",
   "payment.error.actions.billing": "Facturatiebeheer",
   "payment.error.actions.home": "Terug naar Startpagina",
   "payment.error.desc": "Abonnement-ID: {{id}} niet gevonden. Neem bij vragen contact met ons op via e-mail",
