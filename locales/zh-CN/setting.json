@@ -446,6 +446,8 @@
   "settingImage.defaultCount.desc": "设置图像生成面板在创建新任务时的默认图片数量。",
   "settingImage.defaultCount.label": "默认图片数量",
   "settingImage.defaultCount.title": "AI 绘画设置",
+  "settingModel.enableContextCompression.desc": "当对话消息超过 64,000 tokens 时，自动将历史消息压缩为摘要，节省 60-80% 的 token 用量",
+  "settingModel.enableContextCompression.title": "开启自动上下文压缩",
   "settingModel.enableMaxTokens.title": "开启单次回复限制",
   "settingModel.enableReasoningEffort.title": "开启推理强度调整",
   "settingModel.frequencyPenalty.desc": "值越大，用词越丰富多样；值越低，用词更朴实简单",

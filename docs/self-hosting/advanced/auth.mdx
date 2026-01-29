@@ -152,7 +152,19 @@ Send emails via SMTP protocol, suitable for users with existing email services. 
 
 ### Common Configuration
 
-Before using NextAuth, please set the following variables in LobeHub's environment variables:
+Before using Better Auth, please set the following variables in LobeHub's environment variables:
+
+## Email Verification
+
+Enable email verification to ensure users own the email addresses they register with (off by default):
+
+| Environment Variable      | Type     | Description                                                 |
+| ------------------------- | -------- | ----------------------------------------------------------- |
+| `AUTH_EMAIL_VERIFICATION` | Optional | Set to `1` to require email verification after registration |
+
+<Callout type={'info'}>
+  Email verification requires a working email service (SMTP or Resend) configured above. When enabled, users must verify their email address before they can sign in.
+</Callout>
 
 ## Magic Link (Passwordless) Login
 
@@ -193,12 +205,27 @@ Set the `AUTH_SSO_PROVIDERS` environment variable with a comma-separated list, e
 
 The current authentication system requires email. Please configure a valid email address for users in Casdoor. Using a real, valid email is strongly recommended, otherwise features like password reset and magic link login will not work.
 
+### Can I use fake or random email addresses?
+
+**Strongly not recommended.** You should always use valid, real email addresses. Using fake emails will cause the following issues:
+
+- Password reset functionality will not work
+- Magic link login will not work
+- Email verification will fail
+- You may lose access to your account if you forget your password
+
+This applies to all authentication methods, including SSO providers like Casdoor. Always ensure users have valid email addresses configured.
+
 ### How do I restrict registration to specific emails or domains?
 
 Set the `AUTH_ALLOWED_EMAILS` environment variable with a comma-separated list of allowed emails or domains. For example:
 
 - Allow only `example.com` domain: `AUTH_ALLOWED_EMAILS=example.com`
 - Allow multiple domains and specific emails: `AUTH_ALLOWED_EMAILS=example.com,company.org,admin@other.com`
+
+<Callout type={'info'}>
+  Note: `AUTH_ALLOWED_EMAILS` only restricts which email addresses can register, but does not verify email ownership. If you need to ensure users actually own the email address they register with, set `AUTH_EMAIL_VERIFICATION=1` to require email verification. This requires configuring an email service (SMTP).
+</Callout>
 
 ## Additional Features
 

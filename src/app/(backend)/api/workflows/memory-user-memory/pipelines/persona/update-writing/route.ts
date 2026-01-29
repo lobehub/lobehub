@@ -8,39 +8,39 @@ import {
 } from '@/server/services/memory/userMemory/persona/service';
 
 const workflowPayloadSchema = z.object({
-  userId: z.string().optional(),
   userIds: z.array(z.string()).optional(),
 });
 
 export const { POST } = serve(async (context) => {
-  const payload = workflowPayloadSchema.parse(context.requestPayload || {});
+  const payload = await context.run('memory:pipelines:persona:update-writing:parse-payload', () =>
+    workflowPayloadSchema.parse(context.requestPayload || {}),
+  );
   const db = await getServerDB();
 
-  const userIds = Array.from(
-    new Set([...(payload.userIds || []), ...(payload.userId ? [payload.userId] : [])]),
-  ).filter(Boolean);
-
+  const userIds = Array.from(new Set(payload.userIds || [])).filter(Boolean);
   if (userIds.length === 0) {
-    return { message: 'userId or userIds is required', processedUsers: 0 };
+    throw new Error('No user IDs provided for persona update.');
   }
 
   const service = new UserPersonaService(db);
-  const results = [];
 
-  for (const userId of userIds) {
-    const context = await buildUserPersonaJobInput(db, userId);
-    const result = await service.composeWriting({ ...context, userId });
-    results.push({
-      diffId: result.diff?.id,
-      documentId: result.document.id,
-      userId,
-      version: result.document.version,
-    });
-  }
+  await Promise.all(
+    userIds.map(async (userId) =>
+      context.run(`memory:pipelines:persona:update-writing:users:${userId}`, async () => {
+        const context = await buildUserPersonaJobInput(db, userId);
+        const result = await service.composeWriting({ ...context, userId });
+        return {
+          diffId: result.diff?.id,
+          documentId: result.document.id,
+          userId,
+          version: result.document.version,
+        };
+      }),
+    ),
+  );
 
   return {
     message: 'User persona processed via workflow.',
     processedUsers: userIds.length,
-    results,
   };
 });

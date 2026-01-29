@@ -446,6 +446,8 @@
   "settingImage.defaultCount.desc": "تعداد پیش‌فرض تصاویر تولیدشده هنگام ایجاد یک وظیفه جدید در پنل تولید تصویر را تنظیم کنید.",
   "settingImage.defaultCount.label": "تعداد پیش‌فرض تصویر",
   "settingImage.defaultCount.title": "هنر هوش مصنوعی",
+  "settingModel.enableContextCompression.desc": "هنگامی که گفتگو از ۶۴٬۰۰۰ توکن فراتر رود، پیام‌های پیشین به‌صورت خودکار خلاصه می‌شوند تا ۶۰ تا ۸۰ درصد در مصرف توکن صرفه‌جویی شود.",
+  "settingModel.enableContextCompression.title": "فعال‌سازی فشرده‌سازی خودکار زمینه",
   "settingModel.enableMaxTokens.title": "فعال‌سازی محدودیت حداکثر توکن",
   "settingModel.enableReasoningEffort.title": "فعال‌سازی تنظیم تلاش استدلالی",
   "settingModel.frequencyPenalty.desc": "هرچه مقدار بیشتر باشد، واژگان متنوع‌تر و غنی‌تر خواهد بود؛ مقدار کمتر منجر به زبان ساده‌تر و مستقیم‌تر می‌شود.",

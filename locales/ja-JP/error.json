@@ -94,7 +94,7 @@
   "response.InvalidComfyUIArgs": "ComfyUI 設定が正しくありません。設定を確認してから再試行してください",
   "response.InvalidGithubToken": "GitHub PAT が空または正しくありません。確認してから再試行してください",
   "response.InvalidOllamaArgs": "Ollama 設定が正しくありません。設定を確認してから再試行してください",
-  "response.InvalidProviderAPIKey": "LobeHub API Key が空または正しくありません。確認してから再試行してください",
+  "response.InvalidProviderAPIKey": "{{provider}} API Key が空または正しくありません。{{provider}} API Key を確認してから再試行してください",
   "response.InvalidVertexCredentials": "Vertex 認証に失敗しました。認証情報を確認してから再試行してください",
   "response.LocationNotSupportError": "現在の地域ではこのモデルサービスはサポートされていません（地域制限またはサービス未开通）。利用可能な地域に切り替えるか、別のモデルプロバイダーに変更してから再試行してください",
   "response.ModelNotFound": "利用可能なモデルが見つからないかアクセス権限がありません。API キーを切り替えるか、権限を調整してから再試行してください",

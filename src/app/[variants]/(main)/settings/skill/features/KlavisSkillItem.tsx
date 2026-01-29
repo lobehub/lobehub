@@ -120,7 +120,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
         try {
           await refreshKlavisServerTools(serverName);
         } catch (error) {
-          console.error('[Klavis] Failed to check auth status:', error);
+          console.debug('[Klavis] Polling check (expected during auth):', error);
         }
       }, POLL_INTERVAL_MS);
 
@@ -145,8 +145,8 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
               windowCheckIntervalRef.current = null;
             }
             oauthWindowRef.current = null;
-            await refreshKlavisServerTools(serverName);
-            setIsWaitingAuth(false);
+            // Start polling after window closes
+            startFallbackPolling(serverName);
           }
         } catch {
           console.log('[Klavis] COOP blocked window.closed access, falling back to polling');

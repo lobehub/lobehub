@@ -283,21 +283,25 @@ export class GeneralChatAgent implements Agent {
     switch (context.phase) {
       case 'init':
       case 'user_input': {
-        // Check if context compression is needed before calling LLM
-        const compressionCheck = shouldCompress(state.messages, {
-          maxWindowToken: this.config.compressionConfig?.maxWindowToken,
-        });
+        // Check if context compression is enabled and needed before calling LLM
+        const compressionEnabled = this.config.compressionConfig?.enabled ?? true; // Default to enabled
 
-        if (compressionCheck.needsCompression) {
-          // Context exceeds threshold, compress ALL messages into a single summary
-          return {
-            payload: {
-              currentTokenCount: compressionCheck.currentTokenCount,
-              existingSummary: this.findExistingSummary(state.messages),
-              messages: state.messages,
-            },
-            type: 'compress_context',
-          } as AgentInstructionCompressContext;
+        if (compressionEnabled) {
+          const compressionCheck = shouldCompress(state.messages, {
+            maxWindowToken: this.config.compressionConfig?.maxWindowToken,
+          });
+
+          if (compressionCheck.needsCompression) {
+            // Context exceeds threshold, compress ALL messages into a single summary
+            return {
+              payload: {
+                currentTokenCount: compressionCheck.currentTokenCount,
+                existingSummary: this.findExistingSummary(state.messages),
+                messages: state.messages,
+              },
+              type: 'compress_context',
+            } as AgentInstructionCompressContext;
+          }
         }
 
         // User input received, call LLM to generate response

@@ -446,6 +446,8 @@
   "settingImage.defaultCount.desc": "새 작업을 생성할 때 이미지 생성 패널의 기본 이미지 수를 설정합니다.",
   "settingImage.defaultCount.label": "기본 이미지 수",
   "settingImage.defaultCount.title": "AI 그림 설정",
+  "settingModel.enableContextCompression.desc": "대화가 64,000 토큰을 초과할 경우 이전 메시지를 자동으로 요약하여 토큰 사용량을 60~80% 절감합니다",
+  "settingModel.enableContextCompression.title": "자동 컨텍스트 압축 활성화",
   "settingModel.enableMaxTokens.title": "단일 응답 제한 활성화",
   "settingModel.enableReasoningEffort.title": "추론 강도 조정 활성화",
   "settingModel.frequencyPenalty.desc": "값이 클수록 단어 선택이 더 다양하고 풍부해지며, 값이 작을수록 단어 선택이 더 간단하고 소박해집니다.",

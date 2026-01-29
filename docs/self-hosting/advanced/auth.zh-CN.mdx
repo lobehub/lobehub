@@ -152,7 +152,19 @@ LobeHub 与 Clerk 做了深度集成，能够为用户提供一个更加安全�
 
 ### 通用配置
 
-在使用 NextAuth 之前，请先在 LobeHub 的环境变量中设置以下变量：
+在使用 Better Auth 之前，请先在 LobeHub 的环境变量中设置以下变量：
+
+## 邮箱验证
+
+启用邮箱验证以确保用户拥有其注册的邮箱地址（默认关闭）：
+
+| 环境变量                      | 类型 | 描述                   |
+| ------------------------- | -- | -------------------- |
+| `AUTH_EMAIL_VERIFICATION` | 可选 | 设置为 `1` 以要求注册后进行邮箱验证 |
+
+<Callout type={'info'}>
+  邮箱验证需要上方已配置好的邮件服务（SMTP 或 Resend）。启用后，用户必须验证其邮箱地址才能登录。
+</Callout>
 
 ## 魔法链接（免密）登录
 
@@ -194,12 +206,27 @@ Better Auth 支持内置提供商（Google、GitHub、Microsoft、Apple、AWS Co
 当前身份验证方案强依赖 email。请在 Casdoor 中为用户配置有效的 email 地址。
 强烈建议使用真实有效的邮箱，否则密码重置、魔法链接登录等功能将无法使用。
 
+### 邮箱可以随便乱填吗？
+
+**强烈不建议**。请务必填写真实有效的邮箱地址。使用虚假邮箱会导致以下问题：
+
+- 密码重置功能无法使用
+- 魔法链接登录无法使用
+- 邮箱验证无法通过
+- 忘记密码时可能无法找回账户
+
+这适用于所有身份验证方式，包括 Casdoor 等 SSO 提供商。请确保用户配置了有效的邮箱地址。
+
 ### 如何限制只允许特定邮箱或域名注册？
 
 设置 `AUTH_ALLOWED_EMAILS` 环境变量，支持完整邮箱地址或域名，以逗号分隔。例如：
 
 - 只允许 `example.com` 域名：`AUTH_ALLOWED_EMAILS=example.com`
 - 允许多个域名和特定邮箱：`AUTH_ALLOWED_EMAILS=example.com,company.org,admin@other.com`
+
+<Callout type={'info'}>
+  注意：`AUTH_ALLOWED_EMAILS` 仅限制哪些邮箱地址可以注册，但不会验证邮箱所有权。如果需要确保用户确实拥有其注册的邮箱地址，请设置 `AUTH_EMAIL_VERIFICATION=1` 以启用邮箱验证。这需要配置邮件服务（SMTP）。
+</Callout>
 
 ### Webhook 支持
 
@@ -211,4 +238,4 @@ Better Auth 支持内置提供商（Google、GitHub、Microsoft、Apple、AWS Co
 
 ## 其他 SSO 提供商
 
-请参考 [NextAuth.js](https://next-auth.js.org/providers) 文档，欢迎提交 Pull Request。
+请参考 [Auth.js](https://authjs.dev/getting-started/authentication/oauth) 文档，欢迎提交 Pull Request。

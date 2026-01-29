@@ -8,6 +8,7 @@ import {
 } from '@lobechat/const';
 import {
   type AgentStatus,
+  AssistantCategory,
   type AssistantListResponse,
   type AssistantMarketSource,
   type AssistantQueryParams,
@@ -672,6 +673,9 @@ export class DiscoverService {
       ownerId,
       includeAgentGroup,
     } = rest;
+    const shouldOmitCategory = [AssistantCategory.All, AssistantCategory.Discover].includes(
+      category as AssistantCategory,
+    );
 
     try {
       const normalizedLocale = normalizeLocale(locale);
@@ -705,7 +709,7 @@ export class DiscoverService {
       }
 
       const data = await this.market.agents.getAgentList({
-        category,
+        category: shouldOmitCategory ? undefined : category,
         haveSkills,
         // includeAgentGroup may not be in SDK type definition yet, using 'as any'
         includeAgentGroup,
@@ -827,14 +831,14 @@ export class DiscoverService {
     log('getMcpList: params=%O', params);
     const { category, locale, sort } = params;
     const normalizedLocale = normalizeLocale(locale);
-    const isDiscoverCategory = category === McpCategory.Discover;
+    const shouldOmitCategory = [McpCategory.All, McpCategory.Discover].includes(category as McpCategory)
 
     const result = await this.market.plugins.getPluginList(
       {
         ...params,
-        category: isDiscoverCategory ? undefined : category,
+        category: shouldOmitCategory ? undefined : category,
         locale: normalizedLocale,
-        sort: isDiscoverCategory ? McpSorts.Recommended : sort,
+        sort: shouldOmitCategory ? McpSorts.Recommended : sort,
       },
       {
         next: {

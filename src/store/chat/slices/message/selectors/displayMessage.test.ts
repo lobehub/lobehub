@@ -833,5 +833,26 @@ describe('displayMessageSelectors', () => {
       const result = displayMessageSelectors.findLastMessageId('msg-1')(state as ChatStore);
       expect(result).toBe('tool-result-id');
     });
+
+    it('should return lastMessageId for compressedGroup instead of group id', () => {
+      const compressedGroupMessage = {
+        id: 'mg_123456',
+        role: 'compressedGroup',
+        content: 'Compressed summary',
+        lastMessageId: 'msg-999',
+        compressedMessages: [],
+        pinnedMessages: [],
+      } as unknown as UIChatMessage;
+
+      const state: Partial<ChatStore> = {
+        activeAgentId: 'test-id',
+        messagesMap: {
+          [messageMapKey({ agentId: 'test-id' })]: [compressedGroupMessage],
+        },
+      };
+
+      const result = displayMessageSelectors.findLastMessageId('mg_123456')(state as ChatStore);
+      expect(result).toBe('msg-999');
+    });
   });
 });

@@ -446,6 +446,8 @@
   "settingImage.defaultCount.desc": "Задайте броя изображения по подразбиране, които се генерират при създаване на нова задача в панела за генериране на изображения.",
   "settingImage.defaultCount.label": "Брой изображения по подразбиране",
   "settingImage.defaultCount.title": "AI Изкуство",
+  "settingModel.enableContextCompression.desc": "Автоматично компресиране на исторически съобщения в обобщения, когато разговорът надвиши 64 000 токена, спестявайки 60–80% от използваните токени",
+  "settingModel.enableContextCompression.title": "Активирай автоматично компресиране на контекста",
   "settingModel.enableMaxTokens.title": "Активиране на лимит за максимален брой токени",
   "settingModel.enableReasoningEffort.title": "Активиране на настройка за усилие при разсъждение",
   "settingModel.frequencyPenalty.desc": "Колкото по-висока е стойността, толкова по-богат и разнообразен е речникът; по-ниска стойност води до по-прост и ясен език.",

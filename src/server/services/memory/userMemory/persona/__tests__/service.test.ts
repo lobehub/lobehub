@@ -8,6 +8,32 @@ import { UserPersonaModel } from '@/database/models/userMemory/persona';
 
 import { UserPersonaService } from '../service';
 
+// Use var to avoid TDZ with vi.mock hoisting
+var aiInfraMocks:
+  | undefined
+  | {
+      getAiProviderRuntimeState: ReturnType<typeof vi.fn>;
+      tryMatchingModelFrom: ReturnType<typeof vi.fn>;
+      tryMatchingProviderFrom: ReturnType<typeof vi.fn>;
+    };
+
+vi.mock('@/database/repositories/aiInfra', () => {
+  aiInfraMocks = {
+    getAiProviderRuntimeState: vi.fn(),
+    tryMatchingModelFrom: vi.fn(),
+    tryMatchingProviderFrom: vi.fn(),
+  };
+
+  const AiInfraRepos = vi.fn().mockImplementation(() => ({
+    getAiProviderRuntimeState: aiInfraMocks!.getAiProviderRuntimeState,
+  })) as unknown as typeof import('@/database/repositories/aiInfra').AiInfraRepos;
+
+  (AiInfraRepos as any).tryMatchingModelFrom = aiInfraMocks!.tryMatchingModelFrom;
+  (AiInfraRepos as any).tryMatchingProviderFrom = aiInfraMocks!.tryMatchingProviderFrom;
+
+  return { AiInfraRepos };
+});
+
 vi.mock('@/server/globalConfig/parseMemoryExtractionConfig', () => ({
   parseMemoryExtractionConfig: () => ({
     agentLayerExtractor: {
@@ -28,6 +54,10 @@ vi.mock('@/server/globalConfig/parseMemoryExtractionConfig', () => ({
   }),
 }));
 
+vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
+  KeyVaultsGateKeeper: { getUserKeyVaults: vi.fn() },
+}));
+
 const structuredResult = {
   diff: '- updated',
   memoryIds: ['mem-1'],
@@ -45,10 +75,8 @@ vi.mock('@lobechat/memory-user-memory', () => ({
   })),
 }));
 
-vi.mock('@lobechat/model-runtime', () => ({
-  ModelRuntime: {
-    initializeWithProvider: vi.fn().mockResolvedValue({}),
-  },
+vi.mock('@/server/services/memory/userMemory/extract', () => ({
+  resolveRuntimeAgentConfig: vi.fn().mockResolvedValue({}),
 }));
 
 let db: LobeChatDatabase;
@@ -56,6 +84,22 @@ const userId = 'user-persona-service';
 
 beforeEach(async () => {
   toolCall.mockClear();
+  aiInfraMocks!.getAiProviderRuntimeState.mockReset();
+  aiInfraMocks!.tryMatchingModelFrom.mockReset();
+  aiInfraMocks!.tryMatchingProviderFrom.mockReset();
+  aiInfraMocks!.tryMatchingModelFrom.mockResolvedValue('openai');
+  aiInfraMocks!.tryMatchingProviderFrom.mockResolvedValue('openai');
+  aiInfraMocks!.getAiProviderRuntimeState.mockResolvedValue({
+    enabledAiModels: [
+      { abilities: {}, enabled: true, id: 'gpt-mock', providerId: 'openai', type: 'chat' },
+    ],
+    enabledAiProviders: [],
+    enabledChatAiProviders: [],
+    enabledImageAiProviders: [],
+    runtimeConfig: {
+      openai: { keyVaults: { apiKey: 'vault-key', baseURL: 'https://vault.example.com' } },
+    },
+  });
   db = await getTestDB();
 
   await db.delete(users);

@@ -17,11 +17,11 @@ export const params = {
   chatCompletion: {
     handlePayload: (payload) => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { reasoning_effort, thinking, reasoning: _reasoning, ...rest } = payload;
+      const { reasoning_effort, thinking, reasoning: _reasoning, thinkingLevel, ...rest } = payload;
 
       let reasoning: OpenRouterReasoning | undefined;
 
-      if (thinking?.type || thinking?.budget_tokens !== undefined || reasoning_effort) {
+      if (thinking?.type || thinking?.budget_tokens !== undefined || reasoning_effort || thinkingLevel) {
         if (thinking?.type === 'disabled') {
           reasoning = { enabled: false };
         } else if (thinking?.budget_tokens !== undefined) {
@@ -30,6 +30,9 @@ export const params = {
           };
         } else if (reasoning_effort) {
           reasoning = { effort: reasoning_effort };
+        }
+        else if (thinkingLevel) {
+          reasoning = { effort: thinkingLevel };
         }
       }
 
@@ -126,11 +129,14 @@ export const params = {
           if (model.description && model.description.includes('`reasoning` `enabled`')) {
             extendParams.push('enableReasoning');
           }
-          if (hasReasoning && model.id.includes('gpt-5')) {
-            extendParams.push('gpt5ReasoningEffort');
-          }
-          if (hasReasoning && model.id.includes('openai') && !model.id.includes('gpt-5')) {
-            extendParams.push('reasoningEffort');
+          if (hasReasoning && model.id.includes('gpt-5.2')) {
+            extendParams.push('gpt5_2ReasoningEffort', 'textVerbosity');
+          } else if (hasReasoning && model.id.includes('gpt-5.1')) {
+            extendParams.push('gpt5_1ReasoningEffort', 'textVerbosity');
+          } else if (hasReasoning && model.id.includes('gpt-5')) {
+            extendParams.push('gpt5ReasoningEffort', 'textVerbosity');
+          } else if (hasReasoning && model.id.includes('openai')) {
+            extendParams.push('reasoningEffort', 'textVerbosity');
           }
           if (hasReasoning && model.id.includes('claude')) {
             extendParams.push('enableReasoning', 'reasoningBudgetToken');
@@ -140,6 +146,12 @@ export const params = {
           }
           if (hasReasoning && model.id.includes('gemini-2.5')) {
             extendParams.push('reasoningBudgetToken');
+          }
+          if (hasReasoning && model.id.includes('gemini-3-pro')) {
+            extendParams.push('thinkingLevel2');
+          }
+          if (hasReasoning && model.id.includes('gemini-3-flash')) {
+            extendParams.push('thinkingLevel');
           }
           return extendParams.length > 0 ? { settings: { extendParams } } : {};
         })(),

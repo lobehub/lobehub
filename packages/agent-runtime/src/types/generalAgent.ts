@@ -69,16 +69,15 @@ export interface GeneralAgentConfig {
   };
   /**
    * Context compression configuration
-   * Note: Compression checking is always enabled to prevent context overflow.
-   * When triggered, ALL messages are compressed into a single MessageGroup summary.
+   * When enabled and triggered, ALL messages are compressed into a single MessageGroup summary.
    */
   compressionConfig?: {
+    /** Whether context compression is enabled (default: true) */
+    enabled?: boolean;
     /** Model's max context window token count (default: 128k) */
     maxWindowToken?: number;
   };
   modelRuntimeConfig?: {
-    model: string;
-    provider: string;
     /**
      * Compression model configuration
      * Used for context compression tasks
@@ -87,6 +86,8 @@ export interface GeneralAgentConfig {
       model: string;
       provider: string;
     };
+    model: string;
+    provider: string;
   };
   operationId: string;
   userId?: string;
