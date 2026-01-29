@@ -145,6 +145,21 @@ export class FlatListBuilder {
                     taskGrandchild.tools.length > 0
                   ) {
                     this.processAssistantGroup(taskGrandchild, flatList, processedIds, allMessages);
+                  } else if (
+                    // Check if it's a supervisor message without tools (content-only)
+                    taskGrandchild.role === 'assistant' &&
+                    taskGrandchild.metadata?.isSupervisor &&
+                    (!taskGrandchild.tools || taskGrandchild.tools.length === 0)
+                  ) {
+                    const supervisorMessage = this.createSupervisorContentMessage(taskGrandchild);
+                    flatList.push(supervisorMessage);
+                    processedIds.add(taskGrandchildId);
+                    this.buildFlatListRecursive(
+                      taskGrandchildId,
+                      flatList,
+                      processedIds,
+                      allMessages,
+                    );
                   } else {
                     flatList.push(taskGrandchild);
                     processedIds.add(taskGrandchildId);
