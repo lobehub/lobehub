@@ -3,18 +3,13 @@
 import { ThreadStatus } from '@lobechat/types';
 import type { UIChatMessage } from '@lobechat/types';
 import { AccordionItem, Block } from '@lobehub/ui';
+import isEqual from 'fast-deep-equal';
 import { memo, useMemo, useState } from 'react';
 
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
-import { useChatStore } from '@/store/chat';
 
-import {
-  ErrorState,
-  InitializingState,
-  TaskMessages,
-  isProcessingStatus,
-} from '../../Tasks/shared';
+import { TaskContent } from '../../Tasks/shared';
 import TaskTitle, { type TaskMetrics } from './TaskTitle';
 
 interface ServerTaskItemProps {
@@ -22,14 +17,13 @@ interface ServerTaskItemProps {
 }
 
 const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
-  const { id, agentId, metadata, taskDetail } = item;
+  const { id, agentId, metadata, taskDetail, tasks } = item;
   const [expanded, setExpanded] = useState(false);
 
   const title = taskDetail?.title || metadata?.taskTitle;
   const status = taskDetail?.status;
   const threadId = taskDetail?.threadId;
 
-  const isProcessing = isProcessingStatus(status);
   const isCompleted = status === ThreadStatus.Completed;
   const isError = status === ThreadStatus.Failed || status === ThreadStatus.Cancel;
 
@@ -40,24 +34,6 @@ const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
       ? agentGroupSelectors.getAgentByIdFromGroup(activeGroupId, agentId)(s)
       : null,
   );
-
-  // Get polling hook - poll for task status to get messages
-  const [useEnablePollingTaskStatus, operations] = useChatStore((s) => [
-    s.useEnablePollingTaskStatus,
-    s.operations,
-  ]);
-
-  // Check if exec_async_task is already polling for this message
-  const hasActiveOperationPolling = Object.values(operations).some(
-    (op) =>
-      op.status === 'running' && op.type === 'execAgentRuntime' && op.context?.messageId === id,
-  );
-
-  // Enable polling when task has threadId and no active operation is polling
-  const shouldPoll = !!threadId && !hasActiveOperationPolling;
-  const { data } = useEnablePollingTaskStatus(threadId, id, shouldPoll);
-
-  const messages = data?.messages;
 
   // Build metrics for TaskTitle (only for completed/error states)
   const metrics: TaskMetrics | undefined = useMemo(() => {
@@ -76,34 +52,6 @@ const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
     taskDetail?.totalSteps,
     taskDetail?.totalToolCalls,
   ]);
-
-  // Render content based on state
-  const renderContent = () => {
-    // Initializing state: no status yet (task just created, waiting for backend)
-    if (!status) {
-      return <InitializingState />;
-    }
-
-    // Has messages - use TaskMessages to render
-    if (messages && messages.length > 0) {
-      return (
-        <>
-          <TaskMessages
-            duration={taskDetail?.duration}
-            isProcessing={isProcessing}
-            messages={messages}
-            startTime={taskDetail?.startedAt ? new Date(taskDetail.startedAt).getTime() : undefined}
-            totalCost={taskDetail?.totalCost}
-          />
-          {/* Error states: Failed, Cancel */}
-          {isError && taskDetail && <ErrorState taskDetail={taskDetail} />}
-        </>
-      );
-    }
-
-    // Still loading messages
-    return <InitializingState />;
-  };
 
   return (
     <AccordionItem
@@ -126,11 +74,20 @@ const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
       }
     >
       <Block gap={16} padding={12} style={{ marginBlock: 8 }} variant={'outlined'}>
-        {renderContent()}
+        {expanded && (
+          <TaskContent
+            id={id}
+            isError={isError}
+            messages={tasks}
+            status={status}
+            taskDetail={taskDetail}
+            threadId={threadId}
+          />
+        )}
       </Block>
     </AccordionItem>
   );
-}, Object.is);
+}, isEqual);
 
 ServerTaskItem.displayName = 'ServerTaskItem';
 

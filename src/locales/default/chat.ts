@@ -379,6 +379,7 @@ export default {
   'task.metrics.toolCallsShort': 'skill uses',
   'task.status.cancelled': 'Task Cancelled',
   'task.status.failed': 'Task Failed',
+  'task.status.fetchingDetails': 'Fetching details...',
   'task.status.initializing': 'Initializing task...',
   'task.subtask': 'Subtask',
   'thread.divider': 'Subtopic',

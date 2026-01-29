@@ -446,12 +446,15 @@ export const groupOrchestrationSlice: StateCreator<
         revalidateOnReconnect: false,
         refreshInterval: POLLING_INTERVAL,
         onSuccess: (data) => {
-          if (data?.taskDetail && messageId) {
-            // Update taskDetail
+          if (data && messageId) {
+            // Update taskDetail and tasks (intermediate messages)
             get().internal_dispatchMessage({
               id: messageId,
               type: 'updateMessage',
-              value: { taskDetail: data.taskDetail },
+              value: {
+                taskDetail: data.taskDetail,
+                tasks: data.messages,
+              },
             });
 
             // Update content when task is completed or failed
