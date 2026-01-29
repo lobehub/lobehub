@@ -41,99 +41,97 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const AgentItem = memo<DiscoverAssistantItem>(
   ({ createdAt, author, avatar, title, description, identifier, category, backgroundColor }) => {
-    const handleClick = () => {
-      window.open(
-        `https://lobehub.com/discover/assistant/${identifier}`,
-        '_blank',
-        'noopener,noreferrer',
-      );
-    };
-
     return (
-      <Block
-        clickable
-        height={'100%'}
-        onClick={handleClick}
-        style={{
-          overflow: 'hidden',
-          position: 'relative',
-        }}
-        variant={'outlined'}
-        width={'100%'}
+      <a
+        href={`/community/agent/${identifier}`}
+        rel="noopener noreferrer"
+        style={{ display: 'block', height: '100%' }}
+        target="_blank"
       >
-        <Flexbox
-          align={'flex-start'}
-          gap={16}
-          horizontal
-          justify={'space-between'}
-          padding={16}
+        <Block
+          clickable
+          height={'100%'}
+          style={{
+            overflow: 'hidden',
+            position: 'relative',
+          }}
+          variant={'outlined'}
           width={'100%'}
         >
           <Flexbox
-            gap={12}
+            align={'flex-start'}
+            gap={16}
             horizontal
-            style={{
-              overflow: 'hidden',
-            }}
-            title={identifier}
+            justify={'space-between'}
+            padding={16}
+            width={'100%'}
           >
-            <Avatar
-              avatar={avatar}
-              background={backgroundColor || 'transparent'}
-              shape={'square'}
-              size={40}
-              style={{ flex: 'none' }}
-            />
             <Flexbox
-              flex={1}
-              gap={2}
+              gap={12}
+              horizontal
               style={{
                 overflow: 'hidden',
               }}
+              title={identifier}
             >
-              <Text as={'h2'} className={styles.title} ellipsis>
-                {title}
-              </Text>
-              {author && <div className={styles.author}>{author}</div>}
+              <Avatar
+                avatar={avatar}
+                background={backgroundColor || 'transparent'}
+                shape={'square'}
+                size={40}
+                style={{ flex: 'none' }}
+              />
+              <Flexbox
+                flex={1}
+                gap={2}
+                style={{
+                  overflow: 'hidden',
+                }}
+              >
+                <Text as={'h2'} className={styles.title} ellipsis>
+                  {title}
+                </Text>
+                {author && <div className={styles.author}>{author}</div>}
+              </Flexbox>
             </Flexbox>
           </Flexbox>
-        </Flexbox>
-        <Flexbox flex={1} gap={12} paddingInline={16}>
-          <Text
-            as={'p'}
-            className={styles.desc}
-            ellipsis={{
-              rows: 3,
-            }}
-          >
-            {description}
-          </Text>
-        </Flexbox>
-        <Flexbox
-          align={'center'}
-          className={styles.footer}
-          horizontal
-          justify={'space-between'}
-          padding={16}
-        >
+          <Flexbox flex={1} gap={12} paddingInline={16}>
+            <Text
+              as={'p'}
+              className={styles.desc}
+              ellipsis={{
+                rows: 3,
+              }}
+            >
+              {description}
+            </Text>
+          </Flexbox>
           <Flexbox
             align={'center'}
-            className={styles.secondaryDesc}
+            className={styles.footer}
             horizontal
             justify={'space-between'}
+            padding={16}
           >
-            <Flexbox align={'center'} gap={4} horizontal>
-              <Icon icon={ClockIcon} size={14} />
-              <PublishedTime
-                className={styles.secondaryDesc}
-                date={createdAt}
-                template={'MMM DD, YYYY'}
-              />
+            <Flexbox
+              align={'center'}
+              className={styles.secondaryDesc}
+              horizontal
+              justify={'space-between'}
+            >
+              <Flexbox align={'center'} gap={4} horizontal>
+                <Icon icon={ClockIcon} size={14} />
+                <PublishedTime
+                  className={styles.secondaryDesc}
+                  date={createdAt}
+                  template={'MMM DD, YYYY'}
+                />
+              </Flexbox>
+              {category && <span style={{ marginLeft: 12 }}>{category}</span>}
             </Flexbox>
-            {category && <span style={{ marginLeft: 12 }}>{category}</span>}
           </Flexbox>
-        </Flexbox>
-      </Block>
+        </Block>
+      </a>
     );
   },
 );
