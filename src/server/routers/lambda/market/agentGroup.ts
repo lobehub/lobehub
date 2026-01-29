@@ -134,7 +134,7 @@ const publishOrCreateGroupSchema = z.object({
     })
     .optional(),
   description: z.string(),
-  identifier: z.string().optional(),
+  identifier: z.string().nullish(), // Allow null or undefined
   memberAgents: z.array(memberAgentSchema),
   name: z.string(),
   visibility: z.enum(['public', 'private', 'internal']).optional(),
@@ -200,12 +200,11 @@ export const agentGroupRouter = router({
       }
     }),
 
-  
   /**
    * Deprecate agent group
    * POST /market/agent-group/:identifier/deprecate
    */
-deprecateAgentGroup: agentGroupProcedure
+  deprecateAgentGroup: agentGroupProcedure
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ input, ctx }) => {
       log('deprecateAgentGroup input: %O', input);
@@ -259,13 +258,11 @@ deprecateAgentGroup: agentGroupProcedure
       }
     }),
 
-  
-  
-/**
+  /**
    * Fork an agent group
    * POST /market/agent-group/:identifier/fork
    */
-forkAgentGroup: agentGroupProcedure
+  forkAgentGroup: agentGroupProcedure
     .input(
       z.object({
         identifier: z.string(),
@@ -338,13 +335,11 @@ forkAgentGroup: agentGroupProcedure
       }
     }),
 
-  
-  
-/**
+  /**
    * Get the fork source of an agent group
    * GET /market/agent-group/:identifier/fork-source
    */
-getAgentGroupForkSource: agentGroupProcedure
+  getAgentGroupForkSource: agentGroupProcedure
     .input(z.object({ identifier: z.string() }))
     .query(async ({ input, ctx }) => {
       log('getAgentGroupForkSource input: %O', input);
@@ -398,13 +393,11 @@ getAgentGroupForkSource: agentGroupProcedure
       }
     }),
 
-  
-  
-/**
+  /**
    * Get all forks of an agent group
    * GET /market/agent-group/:identifier/forks
    */
-getAgentGroupForks: agentGroupProcedure
+  getAgentGroupForks: agentGroupProcedure
     .input(z.object({ identifier: z.string() }))
     .query(async ({ input, ctx }) => {
       log('getAgentGroupForks input: %O', input);
@@ -458,13 +451,11 @@ getAgentGroupForks: agentGroupProcedure
       }
     }),
 
-  
-  
-/**
+  /**
    * Publish agent group
    * POST /market/agent-group/:identifier/publish
    */
-publishAgentGroup: agentGroupProcedure
+  publishAgentGroup: agentGroupProcedure
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ input, ctx }) => {
       log('publishAgentGroup input: %O', input);
@@ -518,15 +509,13 @@ publishAgentGroup: agentGroupProcedure
       }
     }),
 
-  
-  
-/**
+  /**
    * Unified publish or create agent group flow
    * 1. Check if identifier exists and if current user is owner
    * 2. If not owner or no identifier, create new group
    * 3. Create new version for the group if updating
    */
-publishOrCreate: agentGroupProcedure
+  publishOrCreate: agentGroupProcedure
     .input(publishOrCreateGroupSchema)
     .mutation(async ({ input, ctx }) => {
       log('publishOrCreate input: %O', input);
@@ -614,12 +603,11 @@ publishOrCreate: agentGroupProcedure
       }
     }),
 
-  
   /**
    * Unpublish agent group
    * POST /market/agent-group/:identifier/unpublish
    */
-unpublishAgentGroup: agentGroupProcedure
+  unpublishAgentGroup: agentGroupProcedure
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ input, ctx }) => {
       log('unpublishAgentGroup input: %O', input);
