@@ -262,6 +262,8 @@ export default {
 
   'mcp.categories.web-search.name': 'Information Retrieval',
 
+  'mcp.details.agents.title': 'Agents Using This Skill',
+
   'mcp.details.connectionType.hybrid.desc':
     'This service can run locally or in the cloud depending on configuration or usage scenario, offering dual operation capability.',
 
