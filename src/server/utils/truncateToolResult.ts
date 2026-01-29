@@ -20,8 +20,6 @@ export const DEFAULT_TOOL_RESULT_MAX_LENGTH = 25_000;
 export function truncateToolResult(content: string, maxLength?: number): string {
   const limit = maxLength ?? DEFAULT_TOOL_RESULT_MAX_LENGTH;
 
-  console.log('content-limit', content, limit);
-
   if (!content || content.length <= limit) {
     return content;
   }
