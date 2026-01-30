@@ -98,7 +98,12 @@ export const aiProviderRouter = router({
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.aiProviderModel.updateConfig(input.id, input.value, ctx.gateKeeper.encrypt);
+      return ctx.aiProviderModel.updateConfig(
+        input.id,
+        input.value,
+        ctx.gateKeeper.encrypt,
+        KeyVaultsGateKeeper.getUserKeyVaults,
+      );
     }),
 
   updateAiProviderOrder: aiProviderProcedure

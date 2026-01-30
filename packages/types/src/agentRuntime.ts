@@ -24,6 +24,7 @@ export const AgentRuntimeErrorType = {
   StreamChunkError: 'StreamChunkError',
 
   InvalidGithubToken: 'InvalidGithubToken',
+  InvalidGithubCopilotToken: 'InvalidGithubCopilotToken',
 
   ConnectionCheckFailed: 'ConnectionCheckFailed',
 

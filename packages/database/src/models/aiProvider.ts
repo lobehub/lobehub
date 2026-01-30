@@ -111,11 +111,29 @@ export class AiProviderModel {
     id: string,
     value: UpdateAiProviderConfigParams,
     encryptor?: EncryptUserKeyVaults,
+    decryptor?: DecryptUserKeyVaults,
   ) => {
     // eslint-disable-next-line unicorn/consistent-function-scoping
     const defaultSerialize = (s: string) => s;
     const encrypt = encryptor ?? defaultSerialize;
-    const keyVaults = await encrypt(JSON.stringify(value.keyVaults));
+    const decrypt = decryptor ?? JSON.parse;
+
+    // Merge keyVaults with existing values to preserve OAuth tokens
+    // when updating from form values that don't include them
+    let mergedKeyVaults = value.keyVaults || {};
+
+    const existing = await this.findById(id);
+    if (existing?.keyVaults) {
+      try {
+        const existingKeyVaults = await decrypt(existing.keyVaults);
+        // Merge: new values override existing, but preserve fields not in new values
+        mergedKeyVaults = { ...existingKeyVaults, ...value.keyVaults };
+      } catch {
+        // Ignore decryption errors, use new values only
+      }
+    }
+
+    const keyVaults = await encrypt(JSON.stringify(mergedKeyVaults));
 
     const commonFields = {
       checkModel: value.checkModel,

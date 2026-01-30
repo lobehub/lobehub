@@ -20,6 +20,7 @@ export enum ModelProvider {
   FireworksAI = 'fireworksai',
   GiteeAI = 'giteeai',
   Github = 'github',
+  GithubCopilot = 'githubcopilot',
   Google = 'google',
   Groq = 'groq',
   Higress = 'higress',
