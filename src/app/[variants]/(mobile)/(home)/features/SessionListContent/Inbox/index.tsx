@@ -2,45 +2,35 @@ import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { DEFAULT_INBOX_AVATAR } from '@/const/meta';
-import { INBOX_SESSION_ID } from '@/const/session';
 import { SESSION_CHAT_URL } from '@/const/url';
 import { useNavigateToAgent } from '@/hooks/useNavigateToAgent';
-import { getChatStoreState, useChatStore } from '@/store/chat';
-import { chatSelectors } from '@/store/chat/selectors';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { useSessionStore } from '@/store/session';
+import { sessionSelectors } from '@/store/session/selectors';
 
 import ListItem from '../ListItem';
 
 const Inbox = memo(() => {
   const mobile = useServerConfigStore((s) => s.isMobile);
-  const activeId = useSessionStore((s) => s.activeId);
+  const isInboxActive = useSessionStore(sessionSelectors.isInboxSession);
   const navigateToAgent = useNavigateToAgent();
-
-  const openNewTopicOrSaveTopic = useChatStore((s) => s.openNewTopicOrSaveTopic);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
 
   return (
     <Link
       aria-label={'Lobe AI'}
-      onClick={async (e) => {
+      onClick={(e) => {
         e.preventDefault();
-        if (activeId === INBOX_SESSION_ID && !mobile) {
-          // If user tap the inbox again, open a new topic.
-          // Only for desktop.
-          const inboxMessages = chatSelectors.inboxActiveTopicMessages(getChatStoreState());
-          if (inboxMessages.length > 0) {
-            await openNewTopicOrSaveTopic();
-          }
-        } else {
-          navigateToAgent(INBOX_SESSION_ID);
-        }
+        navigateToAgent(inboxAgentId);
       }}
-      to={SESSION_CHAT_URL(INBOX_SESSION_ID, mobile)}
+      to={SESSION_CHAT_URL(inboxAgentId, mobile)}
     >
       <ListItem
-        active={activeId === INBOX_SESSION_ID}
+        active={isInboxActive}
         avatar={DEFAULT_INBOX_AVATAR}
-        key={INBOX_SESSION_ID}
+        key={'inbox'}
         styles={{
           container: {
             gap: 12,

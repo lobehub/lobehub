@@ -91,7 +91,6 @@ const ChatList = memo<ChatListProps>(({ disableActionsBar, welcome, itemContent 
     <MessageActionProvider withSingletonActionsBar={!disableActionsBar}>
       <VirtualizedList
         dataSource={displayMessageIds}
-        // isGenerating={isGenerating}
         itemContent={itemContent ?? defaultItemContent}
       />
     </MessageActionProvider>

@@ -98,8 +98,16 @@ export class FlatListBuilder {
             return child?.role !== 'task';
           });
 
-          // Create tasks virtual message
-          const tasksMessage = this.createTasksMessage(parentMessage, taskChildren, processedIds);
+          // Check if tasks have different agentIds (groupTasks) or same agentId (tasks)
+          const taskAgentIds = new Set(
+            taskChildren.map((childId) => this.messageMap.get(childId)?.agentId).filter(Boolean),
+          );
+          const isGroupTasks = taskAgentIds.size > 1;
+
+          // Create appropriate virtual message based on agent diversity
+          const tasksMessage = isGroupTasks
+            ? this.createGroupTasksMessage(parentMessage, taskChildren, processedIds)
+            : this.createTasksMessage(parentMessage, taskChildren, processedIds);
           flatList.push(tasksMessage);
 
           // Continue with non-task children (e.g., final summary from assistant)
@@ -136,8 +144,18 @@ export class FlatListBuilder {
                     taskGrandchild.tools &&
                     taskGrandchild.tools.length > 0
                   ) {
-                    this.processAssistantGroup(
-                      taskGrandchild,
+                    this.processAssistantGroup(taskGrandchild, flatList, processedIds, allMessages);
+                  } else if (
+                    // Check if it's a supervisor message without tools (content-only)
+                    taskGrandchild.role === 'assistant' &&
+                    taskGrandchild.metadata?.isSupervisor &&
+                    (!taskGrandchild.tools || taskGrandchild.tools.length === 0)
+                  ) {
+                    const supervisorMessage = this.createSupervisorContentMessage(taskGrandchild);
+                    flatList.push(supervisorMessage);
+                    processedIds.add(taskGrandchildId);
+                    this.buildFlatListRecursive(
+                      taskGrandchildId,
                       flatList,
                       processedIds,
                       allMessages,
@@ -1033,6 +1051,54 @@ export class FlatListBuilder {
       },
       id: tasksId,
       role: 'tasks' as any,
+      tasks: taskMessages as any,
+      updatedAt,
+    } as Message;
+  }
+
+  /**
+   * Create a virtual groupTasks message for multiple tasks with different agentIds
+   */
+  private createGroupTasksMessage(
+    parentMessage: Message,
+    taskChildIds: string[],
+    processedIds: Set<string>,
+  ): Message {
+    const taskMessages: Message[] = [];
+
+    for (const taskId of taskChildIds) {
+      const taskMessage = this.messageMap.get(taskId);
+      if (taskMessage) {
+        taskMessages.push(taskMessage);
+        processedIds.add(taskId);
+      }
+    }
+
+    // Sort by createdAt to maintain order
+    taskMessages.sort((a, b) => a.createdAt - b.createdAt);
+
+    // Generate ID with parent message id and all task message ids
+    const taskIdsStr = taskMessages.map((t) => t.id).join('-');
+    const groupTasksId = `groupTasks-${parentMessage.id}-${taskIdsStr}`;
+
+    // Calculate timestamps from task messages
+    const createdAt =
+      taskMessages.length > 0
+        ? Math.min(...taskMessages.map((m) => m.createdAt))
+        : parentMessage.createdAt;
+    const updatedAt =
+      taskMessages.length > 0
+        ? Math.max(...taskMessages.map((m) => m.updatedAt))
+        : parentMessage.updatedAt;
+
+    return {
+      content: '',
+      createdAt,
+      extra: {
+        parentMessageId: parentMessage.id,
+      },
+      id: groupTasksId,
+      role: 'groupTasks' as any,
       tasks: taskMessages as any,
       updatedAt,
     } as Message;

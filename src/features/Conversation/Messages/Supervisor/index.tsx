@@ -110,7 +110,13 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
       titleAddon={<Tag>{t('supervisor.label')}</Tag>}
     >
       {children && children.length > 0 && (
-        <Group blocks={children} disableEditing={disableEditing} id={id} messageIndex={index} />
+        <Group
+          blocks={children}
+          content={item.content}
+          disableEditing={disableEditing}
+          id={id}
+          messageIndex={index}
+        />
       )}
       {model && (
         <Usage model={model} performance={performance} provider={provider!} usage={usage} />

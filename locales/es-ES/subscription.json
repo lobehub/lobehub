@@ -140,6 +140,8 @@
   "models.output": "Salida",
   "models.title": "Modelos",
   "payDiffPrice": "Pagar Diferencia",
+  "payDiffPriceApprox": "Aprox.",
+  "payDiffPriceTip": "El importe real se mostrará en la página de pago",
   "payment.error.actions.billing": "Gestión de Facturación",
   "payment.error.actions.home": "Volver al Inicio",
   "payment.error.desc": "ID de suscripción: {{id}} no encontrado. Si tienes preguntas, contáctanos por correo electrónico",

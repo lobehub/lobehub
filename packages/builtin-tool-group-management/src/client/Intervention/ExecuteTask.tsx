@@ -81,21 +81,21 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
     );
 
     // Local state
-    const [task, setTask] = useState(args?.task || '');
+    const [instruction, setInstruction] = useState(args?.instruction || '');
     const [timeout, setTimeout] = useState(args?.timeout ?? DEFAULT_TIMEOUT);
     const [hasChanges, setHasChanges] = useState(false);
 
     // Sync local state when args change externally
     useEffect(() => {
       if (!hasChanges) {
-        setTask(args?.task || '');
+        setInstruction(args?.instruction || '');
         setTimeout(args?.timeout ?? DEFAULT_TIMEOUT);
       }
-    }, [args?.task, args?.timeout, hasChanges]);
+    }, [args?.instruction, args?.timeout, hasChanges]);
 
-    // Handle task change
-    const handleTaskChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
-      setTask(e.target.value);
+    // Handle instruction change
+    const handleInstructionChange = useCallback((e: ChangeEvent<HTMLTextAreaElement>) => {
+      setInstruction(e.target.value);
       setHasChanges(true);
     }, []);
 
@@ -113,12 +113,12 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
 
       const cleanup = registerBeforeApprove('executeTask', async () => {
         if (hasChanges && onArgsChange) {
-          await onArgsChange({ ...args, task, timeout });
+          await onArgsChange({ ...args, instruction, timeout });
         }
       });
 
       return cleanup;
-    }, [registerBeforeApprove, hasChanges, task, timeout, args, onArgsChange]);
+    }, [registerBeforeApprove, hasChanges, instruction, timeout, args, onArgsChange]);
 
     return (
       <Flexbox className={styles.container} gap={12}>
@@ -154,12 +154,12 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
           </Flexbox>
         </Flexbox>
 
-        {/* Task input */}
+        {/* Instruction input */}
         <Input.TextArea
           autoSize={{ maxRows: 10, minRows: 6 }}
-          onChange={handleTaskChange}
+          onChange={handleInstructionChange}
           placeholder={t('agentGroupManagement.executeTask.intervention.taskPlaceholder')}
-          value={task}
+          value={instruction}
         />
       </Flexbox>
     );

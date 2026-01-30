@@ -1,7 +1,18 @@
-import { Flexbox, Input } from '@lobehub/ui';
-import { Switch } from 'antd';
+'use client';
+
+import { Flexbox, Input, LobeSwitch as Switch } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
+
+const styles = createStaticStyles(({ css }) => ({
+  titleInput: css`
+    flex: 1;
+    font-size: 28px;
+    font-weight: 500;
+    line-height: 1.4;
+  `,
+}));
 
 interface CronJobHeaderProps {
   enabled?: boolean;
@@ -17,30 +28,26 @@ const CronJobHeader = memo<CronJobHeaderProps>(
     const { t } = useTranslation(['setting', 'common']);
 
     return (
-      <Flexbox gap={16}>
-        {/* Title Input */}
+      <Flexbox
+        align="center"
+        gap={16}
+        horizontal
+        justify="space-between"
+        style={{ marginBottom: 8 }}
+      >
         <Input
+          className={styles.titleInput}
           onChange={(e) => onNameChange(e.target.value)}
           placeholder={t('agentCronJobs.form.name.placeholder')}
-          style={{
-            fontSize: 28,
-            fontWeight: 600,
-            padding: 0,
-          }}
           value={name}
-          variant={'borderless'}
+          variant="borderless"
         />
-
-        {/* Controls Row */}
         {!isNewJob && (
-          <Flexbox align="center" gap={12} horizontal>
-            {/* Enable/Disable Switch */}
-            <Switch
-              checked={enabled ?? false}
-              loading={isTogglingEnabled}
-              onChange={onToggleEnabled}
-            />
-          </Flexbox>
+          <Switch
+            checked={enabled ?? false}
+            loading={isTogglingEnabled}
+            onChange={onToggleEnabled}
+          />
         )}
       </Flexbox>
     );

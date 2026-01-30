@@ -37,7 +37,7 @@ We’re building the world’s largest human–agent co-evolving network.
 [![][share-mastodon-shield]][share-mastodon-link]
 [![][share-linkedin-shield]][share-linkedin-link]
 
-<sup>Agent teams that grow with you</sup>
+<sup>Agent teammates that grow with you</sup>
 
 [![][github-trending-shield]][github-trending-url]
 

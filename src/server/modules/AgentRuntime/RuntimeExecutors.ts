@@ -753,7 +753,11 @@ export const createRuntimeExecutors = (
     const newState = structuredClone(state);
 
     // Query latest messages from database
+    // Must pass agentId to ensure correct query scope, otherwise when topicId is undefined,
+    // the query will use isNull(topicId) condition which won't find messages with actual topicId
     const latestMessages = await ctx.messageModel.query({
+      agentId: state.metadata?.agentId,
+      threadId: state.metadata?.threadId,
       topicId: state.metadata?.topicId,
     });
 

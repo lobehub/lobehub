@@ -35,19 +35,19 @@ Here is the process for deploying the LobeHub server database version on a Linux
 <Steps>
   ### Create a Postgres Database Instance
 
-  Please create a Postgres database instance with the PGVector plugin according to your needs, for example:
+  Please create a Postgres database instance according to your needs, for example:
 
   ```sh
   docker network create pg
 
-  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d pgvector/pgvector:pg17
+  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d paradedb/paradedb:latest-pg17
   ```
 
-  The above command will create a PG instance named `my-postgres` on the network `pg`, where `pgvector/pgvector:pg17` is a Postgres 17 image with the pgvector plugin installed by default.
+  The above command will create a PG instance named `my-postgres` on the network `pg`, where `paradedb/paradedb:latest-pg17` is a Postgres 17 image with pgvector and pg\_search plugins installed by default.
 
   <Callout type="info">
-    The pgvector plugin provides vector search capabilities for Postgres, which is an important
-    component for LobeHub to implement RAG.
+    The ParadeDB image includes pgvector (vector search) and pg\_search (full-text search) plugins, which are important
+    components for LobeHub to implement RAG and knowledge base search.
   </Callout>
 
   <Callout type="warning">

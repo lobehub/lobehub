@@ -72,6 +72,8 @@ export interface DelegateParams {
 
 export interface ExecuteTaskParams {
   agentId: string;
+  /** Clear instruction describing the task to perform */
+  instruction: string;
   /**
    * Whether to run on the desktop client (for local file/shell access).
    * MUST be true when task requires local-system tools. Default is false (server execution).
@@ -83,7 +85,6 @@ export interface ExecuteTaskParams {
    * Use this when the task is the final action needed.
    */
   skipCallSupervisor?: boolean;
-  task: string;
   timeout?: number;
   /** Brief title describing what this task does (shown in UI) */
   title: string;
@@ -92,7 +93,7 @@ export interface ExecuteTaskParams {
 export interface TaskItem {
   /** The ID of the agent to execute this task */
   agentId: string;
-  /** Detailed instruction/prompt for the task execution */
+  /** Detailed instruction for the agent to execute */
   instruction: string;
   /** Optional timeout in milliseconds for this specific task */
   timeout?: number;

@@ -28,7 +28,7 @@ export class UsageRecordService {
     // Set startAt and endAt
     let startAt: string;
     let endAt: string;
-    if (mo) {
+    if (mo && dayjs(mo, 'YYYY-MM', true).isValid()) {
       // mo format: "YYYY-MM"
       startAt = dayjs(mo, 'YYYY-MM').startOf('month').format('YYYY-MM-DD');
       endAt = dayjs(mo, 'YYYY-MM').endOf('month').format('YYYY-MM-DD');
@@ -89,15 +89,18 @@ export class UsageRecordService {
     // Set startAt and endAt
     let startAt: string;
     let endAt: string;
-    if (mo) {
+    let month: string;
+    if (mo && dayjs(mo, 'YYYY-MM', true).isValid()) {
       // mo format: "YYYY-MM"
       startAt = dayjs(mo, 'YYYY-MM').startOf('month').format('YYYY-MM-DD');
       endAt = dayjs(mo, 'YYYY-MM').endOf('month').format('YYYY-MM-DD');
+      month = mo;
     } else {
       startAt = dayjs().startOf('month').format('YYYY-MM-DD');
       endAt = dayjs().endOf('month').format('YYYY-MM-DD');
+      month = dayjs().format('YYYY-MM');
     }
-    const spends = await this.findByMonth(mo);
+    const spends = await this.findByMonth(month);
     // Clustering by time
     let usages = new Map<string, { date: Date; logs: UsageRecordItem[] }>();
     spends.forEach((spend) => {

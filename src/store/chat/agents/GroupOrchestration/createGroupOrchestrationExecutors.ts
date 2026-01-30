@@ -369,14 +369,17 @@ export const createGroupOrchestrationExecutors = (
      *
      * Returns: task_completed result
      */
-    exec_async_task: async (instruction, state): Promise<GroupOrchestrationExecutorOutput> => {
-      const { agentId, task, timeout, title, toolMessageId } = (
-        instruction as SupervisorInstructionExecAsyncTask
+    exec_async_task: async (
+      supervisorInstruction,
+      state,
+    ): Promise<GroupOrchestrationExecutorOutput> => {
+      const { agentId, instruction, timeout, title, toolMessageId } = (
+        supervisorInstruction as SupervisorInstructionExecAsyncTask
       ).payload;
 
       const sessionLogId = `${state.operationId}:exec_async_task`;
       log(
-        `[${sessionLogId}] Executing async task for agent: ${agentId}, task: ${task}, timeout: ${timeout}`,
+        `[${sessionLogId}] Executing async task for agent: ${agentId}, instruction: ${instruction}, timeout: ${timeout}`,
       );
 
       const { groupId, topicId } = messageContext;
@@ -400,7 +403,7 @@ export const createGroupOrchestrationExecutors = (
             agentId,
             content: '',
             groupId,
-            metadata: { instruction: task, taskTitle: title },
+            metadata: { instruction, taskTitle: title },
             parentId: toolMessageId,
             role: 'task',
             topicId,
@@ -427,7 +430,7 @@ export const createGroupOrchestrationExecutors = (
         const createResult = await aiAgentService.execSubAgentTask({
           agentId,
           groupId,
-          instruction: task,
+          instruction,
           parentMessageId: taskMessageId,
           title,
           topicId,
@@ -600,9 +603,12 @@ export const createGroupOrchestrationExecutors = (
      *
      * Returns: task_completed result
      */
-    exec_client_async_task: async (instruction, state): Promise<GroupOrchestrationExecutorOutput> => {
-      const { agentId, task, title, toolMessageId } = (
-        instruction as SupervisorInstructionExecClientAsyncTask
+    exec_client_async_task: async (
+      supervisorInstruction,
+      state,
+    ): Promise<GroupOrchestrationExecutorOutput> => {
+      const { agentId, instruction, title, toolMessageId } = (
+        supervisorInstruction as SupervisorInstructionExecClientAsyncTask
       ).payload;
 
       const sessionLogId = `${state.operationId}:exec_client_async_task`;
@@ -629,7 +635,7 @@ export const createGroupOrchestrationExecutors = (
             agentId,
             content: '',
             groupId,
-            metadata: { instruction: task, taskTitle: title },
+            metadata: { instruction, taskTitle: title },
             parentId: toolMessageId,
             role: 'task',
             topicId,
@@ -656,7 +662,7 @@ export const createGroupOrchestrationExecutors = (
         // Use Group-specific API that handles different agentIds in thread context
         const threadResult = await aiAgentService.createClientGroupAgentTaskThread({
           groupId: groupId!,
-          instruction: task,
+          instruction,
           parentMessageId: taskMessageId,
           subAgentId: agentId,
           title,
@@ -861,9 +867,9 @@ export const createGroupOrchestrationExecutors = (
       interface TaskTracker {
         agentId: string;
         error?: string;
+        instruction: string;
         result?: string;
         status: 'pending' | 'running' | 'completed' | 'failed';
-        task: string;
         taskMessageId?: string;
         threadId?: string;
         timeout: number;
@@ -873,7 +879,7 @@ export const createGroupOrchestrationExecutors = (
       const taskTrackers: TaskTracker[] = tasks.map((t) => ({
         agentId: t.agentId,
         status: 'pending',
-        task: t.task,
+        instruction: t.instruction,
         timeout: t.timeout || 1_800_000, // Default 30 minutes
         title: t.title,
       }));
@@ -887,8 +893,9 @@ export const createGroupOrchestrationExecutors = (
               {
                 agentId: tracker.agentId,
                 content: '',
+                createdAt: Date.now() + index,
                 groupId,
-                metadata: { instruction: tracker.task, taskTitle: tracker.title },
+                metadata: { instruction: tracker.instruction, taskTitle: tracker.title },
                 parentId: toolMessageId,
                 role: 'task',
                 topicId,
@@ -922,7 +929,7 @@ export const createGroupOrchestrationExecutors = (
             const createResult = await aiAgentService.execSubAgentTask({
               agentId: tracker.agentId,
               groupId,
-              instruction: tracker.task,
+              instruction: tracker.instruction,
               parentMessageId: tracker.taskMessageId,
               title: tracker.title,
               topicId,

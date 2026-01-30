@@ -9,7 +9,6 @@ import {
   type UserPersonaExtractionResult,
   UserPersonaExtractor,
 } from '@lobechat/memory-user-memory';
-import { ModelRuntime } from '@lobechat/model-runtime';
 import { desc, eq } from 'drizzle-orm';
 
 import { UserMemoryModel } from '@/database/models/userMemory';
@@ -21,25 +20,13 @@ import {
   parseMemoryExtractionConfig,
 } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import {
+  type ProviderKeyVaultMap,
+  type RuntimeResolveOptions,
+  resolveRuntimeAgentConfig,
+} from '@/server/services/memory/userMemory/extract';
 import { LayersEnum } from '@/types/userMemory';
 import { trimBasedOnBatchProbe } from '@/utils/chunkers';
-
-const extractCredentialsFromVault = (
-  vault?: Record<string, unknown>,
-): { apiKey?: string; baseURL?: string } => {
-  if (!vault || typeof vault !== 'object') return {};
-
-  const apiKey =
-    'apiKey' in vault && typeof (vault as any).apiKey === 'string'
-      ? (vault as any).apiKey
-      : undefined;
-  const baseURL =
-    'baseURL' in vault && typeof (vault as any).baseURL === 'string'
-      ? (vault as any).baseURL
-      : undefined;
-
-  return { apiKey, baseURL };
-};
 
 interface UserPersonaAgentPayload {
   existingPersona?: string | null;
@@ -79,28 +66,27 @@ export class UserPersonaService {
     const runtimeState = await aiInfraRepos.getAiProviderRuntimeState(
       KeyVaultsGateKeeper.getUserKeyVaults,
     );
-
     const providerId = await AiInfraRepos.tryMatchingProviderFrom(runtimeState, {
       fallbackProvider: this.agentConfig.provider,
       label: 'persona writer',
       modelId: this.agentConfig.model,
     });
 
-    const normalizedProvider = providerId.toLowerCase();
-    const { apiKey: vaultApiKey, baseURL: vaultBaseURL } = extractCredentialsFromVault(
-      runtimeState.runtimeConfig?.[normalizedProvider]?.keyVaults,
+    const keyVaults: ProviderKeyVaultMap = Object.entries(runtimeState.runtimeConfig || {}).reduce(
+      (acc, [provider, config]) => {
+        acc[provider.toLowerCase()] = config?.keyVaults;
+        return acc;
+      },
+      {} as ProviderKeyVaultMap,
     );
 
-    const useVaultCredential = !!vaultApiKey;
-    const apiKey = useVaultCredential ? vaultApiKey : this.agentConfig.apiKey;
-    const baseURL = useVaultCredential
-      ? vaultBaseURL || this.agentConfig.baseURL
-      : this.agentConfig.baseURL;
-
-    const runtime = await ModelRuntime.initializeWithProvider(normalizedProvider, {
-      apiKey,
-      baseURL,
-    });
+    const runtime = await resolveRuntimeAgentConfig({ ...this.agentConfig }, keyVaults, {
+      fallback: {
+        apiKey: this.agentConfig.apiKey,
+        baseURL: this.agentConfig.baseURL,
+      },
+      preferred: { providerIds: [providerId] },
+    } satisfies RuntimeResolveOptions);
 
     const personaModel = new UserPersonaModel(this.db, payload.userId);
     const lastDocument = await personaModel.getLatestPersonaDocument();

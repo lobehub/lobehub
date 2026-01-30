@@ -1,6 +1,6 @@
 ---
-title: 在 Dokploy 上部署 LobeHub 的服务端数据库版本
-description: 本文详细介绍如何在 Dokploy 中部署服务端数据库版 LobeHub，包括数据库配置、身份验证服务配置的设置步骤。
+title: 在 Dokploy 上部署 LobeHub
+description: 本文详细介绍如何在 Dokploy 中部署 LobeHub，包括数据库配置、身份验证服务配置的设置步骤。
 tags:
   - 服务端数据库
   - Postgres
@@ -11,9 +11,9 @@ tags:
   - 环境变量配置
 ---
 
-# 在 Dokploy 上部署服务端数据库版
+# 在 Dokploy 上部署 LobeHub
 
-本文将详细介绍如何在 Dokploy 中部署服务端数据库版 LobeHub。
+本文将详细介绍如何在 Dokploy 中部署 LobeHub。
 
 ## 一、准备工作
 
@@ -68,7 +68,7 @@ S3_ENABLE_PATH_STYLE=
 
 ## 二、在 Dokploy 上部署数据库
 
-进入前面创建的 Project，点击 Create Service 选择 Database，在 Database 界面选择 PostgreSQL ，然后设置数据库名、用户、密码，在 Docker image 中填入 `pgvector/pgvector:pg17` 最后点击 Create 创建数据库。
+进入前面创建的 Project，点击 Create Service 选择 Database，在 Database 界面选择 PostgreSQL ，然后设置数据库名、用户、密码，在 Docker image 中填入 `paradedb/paradedb:latest-pg17` 最后点击 Create 创建数据库。
 
 ![](/blog/assets7006b60baaf62aa0d95cd40456e24afe.webp)
 

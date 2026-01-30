@@ -472,12 +472,14 @@ export const createTokenSpeedCalculator = (
     // - text/reasoning: standard text output events
     // - content_part/reasoning_part: multimodal output events used by Gemini 3+ models
     //   which emit structured parts instead of plain text events
+    // - tool_calls: function calling output events
     if (
       !outputStartAt &&
       (chunk.type === 'text' ||
         chunk.type === 'reasoning' ||
         chunk.type === 'content_part' ||
-        chunk.type === 'reasoning_part')
+        chunk.type === 'reasoning_part' ||
+        chunk.type === 'tool_calls')
     ) {
       outputStartAt = Date.now();
     }

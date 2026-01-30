@@ -1,6 +1,5 @@
 'use client';
 
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { Flexbox } from '@lobehub/ui';
 import { Typography } from 'antd';
 import { Clock } from 'lucide-react';
@@ -10,6 +9,7 @@ import urlJoin from 'url-join';
 
 import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentStore } from '@/store/agent';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 import CronJobCards from './CronJobCards';
 import { useAgentCronJobs } from './hooks/useAgentCronJobs';
@@ -20,8 +20,9 @@ const AgentCronJobs = memo(() => {
   const { t } = useTranslation('setting');
   const agentId = useAgentStore((s) => s.activeAgentId);
   const router = useQueryRoute();
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
-  const { cronJobs, loading, deleteCronJob } = useAgentCronJobs(agentId);
+  const { cronJobs, loading, deleteCronJob } = useAgentCronJobs(agentId, enableBusinessFeatures);
 
   // Edit: Navigate to cron job detail page
   const handleEdit = useCallback(
@@ -40,7 +41,7 @@ const AgentCronJobs = memo(() => {
     [deleteCronJob],
   );
 
-  if (!ENABLE_BUSINESS_FEATURES) return null;
+  if (!enableBusinessFeatures) return null;
 
   if (!agentId) {
     return null;

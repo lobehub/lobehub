@@ -53,7 +53,7 @@ export interface SupervisorInstructionParallelCallAgents {
 export interface SupervisorInstructionExecAsyncTask {
   payload: {
     agentId: string;
-    task: string;
+    instruction: string;
     timeout?: number;
     /** Task title (shown in UI, used as thread title) */
     title?: string;
@@ -69,7 +69,7 @@ export interface SupervisorInstructionExecAsyncTask {
 export interface SupervisorInstructionExecClientAsyncTask {
   payload: {
     agentId: string;
-    task: string;
+    instruction: string;
     timeout?: number;
     /** Task title (shown in UI, used as thread title) */
     title?: string;
@@ -85,7 +85,7 @@ export interface SupervisorInstructionBatchExecAsyncTasks {
   payload: {
     tasks: Array<{
       agentId: string;
-      task: string;
+      instruction: string;
       timeout?: number;
       /** Task title (shown in UI, used as thread title) */
       title?: string;

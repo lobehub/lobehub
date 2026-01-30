@@ -1,4 +1,3 @@
-import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import type { SWRResponse } from 'swr';
 import { type StateCreator } from 'zustand/vanilla';
 
@@ -33,7 +32,10 @@ export interface CronTopicGroupWithJobInfo {
 export interface CronSliceAction {
   createAgentCronJob: () => Promise<string | null>;
   internal_refreshCronTopics: () => Promise<void>;
-  useFetchCronTopicsWithJobInfo: (agentId?: string) => SWRResponse<CronTopicGroupWithJobInfo[]>;
+  useFetchCronTopicsWithJobInfo: (
+    agentId?: string,
+    enabled?: boolean,
+  ) => SWRResponse<CronTopicGroupWithJobInfo[]>;
 }
 
 export const createCronSlice: StateCreator<
@@ -69,9 +71,9 @@ export const createCronSlice: StateCreator<
     await mutate([FETCH_CRON_TOPICS_WITH_JOB_INFO_KEY, get().activeAgentId]);
   },
 
-  useFetchCronTopicsWithJobInfo: (agentId) =>
+  useFetchCronTopicsWithJobInfo: (agentId, enabled = true) =>
     useClientDataSWR<CronTopicGroupWithJobInfo[]>(
-      ENABLE_BUSINESS_FEATURES && agentId ? [FETCH_CRON_TOPICS_WITH_JOB_INFO_KEY, agentId] : null,
+      enabled && agentId ? [FETCH_CRON_TOPICS_WITH_JOB_INFO_KEY, agentId] : null,
       async ([, id]: [string, string]) => {
         const [cronJobsResult, cronTopicsGroups] = await Promise.all([
           lambdaClient.agentCronJob.findByAgent.query({ agentId: id }),

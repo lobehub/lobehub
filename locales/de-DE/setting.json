@@ -446,6 +446,8 @@
   "settingImage.defaultCount.desc": "Standardanzahl der Bilder festlegen, die beim Erstellen einer neuen Aufgabe im Bildgenerierungsbereich erzeugt werden.",
   "settingImage.defaultCount.label": "Standardanzahl Bilder",
   "settingImage.defaultCount.title": "KI-Kunst",
+  "settingModel.enableContextCompression.desc": "Komprimiert automatisch frühere Nachrichten zu Zusammenfassungen, wenn das Gespräch 64.000 Tokens überschreitet, und spart dabei 60–80 % an Token-Nutzung",
+  "settingModel.enableContextCompression.title": "Automatische Kontextkomprimierung aktivieren",
   "settingModel.enableMaxTokens.title": "Begrenzung der maximalen Tokens aktivieren",
   "settingModel.enableReasoningEffort.title": "Anpassung des Denkaufwands aktivieren",
   "settingModel.frequencyPenalty.desc": "Je höher der Wert, desto vielfältiger der Wortschatz; je niedriger, desto einfacher die Sprache.",

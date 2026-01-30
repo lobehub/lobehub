@@ -446,6 +446,8 @@
   "settingImage.defaultCount.desc": "Установите количество изображений по умолчанию, создаваемых при запуске новой задачи в панели генерации изображений.",
   "settingImage.defaultCount.label": "Количество изображений по умолчанию",
   "settingImage.defaultCount.title": "ИИ-арт",
+  "settingModel.enableContextCompression.desc": "Автоматически сжимать историю сообщений в виде кратких сводок, когда диалог превышает 64 000 токенов, экономя 60–80% токенов",
+  "settingModel.enableContextCompression.title": "Включить автоматическое сжатие контекста",
   "settingModel.enableMaxTokens.title": "Включить ограничение токенов",
   "settingModel.enableReasoningEffort.title": "Включить настройку усилий рассуждения",
   "settingModel.frequencyPenalty.desc": "Чем выше значение, тем разнообразнее и богаче словарный запас; чем ниже значение, тем проще и прямолинейнее язык.",

@@ -1,3 +1,5 @@
+'use client';
+
 import {
   ReactCodePlugin,
   ReactCodemirrorPlugin,
@@ -8,11 +10,18 @@ import {
   ReactTablePlugin,
 } from '@lobehub/editor';
 import { Editor, useEditor } from '@lobehub/editor/react';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
-import { Card } from 'antd';
-import { Clock } from 'lucide-react';
+import { FormGroup } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+
+const styles = createStaticStyles(({ css }) => ({
+  editorWrapper: css`
+    min-height: 200px;
+    padding-block: 8px;
+    padding-inline: 0;
+  `,
+}));
 
 interface CronJobContentEditorProps {
   enableRichRender: boolean;
@@ -26,12 +35,10 @@ const CronJobContentEditor = memo<CronJobContentEditorProps>(
     const editor = useEditor();
     const currentValueRef = useRef(initialValue);
 
-    // Update currentValueRef when initialValue changes
     useEffect(() => {
       currentValueRef.current = initialValue;
     }, [initialValue]);
 
-    // Initialize editor content when editor is ready
     useEffect(() => {
       if (!editor) return;
       try {
@@ -48,7 +55,6 @@ const CronJobContentEditor = memo<CronJobContentEditorProps>(
       }
     }, [editor, enableRichRender, initialValue]);
 
-    // Handle content changes
     const handleContentChange = useCallback(
       (e: any) => {
         const nextContent = enableRichRender
@@ -57,7 +63,6 @@ const CronJobContentEditor = memo<CronJobContentEditorProps>(
 
         const finalContent = nextContent || '';
 
-        // Only call onChange if content actually changed
         if (finalContent !== currentValueRef.current) {
           currentValueRef.current = finalContent;
           onChange(finalContent);
@@ -67,43 +72,33 @@ const CronJobContentEditor = memo<CronJobContentEditorProps>(
     );
 
     return (
-      <Flexbox gap={12}>
-        <Flexbox align="center" gap={6} horizontal>
-          <Icon icon={Clock} size={16} />
-          <Text style={{ fontWeight: 600 }}>{t('agentCronJobs.content')}</Text>
-        </Flexbox>
-        <Card
-          size="small"
-          style={{ borderRadius: 12, overflow: 'hidden' }}
-          styles={{ body: { padding: 0 } }}
-        >
-          <Flexbox padding={16} style={{ minHeight: 220 }}>
-            <Editor
-              content={''}
-              editor={editor}
-              lineEmptyPlaceholder={t('agentCronJobs.form.content.placeholder')}
-              onTextChange={handleContentChange}
-              placeholder={t('agentCronJobs.form.content.placeholder')}
-              plugins={
-                enableRichRender
-                  ? [
-                      ReactListPlugin,
-                      ReactCodePlugin,
-                      ReactCodemirrorPlugin,
-                      ReactHRPlugin,
-                      ReactLinkPlugin,
-                      ReactTablePlugin,
-                      ReactMathPlugin,
-                    ]
-                  : undefined
-              }
-              style={{ paddingBottom: 48 }}
-              type={'text'}
-              variant={'chat'}
-            />
-          </Flexbox>
-        </Card>
-      </Flexbox>
+      <FormGroup title={t('agentCronJobs.content')} variant="filled">
+        <div className={styles.editorWrapper}>
+          <Editor
+            content={''}
+            editor={editor}
+            lineEmptyPlaceholder={t('agentCronJobs.form.content.placeholder')}
+            onTextChange={handleContentChange}
+            placeholder={t('agentCronJobs.form.content.placeholder')}
+            plugins={
+              enableRichRender
+                ? [
+                    ReactListPlugin,
+                    ReactCodePlugin,
+                    ReactCodemirrorPlugin,
+                    ReactHRPlugin,
+                    ReactLinkPlugin,
+                    ReactTablePlugin,
+                    ReactMathPlugin,
+                  ]
+                : undefined
+            }
+            style={{ paddingBottom: 48 }}
+            type={'text'}
+            variant={'chat'}
+          />
+        </div>
+      </FormGroup>
     );
   },
 );

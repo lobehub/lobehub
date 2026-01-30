@@ -1,5 +1,5 @@
 import { ProviderIcon } from '@lobehub/icons';
-import { Flexbox, Tag, Text } from '@lobehub/ui';
+import { Flexbox, Tag, Text, Tooltip } from '@lobehub/ui';
 import { type TableColumnType } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo, useEffect } from 'react';
@@ -53,7 +53,9 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
               marginRight: -8,
             }}
           />
-          <Text>{value?.length > 12 ? `${value.slice(0, 12)}...` : value}</Text>
+          <Tooltip title={value}>
+            <Text>{value?.length > 12 ? `${value.slice(0, 12)}...` : value}</Text>
+          </Tooltip>
         </Flexbox>
       ),
       title: t('usage.table.model'),

@@ -11,133 +11,132 @@ tags:
 
 在服务端数据库中我们需要配置 S3 存储服务来存储文件。
 
-
 <Callout type={'info'}>
-由于近期 MinIO 的商业化策略调整，我们不再推荐使用 MinIO 作为 S3 存储服务，建议所有仍在使用 MinIO 的用户迁移至 [RustFS](https://rustfs.com/) 或者 [ceph](https://ceph.io/) 等开源的 S3 存储服务或者腾讯云对象存储、Cloudflare R2 等云服务商的 S3 存储服务。
+  由于近期 MinIO 的商业化策略调整，我们不再推荐使用 MinIO 作为 S3 存储服务，建议所有仍在使用 MinIO 的用户迁移至 [RustFS](https://rustfs.com/) 或者 [ceph](https://ceph.io/) 等开源的 S3 存储服务或者腾讯云对象存储、Cloudflare R2 等云服务商的 S3 存储服务。
 </Callout>
 
 ## 配置步骤
 
 <Steps>
-### 部署 RustFS
+  ### 部署 RustFS
 
-首先，拉取 RustFS 的 Docker 镜像：
+  首先，拉取 RustFS 的 Docker 镜像：
 
-```shell
-docker pull rustfs/rustfs:latest
-```
+  ```shell
+  docker pull rustfs/rustfs:latest
+  ```
 
-你可以使用如下命令来查看其版本，建议使用 v1.0.0 及以上版本：
+  你可以使用如下命令来查看其版本，建议使用 v1.0.0 及以上版本：
 
-```shell
-docker inspect --format='{{index .Config.Labels "version"}}' rustfs/rustfs:latest
-```
+  ```shell
+  docker inspect --format='{{index .Config.Labels "version"}}' rustfs/rustfs:latest
+  ```
 
-我们推荐使用 Docker Compose 来部署 RustFS：
+  我们推荐使用 Docker Compose 来部署 RustFS：
 
-```yml
-services:
-    rustfs:
-        image: rustfs/rustfs:latest
-        container_name: lobe-rustfs
-        ports:
-            - '9000:9000'
-            - '9001:9001'
-        environment:
-            - RUSTFS_CONSOLE_ENABLE=true
-            - RUSTFS_ACCESS_KEY=<YOUR_ACCESS_KEY>
-            - RUSTFS_SECRET_KEY=<YOUR_SECRET_KEY>
-        volumes:
-            - rustfs-data:/data
+  ```yml
+  services:
+      rustfs:
+          image: rustfs/rustfs:latest
+          container_name: lobe-rustfs
+          ports:
+              - '9000:9000'
+              - '9001:9001'
+          environment:
+              - RUSTFS_CONSOLE_ENABLE=true
+              - RUSTFS_ACCESS_KEY=<YOUR_ACCESS_KEY>
+              - RUSTFS_SECRET_KEY=<YOUR_SECRET_KEY>
+          volumes:
+              - rustfs-data:/data
 
-volumes:
-  rustfs-data:
-```
+  volumes:
+    rustfs-data:
+  ```
 
-然后，启动 RustFS：
+  然后，启动 RustFS：
 
-```shell
-docker compose up -d
-```
+  ```shell
+  docker compose up -d
+  ```
 
-### 创建存储桶
+  ### 创建存储桶
 
-访问 RustFS 的 WebUI（`http://localhost:9001/`），即可自动跳转到登录页。输入账号（上述 `docker-compose.yml` 文件中的 `RUSTFS_ACCESS_KEY`）、密码（上述 `docker-compose.yml` 文件中的 `RUSTFS_SECRET_KEY`），即可登录。
+  访问 RustFS 的 WebUI（`http://localhost:9001/`），即可自动跳转到登录页。输入账号（上述 `docker-compose.yml` 文件中的 `RUSTFS_ACCESS_KEY`）、密码（上述 `docker-compose.yml` 文件中的 `RUSTFS_SECRET_KEY`），即可登录。
 
-点击左侧边栏的 `对象存储` 菜单，右上角 `创建存储桶` 按钮，创建一个新的存储桶（Bucket）。创建存储桶时将指定其名称，下文以 `lobe` 为例。版本、对象锁依照默认配置不开启。
+  点击左侧边栏的 `对象存储` 菜单，右上角 `创建存储桶` 按钮，创建一个新的存储桶（Bucket）。创建存储桶时将指定其名称，下文以 `lobe` 为例。版本、对象锁依照默认配置不开启。
 
-<Image alt={"Create Bucket"} src={'https://github.com/user-attachments/assets/27c37617-a813-4de5-b0bf-c7167999c856'} />
+  <Image alt={"Create Bucket"} src={'https://github.com/user-attachments/assets/27c37617-a813-4de5-b0bf-c7167999c856'} />
 
-点击存储桶 - `配置` 按钮，选择策略为 `自定义`，然后填入如下 JSON，设置存储桶的权限为 `公有读私有写`：
+  点击存储桶 - `配置` 按钮，选择策略为 `自定义`，然后填入如下 JSON，设置存储桶的权限为 `公有读私有写`：
 
-```json
-{ 
-  "ID": "", 
-  "Version": "2012-10-17", 
-  "Statement": [ 
-    { 
-      "Sid": "", 
-      "Effect": "Allow", 
-      "Principal": { 
-        "AWS": [ 
-          "*" 
-        ] 
-      }, 
-      "Action": [ 
-        "s3:GetObject" 
-      ], 
-      "NotAction": [], 
-      "Resource": [ 
-        "arn:aws:s3:::lobe/*" 
-      ], 
-      "NotResource": [], 
-      "Condition": {} 
-    } 
-  ] 
-}
-```
+  ```json
+  {
+    "ID": "",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "",
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": [
+            "*"
+          ]
+        },
+        "Action": [
+          "s3:GetObject"
+        ],
+        "NotAction": [],
+        "Resource": [
+          "arn:aws:s3:::lobe/*"
+        ],
+        "NotResource": [],
+        "Condition": {}
+      }
+    ]
+  }
+  ```
 
-点击保存即可。
+  点击保存即可。
 
-### 设置访问密钥
+  ### 设置访问密钥
 
-<Callout type={'warning'}>
-  有关这部分，你可以直接使用在 `docker-compose.yml` 文件中配置的 `RUSTFS_ACCESS_KEY` 和 `RUSTFS_SECRET_KEY`，但出于安全考虑，我们推荐你手动创建一个访问密钥。
-</Callout>
+  <Callout type={'warning'}>
+    有关这部分，你可以直接使用在 `docker-compose.yml` 文件中配置的 `RUSTFS_ACCESS_KEY` 和 `RUSTFS_SECRET_KEY`，但出于安全考虑，我们推荐你手动创建一个访问密钥。
+  </Callout>
 
-点击左侧边栏的 `访问密钥` 菜单，右上角 `添加访问密钥` 按钮，创建一个新的访问密钥（Access Key）。名称随意，按照默认配置使用主账号策略即可。
+  点击左侧边栏的 `访问密钥` 菜单，右上角 `添加访问密钥` 按钮，创建一个新的访问密钥（Access Key）。名称随意，按照默认配置使用主账号策略即可。
 
-记录好得到的访问密钥和密钥（你可以点击 `导出` 按钮以在本地保存）。这里 RustFS 的翻译有点迷惑，但你只需要记住上面那个短的是 `Access Key`，长的是 `Secret Key` 即可（导出的 JSON 中是对的）。
+  记录好得到的访问密钥和密钥（你可以点击 `导出` 按钮以在本地保存）。这里 RustFS 的翻译有点迷惑，但你只需要记住上面那个短的是 `Access Key`，长的是 `Secret Key` 即可（导出的 JSON 中是对的）。
 
-<Image alt={"Add Key"} src={'https://github.com/user-attachments/assets/81f18b20-3918-4f77-8571-07d0c4a79aec'} />
+  <Image alt={"Add Key"} src={'https://github.com/user-attachments/assets/81f18b20-3918-4f77-8571-07d0c4a79aec'} />
 
-<Image alt={"Export Key"} src={'https://github.com/user-attachments/assets/4dde41ec-985b-4781-8c77-aac65555a32f'} />
+  <Image alt={"Export Key"} src={'https://github.com/user-attachments/assets/4dde41ec-985b-4781-8c77-aac65555a32f'} />
 
-### 配置反向代理
+  ### 配置反向代理
 
-你还需要完成反向代理配置，并确保局域网 / 公网能访问到 RustFS 的服务。请使用反向代理将以下服务端口映射到域名：
+  你还需要完成反向代理配置，并确保局域网 / 公网能访问到 RustFS 的服务。请使用反向代理将以下服务端口映射到域名：
 
-| 域名                     | 反代端口   | 是否必选 |
-| ---------------------- | ------ | ---- |
-| `lobe-s3-api.example.com`     | `9000` | 必选   |
-| `lobe-s3-ui.example.com` | `9001` |      |
+  | 域名                        | 反代端口   | 是否必选 |
+  | ------------------------- | ------ | ---- |
+  | `lobe-s3-api.example.com` | `9000` | 必选   |
+  | `lobe-s3-ui.example.com`  | `9001` |      |
 
-完成反向代理后，记得配置对应的 SSL 证书，启用 HTTPS 访问。
+  完成反向代理后，记得配置对应的 SSL 证书，启用 HTTPS 访问。
 
-### 设置环境变量
+  ### 设置环境变量
 
-修改 LobeChat 的 `.env` 文件，添加如下环境变量，即可完成配置，使用 RustFS 作为 S3 存储服务：
+  修改 LobeHub 的 `.env` 文件，添加如下环境变量，即可完成配置，使用 RustFS 作为 S3 存储服务：
 
-```shell
-# RustFS 的鉴权 Access Key / Secret Key
-S3_ACCESS_KEY_ID=<YOUR_ACCESS_KEY>
-S3_SECRET_ACCESS_KEY=<YOUR_SECRET_KEY>
-# RustFS API 的请求端点
-S3_ENDPOINT=https://lobe-s3-api.example.com
-# 存储桶的名称
-S3_BUCKET=lobe
-# 存储桶对外的访问域名
-S3_PUBLIC_DOMAIN=https://lobe-s3-api.example.com
-S3_ENABLE_PATH_STYLE=1
-```
+  ```shell
+  # RustFS 的鉴权 Access Key / Secret Key
+  S3_ACCESS_KEY_ID=<YOUR_ACCESS_KEY>
+  S3_SECRET_ACCESS_KEY=<YOUR_SECRET_KEY>
+  # RustFS API 的请求端点
+  S3_ENDPOINT=https://lobe-s3-api.example.com
+  # 存储桶的名称
+  S3_BUCKET=lobe
+  # 存储桶对外的访问域名
+  S3_PUBLIC_DOMAIN=https://lobe-s3-api.example.com
+  S3_ENABLE_PATH_STYLE=1
+  ```
 </Steps>

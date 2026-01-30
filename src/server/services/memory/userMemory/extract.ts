@@ -227,7 +227,7 @@ export interface TopicBatchWorkflowPayload extends MemoryExtractionPayloadInput 
   userId: string;
 }
 
-type ProviderKeyVaultMap = Record<
+export type ProviderKeyVaultMap = Record<
   string,
   AiProviderRuntimeState['runtimeConfig'][string]['keyVaults'] | undefined
 >;
@@ -296,16 +296,16 @@ const maskSecret = (value?: string) => {
   return `${value.slice(0, 6)}***${value.slice(-4)}`;
 };
 
-type ProviderCredential = { apiKey?: string; baseURL?: string };
+export type ProviderCredential = { apiKey?: string; baseURL?: string };
 
-type RuntimeResolveOptions = {
+export type RuntimeResolveOptions = {
   fallback?: ProviderCredential;
   preferred?: {
     providerIds?: string[];
   };
 };
 
-const resolveRuntimeAgentConfig = (
+export const resolveRuntimeAgentConfig = (
   agent: MemoryAgentConfig,
   keyVaults?: ProviderKeyVaultMap,
   options?: RuntimeResolveOptions,
@@ -323,34 +323,63 @@ const resolveRuntimeAgentConfig = (
   );
 
   for (const provider of providerOrder) {
+    if (provider === 'lobehub') {
+      debugRuntimeInit(agent, {
+        provider,
+        source: 'user-vault' as const,
+      });
+
+      return ModelRuntime.initializeWithProvider(provider, {});
+    }
+
     const { apiKey: userApiKey, baseURL: userBaseURL } = extractCredentialsFromVault(
       keyVaults?.[provider],
     );
-    if (!userApiKey) continue;
+    if (!userApiKey) {
+      console.warn(
+        `[memory-extraction] skipping provider ${provider} due to missing API key in user vault`,
+      );
+      continue;
+    }
+
+    debugRuntimeInit(agent, {
+      apiKey: userApiKey,
+      baseURL: userBaseURL,
+      provider,
+      source: 'user-vault' as const,
+    });
 
     // Only use the user baseURL if we are also using their API key; otherwise fall back entirely
     // to system config to avoid mixing credentials.
-    return {
+    return ModelRuntime.initializeWithProvider(provider, {
       apiKey: userApiKey,
-      baseURL: userBaseURL || agent.baseURL || options?.fallback?.baseURL,
-      provider,
-      source: 'user-keyvault' as const,
-    };
+      baseURL: userBaseURL,
+    });
   }
 
-  return {
+  debugRuntimeInit(agent, {
     apiKey: agent.apiKey || options?.fallback?.apiKey,
     baseURL: agent.baseURL || options?.fallback?.baseURL,
     provider: agent.provider || 'openai',
     source: 'system-config' as const,
-  };
+  });
+
+  return ModelRuntime.initializeWithProvider(agent.provider || 'openai', {
+    apiKey: agent.apiKey || options?.fallback?.apiKey,
+    baseURL: agent.baseURL || options?.fallback?.baseURL,
+  });
 };
 
 const logRuntime = debug('lobe-server:memory:user-memory:runtime');
 
 const debugRuntimeInit = (
   agent: MemoryAgentConfig,
-  resolved: ReturnType<typeof resolveRuntimeAgentConfig>,
+  resolved: {
+    apiKey?: string;
+    baseURL?: string;
+    provider: string;
+    source: 'user-vault' | 'system-config';
+  },
 ) => {
   if (!logRuntime.enabled) return;
   logRuntime('init runtime', {
@@ -360,24 +389,6 @@ const debugRuntimeInit = (
     baseURL: resolved.baseURL,
     provider: resolved.provider,
     source: resolved.source,
-  });
-};
-
-const initRuntimeForAgent = async (
-  agent: MemoryAgentConfig,
-  keyVaults?: ProviderKeyVaultMap,
-  options?: RuntimeResolveOptions,
-) => {
-  const resolved = resolveRuntimeAgentConfig(agent, keyVaults, options);
-  debugRuntimeInit(agent, resolved);
-
-  if (!resolved.apiKey) {
-    throw new Error(`Missing API key for ${resolved.provider} memory extraction runtime`);
-  }
-
-  return ModelRuntime.initializeWithProvider(resolved.provider, {
-    apiKey: resolved.apiKey,
-    baseURL: resolved.baseURL,
   });
 };
 
@@ -1957,17 +1968,17 @@ export class MemoryExtractionExecutor {
     };
 
     const runtimes: RuntimeBundle = {
-      embeddings: await initRuntimeForAgent(
+      embeddings: await resolveRuntimeAgentConfig(
         { ...this.privateConfig.embedding },
         keyVaults,
         embeddingOptions,
       ),
-      gatekeeper: await initRuntimeForAgent(
+      gatekeeper: await resolveRuntimeAgentConfig(
         { ...this.privateConfig.agentGateKeeper },
         keyVaults,
         gatekeeperOptions,
       ),
-      layerExtractor: await initRuntimeForAgent(
+      layerExtractor: await resolveRuntimeAgentConfig(
         { ...this.privateConfig.agentLayerExtractor },
         keyVaults,
         layerExtractorOptions,

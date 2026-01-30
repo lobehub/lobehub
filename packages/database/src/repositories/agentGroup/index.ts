@@ -17,9 +17,11 @@ import { LobeChatDatabase } from '../../type';
 export interface SupervisorAgentConfig {
   avatar?: string;
   backgroundColor?: string;
+  chatConfig?: any;
   description?: string;
   model?: string;
   params?: any;
+  plugins?: string[];
   provider?: string;
   systemRole?: string;
   tags?: string[];
@@ -172,9 +174,11 @@ export class AgentGroupRepository {
       .values({
         avatar: supervisorConfig?.avatar,
         backgroundColor: supervisorConfig?.backgroundColor,
+        chatConfig: supervisorConfig?.chatConfig,
         description: supervisorConfig?.description,
         model: supervisorConfig?.model,
         params: supervisorConfig?.params,
+        plugins: supervisorConfig?.plugins,
         provider: supervisorConfig?.provider,
         systemRole: supervisorConfig?.systemRole,
         tags: supervisorConfig?.tags,

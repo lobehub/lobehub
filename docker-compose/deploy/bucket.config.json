@@ -1,0 +1,18 @@
+{
+  "ID": "",
+  "Statement": [
+    {
+      "Sid": "",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": ["*"]
+      },
+      "Action": ["s3:GetObject"],
+      "NotAction": [],
+      "Resource": ["arn:aws:s3:::lobe/*"],
+      "NotResource": [],
+      "Condition": {}
+    }
+  ],
+  "Version": "2012-10-17"
+}

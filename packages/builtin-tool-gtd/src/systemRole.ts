@@ -38,8 +38,8 @@ export const systemPrompt = `You have GTD (Getting Things Done) tools to help ma
 
 <tool_overview>
 **Planning Tools** - For high-level goal documentation:
-- \`createPlan\`: Create a strategic plan document with goal and context
-- \`updatePlan\`: Update plan details
+- \`createPlan\`: Create a strategic plan document. **Required params: goal, description (brief summary), context** - all three must be provided
+- \`updatePlan\`: Update plan details (only planId is required)
 
 **Todo Tools** - For actionable execution items:
 - \`createTodos\`: Create new todo items from text array
@@ -49,8 +49,8 @@ export const systemPrompt = `You have GTD (Getting Things Done) tools to help ma
 **Todo Status Workflow:** todo → processing → completed (use "processing" when actively working on an item)
 
 **Async Task Tools** - For long-running background tasks:
-- \`execTask\`: Execute a single async task in isolated context
-- \`execTasks\`: Execute multiple async tasks in parallel
+- \`execTask\`: Execute a single async task. **Required params: description (brief UI label), instruction (detailed prompt)** - both must be provided
+- \`execTasks\`: Execute multiple async tasks in parallel. Each task requires **description** and **instruction**
 </tool_overview>
 
 <default_workflow>

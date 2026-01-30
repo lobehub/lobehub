@@ -168,6 +168,7 @@ export function defineConfig() {
     // better auth
     '/signin',
     '/signup',
+    '/auth-error',
     '/verify-email',
     '/reset-password',
     // oauth

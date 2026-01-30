@@ -1,6 +1,72 @@
 [
   {
     "children": {
+      "fixes": ["Fix feishu sso provider."]
+    },
+    "date": "2026-01-30",
+    "version": "2.1.2"
+  },
+  {
+    "children": {
+      "fixes": ["Correct desktop download URL path."]
+    },
+    "date": "2026-01-30",
+    "version": "2.1.1"
+  },
+  {
+    "children": {
+      "features": ["Refactor cron job UI and use runtime enableBusinessFeatures flag."]
+    },
+    "date": "2026-01-30",
+    "version": "2.1.0"
+  },
+  {
+    "children": {
+      "improvements": ["Fix usage table display issues."]
+    },
+    "date": "2026-01-29",
+    "version": "2.0.13"
+  },
+  {
+    "children": {
+      "fixes": ["Group publish to market should set local group market identifer."]
+    },
+    "date": "2026-01-29",
+    "version": "2.0.12"
+  },
+  {
+    "children": {
+      "improvements": ["Fix group task render."]
+    },
+    "date": "2026-01-29",
+    "version": "2.0.11"
+  },
+  {
+    "children": {
+      "fixes": ["Add ExtendParamsTypeSchema for enhanced model settings."]
+    },
+    "date": "2026-01-29",
+    "version": "2.0.10"
+  },
+  {
+    "children": {},
+    "date": "2026-01-29",
+    "version": "2.0.9"
+  },
+  {
+    "children": {
+      "fixes": ["Fix inbox agent in mobile."]
+    },
+    "date": "2026-01-28",
+    "version": "2.0.8"
+  },
+  {
+    "children": {},
+    "date": "2026-01-28",
+    "version": "2.0.7"
+  },
+  {
+    "children": {
       "fixes": ["The klavis in onboarding connect timeout fixed."]
     },
     "date": "2026-01-27",
