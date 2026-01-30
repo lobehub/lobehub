@@ -18,7 +18,6 @@ export interface HomeInputAction {
   clearInputMode: () => void;
   sendAsAgent: (message: string) => Promise<string>;
   sendAsGroup: (message: string) => Promise<string>;
-  sendAsImage: () => void;
   sendAsResearch: (message: string) => Promise<void>;
   sendAsWrite: (message: string) => Promise<string>;
   setInputActiveMode: (mode: StarterMode) => void;
@@ -153,17 +152,6 @@ export const createHomeInputSlice: StateCreator<
     }
   },
 
-  sendAsImage: () => {
-    // Navigate to /image page
-    const { navigate } = get();
-    if (navigate) {
-      navigate('/image');
-    }
-
-    // Clear mode
-    set({ inputActiveMode: null }, false, n('sendAsImage'));
-  },
-
   sendAsResearch: async (message) => {
     // TODO: Implement DeepResearch mode
     console.log('sendAsResearch:', message);
@@ -176,29 +164,46 @@ export const createHomeInputSlice: StateCreator<
     set({ homeInputLoading: true }, false, n('sendAsWrite/start'));
 
     try {
-      // 1. Create new Document
+      const agentState = getAgentStoreState();
+
+      // 1. Get model/provider config from inbox agent
+      const inboxAgentId = builtinAgentSelectors.inboxAgentId(agentState);
+      const inboxConfig = inboxAgentId
+        ? agentSelectors.getAgentConfigById(inboxAgentId)(agentState)
+        : null;
+      const model = inboxConfig?.model;
+      const provider = inboxConfig?.provider;
+
+      // 2. Create new Document
       const newDoc = await documentService.createDocument({
-        editorData: '',
+        editorData: '{}',
+        fileType: 'custom/document',
         title: message?.slice(0, 50) || 'Untitled',
       });
 
-      // 2. Navigate to Page
+      // 3. Navigate to Page
       const { navigate } = get();
       if (navigate) {
         navigate(`/page/${newDoc.id}`);
       }
 
-      // 3. Send message with document scope context
-      const { sendMessage } = useChatStore.getState();
-      await sendMessage({
-        context: {
-          agentId: newDoc.id,
-          scope: 'page',
-        },
-        message,
-      });
+      // 4. Update pageAgent's model config and send initial message
+      const pageAgentId = builtinAgentSelectors.pageAgentId(agentState);
 
-      // 4. Clear mode
+      if (pageAgentId) {
+        // Update pageAgent's model to match inbox selection
+        if (model && provider) {
+          await agentState.updateAgentConfigById(pageAgentId, { model, provider });
+        }
+
+        const { sendMessage } = useChatStore.getState();
+        await sendMessage({
+          context: { agentId: pageAgentId, scope: 'page' },
+          message,
+        });
+      }
+
+      // 5. Clear mode
       set({ inputActiveMode: null }, false, n('sendAsWrite/clearMode'));
 
       return newDoc.id;

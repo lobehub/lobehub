@@ -1,7 +1,7 @@
-import { ActionIcon, Block, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Text } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { BotIcon, FilePenIcon, ImageIcon, PenLineIcon, X } from 'lucide-react';
+import { BotIcon, FilePenIcon, PenLineIcon, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,7 +22,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const modeConfig = {
   agent: { icon: BotIcon, titleKey: 'starter.createAgent' },
   group: { icon: GroupBotSquareIcon, titleKey: 'starter.createGroup' },
-  image: { icon: ImageIcon, titleKey: 'starter.image' },
   research: { icon: FilePenIcon, titleKey: 'starter.deepResearch' },
   write: { icon: PenLineIcon, titleKey: 'starter.write' },
 } as const;
@@ -41,29 +40,27 @@ const ModeHeader = memo(() => {
   const Icon = config.icon;
 
   return (
-    <Flexbox align={'flex-start'} padding={4}>
-      <Block
-        align="center"
-        className={styles.container}
-        gap={8}
-        horizontal
-        padding={4}
-        variant={'filled'}
-      >
-        <Icon color={cssVar.colorTextDescription} size={16} />
-        <Text fontSize={12} type={'secondary'}>
-          {t(config.titleKey)}
-        </Text>
-        <ActionIcon
-          icon={X}
-          onClick={clearInputMode}
-          size="small"
-          style={{
-            borderRadius: 16,
-          }}
-        />
-      </Block>
-    </Flexbox>
+    <Block
+      align="center"
+      className={styles.container}
+      gap={8}
+      horizontal
+      padding={4}
+      variant={'filled'}
+    >
+      <Icon color={cssVar.colorTextDescription} size={16} />
+      <Text fontSize={12} type={'secondary'}>
+        {t(config.titleKey)}
+      </Text>
+      <ActionIcon
+        icon={X}
+        onClick={clearInputMode}
+        size="small"
+        style={{
+          borderRadius: 16,
+        }}
+      />
+    </Block>
   );
 });
 
