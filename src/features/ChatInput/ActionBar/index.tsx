@@ -41,10 +41,11 @@ const mapActionsToItems = (keys: ActionKeys[]): ChatInputActionsProps['items'] =
   });
 
 export interface ActionToolbarProps {
+  autoCollapse?: boolean;
   dropdownPlacement?: DropdownPlacement;
 }
 
-const ActionToolbar = memo<ActionToolbarProps>(({ dropdownPlacement }) => {
+const ActionToolbar = memo<ActionToolbarProps>(({ autoCollapse = true, dropdownPlacement }) => {
   const [expandInputActionbar, toggleExpandInputActionbar] = useGlobalStore((s) => [
     systemStatusSelectors.expandInputActionbar(s),
     s.toggleExpandInputActionbar,
@@ -64,9 +65,10 @@ const ActionToolbar = memo<ActionToolbarProps>(({ dropdownPlacement }) => {
   return (
     <ActionBarContext.Provider value={contextValue}>
       <ChatInputActions
+        autoCollapse={autoCollapse}
         collapseOffset={mobile ? 48 : 80}
-        defaultGroupCollapse={true}
-        groupCollapse={!expandInputActionbar}
+        defaultGroupCollapse={autoCollapse}
+        groupCollapse={autoCollapse ? !expandInputActionbar : false}
         items={items}
         onGroupCollapseChange={(v) => {
           toggleExpandInputActionbar(!v);

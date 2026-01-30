@@ -68,8 +68,9 @@ const InputArea = () => {
             }}
           >
             <DesktopChatInput
+              actionBarRightContent={inputActiveMode ? <ModeHeader /> : undefined}
+              autoCollapse={false}
               dropdownPlacement="bottomLeft"
-              extenHeaderContent={inputActiveMode ? <ModeHeader /> : undefined}
               inputContainerProps={inputContainerProps}
             />
           </ChatInputProvider>
