@@ -7,6 +7,7 @@
  * - Per-request runtimes (e.g., CloudSandbox - needs topicId, userId)
  */
 import { type ToolExecutionContext } from '../types';
+import { calculatorRuntime } from './calculator';
 import { cloudSandboxRuntime } from './cloudSandbox';
 import { type ServerRuntimeFactory, type ServerRuntimeRegistration } from './types';
 import { webBrowsingRuntime } from './webBrowsing';
@@ -26,7 +27,7 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 };
 
 // Register all server runtimes
-registerRuntimes([webBrowsingRuntime, cloudSandboxRuntime]);
+registerRuntimes([webBrowsingRuntime, cloudSandboxRuntime, calculatorRuntime]);
 
 // ==================== Registry API ====================
 
