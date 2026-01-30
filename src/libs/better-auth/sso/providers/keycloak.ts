@@ -13,6 +13,7 @@ const provider: GenericProviderDefinition<{
       clientId: env.AUTH_KEYCLOAK_ID,
       clientSecret: env.AUTH_KEYCLOAK_SECRET,
       issuer: env.AUTH_KEYCLOAK_ISSUER,
+      label: env.label,
       providerId: 'keycloak',
     }),
   checkEnvs: () => {
@@ -25,6 +26,7 @@ const provider: GenericProviderDefinition<{
           AUTH_KEYCLOAK_ID: authEnv.AUTH_KEYCLOAK_ID,
           AUTH_KEYCLOAK_ISSUER: authEnv.AUTH_KEYCLOAK_ISSUER,
           AUTH_KEYCLOAK_SECRET: authEnv.AUTH_KEYCLOAK_SECRET,
+          label: authEnv.AUTH_KEYCLOAK_LABEL,
         }
       : false;
   },

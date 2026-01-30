@@ -13,6 +13,7 @@ const provider: GenericProviderDefinition<{
       clientId: env.AUTH_CASDOOR_ID,
       clientSecret: env.AUTH_CASDOOR_SECRET,
       issuer: env.AUTH_CASDOOR_ISSUER,
+      label: env.label,
       overrides: {
         mapProfileToUser: (profile) => {
           const composedName = [profile.firstName, profile.lastName]
@@ -38,6 +39,7 @@ const provider: GenericProviderDefinition<{
           AUTH_CASDOOR_ID: authEnv.AUTH_CASDOOR_ID,
           AUTH_CASDOOR_ISSUER: authEnv.AUTH_CASDOOR_ISSUER,
           AUTH_CASDOOR_SECRET: authEnv.AUTH_CASDOOR_SECRET,
+          label: authEnv.AUTH_CASDOOR_LABEL,
         }
       : false;
   },

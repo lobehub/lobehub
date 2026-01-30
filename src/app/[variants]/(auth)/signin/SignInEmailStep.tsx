@@ -27,6 +27,7 @@ export interface SignInEmailStepProps {
   form: FormInstance<{ email: string }>;
   isSocialOnly: boolean;
   loading: boolean;
+  oAuthSSOProviderLabels?: Record<string, string | undefined>;
   oAuthSSOProviders: string[];
   onCheckUser: (values: { email: string }) => Promise<void>;
   onSetPassword: () => void;
@@ -39,6 +40,7 @@ export const SignInEmailStep = ({
   form,
   isSocialOnly,
   loading,
+  oAuthSSOProviderLabels,
   oAuthSSOProviders,
   serverConfigInit,
   socialLoading,
@@ -62,6 +64,12 @@ export const SignInEmailStep = ({
   );
 
   const getProviderLabel = (provider: string) => {
+    // Use custom label if provided
+    if (oAuthSSOProviderLabels?.[provider]) {
+      return `Continue with ${oAuthSSOProviderLabels[provider]}`;
+    }
+
+    // Fallback to i18n or default label generation
     const normalized = provider
       .toLowerCase()
       .replaceAll(/(^|[_-])([a-z])/g, (_, __, c) => c.toUpperCase());

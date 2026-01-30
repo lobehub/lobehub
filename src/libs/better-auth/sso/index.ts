@@ -117,3 +117,23 @@ export const initBetterAuthSSOProviders = () => {
     socialProviders: socialProviders,
   };
 };
+
+export const getBetterAuthSSOProviderLabels = () => {
+  const enabledProviders = parseSSOProviders(authEnv.AUTH_SSO_PROVIDERS);
+  const providerLabels: Record<string, string | undefined> = {};
+
+  for (const rawProvider of enabledProviders) {
+    const definition = providerRegistry.get(rawProvider);
+
+    if (!definition) {
+      continue;
+    }
+
+    const env = definition.checkEnvs();
+    if (env && env.label) {
+      providerLabels[definition.id] = env.label;
+    }
+  }
+
+  return providerLabels;
+};

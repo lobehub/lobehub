@@ -44,13 +44,26 @@ tags:
 
   When deploying LobeChat, you need to configure the following environment variables:
 
-  | Environment Variable             | Type     | Description                                                                   |
-  | -------------------------------- | -------- | ----------------------------------------------------------------------------- |
-  | `AUTH_SECRET`                    | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32` |
-  | `AUTH_SSO_PROVIDERS`             | Required | SSO provider for LobeChat. Use `okta` for Okta                                |
-  | `AUTH_OKTA_ID`                   | Required | Client ID from Okta application                                               |
-  | `AUTH_OKTA_SECRET`               | Required | Client Secret from Okta application                                           |
-  | `AUTH_OKTA_ISSUER`               | Required | Okta issuer URL (e.g., `https://your-okta-domain.okta.com`)                   |
+  | Environment Variable | Type     | Description                                                                   |
+  | -------------------- | -------- | ----------------------------------------------------------------------------- |
+  | `AUTH_SECRET`        | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS` | Required | SSO provider for LobeChat. Use `okta` for Okta                                |
+  | `AUTH_OKTA_ID`       | Required | Client ID from Okta application                                               |
+  | `AUTH_OKTA_SECRET`   | Required | Client Secret from Okta application                                           |
+  | `AUTH_OKTA_ISSUER`   | Required | Okta issuer URL (e.g., `https://your-okta-domain.okta.com`)                   |
+  | `AUTH_OKTA_LABEL`    | Optional | Custom display label for the login button (e.g., `Corporate SSO`)             |
+
+  ### Custom Login Button Label
+
+  You can customize the text displayed on the Okta login button by setting the `AUTH_OKTA_LABEL` environment variable. This is useful for branding or making the login experience more user-friendly.
+
+  **Example:**
+
+  ```bash
+  AUTH_OKTA_LABEL="Corporate SSO"
+  ```
+
+  This will display "Continue with Corporate SSO" instead of "Continue with Okta" on the login page.
 
   <Callout type={'tip'}>
     Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#okta) for detailed information on these variables.

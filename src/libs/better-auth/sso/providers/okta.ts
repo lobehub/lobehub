@@ -13,6 +13,7 @@ const provider: GenericProviderDefinition<{
       clientId: env.AUTH_OKTA_ID,
       clientSecret: env.AUTH_OKTA_SECRET,
       issuer: env.AUTH_OKTA_ISSUER,
+      label: env.label,
       overrides: {
         mapProfileToUser: (profile) => ({
           email: profile.email,
@@ -27,6 +28,7 @@ const provider: GenericProviderDefinition<{
           AUTH_OKTA_ID: authEnv.AUTH_OKTA_ID,
           AUTH_OKTA_ISSUER: authEnv.AUTH_OKTA_ISSUER,
           AUTH_OKTA_SECRET: authEnv.AUTH_OKTA_SECRET,
+          label: authEnv.AUTH_OKTA_LABEL,
         }
       : false;
   },

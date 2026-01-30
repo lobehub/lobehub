@@ -20,6 +20,7 @@ const provider: BuiltinProviderDefinition<MicrosoftEnv, 'microsoft'> = {
       ? {
           AUTH_MICROSOFT_ID: clientId,
           AUTH_MICROSOFT_SECRET: clientSecret,
+          label: authEnv.AUTH_MICROSOFT_LABEL,
         }
       : false;
   },

@@ -17,13 +17,16 @@ declare global {
       // ===== Auth Provider Credentials ===== //
       AUTH_GOOGLE_ID?: string;
       AUTH_GOOGLE_SECRET?: string;
+      AUTH_GOOGLE_LABEL?: string;
 
       AUTH_APPLE_CLIENT_ID?: string;
       AUTH_APPLE_CLIENT_SECRET?: string;
       AUTH_APPLE_APP_BUNDLE_IDENTIFIER?: string;
+      AUTH_APPLE_LABEL?: string;
 
       AUTH_GITHUB_ID?: string;
       AUTH_GITHUB_SECRET?: string;
+      AUTH_GITHUB_LABEL?: string;
 
       AUTH_COGNITO_ID?: string;
       AUTH_COGNITO_SECRET?: string;
@@ -31,55 +34,69 @@ declare global {
       AUTH_COGNITO_DOMAIN?: string;
       AUTH_COGNITO_REGION?: string;
       AUTH_COGNITO_USERPOOL_ID?: string;
+      AUTH_COGNITO_LABEL?: string;
 
       AUTH_MICROSOFT_ID?: string;
       AUTH_MICROSOFT_SECRET?: string;
+      AUTH_MICROSOFT_LABEL?: string;
 
       AUTH_AUTH0_ID?: string;
       AUTH_AUTH0_SECRET?: string;
       AUTH_AUTH0_ISSUER?: string;
+      AUTH_AUTH0_LABEL?: string;
 
       AUTH_AUTHELIA_ID?: string;
       AUTH_AUTHELIA_SECRET?: string;
       AUTH_AUTHELIA_ISSUER?: string;
+      AUTH_AUTHELIA_LABEL?: string;
 
       AUTH_AUTHENTIK_ID?: string;
       AUTH_AUTHENTIK_SECRET?: string;
       AUTH_AUTHENTIK_ISSUER?: string;
+      AUTH_AUTHENTIK_LABEL?: string;
 
       AUTH_CASDOOR_ID?: string;
       AUTH_CASDOOR_SECRET?: string;
       AUTH_CASDOOR_ISSUER?: string;
+      AUTH_CASDOOR_LABEL?: string;
 
       AUTH_CLOUDFLARE_ZERO_TRUST_ID?: string;
       AUTH_CLOUDFLARE_ZERO_TRUST_SECRET?: string;
       AUTH_CLOUDFLARE_ZERO_TRUST_ISSUER?: string;
+      AUTH_CLOUDFLARE_ZERO_TRUST_LABEL?: string;
 
       AUTH_FEISHU_APP_ID?: string;
       AUTH_FEISHU_APP_SECRET?: string;
+      AUTH_FEISHU_LABEL?: string;
 
       AUTH_GENERIC_OIDC_ID?: string;
       AUTH_GENERIC_OIDC_SECRET?: string;
       AUTH_GENERIC_OIDC_ISSUER?: string;
+      AUTH_GENERIC_OIDC_LABEL?: string;
 
       AUTH_KEYCLOAK_ID?: string;
       AUTH_KEYCLOAK_SECRET?: string;
       AUTH_KEYCLOAK_ISSUER?: string;
+      AUTH_KEYCLOAK_LABEL?: string;
 
       AUTH_LOGTO_ID?: string;
       AUTH_LOGTO_SECRET?: string;
       AUTH_LOGTO_ISSUER?: string;
+      AUTH_LOGTO_LABEL?: string;
 
       AUTH_OKTA_ID?: string;
       AUTH_OKTA_SECRET?: string;
       AUTH_OKTA_ISSUER?: string;
+      AUTH_OKTA_LABEL?: string;
 
       AUTH_WECHAT_ID?: string;
       AUTH_WECHAT_SECRET?: string;
+      AUTH_WECHAT_LABEL?: string;
 
       AUTH_ZITADEL_ID?: string;
       AUTH_ZITADEL_SECRET?: string;
       AUTH_ZITADEL_ISSUER?: string;
+      AUTH_ZITADEL_LABEL?: string;
 
       // ===== JWKS Key ===== //
       /**
@@ -115,13 +132,16 @@ export const getAuthConfig = () => {
 
       AUTH_GOOGLE_ID: z.string().optional(),
       AUTH_GOOGLE_SECRET: z.string().optional(),
+      AUTH_GOOGLE_LABEL: z.string().optional(),
 
       AUTH_APPLE_CLIENT_ID: z.string().optional(),
       AUTH_APPLE_CLIENT_SECRET: z.string().optional(),
       AUTH_APPLE_APP_BUNDLE_IDENTIFIER: z.string().optional(),
+      AUTH_APPLE_LABEL: z.string().optional(),
 
       AUTH_GITHUB_ID: z.string().optional(),
       AUTH_GITHUB_SECRET: z.string().optional(),
+      AUTH_GITHUB_LABEL: z.string().optional(),
 
       AUTH_COGNITO_ID: z.string().optional(),
       AUTH_COGNITO_SECRET: z.string().optional(),
@@ -129,55 +149,69 @@ export const getAuthConfig = () => {
       AUTH_COGNITO_DOMAIN: z.string().optional(),
       AUTH_COGNITO_REGION: z.string().optional(),
       AUTH_COGNITO_USERPOOL_ID: z.string().optional(),
+      AUTH_COGNITO_LABEL: z.string().optional(),
 
       AUTH_MICROSOFT_ID: z.string().optional(),
       AUTH_MICROSOFT_SECRET: z.string().optional(),
+      AUTH_MICROSOFT_LABEL: z.string().optional(),
 
       AUTH_AUTH0_ID: z.string().optional(),
       AUTH_AUTH0_SECRET: z.string().optional(),
       AUTH_AUTH0_ISSUER: z.string().optional(),
+      AUTH_AUTH0_LABEL: z.string().optional(),
 
       AUTH_AUTHELIA_ID: z.string().optional(),
       AUTH_AUTHELIA_SECRET: z.string().optional(),
       AUTH_AUTHELIA_ISSUER: z.string().optional(),
+      AUTH_AUTHELIA_LABEL: z.string().optional(),
 
       AUTH_AUTHENTIK_ID: z.string().optional(),
       AUTH_AUTHENTIK_SECRET: z.string().optional(),
       AUTH_AUTHENTIK_ISSUER: z.string().optional(),
+      AUTH_AUTHENTIK_LABEL: z.string().optional(),
 
       AUTH_CASDOOR_ID: z.string().optional(),
       AUTH_CASDOOR_SECRET: z.string().optional(),
       AUTH_CASDOOR_ISSUER: z.string().optional(),
+      AUTH_CASDOOR_LABEL: z.string().optional(),
 
       AUTH_CLOUDFLARE_ZERO_TRUST_ID: z.string().optional(),
       AUTH_CLOUDFLARE_ZERO_TRUST_SECRET: z.string().optional(),
       AUTH_CLOUDFLARE_ZERO_TRUST_ISSUER: z.string().optional(),
+      AUTH_CLOUDFLARE_ZERO_TRUST_LABEL: z.string().optional(),
 
       AUTH_FEISHU_APP_ID: z.string().optional(),
       AUTH_FEISHU_APP_SECRET: z.string().optional(),
+      AUTH_FEISHU_LABEL: z.string().optional(),
 
       AUTH_GENERIC_OIDC_ID: z.string().optional(),
       AUTH_GENERIC_OIDC_SECRET: z.string().optional(),
       AUTH_GENERIC_OIDC_ISSUER: z.string().optional(),
+      AUTH_GENERIC_OIDC_LABEL: z.string().optional(),
 
       AUTH_KEYCLOAK_ID: z.string().optional(),
       AUTH_KEYCLOAK_SECRET: z.string().optional(),
       AUTH_KEYCLOAK_ISSUER: z.string().optional(),
+      AUTH_KEYCLOAK_LABEL: z.string().optional(),
 
       AUTH_LOGTO_ID: z.string().optional(),
       AUTH_LOGTO_SECRET: z.string().optional(),
       AUTH_LOGTO_ISSUER: z.string().optional(),
+      AUTH_LOGTO_LABEL: z.string().optional(),
 
       AUTH_OKTA_ID: z.string().optional(),
       AUTH_OKTA_SECRET: z.string().optional(),
       AUTH_OKTA_ISSUER: z.string().optional(),
+      AUTH_OKTA_LABEL: z.string().optional(),
 
       AUTH_WECHAT_ID: z.string().optional(),
       AUTH_WECHAT_SECRET: z.string().optional(),
+      AUTH_WECHAT_LABEL: z.string().optional(),
 
       AUTH_ZITADEL_ID: z.string().optional(),
       AUTH_ZITADEL_SECRET: z.string().optional(),
       AUTH_ZITADEL_ISSUER: z.string().optional(),
+      AUTH_ZITADEL_LABEL: z.string().optional(),
 
       LOGTO_WEBHOOK_SIGNING_KEY: z.string().optional(),
 
@@ -208,66 +242,83 @@ export const getAuthConfig = () => {
       // Auth Provider Credentials
       AUTH_GOOGLE_ID: process.env.AUTH_GOOGLE_ID,
       AUTH_GOOGLE_SECRET: process.env.AUTH_GOOGLE_SECRET,
+      AUTH_GOOGLE_LABEL: process.env.AUTH_GOOGLE_LABEL,
 
       AUTH_APPLE_CLIENT_ID: process.env.AUTH_APPLE_CLIENT_ID,
       AUTH_APPLE_CLIENT_SECRET: process.env.AUTH_APPLE_CLIENT_SECRET,
       AUTH_APPLE_APP_BUNDLE_IDENTIFIER: process.env.AUTH_APPLE_APP_BUNDLE_IDENTIFIER,
+      AUTH_APPLE_LABEL: process.env.AUTH_APPLE_LABEL,
 
       AUTH_GITHUB_ID: process.env.AUTH_GITHUB_ID,
       AUTH_GITHUB_SECRET: process.env.AUTH_GITHUB_SECRET,
+      AUTH_GITHUB_LABEL: process.env.AUTH_GITHUB_LABEL,
 
       AUTH_MICROSOFT_ID: process.env.AUTH_MICROSOFT_ID,
       AUTH_MICROSOFT_SECRET: process.env.AUTH_MICROSOFT_SECRET,
+      AUTH_MICROSOFT_LABEL: process.env.AUTH_MICROSOFT_LABEL,
 
       AUTH_COGNITO_ID: process.env.AUTH_COGNITO_ID,
       AUTH_COGNITO_SECRET: process.env.AUTH_COGNITO_SECRET,
       AUTH_COGNITO_ISSUER: process.env.AUTH_COGNITO_ISSUER,
+      AUTH_COGNITO_LABEL: process.env.AUTH_COGNITO_LABEL,
 
       AUTH_AUTH0_ID: process.env.AUTH_AUTH0_ID,
       AUTH_AUTH0_SECRET: process.env.AUTH_AUTH0_SECRET,
       AUTH_AUTH0_ISSUER: process.env.AUTH_AUTH0_ISSUER,
+      AUTH_AUTH0_LABEL: process.env.AUTH_AUTH0_LABEL,
 
       AUTH_AUTHELIA_ID: process.env.AUTH_AUTHELIA_ID,
       AUTH_AUTHELIA_SECRET: process.env.AUTH_AUTHELIA_SECRET,
       AUTH_AUTHELIA_ISSUER: process.env.AUTH_AUTHELIA_ISSUER,
+      AUTH_AUTHELIA_LABEL: process.env.AUTH_AUTHELIA_LABEL,
 
       AUTH_AUTHENTIK_ID: process.env.AUTH_AUTHENTIK_ID,
       AUTH_AUTHENTIK_SECRET: process.env.AUTH_AUTHENTIK_SECRET,
       AUTH_AUTHENTIK_ISSUER: process.env.AUTH_AUTHENTIK_ISSUER,
+      AUTH_AUTHENTIK_LABEL: process.env.AUTH_AUTHENTIK_LABEL,
 
       AUTH_CASDOOR_ID: process.env.AUTH_CASDOOR_ID,
       AUTH_CASDOOR_SECRET: process.env.AUTH_CASDOOR_SECRET,
       AUTH_CASDOOR_ISSUER: process.env.AUTH_CASDOOR_ISSUER,
+      AUTH_CASDOOR_LABEL: process.env.AUTH_CASDOOR_LABEL,
 
       AUTH_CLOUDFLARE_ZERO_TRUST_ID: process.env.AUTH_CLOUDFLARE_ZERO_TRUST_ID,
       AUTH_CLOUDFLARE_ZERO_TRUST_SECRET: process.env.AUTH_CLOUDFLARE_ZERO_TRUST_SECRET,
       AUTH_CLOUDFLARE_ZERO_TRUST_ISSUER: process.env.AUTH_CLOUDFLARE_ZERO_TRUST_ISSUER,
+      AUTH_CLOUDFLARE_ZERO_TRUST_LABEL: process.env.AUTH_CLOUDFLARE_ZERO_TRUST_LABEL,
 
       AUTH_FEISHU_APP_ID: process.env.AUTH_FEISHU_APP_ID,
       AUTH_FEISHU_APP_SECRET: process.env.AUTH_FEISHU_APP_SECRET,
+      AUTH_FEISHU_LABEL: process.env.AUTH_FEISHU_LABEL,
 
       AUTH_GENERIC_OIDC_ID: process.env.AUTH_GENERIC_OIDC_ID,
       AUTH_GENERIC_OIDC_SECRET: process.env.AUTH_GENERIC_OIDC_SECRET,
       AUTH_GENERIC_OIDC_ISSUER: process.env.AUTH_GENERIC_OIDC_ISSUER,
+      AUTH_GENERIC_OIDC_LABEL: process.env.AUTH_GENERIC_OIDC_LABEL,
 
       AUTH_KEYCLOAK_ID: process.env.AUTH_KEYCLOAK_ID,
       AUTH_KEYCLOAK_SECRET: process.env.AUTH_KEYCLOAK_SECRET,
       AUTH_KEYCLOAK_ISSUER: process.env.AUTH_KEYCLOAK_ISSUER,
+      AUTH_KEYCLOAK_LABEL: process.env.AUTH_KEYCLOAK_LABEL,
 
       AUTH_LOGTO_ID: process.env.AUTH_LOGTO_ID,
       AUTH_LOGTO_SECRET: process.env.AUTH_LOGTO_SECRET,
       AUTH_LOGTO_ISSUER: process.env.AUTH_LOGTO_ISSUER,
+      AUTH_LOGTO_LABEL: process.env.AUTH_LOGTO_LABEL,
 
       AUTH_OKTA_ID: process.env.AUTH_OKTA_ID,
       AUTH_OKTA_SECRET: process.env.AUTH_OKTA_SECRET,
       AUTH_OKTA_ISSUER: process.env.AUTH_OKTA_ISSUER,
+      AUTH_OKTA_LABEL: process.env.AUTH_OKTA_LABEL,
 
       AUTH_WECHAT_ID: process.env.AUTH_WECHAT_ID,
       AUTH_WECHAT_SECRET: process.env.AUTH_WECHAT_SECRET,
+      AUTH_WECHAT_LABEL: process.env.AUTH_WECHAT_LABEL,
 
       AUTH_ZITADEL_ID: process.env.AUTH_ZITADEL_ID,
       AUTH_ZITADEL_SECRET: process.env.AUTH_ZITADEL_SECRET,
       AUTH_ZITADEL_ISSUER: process.env.AUTH_ZITADEL_ISSUER,
+      AUTH_ZITADEL_LABEL: process.env.AUTH_ZITADEL_LABEL,
 
       // LOGTO
       LOGTO_WEBHOOK_SIGNING_KEY: process.env.LOGTO_WEBHOOK_SIGNING_KEY,

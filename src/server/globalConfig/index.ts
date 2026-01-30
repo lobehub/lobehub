@@ -8,6 +8,7 @@ import { fileEnv } from '@/envs/file';
 import { imageEnv } from '@/envs/image';
 import { knowledgeEnv } from '@/envs/knowledge';
 import { langfuseEnv } from '@/envs/langfuse';
+import { getBetterAuthSSOProviderLabels } from '@/libs/better-auth/sso';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { parseSystemAgent } from '@/server/globalConfig/parseSystemAgent';
 import { type GlobalServerConfig } from '@/types/serverConfig';
@@ -90,6 +91,7 @@ export const getServerGlobalConfig = async () => {
     memory: {
       userMemory: cleanObject(getPublicMemoryExtractionConfig()),
     },
+    oAuthSSOProviderLabels: getBetterAuthSSOProviderLabels(),
     oAuthSSOProviders: getBetterAuthSSOProviders(),
     systemAgent: parseSystemAgent(appEnv.SYSTEM_AGENT),
     telemetry: {

@@ -8,21 +8,21 @@ const provider: GenericProviderDefinition<{
   AUTH_AUTH0_ISSUER: string;
   AUTH_AUTH0_SECRET: string;
 }> = {
-  build: (env) => {
-    const config = buildOidcConfig({
+  build: (env) =>
+    buildOidcConfig({
       clientId: env.AUTH_AUTH0_ID,
       clientSecret: env.AUTH_AUTH0_SECRET,
       issuer: env.AUTH_AUTH0_ISSUER,
+      label: env.label,
       providerId: 'auth0',
-    });
-    return config;
-  },
+    }),
   checkEnvs: () => {
     return !!(authEnv.AUTH_AUTH0_ID && authEnv.AUTH_AUTH0_SECRET && authEnv.AUTH_AUTH0_ISSUER)
       ? {
           AUTH_AUTH0_ID: authEnv.AUTH_AUTH0_ID,
           AUTH_AUTH0_ISSUER: authEnv.AUTH_AUTH0_ISSUER,
           AUTH_AUTH0_SECRET: authEnv.AUTH_AUTH0_SECRET,
+          label: authEnv.AUTH_AUTH0_LABEL,
         }
       : false;
   },

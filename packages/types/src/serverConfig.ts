@@ -62,6 +62,7 @@ export interface GlobalServerConfig {
   enabledOAuthSSO?: boolean;
   image?: PartialDeep<UserImageConfig>;
   memory?: GlobalMemoryConfig;
+  oAuthSSOProviderLabels?: Record<string, string | undefined>;
   oAuthSSOProviders?: string[];
   systemAgent?: PartialDeep<UserSystemAgentConfig>;
   telemetry: {

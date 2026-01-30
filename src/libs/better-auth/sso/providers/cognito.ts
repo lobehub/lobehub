@@ -35,6 +35,7 @@ const provider: BuiltinProviderDefinition<
           AUTH_COGNITO_REGION: authEnv.AUTH_COGNITO_REGION,
           AUTH_COGNITO_SECRET: authEnv.AUTH_COGNITO_SECRET,
           AUTH_COGNITO_USERPOOL_ID: authEnv.AUTH_COGNITO_USERPOOL_ID,
+          label: authEnv.AUTH_COGNITO_LABEL,
         }
       : false;
   },

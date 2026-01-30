@@ -20,6 +20,7 @@ const provider: BuiltinProviderDefinition<
       ? {
           AUTH_GITHUB_ID: authEnv.AUTH_GITHUB_ID,
           AUTH_GITHUB_SECRET: authEnv.AUTH_GITHUB_SECRET,
+          label: authEnv.AUTH_GITHUB_LABEL,
         }
       : false;
   },

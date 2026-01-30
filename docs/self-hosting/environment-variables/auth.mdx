@@ -123,6 +123,13 @@ These settings are required for email verification and password reset features.
 - Default: `-`
 - Example: `GOCSPX-xxxxxxxxxxxxxxxxxxxx`
 
+#### `AUTH_GOOGLE_LABEL`
+
+- Type: Optional
+- Description: Custom display label for the Google login button. When set, the login page will show "Continue with \[label]" instead of "Continue with Google".
+- Default: `-`
+- Example: `Work Account`
+
 ### GitHub
 
 #### `AUTH_GITHUB_ID`
@@ -139,6 +146,13 @@ These settings are required for email verification and password reset features.
 - Default: `-`
 - Example: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
 
+#### `AUTH_GITHUB_LABEL`
+
+- Type: Optional
+- Description: Custom display label for the GitHub login button. When set, the login page will show "Continue with \[label]" instead of "Continue with GitHub".
+- Default: `-`
+- Example: `Company GitHub`
+
 ### Microsoft
 
 #### `AUTH_MICROSOFT_ID`
@@ -154,6 +168,13 @@ These settings are required for email verification and password reset features.
 - Description: Client Secret of the Microsoft Entra ID application.
 - Default: `-`
 - Example: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+#### `AUTH_MICROSOFT_LABEL`
+
+- Type: Optional
+- Description: Custom display label for the Microsoft login button. When set, the login page will show "Continue with \[label]" instead of "Continue with Microsoft".
+- Default: `-`
+- Example: `Corporate Login`
 
 ### AWS Cognito
 
@@ -178,6 +199,13 @@ These settings are required for email verification and password reset features.
 - Default: `-`
 - Example: `https://cognito-idp.us-east-1.amazonaws.com/us-east-1_xxxxxxxxx`
 
+#### `AUTH_COGNITO_LABEL`
+
+- Type: Optional
+- Description: Custom display label for the AWS Cognito login button. When set, the login page will show "Continue with \[label]" instead of "Continue with AWS Cognito".
+- Default: `-`
+- Example: `Enterprise SSO`
+
 ### Feishu
 
 #### `AUTH_FEISHU_APP_ID`
@@ -194,6 +222,13 @@ These settings are required for email verification and password reset features.
 - Default: `-`
 - Example: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
 
+#### `AUTH_FEISHU_LABEL`
+
+- Type: Optional
+- Description: Custom display label for the Feishu login button. When set, the login page will show "Continue with \[label]" instead of "Continue with Feishu".
+- Default: `-`
+- Example: `飞书登录`
+
 ### WeChat
 
 #### `AUTH_WECHAT_ID`
@@ -209,3 +244,10 @@ These settings are required for email verification and password reset features.
 - Description: App Secret of the WeChat application.
 - Default: `-`
 - Example: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+#### `AUTH_WECHAT_LABEL`
+
+- Type: Optional
+- Description: Custom display label for the WeChat login button. When set, the login page will show "Continue with \[label]" instead of "Continue with WeChat".
+- Default: `-`
+- Example: `微信`

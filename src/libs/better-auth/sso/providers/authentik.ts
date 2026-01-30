@@ -13,6 +13,7 @@ const provider: GenericProviderDefinition<{
       clientId: env.AUTH_AUTHENTIK_ID,
       clientSecret: env.AUTH_AUTHENTIK_SECRET,
       issuer: env.AUTH_AUTHENTIK_ISSUER,
+      label: env.label,
       providerId: 'authentik',
     }),
   checkEnvs: () => {
@@ -25,6 +26,7 @@ const provider: GenericProviderDefinition<{
           AUTH_AUTHENTIK_ID: authEnv.AUTH_AUTHENTIK_ID,
           AUTH_AUTHENTIK_ISSUER: authEnv.AUTH_AUTHENTIK_ISSUER,
           AUTH_AUTHENTIK_SECRET: authEnv.AUTH_AUTHENTIK_SECRET,
+          label: authEnv.AUTH_AUTHENTIK_LABEL,
         }
       : false;
   },

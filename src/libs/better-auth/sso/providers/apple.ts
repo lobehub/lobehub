@@ -23,6 +23,7 @@ const provider: BuiltinProviderDefinition<
           AUTH_APPLE_APP_BUNDLE_IDENTIFIER: authEnv.AUTH_APPLE_APP_BUNDLE_IDENTIFIER,
           AUTH_APPLE_CLIENT_ID: authEnv.AUTH_APPLE_CLIENT_ID,
           AUTH_APPLE_CLIENT_SECRET: authEnv.AUTH_APPLE_CLIENT_SECRET,
+          label: authEnv.AUTH_APPLE_LABEL,
         }
       : false;
   },

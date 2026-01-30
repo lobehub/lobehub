@@ -20,6 +20,7 @@ const provider: BuiltinProviderDefinition<
       ? {
           AUTH_GOOGLE_ID: authEnv.AUTH_GOOGLE_ID,
           AUTH_GOOGLE_SECRET: authEnv.AUTH_GOOGLE_SECRET,
+          label: authEnv.AUTH_GOOGLE_LABEL,
         }
       : false;
   },

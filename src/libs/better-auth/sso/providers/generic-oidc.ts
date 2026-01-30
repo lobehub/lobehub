@@ -13,6 +13,7 @@ const provider: GenericProviderDefinition<{
       clientId: env.AUTH_GENERIC_OIDC_ID,
       clientSecret: env.AUTH_GENERIC_OIDC_SECRET,
       issuer: env.AUTH_GENERIC_OIDC_ISSUER,
+      label: env.label,
       overrides: {
         /**
          * Mirror NextAuth's fallback that prefers name -> username -> email so Better Auth never
@@ -34,6 +35,7 @@ const provider: GenericProviderDefinition<{
           AUTH_GENERIC_OIDC_ID: authEnv.AUTH_GENERIC_OIDC_ID,
           AUTH_GENERIC_OIDC_ISSUER: authEnv.AUTH_GENERIC_OIDC_ISSUER,
           AUTH_GENERIC_OIDC_SECRET: authEnv.AUTH_GENERIC_OIDC_SECRET,
+          label: authEnv.AUTH_GENERIC_OIDC_LABEL,
         }
       : false;
   },

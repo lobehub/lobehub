@@ -171,6 +171,7 @@ const provider: GenericProviderDefinition<{
       ? {
           AUTH_FEISHU_APP_ID: authEnv.AUTH_FEISHU_APP_ID,
           AUTH_FEISHU_APP_SECRET: authEnv.AUTH_FEISHU_APP_SECRET,
+          label: authEnv.AUTH_FEISHU_LABEL,
         }
       : false;
   },

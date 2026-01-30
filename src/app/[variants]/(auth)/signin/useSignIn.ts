@@ -40,6 +40,7 @@ export const useSignIn = () => {
   const [isSocialOnly, setIsSocialOnly] = useState(false);
   const serverConfigInit = useServerConfigStore((s) => s.serverConfigInit);
   const oAuthSSOProviders = useServerConfigStore((s) => s.serverConfig.oAuthSSOProviders) || [];
+  const oAuthSSOProviderLabels = useServerConfigStore(serverConfigSelectors.oAuthSSOProviderLabels);
   const { ssoProviders, preSocialSigninCheck, getAdditionalData } = useBusinessSignin();
 
   useEffect(() => {
@@ -252,6 +253,7 @@ export const useSignIn = () => {
     handleSocialSignIn,
     isSocialOnly,
     loading,
+    oAuthSSOProviderLabels,
     oAuthSSOProviders: ENABLE_BUSINESS_FEATURES ? ssoProviders : oAuthSSOProviders,
     serverConfigInit: ENABLE_BUSINESS_FEATURES ? true : serverConfigInit,
     socialLoading,

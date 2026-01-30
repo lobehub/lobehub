@@ -130,6 +130,7 @@ const provider: GenericProviderDefinition<{
       ? {
           AUTH_WECHAT_ID: authEnv.AUTH_WECHAT_ID,
           AUTH_WECHAT_SECRET: authEnv.AUTH_WECHAT_SECRET,
+          label: authEnv.AUTH_WECHAT_LABEL,
         }
       : false;
   },

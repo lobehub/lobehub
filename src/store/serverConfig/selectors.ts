@@ -14,5 +14,6 @@ export const serverConfigSelectors = {
   enableUploadFileToServer: (s: ServerConfigStore) => s.serverConfig.enableUploadFileToServer,
   enabledTelemetryChat: (s: ServerConfigStore) => s.serverConfig.telemetry.langfuse || false,
   isMobile: (s: ServerConfigStore) => s.isMobile || false,
+  oAuthSSOProviderLabels: (s: ServerConfigStore) => s.serverConfig.oAuthSSOProviderLabels,
   oAuthSSOProviders: (s: ServerConfigStore) => s.serverConfig.oAuthSSOProviders,
 };

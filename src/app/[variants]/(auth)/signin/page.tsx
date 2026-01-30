@@ -19,6 +19,7 @@ const SignInPage = () => {
     handleSocialSignIn,
     isSocialOnly,
     loading,
+    oAuthSSOProviderLabels,
     oAuthSSOProviders,
     serverConfigInit,
     socialLoading,
@@ -32,6 +33,7 @@ const SignInPage = () => {
           form={form as any}
           isSocialOnly={isSocialOnly}
           loading={loading}
+          oAuthSSOProviderLabels={oAuthSSOProviderLabels}
           oAuthSSOProviders={oAuthSSOProviders}
           onCheckUser={handleCheckUser}
           onSetPassword={handleForgotPassword}
