@@ -11,7 +11,7 @@ tags:
 
 # Adding New Image Models
 
-> Learn more about the AI image generation modal design in the [AI Image Generation Modal Design Discussion](https://github.com/lobehub/lobe-chat/discussions/7442)
+> Learn more about the AI image generation modal design in the [AI Image Generation Modal Design Discussion](https://github.com/lobehub/lobehub/discussions/7442)
 
 ## Parameter Standardization
 
@@ -65,7 +65,7 @@ For image generation models that are not compatible with OpenAI format, you need
 
 ### Method 1: Using OpenAI Compatible Factory
 
-Most Providers use `openaiCompatibleFactory` for OpenAI compatibility. You can pass in a custom `createImage` function (reference [PR #8534](https://github.com/lobehub/lobe-chat/pull/8534)).
+Most Providers use `openaiCompatibleFactory` for OpenAI compatibility. You can pass in a custom `createImage` function (reference [PR #8534](https://github.com/lobehub/lobehub/pull/8534)).
 
 **Implementation Steps**:
 
@@ -124,7 +124,7 @@ export const LobeProviderAI = openaiCompatibleFactory({
 
 ### Method 2: Direct Implementation in Provider Class
 
-If your Provider has an independent class implementation, you can directly add the `createImage` method in the class (reference [PR #8503](https://github.com/lobehub/lobe-chat/pull/8503)).
+If your Provider has an independent class implementation, you can directly add the `createImage` method in the class (reference [PR #8503](https://github.com/lobehub/lobehub/pull/8503)).
 
 **Implementation Steps**:
 

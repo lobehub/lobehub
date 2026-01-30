@@ -13,7 +13,7 @@ tags:
 [Casdoor](https://github.com/casdoor/casdoor) 是一个开源的身份验证服务，功能配置丰富且易于上手。
 
 <Callout type={'tip'}>
-  若你想要私有部署 Casdoor，我们建议你将之与 LobeHub 数据库版本一同使用 Docker Compose 部署，此时
+  若你想要私有部署 Casdoor，我们建议你将之与 LobeHub 一同使用 Docker Compose 部署，此时
   LobeHub 可以与之共用同一个 Postgres 实例。
 </Callout>
 
@@ -21,12 +21,12 @@ tags:
 
 若你使用局域网 IP 部署，下文假设：
 
-- 你的 LobeHub 数据库版本 IP / 端口为 `http://LobeHub_IP:3210`。
+- 你的 LobeHub IP / 端口为 `http://LobeHub_IP:3210`。
 - 你私有部署 Casdoor，其域名为 `http://CASDOOR_IP:8000`。
 
 若你使用公网部署，下文假设：
 
-- 你的 LobeHub 数据库版本域名为 `https://lobe.example.com`。
+- 你的 LobeHub 域名为 `https://lobe.example.com`。
 - 你私有部署 Casdoor，其域名为 `https://lobe-auth-api.example.com`。
 
 <Steps>

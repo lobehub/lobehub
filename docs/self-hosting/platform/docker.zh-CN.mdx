@@ -8,7 +8,7 @@ tags:
   - Postgres
 ---
 
-# 使用 Docker 部署服务端数据库版
+# 使用 Docker 部署 LobeHub
 
 <div style={{display:"flex", gap: 4}}>
   [![][docker-release-shield]][docker-release-link]
@@ -19,16 +19,16 @@ tags:
 </div>
 
 <Callout type="info">
-  本文已经假定你了解了 LobeHub 服务端数据库版本（下简称 DB
-  版）的部署基本原理和流程，因此只包含核心环境变量配置的内容。如果你还不了解 LobeHub DB
-  版的部署原理，请先查阅 [使用服务端数据库部署](/zh/docs/self-hosting/server-database) 。
+  本文已经假定你了解了 LobeHub
+  的部署基本原理和流程，因此只包含核心环境变量配置的内容。如果你还不了解 LobeHub
+  的部署原理，请先查阅 [使用服务端数据库部署](/zh/docs/self-hosting/server-database) 。
   此外，针对国内的腾讯云储存桶用户，可查询[配置腾讯云 COS
   存储服务](/zh/docs/self-hosting/advanced/s3/tencent-cloud)。
 </Callout>
 
 ## 在 Linux 服务器上部署
 
-以下是在 Linux 服务器上部署 LobeHub DB 版的流程：
+以下是在 Linux 服务器上部署 LobeHub 的流程：
 
 <Steps>
   ### 创建 Postgres 数据库实例
@@ -125,7 +125,7 @@ tags:
 
 ## 在本地（Mac / Windows） 上使用
 
-LobeHub 的 DB 版也支持直接在本地的 Mac/Windows 本地使用。
+LobeHub 也支持直接在本地的 Mac/Windows 本地使用。
 
 在此我们已假设你的本地有一个 5432 端口可用，账号为 `postgres` ，密码是 `mysecretpassword` 的 pg 实例，它在 `localhost:5432` 可用。
 
