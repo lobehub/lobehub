@@ -2,8 +2,6 @@ import type { ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
-import { sleep } from '@/utils/sleep';
-
 import { LobeRuntimeAI } from '../../core/BaseAI';
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import { OpenAIStream } from '../../core/streams';
@@ -252,7 +250,9 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
           rateLimitAttempts++;
           const retryAfter = this.getRetryAfterMs(error) ?? 1000 * Math.pow(2, rateLimitAttempts);
 
-          await sleep(Math.min(retryAfter, 10_000));
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, Math.min(retryAfter, 10_000));
+          });
           continue;
         }
 
