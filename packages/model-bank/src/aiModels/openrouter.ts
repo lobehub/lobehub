@@ -1079,20 +1079,6 @@ const openrouterChatModels: AIChatModelCard[] = [
     id: 'google/gemma-2-9b-it:free',
     type: 'chat',
   },
-  {
-    abilities: {
-      functionCall: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576 + 8192,
-    description:
-      'Gemini 2.0 Flash Experimental is Google’s latest experimental multimodal AI model with quality improvements over prior versions, especially in world knowledge, code, and long context.',
-    displayName: 'Gemini 2.0 Flash Experimental (Free)',
-    id: 'google/gemini-2.0-flash-exp:free',
-    maxOutput: 8192,
-    releasedAt: '2024-12-11',
-    type: 'chat',
-  },
 ];
 
 export const allModels = [...openrouterChatModels];
