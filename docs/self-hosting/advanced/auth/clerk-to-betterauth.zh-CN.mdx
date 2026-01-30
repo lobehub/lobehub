@@ -1,6 +1,6 @@
 ---
 title: 从 Clerk 迁移到 Better Auth
-description: 将 LobeChat 部署从 Clerk 身份验证迁移到 Better Auth 的指南，包括简单迁移和完整迁移选项。
+description: 将 LobeHub 部署从 Clerk 身份验证迁移到 Better Auth 的指南，包括简单迁移和完整迁移选项。
 tags:
   - 身份验证服务
   - Better Auth
@@ -10,17 +10,17 @@ tags:
 
 # 从 Clerk 迁移到 Better Auth
 
-本指南帮助您将现有的基于 Clerk 的 LobeChat 部署迁移到 Better Auth。
+本指南帮助您将现有的基于 Clerk 的 LobeHub 部署迁移到 Better Auth。
 
 <Callout type={'info'}>
-  Better Auth 是 LobeChat 推荐的身份验证解决方案。它提供更简单的配置、更多的 SSO 提供商支持，以及更好的自托管体验。
+  Better Auth 是 LobeHub 推荐的身份验证解决方案。它提供更简单的配置、更多的 SSO 提供商支持，以及更好的自托管体验。
 </Callout>
 
 <Callout type={'error'}>
   **重要提醒**：
 
   - **务必先备份数据库**！如使用 Neon，可通过 [Fork 分支](https://neon.tech/docs/manage/branches#create-a-branch) 创建备份
-  - 迁移过程中可能出现的任何数据丢失或问题，LobeChat 概不负责
+  - 迁移过程中可能出现的任何数据丢失或问题，LobeHub 概不负责
   - 本指南适合有一定开发背景的用户，不建议无技术经验的用户自行操作
   - 如有任何疑问，欢迎到 [Discord](https://discord.com/invite/AYFPHvv2jT) 社区或 [GitHub Issue](https://github.com/lobehub/lobe-chat/issues/11707) 提问
 </Callout>
@@ -81,7 +81,7 @@ tags:
      查阅 [身份验证服务配置](/zh/docs/self-hosting/advanced/auth) 了解完整的环境变量和 SSO 提供商配置。
    </Callout>
 
-3. **重新部署 LobeChat**
+3. **重新部署 LobeHub**
 
    部署启用 Better Auth 的新版本。
 
@@ -99,7 +99,7 @@ tags:
    - 使用之前关联的社交账号（如 Google、GitHub）登录
    - 点击「设置密码」链接，通过邮件设置新密码后登录
 
-   ![LobeChat 登录页面 - 社交账号登录提示](https://hub-apac-1.lobeobjects.space/docs/8d0563701fcd17ad7252a72b1746dd42.png)
+   ![LobeHub 登录页面 - 社交账号登录提示](https://hub-apac-1.lobeobjects.space/docs/8d0563701fcd17ad7252a72b1746dd42.png)
 
    3. （可选）登录后可在个人资料页进行以下操作：
       - 已关联账号：手动关联其他社交账号
@@ -134,7 +134,7 @@ tags:
 
 **准备工作：**
 
-1. Clone LobeChat 仓库并安装依赖：
+1. Clone LobeHub 仓库并安装依赖：
 
    ```bash
    git clone https://github.com/lobehub/lobe-chat.git

@@ -1,13 +1,13 @@
 ---
-title: Configuring Feishu (Lark) Authentication for LobeChat
+title: Configuring Feishu (Lark) Authentication for LobeHub
 description: >-
-  Learn how to configure Feishu (Lark) SSO for LobeChat, including creating an
+  Learn how to configure Feishu (Lark) SSO for LobeHub, including creating an
   application and setting up environment variables.
 tags:
   - Feishu
   - Lark
   - Authentication
-  - LobeChat
+  - LobeHub
   - Single Sign-On
 ---
 
@@ -49,12 +49,12 @@ tags:
 
   ### Configure Environment Variables
 
-  | Environment Variable             | Type     | Description                                                     |
-  | -------------------------------- | -------- | --------------------------------------------------------------- |
-  | `AUTH_SECRET`                    | Required | Session encryption key, generate with `openssl rand -base64 32` |
-  | `AUTH_SSO_PROVIDERS`             | Required | Set to `feishu`                                                 |
-  | `AUTH_FEISHU_APP_ID`             | Required | App ID from Feishu Open Platform                                |
-  | `AUTH_FEISHU_APP_SECRET`         | Required | App Secret from Feishu Open Platform                            |
+  | Environment Variable     | Type     | Description                                                     |
+  | ------------------------ | -------- | --------------------------------------------------------------- |
+  | `AUTH_SECRET`            | Required | Session encryption key, generate with `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS`     | Required | Set to `feishu`                                                 |
+  | `AUTH_FEISHU_APP_ID`     | Required | App ID from Feishu Open Platform                                |
+  | `AUTH_FEISHU_APP_SECRET` | Required | App Secret from Feishu Open Platform                            |
 
   <Callout type={'tip'}>
     Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#feishu)
@@ -64,7 +64,7 @@ tags:
 
 <Callout type={'info'}>
   After successful deployment, users will be able to authenticate with Feishu
-  and use LobeChat.
+  and use LobeHub.
 </Callout>
 
 ## Related Resources

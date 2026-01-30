@@ -1,12 +1,12 @@
 ---
-title: Configuring Google Authentication for LobeChat
+title: Configuring Google Authentication for LobeHub
 description: >-
-  Learn how to configure Google SSO for LobeChat, including creating OAuth
+  Learn how to configure Google SSO for LobeHub, including creating OAuth
   credentials in Google Cloud Console and setting up environment variables.
 tags:
   - Google
   - Authentication
-  - LobeChat
+  - LobeHub
   - Single Sign-On
 ---
 
@@ -46,12 +46,12 @@ tags:
 
   ### Configure Environment Variables
 
-  | Environment Variable             | Type     | Description                                                     |
-  | -------------------------------- | -------- | --------------------------------------------------------------- |
-  | `AUTH_SECRET`                    | Required | Session encryption key, generate with `openssl rand -base64 32` |
-  | `AUTH_SSO_PROVIDERS`             | Required | Set to `google`                                                 |
-  | `AUTH_GOOGLE_ID`                 | Required | Client ID from Google Cloud Console                             |
-  | `AUTH_GOOGLE_SECRET`             | Required | Client Secret from Google Cloud Console                         |
+  | Environment Variable | Type     | Description                                                     |
+  | -------------------- | -------- | --------------------------------------------------------------- |
+  | `AUTH_SECRET`        | Required | Session encryption key, generate with `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS` | Required | Set to `google`                                                 |
+  | `AUTH_GOOGLE_ID`     | Required | Client ID from Google Cloud Console                             |
+  | `AUTH_GOOGLE_SECRET` | Required | Client Secret from Google Cloud Console                         |
 
   <Callout type={'tip'}>
     Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#google)
@@ -61,7 +61,7 @@ tags:
 
 <Callout type={'info'}>
   After successful deployment, users will be able to authenticate with Google
-  and use LobeChat.
+  and use LobeHub.
 </Callout>
 
 ## Common Issues

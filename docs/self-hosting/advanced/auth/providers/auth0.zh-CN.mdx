@@ -1,10 +1,10 @@
 ---
-title: 在 LobeChat 中配置 Auth0 身份验证
-description: 学习如何在 LobeChat 中配置 Auth0 SSO，包括创建应用、添加用户和设置环境变量。
+title: 在 LobeHub 中配置 Auth0 身份验证
+description: 学习如何在 LobeHub 中配置 Auth0 SSO，包括创建应用、添加用户和设置环境变量。
 tags:
   - Auth0
   - 身份验证
-  - LobeChat
+  - LobeHub
   - 单点登录
 ---
 
@@ -57,13 +57,13 @@ tags:
 
   ### 配置环境变量
 
-  | 环境变量                             | 类型 | 描述                                     |
-  | -------------------------------- | -- | -------------------------------------- |
-  | `AUTH_SECRET`                    | 必选 | 会话加密密钥，使用 `openssl rand -base64 32` 生成 |
-  | `AUTH_SSO_PROVIDERS`             | 必选 | 填写 `auth0`                             |
-  | `AUTH_AUTH0_ID`                  | 必选 | Client ID                              |
-  | `AUTH_AUTH0_SECRET`              | 必选 | Client Secret                          |
-  | `AUTH_AUTH0_ISSUER`              | 必选 | `https://your-tenant.auth0.com`        |
+  | 环境变量                 | 类型 | 描述                                     |
+  | -------------------- | -- | -------------------------------------- |
+  | `AUTH_SECRET`        | 必选 | 会话加密密钥，使用 `openssl rand -base64 32` 生成 |
+  | `AUTH_SSO_PROVIDERS` | 必选 | 填写 `auth0`                             |
+  | `AUTH_AUTH0_ID`      | 必选 | Client ID                              |
+  | `AUTH_AUTH0_SECRET`  | 必选 | Client Secret                          |
+  | `AUTH_AUTH0_ISSUER`  | 必选 | `https://your-tenant.auth0.com`        |
 
   <Callout type={'tip'}>
     前往 [📘 环境变量](/zh/docs/self-hosting/environment-variables/auth#auth0)
@@ -72,7 +72,7 @@ tags:
 </Steps>
 
 <Callout type={'info'}>
-  部署成功后，用户将可以通过 Auth0 身份认证并使用 LobeChat。
+  部署成功后，用户将可以通过 Auth0 身份认证并使用 LobeHub。
 </Callout>
 
 ## 高级配置
@@ -96,7 +96,7 @@ Auth0 支持 Azure AD、Slack、Google Workspace、Office 365、Zoom 等。详�
 </Callout>
 
 <Callout type={'warning'}>
-  创建 GitHub 连接时，务必在 **Attributes** 部分勾选 **Email Address** 权限。LobeChat 需要用户邮箱进行身份认证。
+  创建 GitHub 连接时，务必在 **Attributes** 部分勾选 **Email Address** 权限。LobeHub 需要用户邮箱进行身份认证。
 
   <Image alt="GitHub 连接邮箱权限" src="https://hub-apac-1.lobeobjects.space/docs/afdf22891dda3e5e44c690db184c548e.png" />
 </Callout>

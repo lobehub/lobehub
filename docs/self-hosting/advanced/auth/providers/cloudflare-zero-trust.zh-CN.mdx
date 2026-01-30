@@ -1,10 +1,10 @@
 ---
-title: 在 LobeChat 中配置 Cloudflare Zero Trust 身份验证
-description: 学习如何在 LobeChat 中配置 Cloudflare Zero Trust SSO，包括创建 Access 应用。
+title: 在 LobeHub 中配置 Cloudflare Zero Trust 身份验证
+description: 学习如何在 LobeHub 中配置 Cloudflare Zero Trust SSO，包括创建 Access 应用。
 tags:
   - Cloudflare Zero Trust
   - 身份验证
-  - LobeChat
+  - LobeHub
   - 单点登录
   - OIDC
 ---
@@ -20,7 +20,7 @@ tags:
   2. 前往 **Access** > **Applications**
   3. 点击 **Add an application**，选择 **SaaS**
   4. 配置应用：
-     - Application name: `LobeChat`
+     - Application name: `LobeHub`
      - 选择 OIDC 作为认证协议
      - 在 redirect URIs 中添加回调 URL
 
@@ -32,7 +32,7 @@ tags:
 
   ### 配置环境变量
 
-  在部署 LobeChat 时，你需要配置以下环境变量：
+  在部署 LobeHub 时，你需要配置以下环境变量：
 
   | 环境变量                                | 类型 | 描述                                                      |
   | ----------------------------------- | -- | ------------------------------------------------------- |
@@ -47,7 +47,7 @@ tags:
   </Callout>
 </Steps>
 
-<Callout type={'info'}>部署成功后，用户将可以通过 Cloudflare Zero Trust 身份认证并使用 LobeChat。</Callout>
+<Callout type={'info'}>部署成功后，用户将可以通过 Cloudflare Zero Trust 身份认证并使用 LobeHub。</Callout>
 
 ## 相关资源
 

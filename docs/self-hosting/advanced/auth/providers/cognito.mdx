@@ -1,12 +1,12 @@
 ---
-title: Configuring AWS Cognito Authentication for LobeChat
+title: Configuring AWS Cognito Authentication for LobeHub
 description: >-
-  Learn how to configure AWS Cognito SSO for LobeChat, including creating a User
+  Learn how to configure AWS Cognito SSO for LobeHub, including creating a User
   Pool and App Client in AWS Console.
 tags:
   - AWS Cognito
   - Authentication
-  - LobeChat
+  - LobeHub
   - Single Sign-On
 ---
 
@@ -61,15 +61,15 @@ tags:
 
   ### Configure Environment Variables
 
-  | Environment Variable             | Type     | Description                                                        |
-  | -------------------------------- | -------- | ------------------------------------------------------------------ |
-  | `AUTH_SECRET`                    | Required | Session encryption key, generate with `openssl rand -base64 32`    |
-  | `AUTH_SSO_PROVIDERS`             | Required | Set to `cognito`                                                   |
-  | `AUTH_COGNITO_ID`                | Required | App Client ID                                                      |
-  | `AUTH_COGNITO_SECRET`            | Required | App Client Secret                                                  |
-  | `AUTH_COGNITO_DOMAIN`            | Required | Cognito domain (e.g., `your-app.auth.us-east-1.amazoncognito.com`) |
-  | `AUTH_COGNITO_REGION`            | Required | AWS Region (e.g., `us-east-1`)                                     |
-  | `AUTH_COGNITO_USERPOOL_ID`       | Required | User Pool ID (e.g., `us-east-1_XXXXXXXXX`)                         |
+  | Environment Variable       | Type     | Description                                                        |
+  | -------------------------- | -------- | ------------------------------------------------------------------ |
+  | `AUTH_SECRET`              | Required | Session encryption key, generate with `openssl rand -base64 32`    |
+  | `AUTH_SSO_PROVIDERS`       | Required | Set to `cognito`                                                   |
+  | `AUTH_COGNITO_ID`          | Required | App Client ID                                                      |
+  | `AUTH_COGNITO_SECRET`      | Required | App Client Secret                                                  |
+  | `AUTH_COGNITO_DOMAIN`      | Required | Cognito domain (e.g., `your-app.auth.us-east-1.amazoncognito.com`) |
+  | `AUTH_COGNITO_REGION`      | Required | AWS Region (e.g., `us-east-1`)                                     |
+  | `AUTH_COGNITO_USERPOOL_ID` | Required | User Pool ID (e.g., `us-east-1_XXXXXXXXX`)                         |
 
   <Callout type={'tip'}>
     Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#cognito)
@@ -79,7 +79,7 @@ tags:
 
 <Callout type={'info'}>
   After successful deployment, users will be able to authenticate with AWS
-  Cognito and use LobeChat.
+  Cognito and use LobeHub.
 </Callout>
 
 ## Related Resources

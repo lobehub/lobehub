@@ -1,12 +1,12 @@
 ---
-title: Configuring Authentik Authentication for LobeChat
+title: Configuring Authentik Authentication for LobeHub
 description: >-
-  Learn how to configure Authentik SSO for LobeChat, including creating an
+  Learn how to configure Authentik SSO for LobeHub, including creating an
   OAuth2 provider and application.
 tags:
   - Authentik
   - Authentication
-  - LobeChat
+  - LobeHub
   - Single Sign-On
   - OIDC
 ---
@@ -21,7 +21,7 @@ tags:
   1. In Authentik admin interface, go to **Applications** > **Providers**
   2. Click **Create** and select **OAuth2/OpenID Provider**
   3. Configure the provider:
-     - Name: `LobeChat`
+     - Name: `LobeHub`
      - Authorization flow: Select your authorization flow
      - Client type: `Confidential`
      - Redirect URIs: Add your callback URL
@@ -42,15 +42,15 @@ tags:
 
   ### Configure Environment Variables
 
-  When deploying LobeChat, you need to configure the following environment variables:
+  When deploying LobeHub, you need to configure the following environment variables:
 
-  | Environment Variable             | Type     | Description                                                                   |
-  | -------------------------------- | -------- | ----------------------------------------------------------------------------- |
-  | `AUTH_SECRET`                    | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32` |
-  | `AUTH_SSO_PROVIDERS`             | Required | SSO provider for LobeChat. Use `authentik` for Authentik                      |
-  | `AUTH_AUTHENTIK_ID`              | Required | Client ID from Authentik provider                                             |
-  | `AUTH_AUTHENTIK_SECRET`          | Required | Client Secret from Authentik provider                                         |
-  | `AUTH_AUTHENTIK_ISSUER`          | Required | Authentik issuer URL                                                          |
+  | Environment Variable    | Type     | Description                                                                   |
+  | ----------------------- | -------- | ----------------------------------------------------------------------------- |
+  | `AUTH_SECRET`           | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS`    | Required | SSO provider for LobeHub. Use `authentik` for Authentik                       |
+  | `AUTH_AUTHENTIK_ID`     | Required | Client ID from Authentik provider                                             |
+  | `AUTH_AUTHENTIK_SECRET` | Required | Client Secret from Authentik provider                                         |
+  | `AUTH_AUTHENTIK_ISSUER` | Required | Authentik issuer URL                                                          |
 
   <Callout type={'tip'}>
     Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#authentik) for detailed information on these variables.
@@ -58,7 +58,7 @@ tags:
 </Steps>
 
 <Callout type={'info'}>
-  After successful deployment, users will be able to authenticate with Authentik and use LobeChat.
+  After successful deployment, users will be able to authenticate with Authentik and use LobeHub.
 </Callout>
 
 ## Related Resources

@@ -1,12 +1,12 @@
 ---
-title: Configuring Casdoor Authentication for LobeChat
+title: Configuring Casdoor Authentication for LobeHub
 description: >-
-  Learn how to configure Casdoor SSO for LobeChat, including creating an
+  Learn how to configure Casdoor SSO for LobeHub, including creating an
   application and setting up environment variables.
 tags:
   - Casdoor
   - Authentication
-  - LobeChat
+  - LobeHub
   - Single Sign-On
   - OIDC
 ---
@@ -21,7 +21,7 @@ tags:
   1. Log in to your Casdoor admin console
   2. Go to **Applications** and click **Add**
   3. Configure the application:
-     - Name: `LobeChat`
+     - Name: `LobeHub`
      - Organization: Select your organization
      - Redirect URLs: Add your callback URL
 
@@ -37,12 +37,12 @@ tags:
 
   ### Configure Environment Variables
 
-  When deploying LobeChat, you need to configure the following environment variables:
+  When deploying LobeHub, you need to configure the following environment variables:
 
   | Environment Variable     | Type     | Description                                                                   |
   | ------------------------ | -------- | ----------------------------------------------------------------------------- |
   | `AUTH_SECRET`            | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32` |
-  | `AUTH_SSO_PROVIDERS`     | Required | SSO provider for LobeChat. Use `casdoor` for Casdoor                          |
+  | `AUTH_SSO_PROVIDERS`     | Required | SSO provider for LobeHub. Use `casdoor` for Casdoor                           |
   | `AUTH_CASDOOR_ID`        | Required | Client ID from Casdoor application                                            |
   | `AUTH_CASDOOR_SECRET`    | Required | Client Secret from Casdoor application                                        |
   | `AUTH_CASDOOR_ISSUER`    | Required | Casdoor server URL (e.g., `https://your-casdoor-domain`)                      |
@@ -56,7 +56,7 @@ tags:
 
   > Available in Casdoor `>=1.843.0`.
 
-  Configure Casdoor [Webhook](https://www.casdoor.org/docs/webhooks/overview#setting-up-a-webhook) to sync user data updates to LobeChat.
+  Configure Casdoor [Webhook](https://www.casdoor.org/docs/webhooks/overview#setting-up-a-webhook) to sync user data updates to LobeHub.
 
   **Synced data fields**:
 
@@ -78,7 +78,7 @@ tags:
 </Steps>
 
 <Callout type={'info'}>
-  After successful deployment, users will be able to authenticate with Casdoor and use LobeChat.
+  After successful deployment, users will be able to authenticate with Casdoor and use LobeHub.
 </Callout>
 
 ## Docker Compose Deployment with Casdoor

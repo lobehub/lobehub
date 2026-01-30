@@ -1,7 +1,7 @@
 ---
 title: Migrating from NextAuth to Better Auth
 description: >-
-  Guide for migrating your LobeChat deployment from NextAuth authentication to
+  Guide for migrating your LobeHub deployment from NextAuth authentication to
   Better Auth, including simple and full migration options.
 tags:
   - Authentication Service
@@ -12,17 +12,17 @@ tags:
 
 # Migrating from NextAuth to Better Auth
 
-This guide helps you migrate your existing NextAuth-based LobeChat deployment to Better Auth.
+This guide helps you migrate your existing NextAuth-based LobeHub deployment to Better Auth.
 
 <Callout type={'info'}>
-  Better Auth is the recommended authentication solution for LobeChat. It offers simpler configuration, more SSO providers, and better self-hosting support.
+  Better Auth is the recommended authentication solution for LobeHub. It offers simpler configuration, more SSO providers, and better self-hosting support.
 </Callout>
 
 <Callout type={'error'}>
   **Important Notice**:
 
   - **Always backup your database first!** For Neon users, create a backup via [Fork Branch](https://neon.tech/docs/manage/branches#create-a-branch)
-  - LobeChat is not responsible for any data loss or issues that may occur during the migration process
+  - LobeHub is not responsible for any data loss or issues that may occur during the migration process
   - This guide is intended for users with development experience; not recommended for users without technical background
   - If you have any questions, feel free to ask in our [Discord](https://discord.com/invite/AYFPHvv2jT) community or [GitHub Issue](https://github.com/lobehub/lobe-chat/issues)
 </Callout>
@@ -136,7 +136,7 @@ For small self-hosted deployments, the simplest approach is to let users re-logi
      See [Authentication Service Configuration](/docs/self-hosting/advanced/auth) for complete environment variables and SSO provider setup.
    </Callout>
 
-2. **Redeploy LobeChat**
+2. **Redeploy LobeHub**
 
    Deploy the new version with Better Auth enabled.
 
@@ -172,7 +172,7 @@ For larger deployments or when you need to preserve SSO connections, use the mig
 
 **Preparation:**
 
-1. Clone the LobeChat repository and install dependencies:
+1. Clone the LobeHub repository and install dependencies:
 
    ```bash
    git clone https://github.com/lobehub/lobe-chat.git
@@ -337,7 +337,7 @@ This error occurs because the database schema is outdated. Run `pnpm db:migrate`
 
 ### email\_not\_found error
 
-If you see a redirect to `signin?callbackUrl=...&error=email_not_found`, it means LobeChat cannot get the user's email.
+If you see a redirect to `signin?callbackUrl=...&error=email_not_found`, it means LobeHub cannot get the user's email.
 
 <Callout type={'warning'}>
   **Important**: Better Auth currently **requires user email** for authentication. All SSO providers must be configured to return email information, otherwise users cannot log in.
@@ -347,23 +347,23 @@ Common causes:
 
 **Cause 1: SSO connection not requesting email permission**
 
-When configuring SSO connections (e.g., GitHub in Auth0), make sure to enable **Email Address** permission in the Attributes section. LobeChat requires user email for authentication.
+When configuring SSO connections (e.g., GitHub in Auth0), make sure to enable **Email Address** permission in the Attributes section. LobeHub requires user email for authentication.
 
 **Cause 2: User email not configured in identity provider**
 
 For identity providers like Casdoor or Logto, users may not have an email configured.
 
 <Callout type={'warning'}>
-  **Note for Casdoor Users**: Casdoor does not require users to have an email configured, but LobeChat strongly depends on email for authentication. If you find migration difficult due to many users without email addresses, we recommend staying on [v2.0.0-next.344](https://github.com/lobehub/lobe-chat/releases/tag/v2.0.0-next.344) for now. We plan to provide a self-service migration feature in the future, where users without email will be redirected to a bind-email page when they log in.
+  **Note for Casdoor Users**: Casdoor does not require users to have an email configured, but LobeHub strongly depends on email for authentication. If you find migration difficult due to many users without email addresses, we recommend staying on [v2.0.0-next.344](https://github.com/lobehub/lobe-chat/releases/tag/v2.0.0-next.344) for now. We plan to provide a self-service migration feature in the future, where users without email will be redirected to a bind-email page when they log in.
 </Callout>
 
 Solution:
 
-1. First configure the Webhook in LobeChat to sync user data from the identity provider:
+1. First configure the Webhook in LobeHub to sync user data from the identity provider:
    - [Casdoor Webhook Configuration](/docs/self-hosting/advanced/auth/providers/casdoor)
    - [Logto Webhook Configuration](/docs/self-hosting/advanced/auth/providers/logto)
 2. Then configure the user's email in the identity provider's admin console
-3. The user data will be synced to LobeChat via Webhook, and the user can then log in
+3. The user data will be synced to LobeHub via Webhook, and the user can then log in
 
 ## Related Reading
 

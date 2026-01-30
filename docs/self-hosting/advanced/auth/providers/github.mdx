@@ -1,12 +1,12 @@
 ---
-title: Configuring GitHub Authentication for LobeChat
+title: Configuring GitHub Authentication for LobeHub
 description: >-
-  Learn how to configure GitHub SSO for LobeChat, including creating a GitHub
+  Learn how to configure GitHub SSO for LobeHub, including creating a GitHub
   App, setting up environment variables, and deployment.
 tags:
   - GitHub
   - Authentication
-  - LobeChat
+  - LobeHub
   - Single Sign-On
 ---
 
@@ -59,12 +59,12 @@ tags:
 
   ### Configure Environment Variables
 
-  | Environment Variable             | Type     | Description                                                     |
-  | -------------------------------- | -------- | --------------------------------------------------------------- |
-  | `AUTH_SECRET`                    | Required | Session encryption key, generate with `openssl rand -base64 32` |
-  | `AUTH_SSO_PROVIDERS`             | Required | Set to `github`                                                 |
-  | `AUTH_GITHUB_ID`                 | Required | Client ID from the GitHub App                                   |
-  | `AUTH_GITHUB_SECRET`             | Required | Client Secret from the GitHub App                               |
+  | Environment Variable | Type     | Description                                                     |
+  | -------------------- | -------- | --------------------------------------------------------------- |
+  | `AUTH_SECRET`        | Required | Session encryption key, generate with `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS` | Required | Set to `github`                                                 |
+  | `AUTH_GITHUB_ID`     | Required | Client ID from the GitHub App                                   |
+  | `AUTH_GITHUB_SECRET` | Required | Client Secret from the GitHub App                               |
 
   <Callout type={'tip'}>
     Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#github)
@@ -74,7 +74,7 @@ tags:
 
 <Callout type={'info'}>
   After successful deployment, users will be able to authenticate with GitHub
-  and use LobeChat.
+  and use LobeHub.
 </Callout>
 
 ## Common Issues

@@ -1,12 +1,12 @@
 ---
-title: Configuring Keycloak Authentication for LobeChat
+title: Configuring Keycloak Authentication for LobeHub
 description: >-
-  Learn how to configure Keycloak SSO for LobeChat, including creating a client
+  Learn how to configure Keycloak SSO for LobeHub, including creating a client
   and setting up environment variables.
 tags:
   - Keycloak
   - Authentication
-  - LobeChat
+  - LobeHub
   - Single Sign-On
 ---
 
@@ -52,13 +52,13 @@ tags:
 
   ### Configure Environment Variables
 
-  | Environment Variable             | Type     | Description                                                     |
-  | -------------------------------- | -------- | --------------------------------------------------------------- |
-  | `AUTH_SECRET`                    | Required | Session encryption key, generate with `openssl rand -base64 32` |
-  | `AUTH_SSO_PROVIDERS`             | Required | Set to `keycloak`                                               |
-  | `AUTH_KEYCLOAK_ID`               | Required | Client ID                                                       |
-  | `AUTH_KEYCLOAK_SECRET`           | Required | Client Secret                                                   |
-  | `AUTH_KEYCLOAK_ISSUER`           | Required | `https://your-keycloak-domain/realms/your-realm`                |
+  | Environment Variable   | Type     | Description                                                     |
+  | ---------------------- | -------- | --------------------------------------------------------------- |
+  | `AUTH_SECRET`          | Required | Session encryption key, generate with `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS`   | Required | Set to `keycloak`                                               |
+  | `AUTH_KEYCLOAK_ID`     | Required | Client ID                                                       |
+  | `AUTH_KEYCLOAK_SECRET` | Required | Client Secret                                                   |
+  | `AUTH_KEYCLOAK_ISSUER` | Required | `https://your-keycloak-domain/realms/your-realm`                |
 
   <Callout type={'tip'}>
     Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#keycloak)
@@ -68,7 +68,7 @@ tags:
 
 <Callout type={'info'}>
   After successful deployment, users will be able to authenticate with Keycloak
-  and use LobeChat.
+  and use LobeHub.
 </Callout>
 
 ## Related Resources

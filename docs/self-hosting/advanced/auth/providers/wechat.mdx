@@ -1,12 +1,12 @@
 ---
-title: Configuring WeChat Authentication for LobeChat
+title: Configuring WeChat Authentication for LobeHub
 description: >-
-  Learn how to configure WeChat SSO for LobeChat, including creating an
+  Learn how to configure WeChat SSO for LobeHub, including creating an
   application on WeChat Open Platform.
 tags:
   - WeChat
   - Authentication
-  - LobeChat
+  - LobeHub
   - Single Sign-On
 ---
 
@@ -47,12 +47,12 @@ tags:
 
   ### Configure Environment Variables
 
-  | Environment Variable             | Type     | Description                                                     |
-  | -------------------------------- | -------- | --------------------------------------------------------------- |
-  | `AUTH_SECRET`                    | Required | Session encryption key, generate with `openssl rand -base64 32` |
-  | `AUTH_SSO_PROVIDERS`             | Required | Set to `wechat`                                                 |
-  | `AUTH_WECHAT_ID`                 | Required | AppID from WeChat Open Platform                                 |
-  | `AUTH_WECHAT_SECRET`             | Required | AppSecret from WeChat Open Platform                             |
+  | Environment Variable | Type     | Description                                                     |
+  | -------------------- | -------- | --------------------------------------------------------------- |
+  | `AUTH_SECRET`        | Required | Session encryption key, generate with `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS` | Required | Set to `wechat`                                                 |
+  | `AUTH_WECHAT_ID`     | Required | AppID from WeChat Open Platform                                 |
+  | `AUTH_WECHAT_SECRET` | Required | AppSecret from WeChat Open Platform                             |
 
   <Callout type={'tip'}>
     Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#wechat)
@@ -62,7 +62,7 @@ tags:
 
 <Callout type={'info'}>
   After successful deployment, users will be able to authenticate with WeChat
-  and use LobeChat.
+  and use LobeHub.
 </Callout>
 
 ## Notes

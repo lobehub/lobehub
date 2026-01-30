@@ -1,10 +1,10 @@
 ---
-title: 在 LobeChat 中配置 GitHub 身份验证
-description: 学习如何在 LobeChat 中配置 GitHub SSO，包括创建 GitHub App、设置环境变量和部署。
+title: 在 LobeHub 中配置 GitHub 身份验证
+description: 学习如何在 LobeHub 中配置 GitHub SSO，包括创建 GitHub App、设置环境变量和部署。
 tags:
   - GitHub
   - 身份验证
-  - LobeChat
+  - LobeHub
   - 单点登录
 ---
 
@@ -57,12 +57,12 @@ tags:
 
   ### 配置环境变量
 
-  | 环境变量                             | 类型 | 描述                                     |
-  | -------------------------------- | -- | -------------------------------------- |
-  | `AUTH_SECRET`                    | 必选 | 会话加密密钥，使用 `openssl rand -base64 32` 生成 |
-  | `AUTH_SSO_PROVIDERS`             | 必选 | 填写 `github`                            |
-  | `AUTH_GITHUB_ID`                 | 必选 | GitHub App 的 Client ID                 |
-  | `AUTH_GITHUB_SECRET`             | 必选 | GitHub App 的 Client Secret             |
+  | 环境变量                 | 类型 | 描述                                     |
+  | -------------------- | -- | -------------------------------------- |
+  | `AUTH_SECRET`        | 必选 | 会话加密密钥，使用 `openssl rand -base64 32` 生成 |
+  | `AUTH_SSO_PROVIDERS` | 必选 | 填写 `github`                            |
+  | `AUTH_GITHUB_ID`     | 必选 | GitHub App 的 Client ID                 |
+  | `AUTH_GITHUB_SECRET` | 必选 | GitHub App 的 Client Secret             |
 
   <Callout type={'tip'}>
     前往 [📘 环境变量](/zh/docs/self-hosting/environment-variables/auth#github)
@@ -71,7 +71,7 @@ tags:
 </Steps>
 
 <Callout type={'info'}>
-  部署成功后，用户将可以通过 GitHub 身份认证并使用 LobeChat。
+  部署成功后，用户将可以通过 GitHub 身份认证并使用 LobeHub。
 </Callout>
 
 ## 常见问题

@@ -1,6 +1,6 @@
 ---
 title: 从 NextAuth 迁移到 Better Auth
-description: 将 LobeChat 部署从 NextAuth 身份验证迁移到 Better Auth 的指南，包括简单迁移和完整迁移选项。
+description: 将 LobeHub 部署从 NextAuth 身份验证迁移到 Better Auth 的指南，包括简单迁移和完整迁移选项。
 tags:
   - 身份验证服务
   - Better Auth
@@ -10,17 +10,17 @@ tags:
 
 # 从 NextAuth 迁移到 Better Auth
 
-本指南帮助您将现有的基于 NextAuth 的 LobeChat 部署迁移到 Better Auth。
+本指南帮助您将现有的基于 NextAuth 的 LobeHub 部署迁移到 Better Auth。
 
 <Callout type={'info'}>
-  Better Auth 是 LobeChat 推荐的身份验证解决方案。它提供更简单的配置、更多的 SSO 提供商支持，以及更好的自托管体验。
+  Better Auth 是 LobeHub 推荐的身份验证解决方案。它提供更简单的配置、更多的 SSO 提供商支持，以及更好的自托管体验。
 </Callout>
 
 <Callout type={'error'}>
   **重要提醒**：
 
   - **务必先备份数据库**！如使用 Neon，可通过 [Fork 分支](https://neon.tech/docs/manage/branches#create-a-branch) 创建备份
-  - 迁移过程中可能出现的任何数据丢失或问题，LobeChat 概不负责
+  - 迁移过程中可能出现的任何数据丢失或问题，LobeHub 概不负责
   - 本指南适合有一定开发背景的用户，不建议无技术经验的用户自行操作
   - 如有任何疑问，欢迎到 [Discord](https://discord.com/invite/AYFPHvv2jT) 社区或 [GitHub Issue](https://github.com/lobehub/lobe-chat/issues) 提问
 </Callout>
@@ -131,7 +131,7 @@ Better Auth 支持更多功能，以下是新增的环境变量：
      查阅 [身份验证服务配置](/zh/docs/self-hosting/advanced/auth) 了解完整的环境变量和 SSO 提供商配置。
    </Callout>
 
-2. **重新部署 LobeChat**
+2. **重新部署 LobeHub**
 
    部署启用 Better Auth 的新版本。
 
@@ -167,7 +167,7 @@ Better Auth 支持更多功能，以下是新增的环境变量：
 
 **准备工作：**
 
-1. Clone LobeChat 仓库并安装依赖：
+1. Clone LobeHub 仓库并安装依赖：
 
    ```bash
    git clone https://github.com/lobehub/lobe-chat.git
@@ -331,7 +331,7 @@ npx tsx scripts/nextauth-to-betterauth/verify.ts
 
 ### email\_not\_found 错误
 
-如果登录时跳转到 `signin?callbackUrl=...&error=email_not_found`，说明 LobeChat 无法获取用户邮箱。
+如果登录时跳转到 `signin?callbackUrl=...&error=email_not_found`，说明 LobeHub 无法获取用户邮箱。
 
 <Callout type={'warning'}>
   **重要提示**：Better Auth 目前**强依赖用户邮箱**进行身份认证。所有 SSO 提供商必须配置为返回邮箱信息，否则用户无法登录。
@@ -341,23 +341,23 @@ npx tsx scripts/nextauth-to-betterauth/verify.ts
 
 **原因 1：SSO 连接未请求邮箱权限**
 
-配置 SSO 连接时（如 Auth0 中的 GitHub 连接），务必在 **Attributes** 部分勾选 **Email Address** 权限。LobeChat 需要用户邮箱进行身份认证。
+配置 SSO 连接时（如 Auth0 中的 GitHub 连接），务必在 **Attributes** 部分勾选 **Email Address** 权限。LobeHub 需要用户邮箱进行身份认证。
 
 **原因 2：用户在身份提供商中未配置邮箱**
 
 对于 Casdoor、Logto 等身份提供商，用户可能没有配置邮箱。
 
 <Callout type={'warning'}>
-  **Casdoor 用户注意**：Casdoor 不要求用户必须配置邮箱，但 LobeChat 强依赖邮箱进行身份认证。如果因为大量用户没有邮箱而感觉迁移困难，建议暂时停留在 [v2.0.0-next.344](https://github.com/lobehub/lobe-chat/releases/tag/v2.0.0-next.344) 版本。后续官方计划提供用户端自助迁移功能，届时没有邮箱的用户登录时会被重定向到绑定邮箱页面。
+  **Casdoor 用户注意**：Casdoor 不要求用户必须配置邮箱，但 LobeHub 强依赖邮箱进行身份认证。如果因为大量用户没有邮箱而感觉迁移困难，建议暂时停留在 [v2.0.0-next.344](https://github.com/lobehub/lobe-chat/releases/tag/v2.0.0-next.344) 版本。后续官方计划提供用户端自助迁移功能，届时没有邮箱的用户登录时会被重定向到绑定邮箱页面。
 </Callout>
 
 解决方案：
 
-1. 先在 LobeChat 中配置身份提供商的 Webhook 以同步用户数据：
+1. 先在 LobeHub 中配置身份提供商的 Webhook 以同步用户数据：
    - [Casdoor Webhook 配置](/zh/docs/self-hosting/advanced/auth/providers/casdoor)
    - [Logto Webhook 配置](/zh/docs/self-hosting/advanced/auth/providers/logto)
 2. 然后在身份提供商的管理后台为用户配置邮箱
-3. 用户数据通过 Webhook 同步到 LobeChat 后即可正常登录
+3. 用户数据通过 Webhook 同步到 LobeHub 后即可正常登录
 
 ## 相关阅读
 

@@ -1,19 +1,19 @@
 ---
-title: Configuring Generic OIDC Authentication for LobeChat
+title: Configuring Generic OIDC Authentication for LobeHub
 description: >-
-  Learn how to configure any OpenID Connect provider for LobeChat using Generic
+  Learn how to configure any OpenID Connect provider for LobeHub using Generic
   OIDC integration.
 tags:
   - Generic OIDC
   - OpenID Connect
   - Authentication
-  - LobeChat
+  - LobeHub
   - Single Sign-On
 ---
 
 # Configuring Generic OIDC Authentication
 
-Use Generic OIDC to integrate LobeChat with any OpenID Connect compliant identity provider not explicitly listed in our supported providers.
+Use Generic OIDC to integrate LobeHub with any OpenID Connect compliant identity provider not explicitly listed in our supported providers.
 
 <Steps>
   ### Configure Your OIDC Provider
@@ -48,13 +48,13 @@ Use Generic OIDC to integrate LobeChat with any OpenID Connect compliant identit
 
   ### Configure Environment Variables
 
-  | Environment Variable             | Type     | Description                                                     |
-  | -------------------------------- | -------- | --------------------------------------------------------------- |
-  | `AUTH_SECRET`                    | Required | Session encryption key, generate with `openssl rand -base64 32` |
-  | `AUTH_SSO_PROVIDERS`             | Required | Set to `generic-oidc`                                           |
-  | `AUTH_GENERIC_OIDC_ID`           | Required | Client ID                                                       |
-  | `AUTH_GENERIC_OIDC_SECRET`       | Required | Client Secret                                                   |
-  | `AUTH_GENERIC_OIDC_ISSUER`       | Required | OIDC issuer URL (e.g., `https://your-provider.com`)             |
+  | Environment Variable       | Type     | Description                                                     |
+  | -------------------------- | -------- | --------------------------------------------------------------- |
+  | `AUTH_SECRET`              | Required | Session encryption key, generate with `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS`       | Required | Set to `generic-oidc`                                           |
+  | `AUTH_GENERIC_OIDC_ID`     | Required | Client ID                                                       |
+  | `AUTH_GENERIC_OIDC_SECRET` | Required | Client Secret                                                   |
+  | `AUTH_GENERIC_OIDC_ISSUER` | Required | OIDC issuer URL (e.g., `https://your-provider.com`)             |
 
   <Callout type={'tip'}>
     Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#generic-oidc)
@@ -64,7 +64,7 @@ Use Generic OIDC to integrate LobeChat with any OpenID Connect compliant identit
 
 <Callout type={'info'}>
   After successful deployment, users will be able to authenticate with your OIDC
-  provider and use LobeChat.
+  provider and use LobeHub.
 </Callout>
 
 ## Troubleshooting

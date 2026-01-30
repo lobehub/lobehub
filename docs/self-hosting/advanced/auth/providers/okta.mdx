@@ -1,12 +1,12 @@
 ---
-title: Configuring Okta Authentication for LobeChat
+title: Configuring Okta Authentication for LobeHub
 description: >-
-  Learn how to configure Okta SSO for LobeChat, including creating an
+  Learn how to configure Okta SSO for LobeHub, including creating an
   application and setting up environment variables.
 tags:
   - Okta
   - Authentication
-  - LobeChat
+  - LobeHub
   - Single Sign-On
   - OIDC
 ---
@@ -25,7 +25,7 @@ tags:
      - Sign-in method: **OIDC - OpenID Connect**
      - Application type: **Web Application**
   5. Configure the application:
-     - App integration name: `LobeChat`
+     - App integration name: `LobeHub`
      - Sign-in redirect URIs: Add your callback URL
 
   <Callout type={'info'}>
@@ -42,15 +42,15 @@ tags:
 
   ### Configure Environment Variables
 
-  When deploying LobeChat, you need to configure the following environment variables:
+  When deploying LobeHub, you need to configure the following environment variables:
 
-  | Environment Variable             | Type     | Description                                                                   |
-  | -------------------------------- | -------- | ----------------------------------------------------------------------------- |
-  | `AUTH_SECRET`                    | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32` |
-  | `AUTH_SSO_PROVIDERS`             | Required | SSO provider for LobeChat. Use `okta` for Okta                                |
-  | `AUTH_OKTA_ID`                   | Required | Client ID from Okta application                                               |
-  | `AUTH_OKTA_SECRET`               | Required | Client Secret from Okta application                                           |
-  | `AUTH_OKTA_ISSUER`               | Required | Okta issuer URL (e.g., `https://your-okta-domain.okta.com`)                   |
+  | Environment Variable | Type     | Description                                                                   |
+  | -------------------- | -------- | ----------------------------------------------------------------------------- |
+  | `AUTH_SECRET`        | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS` | Required | SSO provider for LobeHub. Use `okta` for Okta                                 |
+  | `AUTH_OKTA_ID`       | Required | Client ID from Okta application                                               |
+  | `AUTH_OKTA_SECRET`   | Required | Client Secret from Okta application                                           |
+  | `AUTH_OKTA_ISSUER`   | Required | Okta issuer URL (e.g., `https://your-okta-domain.okta.com`)                   |
 
   <Callout type={'tip'}>
     Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#okta) for detailed information on these variables.
@@ -58,7 +58,7 @@ tags:
 </Steps>
 
 <Callout type={'info'}>
-  After successful deployment, users will be able to authenticate with Okta and use LobeChat.
+  After successful deployment, users will be able to authenticate with Okta and use LobeHub.
 </Callout>
 
 ## Related Resources

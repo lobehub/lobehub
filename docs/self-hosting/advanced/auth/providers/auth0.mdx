@@ -1,12 +1,12 @@
 ---
-title: Configuring Auth0 Authentication for LobeChat
+title: Configuring Auth0 Authentication for LobeHub
 description: >-
-  Learn how to configure Auth0 SSO for LobeChat, including creating
+  Learn how to configure Auth0 SSO for LobeHub, including creating
   applications, adding users, and setting up environment variables.
 tags:
   - Auth0
   - Authentication
-  - LobeChat
+  - LobeHub
   - Single Sign-On
 ---
 
@@ -59,13 +59,13 @@ tags:
 
   ### Configure Environment Variables
 
-  | Environment Variable             | Type     | Description                                                     |
-  | -------------------------------- | -------- | --------------------------------------------------------------- |
-  | `AUTH_SECRET`                    | Required | Session encryption key, generate with `openssl rand -base64 32` |
-  | `AUTH_SSO_PROVIDERS`             | Required | Set to `auth0`                                                  |
-  | `AUTH_AUTH0_ID`                  | Required | Client ID                                                       |
-  | `AUTH_AUTH0_SECRET`              | Required | Client Secret                                                   |
-  | `AUTH_AUTH0_ISSUER`              | Required | `https://your-tenant.auth0.com`                                 |
+  | Environment Variable | Type     | Description                                                     |
+  | -------------------- | -------- | --------------------------------------------------------------- |
+  | `AUTH_SECRET`        | Required | Session encryption key, generate with `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS` | Required | Set to `auth0`                                                  |
+  | `AUTH_AUTH0_ID`      | Required | Client ID                                                       |
+  | `AUTH_AUTH0_SECRET`  | Required | Client Secret                                                   |
+  | `AUTH_AUTH0_ISSUER`  | Required | `https://your-tenant.auth0.com`                                 |
 
   <Callout type={'tip'}>
     Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#auth0)
@@ -75,7 +75,7 @@ tags:
 
 <Callout type={'info'}>
   After successful deployment, users will be able to authenticate with Auth0 and
-  use LobeChat.
+  use LobeHub.
 </Callout>
 
 ## Advanced Configuration
@@ -100,7 +100,7 @@ Configure social login in **Authentication** > **Social**.
 </Callout>
 
 <Callout type={'warning'}>
-  When creating a GitHub connection, make sure to enable the **Email Address** permission in the **Attributes** section. LobeChat requires user email for authentication.
+  When creating a GitHub connection, make sure to enable the **Email Address** permission in the **Attributes** section. LobeHub requires user email for authentication.
 
   <Image alt="GitHub Connection Email Permission" src="https://hub-apac-1.lobeobjects.space/docs/afdf22891dda3e5e44c690db184c548e.png" />
 </Callout>

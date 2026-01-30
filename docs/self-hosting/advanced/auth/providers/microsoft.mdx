@@ -1,14 +1,14 @@
 ---
-title: Configuring Microsoft Authentication for LobeChat
+title: Configuring Microsoft Authentication for LobeHub
 description: >-
-  Learn how to configure Microsoft (Entra ID / Azure AD) SSO for LobeChat,
+  Learn how to configure Microsoft (Entra ID / Azure AD) SSO for LobeHub,
   including creating applications in Azure Portal and setting up environment
   variables.
 tags:
   - Microsoft
   - Authentication
   - Azure AD
-  - LobeChat
+  - LobeHub
   - Single Sign-On
 ---
 
@@ -70,12 +70,12 @@ tags:
 
   ### Configure Environment Variables
 
-  | Environment Variable             | Type     | Description                                                     |
-  | -------------------------------- | -------- | --------------------------------------------------------------- |
-  | `AUTH_SECRET`                    | Required | Session encryption key, generate with `openssl rand -base64 32` |
-  | `AUTH_SSO_PROVIDERS`             | Required | Set to `microsoft`                                              |
-  | `AUTH_MICROSOFT_ID`              | Required | Application (client) ID                                         |
-  | `AUTH_MICROSOFT_SECRET`          | Required | Client secret value                                             |
+  | Environment Variable    | Type     | Description                                                     |
+  | ----------------------- | -------- | --------------------------------------------------------------- |
+  | `AUTH_SECRET`           | Required | Session encryption key, generate with `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS`    | Required | Set to `microsoft`                                              |
+  | `AUTH_MICROSOFT_ID`     | Required | Application (client) ID                                         |
+  | `AUTH_MICROSOFT_SECRET` | Required | Client secret value                                             |
 
   <Callout type={'info'}>
     **Alternative Environment Variables**: For backward compatibility, these
@@ -94,14 +94,14 @@ tags:
 
 <Callout type={'info'}>
   After successful deployment, users will be able to authenticate with Microsoft
-  and use LobeChat.
+  and use LobeHub.
 </Callout>
 
 ## Common Issues
 
 ### Tenant Configuration
 
-By default, LobeChat uses `common` tenant which allows both organizational and personal Microsoft accounts. If you need single-tenant configuration, you may need to customize the tenant settings.
+By default, LobeHub uses `common` tenant which allows both organizational and personal Microsoft accounts. If you need single-tenant configuration, you may need to customize the tenant settings.
 
 ### Client Secret Expiration
 

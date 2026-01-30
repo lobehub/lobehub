@@ -22,9 +22,9 @@ This page documents the legacy authentication methods (NextAuth and Clerk) for u
 
 Clerk is a comprehensive identity verification solution that provides a simple yet powerful API and services to handle user authentication and session management.
 
-LobeChat has deeply integrated with Clerk to provide users with a secure and convenient login and registration experience.
+LobeHub has deeply integrated with Clerk to provide users with a secure and convenient login and registration experience.
 
-By setting the environment variables `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in LobeChat's environment, you can enable and use Clerk.
+By setting the environment variables `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in LobeHub's environment, you can enable and use Clerk.
 
 <Callout type={'info'}>
   For detailed Clerk configuration, see [Clerk Configuration Guide](/docs/self-hosting/advanced/auth/clerk).
@@ -40,15 +40,15 @@ By setting the environment variables `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CL
   To migrate from NextAuth to Better Auth, see the [NextAuth Migration Guide](/docs/self-hosting/advanced/auth/nextauth-to-betterauth).
 </Callout>
 
-Before using NextAuth, please set the following variables in LobeChat's environment variables:
+Before using NextAuth, please set the following variables in LobeHub's environment variables:
 
-| Environment Variable             | Type     | Description                                                                                                                                                                                                                                |
-| -------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Environment Variable             | Type     | Description                                                                                                                                                                                                                     |
+| -------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_ENABLE_NEXT_AUTH`   | Required | This is used to enable the NextAuth service. Set it to `1` to enable it; changing this setting requires recompiling the application. Users deploying with the `lobehub/lobehub` image have this configuration added by default. |
-| `AUTH_SECRET`                    | Required | The key used to encrypt Auth.js session tokens. You can use the following command: `openssl rand -base64 32`, or visit `https://generate-secret.vercel.app/32` to generate the key.                                                        |
-| `AUTH_URL`                       | Required | This URL specifies the callback address for Auth.js when performing OAuth verification. Set this only if the default generated redirect address is incorrect. `https://example.com/api/auth`                                               |
-| `NEXT_AUTH_SSO_PROVIDERS`        | Optional | This environment variable is used to enable multiple identity verification sources simultaneously, separated by commas, for example, `auth0,microsoft-entra-id,authentik`.                                                                 |
-| `NEXT_AUTH_SSO_SESSION_STRATEGY` | Optional | The session strategy for Auth.js. Options are `jwt` or `database`. Default is `jwt`.                                                                                                                                                       |
+| `AUTH_SECRET`                    | Required | The key used to encrypt Auth.js session tokens. You can use the following command: `openssl rand -base64 32`, or visit `https://generate-secret.vercel.app/32` to generate the key.                                             |
+| `AUTH_URL`                       | Required | This URL specifies the callback address for Auth.js when performing OAuth verification. Set this only if the default generated redirect address is incorrect. `https://example.com/api/auth`                                    |
+| `NEXT_AUTH_SSO_PROVIDERS`        | Optional | This environment variable is used to enable multiple identity verification sources simultaneously, separated by commas, for example, `auth0,microsoft-entra-id,authentik`.                                                      |
+| `NEXT_AUTH_SSO_SESSION_STRATEGY` | Optional | The session strategy for Auth.js. Options are `jwt` or `database`. Default is `jwt`.                                                                                                                                            |
 
 Currently supported identity verification services include:
 
@@ -103,7 +103,7 @@ The order corresponds to the display order of the SSO providers.
 
 ### Webhook Support
 
-Allow LobeChat to receive notifications when user information is updated in the identity provider. Supported providers include Casdoor and Logto. Please refer to the specific provider documentation for configuration details.
+Allow LobeHub to receive notifications when user information is updated in the identity provider. Supported providers include Casdoor and Logto. Please refer to the specific provider documentation for configuration details.
 
 ### Database Session
 

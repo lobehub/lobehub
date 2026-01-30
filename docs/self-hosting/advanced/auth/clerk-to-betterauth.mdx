@@ -1,7 +1,7 @@
 ---
 title: Migrating from Clerk to Better Auth
 description: >-
-  Guide for migrating your LobeChat deployment from Clerk authentication to
+  Guide for migrating your LobeHub deployment from Clerk authentication to
   Better Auth, including simple and full migration options.
 tags:
   - Authentication Service
@@ -12,17 +12,17 @@ tags:
 
 # Migrating from Clerk to Better Auth
 
-This guide helps you migrate your existing Clerk-based LobeChat deployment to Better Auth.
+This guide helps you migrate your existing Clerk-based LobeHub deployment to Better Auth.
 
 <Callout type={'info'}>
-  Better Auth is the recommended authentication solution for LobeChat. It offers simpler configuration, more SSO providers, and better self-hosting support.
+  Better Auth is the recommended authentication solution for LobeHub. It offers simpler configuration, more SSO providers, and better self-hosting support.
 </Callout>
 
 <Callout type={'error'}>
   **Important Notice**:
 
   - **Always backup your database first!** For Neon users, create a backup via [Fork Branch](https://neon.tech/docs/manage/branches#create-a-branch)
-  - LobeChat is not responsible for any data loss or issues that may occur during the migration process
+  - LobeHub is not responsible for any data loss or issues that may occur during the migration process
   - This guide is intended for users with development experience; not recommended for users without technical background
   - If you have any questions, feel free to ask in our [Discord](https://discord.com/invite/AYFPHvv2jT) community or [GitHub Issue](https://github.com/lobehub/lobe-chat/issues/11707)
 </Callout>
@@ -83,7 +83,7 @@ For small self-hosted deployments, the simplest approach is to let users reset t
      See [Authentication Service Configuration](/docs/self-hosting/advanced/auth) for complete environment variables and SSO provider setup.
    </Callout>
 
-3. **Redeploy LobeChat**
+3. **Redeploy LobeHub**
 
    Deploy the new version with Better Auth enabled.
 
@@ -102,7 +102,7 @@ For small self-hosted deployments, the simplest approach is to let users reset t
    - Log in using their previously linked social account (e.g., Google, GitHub)
    - Click "Set Password" to receive an email and set a new password
 
-   ![LobeChat Login Page - Social Login Hint](https://hub-apac-1.lobeobjects.space/docs/8d0563701fcd17ad7252a72b1746dd42.png)
+   ![LobeHub Login Page - Social Login Hint](https://hub-apac-1.lobeobjects.space/docs/8d0563701fcd17ad7252a72b1746dd42.png)
 
    3. (Optional) After logging in, users can manage their account in the Profile page:
       - Linked Accounts: Link additional social accounts
@@ -139,7 +139,7 @@ For larger deployments or when you need to preserve user passwords and SSO conne
 
 **Preparation:**
 
-1. Clone the LobeChat repository and install dependencies:
+1. Clone the LobeHub repository and install dependencies:
 
    ```bash
    git clone https://github.com/lobehub/lobe-chat.git
