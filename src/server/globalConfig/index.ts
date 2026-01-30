@@ -75,6 +75,7 @@ export const getServerGlobalConfig = async () => {
       config: parseAgentConfig(DEFAULT_AGENT_CONFIG),
     },
     enableBusinessFeatures: ENABLE_BUSINESS_FEATURES,
+    enableEmailPassword: authEnv.AUTH_ENABLE_EMAIL_PASSWORD,
     enableEmailVerification: authEnv.AUTH_EMAIL_VERIFICATION,
     enableKlavis: !!klavisEnv.KLAVIS_API_KEY,
     enableLobehubSkill: !!(appEnv.MARKET_TRUSTED_CLIENT_SECRET && appEnv.MARKET_TRUSTED_CLIENT_ID),

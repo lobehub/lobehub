@@ -50,6 +50,7 @@ export interface GlobalServerConfig {
   aiProvider: ServerLanguageModel;
   defaultAgent?: PartialDeep<UserDefaultAgent>;
   enableBusinessFeatures?: boolean;
+  enableEmailPassword?: boolean;
   enableEmailVerification?: boolean;
   enableKlavis?: boolean;
   enableLobehubSkill?: boolean;

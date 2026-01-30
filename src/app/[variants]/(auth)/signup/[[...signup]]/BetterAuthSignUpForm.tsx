@@ -3,10 +3,13 @@
 import { Button, Icon, Text } from '@lobehub/ui';
 import { Form, Input } from 'antd';
 import { Lock, Mail } from 'lucide-react';
-import Link from '@/libs/next/Link';
-import { useSearchParams } from '@/libs/next/navigation';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import Link from '@/libs/next/Link';
+import { useSearchParams } from '@/libs/next/navigation';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 import { AuthCard } from '../../../../../features/AuthCard';
 import { type SignUpFormValues, useSignUp } from './useSignUp';
@@ -14,6 +17,7 @@ import { type SignUpFormValues, useSignUp } from './useSignUp';
 const BetterAuthSignUpForm = () => {
   const [form] = Form.useForm<SignUpFormValues>();
   const { loading, onSubmit, businessElement } = useSignUp();
+  const enableEmailPassword = useServerConfigStore(serverConfigSelectors.enableEmailPassword);
 
   const { t } = useTranslation('auth');
   const searchParams = useSearchParams();
@@ -29,6 +33,20 @@ const BetterAuthSignUpForm = () => {
       <Link href={`/signin?${searchParams.toString()}`}>{t('betterAuth.signup.signinLink')}</Link>
     </Text>
   );
+
+  if (!enableEmailPassword) {
+    return (
+      <AuthCard
+        footer={footer}
+        subtitle={t('betterAuth.signup.subtitle')}
+        title={t('betterAuth.signup.title')}
+      >
+        <Text type="secondary">
+          Password registration is disabled. Please use social login to create an account.
+        </Text>
+      </AuthCard>
+    );
+  }
 
   return (
     <AuthCard

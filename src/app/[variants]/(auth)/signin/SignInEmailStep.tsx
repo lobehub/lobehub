@@ -24,6 +24,7 @@ export const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const USERNAME_REGEX = /^\w+$/;
 
 export interface SignInEmailStepProps {
+  enableEmailPassword: boolean;
   form: FormInstance<{ email: string }>;
   isSocialOnly: boolean;
   loading: boolean;
@@ -36,6 +37,7 @@ export interface SignInEmailStepProps {
 }
 
 export const SignInEmailStep = ({
+  enableEmailPassword,
   form,
   isSocialOnly,
   loading,
@@ -133,59 +135,61 @@ export const SignInEmailStep = ({
               {getProviderLabel(provider)}
             </Button>
           ))}
-          {divider}
+          {enableEmailPassword && divider}
         </Flexbox>
       )}
-      <Form
-        form={form}
-        layout="vertical"
-        onFinish={(values) => onCheckUser(values as { email: string })}
-      >
-        <Form.Item
-          name="email"
-          rules={[
-            { message: t('betterAuth.errors.emailRequired'), required: true },
-            {
-              validator: (_, value) => {
-                if (!value) return Promise.resolve();
-                const trimmedValue = (value as string).trim();
-                if (EMAIL_REGEX.test(trimmedValue) || USERNAME_REGEX.test(trimmedValue)) {
-                  return Promise.resolve();
-                }
-                return Promise.reject(new Error(t('betterAuth.errors.emailInvalid')));
-              },
-            },
-          ]}
-          style={{ marginBottom: 0 }}
+      {enableEmailPassword && (
+        <Form
+          form={form}
+          layout="vertical"
+          onFinish={(values) => onCheckUser(values as { email: string })}
         >
-          <Input
-            placeholder={t('betterAuth.signin.emailPlaceholder')}
-            prefix={
-              <Icon
-                icon={Mail}
-                style={{
-                  marginInline: 6,
-                }}
-              />
-            }
-            ref={emailInputRef}
-            size="large"
-            style={{
-              padding: 6,
-            }}
-            suffix={
-              <Button
-                icon={ChevronRight}
-                loading={loading}
-                onClick={() => form.submit()}
-                title={t('betterAuth.signin.nextStep')}
-                variant={'filled'}
-              />
-            }
-          />
-        </Form.Item>
-      </Form>
-      {isSocialOnly && (
+          <Form.Item
+            name="email"
+            rules={[
+              { message: t('betterAuth.errors.emailRequired'), required: true },
+              {
+                validator: (_, value) => {
+                  if (!value) return Promise.resolve();
+                  const trimmedValue = (value as string).trim();
+                  if (EMAIL_REGEX.test(trimmedValue) || USERNAME_REGEX.test(trimmedValue)) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error(t('betterAuth.errors.emailInvalid')));
+                },
+              },
+            ]}
+            style={{ marginBottom: 0 }}
+          >
+            <Input
+              placeholder={t('betterAuth.signin.emailPlaceholder')}
+              prefix={
+                <Icon
+                  icon={Mail}
+                  style={{
+                    marginInline: 6,
+                  }}
+                />
+              }
+              ref={emailInputRef}
+              size="large"
+              style={{
+                padding: 6,
+              }}
+              suffix={
+                <Button
+                  icon={ChevronRight}
+                  loading={loading}
+                  onClick={() => form.submit()}
+                  title={t('betterAuth.signin.nextStep')}
+                  variant={'filled'}
+                />
+              }
+            />
+          </Form.Item>
+        </Form>
+      )}
+      {enableEmailPassword && isSocialOnly && (
         <Alert
           description={
             <>

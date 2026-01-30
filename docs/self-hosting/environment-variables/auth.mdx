@@ -32,6 +32,20 @@ LobeHub provides a complete authentication service capability when deployed. The
 - Default: `0`
 - Example: `1`
 
+#### `AUTH_ENABLE_MAGIC_LINK`
+
+- Type: Optional
+- Description: Set to `1` to enable passwordless magic-link login via email. Requires a configured email service (SMTP or Resend).
+- Default: `0`
+- Example: `1`
+
+#### `AUTH_ENABLE_EMAIL_PASSWORD`
+
+- Type: Optional
+- Description: Set to `0` to disable email/password authentication, keeping only social login. When disabled, the email/password forms will be hidden from login and signup pages.
+- Default: `1` (enabled)
+- Example: `0`
+
 #### `AUTH_SSO_PROVIDERS`
 
 - Type: Optional

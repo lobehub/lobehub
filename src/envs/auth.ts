@@ -10,6 +10,7 @@ declare global {
       AUTH_SECRET?: string;
       AUTH_EMAIL_VERIFICATION?: string;
       AUTH_ENABLE_MAGIC_LINK?: string;
+      AUTH_ENABLE_EMAIL_PASSWORD?: string;
       AUTH_SSO_PROVIDERS?: string;
       AUTH_TRUSTED_ORIGINS?: string;
       AUTH_ALLOWED_EMAILS?: string;
@@ -111,6 +112,7 @@ export const getAuthConfig = () => {
       AUTH_TRUSTED_ORIGINS: z.string().optional(),
       AUTH_EMAIL_VERIFICATION: z.boolean().optional().default(false),
       AUTH_ENABLE_MAGIC_LINK: z.boolean().optional().default(false),
+      AUTH_ENABLE_EMAIL_PASSWORD: z.boolean().optional().default(true),
       AUTH_ALLOWED_EMAILS: z.string().optional(),
 
       AUTH_GOOGLE_ID: z.string().optional(),
@@ -195,6 +197,7 @@ export const getAuthConfig = () => {
     runtimeEnv: {
       AUTH_EMAIL_VERIFICATION: process.env.AUTH_EMAIL_VERIFICATION === '1',
       AUTH_ENABLE_MAGIC_LINK: process.env.AUTH_ENABLE_MAGIC_LINK === '1',
+      AUTH_ENABLE_EMAIL_PASSWORD: process.env.AUTH_ENABLE_EMAIL_PASSWORD !== '0',
       AUTH_SECRET: process.env.AUTH_SECRET,
       AUTH_SSO_PROVIDERS: process.env.AUTH_SSO_PROVIDERS,
       AUTH_TRUSTED_ORIGINS: process.env.AUTH_TRUSTED_ORIGINS,

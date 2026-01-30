@@ -152,10 +152,13 @@ Send emails via SMTP protocol, suitable for users with existing email services. 
 
 ### Common Configuration
 
+## Password Login Configuration
 Before using Better Auth, please set the following variables in LobeHub's environment variables:
+| Environment Variable         | Type     | Description                                                                                     |
+| ---------------------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `AUTH_ENABLE_EMAIL_PASSWORD` | Optional | Set to `0` to disable email/password authentication, keeping only social login (on by default)  |
 
 ## Email Verification
-
 Enable email verification to ensure users own the email addresses they register with (off by default):
 
 | Environment Variable      | Type     | Description                                                 |
@@ -170,9 +173,9 @@ Enable email verification to ensure users own the email addresses they register 
 
 Enable magic-link login (depends on a working email provider above, off by default):
 
-| Environment Variable     | Type     | Description                                                         |
-| ------------------------ | -------- | ------------------------------------------------------------------- |
-| `AUTH_ENABLE_MAGIC_LINK` | Optional | Set to `1` to enable passwordless magic-link login (off by default) |
+| Environment Variable         | Type     | Description                                                                                     |
+| ---------------------------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `AUTH_ENABLE_MAGIC_LINK`     | Optional | Set to `1` to enable passwordless magic-link login (off by default)                             |
 
 <Callout type={'tip'}>
   Go to [Environment Variables](/docs/self-hosting/environment-variables/auth#better-auth) for detailed information on all Better Auth variables.
