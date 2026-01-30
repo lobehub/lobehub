@@ -1,6 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiAgentService } from '../index';
+
+// Use vi.hoisted to ensure mock functions are available before vi.mock runs
+const { mockMessageCreate } = vi.hoisted(() => ({
+  mockMessageCreate: vi.fn(),
+}));
 
 // Mock trusted client to avoid server-side env access
 vi.mock('@/libs/trusted-client', () => ({
@@ -8,9 +13,6 @@ vi.mock('@/libs/trusted-client', () => ({
   getTrustedClientTokenForSession: vi.fn().mockResolvedValue(undefined),
   isTrustedClientEnabled: vi.fn().mockReturnValue(false),
 }));
-
-// Mock MessageModel to capture create calls
-const mockMessageCreate = vi.fn();
 
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(() => ({
@@ -87,6 +89,20 @@ vi.mock('@/server/services/agentRuntime', () => ({
   })),
 }));
 
+// Mock MarketService (for getLobehubSkillManifests)
+vi.mock('@/server/services/market', () => ({
+  MarketService: vi.fn().mockImplementation(() => ({
+    getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
+// Mock KlavisService (for getKlavisManifests)
+vi.mock('@/server/services/klavis', () => ({
+  KlavisService: vi.fn().mockImplementation(() => ({
+    getKlavisManifests: vi.fn().mockResolvedValue([]),
+  })),
+}));
+
 // Mock Mecha modules
 vi.mock('@/server/modules/Mecha', () => ({
   createServerAgentToolsEngine: vi.fn().mockReturnValue({
@@ -118,11 +134,16 @@ describe('AiAgentService.execAgent - threadId handling', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-
-    // Setup default mock responses
+    // Explicitly clear the shared mock to prevent state pollution between tests
+    mockMessageCreate.mockClear();
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
 
     service = new AiAgentService(mockDb, userId);
+  });
+
+  afterEach(() => {
+    // Ensure cleanup after each test
+    mockMessageCreate.mockClear();
   });
 
   describe('when threadId is provided in appContext', () => {
