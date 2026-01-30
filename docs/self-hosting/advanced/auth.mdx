@@ -1,8 +1,8 @@
 ---
 title: LobeHub Authentication Service Configuration
 description: >-
-  Learn how to configure external authentication services using Better Auth,
-  Clerk, or Next Auth for centralized user authorization management. Supported
+  Learn how to configure external authentication services using Better Auth
+  for centralized user authorization management. Supported
   authentication services include Auth0, Azure ID, etc.
 tags:
   - Authentication Service
@@ -12,17 +12,7 @@ tags:
 
 # Authentication Service
 
-LobeHub supports the configuration of external authentication services using Better Auth, Clerk, or Next Auth for internal use within enterprises/organizations to centrally manage user authorization.
-
-<Callout type={'info'}>
-  Looking for legacy authentication methods? See [Legacy Authentication](/docs/self-hosting/advanced/auth/legacy) for NextAuth and Clerk documentation.
-</Callout>
-
-Clerk is a comprehensive identity verification solution that has recently gained popularity. It provides a simple yet powerful API and services to handle user authentication and session management. Clerk's design philosophy is to offer a concise and modern authentication solution that enables developers to easily integrate and use it.
-
-LobeHub has deeply integrated with Clerk to provide users with a more secure and convenient login and registration experience. It also relieves developers from the burden of managing authentication logic. Clerk's concise and modern design philosophy aligns perfectly with LobeHub's goals, making user management on the entire platform more efficient and reliable.
-
-By setting the environment variables `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in LobeHub's environment, you can enable and use Clerk.
+LobeHub supports the configuration of external authentication services using Better Auth for internal use within enterprises/organizations to centrally manage user authorization.
 
 ## Better Auth
 
@@ -40,12 +30,11 @@ By setting the environment variables `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CL
 
 To enable Better Auth in LobeHub, set the following environment variables:
 
-| Environment Variable             | Type     | Description                                                                                                                                                               |
-| -------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_ENABLE_BETTER_AUTH` | Required | Set to `1` to enable Better Auth service                                                                                                                                  |
-| `AUTH_SECRET`                    | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32`                                                                                             |
-| `NEXT_PUBLIC_AUTH_URL`           | Required | The browser-accessible base URL for Better Auth (e.g., `http://localhost:3010`, `https://LobeHub.com`). Optional for Vercel deployments (auto-detected from `VERCEL_URL`) |
-| `AUTH_SSO_PROVIDERS`             | Optional | Comma-separated list of enabled SSO providers, e.g., `google,github,microsoft`                                                                                            |
+| Environment Variable   | Type     | Description                                                                                                                                                               |
+| ---------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AUTH_SECRET`          | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32`                                                                                             |
+| `NEXT_PUBLIC_AUTH_URL` | Required | The browser-accessible base URL for Better Auth (e.g., `http://localhost:3010`, `https://LobeHub.com`). Optional for Vercel deployments (auto-detected from `VERCEL_URL`) |
+| `AUTH_SSO_PROVIDERS`   | Optional | Comma-separated list of enabled SSO providers, e.g., `google,github,microsoft`                                                                                            |
 
 ## Supported SSO Providers
 
