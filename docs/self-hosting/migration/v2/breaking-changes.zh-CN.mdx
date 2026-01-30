@@ -76,4 +76,4 @@ LobeHub 2.0 推荐使用 **PostgreSQL 17** 及以上版本。
 
 这是因为 LobeHub 2.0 使用了 [pg\_search](https://github.com/paradedb/paradedb/tree/main/pg_search) 插件来提供全文搜索能力。如果您使用 Neon 等 Serverless Postgres 服务，pg\_search 插件仅在 PostgreSQL 17 上可用。
 
-如果您使用 Docker 自建数据库，推荐使用 `pgvector/pgvector:pg17` 镜像。
+如果您使用 Docker 自建数据库，推荐使用 `paradedb/paradedb:latest-pg17` 镜像。
