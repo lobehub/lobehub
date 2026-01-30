@@ -77,6 +77,171 @@ tags:
 
 <Callout type={'info'}>部署成功后，用户将可以通过 Casdoor 身份认证并使用 LobeChat。</Callout>
 
+## Docker Compose 部署 Casdoor
+
+如果你使用 Docker Compose 部署 LobeHub，可以参考以下配置来集成 Casdoor 作为鉴权服务。
+
+### 反向代理配置
+
+在域名模式中，你需要完成反向代理配置，并确保局域网 / 公网能访问到 Casdoor 服务：
+
+| 域名                 | 反代端口   | 说明         |
+| ------------------ | ------ | ---------- |
+| `auth.example.com` | `8000` | Casdoor 服务 |
+
+<Callout type="important">
+  如果你使用如 [宝塔面板](https://www.bt.cn/) 等面板软件进行反向代理配置，
+  你需要确保其对 `.well-known` 路径的请求不进行拦截，以确保 Casdoor 的 OAuth2 配置能够正常工作。
+  这里提供一份针对 Casdoor 服务的 Nginx server 块的路径白名单配置：
+
+  ```nginx
+  location /.well-known/openid-configuration {
+    proxy_pass http://localhost:8000;  # 转发到 localhost:8000
+    proxy_set_header Host $host;  # 保留原始主机头
+    proxy_set_header X-Real-IP $remote_addr;  # 保留客户端真实IP
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  # 保留转发的IP
+    proxy_set_header X-Forwarded-Proto $scheme;  # 保留请求协议
+  }
+  ```
+
+  ⚠️ 请不要在此类面板软件的反向代理设置中开启任何形式的缓存，以免影响服务的正常运行。
+  详情请见 [https://github.com/lobehub/lobe-chat/discussions/5986](https://github.com/lobehub/lobe-chat/discussions/5986)
+</Callout>
+
+### 必要配置
+
+1. LobeHub 需要与 Casdoor 通讯，因此你需要配置 Casdoor 的 Issuer：
+
+```env
+AUTH_CASDOOR_ISSUER=https://auth.example.com
+```
+
+该配置会影响 LobeHub 的登录鉴权服务，你需要确保 Casdoor 服务的地址正确。
+
+2. 在 Casdoor 中允许回调地址为 LobeHub 的地址：
+
+请在 Casdoor 的 Web 面板的 `身份认证 -> 应用` -> `<应用ID，默认为 app-built-in>` -> `重定向URL` 中添加一行：
+
+```
+https://lobe.example.com/api/auth/callback/casdoor
+```
+
+3. Casdoor 需要在环境变量中提供访问的 Origin 信息：
+
+```env
+origin=https://auth.example.com
+```
+
+### 使用 MinIO 存储 Casdoor 头像
+
+允许用户在 Casdoor 中更换头像：
+
+1. 你需要首先在 `buckets` 中创建一个名为 `casdoor` 的桶，选择自定义策略，复制并粘贴如下内容：
+
+   ```json
+   {
+     "Statement": [
+       {
+         "Effect": "Allow",
+         "Principal": {
+           "AWS": ["*"]
+         },
+         "Action": ["s3:GetBucketLocation"],
+         "Resource": ["arn:aws:s3:::casdoor"]
+       },
+       {
+         "Effect": "Allow",
+         "Principal": {
+           "AWS": ["*"]
+         },
+         "Action": ["s3:ListBucket"],
+         "Resource": ["arn:aws:s3:::casdoor"],
+         "Condition": {
+           "StringEquals": {
+             "s3:prefix": ["files/*"]
+           }
+         }
+       },
+       {
+         "Effect": "Allow",
+         "Principal": {
+           "AWS": ["*"]
+         },
+         "Action": ["s3:PutObject", "s3:DeleteObject", "s3:GetObject"],
+         "Resource": ["arn:aws:s3:::casdoor/**"]
+       }
+     ],
+     "Version": "2012-10-17"
+   }
+   ```
+
+2. 创建一个新的访问密钥，将生成的 `Access Key` 和 `Secret Key` 存储之
+
+3. 在 Casdoor 的 `身份认证 -> 提供商` 中关联 MinIO S3 服务，以下是一个示例配置：
+
+   ![casdoor](/blog/assets18bb134dbc5792d6a624199cca8bf7d3.webp)
+
+   其中，客户端 ID、客户端密钥为上一步创建的访问密钥中的 `Access Key` 和 `Secret Key`，`192.168.31.251` 应当被替换为 `your_server_ip`。
+
+4. 在 Casdoor 的 `身份认证 -> 应用` 中，对 `app-built-in` 应用添加提供商，选择 `minio`，保存并退出
+
+5. 你可以在 Casdoor 的 `身份认证 -> 资源` 中，尝试上传文件以测试配置是否正确
+
+### 常见问题
+
+#### 无法正常登陆
+
+请根据容器日志检查是否存在以下错误：
+
+```sh
+docker logs -f lobe-chat
+```
+
+**r3: "response" is not a conform Authorization Server Metadata response**
+
+```log
+lobe-chat      | [auth][error] r3: "response" is not a conform Authorization Server Metadata response (unexpected HTTP status code)
+```
+
+成因：该问题一般是由于你的反向代理配置不正确导致的，你需要确保你的反向代理配置不会拦截 Casdoor 的 OAuth2 配置请求。
+
+解决方案：
+
+- 请参考上方的反向代理配置注意事项。
+
+- 一个直接的排查方式，你可以直接访问 `https://auth.example.com/.well-known/openid-configuration`，如果：
+  - 返回了非 JSON 格式的数据，则说明你的反向代理配置错误。
+  - 如果返回的 JSON 格式数据中的 `"issuer": "URL"` 字段不是你配置的 `https://auth.example.com`，则说明你的环境变量配置错误。
+
+**TypeError: fetch failed**
+
+```log
+lobe-chat      | [auth][error] TypeError: fetch failed
+```
+
+成因：LobeHub 无法访问鉴权服务。
+
+解决方案：
+
+- 请检查你的鉴权服务是否正常运行，以及 LobeHub 所在的网络是否能够访问到鉴权服务。
+
+- 一个直接的排查方式，你可以在 LobeHub 容器的终端中，使用 `curl` 命令访问你的鉴权服务 `https://auth.example.com/.well-known/openid-configuration`，如果返回了 JSON 格式的数据，则说明你的鉴权服务正常运行。
+
+#### 反向代理下 OAuth 令牌交换失败
+
+如果在反向代理后使用 Docker 时 OAuth 认证在令牌交换阶段失败，这通常是由默认的 `MIDDLEWARE_REWRITE_THROUGH_LOCAL=1` 设置引起的，该设置会将 URL 重写为 `127.0.0.1:3210`。
+
+**解决方案**: 在 `.env` 文件中设置 `MIDDLEWARE_REWRITE_THROUGH_LOCAL=0` 并重启 Docker 容器：
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+### Docker Compose 配置文件
+
+Casdoor 的 Docker Compose 配置文件可以在 [docker-compose/local/casdoor](https://github.com/lobehub/lobe-chat/tree/main/docker-compose/local/casdoor) 目录中找到。
+
 ## 相关资源
 
 - [Casdoor 文档](https://casdoor.org/docs/overview)

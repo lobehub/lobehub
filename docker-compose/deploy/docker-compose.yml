@@ -13,7 +13,7 @@ services:
       - lobe-network
 
   postgresql:
-    image: paradedb/paradedb:latest
+    image: paradedb/paradedb:latest-pg17
     container_name: lobe-postgres
     ports:
       - '5432:5432'
