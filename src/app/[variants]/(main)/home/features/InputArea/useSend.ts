@@ -24,13 +24,7 @@ export const useSend = () => {
     const { sendAsAgent, sendAsGroup, sendAsWrite, sendAsImage, sendAsResearch, inputActiveMode } =
       useHomeStore.getState();
 
-    // Image mode: no input content required
-    if (inputActiveMode === 'image') {
-      sendAsImage();
-      return;
-    }
-
-    // Other modes require input content
+    // Require input content (except for default inbox which can have files/context)
     if (!inputMessage && fileList.length === 0 && contextList.length === 0) return;
 
     try {
@@ -47,6 +41,11 @@ export const useSend = () => {
 
         case 'write': {
           await sendAsWrite(inputMessage);
+          break;
+        }
+
+        case 'image': {
+          sendAsImage(inputMessage || undefined);
           break;
         }
 
