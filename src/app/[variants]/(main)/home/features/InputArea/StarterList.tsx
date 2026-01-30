@@ -2,7 +2,7 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { Button, type ButtonProps, Center, Tooltip } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { BotIcon, ImageIcon, PenLineIcon } from 'lucide-react';
+import { BotIcon, PenLineIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -31,7 +31,6 @@ type StarterTitleKey =
   | 'starter.createAgent'
   | 'starter.createGroup'
   | 'starter.write'
-  | 'starter.image'
   | 'starter.deepResearch';
 
 interface StarterItem {
@@ -69,11 +68,6 @@ const StarterList = memo(() => {
         icon: PenLineIcon,
         key: 'write',
         titleKey: 'starter.write',
-      },
-      {
-        icon: ImageIcon,
-        key: 'image',
-        titleKey: 'starter.image',
       },
       // {
       //   disabled: true,

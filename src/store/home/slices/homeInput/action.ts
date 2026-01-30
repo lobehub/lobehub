@@ -18,7 +18,6 @@ export interface HomeInputAction {
   clearInputMode: () => void;
   sendAsAgent: (message: string) => Promise<string>;
   sendAsGroup: (message: string) => Promise<string>;
-  sendAsImage: (message?: string) => void;
   sendAsResearch: (message: string) => Promise<void>;
   sendAsWrite: (message: string) => Promise<string>;
   setInputActiveMode: (mode: StarterMode) => void;
@@ -151,22 +150,6 @@ export const createHomeInputSlice: StateCreator<
     } finally {
       set({ homeInputLoading: false }, false, n('sendAsGroup/end'));
     }
-  },
-
-  sendAsImage: (message?: string) => {
-    // Navigate to /image page with optional prompt
-    const { navigate } = get();
-    if (navigate) {
-      if (message) {
-        const encodedPrompt = encodeURIComponent(message);
-        navigate(`/image?prompt=${encodedPrompt}`);
-      } else {
-        navigate('/image');
-      }
-    }
-
-    // Clear mode
-    set({ inputActiveMode: null }, false, n('sendAsImage'));
   },
 
   sendAsResearch: async (message) => {

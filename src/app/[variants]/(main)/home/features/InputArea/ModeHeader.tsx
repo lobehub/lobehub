@@ -1,7 +1,7 @@
 import { ActionIcon, Block, Flexbox, Text } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { BotIcon, FilePenIcon, ImageIcon, PenLineIcon, X } from 'lucide-react';
+import { BotIcon, FilePenIcon, PenLineIcon, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,7 +22,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const modeConfig = {
   agent: { icon: BotIcon, titleKey: 'starter.createAgent' },
   group: { icon: GroupBotSquareIcon, titleKey: 'starter.createGroup' },
-  image: { icon: ImageIcon, titleKey: 'starter.image' },
   research: { icon: FilePenIcon, titleKey: 'starter.deepResearch' },
   write: { icon: PenLineIcon, titleKey: 'starter.write' },
 } as const;
