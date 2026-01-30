@@ -4,7 +4,7 @@ import { CheckCircleFilled } from '@ant-design/icons';
 import { type ChatMessageError, TraceNameMap } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
 import { Alert, Button, Flexbox, Highlighter, Icon, LobeSelect as Select } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
 import { type ReactNode, memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +13,11 @@ import { useProviderName } from '@/hooks/useProviderName';
 import { chatService } from '@/services/chat';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
+const styles = createStaticStyles(({ css }) => ({
+  popup: css`
+    width: 380px;
+  `,
+}));
 const Error = memo<{ error: ChatMessageError }>(({ error }) => {
   const { t } = useTranslation('error');
   const providerName = useProviderName(error.body?.provider);
@@ -184,6 +189,7 @@ const Checker = memo<ConnectionCheckerProps>(
               );
             }}
             options={sortedModels.map((id) => ({ label: id, value: id }))}
+            popupClassName={cx(styles.popup)}
             style={{
               flex: 1,
               overflow: 'hidden',
