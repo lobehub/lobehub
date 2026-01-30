@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 
+import { useMounted } from '@/hooks/useMounted';
 import { useGlobalStore } from '@/store/global';
 
 import AskAIMenu from './AskAIMenu';
@@ -170,15 +171,10 @@ CommandMenuContent.displayName = 'CommandMenuContent';
  */
 const CommandMenu = memo(() => {
   const [open] = useGlobalStore((s) => [s.status.showCommandMenu]);
-  const [mounted, setMounted] = useState(false);
+  const mounted = useMounted();
   const [appRoot, setAppRoot] = useState<HTMLElement | null>(null);
   const location = useLocation();
   const pathname = location.pathname;
-
-  // Ensure we're mounted on the client
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   // Find App root node (.ant-app)
   useEffect(() => {

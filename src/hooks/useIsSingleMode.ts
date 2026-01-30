@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 
+import { useMounted } from '@/hooks/useMounted';
 import { useSearchParams } from '@/libs/router/navigation';
 
 /**
@@ -12,11 +13,7 @@ import { useSearchParams } from '@/libs/router/navigation';
  */
 export const useIsSingleMode = (): boolean => {
   const [isSingleMode, setIsSingleMode] = useState(false);
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useMounted();
 
   const [searchParams] = useSearchParams();
 

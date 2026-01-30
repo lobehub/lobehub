@@ -1,4 +1,4 @@
-import { pwaInstallHandler } from 'pwa-install-handler';
+import { PWAInstallElement } from '@khmyznikov/pwa-install';
 import { useEffect, useState } from 'react';
 
 import { PWA_INSTALL_ID } from '@/const/layoutTokens';
@@ -12,17 +12,34 @@ export const usePWAInstall = () => {
 
   useEffect(() => {
     if (isOnServerSide) return;
-    pwaInstallHandler.addListener(setCanInstall);
+
+    const pwa = document.querySelector(`#${PWA_INSTALL_ID}`) as PWAInstallElement;
+    if (!pwa) return;
+
+    // Pass the captured event if available
+    if ((window as any).pwaPromptEvent) {
+      pwa.externalPromptEvent = (window as any).pwaPromptEvent;
+    }
+
+    // Check initial state
+    if (pwa.isInstallAvailable) {
+      setCanInstall(true);
+    }
+
+    // Listen for install availability changes
+    const handleInstallAvailable = () => {
+      setCanInstall(true);
+    };
+
+    pwa.addEventListener('pwa-install-available-event', handleInstallAvailable);
+
     return () => {
-      pwaInstallHandler.removeListener(setCanInstall);
+      pwa.removeEventListener('pwa-install-available-event', handleInstallAvailable);
     };
   }, []);
 
   const installCheck = () => {
-    // 当在 PWA 或不支持 PWA 的环境中时，不显示安装按钮
     if (isPWA || !isSupportInstallPWA) return false;
-    const pwa: any = document.querySelector(`#${PWA_INSTALL_ID}`);
-    if (!pwa) return false;
     return canInstall;
   };
 
@@ -31,7 +48,6 @@ export const usePWAInstall = () => {
     install: () => {
       const pwa: any = document.querySelector(`#${PWA_INSTALL_ID}`);
       if (!pwa) return;
-      pwa.externalPromptEvent = pwaInstallHandler.getEvent();
       pwa?.showDialog(true);
     },
   };

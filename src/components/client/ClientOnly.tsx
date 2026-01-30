@@ -9,9 +9,8 @@ const ClientOnly: FC<PropsWithChildren<{ fallback?: React.ReactNode }>> = ({
 }) => {
   const [mounted, setMounted] = useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+const ClientOnly: FC<PropsWithChildren> = ({ children }) => {
+  const mounted = useMounted();
 
   if (!mounted) return fallback;
 

@@ -57,6 +57,7 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
         )}
       </head>
       <body>
+        <Script src="/beforeinstallprompt.js" strategy="beforeInteractive" />
         {ENABLE_BUSINESS_FEATURES ? (
           <BusinessGlobalProvider>{renderContent()}</BusinessGlobalProvider>
         ) : (
