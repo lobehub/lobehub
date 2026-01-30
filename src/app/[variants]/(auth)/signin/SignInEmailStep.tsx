@@ -101,7 +101,7 @@ export const SignInEmailStep = ({
     <AuthCard
       footer={footer}
       subtitle={t('signin.subtitle', { appName: BRANDING_NAME })}
-      title={'Agent teams that grow with you'}
+      title={'Agent teammates that grow with you'}
     >
       {!serverConfigInit && (
         <Flexbox gap={12}>

@@ -35,7 +35,7 @@ LobeHub 是一个工作与生活空间，用于发现、构建并与会随着您
 [![][share-weibo-shield]][share-weibo-link]
 [![][share-mastodon-shield]][share-mastodon-link]
 
-<sup>Agent teams that grow with you</sup>
+<sup>Agent teammates that grow with you</sup>
 
 [![][github-trending-shield]][github-trending-url]
 [![][github-hello-shield]][github-hello-url]
