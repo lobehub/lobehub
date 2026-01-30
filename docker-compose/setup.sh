@@ -406,31 +406,33 @@ download_file() {
 }
 
 print_centered() {
-    # Define colors
-    declare -A colors
-    colors=(
-        [black]="\e[30m"
-        [red]="\e[31m"
-        [green]="\e[32m"
-        [yellow]="\e[33m"
-        [blue]="\e[34m"
-        [magenta]="\e[35m"
-        [cyan]="\e[36m"
-        [white]="\e[37m"
-        [reset]="\e[0m"
-    )
     local text="$1"                                   # Get input texts
     local color="${2:-reset}"                         # Get color, default to reset
     local term_width=$(tput cols)                     # Get terminal width
     local text_length=${#text}                        # Get text length
     local padding=$(((term_width - text_length) / 2)) # Get padding
-    # Check if the color is valid
-    if [[ -z "${colors[$color]}" ]]; then
-        echo "Invalid color specified. Available colors: ${!colors[@]}"
-        return 1
-    fi
+
+    # Get color code (compatible with bash 3.x)
+    local color_code=""
+    local reset_code="\e[0m"
+    case "$color" in
+        black)   color_code="\e[30m" ;;
+        red)     color_code="\e[31m" ;;
+        green)   color_code="\e[32m" ;;
+        yellow)  color_code="\e[33m" ;;
+        blue)    color_code="\e[34m" ;;
+        magenta) color_code="\e[35m" ;;
+        cyan)    color_code="\e[36m" ;;
+        white)   color_code="\e[37m" ;;
+        reset)   color_code="\e[0m" ;;
+        *)
+            echo "Invalid color specified. Available colors: black red green yellow blue magenta cyan white reset"
+            return 1
+        ;;
+    esac
+
     # Print the text with padding
-    printf "%*s${colors[$color]}%s${colors[reset]}\n" $padding "" "$text"
+    printf "%*s${color_code}%s${reset_code}\n" $padding "" "$text"
 }
 
 # Usage:
