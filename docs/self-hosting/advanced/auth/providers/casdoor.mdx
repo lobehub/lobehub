@@ -81,6 +81,116 @@ tags:
   After successful deployment, users will be able to authenticate with Casdoor and use LobeChat.
 </Callout>
 
+## Docker Compose Deployment with Casdoor
+
+If you're deploying LobeHub using Docker Compose, refer to the following configuration to integrate Casdoor as an authentication service.
+
+### Reverse Proxy Configuration
+
+In domain mode, you need to configure a reverse proxy to ensure Casdoor is accessible:
+
+| Domain             | Proxy Port | Description     |
+| ------------------ | ---------- | --------------- |
+| `auth.example.com` | `8000`     | Casdoor service |
+
+<Callout type="important">
+  If you're using panel software like [aaPanel](https://www.bt.cn/) for reverse proxy configuration,
+  ensure it does not intercept requests to the `.well-known` path to facilitate the proper functioning of Casdoor's OAuth2 configuration.
+  Below is a whitelist configuration for the Nginx server block concerning paths for Casdoor reverse proxy:
+
+  ```nginx
+  location /.well-known/openid-configuration {
+    proxy_pass http://localhost:8000;  # Forward to localhost:8000
+    proxy_set_header Host $host;  # Keep the original host header
+    proxy_set_header X-Real-IP $remote_addr;  # Keep the client's real IP
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;  # Keep the forwarded IP
+    proxy_set_header X-Forwarded-Proto $scheme;  # Keep the request protocol
+  }
+  ```
+
+  ⚠️ Please do not enable any form of caching in the reverse proxy settings of such panel software to avoid affecting the normal operation of the service.
+  See [https://github.com/lobehub/lobe-chat/discussions/5986](https://github.com/lobehub/lobe-chat/discussions/5986)
+</Callout>
+
+### Required Configuration
+
+1. LobeHub needs to communicate with Casdoor, so you need to configure Casdoor's Issuer:
+
+```env
+AUTH_CASDOOR_ISSUER=https://auth.example.com
+```
+
+This configuration affects LobeHub's login authentication service. Ensure the Casdoor service URL is correct.
+
+2. Allow callback URL in Casdoor to point to LobeHub:
+
+In Casdoor's Web panel under `Authentication -> Applications` -> `<Application ID, default is app-built-in>` -> `Redirect URLs`, add:
+
+```
+https://lobe.example.com/api/auth/callback/casdoor
+```
+
+3. Casdoor needs Origin information in environment variables:
+
+```env
+origin=https://auth.example.com
+```
+
+### Troubleshooting
+
+#### Cannot Login Properly
+
+Check container logs for the following errors:
+
+```sh
+docker logs -f lobehub
+```
+
+**r3: "response" is not a conform Authorization Server Metadata response**
+
+```log
+lobehub      | [auth][error] r3: "response" is not a conform Authorization Server Metadata response (unexpected HTTP status code)
+```
+
+Cause: This issue is typically caused by improper reverse proxy configuration. Ensure your reverse proxy doesn't intercept Casdoor's OAuth2 configuration requests.
+
+Solution:
+
+- Refer to the reverse proxy configuration notes above.
+
+- Direct troubleshooting: Access `https://auth.example.com/.well-known/openid-configuration`:
+  - If non-JSON data is returned, your reverse proxy configuration is incorrect.
+  - If the returned JSON's `"issuer": "URL"` field doesn't match `https://auth.example.com`, your environment variable configuration is incorrect.
+
+**TypeError: fetch failed**
+
+```log
+lobehub      | [auth][error] TypeError: fetch failed
+```
+
+Cause: LobeHub cannot access the authentication service.
+
+Solution:
+
+- Check if your authentication service is running properly and if LobeHub's network can reach it.
+
+- Direct troubleshooting: Use `curl` in the LobeHub container terminal to access `https://auth.example.com/.well-known/openid-configuration`. If JSON data is returned, your authentication service is working correctly.
+
+#### OAuth Token Exchange Failures with Reverse Proxy
+
+If OAuth authentication fails during the token exchange phase when using Docker behind a reverse proxy, this is typically caused by the default `MIDDLEWARE_REWRITE_THROUGH_LOCAL=1` setting.
+
+**Solution**: Set `MIDDLEWARE_REWRITE_THROUGH_LOCAL=0` in your `.env` file and restart Docker containers:
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+### Docker Compose Configuration Files
+
+Casdoor Docker Compose configuration files can be found in the [docker-compose/local/casdoor](https://github.com/lobehub/lobe-chat/tree/main/docker-compose/local/casdoor) directory.
+
 ## Related Resources
 
 - [Casdoor Documentation](https://casdoor.org/docs/overview)
