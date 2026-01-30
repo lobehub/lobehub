@@ -5,6 +5,7 @@ import { Flexbox, Icon, Tabs, type TabsProps, Tag } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import {
   BookOpenIcon,
+  BotIcon,
   CodeIcon,
   DownloadIcon,
   HistoryIcon,
@@ -58,6 +59,7 @@ const Nav = memo<NavProps>(
   ({ mobile, noSettings, setActiveTab, activeTab = McpNavKey.Overview, inModal }) => {
     const { t } = useTranslation('discover');
     const {
+      agents,
       versions,
       deploymentOptions,
       toolsCount,
@@ -66,6 +68,8 @@ const Nav = memo<NavProps>(
       github,
       identifier,
     } = useDetailContext();
+
+    const agentsCount = agents?.length || 0;
 
     // 检查插件是否已安装
     const installedPlugin = useToolStore(pluginSelectors.getInstalledPluginById(identifier));
@@ -143,7 +147,24 @@ const Nav = memo<NavProps>(
               key: McpNavKey.Score,
               label: t('mcp.details.score.title'),
             },
-
+            // Only show agents tab if there are agents
+            agentsCount > 0 && {
+              icon: <Icon icon={BotIcon} size={16} />,
+              key: McpNavKey.Agents,
+              label: (
+                <Flexbox
+                  align={'center'}
+                  gap={6}
+                  horizontal
+                  style={{
+                    display: 'inline-flex',
+                  }}
+                >
+                  {t('mcp.details.agents.title')}
+                  <Tag>{agentsCount}</Tag>
+                </Flexbox>
+              ),
+            },
             !inModal && {
               icon: <Icon icon={HistoryIcon} size={16} />,
               key: McpNavKey.Version,

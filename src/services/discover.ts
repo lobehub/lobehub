@@ -88,6 +88,21 @@ class DiscoverService {
     );
   };
 
+  getAgentsByPlugin = async (params: {
+    locale?: string;
+    page?: number;
+    pageSize?: number;
+    pluginId: string;
+  }): Promise<AssistantListResponse> => {
+    const locale = globalHelpers.getCurrentLanguage();
+    return lambdaClient.market.getAgentsByPlugin.query({
+      ...params,
+      locale,
+      page: params.page ? Number(params.page) : 1,
+      pageSize: params.pageSize ? Number(params.pageSize) : 20,
+    });
+  };
+
   // ============================== MCP Market ==============================
 
   getMcpCategories = async (params: CategoryListQuery = {}): Promise<CategoryItem[]> => {

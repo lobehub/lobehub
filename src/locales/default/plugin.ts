@@ -500,6 +500,7 @@ export default {
   'skillDetail.author': 'Author',
   'skillDetail.details': 'Details',
   'skillDetail.developedBy': 'Developed by',
+  'skillDetail.tabs.agents': 'Agents Using This Skill',
   'skillDetail.tabs.overview': 'Overview',
   'skillDetail.tabs.tools': 'Capabilities',
   'skillDetail.tools': 'Tools',
