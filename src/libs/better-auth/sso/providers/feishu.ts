@@ -102,9 +102,6 @@ const provider: GenericProviderDefinition<{
           throw new Error(parsed.msg ?? parsed.message ?? 'Failed to fetch Feishu OAuth token');
         }
 
-        console.log('[Feishu OAuth] Token response:', JSON.stringify(parsed, null, 2));
-        console.log('[Feishu OAuth] Granted scopes:', payload.scope);
-
         return {
           accessToken: payload.access_token,
           accessTokenExpiresAt: payload.expires_in
@@ -118,7 +115,6 @@ const provider: GenericProviderDefinition<{
         };
       },
       getUserInfo: async (tokens) => {
-        console.log('[Feishu OAuth] getUserInfo called, accessToken:', !!tokens.accessToken);
         if (!tokens.accessToken) return null;
 
         const response = await fetch(FEISHU_USERINFO_URL, {
@@ -128,27 +124,19 @@ const provider: GenericProviderDefinition<{
           },
         });
 
-        console.log('[Feishu OAuth] User info response status:', response.status);
         if (!response.ok) return null;
 
         const payload = (await response.json()) as unknown;
-        console.log('[Feishu OAuth] Raw payload:', JSON.stringify(payload, null, 2));
-
         const profileResponse = payload as FeishuUserInfoResponse;
 
-        if (profileResponse.code && profileResponse.code !== 0) {
-          console.log('[Feishu OAuth] Error code:', profileResponse.code, profileResponse.msg);
-          return null;
-        }
+        if (profileResponse.code && profileResponse.code !== 0) return null;
 
         const profile: FeishuUserProfile | undefined =
           profileResponse.data ?? (isFeishuProfile(payload) ? payload : undefined);
 
-        console.log('[Feishu OAuth] Parsed profile:', JSON.stringify(profile, null, 2));
         if (!profile) return null;
 
         const unionId = profile.union_id ?? profile.open_id;
-        console.log('[Feishu OAuth] unionId:', unionId);
         if (!unionId) return null;
 
         // Always use union_id to construct email for consistency
@@ -156,16 +144,11 @@ const provider: GenericProviderDefinition<{
         // 1. Admin hasn't enabled "Allow OpenAPI to access email field" in Feishu admin console
         // 2. User hasn't bound an email in Feishu
         // 3. User's email changes later (which would cause account mismatch)
-        const email = `${unionId}@feishu.sso`;
-        console.log('[Feishu OAuth] constructed email:', email);
-        console.log('[Feishu OAuth] original profile.email:', `"${profile.email}"`);
-        console.log('[Feishu OAuth] original profile.enterprise_email:', profile.enterprise_email);
+        const email = profile.email || profile.enterprise_email || `${unionId}@feishu.sso`;
 
-        // Note: We spread profile first, then override email to ensure our constructed email is used
-        // profile.email might be an empty string "" which is falsy but still a defined property
-        const result = {
+        return {
           ...profile,
-          email, // Override profile.email with our constructed email
+          email,
           emailVerified: false,
           id: unionId,
           image:
@@ -175,12 +158,6 @@ const provider: GenericProviderDefinition<{
             profile.avatar_big,
           name: profile.name ?? profile.en_name ?? unionId,
         };
-
-        // Double check email is set correctly
-        console.log('[Feishu OAuth] result.email after spread:', result.email);
-
-        console.log('[Feishu OAuth] Final result:', JSON.stringify(result, null, 2));
-        return result;
       },
       pkce: false,
       providerId: 'feishu',
