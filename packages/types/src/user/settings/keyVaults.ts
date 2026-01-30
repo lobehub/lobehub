@@ -43,6 +43,25 @@ export interface ComfyUIKeyVault {
   username?: string;
 }
 
+export interface GithubCopilotKeyVault {
+  /**
+   * Traditional PAT (Personal Access Token)
+   */
+  apiKey?: string;
+  /**
+   * Provider-specific bearer token (Copilot API token)
+   */
+  bearerToken?: string;
+  /**
+   * Bearer token expiration timestamp (ms)
+   */
+  bearerTokenExpiresAt?: string;
+  /**
+   * OAuth access token (e.g., GitHub's ghu_xxx)
+   */
+  oauthAccessToken?: string;
+}
+
 export interface SearchEngineKeyVaults {
   searchxng?: {
     apiKey?: string;

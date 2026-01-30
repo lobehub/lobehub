@@ -34,6 +34,13 @@ export interface ClientSecretPayload {
   customHeaders?: Record<string, string>;
 
   /**
+   * GitHub Copilot OAuth fields
+   */
+  oauthAccessToken?: string;
+  bearerToken?: string;
+  bearerTokenExpiresAt?: number;
+
+  /**
    * user id
    * in client db mode it's a uuid
    * in server db mode it's a user id

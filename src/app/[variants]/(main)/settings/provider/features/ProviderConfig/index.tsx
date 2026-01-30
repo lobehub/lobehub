@@ -33,6 +33,7 @@ import {
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey, LLMProviderBaseUrlKey } from '../../const';
 import Checker, { type CheckErrorRender } from './Checker';
 import EnableSwitch from './EnableSwitch';
+import OAuthDeviceFlowAuth from './OAuthDeviceFlowAuth';
 import UpdateProviderInfo from './UpdateProviderInfo';
 
 const prefixCls = 'ant';
@@ -131,6 +132,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
     title,
   }) => {
     const {
+      authType,
       proxyUrl,
       showApiKey = true,
       defaultShowBrowserRequest,
@@ -235,42 +237,68 @@ const ProviderConfig = memo<ProviderConfigProps>(
 
     const isCustom = source === AiProviderSourceEnum.Custom;
 
-    const apiKeyItem: FormItemProps[] = !showApiKey
-      ? []
-      : (apiKeyItems ?? [
-          {
-            children: isLoading ? (
-              <SkeletonInput />
-            ) : (
-              <FormPassword
-                autoComplete={'new-password'}
-                placeholder={t('providerModels.config.apiKey.placeholder', { name })}
-                suffix={
-                  configUpdating && (
-                    <Icon icon={Loader2Icon} spin style={{ color: cssVar.colorTextTertiary }} />
-                  )
-                }
-              />
-            ),
-            desc: apiKeyUrl ? (
-              <Trans
-                components={[
-                  <span key="0" />,
-                  <span key="1" />,
-                  <span key="2" />,
-                  <a href={apiKeyUrl} key="3" rel="noreferrer" target="_blank" />,
-                ]}
-                i18nKey="providerModels.config.apiKey.descWithUrl"
-                ns={'modelProvider'}
-                values={{ name }}
-              />
-            ) : (
-              t(`providerModels.config.apiKey.desc`, { name })
-            ),
-            label: t(`providerModels.config.apiKey.title`),
-            name: [KeyVaultsConfigKey, LLMProviderApiTokenKey],
-          },
-        ]);
+    // OAuth Device Flow authentication item
+    const oauthItem: FormItemProps[] =
+      authType === 'oauthDeviceFlow'
+        ? [
+            {
+              children: isLoading ? (
+                <SkeletonInput />
+              ) : (
+                <OAuthDeviceFlowAuth
+                  name={name || id}
+                  onAuthChange={async () => {
+                    // Only refresh provider data, don't update with form values
+                    // OAuth tokens are saved directly to DB by the tRPC endpoint
+                    await useAiInfraStore.getState().refreshAiProviderDetail();
+                    await useAiInfraStore.getState().refreshAiProviderRuntimeState();
+                  }}
+                  providerId={id}
+                />
+              ),
+              label: t('providerModels.config.oauth.title'),
+              minWidth: undefined,
+            },
+          ]
+        : [];
+
+    const apiKeyItem: FormItemProps[] =
+      !showApiKey || authType === 'oauthDeviceFlow'
+        ? []
+        : (apiKeyItems ?? [
+            {
+              children: isLoading ? (
+                <SkeletonInput />
+              ) : (
+                <FormPassword
+                  autoComplete={'new-password'}
+                  placeholder={t('providerModels.config.apiKey.placeholder', { name })}
+                  suffix={
+                    configUpdating && (
+                      <Icon icon={Loader2Icon} spin style={{ color: cssVar.colorTextTertiary }} />
+                    )
+                  }
+                />
+              ),
+              desc: apiKeyUrl ? (
+                <Trans
+                  components={[
+                    <span key="0" />,
+                    <span key="1" />,
+                    <span key="2" />,
+                    <a href={apiKeyUrl} key="3" rel="noreferrer" target="_blank" />,
+                  ]}
+                  i18nKey="providerModels.config.apiKey.descWithUrl"
+                  ns={'modelProvider'}
+                  values={{ name }}
+                />
+              ) : (
+                t(`providerModels.config.apiKey.desc`, { name })
+              ),
+              label: t(`providerModels.config.apiKey.title`),
+              name: [KeyVaultsConfigKey, LLMProviderApiTokenKey],
+            },
+          ]);
 
     const aceGcmItem: FormItemProps = {
       children: (
@@ -359,6 +387,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       : undefined;
 
     const configItems = [
+      ...oauthItem,
       ...apiKeyItem,
       endpointItem,
       supportResponsesApi
@@ -400,6 +429,8 @@ const ProviderConfig = memo<ProviderConfigProps>(
     ].filter(Boolean) as FormItemProps[];
 
     const logoUrl = data?.logo ?? logo;
+
+    console.log('id', id);
     const model: FormGroupItemType = {
       children: configItems,
 
