@@ -2,7 +2,7 @@
 
 import { SiDiscord } from '@icons-pack/react-simple-icons';
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { Alert, Button, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { parseAsString, useQueryState } from 'nuqs';
 import { memo } from 'react';
@@ -45,7 +45,9 @@ const AuthErrorPage = memo(() => {
       subtitle={description}
       title={t('title')}
     >
-      <Alert title={error || 'UNKNOWN'} type={'error'} />
+      <Text style={{ fontFamily: cssVar.fontFamilyCode }} type={'secondary'}>
+        ErrorCode: {error || 'UNKNOWN'}
+      </Text>
     </AuthCard>
   );
 });

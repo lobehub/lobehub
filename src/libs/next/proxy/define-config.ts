@@ -167,6 +167,7 @@ export function defineConfig() {
     '/trpc(.*)',
     // better auth
     '/signin',
+    '/auth-error',
     '/signup',
     '/verify-email',
     '/reset-password',

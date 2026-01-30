@@ -69,7 +69,7 @@ const provider: GenericProviderDefinition<{
       authorizationUrlParams: {
         app_id: clientId,
         response_type: 'code',
-        scope: '',
+        scope: 'contact:user.base:readonly contact:user.email:readonly',
       },
       clientId,
       clientSecret,
@@ -79,8 +79,8 @@ const provider: GenericProviderDefinition<{
       getToken: async ({ code, redirectURI }) => {
         const tokenResponse = await fetch(FEISHU_TOKEN_URL, {
           body: JSON.stringify({
-            app_id: clientId,
-            app_secret: clientSecret,
+            client_id: clientId,
+            client_secret: clientSecret,
             code,
             grant_type: 'authorization_code',
             redirect_uri: redirectURI,
@@ -124,16 +124,12 @@ const provider: GenericProviderDefinition<{
           },
         });
 
-        if (!response.ok) {
-          return null;
-        }
+        if (!response.ok) return null;
 
         const payload = (await response.json()) as unknown;
         const profileResponse = payload as FeishuUserInfoResponse;
 
-        if (profileResponse.code && profileResponse.code !== 0) {
-          return null;
-        }
+        if (profileResponse.code && profileResponse.code !== 0) return null;
 
         const profile: FeishuUserProfile | undefined =
           profileResponse.data ?? (isFeishuProfile(payload) ? payload : undefined);
@@ -143,11 +139,12 @@ const provider: GenericProviderDefinition<{
         const unionId = profile.union_id ?? profile.open_id;
         if (!unionId) return null;
 
-        const syntheticEmail =
-          profile.email ?? profile.enterprise_email ?? `${unionId}@feishu.lobehub`;
+        // Use || instead of ?? because email might be empty string ""
+        const email = profile.email || profile.enterprise_email;
 
         return {
-          email: syntheticEmail,
+          ...profile,
+          email,
           emailVerified: false,
           id: unionId,
           image:
@@ -156,7 +153,6 @@ const provider: GenericProviderDefinition<{
             profile.avatar_middle ??
             profile.avatar_big,
           name: profile.name ?? profile.en_name ?? unionId,
-          ...profile,
         };
       },
       pkce: false,
