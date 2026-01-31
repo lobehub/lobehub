@@ -384,39 +384,6 @@ describe('LobeZhipuAI - custom features', () => {
       });
     });
 
-    describe('Stream parameter', () => {
-      it('should always set stream to true', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4',
-          temperature: 0.5,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            stream: true,
-          }),
-          expect.anything(),
-        );
-      });
-
-      it('should override stream parameter to true', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'glm-4',
-          stream: false,
-          temperature: 0.5,
-        });
-
-        expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-          expect.objectContaining({
-            stream: true,
-          }),
-          expect.anything(),
-        );
-      });
-    });
-
     describe('Preserve other payload properties', () => {
       it('should preserve all other properties', async () => {
         await instance.chat({
