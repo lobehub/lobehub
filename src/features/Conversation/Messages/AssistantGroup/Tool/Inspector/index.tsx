@@ -57,14 +57,19 @@ const Inspectors = memo<InspectorProps>(
       );
     }
 
+    const args = safeParseJSON(argsStr);
+    const partialJson = safeParsePartialJSON(argsStr);
+
     return (
       <Flexbox align={'center'} gap={6} horizontal>
         <StatusIndicator intervention={intervention} result={result} />
         <ToolTitle
           apiName={apiName}
+          args={args || undefined}
           identifier={identifier}
           isAborted={isAborted}
           isLoading={isTitleLoading}
+          partialArgs={partialJson || undefined}
         />
       </Flexbox>
     );
