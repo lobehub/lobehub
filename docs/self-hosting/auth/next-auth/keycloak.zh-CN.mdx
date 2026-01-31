@@ -1,0 +1,120 @@
+---
+title: 在 LobeHub 中配置 Keycloak 身份验证服务
+description: 学习如何在 LobeHub 中配置 Keycloak 身份验证服务，包括部署、创建、设置权限和环境变量。
+tags:
+  - Keycloak 身份验证
+  - 环境变量配置
+  - 单点登录
+  - LobeHub
+---
+
+# 配置 Keycloak 身份验证服务
+
+[Keycloak](https://www.keycloak.org/) 是一个开源的身份和访问管理解决方案，提供单点登录、身份代理和社交登录等功能，适用于现代应用和服务。
+
+<Callout type={'tip'}>
+  若你想要私有部署 Keycloak，我们建议你将之与 LobeHub 一同使用 Docker Compose
+  部署，这样可以更方便地管理服务。
+</Callout>
+
+## Keycloak 配置流程
+
+若你使用局域网 IP 部署，下文假设：
+
+- 你的 LobeHub IP / 端口为 `http://LobeHub_IP:3210`。
+- 你私有部署 Keycloak，其域名为 `http://KEYCLOAK_IP:8080`。
+
+若你使用公网部署，下文假设：
+
+- 你的 LobeHub 域名为 `https://lobe.example.com`。
+- 你私有部署 Keycloak，其域名为 `https://lobe-auth-api.example.com`。
+
+<Steps>
+  ### 创建 Keycloak 领域和客户端
+
+  访问你私有部署的 Keycloak 管理控制台（默认为 `http://localhost:8080/admin`），使用管理员账号登录。
+
+  1. 创建新领域（Realm）
+
+     - 点击左上角的下拉菜单，选择 "Create Realm"
+     - 输入名称，例如 "LobeHub"，然后点击 "Create"
+
+  2. 创建客户端（Client）
+
+     - 在左侧菜单中选择 "Clients"，然后点击 "Create client"
+     - 填写以下信息：
+       - Client ID: `LobeHub`
+       - Client type: `OpenID Connect`
+       - 点击 "Next"
+     - 在 "Capability config" 页面：
+       - 启用 "Client authentication"
+       - 启用 "Standard flow"
+       - 点击 "Next"
+     - 在 "Login settings" 页面：
+       - Valid redirect URIs:
+         - 本地开发环境：`http://localhost:3210/api/auth/callback/keycloak`
+         - 局域网 IP 部署：`http://LobeHub_IP:3210/api/auth/callback/keycloak`
+         - 公网环境：`https://lobe.example.com/api/auth/callback/keycloak`
+       - Web origins: 添加你的 LobeHub 域名或 IP
+       - 点击 "Save"
+
+  3. 获取客户端密钥
+     - 在客户端详情页，切换到 "Credentials" 选项卡
+     - 复制 "Client secret" 的值，后续需要用到
+
+  ### 配置用户和角色（可选）
+
+  1. 创建用户
+
+     - 在左侧菜单中选择 "Users"，然后点击 "Add user"
+     - 填写用户信息，点击 "Create"
+     - 在用户详情页，切换到 "Credentials" 选项卡
+     - 设置密码，并根据需要禁用 "Temporary" 选项
+     - 点击 "Set Password" 保存
+
+  2. 创建角色和权限
+     - 在左侧菜单中选择 "Realm roles"
+     - 点击 "Create role"
+     - 创建所需角色，如 "admin"、"user" 等
+     - 为用户分配角色：在用户详情页，切换到 "Role mapping" 选项卡，分配相应角色
+
+  ### 关闭注册（可选）
+
+  为了保证你的应用安全，建议控制 Keycloak 的注册功能。
+
+  1. 在左侧菜单中选择 "Realm settings"
+  2. 切换到 "Login" 选项卡
+  3. 在 "User registration" 部分，禁用 "User registration" 选项
+  4. 点击 "Save" 保存设置
+
+  <Callout type={'warning'}>
+    如果不关闭注册功能，任何人都可能注册并登录你的应用，请根据你的安全需求进行配置。
+  </Callout>
+
+  ### 配置环境变量
+
+  将获取到的客户端 ID 和客户端密钥，设为 LobeHub 环境变量中的 `AUTH_KEYCLOAK_ID` 和 `AUTH_KEYCLOAK_SECRET`。
+
+  配置 LobeHub 环境变量中 `AUTH_KEYCLOAK_ISSUER` 为：
+
+  - `http://localhost:8080/realms/LobeHub`，若你是本地开发环境
+  - `http://KEYCLOAK_IP:8080/realms/LobeHub`，若你是局域网私有部署的 Keycloak
+  - `https://lobe-auth-api.example.com/realms/LobeHub`，若你是公网环境部署的 Keycloak
+
+  在部署 LobeHub 时，你需要配置以下环境变量：
+
+  | 环境变量                      | 类型 | 描述                                                                                               |
+  | ------------------------- | -- | ------------------------------------------------------------------------------------------------ |
+  | `AUTH_SECRET`             | 必选 | 用于加密 Auth.js 会话令牌的密钥。您可以使用以下命令生成秘钥： `openssl rand -base64 32`                                    |
+  | `NEXT_AUTH_SSO_PROVIDERS` | 必选 | 选择 LoboChat 的单点登录提供商。使用 Keycloak 请填写 `keycloak`。                                                 |
+  | `AUTH_KEYCLOAK_ID`        | 必选 | Keycloak 客户端 ID                                                                                  |
+  | `AUTH_KEYCLOAK_SECRET`    | 必选 | Keycloak 客户端密钥                                                                                   |
+  | `AUTH_KEYCLOAK_ISSUER`    | 必选 | Keycloak 提供程序的 OpenID Connect 颁发者 URL，格式为 `{keycloak_url}/realms/{realm_name}`                   |
+  | `AUTH_URL`                | 必选 | 该 URL 用于指定 Auth.js 在执行 OAuth 验证时的回调地址，当默认生成的重定向地址发生不正确时才需要设置。`https://lobe.example.com/api/auth` |
+
+  <Callout type={'tip'}>
+    前往 [📘 环境变量](/zh/docs/self-hosting/environment-variables/auth#keycloak) 可查阅相关变量详情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>部署成功后，用户将可以通过 Keycloak 身份认证并使用 LobeHub。</Callout>

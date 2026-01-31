@@ -9,7 +9,7 @@ tags:
 
 # 添加新的图像模型
 
-> 了解更多关于 AI 绘画模态的设计，请参考 [AI 绘画模态设计讨论](https://github.com/lobehub/lobe-chat/discussions/7442)
+> 了解更多关于 AI 绘画模态的设计，请参考 [AI 绘画模态设计讨论](https://github.com/lobehub/lobehub/discussions/7442)
 
 ## 参数标准化
 
@@ -63,7 +63,7 @@ const zhipuImageModels: AIImageModelCard[] = [
 
 ### 方式一：使用 OpenAI Compatible Factory
 
-大部分 Provider 都使用 `openaiCompatibleFactory` 来兼容 OpenAI，可以通过传入自定义的 `createImage` 函数（参考 [PR #8534](https://github.com/lobehub/lobe-chat/pull/8534)）。
+大部分 Provider 都使用 `openaiCompatibleFactory` 来兼容 OpenAI，可以通过传入自定义的 `createImage` 函数（参考 [PR #8534](https://github.com/lobehub/lobehub/pull/8534)）。
 
 **实现步骤**：
 
@@ -122,7 +122,7 @@ export const LobeProviderAI = openaiCompatibleFactory({
 
 ### 方式二：在 Provider 类中直接实现
 
-如果你的 Provider 有独立的类实现，可以直接在类中添加 `createImage` 方法（参考 [PR #8503](https://github.com/lobehub/lobe-chat/pull/8503)）。
+如果你的 Provider 有独立的类实现，可以直接在类中添加 `createImage` 方法（参考 [PR #8503](https://github.com/lobehub/lobehub/pull/8503)）。
 
 **实现步骤**：
 

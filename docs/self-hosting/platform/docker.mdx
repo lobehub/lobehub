@@ -35,19 +35,19 @@ Here is the process for deploying the LobeHub server database version on a Linux
 <Steps>
   ### Create a Postgres Database Instance
 
-  Please create a Postgres database instance with the PGVector plugin according to your needs, for example:
+  Please create a Postgres database instance according to your needs, for example:
 
   ```sh
   docker network create pg
 
-  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d pgvector/pgvector:pg17
+  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d paradedb/paradedb:latest-pg17
   ```
 
-  The above command will create a PG instance named `my-postgres` on the network `pg`, where `pgvector/pgvector:pg17` is a Postgres 17 image with the pgvector plugin installed by default.
+  The above command will create a PG instance named `my-postgres` on the network `pg`, where `paradedb/paradedb:latest-pg17` is a Postgres 17 image with pgvector and pg\_search plugins installed by default.
 
   <Callout type="info">
-    The pgvector plugin provides vector search capabilities for Postgres, which is an important
-    component for LobeHub to implement RAG.
+    The ParadeDB image includes pgvector (vector search) and pg\_search (full-text search) plugins, which are important
+    components for LobeHub to implement RAG and knowledge base search.
   </Callout>
 
   <Callout type="warning">
@@ -64,6 +64,10 @@ Here is the process for deploying the LobeHub server database version on a Linux
 
   <GenerateSecret envName="AUTH_SECRET" />
 
+  Click the button below to generate `JWKS_KEY` (for signing and verifying JWTs):
+
+  <GenerateJWKSKey />
+
   ```shell
   # Website domain
   APP_URL=https://your-prod-domain.com
@@ -77,7 +81,7 @@ Here is the process for deploying the LobeHub server database version on a Linux
   # Authentication (Better Auth)
   # Session encryption key (generate with: openssl rand -base64 32)
   AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
-  # JWKS key for signing and verifying JWTs (generate at: https://lobehub.com/docs/self-hosting/environment-variables/auth#jwks_key)
+  # JWKS key for signing and verifying JWTs
   JWKS_KEY='{"keys":[...]}'
 
   # S3 related
@@ -85,7 +89,6 @@ Here is the process for deploying the LobeHub server database version on a Linux
   S3_SECRET_ACCESS_KEY=xxxxxxxxxx
   S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com
   S3_BUCKET=LobeHub
-  S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com
 
   ```
 
@@ -142,7 +145,6 @@ $ docker run -it -d --name lobehub -p 3210:3210 \
   -e S3_SECRET_ACCESS_KEY=xxxxxxxxxx \
   -e S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com \
   -e S3_BUCKET=LobeHub \
-  -e S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com \
   lobehub/lobehub
 ```
 

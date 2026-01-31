@@ -230,6 +230,20 @@ show_message() {
                 ;;
             esac
         ;;
+        tips_disable_registration)
+            case $LANGUAGE in
+                zh_CN)
+                    echo "如需限制用户注册，可在 .env 中配置："
+                    echo "  - 使用 SSO 登录时，设置 AUTH_DISABLE_EMAIL_PASSWORD=1 可禁用邮箱密码注册"
+                    echo "  - 使用邮箱密码登录时，设置 AUTH_ALLOWED_EMAILS=user1@example.com,user2@example.com 可限制允许登录的邮箱"
+                ;;
+                *)
+                    echo "To restrict user registration, configure in .env:"
+                    echo "  - For SSO login: set AUTH_DISABLE_EMAIL_PASSWORD=1 to disable email/password registration"
+                    echo "  - For email/password login: set AUTH_ALLOWED_EMAILS=user1@example.com,user2@example.com to allow specific emails"
+                ;;
+            esac
+        ;;
         tips_show_documentation)
             case $LANGUAGE in
                 zh_CN)
@@ -263,10 +277,10 @@ show_message() {
         tips_allow_ports)
             case $LANGUAGE in
                 zh_CN)
-                    echo "请确保服务器以下端口未被占用且能被访问：3210, 9000, 9001, 8000"
+                    echo "请确保服务器以下端口未被占用且能被访问：3210, 9000, 9001"
                 ;;
                 *)
-                    echo "Please make sure the following ports on the server are not occupied and can be accessed: 3210, 9000, 9001, 8000"
+                    echo "Please make sure the following ports on the server are not occupied and can be accessed: 3210, 9000, 9001"
                 ;;
             esac
         ;;
@@ -315,12 +329,10 @@ show_message() {
         tips_init_database_failed)
             case $LANGUAGE in
                 zh_CN)
-                    echo "无法初始化数据库，为了避免你的数据重复初始化，请在首次成功启动时运行以下指令清空 Casdoor 初始配置文件："
-                    echo "echo '{}' > init_data.json"
+                    echo "无法初始化数据库"
                 ;;
                 *)
-                    echo "Failed to initialize the database. To avoid your data being initialized repeatedly, run the following command to unmount the initial configuration file of Casdoor when you first start successfully:"
-                    echo "echo '{}' > init_data.json"
+                    echo "Failed to initialize the database."
                 ;;
             esac
         ;;
@@ -338,7 +350,7 @@ show_message() {
             case $LANGUAGE in
                 zh_CN)
                     echo "请选择部署模式："
-                    echo "(0) 域名模式（访问时无需指明端口），需要使用反向代理服务 LobeHub, RustFS, Casdoor ，并分别分配一个域名；"
+                    echo "(0) 域名模式（访问时无需指明端口），需要使用反向代理服务 LobeHub, RustFS，并分别分配一个域名；"
                     echo "(1) 端口模式（访问时需要指明端口，如使用IP访问，或域名+端口访问），需要放开指定端口；"
                     echo "(2) 本地模式（仅供本地测试使用）"
                     echo "如果你对这些内容疑惑，可以先选择使用本地模式进行部署，稍后根据文档指引再进行修改。"
@@ -346,7 +358,7 @@ show_message() {
                 ;;
                 *)
                     echo "Please select the deployment mode:"
-                    echo "(0) Domain mode (no need to specify the port when accessing), you need to use the reverse proxy service LobeHub, RustFS, Casdoor, and assign a domain name respectively;"
+                    echo "(0) Domain mode (no need to specify the port when accessing), you need to use the reverse proxy service LobeHub, RustFS, and assign a domain name respectively;"
                     echo "(1) Port mode (need to specify the port when accessing, such as using IP access, or domain name + port access), you need to open the specified port;"
                     echo "(2) Local mode (for local testing only)"
                     echo "If you are confused about these contents, you can choose to deploy in local mode first, and then modify according to the document guide later."
@@ -408,31 +420,33 @@ download_file() {
 }
 
 print_centered() {
-    # Define colors
-    declare -A colors
-    colors=(
-        [black]="\e[30m"
-        [red]="\e[31m"
-        [green]="\e[32m"
-        [yellow]="\e[33m"
-        [blue]="\e[34m"
-        [magenta]="\e[35m"
-        [cyan]="\e[36m"
-        [white]="\e[37m"
-        [reset]="\e[0m"
-    )
     local text="$1"                                   # Get input texts
     local color="${2:-reset}"                         # Get color, default to reset
     local term_width=$(tput cols)                     # Get terminal width
     local text_length=${#text}                        # Get text length
     local padding=$(((term_width - text_length) / 2)) # Get padding
-    # Check if the color is valid
-    if [[ -z "${colors[$color]}" ]]; then
-        echo "Invalid color specified. Available colors: ${!colors[@]}"
-        return 1
-    fi
+
+    # Get color code (compatible with bash 3.x)
+    local color_code=""
+    local reset_code="\e[0m"
+    case "$color" in
+        black)   color_code="\e[30m" ;;
+        red)     color_code="\e[31m" ;;
+        green)   color_code="\e[32m" ;;
+        yellow)  color_code="\e[33m" ;;
+        blue)    color_code="\e[34m" ;;
+        magenta) color_code="\e[35m" ;;
+        cyan)    color_code="\e[36m" ;;
+        white)   color_code="\e[37m" ;;
+        reset)   color_code="\e[0m" ;;
+        *)
+            echo "Invalid color specified. Available colors: black red green yellow blue magenta cyan white reset"
+            return 1
+        ;;
+    esac
+
     # Print the text with padding
-    printf "%*s${colors[$color]}%s${colors[reset]}\n" $padding "" "$text"
+    printf "%*s${color_code}%s${reset_code}\n" $padding "" "$text"
 }
 
 # Usage:
@@ -469,10 +483,9 @@ ask() {
 # == Variables ==
 # ===============
 # File list
-SUB_DIR="docker-compose/local"
+SUB_DIR="docker-compose/deploy"
 FILES=(
     "$SUB_DIR/docker-compose.yml"
-    "$SUB_DIR/init_data.json"
     "$SUB_DIR/searxng-settings.yml"
     "$SUB_DIR/bucket.config.json"
 )
@@ -481,10 +494,7 @@ ENV_EXAMPLES=(
     "$SUB_DIR/.env.example"
 )
 # Default values
-CASDOOR_PASSWORD="pswd123"
-CASDOOR_SECRET="CASDOOR_SECRET"
 RUSTFS_SECRET_KEY="YOUR_RUSTFS_PASSWORD"
-CASDOOR_HOST="localhost:8000"
 RUSTFS_HOST="localhost:9000"
 PROTOCOL="http"
 
@@ -514,9 +524,8 @@ section_download_files(){
     fi
     
     download_file "$SOURCE_URL/${FILES[0]}" "docker-compose.yml"
-    download_file "$SOURCE_URL/${FILES[1]}" "init_data.json"
-    download_file "$SOURCE_URL/${FILES[2]}" "searxng-settings.yml"
-    download_file "$SOURCE_URL/${FILES[3]}" "bucket.config.json"
+    download_file "$SOURCE_URL/${FILES[1]}" "searxng-settings.yml"
+    download_file "$SOURCE_URL/${FILES[2]}" "bucket.config.json"
     # Download .env.example with the specified language
     if [ "$LANGUAGE" = "zh_CN" ]; then
         download_file "$SOURCE_URL/${ENV_EXAMPLES[0]}" ".env"
@@ -576,15 +585,10 @@ section_configurate_host() {
             echo "LobeHub" $(show_message "ask_domain" "example.com")
             ask "(example.com)"
             LOBE_HOST="$ask_result"
-            # If user use domain mode, ask for the domain of RustFS and Casdoor
+            # If user use domain mode, ask for the domain of RustFS
             echo "RustFS S3 API" $(show_message "ask_domain" "s3.example.com")
             ask "(s3.example.com)"
             RUSTFS_HOST="$ask_result"
-            echo "Casdoor API" $(show_message "ask_domain" "auth.example.com")
-            ask "(auth.example.com)"
-            CASDOOR_HOST="$ask_result"
-            # Setup callback url for Casdoor
-            sed "${SED_INPLACE_ARGS[@]}" "s/"example.com"/${LOBE_HOST}/" init_data.json
         ;;
         1)
             DEPLOY_MODE="ip"
@@ -595,23 +599,16 @@ section_configurate_host() {
             # If user use ip mode, append the port to the host
             LOBE_HOST="${HOST}:3210"
             RUSTFS_HOST="${HOST}:9000"
-            CASDOOR_HOST="${HOST}:8000"
-            # Setup callback url for Casdoor
-            sed "${SED_INPLACE_ARGS[@]}" "s/"localhost:3210"/${LOBE_HOST}/" init_data.json
         ;;
         *)
             echo "Invalid deploy mode: $ask_result"
             exit 1
         ;;
     esac
-    
+
     # lobe host
     sed "${SED_INPLACE_ARGS[@]}" "s#^APP_URL=.*#APP_URL=$PROTOCOL://$LOBE_HOST#" .env
-    # auth related
-    sed "${SED_INPLACE_ARGS[@]}" "s#^AUTH_CASDOOR_ISSUER=.*#AUTH_CASDOOR_ISSUER=$PROTOCOL://$CASDOOR_HOST#" .env
-    sed "${SED_INPLACE_ARGS[@]}" "s#^origin=.*#origin=$PROTOCOL://$CASDOOR_HOST#" .env
     # s3 related
-    sed "${SED_INPLACE_ARGS[@]}" "s#^S3_PUBLIC_DOMAIN=.*#S3_PUBLIC_DOMAIN=$PROTOCOL://$RUSTFS_HOST#" .env
     sed "${SED_INPLACE_ARGS[@]}" "s#^S3_ENDPOINT=.*#S3_ENDPOINT=$PROTOCOL://$RUSTFS_HOST#" .env
     
 
@@ -664,37 +661,7 @@ section_regenerate_secrets() {
         exit 1
     fi
     echo $(show_message "security_secrect_regenerate")
-    
-    # Generate CASDOOR_SECRET
-    CASDOOR_SECRET=$(generate_key 32)
-    if [ $? -ne 0 ]; then
-        echo $(show_message "security_secrect_regenerate_failed") "CASDOOR_SECRET"
-    else
-        # Search and replace the value of CASDOOR_SECRET in .env
-        sed "${SED_INPLACE_ARGS[@]}" "s#^AUTH_CASDOOR_SECRET=.*#AUTH_CASDOOR_SECRET=${CASDOOR_SECRET}#" .env
-        if [ $? -ne 0 ]; then
-            echo $(show_message "security_secrect_regenerate_failed") "AUTH_CASDOOR_SECRET in \`.env\`"
-        fi
-        # replace `clientSecrect` in init_data.json
-        sed "${SED_INPLACE_ARGS[@]}" "s#dbf205949d704de81b0b5b3603174e23fbecc354#${CASDOOR_SECRET}#" init_data.json
-        if [ $? -ne 0 ]; then
-            echo $(show_message "security_secrect_regenerate_failed") "AUTH_CASDOOR_SECRET in \`init_data.json\`"
-        fi
-    fi
-    
-    # Generate Casdoor User
-    CASDOOR_USER="admin"
-    CASDOOR_PASSWORD=$(generate_key 10)
-    if [ $? -ne 0 ]; then
-        echo $(show_message "security_secrect_regenerate_failed") "CASDOOR_PASSWORD"
-        CASDOOR_PASSWORD="pswd123"
-    else
-        # replace `password` in init_data.json
-        sed "${SED_INPLACE_ARGS[@]}" "s/"pswd123"/${CASDOOR_PASSWORD}/" init_data.json
-        if [ $? -ne 0 ]; then
-            echo $(show_message "security_secrect_regenerate_failed") "CASDOOR_PASSWORD in \`init_data.json\`"
-        fi
-    fi
+
     # Generate RUSTFS S3 User Password
     RUSTFS_SECRET_KEY=$(generate_key 8)
     if [ $? -ne 0 ]; then
@@ -735,13 +702,10 @@ section_init_database() {
     fi
 
     docker compose pull
-    docker compose up --detach postgresql casdoor
+    docker compose up --detach postgresql
     # hopefully enough time for even the slower systems
 	sleep 15
 	docker compose stop
-
-    # Init finished, remove init mount
-    echo '{}' > init_data.json
 }
 
 show_message "ask_init_database"
@@ -759,16 +723,14 @@ fi
 section_display_configurated_report() {
     # Display configuration reports
     echo $(show_message "security_secrect_regenerate_report")
-    
-    echo -e "LobeHub: \n  - URL: $PROTOCOL://$LOBE_HOST \n  - Username: user \n  - Password: ${CASDOOR_PASSWORD} "
-    echo -e "Casdoor: \n  - URL: $PROTOCOL://$CASDOOR_HOST \n  - Username: admin \n  - Password: ${CASDOOR_PASSWORD}\n"
+
+    echo -e "LobeHub: \n  - URL: $PROTOCOL://$LOBE_HOST"
     echo -e "RustFS: \n  - URL: $PROTOCOL://$RUSTFS_HOST \n  - Username: admin\n  - Password: ${RUSTFS_SECRET_KEY}\n"
-    
+
     # if user run in domain mode, diplay reverse proxy configuration
     if [[ "$DEPLOY_MODE" == "domain" ]]; then
         echo $(show_message "tips_add_reverse_proxy")
         printf "\n%s\t->\t%s\n" "$LOBE_HOST" "127.0.0.1:3210"
-        printf "%s\t->\t%s\n" "$CASDOOR_HOST" "127.0.0.1:8000"
         printf "%s\t->\t%s\n" "$RUSTFS_HOST" "127.0.0.1:9000"
     fi
 
@@ -777,7 +739,8 @@ section_display_configurated_report() {
     printf "\n%s\n\n" "$(show_message "tips_run_command")"
     print_centered "docker compose up --no-attach searxng" "green"
     printf "\n%s\n" "$(show_message "tips_if_run_normally")"
-    printf "\n%s\n\n" "$(show_message "tips_regen_jwks")"
+    printf "\n%s\n" "$(show_message "tips_regen_jwks")"
+    printf "\n%s\n\n" "$(show_message "tips_disable_registration")"
     print_centered "docker compose up -d --no-attach searxng" "green"
     printf "\n%s\n" "$(show_message "tips_if_want_searxng_logs")"
     print_centered "docker compose logs -f searxng" "white"

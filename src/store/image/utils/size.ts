@@ -1,7 +1,7 @@
 /**
- * 解析比例字符串，例如 "16:9" -> 1.777
- * @param ratio - 格式为 "width:height" 的比例字符串
- * @returns 比例数值，出现错误时返回 1:1 比例
+ * Parse ratio string, e.g., "16:9" -> 1.777
+ * @param ratio - Ratio string in "width:height" format
+ * @returns Ratio value, returns 1:1 ratio on error
  */
 export function parseRatio(ratio: string): number {
   if (!ratio || typeof ratio !== 'string') return 1;
@@ -21,14 +21,14 @@ export function parseRatio(ratio: string): number {
 }
 
 /**
- * 根据目标比例和默认尺寸，计算最合适的尺寸
- * @param ratio - 目标宽高比例
- * @param defaultWidth - 默认宽度
- * @param defaultHeight - 默认高度
- * @returns 计算出的尺寸对象
+ * Calculate the most appropriate size based on target ratio and default dimensions
+ * @param ratio - Target aspect ratio
+ * @param defaultWidth - Default width
+ * @param defaultHeight - Default height
+ * @returns Calculated size object
  */
 export function adaptSizeToRatio(ratio: number, defaultWidth: number, defaultHeight: number) {
-  // 验证输入参数
+  // Validate input parameters
   if (!Number.isFinite(ratio) || ratio <= 0) {
     throw new Error('Invalid ratio: must be a positive finite number');
   }
@@ -42,10 +42,10 @@ export function adaptSizeToRatio(ratio: number, defaultWidth: number, defaultHei
   const currentRatio = defaultWidth / defaultHeight;
 
   if (ratio > currentRatio) {
-    // 目标比例更宽，保持宽度，调整高度
+    // Target ratio is wider, keep width and adjust height
     return { width: defaultWidth, height: Math.round(defaultWidth / ratio) };
   } else {
-    // 目标比例更高，保持高度，调整宽度
+    // Target ratio is taller, keep height and adjust width
     return { width: Math.round(defaultHeight * ratio), height: defaultHeight };
   }
 }

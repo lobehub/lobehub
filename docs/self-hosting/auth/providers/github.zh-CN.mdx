@@ -1,0 +1,90 @@
+---
+title: 在 LobeHub 中配置 GitHub 身份验证
+description: 学习如何在 LobeHub 中配置 GitHub SSO，包括创建 GitHub App、设置环境变量和部署。
+tags:
+  - GitHub
+  - 身份验证
+  - LobeHub
+  - 单点登录
+---
+
+# 配置 GitHub 身份验证
+
+<Steps>
+  ### 创建 GitHub App
+
+  1. 前往 [GitHub 开发者设置](https://github.com/settings/apps/new)
+  2. 填写 **GitHub App name** 和 **Homepage URL**
+
+  <Image alt="创建 GitHub App" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/2f919f99-2aaa-4fa7-9938-169d3ed09db7" />
+
+  ### 配置回调 URL
+
+  <Callout type={'info'}>
+    回调 URL 格式：
+
+    - 本地开发: `http://localhost:3210/api/auth/callback/github`
+    - 生产环境: `https://your-domain.com/api/auth/callback/github`
+  </Callout>
+
+  按需设置 Webhook URL（不需要可禁用）。
+
+  <Image alt="填写其他字段" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/d7ef5ad1-b1a3-435e-b1bc-4436d2b6fecd" />
+
+  ### 配置权限
+
+  设置读取用户邮箱地址的权限：
+
+  <Image alt="设置所需权限" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/23131ca1-9e84-4a89-a840-ef79c4bc0251" />
+
+  <Image alt="设置读取邮件地址权限" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/358bca8d-3d82-4e76-9a5e-90d16a39efde" />
+
+  设置公开访问还是仅自己访问。
+
+  <Image alt="设置访问权限" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/995780cb-9096-4a36-ab17-d422703ab970" />
+
+  点击 **Create GitHub App**。
+
+  ### 生成客户端密钥
+
+  创建成功后，点击 **Generate a new client secret**。
+
+  <Image alt="创建客户端密钥" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/6d69bdca-7d18-4cbc-b3e0-220d8815cd29" />
+
+  保存 **Client ID** 和 **Client Secret**。
+
+  <Image alt="保存凭证" inStep src="https://github.com/lobehub/lobe-chat/assets/64475363/c6108133-a918-48b0-ab1a-e3fa607572a4" />
+
+  ### 配置环境变量
+
+  | 环境变量                 | 类型 | 描述                                     |
+  | -------------------- | -- | -------------------------------------- |
+  | `AUTH_SECRET`        | 必选 | 会话加密密钥，使用 `openssl rand -base64 32` 生成 |
+  | `AUTH_SSO_PROVIDERS` | 必选 | 填写 `github`                            |
+  | `AUTH_GITHUB_ID`     | 必选 | GitHub App 的 Client ID                 |
+  | `AUTH_GITHUB_SECRET` | 必选 | GitHub App 的 Client Secret             |
+
+  <Callout type={'tip'}>
+    前往 [📘 环境变量](/zh/docs/self-hosting/environment-variables/auth#github)
+    可查阅相关变量详情。
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  部署成功后，用户将可以通过 GitHub 身份认证并使用 LobeHub。
+</Callout>
+
+## 常见问题
+
+### email\_not\_found 错误
+
+这通常是因为 GitHub App 没有邮箱读取权限。前往应用设置，导航到 **Permissions & events** > **Account permissions** > **Email addresses**，设置为 **Read-only**。
+
+### 没有 Refresh Token
+
+GitHub OAuth 不发放 refresh token。访问令牌在用户撤销、应用撤销或一年未使用前会一直有效。
+
+## 相关资源
+
+- [GitHub 开发者设置](https://github.com/settings/developers)
+- [GitHub Apps 文档](https://docs.github.com/en/apps)

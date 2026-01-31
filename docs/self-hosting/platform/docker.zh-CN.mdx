@@ -8,7 +8,7 @@ tags:
   - Postgres
 ---
 
-# 使用 Docker 部署服务端数据库版
+# 使用 Docker 部署 LobeHub
 
 <div style={{display:"flex", gap: 4}}>
   [![][docker-release-shield]][docker-release-link]
@@ -19,32 +19,32 @@ tags:
 </div>
 
 <Callout type="info">
-  本文已经假定你了解了 LobeHub 服务端数据库版本（下简称 DB
-  版）的部署基本原理和流程，因此只包含核心环境变量配置的内容。如果你还不了解 LobeHub DB
-  版的部署原理，请先查阅 [使用服务端数据库部署](/zh/docs/self-hosting/server-database) 。
+  本文已经假定你了解了 LobeHub
+  的部署基本原理和流程，因此只包含核心环境变量配置的内容。如果你还不了解 LobeHub
+  的部署原理，请先查阅 [使用服务端数据库部署](/zh/docs/self-hosting/server-database) 。
   此外，针对国内的腾讯云储存桶用户，可查询[配置腾讯云 COS
   存储服务](/zh/docs/self-hosting/advanced/s3/tencent-cloud)。
 </Callout>
 
 ## 在 Linux 服务器上部署
 
-以下是在 Linux 服务器上部署 LobeHub DB 版的流程：
+以下是在 Linux 服务器上部署 LobeHub 的流程：
 
 <Steps>
   ### 创建 Postgres 数据库实例
 
-  请按照你自己的诉求创建一个带有 PGVector 插件的 Postgres 数据库实例，例如：
+  请按照你自己的诉求创建一个 Postgres 数据库实例，例如：
 
   ```sh
   docker network create pg
 
-  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d pgvector/pgvector:pg17
+  docker run --name my-postgres --network pg -e POSTGRES_PASSWORD=mysecretpassword -p 5432:5432 -d paradedb/paradedb:latest-pg17
   ```
 
-  上述指令会创建一个名为 `my-postgres`，并且网络为 `pg` 的 PG 实例，其中 `pgvector/pgvector:pg17` 是一个 Postgres 17 的镜像，且默认安装了 pgvector 插件。
+  上述指令会创建一个名为 `my-postgres`，并且网络为 `pg` 的 PG 实例，其中 `paradedb/paradedb:latest-pg17` 是一个 Postgres 17 的镜像，且默认安装了 pgvector 和 pg\_search 插件。
 
   <Callout type="info">
-    pgvector 插件为 Postgres 提供了向量搜索的能力，是 LobeHub 实现 RAG 的重要构件之一。
+    ParadeDB 镜像包含了 pgvector（向量搜索）和 pg\_search（全文搜索）插件，是 LobeHub 实现 RAG 和知识库搜索的重要构件。
   </Callout>
 
   <Callout type="warning">
@@ -60,6 +60,10 @@ tags:
 
   <GenerateSecret envName="AUTH_SECRET" />
 
+  点击下方按钮一键生成 `JWKS_KEY`（用于签名和验证 JWT）：
+
+  <GenerateJWKSKey />
+
   ```shell
   # 网站域名
   APP_URL=https://your-prod-domain.com
@@ -74,7 +78,7 @@ tags:
   # 身份验证（Better Auth）
   # 会话加密密钥（使用以下命令生成：openssl rand -base64 32）
   AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
-  # JWKS 密钥，用于签名和验证 JWT（在此生成：https://lobehub.com/zh/docs/self-hosting/environment-variables/auth#jwks_key）
+  # JWKS 密钥，用于签名和验证 JWT
   JWKS_KEY='{"keys":[...]}'
 
   # S3 相关
@@ -83,8 +87,6 @@ tags:
   # 用于 S3 API 访问的域名
   S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com
   S3_BUCKET=LobeHub
-  # 用于外网访问 S3 的公共域名，需配置 CORS
-  S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com
   # S3_REGION=ap-chengdu # 如果需要指定地域
 
   ```
@@ -125,7 +127,7 @@ tags:
 
 ## 在本地（Mac / Windows） 上使用
 
-LobeHub 的 DB 版也支持直接在本地的 Mac/Windows 本地使用。
+LobeHub 也支持直接在本地的 Mac/Windows 本地使用。
 
 在此我们已假设你的本地有一个 5432 端口可用，账号为 `postgres` ，密码是 `mysecretpassword` 的 pg 实例，它在 `localhost:5432` 可用。
 
@@ -142,7 +144,6 @@ $ docker run -it -d --name lobehub -p 3210:3210 \
   -e S3_SECRET_ACCESS_KEY=xxxxxxxxxx \
   -e S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com \
   -e S3_BUCKET=LobeHub \
-  -e S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com \
   lobehub/lobehub
 ```
 

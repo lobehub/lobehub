@@ -139,8 +139,8 @@ describe('createGroupOrchestrationExecutors', () => {
         {
           payload: {
             tasks: [
-              { agentId: TEST_IDS.AGENT_1_ID, task: 'Task 1', title: 'Task 1 Title' },
-              { agentId: TEST_IDS.AGENT_2_ID, task: 'Task 2', title: 'Task 2 Title' },
+              { agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' },
+              { agentId: TEST_IDS.AGENT_2_ID, instruction: 'Task 2', title: 'Task 2 Title' },
             ],
             toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
           },
@@ -187,8 +187,8 @@ describe('createGroupOrchestrationExecutors', () => {
         {
           payload: {
             tasks: [
-              { agentId: TEST_IDS.AGENT_1_ID, task: 'Task 1', title: 'Task 1 Title' },
-              { agentId: TEST_IDS.AGENT_2_ID, task: 'Task 2', title: 'Task 2 Title' },
+              { agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' },
+              { agentId: TEST_IDS.AGENT_2_ID, instruction: 'Task 2', title: 'Task 2 Title' },
             ],
             toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
           },
@@ -263,8 +263,8 @@ describe('createGroupOrchestrationExecutors', () => {
         {
           payload: {
             tasks: [
-              { agentId: TEST_IDS.AGENT_1_ID, task: 'Task 1', title: 'Task 1 Title' },
-              { agentId: TEST_IDS.AGENT_2_ID, task: 'Task 2', title: 'Task 2 Title' },
+              { agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' },
+              { agentId: TEST_IDS.AGENT_2_ID, instruction: 'Task 2', title: 'Task 2 Title' },
             ],
             toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
           },
@@ -327,8 +327,8 @@ describe('createGroupOrchestrationExecutors', () => {
         {
           payload: {
             tasks: [
-              { agentId: TEST_IDS.AGENT_1_ID, task: 'Task 1', title: 'Task 1 Title' },
-              { agentId: TEST_IDS.AGENT_2_ID, task: 'Task 2', title: 'Task 2 Title' },
+              { agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' },
+              { agentId: TEST_IDS.AGENT_2_ID, instruction: 'Task 2', title: 'Task 2 Title' },
             ],
             toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
           },
@@ -386,8 +386,8 @@ describe('createGroupOrchestrationExecutors', () => {
         {
           payload: {
             tasks: [
-              { agentId: TEST_IDS.AGENT_1_ID, task: 'Task 1', title: 'Task 1 Title' },
-              { agentId: TEST_IDS.AGENT_2_ID, task: 'Task 2', title: 'Task 2 Title' },
+              { agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' },
+              { agentId: TEST_IDS.AGENT_2_ID, instruction: 'Task 2', title: 'Task 2 Title' },
             ],
             toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
           },
@@ -445,8 +445,8 @@ describe('createGroupOrchestrationExecutors', () => {
         {
           payload: {
             tasks: [
-              { agentId: TEST_IDS.AGENT_1_ID, task: 'Task 1', title: 'Task 1 Title' },
-              { agentId: TEST_IDS.AGENT_2_ID, task: 'Task 2', title: 'Task 2 Title' },
+              { agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' },
+              { agentId: TEST_IDS.AGENT_2_ID, instruction: 'Task 2', title: 'Task 2 Title' },
             ],
             toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
           },
@@ -498,7 +498,7 @@ describe('createGroupOrchestrationExecutors', () => {
       const result = await batchExecTasksExecutor(
         {
           payload: {
-            tasks: [{ agentId: TEST_IDS.AGENT_1_ID, task: 'Task 1', title: 'Task 1 Title' }],
+            tasks: [{ agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' }],
             toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
           },
           type: 'batch_exec_async_tasks',
@@ -546,7 +546,7 @@ describe('createGroupOrchestrationExecutors', () => {
       const result = await batchExecTasksExecutor(
         {
           payload: {
-            tasks: [{ agentId: TEST_IDS.AGENT_1_ID, task: 'Task 1', title: 'Task 1 Title' }],
+            tasks: [{ agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' }],
             toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
           },
           type: 'batch_exec_async_tasks',
@@ -604,7 +604,7 @@ describe('createGroupOrchestrationExecutors', () => {
       await batchExecTasksExecutor(
         {
           payload: {
-            tasks: [{ agentId: TEST_IDS.AGENT_1_ID, task: 'Task 1', title: 'Task 1 Title' }],
+            tasks: [{ agentId: TEST_IDS.AGENT_1_ID, instruction: 'Task 1', title: 'Task 1 Title' }],
             toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
           },
           type: 'batch_exec_async_tasks',

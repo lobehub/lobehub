@@ -7,4 +7,3 @@ NODE_OPTIONS = "--max-old-space-size=4096"
 
 [template.environment]
 OPENAI_API_KEY = "set your OpenAI API Key"
-ACCESS_CODE = "set your password to protect your api key"

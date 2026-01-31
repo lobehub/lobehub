@@ -1,0 +1,67 @@
+---
+title: Configuring Okta Authentication for LobeHub
+description: >-
+  Learn how to configure Okta SSO for LobeHub, including creating an
+  application and setting up environment variables.
+tags:
+  - Okta
+  - Authentication
+  - LobeHub
+  - Single Sign-On
+  - OIDC
+---
+
+# Configuring Okta Authentication
+
+[Okta](https://www.okta.com/) is a leading identity and access management platform.
+
+<Steps>
+  ### Create Application in Okta
+
+  1. Log in to Okta Admin Console
+  2. Go to **Applications** > **Applications**
+  3. Click **Create App Integration**
+  4. Select:
+     - Sign-in method: **OIDC - OpenID Connect**
+     - Application type: **Web Application**
+  5. Configure the application:
+     - App integration name: `LobeHub`
+     - Sign-in redirect URIs: Add your callback URL
+
+  <Callout type={'info'}>
+    **Callback URL Format**: `https://your-domain.com/api/auth/callback/okta`
+  </Callout>
+
+  6. After creation, note down the **Client ID** and **Client Secret**
+
+  ### Get Issuer URL
+
+  The issuer URL is typically: `https://your-okta-domain.okta.com`
+
+  For custom authorization servers: `https://your-okta-domain.okta.com/oauth2/default`
+
+  ### Configure Environment Variables
+
+  When deploying LobeHub, you need to configure the following environment variables:
+
+  | Environment Variable | Type     | Description                                                                   |
+  | -------------------- | -------- | ----------------------------------------------------------------------------- |
+  | `AUTH_SECRET`        | Required | Key used to encrypt session tokens. Generate using: `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS` | Required | SSO provider for LobeHub. Use `okta` for Okta                                 |
+  | `AUTH_OKTA_ID`       | Required | Client ID from Okta application                                               |
+  | `AUTH_OKTA_SECRET`   | Required | Client Secret from Okta application                                           |
+  | `AUTH_OKTA_ISSUER`   | Required | Okta issuer URL (e.g., `https://your-okta-domain.okta.com`)                   |
+
+  <Callout type={'tip'}>
+    Go to [📘 Environment Variables](/docs/self-hosting/environment-variables/auth#okta) for detailed information on these variables.
+  </Callout>
+</Steps>
+
+<Callout type={'info'}>
+  After successful deployment, users will be able to authenticate with Okta and use LobeHub.
+</Callout>
+
+## Related Resources
+
+- [Okta Developer Documentation](https://developer.okta.com/docs/)
+- [Create OIDC App Integration](https://developer.okta.com/docs/guides/implement-grant-type/authcode/main/)

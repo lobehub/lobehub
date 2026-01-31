@@ -3,8 +3,8 @@ import { type LobeSessions } from '@/types/session';
 export interface SessionState {
   activeAgentId?: string;
   /**
-   * @title 当前活动的会话
-   * @description 当前正在编辑或查看的会话
+   * @title Current active session
+   * @description The session currently being edited or viewed
    */
   activeId: string;
   /**
@@ -22,14 +22,14 @@ export interface SessionState {
   pinnedSessions: LobeSessions;
   searchKeywords: string;
   /**
-   * @title 正在重命名的会话 ID
-   * @description 用于控制会话重命名弹窗的显示状态
+   * @title Session ID being renamed
+   * @description Used to control the display state of the session rename modal
    */
   sessionRenamingId: string | null;
   sessionSearchKeywords?: string;
   /**
-   * @title 正在更新的会话 ID
-   * @description 用于显示会话更新时的加载状态
+   * @title Session ID being updated
+   * @description Used to display loading state when session is being updated
    */
   sessionUpdatingId: string | null;
   /**

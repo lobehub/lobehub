@@ -10,7 +10,7 @@ import { initialState } from '../initialState';
 import type { ElectronStore } from '../store';
 
 /**
- * 设置操作
+ * Remote server actions
  */
 export interface ElectronRemoteServerAction {
   clearRemoteServerSyncError: () => void;
@@ -39,28 +39,28 @@ export const remoteSyncSlice: StateCreator<
     set({ isConnectingServer: true });
     get().clearRemoteServerSyncError();
     try {
-      // 获取当前配置
+      // Get current configuration
       const config = await remoteServerService.getRemoteServerConfig();
 
-      // 如果已经激活，需要先清除
+      // If already active, need to clear first
       if (!isEqual(config, values)) {
         await remoteServerService.setRemoteServerConfig({ ...values, active: false });
       }
 
-      // 请求授权
+      // Request authorization
       const result = await remoteServerService.requestAuthorization(values);
 
       if (!result.success) {
-        console.error('请求授权失败:', result.error);
+        console.error('Authorization request failed:', result.error);
 
         set({
           remoteServerSyncError: { message: result.error, type: 'AUTH_ERROR' },
         });
       }
-      // 刷新状态
+      // Refresh state
       await get().refreshServerConfig();
     } catch (error) {
-      console.error('远程服务器配置出错:', error);
+      console.error('Remote server configuration error:', error);
       set({
         remoteServerSyncError: { message: (error as Error).message, type: 'CONFIG_ERROR' },
       });
@@ -74,12 +74,12 @@ export const remoteSyncSlice: StateCreator<
     get().clearRemoteServerSyncError();
     try {
       await remoteServerService.setRemoteServerConfig({ active: false, storageMode: 'cloud' });
-      // 更新表单URL为空
+      // Update form URL to empty
       set({ dataSyncConfig: initialState.dataSyncConfig });
-      // 刷新状态
+      // Refresh state
       await get().refreshServerConfig();
     } catch (error) {
-      console.error('断开连接失败:', error);
+      console.error('Disconnect failed:', error);
       set({
         remoteServerSyncError: { message: (error as Error).message, type: 'DISCONNECT_ERROR' },
       });
@@ -110,7 +110,7 @@ export const remoteSyncSlice: StateCreator<
         try {
           return await remoteServerService.getRemoteServerConfig();
         } catch (error) {
-          console.error('获取远程服务器配置失败:', error);
+          console.error('Failed to get remote server configuration:', error);
           throw error;
         }
       },

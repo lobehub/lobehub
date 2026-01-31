@@ -46,6 +46,13 @@ LobeHub provides a complete authentication service capability when deployed. The
 - Default: `-`
 - Example: `example.com,admin@other.com`
 
+#### `AUTH_DISABLE_EMAIL_PASSWORD`
+
+- Type: Optional
+- Description: Set to `1` to disable email/password authentication, forcing users to use SSO login only. When enabled, the email input will be hidden on the login page and the signup page will redirect to login.
+- Default: `0`
+- Example: `1`
+
 #### `JWKS_KEY`
 
 - Type: Required

@@ -13,11 +13,11 @@ tags:
 
 This document aims to guide developers on how to develop a complete feature in LobeHub.
 
-We will use [RFC 021 - Custom Assistant Opening Guidance](https://github.com/lobehub/lobe-chat/discussions/891) as an example to illustrate the complete implementation process.
+We will use [RFC 021 - Custom Assistant Opening Guidance](https://github.com/lobehub/lobehub/discussions/891) as an example to illustrate the complete implementation process.
 
 ## 1. Update Schema
 
-lobe-chat uses a postgres database, with the browser-side local database using [pglite](https://pglite.dev/) (wasm version of postgres). The project also uses [drizzle](https://orm.drizzle.team/) ORM to operate the database.
+lobehub uses a postgres database, with the browser-side local database using [pglite](https://pglite.dev/) (wasm version of postgres). The project also uses [drizzle](https://orm.drizzle.team/) ORM to operate the database.
 
 Compared to the old solution where the browser side used indexDB, having both the browser side and server side use postgres has the advantage that the model layer code can be completely reused.
 
@@ -160,7 +160,7 @@ Foreseeably, the frontend will add two inputs, calling updateSessionConfig upon 
 
 ### Data Flow Store Implementation
 
-lobe-chat uses [zustand](https://zustand.docs.pmnd.rs/getting-started/introduction) as the global state management framework. For detailed practices on state management, you can refer to [📘 State Management Best Practices](/docs/development/state-management/state-management-intro).
+lobehub uses [zustand](https://zustand.docs.pmnd.rs/getting-started/introduction) as the global state management framework. For detailed practices on state management, you can refer to [📘 State Management Best Practices](/docs/development/state-management/state-management-intro).
 
 There are two stores related to the agent:
 
@@ -254,7 +254,7 @@ We're adding a new category of settings this time. In `src/features/AgentSetting
 - [@ant-design/icons](https://ant.design/components/icon-cn) and [lucide](https://lucide.dev/icons/): icon libraries
 - [react-i18next](https://github.com/i18next/react-i18next) and [lobe-i18n](https://github.com/lobehub/lobe-cli-toolbox/tree/master/packages/lobe-i18n): i18n framework and multi-language automatic translation tool
 
-lobe-chat is an internationalized project, so newly added text needs to update the default `locale` file: `src/locales/default/setting.ts`.
+lobehub is an internationalized project, so newly added text needs to update the default `locale` file: `src/locales/default/setting.ts`.
 
 Let's take the subcomponent `OpeningQuestion.tsx` as an example. Component implementation:
 

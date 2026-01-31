@@ -45,8 +45,8 @@ export const useMarketGroupPublish = ({ action, onSuccess }: UseMarketGroupPubli
    * Returns whether fork confirmation is needed and original group info
    */
   const checkOwnership = useCallback(async (): Promise<CheckOwnershipResult> => {
-    // marketIdentifier is stored in editorData
-    const identifier = currentGroup?.editorData?.marketIdentifier as string | undefined;
+    // marketIdentifier is stored at top-level (same as agents)
+    const identifier = currentGroup?.marketIdentifier;
 
     // No identifier means new group, no need to check
     if (!identifier) {
@@ -150,27 +150,26 @@ export const useMarketGroupPublish = ({ action, onSuccess }: UseMarketGroupPubli
           }),
           ...(currentGroupConfig.openingQuestions !== undefined &&
             currentGroupConfig.openingQuestions.length > 0 && {
-            openingQuestions: currentGroupConfig.openingQuestions,
-          }),
+              openingQuestions: currentGroupConfig.openingQuestions,
+            }),
           ...(currentGroupConfig.allowDM !== undefined && { allowDM: currentGroupConfig.allowDM }),
-          ...(currentGroupConfig.revealDM !== undefined && { revealDM: currentGroupConfig.revealDM }),
+          ...(currentGroupConfig.revealDM !== undefined && {
+            revealDM: currentGroupConfig.revealDM,
+          }),
         },
         // Market requires at least 1 character for description
         description: currentGroupMeta.description || 'No description provided',
-        // marketIdentifier is stored in editorData
-        identifier: currentGroup.editorData?.marketIdentifier as string | undefined,
+        // marketIdentifier is stored at top-level (same as agents)
+        identifier: currentGroup.marketIdentifier,
         memberAgents,
         name: currentGroupMeta.title || 'Untitled Group',
         visibility: 'public', // TODO: Allow user to select visibility
       });
 
-      // Save marketIdentifier to editorData if new group
+      // Save marketIdentifier at top-level if new group (same as agents)
       if (result.isNewGroup) {
         await updateGroupMeta({
-          editorData: {
-            ...currentGroup.editorData,
-            marketIdentifier: result.identifier,
-          },
+          marketIdentifier: result.identifier,
         });
       }
 

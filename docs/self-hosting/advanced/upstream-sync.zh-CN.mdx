@@ -42,11 +42,11 @@ Docker 部署版本的升级非常简单，只需要重新部署 LobeHub 的最�
 <Steps>
   ### 停止并删除当前运行的 LobeHub 容器
 
-  假设 LobeHub 容器的名称是 `lobe-chat`，使用以下指令停止并删除当前运行的 LobeHub 容器：
+  假设 LobeHub 容器的名称是 `lobehub`，使用以下指令停止并删除当前运行的 LobeHub 容器：
 
   ```fish
-  docker stop lobe-chat
-  docker rm lobe-chat
+  docker stop lobehub
+  docker rm lobehub
   ```
 
   ### 拉取最新的 LobeHub 镜像
@@ -54,7 +54,7 @@ Docker 部署版本的升级非常简单，只需要重新部署 LobeHub 的最�
   使用以下命令拉取 LobeHub 的最新 Docker 镜像：
 
   ```fish
-  docker pull lobehub/lobe-chat
+  docker pull lobehub/lobehub
   ```
 
   ### 重新启动 Docker 容器
@@ -65,7 +65,7 @@ Docker 部署版本的升级非常简单，只需要重新部署 LobeHub 的最�
   docker run -d -p 3210:3210 \
     -e OPENAI_API_KEY=sk-xxxx \
     -e OPENAI_PROXY_URL=https://api-proxy.com/v1 \
-    --name lobe-chat \
+    --name lobehub \
     lobehub/lobe-chat
   ```
 </Steps>

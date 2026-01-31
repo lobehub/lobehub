@@ -102,6 +102,8 @@ export default {
   'betterAuth.signin.socialError': 'Social sign in failed, please try again',
   'betterAuth.signin.socialOnlyHint':
     'This email was registered via a third-party social account. Sign in with that provider, or',
+  'betterAuth.signin.ssoOnlyNoProviders':
+    'Email registration is disabled and no SSO providers are configured. Please contact your administrator.',
   'betterAuth.signin.submit': 'Sign In',
   'betterAuth.signup.confirmPasswordPlaceholder': 'Confirm your password',
   'betterAuth.signup.emailPlaceholder': 'Enter your email address',
@@ -201,7 +203,7 @@ export default {
   'profile.usernameRule': 'Username can only contain letters, numbers, or underscores',
   'profile.usernameUpdateFailed': 'Failed to update username, please try again later',
   'signin.subtitle': 'Sign up or log in to your {{appName}} account',
-  'signin.title': 'Agent teams that grow with you',
+  'signin.title': 'Agent teammates that grow with you',
   'signout': 'Log Out',
   'signup': 'Sign Up',
   'stats.aiheatmaps': 'Activity Index',

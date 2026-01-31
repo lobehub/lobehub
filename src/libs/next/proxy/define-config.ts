@@ -168,6 +168,7 @@ export function defineConfig() {
     // better auth
     '/signin',
     '/signup',
+    '/auth-error',
     '/verify-email',
     '/reset-password',
     // oauth
@@ -227,7 +228,6 @@ export function defineConfig() {
   };
 
   logDefault('Middleware configuration: %O', {
-    enableAuthProtection: appEnv.ENABLE_AUTH_PROTECTION,
     enableOIDC: authEnv.ENABLE_OIDC,
   });
 

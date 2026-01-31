@@ -2,6 +2,181 @@
 
 # Changelog
 
+### [Version 2.1.3](https://github.com/lobehub/lobe-chat/compare/v2.1.2...v2.1.3)
+
+<sup>Released on **2026-01-31**</sup>
+
+#### 🐛 Bug Fixes
+
+- **auth**: Add AUTH_DISABLE_EMAIL_PASSWORD env to enable SSO-only mode.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **auth**: Add AUTH_DISABLE_EMAIL_PASSWORD env to enable SSO-only mode, closes [#12009](https://github.com/lobehub/lobe-chat/issues/12009) ([f3210a3](https://github.com/lobehub/lobe-chat/commit/f3210a3))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.2](https://github.com/lobehub/lobe-chat/compare/v2.1.1...v2.1.2)
+
+<sup>Released on **2026-01-30**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Fix feishu sso provider.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Fix feishu sso provider, closes [#11970](https://github.com/lobehub/lobe-chat/issues/11970) ([ffd9fff](https://github.com/lobehub/lobe-chat/commit/ffd9fff))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.1](https://github.com/lobehub/lobe-chat/compare/v2.1.0...v2.1.1)
+
+<sup>Released on **2026-01-30**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Correct desktop download URL path.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Correct desktop download URL path, closes [#11990](https://github.com/lobehub/lobe-chat/issues/11990) ([e46df98](https://github.com/lobehub/lobe-chat/commit/e46df98))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+## [Version 2.1.0](https://github.com/lobehub/lobe-chat/compare/v2.0.13...v2.1.0)
+
+<sup>Released on **2026-01-30**</sup>
+
+#### ✨ Features
+
+- **misc**: Refactor cron job UI and use runtime enableBusinessFeatures flag.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's improved
+
+- **misc**: Refactor cron job UI and use runtime enableBusinessFeatures flag, closes [#11975](https://github.com/lobehub/lobe-chat/issues/11975) ([104a19a](https://github.com/lobehub/lobe-chat/commit/104a19a))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.0.13](https://github.com/lobehub/lobe-chat/compare/v2.0.12...v2.0.13)
+
+<sup>Released on **2026-01-29**</sup>
+
+#### 💄 Styles
+
+- **misc**: Fix usage table display issues.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Styles
+
+- **misc**: Fix usage table display issues, closes [#10108](https://github.com/lobehub/lobe-chat/issues/10108) ([4bd82c3](https://github.com/lobehub/lobe-chat/commit/4bd82c3))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.0.12](https://github.com/lobehub/lobe-chat/compare/v2.0.11...v2.0.12)
+
+<sup>Released on **2026-01-29**</sup>
+
+#### 🐛 Bug Fixes
+
+- **misc**: Group publish to market should set local group market identifer.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### What's fixed
+
+- **misc**: Group publish to market should set local group market identifer, closes [#11965](https://github.com/lobehub/lobe-chat/issues/11965) ([0bda4d9](https://github.com/lobehub/lobe-chat/commit/0bda4d9))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.0.11](https://github.com/lobehub/lobe-chat/compare/v2.0.10...v2.0.11)
+
+<sup>Released on **2026-01-29**</sup>
+
+#### 💄 Styles
+
+- **misc**: Fix group task render.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Styles
+
+- **misc**: Fix group task render, closes [#11952](https://github.com/lobehub/lobe-chat/issues/11952) ([b8ef02e](https://github.com/lobehub/lobe-chat/commit/b8ef02e))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
 ### [Version 2.0.10](https://github.com/lobehub/lobe-chat/compare/v2.0.9...v2.0.10)
 
 <sup>Released on **2026-01-29**</sup>

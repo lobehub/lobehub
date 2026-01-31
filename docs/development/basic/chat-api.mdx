@@ -1,18 +1,18 @@
 ---
-title: Lobe Chat API Client-Server Interaction Logic
+title: LobeHub API Client-Server Interaction Logic
 description: >-
-  Explore the client-server interaction logic of Lobe Chat API, including event
+  Explore the client-server interaction logic of LobeHub API, including event
   sequences.
 tags:
-  - Lobe Chat API
+  - LobeHub API
   - Client-Server Interaction
   - Event Sequences
   - API Logic
 ---
 
-# Lobe Chat API Client-Server Interaction Logic
+# LobeHub API Client-Server Interaction Logic
 
-This document explains the implementation logic of Lobe Chat API in client-server interactions, including event sequences and core components involved.
+This document explains the implementation logic of LobeHub API in client-server interactions, including event sequences and core components involved.
 
 ## Interaction Sequence Diagram
 
@@ -201,7 +201,7 @@ sequenceDiagram
 
 ## AgentRuntime Overview
 
-AgentRuntime is a core abstraction layer in Lobe Chat that encapsulates a unified interface for interacting with different AI model providers. Its main responsibilities and features include:
+AgentRuntime is a core abstraction layer in LobeHub that encapsulates a unified interface for interacting with different AI model providers. Its main responsibilities and features include:
 
 1. **Unified Abstraction Layer**: AgentRuntime provides a unified interface that hides the implementation details and differences between various AI provider APIs (such as OpenAI, Anthropic, Bedrock, etc.).
 
@@ -244,7 +244,7 @@ AgentRuntime is a core abstraction layer in Lobe Chat that encapsulates a unifie
 
    **Adapter Implementation Examples**:
 
-   1. **OpenRouter Adapter**: OpenRouter is a unified API that allows access to AI models from multiple providers. Lobe Chat implements support for OpenRouter through an adapter:
+   1. **OpenRouter Adapter**: OpenRouter is a unified API that allows access to AI models from multiple providers. LobeHub implements support for OpenRouter through an adapter:
 
       ```ts
       // OpenRouter adapter implementation
@@ -258,7 +258,7 @@ AgentRuntime is a core abstraction layer in Lobe Chat that encapsulates a unifie
             apiKey: options.apiKey,
             baseURL: OPENROUTER_BASE_URL,
             defaultHeaders: {
-              'HTTP-Referer': 'https://github.com/lobehub/lobe-chat',
+              'HTTP-Referer': 'https://github.com/lobehub/lobehub',
               'X-Title': 'LobeHub',
             },
           });
@@ -267,7 +267,7 @@ AgentRuntime is a core abstraction layer in Lobe Chat that encapsulates a unifie
 
         // Implement chat functionality
         async chat(payload: ChatCompletionCreateParamsBase, options?: RequestOptions) {
-          // Convert Lobe Chat request format to OpenRouter format
+          // Convert LobeHub request format to OpenRouter format
           // Handle model mapping, message format, etc.
           return this.client.chat.completions.create(
             {
@@ -282,7 +282,7 @@ AgentRuntime is a core abstraction layer in Lobe Chat that encapsulates a unifie
       }
       ```
 
-   2. **Google Gemini Adapter**: Gemini is Google's large language model. Lobe Chat supports Gemini series models through a dedicated adapter:
+   2. **Google Gemini Adapter**: Gemini is Google's large language model. LobeHub supports Gemini series models through a dedicated adapter:
 
       ```ts
       import { GoogleGenerativeAI } from '@google/generative-ai';

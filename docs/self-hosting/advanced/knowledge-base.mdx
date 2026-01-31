@@ -22,12 +22,12 @@ LobeHub supports file upload and knowledge base management. This feature relies 
 PostgreSQL is a powerful open-source relational database system, and PGVector is its extension for vector operations.
 
 - **Purpose**: Store structured data and vector indexes
-- **Deployment Tip**: Use official Docker image for quick deployment
+- **Deployment Tip**: Use the ParadeDB Docker image for quick deployment with pgvector and pg\_search plugins
 
 Deployment script example:
 
 ```
-docker run -p 5432:5432 -d --name pg -e POSTGRES_PASSWORD=mysecretpassword pgvector/pgvector:pg17
+docker run -p 5432:5432 -d --name pg -e POSTGRES_PASSWORD=mysecretpassword paradedb/paradedb:latest-pg17
 ```
 
 - **Note**: Ensure sufficient resources for vector operations

@@ -1,6 +1,6 @@
 ---
 title: Configure Redis Cache Service
-description: Learn how to configure Redis cache service to optimize LobeChat performance and session management.
+description: Learn how to configure Redis cache service to optimize LobeHub performance and session management.
 tags:
   - Redis
   - Cache
@@ -10,17 +10,17 @@ tags:
 
 # Configure Redis Cache Service
 
-LobeChat uses Redis as a high-performance cache and session storage service to optimize system performance and manage user authentication state.
+LobeHub uses Redis as a high-performance cache and session storage service to optimize system performance and manage user authentication state.
 
 <Callout type={'info'}>
-  LobeChat uses the standard Redis protocol (via ioredis library), supporting any Redis
+  LobeHub uses the standard Redis protocol (via ioredis library), supporting any Redis
   protocol-compatible service, including official Redis, self-hosted Redis, and cloud provider Redis
   services (such as AWS ElastiCache, Alibaba Cloud Redis, etc.).
 </Callout>
 
 ## Use Cases
 
-Redis is used in LobeChat for the following scenarios:
+Redis is used in LobeHub for the following scenarios:
 
 ### Authentication Session Storage
 
@@ -57,7 +57,7 @@ Caches Agent configuration data to reduce database queries and improve response 
 
   ### `REDIS_PREFIX`
 
-  The prefix for Redis keys, used to isolate LobeChat data in a shared Redis instance.
+  The prefix for Redis keys, used to isolate LobeHub data in a shared Redis instance.
 
   - Default: `lobechat`
   - Example: `REDIS_PREFIX=my-lobechat`
@@ -119,7 +119,7 @@ REDIS_PREFIX=lobechat
 ## Notes
 
 <Callout type={'warning'}>
-  Redis is an optional service. If `REDIS_URL` is not configured, LobeChat will still function
+  Redis is an optional service. If `REDIS_URL` is not configured, LobeHub will still function
   normally, but will lose the caching and session management optimizations mentioned above.
 </Callout>
 

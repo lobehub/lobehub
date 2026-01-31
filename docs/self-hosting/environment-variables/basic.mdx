@@ -190,13 +190,6 @@ SSRF_ALLOW_IP_ADDRESS_LIST=192.168.1.100,10.0.0.50
 - Allow access to internal API gateway: `10.0.0.50`
 - Allow access to internal documentation server: `172.16.0.10`
 
-### `ENABLE_AUTH_PROTECTION`
-
-- Type: Optional
-- Description: Controls whether to enable route protection. When set to `1`, all routes except public routes (like `/api/auth`, `/login`, `/signup`) will require authentication. When set to `0` or not set, only specific protected routes (like `/settings`, `/files`) will require authentication.
-- Default: `0`
-- Example: `1` or `0`
-
 ### `NEXT_PUBLIC_ASSET_PREFIX`
 
 - Type: Optional

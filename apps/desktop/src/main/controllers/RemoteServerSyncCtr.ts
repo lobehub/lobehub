@@ -162,7 +162,7 @@ export default class RemoteServerSyncCtr extends ControllerModule {
       });
     });
 
-    // 5. 监听请求本身的错误（如 DNS 解析失败）
+    // 5. Listen for request errors (e.g., DNS resolution failure)
     clientReq.on('error', (error) => {
       logger.error(`${logPrefix} Error forwarding request:`, error);
       if (sender.isDestroyed()) return;
@@ -196,7 +196,7 @@ export default class RemoteServerSyncCtr extends ControllerModule {
     delete requestHeaders['connection']; // Often causes issues
     // delete requestHeaders['content-length']; // Let node handle it based on body
 
-    // 读取代理配置
+    // Read proxy configuration
     const proxyConfig = this.app.storeManager.get('networkProxy', defaultProxySettings);
 
     let agent;

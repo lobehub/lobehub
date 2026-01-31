@@ -24,7 +24,7 @@ const Title = memo<TitleProps>(({ showTitle, time, avatar, titleAddon }) => {
         </Text>
       )}
       {showTitle ? titleAddon : undefined}
-      {time && (
+      {!time ? null : (
         <Text
           aria-label="published-date"
           as={'time'}

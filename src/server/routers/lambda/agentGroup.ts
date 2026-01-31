@@ -133,9 +133,11 @@ export const agentGroupRouter = router({
           .object({
             avatar: z.string().nullish(),
             backgroundColor: z.string().nullish(),
+            chatConfig: z.any().nullish(),
             description: z.string().nullish(),
             model: z.string().nullish(),
             params: z.any().nullish(),
+            plugins: z.array(z.string()).nullish(),
             provider: z.string().nullish(),
             systemRole: z.string().nullish(),
             tags: z.array(z.string()).nullish(),

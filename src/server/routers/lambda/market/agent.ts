@@ -177,8 +177,8 @@ const publishOrCreateSchema = z.object({
   editorData: z.record(z.any()).optional(),
 
   // Agent basic info
-  identifier: z.string().optional(),
-  // Optional - if not provided or not owned, will create new
+  identifier: z.string().nullish(),
+  // Optional - if not provided or not owned, will create new (allow null or undefined)
   name: z.string(),
   tags: z.array(z.string()).optional(),
   tokenUsage: z.number().optional(),
@@ -312,12 +312,11 @@ export const agentRouter = router({
       }
     }),
 
-  
   /**
    * Fork an agent
    * POST /market/agent/:identifier/fork
    */
-forkAgent: agentProcedure
+  forkAgent: agentProcedure
     .input(
       z.object({
         identifier: z.string(),
@@ -385,13 +384,11 @@ forkAgent: agentProcedure
       }
     }),
 
-  
-  
-/**
+  /**
    * Get agent detail by identifier
    * GET /market/agent/:identifier
    */
-getAgentDetail: agentProcedure
+  getAgentDetail: agentProcedure
     .input(z.object({ identifier: z.string() }))
     .query(async ({ input, ctx }) => {
       log('getAgentDetail input: %O', input);
@@ -409,14 +406,11 @@ getAgentDetail: agentProcedure
       }
     }),
 
-  
-  
-
-/**
+  /**
    * Get the fork source of an agent
    * GET /market/agent/:identifier/fork-source
    */
-getAgentForkSource: agentProcedure
+  getAgentForkSource: agentProcedure
     .input(z.object({ identifier: z.string() }))
     .query(async ({ input, ctx }) => {
       log('getAgentForkSource input: %O', input);
@@ -470,16 +464,11 @@ getAgentForkSource: agentProcedure
       }
     }),
 
-  
-  
-
-
-
-/**
+  /**
    * Get all forks of an agent
    * GET /market/agent/:identifier/forks
    */
-getAgentForks: agentProcedure
+  getAgentForks: agentProcedure
     .input(z.object({ identifier: z.string() }))
     .query(async ({ input, ctx }) => {
       log('getAgentForks input: %O', input);
@@ -533,17 +522,11 @@ getAgentForks: agentProcedure
       }
     }),
 
-  
-  
-
-
-
-
-/**
+  /**
    * Get own agents (requires authentication)
    * GET /market/agent/own
    */
-getOwnAgents: agentProcedure.input(paginationSchema.optional()).query(async ({ input, ctx }) => {
+  getOwnAgents: agentProcedure.input(paginationSchema.optional()).query(async ({ input, ctx }) => {
     log('getOwnAgents input: %O', input);
 
     try {
@@ -562,16 +545,11 @@ getOwnAgents: agentProcedure.input(paginationSchema.optional()).query(async ({ i
     }
   }),
 
-  
-  
-
-
-
-/**
+  /**
    * Publish an agent (make it visible in marketplace)
    * POST /market/agent/:identifier/publish
    */
-publishAgent: agentProcedure
+  publishAgent: agentProcedure
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ input, ctx }) => {
       log('publishAgent input: %O', input);
@@ -589,11 +567,7 @@ publishAgent: agentProcedure
       }
     }),
 
-  
-  
-
-
-/**
+  /**
    * Unified publish or create agent flow
    * This procedure handles the complete publish logic:
    * 1. Check if identifier exists and if current user is owner
@@ -602,7 +576,7 @@ publishAgent: agentProcedure
    *
    * Returns: { identifier, isNewAgent, success }
    */
-publishOrCreate: agentProcedure.input(publishOrCreateSchema).mutation(async ({ input, ctx }) => {
+  publishOrCreate: agentProcedure.input(publishOrCreateSchema).mutation(async ({ input, ctx }) => {
     log('publishOrCreate input: %O', input);
 
     const { identifier: inputIdentifier, name, ...versionData } = input;
@@ -684,13 +658,11 @@ publishOrCreate: agentProcedure.input(publishOrCreateSchema).mutation(async ({ i
     }
   }),
 
-  
-  
-/**
+  /**
    * Unpublish an agent (hide from marketplace, can be republished)
    * POST /market/agent/:identifier/unpublish
    */
-unpublishAgent: agentProcedure
+  unpublishAgent: agentProcedure
     .input(z.object({ identifier: z.string() }))
     .mutation(async ({ input, ctx }) => {
       log('unpublishAgent input: %O', input);

@@ -83,9 +83,21 @@ const UsageTrends = memo<UsageChartProps>(({ isLoading, data, groupBy }) => {
   const charts =
     data &&
     (type === ShowType.Spend ? (
-      <UsageBarChart categories={spendCate} data={spendData} index="day" />
+      <UsageBarChart
+        categories={spendCate}
+        data={spendData}
+        index="day"
+        showType="spend"
+        stack={true}
+      />
     ) : (
-      <UsageBarChart categories={tokenCate} data={tokenData} index="day" />
+      <UsageBarChart
+        categories={tokenCate}
+        data={tokenData}
+        index="day"
+        showType="token"
+        stack={true}
+      />
     ));
 
   return (

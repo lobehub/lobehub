@@ -153,6 +153,43 @@ describe('parse', () => {
 
       expect(serializeParseResult(result)).toEqual(outputs.agentGroup.speakDifferentAgent);
     });
+
+    it('should handle supervisor content-only message (no tools)', () => {
+      const result = parse(inputs.agentGroup.supervisorContentOnly);
+
+      // The critical assertions:
+      // 1. The final supervisor message (content-only, no tools) should be transformed to role='supervisor'
+      // 2. Its content should be moved to children array
+      const supervisorSummary = result.flatList.find((m) => m.id === 'msg-supervisor-summary');
+      expect(supervisorSummary).toBeDefined();
+      expect(supervisorSummary?.role).toBe('supervisor');
+      expect((supervisorSummary as any)?.children).toHaveLength(1);
+      expect((supervisorSummary as any)?.children[0].content).toBe('调研完成！这是综合汇总报告...');
+      // The top-level content should be empty
+      expect(supervisorSummary?.content).toBe('');
+    });
+
+    it('should handle supervisor summary after multiple tasks (content folded into children)', () => {
+      const result = parse(inputs.agentGroup.supervisorAfterMultiTasks);
+
+      // The critical assertions:
+      // 1. flatList should have: user, supervisor(+tool), groupTasks(2 tasks), supervisor-summary
+      expect(result.flatList).toHaveLength(4);
+      expect(result.flatList[0].role).toBe('user');
+      expect(result.flatList[1].role).toBe('supervisor');
+      expect(result.flatList[2].role).toBe('groupTasks');
+      expect(result.flatList[3].role).toBe('supervisor');
+
+      // 2. groupTasks should have 2 tasks
+      expect((result.flatList[2] as any).tasks).toHaveLength(2);
+
+      // 3. The supervisor summary (no tools) should have content folded into children
+      const supervisorSummary = result.flatList[3];
+      expect(supervisorSummary.id).toBe('msg-supervisor-summary');
+      expect(supervisorSummary.content).toBe(''); // content should be empty
+      expect((supervisorSummary as any).children).toHaveLength(1);
+      expect((supervisorSummary as any).children[0].content).toBe('调研完成！这是综合汇总报告...');
+    });
   });
 
   describe('Tasks Aggregation', () => {

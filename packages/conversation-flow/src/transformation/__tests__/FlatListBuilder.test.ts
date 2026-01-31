@@ -557,5 +557,152 @@ describe('FlatListBuilder', () => {
       expect(result[1].id).toBe('msg-2');
       expect(result[2].id).toBe('msg-3');
     });
+
+    it('should create tasks message when multiple tasks have same agentId', () => {
+      const messages: Message[] = [
+        {
+          content: 'User request',
+          createdAt: 0,
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          content: 'Tool message',
+          createdAt: 0,
+          id: 'tool-1',
+          parentId: 'msg-1',
+          role: 'tool',
+          updatedAt: 0,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'Task 1 result',
+          createdAt: 1,
+          id: 'task-1',
+          parentId: 'tool-1',
+          role: 'task',
+          updatedAt: 1,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'Task 2 result',
+          createdAt: 2,
+          id: 'task-2',
+          parentId: 'tool-1',
+          role: 'task',
+          updatedAt: 2,
+        },
+      ];
+
+      const builder = createBuilder(messages);
+      const result = builder.flatten(messages);
+
+      // Should create tasks (not groupTasks) since all tasks have same agentId
+      expect(result).toHaveLength(3);
+      expect(result[0].id).toBe('msg-1');
+      expect(result[1].id).toBe('tool-1');
+      expect(result[2].role).toBe('tasks');
+      expect((result[2] as any).tasks).toHaveLength(2);
+    });
+
+    it('should create groupTasks message when multiple tasks have different agentIds', () => {
+      const messages: Message[] = [
+        {
+          content: 'User request',
+          createdAt: 0,
+          id: 'msg-1',
+          role: 'user',
+          updatedAt: 0,
+        },
+        {
+          content: 'Tool message',
+          createdAt: 0,
+          id: 'tool-1',
+          parentId: 'msg-1',
+          role: 'tool',
+          updatedAt: 0,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'Task 1 result',
+          createdAt: 1,
+          id: 'task-1',
+          parentId: 'tool-1',
+          role: 'task',
+          updatedAt: 1,
+        },
+        {
+          agentId: 'agent-2',
+          content: 'Task 2 result',
+          createdAt: 2,
+          id: 'task-2',
+          parentId: 'tool-1',
+          role: 'task',
+          updatedAt: 2,
+        },
+        {
+          agentId: 'agent-3',
+          content: 'Task 3 result',
+          createdAt: 3,
+          id: 'task-3',
+          parentId: 'tool-1',
+          role: 'task',
+          updatedAt: 3,
+        },
+      ];
+
+      const builder = createBuilder(messages);
+      const result = builder.flatten(messages);
+
+      // Should create groupTasks since tasks have different agentIds
+      expect(result).toHaveLength(3);
+      expect(result[0].id).toBe('msg-1');
+      expect(result[1].id).toBe('tool-1');
+      expect(result[2].role).toBe('groupTasks');
+      expect((result[2] as any).tasks).toHaveLength(3);
+      // Verify ID format
+      expect(result[2].id).toContain('groupTasks-');
+    });
+
+    it('should create groupTasks with correct timestamps from task messages', () => {
+      const messages: Message[] = [
+        {
+          content: 'Tool message',
+          createdAt: 0,
+          id: 'tool-1',
+          role: 'tool',
+          updatedAt: 0,
+        },
+        {
+          agentId: 'agent-1',
+          content: 'Task 1',
+          createdAt: 100,
+          id: 'task-1',
+          parentId: 'tool-1',
+          role: 'task',
+          updatedAt: 150,
+        },
+        {
+          agentId: 'agent-2',
+          content: 'Task 2',
+          createdAt: 200,
+          id: 'task-2',
+          parentId: 'tool-1',
+          role: 'task',
+          updatedAt: 300,
+        },
+      ];
+
+      const builder = createBuilder(messages);
+      const result = builder.flatten(messages);
+
+      const groupTasksMsg = result.find((m) => m.role === 'groupTasks');
+      expect(groupTasksMsg).toBeDefined();
+      // createdAt should be min of task createdAt
+      expect(groupTasksMsg!.createdAt).toBe(100);
+      // updatedAt should be max of task updatedAt
+      expect(groupTasksMsg!.updatedAt).toBe(300);
+    });
   });
 });

@@ -69,7 +69,7 @@ const provider: GenericProviderDefinition<{
       authorizationUrlParams: {
         app_id: clientId,
         response_type: 'code',
-        scope: '',
+        scope: 'contact:user.base:readonly contact:user.email:readonly',
       },
       clientId,
       clientSecret,
@@ -79,8 +79,8 @@ const provider: GenericProviderDefinition<{
       getToken: async ({ code, redirectURI }) => {
         const tokenResponse = await fetch(FEISHU_TOKEN_URL, {
           body: JSON.stringify({
-            app_id: clientId,
-            app_secret: clientSecret,
+            client_id: clientId,
+            client_secret: clientSecret,
             code,
             grant_type: 'authorization_code',
             redirect_uri: redirectURI,
@@ -124,16 +124,12 @@ const provider: GenericProviderDefinition<{
           },
         });
 
-        if (!response.ok) {
-          return null;
-        }
+        if (!response.ok) return null;
 
         const payload = (await response.json()) as unknown;
         const profileResponse = payload as FeishuUserInfoResponse;
 
-        if (profileResponse.code && profileResponse.code !== 0) {
-          return null;
-        }
+        if (profileResponse.code && profileResponse.code !== 0) return null;
 
         const profile: FeishuUserProfile | undefined =
           profileResponse.data ?? (isFeishuProfile(payload) ? payload : undefined);
@@ -143,11 +139,16 @@ const provider: GenericProviderDefinition<{
         const unionId = profile.union_id ?? profile.open_id;
         if (!unionId) return null;
 
-        const syntheticEmail =
-          profile.email ?? profile.enterprise_email ?? `${unionId}@feishu.lobehub`;
+        // Always use union_id to construct email for consistency
+        // This avoids issues when:
+        // 1. Admin hasn't enabled "Allow OpenAPI to access email field" in Feishu admin console
+        // 2. User hasn't bound an email in Feishu
+        // 3. User's email changes later (which would cause account mismatch)
+        const email = profile.email || profile.enterprise_email || `${unionId}@feishu.sso`;
 
         return {
-          email: syntheticEmail,
+          ...profile,
+          email,
           emailVerified: false,
           id: unionId,
           image:
@@ -156,13 +157,13 @@ const provider: GenericProviderDefinition<{
             profile.avatar_middle ??
             profile.avatar_big,
           name: profile.name ?? profile.en_name ?? unionId,
-          ...profile,
         };
       },
       pkce: false,
       providerId: 'feishu',
       responseMode: 'query',
-      scopes: [],
+      scopes: ['contact:user.base:readonly', 'contact:user.email:readonly'],
+      tokenUrl: FEISHU_TOKEN_URL,
     };
   },
 

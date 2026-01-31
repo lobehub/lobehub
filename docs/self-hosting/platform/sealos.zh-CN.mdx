@@ -12,19 +12,19 @@ tags:
 # 使用 Sealos 部署 LobeHub 数据库版
 
 <Callout type="info">
-  本文假设你已经熟悉 Lobe Chat
-  服务器数据库版的部署基本原理和流程，因此只包含与核心环境变量配置相关的内容。如果你对 Lobe Chat
+  本文假设你已经熟悉 LobeHub
+  服务器数据库版的部署基本原理和流程，因此只包含与核心环境变量配置相关的内容。如果你对 LobeHub
   服务器数据库版的部署原理不熟悉，请先参考[部署服务器数据库](/zh/docs/self-hosting/server-database)。
 </Callout>
 
-在 Sealos 的 Lobe Chat 数据库版应用中总共包含有以下四个服务：
+在 Sealos 的 LobeHub 数据库版应用中总共包含有以下四个服务：
 
 - Logto 提供身份校验（需额外部署）
 - 带有 Vector 插件的 PostgreSQL 来做数据存储和向量化
 - 一个对象存储 Bucket
 - LobeHub Database 的实例
 
-这里是在 Sealos 上部署 Lobe Chat 服务器数据库版的流程：
+这里是在 Sealos 上部署 LobeHub 服务器数据库版的流程：
 
 ## 预部署配置
 
@@ -57,18 +57,18 @@ tags:
 
   ![Logto 创建应用页面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-create-application.png)
 
-  在弹窗中填写应用的名称为 `Lobe Chat`，然后点击 `Create application` 按钮。接下来啥也不用填，直接点击底部的 `Finish and done` 按钮就创建完成了。
+  在弹窗中填写应用的名称为 `LobeHub`，然后点击 `Create application` 按钮。接下来啥也不用填，直接点击底部的 `Finish and done` 按钮就创建完成了。
 
   ![Logto 创建应用完成页面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-create-application-done.png)
 
-  在 `Lobe Chat` 应用中找到以下三个参数，后面部署 Lobe Chat 数据库版时需要用到。
+  在 `LobeHub` 应用中找到以下三个参数，后面部署 LobeHub 数据库版时需要用到。
 
   ![Logto 应用详情页面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/logto-app-detail.png)
 </Steps>
 
-## 部署 Lobe Chat 数据库版
+## 部署 LobeHub 数据库版
 
-点击下方按钮访问 Lobe Chat 数据库版应用部署页面：
+点击下方按钮访问 LobeHub 数据库版应用部署页面：
 
 [![](https://raw.githubusercontent.com/labring-actions/templates/main/Deploy-on-Sealos.svg)](https://template.hzh.sealos.run/deploy?templateName=lobe-chat-db)
 
@@ -80,33 +80,33 @@ tags:
 
 点击【部署】按钮，部署完成后，等待应用的所有组件状态都变成 “运行中”，点击应用的【详情】按钮，进入应用详情页面。
 
-![Lobe Chat 数据库版部署完成页面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-deployment-done.png)
+![LobeHub 数据库版部署完成页面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-deployment-done.png)
 
 找到公网地址，复制下来，后面需要用到。
 
-![Lobe Chat 数据库版公网地址](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-public-address.png)
+![LobeHub 数据库版公网地址](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-public-address.png)
 
 ## 部署后配置
 
-进入 Logto 的 `Applications` 页面，找到 `Lobe Chat` 应用，点击进入应用详情页面。
+进入 Logto 的 `Applications` 页面，找到 `LobeHub` 应用，点击进入应用详情页面。
 
 在 `Settings` 页面中找到 “Redirect URI” 和 “Post sign-out redirect URI” 这两个参数，填入以下值：
 
 - Redirect URI：`https://<lobe-chat-db-public-address>/api/auth/callback/logto`
 - Post sign-out redirect URI：`https://<lobe-chat-db-public-address>`
 
-其中 `https://<lobe-chat-db-public-address>` 为 Lobe Chat 数据库版的公网地址。
+其中 `https://<lobe-chat-db-public-address>` 为 LobeHub 数据库版的公网地址。
 
 填完之后点击 `Save changes` 按钮保存配置。
 
-现在通过 `https://<lobe-chat-db-public-address>` 访问 Lobe Chat 数据库版，点击左上角的头像，然后点击【登录 / 注册】按钮：
+现在通过 `https://<lobe-chat-db-public-address>` 访问 LobeHub 数据库版，点击左上角的头像，然后点击【登录 / 注册】按钮：
 
-![Lobe Chat 数据库版登录页面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-login.png)
+![LobeHub 数据库版登录页面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-login.png)
 
 接下来会跳转到 Logto 的登录页面，点击【注册】注册一个账号。
 
-![Lobe Chat 数据库版注册页面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-register.png)
+![LobeHub 数据库版注册页面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-register.png)
 
-注册完成后，即可使用 Logto 登录 Lobe Chat 数据库版。
+注册完成后，即可使用 Logto 登录 LobeHub 数据库版。
 
-![Lobe Chat 数据库版登录成功页面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-login-success.png)
+![LobeHub 数据库版登录成功页面](https://raw.githubusercontent.com/labring-actions/templates/main/template/lobe-chat-db/images/lobe-chat-db-login-success.png)

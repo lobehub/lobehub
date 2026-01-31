@@ -15,6 +15,7 @@ import AgentCouncilMessage from './AgentCouncil';
 import AssistantMessage from './Assistant';
 import AssistantGroupMessage from './AssistantGroup';
 import CompressedGroupMessage from './CompressedGroup';
+import GroupTasksMessage from './GroupTasks';
 import SupervisorMessage from './Supervisor';
 import TaskMessage from './Task';
 import TasksMessage from './Tasks';
@@ -157,6 +158,10 @@ const MessageItem = memo<MessageItemProps>(
         }
         case 'tasks': {
           return <TasksMessage id={id} index={index} />;
+        }
+
+        case 'groupTasks': {
+          return <GroupTasksMessage id={id} index={index} />;
         }
 
         case 'agentCouncil': {
