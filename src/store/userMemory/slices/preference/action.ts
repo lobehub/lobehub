@@ -97,28 +97,28 @@ export const createPreferenceSlice: StateCreator<
             produce((draft) => {
               draft.preferencesSearchLoading = false;
 
-              // 设置基础信息
+              // Set basic information
               if (!draft.preferencesInit) {
                 draft.preferencesInit = true;
                 draft.preferencesTotal = data.total;
               }
 
-              // 转换数据结构
+              // Transform data structure
               const transformedItems = data.items.map((item: any) => ({
                 ...item.memory,
                 ...item.preference,
               }));
 
-              // 累积数据逻辑
+              // Accumulate data logic
               if (page === 1) {
-                // 第一页，直接设置
+                // First page, set directly
                 draft.preferences = uniqBy(transformedItems, 'id');
               } else {
-                // 后续页面，累积数据
+                // Subsequent pages, accumulate data
                 draft.preferences = uniqBy([...draft.preferences, ...transformedItems], 'id');
               }
 
-              // 更新 hasMore
+              // Update hasMore
               draft.preferencesHasMore = data.items.length >= (params.pageSize || 20);
             }),
             false,

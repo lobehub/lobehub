@@ -24,7 +24,7 @@ const displayMigrationStatus = (s: GlobalState) => {
           status: !!recordInTable ? 'success' : 'error',
         };
       })
-      // 时间倒序
+      // Sort by time in descending order
       .sort((a, b) => b.folderMillis - a.folderMillis)
   );
 };
