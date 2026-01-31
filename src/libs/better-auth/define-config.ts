@@ -107,6 +107,7 @@ export function defineConfig(customOptions: CustomBetterAuthOptions) {
 
     emailAndPassword: {
       autoSignIn: true,
+      disableSignUp: authEnv.AUTH_DISABLE_EMAIL_PASSWORD,
       enabled: !authEnv.AUTH_DISABLE_EMAIL_PASSWORD,
       maxPasswordLength: 64,
       minPasswordLength: 8,

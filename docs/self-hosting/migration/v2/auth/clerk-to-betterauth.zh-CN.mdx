@@ -55,7 +55,7 @@ tags:
 
 1. **配置邮件服务**
 
-   设置邮件服务以支持密码重置功能。参阅 [邮件服务配置](/zh/docs/self-hosting/advanced/auth#邮件服务配置)。
+   设置邮件服务以支持密码重置功能。参阅 [邮件服务配置](/zh/docs/self-hosting/auth#邮件服务配置)。
 
 2. **更新环境变量**
 
@@ -78,7 +78,7 @@ tags:
    ```
 
    <Callout type={'tip'}>
-     查阅 [身份验证服务配置](/zh/docs/self-hosting/advanced/auth) 了解完整的环境变量和 SSO 提供商配置。
+     查阅 [身份验证服务配置](/zh/docs/self-hosting/auth) 了解完整的环境变量和 SSO 提供商配置。
    </Callout>
 
 3. **重新部署 LobeHub**
@@ -283,7 +283,7 @@ npx tsx scripts/clerk-to-betterauth/verify.ts
 迁移完成后，参照 [简单迁移 - 步骤 2](#步骤) 配置 Better Auth 环境变量并重新部署。
 
 <Callout type={'tip'}>
-  完整的 Better Auth 配置请参阅 [身份验证服务配置](/zh/docs/self-hosting/advanced/auth)，包括所有支持的 SSO 提供商和邮件服务配置。
+  完整的 Better Auth 配置请参阅 [身份验证服务配置](/zh/docs/self-hosting/auth)，包括所有支持的 SSO 提供商和邮件服务配置。
 </Callout>
 
 ## 迁移内容对比
@@ -333,11 +333,11 @@ npx tsx scripts/clerk-to-betterauth/verify.ts
 ## 相关阅读
 
 <Cards>
-  <Card href={'/zh/docs/self-hosting/advanced/auth/migration-internals'} title={'迁移技术原理'} />
+  <Card href={'/zh/docs/self-hosting/migration/v2/auth/migration-internals'} title={'迁移技术原理'} />
 
-  <Card href={'/zh/docs/self-hosting/advanced/auth'} title={'身份验证服务配置'} />
+  <Card href={'/zh/docs/self-hosting/auth'} title={'身份验证服务配置'} />
 
   <Card href={'/zh/docs/self-hosting/environment-variables/auth'} title={'认证相关环境变量'} />
 
-  <Card href={'/zh/docs/self-hosting/advanced/auth/legacy'} title={'旧版身份验证（NextAuth 和 Clerk）'} />
+  <Card href={'/zh/docs/self-hosting/auth/legacy'} title={'旧版身份验证（NextAuth 和 Clerk）'} />
 </Cards>

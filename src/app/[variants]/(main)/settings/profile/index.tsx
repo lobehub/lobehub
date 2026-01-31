@@ -59,6 +59,7 @@ const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
   const isLoadedAuthProviders = useUserStore(authSelectors.isLoadedAuthProviders);
   const fetchAuthProviders = useUserStore((s) => s.fetchAuthProviders);
   const enableKlavis = useServerConfigStore(serverConfigSelectors.enableKlavis);
+  const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
   const [servers, isServersInit, useFetchUserKlavisServers] = useToolStore((s) => [
     s.servers,
     s.isServersInit,
@@ -113,7 +114,7 @@ const ProfileSetting = ({ mobile }: ProfileSettingProps) => {
           <InterestsRow mobile={mobile} />
 
           {/* Password Row - For logged in users to change or set password */}
-          {!isDesktop && isLogin && (
+          {!isDesktop && isLogin && !disableEmailPassword && (
             <>
               <Divider style={{ margin: 0 }} />
               <PasswordRow mobile={mobile} />

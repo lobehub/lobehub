@@ -11,7 +11,7 @@ tags:
 # 旧版身份验证
 
 <Callout type={'warning'}>
-  **旧版提示**：NextAuth 和 Clerk 是旧版身份验证方案。对于新部署，我们强烈建议使用 [Better Auth](/zh/docs/self-hosting/advanced/auth)，它更简洁、更灵活。
+  **旧版提示**：NextAuth 和 Clerk 是旧版身份验证方案。对于新部署，我们强烈建议使用 [Better Auth](/zh/docs/self-hosting/auth)，它更简洁、更灵活。
 </Callout>
 
 本页面为仍在使用这些服务的用户提供旧版身份验证方案（NextAuth 和 Clerk）的文档。
@@ -25,17 +25,17 @@ LobeHub 与 Clerk 做了深度集成，能够为用户提供安全、便捷的�
 在 LobeHub 的环境变量中设置 `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` 和 `CLERK_SECRET_KEY`，即可开启和使用 Clerk。
 
 <Callout type={'info'}>
-  详细的 Clerk 配置请参阅 [Clerk 配置指南](/zh/docs/self-hosting/advanced/auth/clerk)。
+  详细的 Clerk 配置请参阅 [Clerk 配置指南](/zh/docs/self-hosting/auth/clerk)。
 </Callout>
 
 <Callout type={'tip'}>
-  如需从 Clerk 迁移到 Better Auth，请参阅 [Clerk 迁移指南](/zh/docs/self-hosting/advanced/auth/clerk-to-betterauth)。
+  如需从 Clerk 迁移到 Better Auth，请参阅 [Clerk 迁移指南](/zh/docs/self-hosting/migration/v2/auth/clerk-to-betterauth)。
 </Callout>
 
 ## Next Auth
 
 <Callout type={'tip'}>
-  如需从 NextAuth 迁移到 Better Auth，请参阅 [NextAuth 迁移指南](/zh/docs/self-hosting/advanced/auth/nextauth-to-betterauth)。
+  如需从 NextAuth 迁移到 Better Auth，请参阅 [NextAuth 迁移指南](/zh/docs/self-hosting/migration/v2/auth/nextauth-to-betterauth)。
 </Callout>
 
 在使用 NextAuth 之前，请先在 LobeHub 的环境变量中设置以下变量：
@@ -51,25 +51,25 @@ LobeHub 与 Clerk 做了深度集成，能够为用户提供安全、便捷的�
 目前支持的身份验证服务有：
 
 <Cards>
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/auth0'} title={'Auth0'} />
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/auth0'} title={'Auth0'} />
 
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/microsoft-entra-id'} title={'Microsoft Entra ID'} />
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/microsoft-entra-id'} title={'Microsoft Entra ID'} />
 
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/authentik'} title={'Authentik'} />
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/authentik'} title={'Authentik'} />
 
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/github'} title={'Github'} />
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/github'} title={'Github'} />
 
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/zitadel'} title={'ZITADEL'} />
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/zitadel'} title={'ZITADEL'} />
 
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/cloudflare-zero-trust'} title={'Cloudflare Zero Trust'} />
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/cloudflare-zero-trust'} title={'Cloudflare Zero Trust'} />
 
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/authelia'} title={'Authelia'} />
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/authelia'} title={'Authelia'} />
 
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/logto'} title={'Logto'} />
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/logto'} title={'Logto'} />
 
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/keycloak'} title={'Keycloak'} />
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/keycloak'} title={'Keycloak'} />
 
-  <Card href={'/zh/docs/self-hosting/advanced/auth/next-auth/okta'} title={'Okta'} />
+  <Card href={'/zh/docs/self-hosting/auth/next-auth/okta'} title={'Okta'} />
 </Cards>
 
 点击即可查看对应平台的配置文档。
