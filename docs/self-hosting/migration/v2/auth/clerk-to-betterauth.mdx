@@ -57,7 +57,7 @@ For small self-hosted deployments, the simplest approach is to let users reset t
 
 1. **Configure Email Service**
 
-   Set up email service for password reset functionality. See [Email Service Configuration](/docs/self-hosting/advanced/auth#email-service-configuration).
+   Set up email service for password reset functionality. See [Email Service Configuration](/docs/self-hosting/auth#email-service-configuration).
 
 2. **Update Environment Variables**
 
@@ -80,7 +80,7 @@ For small self-hosted deployments, the simplest approach is to let users reset t
    ```
 
    <Callout type={'tip'}>
-     See [Authentication Service Configuration](/docs/self-hosting/advanced/auth) for complete environment variables and SSO provider setup.
+     See [Authentication Service Configuration](/docs/self-hosting/auth) for complete environment variables and SSO provider setup.
    </Callout>
 
 3. **Redeploy LobeHub**
@@ -289,7 +289,7 @@ npx tsx scripts/clerk-to-betterauth/verify.ts
 After migration is complete, follow [Simple Migration - Step 2](#steps) to configure Better Auth environment variables and redeploy.
 
 <Callout type={'tip'}>
-  For complete Better Auth configuration, see [Authentication Service Configuration](/docs/self-hosting/advanced/auth).
+  For complete Better Auth configuration, see [Authentication Service Configuration](/docs/self-hosting/auth).
 </Callout>
 
 ## What Gets Migrated
@@ -339,11 +339,11 @@ This error occurs because the database schema is outdated. Run `pnpm db:migrate`
 ## Related Reading
 
 <Cards>
-  <Card href={'/docs/self-hosting/advanced/auth/migration-internals'} title={'Migration Technical Deep Dive'} />
+  <Card href={'/docs/self-hosting/migration/v2/auth/migration-internals'} title={'Migration Technical Deep Dive'} />
 
-  <Card href={'/docs/self-hosting/advanced/auth'} title={'Authentication Service Configuration'} />
+  <Card href={'/docs/self-hosting/auth'} title={'Authentication Service Configuration'} />
 
   <Card href={'/docs/self-hosting/environment-variables/auth'} title={'Auth Environment Variables'} />
 
-  <Card href={'/docs/self-hosting/advanced/auth/legacy'} title={'Legacy Authentication (NextAuth & Clerk)'} />
+  <Card href={'/docs/self-hosting/auth/legacy'} title={'Legacy Authentication (NextAuth & Clerk)'} />
 </Cards>
