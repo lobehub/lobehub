@@ -35,6 +35,10 @@ vi.mock('semver', async (importOriginal) => {
   };
 });
 
+vi.mock('url-join', () => ({
+  default: vi.fn((...args) => args.join('/')),
+}));
+
 // 模拟 process.env
 const originalEnv = process.env;
 
@@ -242,7 +246,7 @@ describe('ChangelogService', () => {
       it('should generate correct URL', () => {
         // @ts-ignore - accessing private method for testing
         const result = service.genUrl('test/path');
-        expect(result).toBe('https://raw.githubusercontent.com/lobehub/lobe-chat/main/test/path');
+        expect(result).toBe('https://raw.githubusercontent.com/lobehub/lobehub/main/test/path');
       });
     });
 
@@ -278,17 +282,33 @@ describe('ChangelogService', () => {
     });
 
     describe('replaceCdnUrl', () => {
-      it('should replace /blog URL with CDN URL', () => {
-        // @ts-ignore - accessing private method for testing
-        const result = service.replaceCdnUrl('/blog/image.jpg');
+      it('should replace URL with CDN URL if available', async () => {
+        // 设置环境变量
+        process.env.DOC_S3_PUBLIC_DOMAIN = 'https://cdn.example.com';
 
-        expect(result).toBe('https://hub-apac-1.lobeobjects.space/blog/image.jpg');
+        // 重新导入模块以确保环境变量生效
+        const { ChangelogService } = await import('./index');
+        const service = new ChangelogService();
+
+        service.cdnUrls = { 'https://example.com/image.jpg': 'image-hash.jpg' };
+
+        // @ts-ignore - accessing private method for testing
+        const result = service.replaceCdnUrl('https://example.com/image.jpg');
+
+        expect(result).toBe('https://cdn.example.com/image-hash.jpg');
       });
 
-      it('should return original URL if not starting with /blog', () => {
+      it('should return original URL if CDN URL is not available', () => {
+        const originalDocCdnPrefix = process.env.DOC_S3_PUBLIC_DOMAIN;
+        process.env.DOC_S3_PUBLIC_DOMAIN = 'https://cdn.example.com';
+        service.cdnUrls = {};
+
         // @ts-ignore - accessing private method for testing
         const result = service.replaceCdnUrl('https://example.com/image.jpg');
         expect(result).toBe('https://example.com/image.jpg');
+
+        // Restore original value
+        process.env.DOC_S3_PUBLIC_DOMAIN = originalDocCdnPrefix;
       });
     });
   });

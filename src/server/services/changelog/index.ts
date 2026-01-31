@@ -36,7 +36,7 @@ export class ChangelogService {
     changelogPath: 'changelog',
     docsPath: 'docs/changelog',
     majorVersion: 1,
-    repo: 'lobe-chat',
+    repo: 'lobehub',
     type: 'cloud',
     urlTemplate: process.env.CHANGELOG_URL_TEMPLATE || URL_TEMPLATE,
     user: 'lobehub',
@@ -172,11 +172,32 @@ export class ChangelogService {
   }
 
   private formatVersionRange(range: string[]): string[] {
+    if (!range || range.length === 0) {
+      return [];
+    }
+
     if (range.length === 1) {
       return range;
     }
 
-    const [v1, v2]: any = range.map((v) => semver.parse(v)?.toString());
+    const parsedVersions = range
+      .map((v) => {
+        const parsed = semver.parse(v);
+        return parsed ? parsed.toString() : null;
+      })
+      .filter((v): v is string => v !== null);
+
+    // If we don't have at least 2 valid versions, return the original range
+    if (parsedVersions.length < 2) {
+      return range;
+    }
+
+    const [v1, v2] = parsedVersions;
+
+    // Ensure both versions are valid strings before comparison
+    if (!v1 || !v2) {
+      return range;
+    }
 
     const minVersion = semver.lt(v1, v2) ? v1 : v2;
     const maxVersion = semver.gt(v1, v2) ? v1 : v2;
@@ -214,7 +235,9 @@ export class ChangelogService {
   }
 
   private replaceCdnUrl(url: string) {
-    if (url?.startsWith('/blog')) return urlJoin('https://hub-apac-1.lobeobjects.space/', url);
-    return url;
+    if (!docCdnPrefix || !this.cdnUrls?.[url]) {
+      return url;
+    }
+    return urlJoin(docCdnPrefix, this.cdnUrls[url]);
   }
 }
