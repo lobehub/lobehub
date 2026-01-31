@@ -5,7 +5,7 @@ import { createPatch } from 'diff';
 import { ChevronRight } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import path from 'path-browserify-esm';
-import React, { memo, useMemo } from 'react';
+import { memo, useMemo } from 'react';
 import { Diff, Hunk, parseDiff } from 'react-diff-view';
 import 'react-diff-view/style/index.css';
 import { useTranslation } from 'react-i18next';
@@ -14,6 +14,8 @@ import useSWR from 'swr';
 import { LocalFile, LocalFolder } from '@/features/LocalFile';
 import { localFileService } from '@/services/electron/localFileService';
 import '@/styles/react-diff-view.dark.css';
+
+import OutOfScopeWarning from '../OutOfScopeWarning';
 
 const EditLocalFile = memo<BuiltinInterventionProps<EditLocalFileParams>>(({ args }) => {
   const { t } = useTranslation('tool');
@@ -58,6 +60,7 @@ const EditLocalFile = memo<BuiltinInterventionProps<EditLocalFileParams>>(({ arg
 
   return (
     <Flexbox gap={12}>
+      <OutOfScopeWarning paths={[args.file_path]} />
       <Flexbox horizontal>
         <LocalFolder path={dir} />
         <Icon icon={ChevronRight} />

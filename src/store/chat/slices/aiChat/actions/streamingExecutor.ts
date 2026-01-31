@@ -30,12 +30,15 @@ import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { chatService } from '@/services/chat';
 import { type ResolvedAgentConfig, resolveAgentConfig } from '@/services/chat/mecha';
 import { messageService } from '@/services/message';
+import { getAgentStoreState } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { createAgentExecutors } from '@/store/chat/agents/createAgentExecutors';
 import { type ChatStore } from '@/store/chat/store';
 import { getFileStoreState } from '@/store/file/store';
 import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-page-agent';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
+import { dynamicInterventionResolvers } from '@/tools/dynamicInterventionResolvers';
 
 import { topicSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
@@ -262,6 +265,10 @@ export const streamingExecutor: StateCreator<
       provider: agentConfigData.provider!,
     };
 
+    const topicWorkingDirectory = topicSelectors.currentTopicWorkingDirectory(get());
+    const agentWorkingDirectory = agentSelectors.currentAgentWorkingDirectory(getAgentStoreState());
+    const workingDirectory = topicWorkingDirectory ?? agentWorkingDirectory;
+
     // Create initial state or use provided state
     const state =
       initialState ||
@@ -272,6 +279,7 @@ export const streamingExecutor: StateCreator<
           sessionId: agentId,
           threadId,
           topicId,
+          workingDirectory,
         },
         modelRuntimeConfig,
         operationId: operationId ?? agentId,
@@ -705,6 +713,7 @@ export const streamingExecutor: StateCreator<
       compressionConfig: {
         enabled: agentConfigData.chatConfig?.enableContextCompression ?? true, // Default to enabled
       },
+      dynamicInterventionResolvers,
       operationId: `${messageKey}/${params.parentMessageId}`,
       modelRuntimeConfig,
     });

@@ -83,7 +83,6 @@ export const List: FC<ListProps> = ({
       flex={1}
       style={{
         height: listHeight,
-        paddingBlock: groupMode === 'byModel' ? 8 : 0,
       }}
     >
       <TooltipGroup>

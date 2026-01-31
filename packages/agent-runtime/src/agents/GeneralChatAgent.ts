@@ -1,4 +1,9 @@
-import type { ChatToolPayload, HumanInterventionConfig } from '@lobechat/types';
+import type {
+  ChatToolPayload,
+  ExtendedHumanInterventionConfig,
+  HumanInterventionConfig,
+  HumanInterventionPolicy,
+} from '@lobechat/types';
 
 import { DEFAULT_SECURITY_BLACKLIST, InterventionChecker } from '../core';
 import {
@@ -46,7 +51,7 @@ export class GeneralChatAgent implements Agent {
   private getToolInterventionConfig(
     toolCalling: ChatToolPayload,
     state: AgentState,
-  ): HumanInterventionConfig | undefined {
+  ): ExtendedHumanInterventionConfig | undefined {
     const { identifier, apiName } = toolCalling;
     const manifest = state.toolManifestMap[identifier];
 
@@ -57,6 +62,57 @@ export class GeneralChatAgent implements Agent {
 
     // API-level config takes precedence over tool-level config
     return api?.humanIntervention ?? manifest.humanIntervention;
+  }
+
+  private isDynamicInterventionConfig(
+    config: ExtendedHumanInterventionConfig | undefined,
+  ): config is {
+    dynamic: { default?: HumanInterventionPolicy; policy?: HumanInterventionPolicy; type: string };
+  } {
+    return !!config && typeof config === 'object' && !Array.isArray(config) && 'dynamic' in config;
+  }
+
+  private matchesAlwaysPolicy(
+    config: HumanInterventionConfig | undefined,
+    toolArgs: Record<string, any>,
+  ): boolean {
+    if (!config) return false;
+    if (config === 'always') return true;
+    if (!Array.isArray(config)) return false;
+
+    return config.some((rule) => {
+      if (rule.policy !== 'always') return false;
+      if (!rule.match) return true;
+
+      return Object.entries(rule.match).every(([paramName, matcher]) => {
+        const paramValue = toolArgs[paramName];
+        if (paramValue === undefined) return false;
+
+        if (typeof matcher === 'string') {
+          return String(paramValue).includes(matcher) || matcher.includes('*');
+        }
+
+        return true;
+      });
+    });
+  }
+
+  private resolveDynamicPolicy(
+    config: ExtendedHumanInterventionConfig | undefined,
+    toolArgs: Record<string, any>,
+    metadata?: Record<string, any>,
+  ): HumanInterventionPolicy | undefined {
+    if (!this.isDynamicInterventionConfig(config)) {
+      return undefined;
+    }
+
+    const { dynamic } = config;
+    const resolver = this.config.dynamicInterventionResolvers?.[dynamic.type];
+
+    if (!resolver) return dynamic.default ?? 'never';
+
+    const shouldIntervene = resolver(toolArgs, metadata);
+    return shouldIntervene ? (dynamic.policy ?? 'always') : (dynamic.default ?? 'never');
   }
 
   /**
@@ -111,43 +167,37 @@ export class GeneralChatAgent implements Agent {
         continue;
       }
 
-      // Priority 1: Check 'always' policy - overrides auto-run mode
-      // Some sensitive operations (e.g., installPlugin) must always require user confirmation
       const config = this.getToolInterventionConfig(toolCalling, state);
-      const hasAlwaysPolicy =
-        config === 'always' ||
-        (Array.isArray(config) &&
-          config.some((rule) => {
-            // Check if the 'always' rule matches current tool args
-            if (rule.policy !== 'always') return false;
-            // If rule has match criteria, check if it matches
-            if (rule.match) {
-              return Object.entries(rule.match).every(([paramName, matcher]) => {
-                const paramValue = toolArgs[paramName];
-                if (paramValue === undefined) return false;
-                // Simple string comparison for basic matching
-                if (typeof matcher === 'string') {
-                  return String(paramValue).includes(matcher) || matcher.includes('*');
-                }
-                return true;
-              });
-            }
-            // No match criteria means it's a default 'always' rule
-            return true;
-          }));
+      const isDynamicConfig = this.isDynamicInterventionConfig(config);
+      const dynamicPolicy = this.resolveDynamicPolicy(config, toolArgs, state.metadata);
+      const staticConfig = isDynamicConfig
+        ? undefined
+        : (config as HumanInterventionConfig | undefined);
 
-      if (hasAlwaysPolicy) {
+      // Priority 1: Dynamic policy (highest priority after security/headless)
+      if (dynamicPolicy !== undefined) {
+        if (dynamicPolicy === 'never') {
+          toolsToExecute.push(toolCalling);
+        } else {
+          toolsNeedingIntervention.push(toolCalling);
+        }
+        continue;
+      }
+
+      // Priority 2: Check 'always' policy - overrides auto-run mode
+      // Some sensitive operations (e.g., installPlugin) must always require user confirmation
+      if (this.matchesAlwaysPolicy(staticConfig, toolArgs)) {
         toolsNeedingIntervention.push(toolCalling);
         continue;
       }
 
-      // Priority 2: User config is 'auto-run', all tools execute directly
+      // Priority 3: User config is 'auto-run', all tools execute directly
       if (approvalMode === 'auto-run') {
         toolsToExecute.push(toolCalling);
         continue;
       }
 
-      // Priority 3: User config is 'allow-list', check if tool is in whitelist
+      // Priority 4: User config is 'allow-list', check if tool is in whitelist
       if (approvalMode === 'allow-list') {
         if (allowList.includes(toolKey)) {
           toolsToExecute.push(toolCalling);
@@ -157,10 +207,10 @@ export class GeneralChatAgent implements Agent {
         continue;
       }
 
-      // Priority 4: User config is 'manual' (default), use tool's own config
+      // Priority 5: User config is 'manual' (default), use tool's own config
       // Note: config is already retrieved above for 'always' policy check
       const policy = InterventionChecker.shouldIntervene({
-        config,
+        config: staticConfig,
         securityBlacklist,
         toolArgs,
       });
