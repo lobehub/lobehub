@@ -287,6 +287,123 @@ describe('MessageContentProcessor', () => {
       // Should not include file context
       expect(result.messages[0].content).toBe('Hello');
     });
+
+    it('should generate file_url for google pdf with http(s) url', async () => {
+      mockIsCanUseVision.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        model: 'gemini-3-flash-preview',
+        provider: 'google',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: true, includeFileUrl: true },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Hello',
+          fileList: [
+            {
+              id: 'file1',
+              name: 'test.pdf',
+              fileType: 'application/pdf',
+              size: 1024,
+              url: 'https://example.com/test.pdf',
+            },
+          ],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      expect(Array.isArray(result.messages[0].content)).toBe(true);
+      const content = result.messages[0].content as any[];
+      expect(content).toHaveLength(2);
+      expect(content[0].type).toBe('text');
+      expect(content[0].text).toBe('Hello');
+      expect(content[0].text).not.toContain('SYSTEM CONTEXT');
+      expect(content[1].type).toBe('file_url');
+      expect(content[1].file_url.url).toBe('https://example.com/test.pdf');
+    });
+
+    it('should keep file context for google pdf with non-http url', async () => {
+      mockIsCanUseVision.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        model: 'gemini-3-flash-preview',
+        provider: 'google',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: true, includeFileUrl: true },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Hello',
+          fileList: [
+            {
+              id: 'file1',
+              name: 'test.pdf',
+              fileType: 'application/pdf',
+              size: 1024,
+              url: '/f/file1',
+            },
+          ],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      expect(Array.isArray(result.messages[0].content)).toBe(true);
+      const content = result.messages[0].content as any[];
+      expect(content).toHaveLength(1);
+      expect(content[0].type).toBe('text');
+      expect(content[0].text).toContain('SYSTEM CONTEXT');
+    });
+
+    it('should keep file context for google pdf with private http url', async () => {
+      mockIsCanUseVision.mockReturnValue(false);
+
+      const processor = new MessageContentProcessor({
+        model: 'gemini-3-flash-preview',
+        provider: 'google',
+        isCanUseVision: mockIsCanUseVision,
+        fileContext: { enabled: true, includeFileUrl: true },
+      });
+
+      const messages: UIChatMessage[] = [
+        {
+          id: 'test',
+          role: 'user',
+          content: 'Hello',
+          fileList: [
+            {
+              id: 'file1',
+              name: 'local.pdf',
+              fileType: 'application/pdf',
+              size: 1024,
+              url: 'http://127.0.0.1:8080/local.pdf',
+            },
+          ],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      ];
+
+      const result = await processor.process(createContext(messages));
+
+      expect(Array.isArray(result.messages[0].content)).toBe(true);
+      const content = result.messages[0].content as any[];
+      expect(content).toHaveLength(1);
+      expect(content[0].type).toBe('text');
+      expect(content[0].text).toContain('SYSTEM CONTEXT');
+    });
   });
 
   describe('Reasoning/thinking content', () => {

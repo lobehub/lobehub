@@ -1,8 +1,8 @@
 import { filesPrompts } from '@lobechat/prompts';
-import { MessageContentPart } from '@lobechat/types';
+import { ChatFileItem, MessageContentPart } from '@lobechat/types';
 import { imageUrlToBase64 } from '@lobechat/utils/imageToBase64';
 import { parseDataUri } from '@lobechat/utils/uriParser';
-import { isDesktopLocalStaticServerUrl } from '@lobechat/utils/url';
+import { isDesktopLocalStaticServerUrl, isLocalOrPrivateUrl } from '@lobechat/utils/url';
 import debug from 'debug';
 
 import { BaseProcessor } from '../base/BaseProcessor';
@@ -48,6 +48,9 @@ export interface MessageContentConfig {
 }
 
 export interface UserMessageContentPart {
+  file_url?: {
+    url: string;
+  };
   googleThoughtSignature?: string;
   image_url?: {
     detail?: string;
@@ -56,11 +59,22 @@ export interface UserMessageContentPart {
   signature?: string;
   text?: string;
   thinking?: string;
-  type: 'text' | 'image_url' | 'thinking' | 'video_url';
+  type: 'text' | 'image_url' | 'thinking' | 'video_url' | 'file_url';
   video_url?: {
     url: string;
   };
 }
+
+const MAX_GOOGLE_EXTERNAL_PDF_SIZE = 100 * 1024 * 1024;
+
+const isHttpUrl = (url: string) => {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Message Content Processor
@@ -148,11 +162,31 @@ export class MessageContentProcessor extends BaseProcessor {
     // Add text content
     let textContent = message.content || '';
 
+    const isGoogleProvider = this.config.provider === 'google';
+    const fileList: ChatFileItem[] = message.fileList || [];
+    const googlePdfFiles = isGoogleProvider
+      ? fileList.filter((file) => {
+          const fileType = file.fileType?.toLowerCase();
+          return (
+            fileType === 'application/pdf' &&
+            file.size <= MAX_GOOGLE_EXTERNAL_PDF_SIZE &&
+            isHttpUrl(file.url) &&
+            !isLocalOrPrivateUrl(file.url)
+          );
+        })
+      : [];
+
+    const fileListForPrompt = isGoogleProvider
+      ? fileList.filter((file) => !googlePdfFiles.includes(file))
+      : fileList;
+
+    let filesContext = '';
+
     // Add file context (if file context is enabled and has files, images or videos)
     if ((hasFiles || hasImages || hasVideos) && this.config.fileContext?.enabled) {
-      const filesContext = filesPrompts({
+      filesContext = filesPrompts({
         addUrl: this.config.fileContext.includeFileUrl ?? true,
-        fileList: message.fileList,
+        fileList: fileListForPrompt,
         imageList: message.imageList || [],
         videoList: message.videoList || [],
       });
@@ -170,6 +204,15 @@ export class MessageContentProcessor extends BaseProcessor {
       });
     }
 
+    if (googlePdfFiles.length > 0) {
+      googlePdfFiles.forEach((file) => {
+        contentParts.push({
+          file_url: { url: file.url },
+          type: 'file_url',
+        });
+      });
+    }
+
     // Process image content
     if (hasImages && this.config.isCanUseVision?.(this.config.model, this.config.provider)) {
       const imageContentParts = await this.processImageList(message.imageList || []);
@@ -183,7 +226,7 @@ export class MessageContentProcessor extends BaseProcessor {
     }
 
     // Explicitly return fields, keeping only necessary message fields
-    const hasFileContext = (hasFiles || hasImages || hasVideos) && this.config.fileContext?.enabled;
+    const hasFileContext = !!filesContext;
     const hasVisionContent =
       hasImages && this.config.isCanUseVision?.(this.config.model, this.config.provider);
     const hasVideoContent =
@@ -420,6 +463,9 @@ export class MessageContentProcessor extends BaseProcessor {
       }
       case 'video_url': {
         return !!(part.video_url && part.video_url.url);
+      }
+      case 'file_url': {
+        return !!(part.file_url && part.file_url.url);
       }
       default: {
         return false;

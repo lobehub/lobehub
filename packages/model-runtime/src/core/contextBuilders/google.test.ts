@@ -1,10 +1,10 @@
 // @vitest-environment node
 import { Type as SchemaType } from '@google/genai';
 import * as imageToBase64Module from '@lobechat/utils';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
-import { parseDataUri } from '../../utils/uriParser';
+import { isPublicExternalUrl, parseDataUri, validateExternalUrl } from '../../utils/uriParser';
 import {
   GEMINI_MAGIC_THOUGHT_SIGNATURE,
   buildGoogleMessage,
@@ -16,7 +16,10 @@ import {
 
 // Mock the utils
 vi.mock('../../utils/uriParser', () => ({
+  isPublicExternalUrl: vi.fn(),
+  MAX_INLINE_PDF_SIZE: 50 * 1024 * 1024,
   parseDataUri: vi.fn(),
+  validateExternalUrl: vi.fn(),
 }));
 
 vi.mock('../../utils/imageToBase64', () => ({
@@ -25,6 +28,11 @@ vi.mock('../../utils/imageToBase64', () => ({
 
 describe('google contextBuilders', () => {
   describe('buildGooglePart', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.resetAllMocks();
+    });
+
     it('should handle text type messages', async () => {
       const content: UserMessageContentPart = {
         text: 'Hello',
@@ -90,6 +98,14 @@ describe('google contextBuilders', () => {
         mimeType: 'image/png',
       });
 
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(false);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 0,
+        contentType: '',
+        isValid: false,
+        reason: 'not public',
+      });
+
       const content: UserMessageContentPart = {
         image_url: { url: imageUrl },
         type: 'image_url',
@@ -106,6 +122,63 @@ describe('google contextBuilders', () => {
       });
 
       expect(imageToBase64Module.imageUrlToBase64).toHaveBeenCalledWith(imageUrl);
+    });
+
+    it('should build fileData for file_url on gemini-3+', async () => {
+      const fileUrl = 'https://example.com/sample.pdf';
+
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 1024,
+        contentType: 'application/pdf',
+        isValid: true,
+      });
+
+      const content: UserMessageContentPart = {
+        file_url: { url: fileUrl },
+        type: 'file_url',
+      };
+
+      const result = await buildGooglePart(content, { model: 'gemini-3-flash-preview' });
+
+      expect(result).toEqual({
+        fileData: {
+          fileUri: fileUrl,
+          mimeType: 'application/pdf',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
+    });
+
+    it('should fallback to inlineData for file_url on gemini-2.5 and earlier', async () => {
+      const fileUrl = 'https://example.com/sample.pdf';
+
+      vi.mocked(isPublicExternalUrl).mockReturnValueOnce(true);
+      vi.mocked(validateExternalUrl).mockResolvedValueOnce({
+        contentLength: 1024,
+        contentType: 'application/pdf',
+        isValid: true,
+      });
+
+      vi.spyOn(imageToBase64Module, 'imageUrlToBase64').mockResolvedValueOnce({
+        base64: 'mockPdfBase64',
+        mimeType: 'application/pdf',
+      });
+
+      const content: UserMessageContentPart = {
+        file_url: { url: fileUrl },
+        type: 'file_url',
+      };
+
+      const result = await buildGooglePart(content, { model: 'gemini-2.5-flash' });
+
+      expect(result).toEqual({
+        inlineData: {
+          data: 'mockPdfBase64',
+          mimeType: 'application/pdf',
+        },
+        thoughtSignature: GEMINI_MAGIC_THOUGHT_SIGNATURE,
+      });
     });
 
     it('should throw TypeError for unsupported image URL types', async () => {

@@ -7,13 +7,13 @@ export type LLMRoleType = 'user' | 'system' | 'assistant' | 'function' | 'tool';
 export type ChatResponseFormat =
   | { type: 'json_object' }
   | {
-      json_schema: {
-        name: string;
-        schema: Record<string, any>;
-        strict?: boolean;
-      };
-      type: 'json_schema';
+    json_schema: {
+      name: string;
+      schema: Record<string, any>;
+      strict?: boolean;
     };
+    type: 'json_schema';
+  };
 
 interface UserMessageContentPartThinking {
   signature: string;
@@ -33,6 +33,13 @@ interface UserMessageContentPartImage {
   type: 'image_url';
 }
 
+interface UserMessageContentPartFile {
+  file_url: {
+    url: string;
+  };
+  type: 'file_url';
+}
+
 interface UserMessageContentPartVideo {
   type: 'video_url';
   video_url: { url: string };
@@ -41,6 +48,7 @@ interface UserMessageContentPartVideo {
 export type UserMessageContentPart =
   | UserMessageContentPartText
   | UserMessageContentPartImage
+  | UserMessageContentPartFile
   | UserMessageContentPartVideo
   | UserMessageContentPartThinking;
 
