@@ -1,0 +1,35 @@
+# Ingress for external access to LobeHub services
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: lobehub-ingress
+  namespace: lobehub
+  labels:
+    app: lobehub
+    tier: ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: lobehub.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: lobehub
+            port:
+              number: 3210
+  - host: searxng.local
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: searxng
+            port:
+              number: 8080

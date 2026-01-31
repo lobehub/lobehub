@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lobehub
+  labels:
+    name: lobehub
+    environment: development
+    app: lobehub-stack
