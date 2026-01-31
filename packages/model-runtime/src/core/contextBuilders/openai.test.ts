@@ -397,6 +397,53 @@ describe('convertOpenAIResponseInputs', () => {
       { content: '杭州天气如何', role: 'user' },
     ]);
   });
+
+  it('should handle openai and claude mixed message', async () => {
+    // See: https://github.com/lobehub/lobehub/pull/12017
+    const messages: OpenAIChatMessage[] = [
+      {
+        content: 'system prompts',
+        role: 'system',
+      },
+      {
+        content: '你是谁',
+        role: 'user',
+      },
+      {
+        content: [
+          {
+            signature: 'E',
+            thinking: 'thoughts',
+            type: 'thinking',
+          },
+          {
+            text: '我是 Claude',
+            type: 'text',
+          },
+        ],
+        role: 'assistant',
+        reasoning: {
+          content: 'The user is asking',
+          duration: 110,
+          // @ts-expect-error: ignore
+          signature: 'E',
+        },
+      },
+    ];
+    const result = await convertOpenAIResponseInputs(messages);
+    expect(result).toEqual([
+      { content: 'system prompts', role: 'developer' },
+      { content: '你是谁', role: 'user' },
+      {
+        summary: [{ text: 'The user is asking', type: 'summary_text' }],
+        type: 'reasoning',
+      },
+      {
+        content: [{ text: '我是 Claude', type: 'output_text' }],
+        role: 'assistant',
+      },
+    ]);
+  });
 });
 
 describe('convertImageUrlToFile', () => {
