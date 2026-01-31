@@ -14,6 +14,11 @@ const POLL_TIMEOUT_MS = 15_000;
 
 interface LobehubSkillServerItemProps {
   /**
+   * Optional agent ID to use instead of currentAgentConfig
+   * Used in group profile to specify which member's plugins to toggle
+   */
+  agentId?: string;
+  /**
    * Display label for the provider
    */
   label: string;
@@ -23,7 +28,7 @@ interface LobehubSkillServerItemProps {
   provider: string;
 }
 
-const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, label }) => {
+const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, label, agentId }) => {
   const { t } = useTranslation('setting');
   const [isConnecting, setIsConnecting] = useState(false);
   const [isToggling, setIsToggling] = useState(false);
@@ -37,6 +42,10 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
   const server = useToolStore(lobehubSkillStoreSelectors.getServerByIdentifier(provider));
   const checkStatus = useToolStore((s) => s.checkLobehubSkillStatus);
   const getAuthorizeUrl = useToolStore((s) => s.getLobehubSkillAuthorizeUrl);
+
+  // Get effective agent ID (agentId prop or current active agent)
+  const activeAgentId = useAgentStore((s) => s.activeAgentId);
+  const effectiveAgentId = agentId || activeAgentId || '';
 
   const cleanup = useCallback(() => {
     if (windowCheckIntervalRef.current) {
@@ -129,10 +138,23 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
   );
 
   const pluginId = server ? server.identifier : '';
-  const [checked, togglePlugin] = useAgentStore((s) => [
-    agentSelectors.currentAgentPlugins(s).includes(pluginId),
-    s.togglePlugin,
-  ]);
+  const plugins = useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins || [];
+  const checked = plugins.includes(pluginId);
+  const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
+
+  // Toggle plugin for the effective agent
+  const togglePlugin = useCallback(
+    async (pluginIdToToggle: string) => {
+      if (!effectiveAgentId) return;
+      const currentPlugins = plugins;
+      const hasPlugin = currentPlugins.includes(pluginIdToToggle);
+      const newPlugins = hasPlugin
+        ? currentPlugins.filter((id) => id !== pluginIdToToggle)
+        : [...currentPlugins, pluginIdToToggle];
+      await updateAgentConfigById(effectiveAgentId, { plugins: newPlugins });
+    },
+    [effectiveAgentId, plugins, updateAgentConfigById],
+  );
 
   // Listen for OAuth success message from popup window
   useEffect(() => {
@@ -156,9 +178,10 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
           .lobehubSkillServers?.find((s) => s.identifier === provider);
         if (latestServer?.status === LobehubSkillStatus.CONNECTED) {
           const newPluginId = latestServer.identifier;
-          const isAlreadyEnabled = agentSelectors
-            .currentAgentPlugins(useAgentStore.getState())
-            .includes(newPluginId);
+          const currentAgentPlugins =
+            agentSelectors.getAgentConfigById(effectiveAgentId)(useAgentStore.getState())
+              ?.plugins || [];
+          const isAlreadyEnabled = currentAgentPlugins.includes(newPluginId);
           if (!isAlreadyEnabled) {
             console.log('[LobehubSkill] Auto-enabling plugin:', newPluginId);
             togglePlugin(newPluginId);
@@ -169,7 +192,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [provider, cleanup, checkStatus, togglePlugin]);
+  }, [provider, cleanup, checkStatus, togglePlugin, effectiveAgentId]);
 
   const handleConnect = async () => {
     // 只有已连接状态才阻止重新连接

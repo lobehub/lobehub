@@ -16,6 +16,11 @@ const POLL_TIMEOUT_MS = 15_000; // 15 秒超时
 
 interface KlavisServerItemProps {
   /**
+   * Optional agent ID to use instead of currentAgentConfig
+   * Used in group profile to specify which member's plugins to toggle
+   */
+  agentId?: string;
+  /**
    * Identifier used for storage (e.g., 'google-calendar')
    */
   identifier: string;
@@ -28,7 +33,7 @@ interface KlavisServerItemProps {
 }
 
 const KlavisServerItem = memo<KlavisServerItemProps>(
-  ({ identifier, label, server, serverName }) => {
+  ({ identifier, label, server, serverName, agentId }) => {
     const { t } = useTranslation('setting');
     const [isConnecting, setIsConnecting] = useState(false);
     const [isToggling, setIsToggling] = useState(false);
@@ -42,6 +47,10 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
     const userId = useUserStore(userProfileSelectors.userId);
     const createKlavisServer = useToolStore((s) => s.createKlavisServer);
     const refreshKlavisServerTools = useToolStore((s) => s.refreshKlavisServerTools);
+
+    // Get effective agent ID (agentId prop or current active agent)
+    const activeAgentId = useAgentStore((s) => s.activeAgentId);
+    const effectiveAgentId = agentId || activeAgentId || '';
 
     // 清理所有定时器
     const cleanup = useCallback(() => {
@@ -162,10 +171,24 @@ const KlavisServerItem = memo<KlavisServerItemProps>(
 
     // Get plugin ID for this server (使用 identifier 作为 pluginId)
     const pluginId = server ? server.identifier : '';
-    const [checked, togglePlugin] = useAgentStore((s) => [
-      agentSelectors.currentAgentPlugins(s).includes(pluginId),
-      s.togglePlugin,
-    ]);
+    const plugins =
+      useAgentStore(agentSelectors.getAgentConfigById(effectiveAgentId))?.plugins || [];
+    const checked = plugins.includes(pluginId);
+    const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
+
+    // Toggle plugin for the effective agent
+    const togglePlugin = useCallback(
+      async (pluginIdToToggle: string) => {
+        if (!effectiveAgentId) return;
+        const currentPlugins = plugins;
+        const hasPlugin = currentPlugins.includes(pluginIdToToggle);
+        const newPlugins = hasPlugin
+          ? currentPlugins.filter((id) => id !== pluginIdToToggle)
+          : [...currentPlugins, pluginIdToToggle];
+        await updateAgentConfigById(effectiveAgentId, { plugins: newPlugins });
+      },
+      [effectiveAgentId, plugins, updateAgentConfigById],
+    );
 
     const handleConnect = async () => {
       if (!userId) {
