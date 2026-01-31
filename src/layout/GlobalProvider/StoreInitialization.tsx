@@ -1,7 +1,7 @@
 'use client';
 
 import { INBOX_SESSION_ID } from '@lobechat/const';
-import { memo } from 'react';
+import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
 
@@ -16,6 +16,10 @@ import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 import { useUserMemoryStore } from '@/store/userMemory';
+import {
+  AI_PROVIDER_RUNTIME_BROADCAST_CHANNEL,
+  getBroadcastSourceId,
+} from '@/utils/client/broadcast';
 
 import { useUserStateRedirect } from './useUserStateRedirect';
 
@@ -37,6 +41,7 @@ const StoreInitialization = memo(() => {
 
   const useInitBuiltinAgent = useAgentStore((s) => s.useInitBuiltinAgent);
   const useInitAiProviderKeyVaults = useAiInfraStore((s) => s.useFetchAiProviderRuntimeState);
+  const refreshAiProviderRuntimeState = useAiInfraStore((s) => s.refreshAiProviderRuntimeState);
   const useInitIdentities = useUserMemoryStore((s) => s.useInitIdentities);
 
   // init the system preference
@@ -87,6 +92,26 @@ const StoreInitialization = memo(() => {
   const mobile = useIsMobile();
 
   useStoreUpdater('isMobile', mobile);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
+    const sourceId = getBroadcastSourceId();
+    if (!sourceId) return;
+
+    const channel = new BroadcastChannel(AI_PROVIDER_RUNTIME_BROADCAST_CHANNEL);
+    const handleMessage = (event: MessageEvent<{ sourceId?: string; type?: string }>) => {
+      if (event.data?.type !== 'refresh-ai-provider-runtime') return;
+      if (event.data.sourceId === sourceId) return;
+      void refreshAiProviderRuntimeState({ broadcast: false });
+    };
+
+    channel.addEventListener('message', handleMessage);
+
+    return () => {
+      channel.removeEventListener('message', handleMessage);
+      channel.close();
+    };
+  }, [refreshAiProviderRuntimeState]);
 
   return null;
 });

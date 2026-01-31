@@ -28,6 +28,10 @@ import {
   type UpdateAiProviderConfigParams,
   type UpdateAiProviderParams,
 } from '@/types/aiProvider';
+import {
+  AI_PROVIDER_RUNTIME_BROADCAST_CHANNEL,
+  getBroadcastSourceId,
+} from '@/utils/client/broadcast';
 
 export type ProviderModelListItem = {
   abilities: ModelAbilities;
@@ -175,7 +179,7 @@ export interface AiProviderAction {
   internal_toggleAiProviderLoading: (id: string, loading: boolean) => void;
   refreshAiProviderDetail: () => Promise<void>;
   refreshAiProviderList: () => Promise<void>;
-  refreshAiProviderRuntimeState: () => Promise<void>;
+  refreshAiProviderRuntimeState: (options?: { broadcast?: boolean }) => Promise<void>;
   removeAiProvider: (id: string) => Promise<void>;
   toggleProviderEnabled: (id: string, enabled: boolean) => Promise<void>;
   updateAiProvider: (id: string, value: UpdateAiProviderParams) => Promise<void>;
@@ -245,11 +249,20 @@ export const createAiProviderSlice: StateCreator<
     await mutate(AiProviderSwrKey.fetchAiProviderList);
     await get().refreshAiProviderRuntimeState();
   },
-  refreshAiProviderRuntimeState: async () => {
+  refreshAiProviderRuntimeState: async (options) => {
     await Promise.all([
       mutate([AiProviderSwrKey.fetchAiProviderRuntimeState, true]),
       mutate([AiProviderSwrKey.fetchAiProviderRuntimeState, false]),
     ]);
+
+    if (options?.broadcast !== false && typeof window !== 'undefined') {
+      const sourceId = getBroadcastSourceId();
+      if (sourceId && 'BroadcastChannel' in window) {
+        const channel = new BroadcastChannel(AI_PROVIDER_RUNTIME_BROADCAST_CHANNEL);
+        channel.postMessage({ sourceId, type: 'refresh-ai-provider-runtime' });
+        channel.close();
+      }
+    }
   },
   removeAiProvider: async (id) => {
     await aiProviderService.deleteAiProvider(id);
