@@ -874,6 +874,32 @@ describe('AiInfraRepos', () => {
       // 无 settings
       expect(merged?.settings).toBeUndefined();
     });
+
+    it('should inject default settings for a builtin model with search enabled but no settings, when no user model exists', async () => {
+      const mockProviders = [
+        { enabled: true, id: 'qwen', name: 'Qwen', source: 'builtin' as const },
+      ];
+
+      // 后端内置模型：开启了 search，但没有 settings 字段
+      const builtinModel = {
+        id: 'qwen-plus',
+        enabled: true,
+        type: 'chat' as const,
+        abilities: { search: true },
+      };
+
+      vi.spyOn(repo.aiModelModel, 'getAllModels').mockResolvedValue([]);
+      vi.spyOn(repo, 'getAiProviderList').mockResolvedValue(mockProviders);
+      vi.spyOn(repo as any, 'fetchBuiltinModels').mockResolvedValue([builtinModel]);
+
+      const result = await repo.getEnabledModels();
+
+      const model = result.find((m) => m.id === 'qwen-plus');
+      expect(model).toBeDefined();
+      expect(model?.abilities?.search).toBe(true);
+
+      expect(model?.settings).toEqual({ searchImpl: 'params' });
+    });
   });
 
   describe('getAiProviderModelList', () => {
