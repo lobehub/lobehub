@@ -5,13 +5,21 @@ import { disableStreamModels, systemToUserModels } from '../../const/models';
 import { ChatStreamPayload, OpenAIChatMessage } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 
+type ConvertMessageContentOptions = {
+  forceImageBase64?: boolean;
+};
+
 export const convertMessageContent = async (
   content: OpenAI.ChatCompletionContentPart,
+  options?: ConvertMessageContentOptions,
 ): Promise<OpenAI.ChatCompletionContentPart> => {
   if (content.type === 'image_url') {
     const { type } = parseDataUri(content.image_url.url);
 
-    if (type === 'url' && process.env.LLM_VISION_IMAGE_USE_BASE64 === '1') {
+    const shouldUseBase64 =
+      options?.forceImageBase64 || process.env.LLM_VISION_IMAGE_USE_BASE64 === '1';
+
+    if (type === 'url' && shouldUseBase64) {
       const { base64, mimeType } = await imageUrlToBase64(content.image_url.url);
 
       return {
@@ -24,7 +32,10 @@ export const convertMessageContent = async (
   return content;
 };
 
-export const convertOpenAIMessages = async (messages: OpenAI.ChatCompletionMessageParam[]) => {
+export const convertOpenAIMessages = async (
+  messages: OpenAI.ChatCompletionMessageParam[],
+  options?: ConvertMessageContentOptions,
+) => {
   return (await Promise.all(
     messages.map(async (message) => {
       const msg = message as any;
@@ -37,7 +48,7 @@ export const convertOpenAIMessages = async (messages: OpenAI.ChatCompletionMessa
             ? message.content
             : await Promise.all(
                 (message.content || []).map((c) =>
-                  convertMessageContent(c as OpenAI.ChatCompletionContentPart),
+                  convertMessageContent(c as OpenAI.ChatCompletionContentPart, options),
                 ),
               ),
         role: msg.role,
@@ -59,7 +70,10 @@ export const convertOpenAIMessages = async (messages: OpenAI.ChatCompletionMessa
   )) as OpenAI.ChatCompletionMessageParam[];
 };
 
-export const convertOpenAIResponseInputs = async (messages: OpenAIChatMessage[]) => {
+export const convertOpenAIResponseInputs = async (
+  messages: OpenAIChatMessage[],
+  options?: ConvertMessageContentOptions,
+) => {
   let input: OpenAI.Responses.ResponseInputItem[] = [];
   await Promise.all(
     messages.map(async (message) => {
@@ -113,7 +127,10 @@ export const convertOpenAIResponseInputs = async (messages: OpenAIChatMessage[])
                     return { ...c, type: 'input_text' };
                   }
 
-                  const image = await convertMessageContent(c as OpenAI.ChatCompletionContentPart);
+                  const image = await convertMessageContent(
+                    c as OpenAI.ChatCompletionContentPart,
+                    options,
+                  );
                   return {
                     image_url: (image as OpenAI.ChatCompletionContentPartImage).image_url?.url,
                     type: 'input_image',

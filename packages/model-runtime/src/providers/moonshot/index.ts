@@ -15,6 +15,7 @@ export interface MoonshotModelCard {
 export const params = {
   baseURL: 'https://api.moonshot.cn/v1',
   chatCompletion: {
+    forceImageBase64: true,
     handlePayload: (payload: ChatStreamPayload) => {
       const { enabledSearch, messages, model, temperature, thinking, tools, ...rest } = payload;
 
