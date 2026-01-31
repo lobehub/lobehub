@@ -1,5 +1,7 @@
 import debug from 'debug';
 
+import { documentService } from '@/services/document';
+import { fileService } from '@/services/file';
 import { resourceService } from '@/services/resource';
 import { type StoreSetter } from '@/store/types';
 import type { CreateResourceParams, ResourceItem, UpdateResourceParams } from '@/types/resource';

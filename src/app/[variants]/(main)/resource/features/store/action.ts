@@ -138,9 +138,7 @@ export const store: CreateStore = (publicState) => (set, get) => ({
 
     switch (type) {
       case 'delete': {
-        // Use optimistic deleteResource for instant batch delete
-        // All items disappear immediately, sync happens in background
-        await Promise.all(selectedFileIds.map((id) => fileStore.deleteResource(id)));
+        await fileStore.deleteResources(selectedFileIds);
 
         set({ selectedFileIds: [] });
         return;
