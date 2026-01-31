@@ -1,4 +1,5 @@
 {
+  "arguments.moreParams": "等 {{count}} 个参数",
   "arguments.title": "参数列表",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "获取可用模型",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "获取可用技能",
