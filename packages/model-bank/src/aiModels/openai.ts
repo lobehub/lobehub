@@ -164,7 +164,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-13',
     settings: {
-      extendParams: ['gpt5_1ReasoningEffort'],
+      extendParams: ['reasoningEffort'],
       searchImpl: 'params',
     },
     type: 'chat',
@@ -191,7 +191,7 @@ export const openaiChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2025-11-13',
     settings: {
-      extendParams: ['gpt5_1ReasoningEffort'],
+      extendParams: ['reasoningEffort'],
       searchImpl: 'params',
     },
     type: 'chat',

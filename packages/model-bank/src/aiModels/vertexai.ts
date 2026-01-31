@@ -5,6 +5,36 @@ import { imagenGenParameters, nanoBananaParameters } from './google';
 const vertexaiChatModels: AIChatModelCard[] = [
   {
     abilities: {
+      imageOutput: true,
+      reasoning: true,
+      search: true,
+      vision: true,
+    },
+    contextWindowTokens: 131_072 + 32_768,
+    description:
+      "Gemini 3 Pro Image (Nano Banana Pro) is Google's image generation model that also supports multimodal conversations.",
+    displayName: 'Nano Banana Pro',
+    enabled: true,
+    id: 'gemini-3-pro-image-preview',
+    maxOutput: 32_768,
+    pricing: {
+      approximatePricePerImage: 0.134,
+      units: [
+        { name: 'imageOutput', rate: 120, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 12, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    releasedAt: '2025-11-20',
+    settings: {
+      extendParams: ['thinkingBudget'],
+      searchImpl: 'params',
+      searchProvider: 'google',
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
       functionCall: true,
       reasoning: true,
       search: true,
@@ -108,7 +138,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
     },
     contextWindowTokens: 131_072 + 32_768,
     description:
-      'Gemini 3 Pro Image（Nano Banana Pro）是 Google 的图像生成模型，同时支持多模态对话。',
+      "Gemini 3 Pro Image (Nano Banana Pro) is Google's image generation model that also supports multimodal conversations.",
     displayName: 'Nano Banana Pro',
     enabled: true,
     id: 'gemini-3-pro-image-preview',

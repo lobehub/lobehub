@@ -76,10 +76,10 @@ export const normalizeImageModel = async (
   const fallbackParametersPromise = model.parameters
     ? Promise.resolve<ModelParamsSchema | undefined>(model.parameters)
     : getModelPropertyWithFallback<ModelParamsSchema | undefined>(
-        model.id,
-        'parameters',
-        model.providerId,
-      );
+      model.id,
+      'parameters',
+      model.providerId,
+    );
 
   const modelWithPricing = model as AIImageModelCard;
   const fallbackPricingPromise = modelWithPricing.pricing
@@ -320,23 +320,23 @@ export const createAiProviderSlice: StateCreator<
           aiProviderDetailMap:
             currentDetailConfig && Object.keys(detailUpdates).length > 0
               ? {
-                  ...state.aiProviderDetailMap,
-                  [id]: {
-                    ...currentDetailConfig,
-                    ...detailUpdates,
-                  },
-                }
+                ...state.aiProviderDetailMap,
+                [id]: {
+                  ...currentDetailConfig,
+                  ...detailUpdates,
+                },
+              }
               : state.aiProviderDetailMap,
           // Update runtime config for selectors
           aiProviderRuntimeConfig:
             currentRuntimeConfig && Object.keys(updates).length > 0
               ? {
-                  ...state.aiProviderRuntimeConfig,
-                  [id]: {
-                    ...currentRuntimeConfig,
-                    ...updates,
-                  },
-                }
+                ...state.aiProviderRuntimeConfig,
+                [id]: {
+                  ...currentRuntimeConfig,
+                  ...updates,
+                },
+              }
               : state.aiProviderRuntimeConfig,
         };
       },

@@ -157,6 +157,31 @@ const qwenChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
+      reasoning: true,
+      search: true,
+    },
+    contextWindowTokens: 131_072,
+    description:
+      'deepseek-v3.2 introduces sparse attention mechanism, aiming to improve training and inference efficiency when processing long texts, priced lower than deepseek-v3.1.',
+    displayName: 'DeepSeek V3.2',
+    id: 'deepseek-v3.2',
+    maxOutput: 65_536,
+    pricing: {
+      currency: 'CNY',
+      units: [
+        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
+      ],
+    },
+    settings: {
+      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
+    },
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       reasoning: true,
       search: true,
     },
@@ -180,6 +205,7 @@ const qwenChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
+      functionCall: true,
       reasoning: true,
       search: true,
     },
@@ -1368,7 +1394,7 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     config: {
-      deploymentName: 'qwen3-omni-flash-2025-09-15',
+      deploymentName: 'qwen3-omni-flash-2025-12-01',
     },
     contextWindowTokens: 65_536,
     description:
@@ -1381,10 +1407,11 @@ const qwenChatModels: AIChatModelCard[] = [
       currency: 'CNY',
       units: [
         { name: 'textInput', rate: 1.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'audioInput', rate: 15.8, strategy: 'fixed', unit: 'millionTokens' },
+        { name: 'imageInput', rate: 3.3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 6.9, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
-    releasedAt: '2025-09-15',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
