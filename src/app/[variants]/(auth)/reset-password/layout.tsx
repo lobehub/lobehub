@@ -1,16 +1,23 @@
 'use client';
 
-import { redirect } from 'next/navigation';
-import { type PropsWithChildren } from 'react';
+import { type PropsWithChildren, useEffect } from 'react';
 
+import { useRouter } from '@/libs/next/navigation';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 const ResetPasswordLayout = ({ children }: PropsWithChildren) => {
+  const router = useRouter();
   const disableEmailPassword = useServerConfigStore(serverConfigSelectors.disableEmailPassword);
 
+  useEffect(() => {
+    if (disableEmailPassword) {
+      router.replace('/signin');
+    }
+  }, [disableEmailPassword, router]);
+
   if (disableEmailPassword) {
-    redirect('/signin');
+    return null;
   }
 
   return children;
