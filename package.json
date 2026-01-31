@@ -273,7 +273,7 @@
     "langchain": "^0.3.37",
     "langfuse": "^3.38.6",
     "langfuse-core": "^3.38.6",
-    "lucide-react": "^0.562.0",
+    "lucide-react": "^0.563.0",
     "mammoth": "^1.11.0",
     "marked": "^17.0.1",
     "mdast-util-to-markdown": "^2.1.2",
