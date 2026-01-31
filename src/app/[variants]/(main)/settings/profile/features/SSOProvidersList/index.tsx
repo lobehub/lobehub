@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { modal, notification } from '@/components/AntdStaticMethods';
 import AuthIcons from '@/components/AuthIcons';
+import { isBuiltinProvider, normalizeProviderId } from '@/libs/better-auth/utils/client';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
@@ -63,14 +64,24 @@ export const SSOProvidersList = memo(() => {
   };
 
   const handleLinkSSO = async (provider: string) => {
-    if (enableAuthActions) {
-      // Use better-auth native linkSocial API
-      const { linkSocial } = await import('@/libs/better-auth/auth-client');
+    if (!enableAuthActions) return;
+
+    const normalizedProvider = normalizeProviderId(provider);
+    const { linkSocial, oauth2 } = await import('@/libs/better-auth/auth-client');
+
+    if (isBuiltinProvider(normalizedProvider)) {
+      // Use better-auth native linkSocial API for built-in providers
       await linkSocial({
         callbackURL: '/profile',
-        provider: provider as any,
+        provider: normalizedProvider as any,
       });
+      return;
     }
+
+    await oauth2.link({
+      callbackURL: '/profile',
+      providerId: normalizedProvider,
+    });
   };
 
   // Dropdown menu items for linking new providers
