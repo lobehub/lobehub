@@ -228,7 +228,6 @@ export function defineConfig() {
   };
 
   logDefault('Middleware configuration: %O', {
-    enableAuthProtection: appEnv.ENABLE_AUTH_PROTECTION,
     enableOIDC: authEnv.ENABLE_OIDC,
   });
 
