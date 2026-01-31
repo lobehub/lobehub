@@ -468,7 +468,7 @@
   "settingModel.enableReasoningEffort.title": "开启推理强度调整",
   "settingModel.frequencyPenalty.desc": "值越大，用词越丰富多样；值越低，用词更朴实简单",
   "settingModel.frequencyPenalty.title": "词汇丰富度",
-  "settingModel.maxTokens.desc": "单次交互所用的最大 Token 数",
+  "settingModel.maxTokens.desc": "单次交互可输出的最大 Token 数",
   "settingModel.maxTokens.title": "单次回复限制",
   "settingModel.model.desc": "{{provider}} 模型",
   "settingModel.model.title": "模型",

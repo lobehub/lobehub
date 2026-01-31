@@ -525,7 +525,7 @@ export default {
   'settingModel.frequencyPenalty.desc':
     'The higher the value, the more diverse and rich the vocabulary; the lower the value, the simpler and more straightforward the language.',
   'settingModel.frequencyPenalty.title': 'Vocabulary Richness',
-  'settingModel.maxTokens.desc': 'The maximum number of tokens used for each interaction',
+  'settingModel.maxTokens.desc': 'The maximum number of Tokens that can be output in a single interaction',
   'settingModel.maxTokens.title': 'Max Tokens Limit',
   'settingModel.model.desc': '{{provider}} model',
   'settingModel.model.title': 'Model',
