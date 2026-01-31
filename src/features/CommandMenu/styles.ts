@@ -22,6 +22,28 @@ const fadeIn = keyframes`
   }
 `;
 
+const slideUp = keyframes`
+  from {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateY(-20px) scale(0.96);
+    opacity: 0;
+  }
+`;
+
+const fadeOut = keyframes`
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+`;
+
 const pulse = keyframes`
   0% {
     background-position: 200% 0;
@@ -91,6 +113,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     box-shadow: ${cssVar.boxShadowSecondary};
 
     animation: ${slideDown} 0.12s ease-out;
+
+    &[data-closing='true'] {
+      animation: ${slideUp} 0.15s ease-out forwards;
+    }
 
     [cmdk-input] {
       flex: 1;
@@ -275,6 +301,10 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     background: ${cssVar.colorBgMask};
 
     animation: ${fadeIn} 0.1s ease-in-out;
+
+    &[data-closing='true'] {
+      animation: ${fadeOut} 0.15s ease-out forwards;
+    }
   `,
   skeleton: css`
     height: 16px;
