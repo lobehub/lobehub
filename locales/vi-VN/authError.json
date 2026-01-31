@@ -8,6 +8,7 @@
   "codes.DELETED_ACCOUNT_EMAIL": "Email này đã được liên kết với một tài khoản đã bị xóa và không thể sử dụng để đăng ký",
   "codes.EMAIL_CAN_NOT_BE_UPDATED": "Không thể cập nhật email cho tài khoản này",
   "codes.EMAIL_NOT_ALLOWED": "Email này không được phép sử dụng để đăng ký",
+  "codes.EMAIL_NOT_FOUND": "Không tìm thấy email liên kết với tài khoản này. Vui lòng kiểm tra xem tài khoản của bạn đã được liên kết với email chưa.",
   "codes.EMAIL_NOT_VERIFIED": "Vui lòng xác minh email trước",
   "codes.FAILED_TO_CREATE_SESSION": "Không thể tạo phiên đăng nhập",
   "codes.FAILED_TO_CREATE_USER": "Không thể tạo người dùng",

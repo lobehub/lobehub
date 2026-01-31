@@ -8,6 +8,7 @@
   "codes.DELETED_ACCOUNT_EMAIL": "Dit e-mailadres is gekoppeld aan een verwijderd account en kan niet worden gebruikt voor registratie",
   "codes.EMAIL_CAN_NOT_BE_UPDATED": "E-mailadres kan niet worden bijgewerkt voor dit account",
   "codes.EMAIL_NOT_ALLOWED": "E-mailadres niet toegestaan voor registratie",
+  "codes.EMAIL_NOT_FOUND": "Geen e-mailadres gekoppeld aan dit account. Controleer of er een e-mailadres aan je account is gekoppeld.",
   "codes.EMAIL_NOT_VERIFIED": "Verifieer eerst je e-mailadres",
   "codes.FAILED_TO_CREATE_SESSION": "Sessie aanmaken mislukt",
   "codes.FAILED_TO_CREATE_USER": "Gebruiker aanmaken mislukt",

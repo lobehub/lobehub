@@ -8,6 +8,7 @@
   "codes.DELETED_ACCOUNT_EMAIL": "이 이메일은 삭제된 계정과 연결되어 있어 회원가입에 사용할 수 없습니다",
   "codes.EMAIL_CAN_NOT_BE_UPDATED": "현재 계정의 이메일은 수정할 수 없습니다",
   "codes.EMAIL_NOT_ALLOWED": "이 이메일은 회원가입에 사용할 수 없습니다",
+  "codes.EMAIL_NOT_FOUND": "이 계정에 연결된 이메일이 없습니다. 계정에 이메일이 등록되어 있는지 확인해 주세요.",
   "codes.EMAIL_NOT_VERIFIED": "이메일 인증을 먼저 완료해 주세요",
   "codes.FAILED_TO_CREATE_SESSION": "세션 생성에 실패했습니다",
   "codes.FAILED_TO_CREATE_USER": "사용자 생성에 실패했습니다",

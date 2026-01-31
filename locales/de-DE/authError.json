@@ -8,6 +8,7 @@
   "codes.DELETED_ACCOUNT_EMAIL": "Diese E-Mail-Adresse ist mit einem gelöschten Konto verknüpft und kann nicht für die Registrierung verwendet werden",
   "codes.EMAIL_CAN_NOT_BE_UPDATED": "E-Mail-Adresse kann für dieses Konto nicht aktualisiert werden",
   "codes.EMAIL_NOT_ALLOWED": "Diese E-Mail-Adresse ist für die Registrierung nicht zugelassen",
+  "codes.EMAIL_NOT_FOUND": "Keine E-Mail mit diesem Konto verknüpft. Bitte überprüfen Sie, ob Ihrem Konto eine E-Mail-Adresse zugeordnet ist.",
   "codes.EMAIL_NOT_VERIFIED": "Bitte verifiziere zuerst deine E-Mail-Adresse",
   "codes.FAILED_TO_CREATE_SESSION": "Sitzung konnte nicht erstellt werden",
   "codes.FAILED_TO_CREATE_USER": "Benutzer konnte nicht erstellt werden",

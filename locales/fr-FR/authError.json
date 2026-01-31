@@ -8,6 +8,7 @@
   "codes.DELETED_ACCOUNT_EMAIL": "Cet e-mail est associé à un compte supprimé et ne peut pas être utilisé pour l'inscription",
   "codes.EMAIL_CAN_NOT_BE_UPDATED": "L'adresse e-mail ne peut pas être mise à jour pour ce compte",
   "codes.EMAIL_NOT_ALLOWED": "Adresse e-mail non autorisée pour l'inscription",
+  "codes.EMAIL_NOT_FOUND": "Aucune adresse e-mail n’est associée à ce compte. Veuillez vérifier si une adresse e-mail y est liée.",
   "codes.EMAIL_NOT_VERIFIED": "Veuillez d'abord vérifier votre adresse e-mail",
   "codes.FAILED_TO_CREATE_SESSION": "Échec de la création de la session",
   "codes.FAILED_TO_CREATE_USER": "Échec de la création de l'utilisateur",
