@@ -149,6 +149,16 @@ The current authentication system requires email. Please configure a valid email
 
 This applies to all authentication methods, including SSO providers like Casdoor. Always ensure users have valid email addresses configured.
 
+### How do I enable SSO-only mode (disable email/password login)?
+
+Set `AUTH_DISABLE_EMAIL_PASSWORD=1` to disable email/password authentication. When enabled:
+
+- The email input will be hidden on the login page, only SSO buttons are displayed
+- The signup page will redirect to the login page
+- Users can only log in via configured SSO providers
+
+Make sure you have at least one SSO provider configured via `AUTH_SSO_PROVIDERS` before enabling this option.
+
 ### How do I restrict registration to specific emails or domains?
 
 Set the `AUTH_ALLOWED_EMAILS` environment variable with a comma-separated list of allowed emails or domains. For example:

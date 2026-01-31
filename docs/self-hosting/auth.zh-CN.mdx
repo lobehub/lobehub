@@ -150,6 +150,16 @@ Better Auth 支持内置提供商（Google、GitHub、Microsoft、Apple、AWS Co
 
 这适用于所有身份验证方式，包括 Casdoor 等 SSO 提供商。请确保用户配置了有效的邮箱地址。
 
+### 如何启用仅 SSO 模式（禁用邮箱密码登录）？
+
+设置 `AUTH_DISABLE_EMAIL_PASSWORD=1` 可禁用邮箱密码登录。启用后：
+
+- 登录页面将隐藏邮箱输入框，仅显示 SSO 登录按钮
+- 注册页面将重定向到登录页面
+- 用户只能通过配置的 SSO 提供商登录
+
+启用此选项前，请确保已通过 `AUTH_SSO_PROVIDERS` 配置了至少一个 SSO 提供商。
+
 ### 如何限制只允许特定邮箱或域名注册？
 
 设置 `AUTH_ALLOWED_EMAILS` 环境变量，支持完整邮箱地址或域名，以逗号分隔。例如：
