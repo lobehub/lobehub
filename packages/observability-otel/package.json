@@ -18,11 +18,11 @@
     "@opentelemetry/instrumentation": "^0.208.0",
     "@opentelemetry/instrumentation-http": "^0.208.0",
     "@opentelemetry/instrumentation-pg": "^0.61.0",
-    "@opentelemetry/resources": "^2.2.0",
-    "@opentelemetry/sdk-metrics": "^2.2.0",
+    "@opentelemetry/resources": "^2.5.0",
+    "@opentelemetry/sdk-metrics": "^2.5.0",
     "@opentelemetry/sdk-node": "^0.208.0",
-    "@opentelemetry/sdk-trace-node": "^2.2.0",
-    "@opentelemetry/semantic-conventions": "^1.38.0",
+    "@opentelemetry/sdk-trace-node": "^2.5.0",
+    "@opentelemetry/semantic-conventions": "^1.39.0",
     "@vercel/otel": "^2.1.0"
   }
 }

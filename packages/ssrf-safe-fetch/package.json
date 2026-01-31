@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "node-fetch": "^3.3.2",
-    "request-filtering-agent": "^3.0.2"
+    "request-filtering-agent": "^3.2.0"
   },
   "devDependencies": {
     "vitest": "^3.2.4"

@@ -12,14 +12,14 @@
   "dependencies": {
     "@lobechat/const": "workspace:*",
     "@lobechat/prompts": "workspace:*",
-    "type-fest": "^4.18.3"
+    "type-fest": "^4.41.0"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*"
   },
   "peerDependencies": {
-    "@lobehub/ui": "^4",
-    "antd": "^6",
+    "@lobehub/ui": "^4.32.2",
+    "antd": "^6.2.2",
     "lucide-react": "*",
     "next": "*",
     "react": "*",

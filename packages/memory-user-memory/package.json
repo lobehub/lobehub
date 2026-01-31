@@ -20,20 +20,20 @@
     "@lobechat/context-engine": "workspace:*",
     "@lobechat/model-runtime": "workspace:*",
     "@lobechat/prompts": "workspace:*",
-    "dayjs": "^1.11.11",
+    "dayjs": "^1.11.19",
     "dotenv": "^17.2.3",
-    "ora": "^9.0.0",
+    "ora": "^9.1.0",
     "unist-builder": "^4.0.0",
     "xast-util-to-xml": "^4.0.0",
     "xastscript": "^4.0.0",
-    "zod-to-json-schema": "^3.24.6"
+    "zod-to-json-schema": "^3.25.1"
   },
   "devDependencies": {
     "@lobechat/types": "workspace:*",
     "@types/json-schema": "^7.0.15",
     "@types/xast": "^2.0.4",
     "promptfoo": "^0.120.17",
-    "tsx": "^4.20.6"
+    "tsx": "^4.21.0"
   },
   "peerDependencies": {
     "zod": "^3.25.76"
