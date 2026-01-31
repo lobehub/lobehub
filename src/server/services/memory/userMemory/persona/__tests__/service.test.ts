@@ -13,14 +13,12 @@ var aiInfraMocks:
   | undefined
   | {
       getAiProviderRuntimeState: ReturnType<typeof vi.fn>;
-      tryMatchingModelFrom: ReturnType<typeof vi.fn>;
       tryMatchingProviderFrom: ReturnType<typeof vi.fn>;
     };
 
 vi.mock('@/database/repositories/aiInfra', () => {
   aiInfraMocks = {
     getAiProviderRuntimeState: vi.fn(),
-    tryMatchingModelFrom: vi.fn(),
     tryMatchingProviderFrom: vi.fn(),
   };
 
@@ -28,7 +26,6 @@ vi.mock('@/database/repositories/aiInfra', () => {
     getAiProviderRuntimeState: aiInfraMocks!.getAiProviderRuntimeState,
   })) as unknown as typeof import('@/database/repositories/aiInfra').AiInfraRepos;
 
-  (AiInfraRepos as any).tryMatchingModelFrom = aiInfraMocks!.tryMatchingModelFrom;
   (AiInfraRepos as any).tryMatchingProviderFrom = aiInfraMocks!.tryMatchingProviderFrom;
 
   return { AiInfraRepos };
@@ -85,9 +82,7 @@ const userId = 'user-persona-service';
 beforeEach(async () => {
   toolCall.mockClear();
   aiInfraMocks!.getAiProviderRuntimeState.mockReset();
-  aiInfraMocks!.tryMatchingModelFrom.mockReset();
   aiInfraMocks!.tryMatchingProviderFrom.mockReset();
-  aiInfraMocks!.tryMatchingModelFrom.mockResolvedValue('openai');
   aiInfraMocks!.tryMatchingProviderFrom.mockResolvedValue('openai');
   aiInfraMocks!.getAiProviderRuntimeState.mockResolvedValue({
     enabledAiModels: [
