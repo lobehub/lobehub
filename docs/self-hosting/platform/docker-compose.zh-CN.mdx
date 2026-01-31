@@ -262,7 +262,7 @@ mv .env.zh-CN.example .env
 
 这些服务可以通过自建或者在线云服务组合搭配，以满足不同层次的部署需求。本文中，我们提供了完全基于开源自建服务的 Docker Compose 配置，你可以直接使用这份配置文件来启动 LobeHub，也可以对之进行修改以适应你的需求。
 
-我们默认使用 [RustFS](https://github.com/rustfs/rustfs) 作为本地 S3 对象存储服务。如需配置 SSO 登录鉴权服务，请参考 [身份验证服务](/zh/docs/self-hosting/advanced/auth) 文档。
+我们默认使用 [RustFS](https://github.com/rustfs/rustfs) 作为本地 S3 对象存储服务。如需配置 SSO 登录鉴权服务，请参考 [身份验证服务](/zh/docs/self-hosting/auth) 文档。
 
 <Callout type="warning">
   如果你的网络拓扑较为复杂，请先确保在你的网络环境中这些服务能够正常通讯。
@@ -346,7 +346,7 @@ environment:
 
 ## 配置身份验证
 
-如需配置 SSO 登录鉴权服务（如 Casdoor、Logto 等），请参考 [身份验证服务](/zh/docs/self-hosting/advanced/auth) 文档。
+如需配置 SSO 登录鉴权服务（如 Casdoor、Logto 等），请参考 [身份验证服务](/zh/docs/self-hosting/auth) 文档。
 
 [docker-pulls-link]: https://hub.docker.com/r/lobehub/lobehub
 [docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobehub?color=45cc11&labelColor=black&style=flat-square

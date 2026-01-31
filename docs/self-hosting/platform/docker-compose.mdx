@@ -265,7 +265,7 @@ Generally, to fully run the LobeHub database version, you will need at least the
 
 These services can be combined through self-hosting or online cloud services to meet various deployment needs. In this article, we provide a Docker Compose configuration entirely based on open-source self-hosted services, which can be used directly to start the LobeHub database version or modified to suit your requirements.
 
-We use [RustFS](https://github.com/rustfs/rustfs) as the local S3 object storage service by default. To configure SSO authentication services, please refer to the [Authentication Services](/docs/self-hosting/advanced/auth) documentation.
+We use [RustFS](https://github.com/rustfs/rustfs) as the local S3 object storage service by default. To configure SSO authentication services, please refer to the [Authentication Services](/docs/self-hosting/auth) documentation.
 
 <Callout type="warning">
   If your network topology is complex, please make sure these services can communicate properly
@@ -350,7 +350,7 @@ If `INTERNAL_APP_URL` is not set, it defaults to `APP_URL`.
 
 ## Configuring Authentication
 
-To configure SSO authentication services (such as Casdoor, Logto, etc.), please refer to the [Authentication Services](/docs/self-hosting/advanced/auth) documentation.
+To configure SSO authentication services (such as Casdoor, Logto, etc.), please refer to the [Authentication Services](/docs/self-hosting/auth) documentation.
 
 [docker-pulls-link]: https://hub.docker.com/r/lobehub/lobehub
 [docker-pulls-shield]: https://img.shields.io/docker/pulls/lobehub/lobehub?color=45cc11&labelColor=black&style=flat-square
