@@ -1171,6 +1171,188 @@ describe('ChatService', () => {
         );
       });
     });
+
+    describe('historyCount functionality', () => {
+      it('should include historyCount + 1 messages when historyCount is set', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+
+        // Create 5 messages: 4 history messages + 1 current user message
+        const messages = [
+          {
+            id: '1',
+            content: 'History 1',
+            role: 'user',
+            createdAt: Date.now(),
+            meta: {},
+            updatedAt: Date.now(),
+          },
+          {
+            id: '2',
+            content: 'Response 1',
+            role: 'assistant',
+            createdAt: Date.now(),
+            meta: {},
+            updatedAt: Date.now(),
+          },
+          {
+            id: '3',
+            content: 'History 2',
+            role: 'user',
+            createdAt: Date.now(),
+            meta: {},
+            updatedAt: Date.now(),
+          },
+          {
+            id: '4',
+            content: 'Response 2',
+            role: 'assistant',
+            createdAt: Date.now(),
+            meta: {},
+            updatedAt: Date.now(),
+          },
+          {
+            id: '5',
+            content: 'Current message',
+            role: 'user',
+            createdAt: Date.now(),
+            meta: {},
+            updatedAt: Date.now(),
+          },
+        ] as UIChatMessage[];
+
+        // Mock historyCount to 2 (meaning 2 history messages + 1 current = 3 total)
+        vi.spyOn(agentChatConfigSelectors, 'enableHistoryCount').mockReturnValue(true);
+        vi.spyOn(agentChatConfigSelectors, 'historyCount').mockReturnValue(2);
+        vi.spyOn(agentChatConfigSelectors, 'currentChatConfig').mockReturnValue({
+          searchMode: 'off',
+        } as any);
+
+        await chatService.createAssistantMessage({
+          messages,
+          plugins: [],
+          model: 'gpt-4',
+          provider: 'openai',
+        });
+
+        // Should keep 3 messages: 2 history + 1 current (historyCount + 1)
+        expect(getChatCompletionSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            messages: expect.arrayContaining([
+              expect.objectContaining({ content: 'History 2', role: 'user' }),
+              expect.objectContaining({ content: 'Response 2', role: 'assistant' }),
+              expect.objectContaining({ content: 'Current message', role: 'user' }),
+            ]),
+          }),
+          undefined,
+        );
+        // Verify only 3 messages are passed
+        const calledMessages = getChatCompletionSpy.mock.calls[0][0].messages;
+        expect(calledMessages).toHaveLength(3);
+      });
+
+      it('should include only 1 message when historyCount is 0', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+
+        const messages = [
+          {
+            id: '1',
+            content: 'History 1',
+            role: 'user',
+            createdAt: Date.now(),
+            meta: {},
+            updatedAt: Date.now(),
+          },
+          {
+            id: '2',
+            content: 'Response 1',
+            role: 'assistant',
+            createdAt: Date.now(),
+            meta: {},
+            updatedAt: Date.now(),
+          },
+          {
+            id: '3',
+            content: 'Current message',
+            role: 'user',
+            createdAt: Date.now(),
+            meta: {},
+            updatedAt: Date.now(),
+          },
+        ] as UIChatMessage[];
+
+        // historyCount = 0 means no history, only current message (0 + 1 = 1)
+        vi.spyOn(agentChatConfigSelectors, 'enableHistoryCount').mockReturnValue(true);
+        vi.spyOn(agentChatConfigSelectors, 'historyCount').mockReturnValue(0);
+        vi.spyOn(agentChatConfigSelectors, 'currentChatConfig').mockReturnValue({
+          searchMode: 'off',
+        } as any);
+
+        await chatService.createAssistantMessage({
+          messages,
+          plugins: [],
+          model: 'gpt-4',
+          provider: 'openai',
+        });
+
+        // Should keep only 1 message: the current user message
+        const calledMessages = getChatCompletionSpy.mock.calls[0][0].messages;
+        expect(calledMessages).toBeDefined();
+        expect(calledMessages).toHaveLength(1);
+        expect(calledMessages![0]).toEqual(
+          expect.objectContaining({ content: 'Current message', role: 'user' }),
+        );
+      });
+
+      it('should include all messages when historyCount is disabled', async () => {
+        const getChatCompletionSpy = vi.spyOn(chatService, 'getChatCompletion');
+
+        const messages = [
+          {
+            id: '1',
+            content: 'History 1',
+            role: 'user',
+            createdAt: Date.now(),
+            meta: {},
+            updatedAt: Date.now(),
+          },
+          {
+            id: '2',
+            content: 'Response 1',
+            role: 'assistant',
+            createdAt: Date.now(),
+            meta: {},
+            updatedAt: Date.now(),
+          },
+          {
+            id: '3',
+            content: 'Current message',
+            role: 'user',
+            createdAt: Date.now(),
+            meta: {},
+            updatedAt: Date.now(),
+          },
+        ] as UIChatMessage[];
+
+        // historyCount disabled - should include all messages
+        vi.spyOn(agentChatConfigSelectors, 'enableHistoryCount').mockReturnValue(false);
+        vi.spyOn(agentChatConfigSelectors, 'historyCount').mockReturnValue(0);
+        vi.spyOn(agentChatConfigSelectors, 'currentChatConfig').mockReturnValue({
+          searchMode: 'off',
+        } as any);
+
+        await chatService.createAssistantMessage({
+          messages,
+          plugins: [],
+          model: 'gpt-4',
+          provider: 'openai',
+        });
+
+        // Should keep all 3 messages when historyCount is disabled
+        const calledMessages = getChatCompletionSpy.mock.calls[0][0].messages;
+        expect(calledMessages).toBeDefined();
+        expect(calledMessages).toHaveLength(3);
+      });
+    });
   });
 
   describe('getChatCompletion', () => {

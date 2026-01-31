@@ -195,6 +195,58 @@ const ollamaCloudModels: AIChatModelCard[] = [
     id: 'qwen3-vl:235b',
     type: 'chat',
   },
+  {
+    abilities: {
+      functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Ministral 3 3B 是 Ministral 3 系列中最小的、最有效的模型，提供强大的语言和视觉能力在一个紧凑的包中。专为边缘部署设计，它在包括本地设置在内的各种硬件上提供高性能。',
+    displayName: 'Ministral 3 3B',
+    id: 'ministral-3:3b',
+    releasedAt: '2025-12-02',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Ministral 3 8B 是 Ministral 3 系列中的强大且有效的模型，提供一流的文本和视觉能力。专为边缘部署构建，它在包括本地设置在内的各种硬件上提供高性能。',
+    displayName: 'Ministral 3 8B',
+    id: 'ministral-3:8b',
+    releasedAt: '2025-12-02',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Ministral 3 14B 是 Ministral 3 系列中最大的模型，提供最先进的性能和与其更大的 Mistral Small 3.2 24B 对应模型相当的性能。针对本地部署优化，它在包括本地设置在内的各种硬件上提供高性能。',
+    displayName: 'Ministral 3 14B',
+    id: 'ministral-3:14b',
+    releasedAt: '2025-12-02',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
+      vision: true,
+    },
+    contextWindowTokens: 262_144,
+    description:
+      'Mistral Large 3 是一款最先进的开放权重通用多模态模型，采用精细的混合专家架构。它具有41B活跃参数和675B总参数。',
+    displayName: 'Mistral Large 3',
+    id: 'mistral-large-3:675b',
+    releasedAt: '2025-12-02',
+    type: 'chat',
+  },
 ];
 
 export const allModels = [...ollamaCloudModels];

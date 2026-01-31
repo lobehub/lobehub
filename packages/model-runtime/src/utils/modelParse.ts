@@ -64,6 +64,11 @@ export const MODEL_LIST_CONFIGS = {
     reasoningKeywords: ['-m'],
     visionKeywords: ['-vl', 'Text-01'],
   },
+  mistral: {
+    functionCallKeywords: ['mistral', 'ministral', 'pixtral'],
+    reasoningKeywords: ['magistral'],
+    visionKeywords: ['magistral', 'pixtral', 'ministral', 'mistral'],
+  },
   moonshot: {
     functionCallKeywords: ['moonshot', 'kimi'],
     reasoningKeywords: ['thinking'],
@@ -147,6 +152,7 @@ export const MODEL_OWNER_DETECTION_CONFIG = {
   llama: ['llama', 'llava'],
   longcat: ['longcat'],
   minimax: ['minimax'],
+  mistral: ['mistral', 'ministral', 'magistral', 'pixtral'],
   moonshot: ['moonshot', 'kimi'],
   openai: ['o1', 'o3', 'o4', 'gpt-'],
   qwen: ['qwen', 'qwq', 'qvq'],
