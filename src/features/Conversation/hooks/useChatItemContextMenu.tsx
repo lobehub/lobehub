@@ -244,14 +244,22 @@ export const useChatItemContextMenu = ({
         }
         case 'regenerate': {
           if (inPortalThread) {
+            if (item.error) {
+              delAndResendThreadMessage(id);
+              break;
+            }
             resendThreadMessage(id);
           } else if (role === 'assistant') {
+            if (item.error) {
+              delAndRegenerateMessage(id);
+              break;
+            }
+
             regenerateAssistantMessage(id);
           } else {
             regenerateUserMessage(id);
           }
 
-          if (item.error) deleteMessage(id);
           break;
         }
         case 'delAndRegenerate': {
