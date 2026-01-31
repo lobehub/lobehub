@@ -8,6 +8,7 @@ import {
   type NavigationHistoryState,
   navigationHistoryInitialState,
 } from './actions/navigationHistory';
+import { type RecentPagesState, recentPagesInitialState } from './actions/recentPages';
 
 export type RemoteServerError = 'CONFIG_ERROR' | 'AUTH_ERROR' | 'DISCONNECT_ERROR';
 
@@ -20,7 +21,7 @@ export const defaultProxySettings: NetworkProxySettings = {
   proxyType: 'http',
 };
 
-export interface ElectronState extends NavigationHistoryState {
+export interface ElectronState extends NavigationHistoryState, RecentPagesState {
   appState: ElectronAppState;
   dataSyncConfig: DataSyncConfig;
   desktopHotkeys: Record<string, string>;
@@ -36,6 +37,7 @@ export interface ElectronState extends NavigationHistoryState {
 
 export const initialState: ElectronState = {
   ...navigationHistoryInitialState,
+  ...recentPagesInitialState,
   appState: {},
   dataSyncConfig: { storageMode: 'cloud' },
   desktopHotkeys: {},

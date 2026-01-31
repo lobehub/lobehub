@@ -5,9 +5,97 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
+import {
+  type CachedPageData,
+  type PageReference,
+} from '@/features/Electron/titlebar/RecentlyViewed/types';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors/selectors';
+import { useChatStore } from '@/store/chat';
 import { useElectronStore } from '@/store/electron';
+import { usePageStore } from '@/store/page';
+import { listSelectors } from '@/store/page/slices/list/selectors';
+import { useSessionStore } from '@/store/session';
+import { sessionGroupSelectors } from '@/store/session/slices/sessionGroup/selectors';
 
 import { getRouteMetadata } from './routeMetadata';
+
+/**
+ * Get cached display data for a page reference
+ */
+const getCachedDataForReference = (reference: PageReference): CachedPageData | undefined => {
+  switch (reference.type) {
+    case 'agent':
+    case 'agent-topic': {
+      const agentId = 'agentId' in reference.params ? reference.params.agentId : undefined;
+      if (!agentId) return undefined;
+
+      const meta = agentSelectors.getAgentMetaById(agentId)(useAgentStore.getState());
+      if (!meta || Object.keys(meta).length === 0) return undefined;
+
+      // For agent-topic, try to get topic title
+      let title = meta.title;
+      if (reference.type === 'agent-topic' && 'topicId' in reference.params) {
+        const topicId = reference.params.topicId;
+        const topicDataMap = useChatStore.getState().topicDataMap;
+        for (const data of Object.values(topicDataMap)) {
+          const topic = data.items?.find((t) => t.id === topicId);
+          if (topic?.title) {
+            title = topic.title;
+            break;
+          }
+        }
+      }
+
+      return {
+        avatar: meta.avatar,
+        backgroundColor: meta.backgroundColor,
+        title: title || '',
+      };
+    }
+
+    case 'group':
+    case 'group-topic': {
+      const groupId = 'groupId' in reference.params ? reference.params.groupId : undefined;
+      if (!groupId) return undefined;
+
+      const group = sessionGroupSelectors.getGroupById(groupId)(useSessionStore.getState());
+      if (!group) return undefined;
+
+      // For group-topic, try to get topic title
+      let title = group.name;
+      if (reference.type === 'group-topic' && 'topicId' in reference.params) {
+        const topicId = reference.params.topicId;
+        const topicDataMap = useChatStore.getState().topicDataMap;
+        for (const data of Object.values(topicDataMap)) {
+          const topic = data.items?.find((t) => t.id === topicId);
+          if (topic?.title) {
+            title = topic.title;
+            break;
+          }
+        }
+      }
+
+      return { title: title || '' };
+    }
+
+    case 'page': {
+      const pageId = 'pageId' in reference.params ? reference.params.pageId : undefined;
+      if (!pageId) return undefined;
+
+      const document = listSelectors.getDocumentById(pageId)(usePageStore.getState());
+      if (!document) return undefined;
+
+      return { title: document.title || '' };
+    }
+
+    default: {
+      // Static pages don't need cached data
+      return undefined;
+    }
+  }
+};
 
 /**
  * Hook to manage navigation history in Electron desktop app
@@ -31,6 +119,7 @@ export const useNavigationHistory = () => {
   const canGoBackFn = useElectronStore((s) => s.canGoBack);
   const canGoForwardFn = useElectronStore((s) => s.canGoForward);
   const getCurrentEntry = useElectronStore((s) => s.getCurrentEntry);
+  const addRecentPage = useElectronStore((s) => s.addRecentPage);
 
   // Track previous location to avoid duplicate entries
   const prevLocationRef = useRef<string | null>(null);
@@ -39,9 +128,6 @@ export const useNavigationHistory = () => {
   const canGoBack = historyCurrentIndex > 0;
   const canGoForward = historyCurrentIndex < historyEntries.length - 1;
 
-  /**
-   * Go back in history
-   */
   const goBack = useCallback(() => {
     if (!canGoBackFn()) return;
 
@@ -51,9 +137,6 @@ export const useNavigationHistory = () => {
     }
   }, [canGoBackFn, storeGoBack, navigate]);
 
-  /**
-   * Go forward in history
-   */
   const goForward = useCallback(() => {
     if (!canGoForwardFn()) return;
 
@@ -99,6 +182,17 @@ export const useNavigationHistory = () => {
       url: currentUrl,
     });
 
+    // Only add to recent pages if NOT a dynamic title route
+    // Dynamic title routes will be added when the real title is available
+    if (!metadata.useDynamicTitle) {
+      // Parse URL into a page reference using plugins
+      const reference = pluginRegistry.parseUrl(location.pathname, location.search);
+      if (reference) {
+        const cached = getCachedDataForReference(reference);
+        addRecentPage(reference, cached);
+      }
+    }
+
     prevLocationRef.current = currentUrl;
   }, [
     location.pathname,
@@ -107,6 +201,7 @@ export const useNavigationHistory = () => {
     setIsNavigatingHistory,
     getCurrentEntry,
     pushHistory,
+    addRecentPage,
     t,
   ]);
 
@@ -129,7 +224,27 @@ export const useNavigationHistory = () => {
       ...currentEntry,
       title: currentPageTitle,
     });
-  }, [currentPageTitle, getCurrentEntry, replaceHistory, location.pathname]);
+
+    // Add or update in recent pages (dynamic title routes are added here, not on route change)
+    // Parse URL into a page reference using plugins
+    const reference = pluginRegistry.parseUrl(location.pathname, location.search);
+    if (reference) {
+      // Get cached data with the dynamic title
+      const cached = getCachedDataForReference(reference);
+      // Override with the current page title if available
+      const cachedWithTitle = cached
+        ? { ...cached, title: currentPageTitle }
+        : { title: currentPageTitle };
+      addRecentPage(reference, cachedWithTitle);
+    }
+  }, [
+    currentPageTitle,
+    getCurrentEntry,
+    replaceHistory,
+    addRecentPage,
+    location.pathname,
+    location.search,
+  ]);
 
   // Listen to broadcast events from main process (Electron menu)
   useWatchBroadcast('historyGoBack', () => {

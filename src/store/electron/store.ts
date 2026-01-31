@@ -8,6 +8,7 @@ import {
   type NavigationHistoryAction,
   createNavigationHistorySlice,
 } from './actions/navigationHistory';
+import { type RecentPagesAction, createRecentPagesSlice } from './actions/recentPages';
 import { type ElectronSettingsAction, settingsSlice } from './actions/settings';
 import { type ElectronRemoteServerAction, remoteSyncSlice } from './actions/sync';
 import { type ElectronState, initialState } from './initialState';
@@ -20,7 +21,8 @@ export interface ElectronStore
     ElectronRemoteServerAction,
     ElectronAppAction,
     ElectronSettingsAction,
-    NavigationHistoryAction {
+    NavigationHistoryAction,
+    RecentPagesAction {
   /* empty */
 }
 
@@ -32,6 +34,7 @@ const createStore: StateCreator<ElectronStore, [['zustand/devtools', never]]> = 
   ...createElectronAppSlice(...parameters),
   ...settingsSlice(...parameters),
   ...createNavigationHistorySlice(...parameters),
+  ...createRecentPagesSlice(...parameters),
 });
 
 //  ===============  Implement useStore ============ //
