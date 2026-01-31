@@ -291,10 +291,20 @@ export const messageCRUDSlice: StateCreator<
 
   deleteMessage: async (id) => {
     const state = get();
-    const { internal_dispatchMessage, replaceMessages, context } = state;
+    const {
+      internal_dispatchMessage,
+      replaceMessages,
+      context,
+      dbMessages,
+      updateMessageMetadata,
+    } = state;
 
     const message = dataSelectors.getDisplayMessageById(id)(state);
     if (!message) return;
+
+    // Get dbMessage to find parentId for branch handling
+    const dbMessage = dbMessages.find((m) => m.id === id);
+    const parentId = dbMessage?.parentId;
 
     let ids = [message.id];
 
@@ -311,6 +321,23 @@ export const messageCRUDSlice: StateCreator<
           .map((tool: ChatToolPayloadWithResult) => tool.result!.id);
       });
       ids = ids.concat(toolResultIds);
+    }
+
+    // BEFORE optimistic delete: Fix activeBranchIndex if it will be out of bounds after deletion
+    // This prevents momentary disappearance of all messages when deleting the active branch (e.g., 3/3)
+    if (parentId) {
+      const currentChildrenCount = dbMessages.filter((m) => m.parentId === parentId).length;
+      const parentMessage = dbMessages.find((m) => m.id === parentId);
+      const currentActiveBranchIndex = (parentMessage?.metadata as any)?.activeBranchIndex ?? 0;
+
+      // After deletion, children.length will be currentChildrenCount - 1
+      const newChildrenCount = currentChildrenCount - 1;
+
+      // If activeBranchIndex will be out of bounds after deletion, update it first
+      if (currentActiveBranchIndex >= newChildrenCount && newChildrenCount > 0) {
+        // Update to the last valid branch (newChildrenCount - 1)
+        await updateMessageMetadata(parentId, { activeBranchIndex: newChildrenCount - 1 });
+      }
     }
 
     // Optimistic update

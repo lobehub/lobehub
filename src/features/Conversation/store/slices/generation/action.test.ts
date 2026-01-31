@@ -13,11 +13,22 @@ const mockRegenerateUserMessage = vi.fn();
 const mockRegenerateAssistantMessage = vi.fn();
 const mockContinueGenerationMessage = vi.fn();
 const mockDeleteMessage = vi.fn();
+const mockOptimisticDeleteMessage = vi.fn();
 const mockSwitchMessageBranch = vi.fn();
 const mockStartOperation = vi.fn(() => ({ operationId: 'test-op-id' }));
 const mockCompleteOperation = vi.fn();
 const mockFailOperation = vi.fn();
 const mockInternalExecAgentRuntime = vi.fn();
+
+const messageServiceMocks = vi.hoisted(() => ({
+  removeMessage: vi.fn(),
+  removeMessages: vi.fn(),
+  updateMessageMetadata: vi.fn(),
+}));
+
+vi.mock('@/services/message', () => ({
+  messageService: messageServiceMocks,
+}));
 
 vi.mock('@/store/chat', () => ({
   useChatStore: {
@@ -36,6 +47,7 @@ vi.mock('@/store/chat', () => ({
       regenerateAssistantMessage: mockRegenerateAssistantMessage,
       continueGenerationMessage: mockContinueGenerationMessage,
       deleteMessage: mockDeleteMessage,
+      optimisticDeleteMessage: mockOptimisticDeleteMessage,
       switchMessageBranch: mockSwitchMessageBranch,
       startOperation: mockStartOperation,
       completeOperation: mockCompleteOperation,
@@ -49,6 +61,9 @@ vi.mock('@/store/chat', () => ({
 describe('Generation Actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    messageServiceMocks.removeMessage.mockResolvedValue(undefined);
+    messageServiceMocks.removeMessages.mockResolvedValue(undefined);
+    messageServiceMocks.updateMessageMetadata.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -410,7 +425,9 @@ describe('Generation Actions', () => {
   });
 
   describe('delAndRegenerateMessage', () => {
-    it('should create operation with context and pass operationId to deleteMessage', async () => {
+    it('should regenerate first then delete and adjust branch index', async () => {
+      const mockLocalDeleteDBMessage = vi.fn().mockResolvedValue(undefined);
+
       // Re-setup mock to ensure all required functions are available
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
@@ -420,6 +437,7 @@ describe('Generation Actions', () => {
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
         deleteMessage: mockDeleteMessage,
+        optimisticDeleteMessage: mockOptimisticDeleteMessage,
         switchMessageBranch: mockSwitchMessageBranch,
         startOperation: mockStartOperation,
         completeOperation: mockCompleteOperation,
@@ -435,46 +453,63 @@ describe('Generation Actions', () => {
       };
 
       const store = createStore({ context });
+      const dispatchSpy = vi.spyOn(store.getState(), 'internal_dispatchMessage');
 
-      // Set displayMessages after store creation
+      // Set displayMessages and dbMessages after store creation
+      // Simulate 3 branches: msg-2, msg-3, msg-4 all with parentId msg-1
       act(() => {
         store.setState({
           displayMessages: [
             { id: 'msg-1', role: 'user', content: 'Hello' },
-            { id: 'msg-2', role: 'assistant', content: 'Hi there', parentId: 'msg-1' },
+            { id: 'msg-4', role: 'assistant', content: 'Response 3', parentId: 'msg-1' },
           ],
+          dbMessages: [
+            { id: 'msg-1', role: 'user', content: 'Hello', parentId: null },
+            { id: 'msg-2', role: 'assistant', content: 'Response 1', parentId: 'msg-1' },
+            { id: 'msg-3', role: 'assistant', content: 'Response 2', parentId: 'msg-1' },
+            { id: 'msg-4', role: 'assistant', content: 'Response 3', parentId: 'msg-1' },
+          ],
+          deleteDBMessage: mockLocalDeleteDBMessage,
         } as any);
       });
 
       await act(async () => {
-        await store.getState().delAndRegenerateMessage('msg-2');
+        await store.getState().delAndRegenerateMessage('msg-4');
       });
 
       // Should create operation with context
       expect(mockStartOperation).toHaveBeenCalledWith({
-        context: { ...context, messageId: 'msg-2' },
+        context: { ...context, messageId: 'msg-4' },
         type: 'regenerate',
       });
 
-      // Should pass operationId to deleteMessage for correct context isolation
-      expect(mockDeleteMessage).toHaveBeenCalledWith('msg-2', { operationId: 'test-op-id' });
+      // Should regenerate from the parent user message FIRST (msg-1)
+      expect(mockInternalExecAgentRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          parentMessageId: 'msg-1', // Parent user message
+          parentMessageType: 'user',
+          parentOperationId: 'test-op-id',
+        }),
+      );
+
+      // Should delete the message via optimistic dispatch
+      expect(dispatchSpy).toHaveBeenCalledWith({ id: 'msg-4', type: 'deleteMessage' });
+
+      // Should persist delete and branch metadata
+      expect(messageServiceMocks.removeMessage).toHaveBeenCalledWith('msg-4', context);
+      expect(messageServiceMocks.updateMessageMetadata).toHaveBeenCalledWith(
+        'msg-1',
+        { activeBranchIndex: expect.any(Number) },
+        context,
+      );
 
       // Should complete operation
       expect(mockCompleteOperation).toHaveBeenCalledWith('test-op-id');
     });
 
-    it('should delete message BEFORE regeneration to prevent message not found issue (LOBE-2533)', async () => {
-      // This test verifies the fix for LOBE-2533:
-      // When "delete and regenerate" is called, if regeneration happens first,
-      // it switches to a new branch, causing the original message to no longer
-      // appear in displayMessages. Then deleteMessage cannot find the message
-      // and fails silently.
-      //
-      // The fix: delete first, then regenerate.
+    it('should set activeBranchIndex before delete to avoid branch jump', async () => {
+      const mockLocalDeleteDBMessage = vi.fn().mockResolvedValue(undefined);
 
-      const callOrder: string[] = [];
-
-      // Re-setup mock to track call order
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
         messagesMap: {},
@@ -482,21 +517,13 @@ describe('Generation Actions', () => {
         messageLoadingIds: [],
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
-        deleteMessage: vi.fn().mockImplementation(() => {
-          callOrder.push('deleteMessage');
-          return Promise.resolve();
-        }),
-        switchMessageBranch: vi.fn().mockImplementation(() => {
-          callOrder.push('switchMessageBranch');
-          return Promise.resolve();
-        }),
+        deleteMessage: mockDeleteMessage,
+        optimisticDeleteMessage: mockOptimisticDeleteMessage,
+        switchMessageBranch: mockSwitchMessageBranch,
         startOperation: mockStartOperation,
         completeOperation: mockCompleteOperation,
         failOperation: mockFailOperation,
-        internal_execAgentRuntime: vi.fn().mockImplementation(() => {
-          callOrder.push('internal_execAgentRuntime');
-          return Promise.resolve();
-        }),
+        internal_execAgentRuntime: mockInternalExecAgentRuntime,
       } as any);
 
       const context: ConversationContext = {
@@ -507,18 +534,90 @@ describe('Generation Actions', () => {
       };
 
       const store = createStore({ context });
+      const dispatchSpy = vi.spyOn(store.getState(), 'internal_dispatchMessage');
 
-      // Set displayMessages and dbMessages
+      // 3 branches under parent msg-1, deleting msg-4 should set index to 2
       act(() => {
         store.setState({
           displayMessages: [
             { id: 'msg-1', role: 'user', content: 'Hello' },
-            { id: 'msg-2', role: 'assistant', content: 'Hi there', parentId: 'msg-1' },
+            { id: 'msg-4', role: 'assistant', content: 'Response 3', parentId: 'msg-1' },
           ],
           dbMessages: [
-            { id: 'msg-1', role: 'user', content: 'Hello' },
-            { id: 'msg-2', role: 'assistant', content: 'Hi there', parentId: 'msg-1' },
+            { id: 'msg-1', role: 'user', content: 'Hello', parentId: null },
+            { id: 'msg-2', role: 'assistant', content: 'Response 1', parentId: 'msg-1' },
+            { id: 'msg-3', role: 'assistant', content: 'Response 2', parentId: 'msg-1' },
+            { id: 'msg-4', role: 'assistant', content: 'Response 3', parentId: 'msg-1' },
           ],
+          deleteDBMessage: mockLocalDeleteDBMessage,
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().delAndRegenerateMessage('msg-4');
+      });
+
+      expect(dispatchSpy.mock.calls[0][0]).toEqual({
+        id: 'msg-1',
+        type: 'updateMessageMetadata',
+        value: { activeBranchIndex: 2 },
+      });
+      expect(dispatchSpy).toHaveBeenCalledWith({ id: 'msg-4', type: 'deleteMessage' });
+    });
+
+    it('should delete assistantGroup children and tool results via deleteMessages', async () => {
+      const mockLocalDeleteDBMessage = vi.fn().mockResolvedValue(undefined);
+      const mockDeleteMessages = vi.fn().mockResolvedValue(undefined);
+
+      const { useChatStore } = await import('@/store/chat');
+      vi.mocked(useChatStore.getState).mockReturnValue({
+        messagesMap: {},
+        operations: {},
+        messageLoadingIds: [],
+        cancelOperations: mockCancelOperations,
+        cancelOperation: mockCancelOperation,
+        deleteMessage: mockDeleteMessage,
+        optimisticDeleteMessage: mockOptimisticDeleteMessage,
+        switchMessageBranch: mockSwitchMessageBranch,
+        startOperation: mockStartOperation,
+        completeOperation: mockCompleteOperation,
+        failOperation: mockFailOperation,
+        internal_execAgentRuntime: mockInternalExecAgentRuntime,
+      } as any);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: null,
+      };
+
+      const store = createStore({ context });
+      const dispatchSpy = vi.spyOn(store.getState(), 'internal_dispatchMessage');
+
+      act(() => {
+        store.setState({
+          displayMessages: [
+            { id: 'msg-1', role: 'user', content: 'Hello' },
+            {
+              id: 'msg-2',
+              role: 'assistantGroup',
+              content: '',
+              parentId: 'msg-1',
+              children: [
+                {
+                  id: 'child-1',
+                  content: 'Response',
+                  tools: [{ result: { id: 'tool-1' } }],
+                },
+              ],
+            },
+          ],
+          dbMessages: [
+            { id: 'msg-1', role: 'user', content: 'Hello', parentId: null },
+            { id: 'msg-2', role: 'assistant', content: 'Group', parentId: 'msg-1' },
+          ],
+          deleteDBMessage: mockLocalDeleteDBMessage,
+          deleteMessages: mockDeleteMessages,
         } as any);
       });
 
@@ -526,23 +625,20 @@ describe('Generation Actions', () => {
         await store.getState().delAndRegenerateMessage('msg-2');
       });
 
-      // CRITICAL: deleteMessage must be called BEFORE switchMessageBranch and internal_execAgentRuntime
-      // If regeneration (which calls switchMessageBranch) happens first, the message
-      // won't be found in displayMessages and deletion will fail silently.
-      expect(callOrder[0]).toBe('deleteMessage');
-      expect(callOrder).toContain('switchMessageBranch');
-      expect(callOrder).toContain('internal_execAgentRuntime');
-
-      // Verify deleteMessage is called before any regeneration-related calls
-      const deleteIndex = callOrder.indexOf('deleteMessage');
-      const switchIndex = callOrder.indexOf('switchMessageBranch');
-      const execIndex = callOrder.indexOf('internal_execAgentRuntime');
-
-      expect(deleteIndex).toBeLessThan(switchIndex);
-      expect(deleteIndex).toBeLessThan(execIndex);
+      expect(dispatchSpy).toHaveBeenCalledWith({
+        ids: ['msg-2', 'child-1', 'tool-1'],
+        type: 'deleteMessages',
+      });
+      expect(messageServiceMocks.removeMessages).toHaveBeenCalledWith(
+        ['msg-2', 'child-1', 'tool-1'],
+        context,
+      );
+      expect(mockLocalDeleteDBMessage).not.toHaveBeenCalled();
     });
 
     it('should not proceed if assistant message has no parentId', async () => {
+      const mockDeleteMessages = vi.fn().mockResolvedValue(undefined);
+
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
         messagesMap: {},
@@ -561,12 +657,11 @@ describe('Generation Actions', () => {
 
       const store = createStore({ context });
 
-      // Set displayMessages with assistant message that has no parentId
       act(() => {
         store.setState({
-          displayMessages: [
-            { id: 'msg-1', role: 'assistant', content: 'Hi there' }, // no parentId
-          ],
+          displayMessages: [{ id: 'msg-1', role: 'assistant', content: 'Hi there' }],
+          dbMessages: [{ id: 'msg-1', role: 'assistant', content: 'Hi there', parentId: null }],
+          deleteMessages: mockDeleteMessages,
         } as any);
       });
 
@@ -574,14 +669,15 @@ describe('Generation Actions', () => {
         await store.getState().delAndRegenerateMessage('msg-1');
       });
 
-      // Should not proceed - no operation created, no delete called
       expect(mockStartOperation).not.toHaveBeenCalled();
-      expect(mockDeleteMessage).not.toHaveBeenCalled();
+      expect(mockDeleteMessages).not.toHaveBeenCalled();
     });
   });
 
   describe('delAndResendThreadMessage', () => {
-    it('should create operation with context and pass operationId to deleteMessage', async () => {
+    it('should resend first then delete and adjust branch index', async () => {
+      const mockLocalDeleteDBMessage = vi.fn().mockResolvedValue(undefined);
+
       // Re-setup mock to ensure startOperation is available
       const { useChatStore } = await import('@/store/chat');
       vi.mocked(useChatStore.getState).mockReturnValue({
@@ -591,6 +687,7 @@ describe('Generation Actions', () => {
         cancelOperations: mockCancelOperations,
         cancelOperation: mockCancelOperation,
         deleteMessage: mockDeleteMessage,
+        optimisticDeleteMessage: mockOptimisticDeleteMessage,
         switchMessageBranch: mockSwitchMessageBranch,
         startOperation: mockStartOperation,
         completeOperation: mockCompleteOperation,
@@ -605,29 +702,181 @@ describe('Generation Actions', () => {
       };
 
       const store = createStore({ context });
+      const dispatchSpy = vi.spyOn(store.getState(), 'internal_dispatchMessage');
 
-      // Set displayMessages after store creation
+      // Set displayMessages and dbMessages after store creation
       act(() => {
         store.setState({
-          displayMessages: [{ id: 'msg-1', role: 'user', content: 'Hello' }],
+          displayMessages: [
+            { id: 'msg-1', role: 'user', content: 'Hello' },
+            { id: 'msg-2', role: 'assistant', content: 'Hi there', parentId: 'msg-1' },
+          ],
+          dbMessages: [
+            { id: 'msg-1', role: 'user', content: 'Hello', parentId: null },
+            { id: 'msg-2', role: 'assistant', content: 'Original response', parentId: 'msg-1' },
+          ],
+          deleteDBMessage: mockLocalDeleteDBMessage,
         } as any);
       });
 
       await act(async () => {
-        await store.getState().delAndResendThreadMessage('msg-1');
+        await store.getState().delAndResendThreadMessage('msg-2');
       });
 
       // Should create operation with context including threadId
       expect(mockStartOperation).toHaveBeenCalledWith({
-        context: { ...context, messageId: 'msg-1' },
+        context: { ...context, messageId: 'msg-2' },
         type: 'regenerate',
       });
 
-      // Should pass operationId to deleteMessage
-      expect(mockDeleteMessage).toHaveBeenCalledWith('msg-1', { operationId: 'test-op-id' });
+      // Should resend from the parent user message FIRST (msg-1)
+      // resendThreadMessage internally calls regenerateUserMessage
+      expect(mockInternalExecAgentRuntime).toHaveBeenCalledWith(
+        expect.objectContaining({
+          parentMessageId: 'msg-1', // Parent user message
+          parentMessageType: 'user',
+          parentOperationId: 'test-op-id',
+        }),
+      );
+
+      // Should delete the message via optimistic dispatch
+      expect(dispatchSpy).toHaveBeenCalledWith({ id: 'msg-2', type: 'deleteMessage' });
+
+      // Should persist delete and branch metadata
+      expect(messageServiceMocks.removeMessage).toHaveBeenCalledWith('msg-2', context);
+      expect(messageServiceMocks.updateMessageMetadata).toHaveBeenCalledWith(
+        'msg-1',
+        { activeBranchIndex: expect.any(Number) },
+        context,
+      );
 
       // Should complete operation
       expect(mockCompleteOperation).toHaveBeenCalledWith('test-op-id');
+    });
+
+    it('should set activeBranchIndex before delete to avoid branch jump', async () => {
+      const mockLocalDeleteDBMessage = vi.fn().mockResolvedValue(undefined);
+
+      const { useChatStore } = await import('@/store/chat');
+      vi.mocked(useChatStore.getState).mockReturnValue({
+        messagesMap: {},
+        operations: {},
+        messageLoadingIds: [],
+        cancelOperations: mockCancelOperations,
+        cancelOperation: mockCancelOperation,
+        deleteMessage: mockDeleteMessage,
+        optimisticDeleteMessage: mockOptimisticDeleteMessage,
+        switchMessageBranch: mockSwitchMessageBranch,
+        startOperation: mockStartOperation,
+        completeOperation: mockCompleteOperation,
+        internal_execAgentRuntime: mockInternalExecAgentRuntime,
+      } as any);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: 'thread-1',
+        groupId: 'group-1',
+      };
+
+      const store = createStore({ context });
+      const dispatchSpy = vi.spyOn(store.getState(), 'internal_dispatchMessage');
+
+      act(() => {
+        store.setState({
+          displayMessages: [
+            { id: 'msg-1', role: 'user', content: 'Hello' },
+            { id: 'msg-2', role: 'assistant', content: 'Hi there', parentId: 'msg-1' },
+          ],
+          dbMessages: [
+            { id: 'msg-1', role: 'user', content: 'Hello', parentId: null },
+            { id: 'msg-2', role: 'assistant', content: 'Original response', parentId: 'msg-1' },
+            { id: 'msg-3', role: 'assistant', content: 'Alt response', parentId: 'msg-1' },
+          ],
+          deleteDBMessage: mockLocalDeleteDBMessage,
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().delAndResendThreadMessage('msg-2');
+      });
+
+      expect(dispatchSpy.mock.calls[0][0]).toEqual({
+        id: 'msg-1',
+        type: 'updateMessageMetadata',
+        value: { activeBranchIndex: 1 },
+      });
+      expect(dispatchSpy).toHaveBeenCalledWith({ id: 'msg-2', type: 'deleteMessage' });
+    });
+
+    it('should delete assistantGroup children and tool results via deleteMessages', async () => {
+      const mockLocalDeleteDBMessage = vi.fn().mockResolvedValue(undefined);
+      const mockDeleteMessages = vi.fn().mockResolvedValue(undefined);
+
+      const { useChatStore } = await import('@/store/chat');
+      vi.mocked(useChatStore.getState).mockReturnValue({
+        messagesMap: {},
+        operations: {},
+        messageLoadingIds: [],
+        cancelOperations: mockCancelOperations,
+        cancelOperation: mockCancelOperation,
+        deleteMessage: mockDeleteMessage,
+        optimisticDeleteMessage: mockOptimisticDeleteMessage,
+        switchMessageBranch: mockSwitchMessageBranch,
+        startOperation: mockStartOperation,
+        completeOperation: mockCompleteOperation,
+        internal_execAgentRuntime: mockInternalExecAgentRuntime,
+      } as any);
+
+      const context: ConversationContext = {
+        agentId: 'session-1',
+        topicId: 'topic-1',
+        threadId: 'thread-1',
+      };
+
+      const store = createStore({ context });
+      const dispatchSpy = vi.spyOn(store.getState(), 'internal_dispatchMessage');
+
+      act(() => {
+        store.setState({
+          displayMessages: [
+            { id: 'msg-1', role: 'user', content: 'Hello' },
+            {
+              id: 'msg-2',
+              role: 'assistantGroup',
+              content: '',
+              parentId: 'msg-1',
+              children: [
+                {
+                  id: 'child-1',
+                  content: 'Response',
+                  tools: [{ result: { id: 'tool-1' } }],
+                },
+              ],
+            },
+          ],
+          dbMessages: [
+            { id: 'msg-1', role: 'user', content: 'Hello', parentId: null },
+            { id: 'msg-2', role: 'assistant', content: 'Group', parentId: 'msg-1' },
+          ],
+          deleteDBMessage: mockLocalDeleteDBMessage,
+          deleteMessages: mockDeleteMessages,
+        } as any);
+      });
+
+      await act(async () => {
+        await store.getState().delAndResendThreadMessage('msg-2');
+      });
+
+      expect(dispatchSpy).toHaveBeenCalledWith({
+        ids: ['msg-2', 'child-1', 'tool-1'],
+        type: 'deleteMessages',
+      });
+      expect(messageServiceMocks.removeMessages).toHaveBeenCalledWith(
+        ['msg-2', 'child-1', 'tool-1'],
+        context,
+      );
+      expect(mockLocalDeleteDBMessage).not.toHaveBeenCalled();
     });
   });
 
@@ -681,11 +930,12 @@ describe('Generation Actions', () => {
         type: 'regenerate',
       });
 
-      // Should pass operationId to switchMessageBranch
-      // nextBranchIndex = childrenCount = 2 (two assistant messages with parentId: 'msg-1')
-      expect(mockSwitchMessageBranch).toHaveBeenCalledWith('msg-1', 2, {
-        operationId: 'test-op-id',
-      });
+      // Should persist branch switch via service
+      expect(messageServiceMocks.updateMessageMetadata).toHaveBeenCalledWith(
+        'msg-1',
+        { activeBranchIndex: 2 },
+        context,
+      );
     });
 
     it('should pass context to internal_execAgentRuntime', async () => {
