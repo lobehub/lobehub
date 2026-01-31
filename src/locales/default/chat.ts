@@ -181,6 +181,7 @@ export default {
   'messageAction.delAndRegenerate': 'Delete and Regenerate',
   'messageAction.deleteDisabledByThreads': 'This message has a subtopic and can’t be deleted',
   'messageAction.expand': 'Expand Message',
+  'messageAction.reaction': 'Add Reaction',
   'messageAction.regenerate': 'Regenerate',
   'messages.dm.sentTo': 'Visible only to {{name}}',
   'messages.dm.title': 'DM',
