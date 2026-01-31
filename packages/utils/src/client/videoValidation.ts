@@ -1,6 +1,6 @@
 import { formatSize } from '../format';
 
-const VIDEO_SIZE_LIMIT = 20 * 1024 * 1024; // 20MB in bytes
+const VIDEO_SIZE_LIMIT = 100 * 1024 * 1024; // 100MB in bytes
 
 export interface VideoValidationResult {
   actualSize?: string;

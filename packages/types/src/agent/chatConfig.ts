@@ -36,6 +36,7 @@ export interface LobeAgentChatConfig {
   reasoningEffort?: 'low' | 'medium' | 'high';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
   gpt5_1ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
+  codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   gpt5_2ProReasoningEffort?: 'medium' | 'high' | 'xhigh';
   /**
@@ -106,6 +107,7 @@ export const LocalSystemConfigSchema = z.object({
 
 export const AgentChatConfigSchema = z.object({
   autoCreateTopicThreshold: z.number().default(2),
+  codexMaxReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
   compressionModelId: z.string().optional(),
   disableContextCaching: z.boolean().optional(),
   enableAutoCreateTopic: z.boolean().optional(),

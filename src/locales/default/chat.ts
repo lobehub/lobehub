@@ -455,7 +455,7 @@ export default {
   'upload.preview.status.pending': 'Preparing to upload...',
   'upload.preview.status.processing': 'Processing file...',
   'upload.validation.videoSizeExceeded':
-    'Video file size must not exceed 20MB. Current file size is {{actualSize}}.',
+    'Video file size must not exceed 100MB. Current file size is {{actualSize}}.',
   'viewMode.fullWidth': 'Full Width',
   'viewMode.normal': 'Standard',
   'viewMode.wideScreen': 'Widescreen',

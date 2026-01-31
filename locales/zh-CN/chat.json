@@ -417,7 +417,7 @@
   "upload.preview.prepareTasks": "正在准备分块…",
   "upload.preview.status.pending": "准备上传…",
   "upload.preview.status.processing": "文件处理中…",
-  "upload.validation.videoSizeExceeded": "视频文件不能超过 20MB。当前为 {{actualSize}}",
+  "upload.validation.videoSizeExceeded": "视频文件不能超过 100MB。当前为 {{actualSize}}",
   "viewMode.fullWidth": "全宽显示",
   "viewMode.normal": "普通",
   "viewMode.wideScreen": "宽屏",

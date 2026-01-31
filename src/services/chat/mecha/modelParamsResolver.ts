@@ -106,6 +106,10 @@ export const resolveModelExtendParams = (ctx: ModelParamsContext): ModelExtendPa
     extendParams.reasoning_effort = chatConfig.gpt5_2ProReasoningEffort;
   }
 
+  if (modelExtendParams.includes('codexMaxReasoningEffort') && chatConfig.codexMaxReasoningEffort) {
+    extendParams.reasoning_effort = chatConfig.codexMaxReasoningEffort;
+  }
+
   // Text verbosity
   if (modelExtendParams.includes('textVerbosity') && chatConfig.textVerbosity) {
     extendParams.verbosity = chatConfig.textVerbosity;

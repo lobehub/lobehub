@@ -222,6 +222,8 @@ export default {
   'providerModels.item.modelConfig.displayName.title': 'Model Display Name',
   'providerModels.item.modelConfig.extendParams.extra':
     'Choose extended parameters supported by the model. Hover an option to preview controls. Incorrect configs may cause request failures.',
+  'providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint':
+    'For GPT-5.1 Codex Max; controls reasoning intensity.',
   'providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint':
     'For Claude models; can lower cost and speed up responses.',
   'providerModels.item.modelConfig.extendParams.options.enableReasoning.hint':

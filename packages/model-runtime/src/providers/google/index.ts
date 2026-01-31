@@ -148,7 +148,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
         thinkingLevel,
       }) as ThinkingConfig;
 
-      const contents = await buildGoogleMessages(payload.messages);
+      const contents = await buildGoogleMessages(payload.messages, { model });
 
       const controller = new AbortController();
       const originalSignal = options?.signal;
@@ -274,7 +274,7 @@ export class LobeGoogleAI implements LobeRuntimeAI {
    */
   async generateObject(payload: GenerateObjectPayload, options?: GenerateObjectOptions) {
     // Convert OpenAI messages to Google format
-    const contents = await buildGoogleMessages(payload.messages);
+    const contents = await buildGoogleMessages(payload.messages, { model: payload.model });
 
     // Handle tools-based structured output
     if (payload.tools && payload.tools.length > 0) {

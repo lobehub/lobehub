@@ -5,6 +5,7 @@ import { memo, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
+import CodexMaxReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/CodexMaxReasoningEffortSlider';
 import GPT5ReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT52ProReasoningEffortSlider';
@@ -58,6 +59,10 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'gpt5_2ProReasoningEffort',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.codexMaxReasoningEffort.hint',
+    key: 'codexMaxReasoningEffort',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.textVerbosity.hint',
     key: 'textVerbosity',
   },
@@ -94,6 +99,7 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
 // Map variant keys to their base i18n title key (synced with ControlsForm.tsx)
 // This allows reusing existing i18n translations instead of adding new ones
 const TITLE_KEY_ALIASES: Partial<Record<ExtendParamsType, ExtendParamsType>> = {
+  codexMaxReasoningEffort: 'reasoningEffort',
   gpt5ReasoningEffort: 'reasoningEffort',
   gpt5_1ReasoningEffort: 'reasoningEffort',
   gpt5_2ProReasoningEffort: 'reasoningEffort',
@@ -109,6 +115,11 @@ type PreviewMeta = {
 };
 
 const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
+  codexMaxReasoningEffort: {
+    labelSuffix: ' (Codex)',
+    previewWidth: 300,
+    tag: 'reasoning_effort',
+  },
   disableContextCaching: { labelSuffix: ' (Claude)', previewWidth: 400 },
   enableReasoning: { previewWidth: 300, tag: 'thinking.type' },
   gpt5ReasoningEffort: { previewWidth: 300, tag: 'reasoning_effort' },
@@ -211,6 +222,7 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
   // Preview controls use controlled mode with default values (no store access)
   const previewControls = useMemo<Partial<Record<ExtendParamsType, ReactNode>>>(
     () => ({
+      codexMaxReasoningEffort: <CodexMaxReasoningEffortSlider value="medium" />,
       disableContextCaching: <Switch checked disabled />,
       enableReasoning: <Switch checked disabled />,
       gpt5ReasoningEffort: <GPT5ReasoningEffortSlider value="medium" />,
