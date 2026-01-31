@@ -50,15 +50,6 @@ The best practice in this area is to use a file storage service (S3) to store im
 
   Whether to set the ACL to `public-read` when uploading files. This option is enabled by default. If the service provider does not support setting individual ACLs for files (i.e., all files inherit the ACL of the storage bucket), enabling this option may cause request errors. Set `S3_SET_ACL` to `0` to disable it.
 
-  ### `S3_PUBLIC_DOMAIN`
-
-  The public access domain of the storage bucket, used to access files in the storage bucket. This address needs to be **publicly readable**. The reason is that when OpenAI's gpt-4o and other vision models recognize images, OpenAI will try to download this image link on their servers. Therefore, this link must be publicly accessible. If it is a private link, OpenAI will not be able to access the image and thus will not be able to recognize the image content properly.
-
-  <Callout type={'warning'}>
-    Additionally, since this access domain is often a separate URL, it needs to be configured to allow
-    cross-origin access to the site. Otherwise, cross-origin issues will occur in the browser.
-  </Callout>
-
   ### `S3_ENABLE_PATH_STYLE`
 
   Whether to enable the `path-style` access mode of S3. This option is disabled by default. If your S3 service provider uses `path-style`, set `S3_ENABLE_PATH_STYLE` to `1` to enable it.

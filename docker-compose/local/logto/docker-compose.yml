@@ -103,7 +103,6 @@ services:
       - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
       - 'S3_ENDPOINT=http://localhost:${MINIO_PORT}'
       - 'S3_BUCKET=${MINIO_LOBE_BUCKET}'
-      - 'S3_PUBLIC_DOMAIN=http://localhost:${MINIO_PORT}'
       - 'S3_ENABLE_PATH_STYLE=1'
       - 'REDIS_URL=redis://redis:6379'
       - 'REDIS_PREFIX=lobechat'

@@ -40,8 +40,6 @@ tags:
   S3_BUCKET=LobeHub
   # 存储桶的请求端点(注意此处链接的路径带存储桶名称，必须删除该路径，或使用申请 S3 API token 页面所提供的链接)
   S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
-  # 存储桶对外的访问域名
-  S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com
   ```
 
   <Callout type={'warning'}>`S3_ENDPOINT`必须删除其路径，否则会无法访问所上传文件</Callout>
@@ -115,9 +113,6 @@ S3_SECRET_ACCESS_KEY=55af75d8eb6b99f189f6a35f855336ea62cd9c4751a5cf4337c53c1d3f4
 S3_BUCKET=LobeHub
 # 存储桶的请求端点
 S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
-# 存储桶对外的访问域名
-S3_PUBLIC_DOMAIN=https://s3-dev.your-domain.com
-
 # 桶的区域，如 us-west-1，一般来说不需要添加，但某些服务商则需要配置
 # S3_REGION=us-west-1
 ```

@@ -60,6 +60,10 @@ tags:
 
   <GenerateSecret envName="AUTH_SECRET" />
 
+  点击下方按钮一键生成 `JWKS_KEY`（用于签名和验证 JWT）：
+
+  <GenerateJWKSKey />
+
   ```shell
   # 网站域名
   APP_URL=https://your-prod-domain.com
@@ -74,7 +78,7 @@ tags:
   # 身份验证（Better Auth）
   # 会话加密密钥（使用以下命令生成：openssl rand -base64 32）
   AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
-  # JWKS 密钥，用于签名和验证 JWT（在此生成：https://lobehub.com/zh/docs/self-hosting/environment-variables/auth#jwks_key）
+  # JWKS 密钥，用于签名和验证 JWT
   JWKS_KEY='{"keys":[...]}'
 
   # S3 相关
@@ -83,8 +87,6 @@ tags:
   # 用于 S3 API 访问的域名
   S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com
   S3_BUCKET=LobeHub
-  # 用于外网访问 S3 的公共域名，需配置 CORS
-  S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com
   # S3_REGION=ap-chengdu # 如果需要指定地域
 
   ```
@@ -142,7 +144,6 @@ $ docker run -it -d --name lobehub -p 3210:3210 \
   -e S3_SECRET_ACCESS_KEY=xxxxxxxxxx \
   -e S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com \
   -e S3_BUCKET=LobeHub \
-  -e S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com \
   lobehub/lobehub
 ```
 
