@@ -1,10 +1,10 @@
 export interface ShortcutConfig {
   /**
-   * 快捷键加速器（如 CommandOrControl+E）
+   * Shortcut accelerator (e.g. CommandOrControl+E)
    */
   accelerator: string;
   /**
-   * 快捷键 ID
+   * Shortcut ID
    */
   id: string;
 }

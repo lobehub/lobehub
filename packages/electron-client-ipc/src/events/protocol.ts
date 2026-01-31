@@ -1,17 +1,17 @@
 import { McpInstallSchema } from '../types';
 
 /**
- * 协议安装相关的 Broadcast 事件（主进程 -> 渲染进程）
+ * Protocol installation related Broadcast events (main process -> renderer process)
  */
 export interface ProtocolBroadcastEvents {
   /**
-   * MCP 插件安装请求事件
-   * 主进程解析协议 URL 后发送给前端
+   * MCP plugin installation request event
+   * Sent to frontend after main process parses protocol URL
    */
   mcpInstallRequest: (data: {
-    /** 市场来源ID */
+    /** Market source ID */
     marketId?: string;
-    /** 插件ID */
+    /** Plugin ID */
     pluginId: string;
     /** MCP Schema 对象 */
     schema: McpInstallSchema;

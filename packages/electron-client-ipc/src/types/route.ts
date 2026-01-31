@@ -1,46 +1,46 @@
 export interface InterceptRouteParams {
   /**
-   * 请求路径
+   * Request path
    */
   path: string;
   /**
-   * 来源类型：'link-click', 'push-state', 'replace-state'
+   * Source type: 'link-click', 'push-state', 'replace-state'
    */
   source: 'link-click' | 'push-state' | 'replace-state';
   /**
-   * 完整URL
+   * Full URL
    */
   url: string;
 }
 
 export interface InterceptRouteResponse {
   /**
-   * 错误信息 (如果有)
+   * Error message (if any)
    */
   error?: string;
 
   /**
-   * 是否已拦截
+   * Whether intercepted
    */
   intercepted: boolean;
 
   /**
-   * 原始路径
+   * Original path
    */
   path: string;
 
   /**
-   * 原始来源
+   * Original source
    */
   source: string;
 
   /**
-   * 子路径 (如果有)
+   * Sub path (if any)
    */
   subPath?: string;
 
   /**
-   * 目标窗口标识符
+   * Target window identifier
    */
   targetWindow?: string;
 }
