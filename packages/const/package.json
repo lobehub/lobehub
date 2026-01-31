@@ -17,7 +17,7 @@
   },
   "peerDependencies": {
     "@icons-pack/react-simple-icons": "^13.8.0",
-    "@lobehub/ui": "^4",
+    "@lobehub/ui": "^4.32.2",
     "klavis": "^2.15.0"
   }
 }

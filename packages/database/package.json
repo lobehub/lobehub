@@ -20,8 +20,8 @@
     "@lobechat/utils": "workspace:*",
     "random-words": "^2.0.1",
     "ts-md5": "^2.0.1",
-    "type-fest": "^5.2.0",
-    "ws": "^8.18.3"
+    "type-fest": "^5.4.3",
+    "ws": "^8.19.0"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.3.14",
