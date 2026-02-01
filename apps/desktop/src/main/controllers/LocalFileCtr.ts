@@ -1,4 +1,3 @@
-import { SYSTEM_FILES_BLACKLIST } from '@lobechat/const';
 import {
   EditLocalFileParams,
   EditLocalFileResult,
@@ -20,7 +19,7 @@ import {
   ShowSaveDialogResult,
   WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
-import { loadFile } from '@lobechat/file-loaders';
+import { SYSTEM_FILES_TO_IGNORE , loadFile } from '@lobechat/file-loaders';
 import { createPatch } from 'diff';
 import { dialog, shell } from 'electron';
 import fg from 'fast-glob';
@@ -237,7 +236,7 @@ export default class LocalFileCtr extends ControllerModule {
 
       for (const entry of entries) {
         // Skip specific system files based on the ignore list
-        if (SYSTEM_FILES_BLACKLIST.includes(entry)) {
+        if (SYSTEM_FILES_TO_IGNORE.includes(entry)) {
           logger.debug('Ignoring system file:', { fileName: entry });
           continue;
         }

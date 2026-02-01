@@ -18,14 +18,10 @@ vi.mock('@/utils/logger', () => ({
   }),
 }));
 
-// Mock @lobechat/const
-vi.mock('@lobechat/const', () => ({
-  SYSTEM_FILES_BLACKLIST: ['.DS_Store', 'Thumbs.db', '$RECYCLE.BIN'],
-}));
-
 // Mock file-loaders
 vi.mock('@lobechat/file-loaders', () => ({
   loadFile: vi.fn(),
+  SYSTEM_FILES_TO_IGNORE: ['.DS_Store', 'Thumbs.db', '$RECYCLE.BIN'],
 }));
 
 // Mock electron
