@@ -48,7 +48,7 @@ export const getFileConfig = () => {
 
       S3_ENDPOINT: z.string().url().optional(),
       S3_PREVIEW_URL_EXPIRE_IN: z.number(),
-      S3_PUBLIC_DOMAIN: z.string().url().optional(),
+      S3_PUBLIC_DOMAIN: z.string().optional(),
       S3_REGION: z.string().optional(),
       S3_SECRET_ACCESS_KEY: z.string().optional(),
       S3_SET_ACL: z.boolean(),
