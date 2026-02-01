@@ -1,12 +1,10 @@
 'use client';
 
-import { Flexbox, Icon, Tabs, Tag } from '@lobehub/ui';
+import { Flexbox, Icon, Tabs } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { BookOpenIcon, BotIcon, CodeIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { useDetailContext } from './DetailContext';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   nav: css`
@@ -34,8 +32,6 @@ interface NavProps {
 
 const Nav = memo<NavProps>(({ activeTab = 'overview', setActiveTab, mobile }) => {
   const { t } = useTranslation('plugin');
-  const { tools, toolsLoading } = useDetailContext();
-  const toolsCount = tools.length;
 
   const items = useMemo(
     () => [
@@ -47,15 +43,7 @@ const Nav = memo<NavProps>(({ activeTab = 'overview', setActiveTab, mobile }) =>
       {
         icon: <Icon icon={CodeIcon} size={16} />,
         key: 'schema',
-        label:
-          !toolsLoading && toolsCount > 0 ? (
-            <Flexbox align="center" gap={6} horizontal style={{ display: 'inline-flex' }}>
-              {t('skillDetail.tabs.tools')}
-              <Tag>{toolsCount}</Tag>
-            </Flexbox>
-          ) : (
-            t('skillDetail.tabs.tools')
-          ),
+        label: t('skillDetail.tabs.tools'),
       },
       {
         icon: <Icon icon={BotIcon} size={16} />,
@@ -63,7 +51,7 @@ const Nav = memo<NavProps>(({ activeTab = 'overview', setActiveTab, mobile }) =>
         label: t('skillDetail.tabs.agents'),
       },
     ],
-    [t, toolsCount, toolsLoading],
+    [t],
   );
 
   return (

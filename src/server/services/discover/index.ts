@@ -802,7 +802,7 @@ export class DiscoverService {
     version?: string;
   }): Promise<DiscoverMcpDetail> => {
     log('getMcpDetail: params=%O', params);
-    const { identifier, locale } = params;
+    const { locale } = params;
     const normalizedLocale = normalizeLocale(locale);
     const mcp = await this.market.plugins.getPluginDetail(
       { ...params, locale: normalizedLocale },
@@ -813,31 +813,19 @@ export class DiscoverService {
       },
     );
 
-    // Fetch related MCPs and agents in parallel
-    const [list, agentsData] = await Promise.all([
-      this.getMcpList({
-        category: mcp.category,
-        locale,
-        page: 1,
-        pageSize: 7,
-      }),
-      this.getAgentsByPlugin({
-        locale,
-        pageSize: 6,
-        pluginId: identifier,
-      }),
-    ]);
+    // Fetch related MCPs
+    const list = await this.getMcpList({
+      category: mcp.category,
+      locale,
+      page: 1,
+      pageSize: 7,
+    });
 
     const result = {
       ...mcp,
-      agents: agentsData.items,
       related: list.items.filter((item) => item.identifier !== mcp.identifier).slice(0, 6),
     };
-    log(
-      'getMcpDetail: returning mcp with %d related items and %d agents',
-      result.related.length,
-      result.agents.length,
-    );
+    log('getMcpDetail: returning mcp with %d related items', result.related.length);
     return result;
   };
 
