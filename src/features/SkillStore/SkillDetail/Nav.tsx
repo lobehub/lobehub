@@ -34,7 +34,7 @@ interface NavProps {
 
 const Nav = memo<NavProps>(({ activeTab = 'overview', setActiveTab, mobile }) => {
   const { t } = useTranslation('plugin');
-  const { tools } = useDetailContext();
+  const { tools, toolsLoading } = useDetailContext();
   const toolsCount = tools.length;
 
   const items = useMemo(
@@ -48,7 +48,7 @@ const Nav = memo<NavProps>(({ activeTab = 'overview', setActiveTab, mobile }) =>
         icon: <Icon icon={CodeIcon} size={16} />,
         key: 'schema',
         label:
-          toolsCount > 0 ? (
+          !toolsLoading && toolsCount > 0 ? (
             <Flexbox align="center" gap={6} horizontal style={{ display: 'inline-flex' }}>
               {t('skillDetail.tabs.tools')}
               <Tag>{toolsCount}</Tag>
@@ -63,7 +63,7 @@ const Nav = memo<NavProps>(({ activeTab = 'overview', setActiveTab, mobile }) =>
         label: t('skillDetail.tabs.agents'),
       },
     ],
-    [t, toolsCount],
+    [t, toolsCount, toolsLoading],
   );
 
   return (

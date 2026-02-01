@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Segmented, Tag } from '@lobehub/ui';
+import { Flexbox, Segmented, Skeleton, Tag } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,10 +13,18 @@ import { useDetailContext } from './DetailContext';
 
 const Schema = memo(() => {
   const { t } = useTranslation('discover');
-  const { tools } = useDetailContext();
+  const { tools, toolsLoading } = useDetailContext();
   const [activeKey, setActiveKey] = useState<string[]>([]);
   const [mode, setMode] = useState<ModeType>(ModeType.Docs);
   const toolsCount = tools.length;
+
+  if (toolsLoading) {
+    return (
+      <Flexbox gap={16}>
+        <Skeleton active paragraph={{ rows: 4 }} />
+      </Flexbox>
+    );
+  }
 
   return (
     <DetailProvider config={{ tools, toolsCount }}>
