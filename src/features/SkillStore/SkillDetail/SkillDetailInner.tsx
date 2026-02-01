@@ -23,9 +23,9 @@ interface SkillDetailInnerProps {
 
 const SkillDetailInner = memo<SkillDetailInnerProps>(({ type }) => {
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
-  const { agentsLoading, toolsLoading } = useDetailContext();
+  const { toolsLoading } = useDetailContext();
 
-  if (toolsLoading || agentsLoading) {
+  if (toolsLoading) {
     return (
       <Flexbox gap={16}>
         <Skeleton active paragraph={{ rows: 3 }} />

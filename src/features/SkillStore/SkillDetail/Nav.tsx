@@ -34,12 +34,11 @@ interface NavProps {
 
 const Nav = memo<NavProps>(({ activeTab = 'overview', setActiveTab, mobile }) => {
   const { t } = useTranslation('plugin');
-  const { agents, agentsLoading, tools } = useDetailContext();
+  const { tools } = useDetailContext();
   const toolsCount = tools.length;
-  const agentsCount = agents.length;
 
-  const items = useMemo(() => {
-    const baseItems = [
+  const items = useMemo(
+    () => [
       {
         icon: <Icon icon={BookOpenIcon} size={16} />,
         key: 'overview',
@@ -58,24 +57,14 @@ const Nav = memo<NavProps>(({ activeTab = 'overview', setActiveTab, mobile }) =>
             t('skillDetail.tabs.tools')
           ),
       },
-    ];
-
-    // Only show agents tab if there are agents (and not loading)
-    if (!agentsLoading && agentsCount > 0) {
-      baseItems.push({
+      {
         icon: <Icon icon={BotIcon} size={16} />,
         key: 'agents',
-        label: (
-          <Flexbox align="center" gap={6} horizontal style={{ display: 'inline-flex' }}>
-            {t('skillDetail.tabs.agents')}
-            <Tag>{agentsCount}</Tag>
-          </Flexbox>
-        ),
-      });
-    }
-
-    return baseItems;
-  }, [t, toolsCount, agentsCount, agentsLoading]);
+        label: t('skillDetail.tabs.agents'),
+      },
+    ],
+    [t, toolsCount],
+  );
 
   return (
     <Flexbox className={styles.nav}>
