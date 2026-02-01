@@ -38,14 +38,16 @@ describe('formatFileList', () => {
         },
       ];
 
-      const result = formatFileList(files, '/Users/test/Desktop', {
+      const result = formatFileList({
+        directory: '/Users/test/Desktop',
+        files,
         sortBy: 'modifiedTime',
         sortOrder: 'desc',
         totalCount: 150,
       });
 
       expect(result).toMatchInlineSnapshot(`
-        "Found 5 item(s) in /Users/test/Desktop (showing 5 of 150, sorted by modifiedTime desc):
+        "Found 150 item(s) in /Users/test/Desktop (showing first 5, sorted by modifiedTime desc):
           [D] Documents                                2024-01-20 14:30      --
           [D] Downloads                                2024-01-18 09:15      --
           [F] report.pdf                               2024-01-15 11:20      2.3 MB
@@ -63,7 +65,7 @@ describe('formatFileList', () => {
         { isDirectory: false, name: 'tsconfig.json' },
       ];
 
-      const result = formatFileList(files, '/project');
+      const result = formatFileList({ directory: '/project', files });
 
       expect(result).toMatchInlineSnapshot(`
         "Found 5 item(s) in /project:
@@ -82,7 +84,9 @@ describe('formatFileList', () => {
         { isDirectory: false, name: 'gamma.txt' },
       ];
 
-      const result = formatFileList(files, '/test', {
+      const result = formatFileList({
+        directory: '/test',
+        files,
         sortBy: 'name',
         sortOrder: 'asc',
       });
@@ -135,7 +139,7 @@ describe('formatFileList', () => {
         },
       ];
 
-      const result = formatFileList(files, '/test');
+      const result = formatFileList({ directory: '/test', files });
 
       expect(result).toMatchInlineSnapshot(`
         "Found 6 item(s) in /test:
@@ -150,7 +154,7 @@ describe('formatFileList', () => {
   });
 
   it('should format empty directory', () => {
-    const result = formatFileList([], '/home/user');
+    const result = formatFileList({ directory: '/home/user', files: [] });
     expect(result).toMatchInlineSnapshot(`"Directory /home/user is empty"`);
   });
 
@@ -159,7 +163,7 @@ describe('formatFileList', () => {
       { isDirectory: false, name: 'file1.txt' },
       { isDirectory: false, name: 'file2.js' },
     ];
-    const result = formatFileList(files, '/home/user');
+    const result = formatFileList({ directory: '/home/user', files });
     expect(result).toMatchInlineSnapshot(`
       "Found 2 item(s) in /home/user:
         [F] file1.txt
@@ -172,7 +176,7 @@ describe('formatFileList', () => {
       { isDirectory: true, name: 'src' },
       { isDirectory: true, name: 'dist' },
     ];
-    const result = formatFileList(files, '/project');
+    const result = formatFileList({ directory: '/project', files });
     expect(result).toMatchInlineSnapshot(`
       "Found 2 item(s) in /project:
         [D] src
@@ -187,7 +191,7 @@ describe('formatFileList', () => {
       { isDirectory: true, name: 'node_modules' },
       { isDirectory: false, name: 'README.md' },
     ];
-    const result = formatFileList(files, '/project');
+    const result = formatFileList({ directory: '/project', files });
     expect(result).toMatchInlineSnapshot(`
       "Found 4 item(s) in /project:
         [D] src
@@ -199,7 +203,7 @@ describe('formatFileList', () => {
 
   it('should format single item', () => {
     const files = [{ isDirectory: false, name: 'index.ts' }];
-    const result = formatFileList(files, '/src');
+    const result = formatFileList({ directory: '/src', files });
     expect(result).toMatchInlineSnapshot(`
       "Found 1 item(s) in /src:
         [F] index.ts"
@@ -228,7 +232,7 @@ describe('formatFileList', () => {
           size: 1153434, // ~1.1 MB
         },
       ];
-      const result = formatFileList(files, '/Users/test/Downloads');
+      const result = formatFileList({ directory: '/Users/test/Downloads', files });
       expect(result).toContain('Found 3 item(s) in /Users/test/Downloads');
       expect(result).toContain('[D] src');
       expect(result).toContain('[F] report.pdf');
@@ -241,13 +245,15 @@ describe('formatFileList', () => {
         { isDirectory: false, name: 'file1.txt' },
         { isDirectory: false, name: 'file2.txt' },
       ];
-      const result = formatFileList(files, '/test', {
-        limit: 100,
+      const result = formatFileList({
+        directory: '/test',
+        files,
         sortBy: 'modifiedTime',
         sortOrder: 'desc',
         totalCount: 150,
       });
-      expect(result).toContain('showing 2 of 150');
+      expect(result).toContain('Found 150 item(s)');
+      expect(result).toContain('showing first 2');
       expect(result).toContain('sorted by modifiedTime desc');
     });
 
@@ -256,7 +262,9 @@ describe('formatFileList', () => {
         { isDirectory: false, name: 'file1.txt' },
         { isDirectory: false, name: 'file2.txt' },
       ];
-      const result = formatFileList(files, '/test', {
+      const result = formatFileList({
+        directory: '/test',
+        files,
         sortBy: 'name',
         sortOrder: 'asc',
       });
@@ -273,7 +281,7 @@ describe('formatFileList', () => {
           size: 4096,
         },
       ];
-      const result = formatFileList(files, '/test');
+      const result = formatFileList({ directory: '/test', files });
       expect(result).toContain('--');
     });
 
@@ -290,7 +298,7 @@ describe('formatFileList', () => {
           size: 1073741824,
         },
       ];
-      const result = formatFileList(files, '/test');
+      const result = formatFileList({ directory: '/test', files });
       expect(result).toContain('0 B');
       expect(result).toContain('500 B');
       expect(result).toContain('2 KB');
@@ -300,7 +308,7 @@ describe('formatFileList', () => {
 
     it('should handle files with only size (no modifiedTime)', () => {
       const files = [{ isDirectory: false, name: 'file.txt', size: 1024 }];
-      const result = formatFileList(files, '/test');
+      const result = formatFileList({ directory: '/test', files });
       expect(result).toContain('[F] file.txt');
       expect(result).toContain('1 KB');
     });
@@ -309,7 +317,7 @@ describe('formatFileList', () => {
       const files = [
         { isDirectory: false, modifiedTime: new Date('2024-06-15T10:30:00'), name: 'file.txt' },
       ];
-      const result = formatFileList(files, '/test');
+      const result = formatFileList({ directory: '/test', files });
       expect(result).toContain('[F] file.txt');
       expect(result).toContain('2024-06-15 10:30');
     });
@@ -323,14 +331,15 @@ describe('formatFileList', () => {
           size: 1024,
         },
       ];
-      const result = formatFileList(files, '/test');
+      const result = formatFileList({ directory: '/test', files });
       expect(result).toContain('this_is_a_very_long_filename_that_exceeds_normal_length.txt');
     });
 
     it('should handle options with only totalCount', () => {
       const files = [{ isDirectory: false, name: 'file.txt' }];
-      const result = formatFileList(files, '/test', { totalCount: 100 });
-      expect(result).toContain('showing 1 of 100');
+      const result = formatFileList({ directory: '/test', files, totalCount: 100 });
+      expect(result).toContain('Found 100 item(s)');
+      expect(result).toContain('showing first 1');
     });
 
     it('should not show extra info when totalCount equals file count', () => {
@@ -338,7 +347,7 @@ describe('formatFileList', () => {
         { isDirectory: false, name: 'file1.txt' },
         { isDirectory: false, name: 'file2.txt' },
       ];
-      const result = formatFileList(files, '/test', { totalCount: 2 });
+      const result = formatFileList({ directory: '/test', files, totalCount: 2 });
       expect(result).not.toContain('showing');
     });
   });

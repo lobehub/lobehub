@@ -47,6 +47,7 @@ export interface LocalFileSearchState {
 
 export interface LocalFileListState {
   listResults: LocalFileItem[];
+  totalCount: number;
 }
 
 export interface LocalReadFileState {

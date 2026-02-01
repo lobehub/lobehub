@@ -5,9 +5,11 @@ export interface FileListItem {
   size?: number;
 }
 
-export interface FormatFileListOptions {
-  /** Maximum number of items requested (for showing "showing X of Y" info) */
-  limit?: number;
+export interface FormatFileListParams {
+  /** Directory path */
+  directory: string;
+  /** List of files to format */
+  files: FileListItem[];
   /** Sort field used */
   sortBy?: string;
   /** Sort order used */
@@ -39,11 +41,13 @@ const formatDate = (date: Date): string => {
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 };
 
-export const formatFileList = (
-  files: FileListItem[],
-  directory: string,
-  options?: FormatFileListOptions,
-): string => {
+export const formatFileList = ({
+  files,
+  directory,
+  sortBy,
+  sortOrder,
+  totalCount: totalCountParam,
+}: FormatFileListParams): string => {
   if (files.length === 0) {
     return `Directory ${directory} is empty`;
   }
@@ -51,20 +55,22 @@ export const formatFileList = (
   // Check if we have extended info (size and modifiedTime)
   const hasExtendedInfo = files.some((f) => f.size !== undefined || f.modifiedTime !== undefined);
 
-  let header = `Found ${files.length} item(s) in ${directory}`;
+  // Use totalCount if available, otherwise use files.length
+  const totalCount = totalCountParam ?? files.length;
+  const isTruncated = totalCount > files.length;
+
+  let header = `Found ${totalCount} item(s) in ${directory}`;
 
   // Add sorting and limit info if provided
-  if (options) {
-    const parts: string[] = [];
-    if (options.totalCount && options.totalCount > files.length) {
-      parts.push(`showing ${files.length} of ${options.totalCount}`);
-    }
-    if (options.sortBy) {
-      parts.push(`sorted by ${options.sortBy} ${options.sortOrder || 'desc'}`);
-    }
-    if (parts.length > 0) {
-      header += ` (${parts.join(', ')})`;
-    }
+  const parts: string[] = [];
+  if (isTruncated) {
+    parts.push(`showing first ${files.length}`);
+  }
+  if (sortBy) {
+    parts.push(`sorted by ${sortBy} ${sortOrder || 'desc'}`);
+  }
+  if (parts.length > 0) {
+    header += ` (${parts.join(', ')})`;
   }
 
   const fileList = files
