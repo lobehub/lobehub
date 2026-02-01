@@ -578,7 +578,8 @@ describe('LocalFileCtr', () => {
 
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
 
-      expect(result).toHaveLength(3);
+      expect(result.files).toHaveLength(3);
+      expect(result.totalCount).toBe(3);
       expect(mockFsPromises.readdir).toHaveBeenCalledWith('/test');
     });
 
@@ -612,11 +613,12 @@ describe('LocalFileCtr', () => {
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
 
       // Should only contain file1.txt and folder1, not .DS_Store or Thumbs.db
-      expect(result).toHaveLength(2);
-      expect(result.map((r) => r.name)).not.toContain('.DS_Store');
-      expect(result.map((r) => r.name)).not.toContain('Thumbs.db');
-      expect(result.map((r) => r.name)).toContain('folder1');
-      expect(result.map((r) => r.name)).toContain('file1.txt');
+      expect(result.files).toHaveLength(2);
+      expect(result.totalCount).toBe(2);
+      expect(result.files.map((r) => r.name)).not.toContain('.DS_Store');
+      expect(result.files.map((r) => r.name)).not.toContain('Thumbs.db');
+      expect(result.files.map((r) => r.name)).toContain('folder1');
+      expect(result.files.map((r) => r.name)).toContain('file1.txt');
     });
 
     it('should filter out $RECYCLE.BIN system folder', async () => {
@@ -636,8 +638,9 @@ describe('LocalFileCtr', () => {
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
 
       // Should not contain $RECYCLE.BIN
-      expect(result).toHaveLength(2);
-      expect(result.map((r) => r.name)).not.toContain('$RECYCLE.BIN');
+      expect(result.files).toHaveLength(2);
+      expect(result.totalCount).toBe(2);
+      expect(result.files.map((r) => r.name)).not.toContain('$RECYCLE.BIN');
     });
 
     it('should sort by name ascending when specified', async () => {
@@ -656,7 +659,7 @@ describe('LocalFileCtr', () => {
         sortOrder: 'asc',
       });
 
-      expect(result.map((r) => r.name)).toEqual(['alpha.txt', 'apple.txt', 'zebra.txt']);
+      expect(result.files.map((r) => r.name)).toEqual(['alpha.txt', 'apple.txt', 'zebra.txt']);
     });
 
     it('should sort by modifiedTime descending by default', async () => {
@@ -680,7 +683,7 @@ describe('LocalFileCtr', () => {
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
 
       // Default sort: modifiedTime descending (newest first)
-      expect(result.map((r) => r.name)).toEqual(['new.txt', 'mid.txt', 'old.txt']);
+      expect(result.files.map((r) => r.name)).toEqual(['new.txt', 'mid.txt', 'old.txt']);
     });
 
     it('should sort by size ascending when specified', async () => {
@@ -707,7 +710,7 @@ describe('LocalFileCtr', () => {
         sortOrder: 'asc',
       });
 
-      expect(result.map((r) => r.name)).toEqual(['small.txt', 'medium.txt', 'large.txt']);
+      expect(result.files.map((r) => r.name)).toEqual(['small.txt', 'medium.txt', 'large.txt']);
     });
 
     it('should apply limit parameter', async () => {
@@ -731,7 +734,8 @@ describe('LocalFileCtr', () => {
         limit: 3,
       });
 
-      expect(result).toHaveLength(3);
+      expect(result.files).toHaveLength(3);
+      expect(result.totalCount).toBe(5); // Total is 5, but limited to 3
     });
 
     it('should use default limit of 100', async () => {
@@ -748,7 +752,8 @@ describe('LocalFileCtr', () => {
 
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
 
-      expect(result).toHaveLength(100);
+      expect(result.files).toHaveLength(100);
+      expect(result.totalCount).toBe(150); // Total is 150, but limited to 100
     });
 
     it('should sort by createdTime ascending when specified', async () => {
@@ -779,7 +784,7 @@ describe('LocalFileCtr', () => {
         sortOrder: 'asc',
       });
 
-      expect(result.map((r) => r.name)).toEqual(['oldest.txt', 'middle.txt', 'newest.txt']);
+      expect(result.files.map((r) => r.name)).toEqual(['oldest.txt', 'middle.txt', 'newest.txt']);
     });
 
     it('should sort by createdTime descending when specified', async () => {
@@ -810,7 +815,7 @@ describe('LocalFileCtr', () => {
         sortOrder: 'desc',
       });
 
-      expect(result.map((r) => r.name)).toEqual(['newest.txt', 'middle.txt', 'oldest.txt']);
+      expect(result.files.map((r) => r.name)).toEqual(['newest.txt', 'middle.txt', 'oldest.txt']);
     });
 
     it('should sort by name descending when specified', async () => {
@@ -829,7 +834,7 @@ describe('LocalFileCtr', () => {
         sortOrder: 'desc',
       });
 
-      expect(result.map((r) => r.name)).toEqual(['zebra.txt', 'middle.txt', 'alpha.txt']);
+      expect(result.files.map((r) => r.name)).toEqual(['zebra.txt', 'middle.txt', 'alpha.txt']);
     });
 
     it('should sort by size descending when specified', async () => {
@@ -856,7 +861,7 @@ describe('LocalFileCtr', () => {
         sortOrder: 'desc',
       });
 
-      expect(result.map((r) => r.name)).toEqual(['large.txt', 'medium.txt', 'small.txt']);
+      expect(result.files.map((r) => r.name)).toEqual(['large.txt', 'medium.txt', 'small.txt']);
     });
 
     it('should sort by modifiedTime ascending when specified', async () => {
@@ -883,7 +888,7 @@ describe('LocalFileCtr', () => {
         sortOrder: 'asc',
       });
 
-      expect(result.map((r) => r.name)).toEqual(['old.txt', 'mid.txt', 'new.txt']);
+      expect(result.files.map((r) => r.name)).toEqual(['old.txt', 'mid.txt', 'new.txt']);
     });
 
     it('should handle empty directory with sort options', async () => {
@@ -895,7 +900,8 @@ describe('LocalFileCtr', () => {
         sortOrder: 'asc',
       });
 
-      expect(result).toEqual([]);
+      expect(result.files).toEqual([]);
+      expect(result.totalCount).toBe(0);
     });
 
     it('should apply limit after sorting', async () => {
@@ -931,8 +937,9 @@ describe('LocalFileCtr', () => {
       });
 
       // Should get the 3 newest files
-      expect(result).toHaveLength(3);
-      expect(result.map((r) => r.name)).toEqual(['file5.txt', 'file4.txt', 'file3.txt']);
+      expect(result.files).toHaveLength(3);
+      expect(result.totalCount).toBe(5); // Total is 5, but limited to 3
+      expect(result.files.map((r) => r.name)).toEqual(['file5.txt', 'file4.txt', 'file3.txt']);
     });
 
     it('should handle limit larger than file count', async () => {
@@ -950,7 +957,8 @@ describe('LocalFileCtr', () => {
         limit: 1000,
       });
 
-      expect(result).toHaveLength(2);
+      expect(result.files).toHaveLength(2);
+      expect(result.totalCount).toBe(2);
     });
 
     it('should return file metadata including size, times and type', async () => {
@@ -969,8 +977,9 @@ describe('LocalFileCtr', () => {
 
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
 
-      expect(result).toHaveLength(1);
-      expect(result[0]).toEqual({
+      expect(result.files).toHaveLength(1);
+      expect(result.totalCount).toBe(1);
+      expect(result.files[0]).toEqual({
         name: 'document.pdf',
         path: '/test/document.pdf',
         isDirectory: false,
@@ -982,12 +991,13 @@ describe('LocalFileCtr', () => {
       });
     });
 
-    it('should return empty array when directory read fails', async () => {
+    it('should return empty result when directory read fails', async () => {
       vi.mocked(mockFsPromises.readdir).mockRejectedValue(new Error('Permission denied'));
 
       const result = await localFileCtr.listLocalFiles({ path: '/protected' });
 
-      expect(result).toEqual([]);
+      expect(result.files).toEqual([]);
+      expect(result.totalCount).toBe(0);
     });
 
     it('should skip files that cannot be stat', async () => {
@@ -1008,8 +1018,9 @@ describe('LocalFileCtr', () => {
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
 
       // Should only contain good.txt, bad.txt should be skipped
-      expect(result).toHaveLength(1);
-      expect(result[0].name).toBe('good.txt');
+      expect(result.files).toHaveLength(1);
+      expect(result.totalCount).toBe(1);
+      expect(result.files[0].name).toBe('good.txt');
     });
 
     it('should handle directory type correctly', async () => {
@@ -1024,9 +1035,10 @@ describe('LocalFileCtr', () => {
 
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
 
-      expect(result).toHaveLength(1);
-      expect(result[0].isDirectory).toBe(true);
-      expect(result[0].type).toBe('directory');
+      expect(result.files).toHaveLength(1);
+      expect(result.totalCount).toBe(1);
+      expect(result.files[0].isDirectory).toBe(true);
+      expect(result.files[0].type).toBe('directory');
     });
 
     it('should handle files without extension', async () => {
@@ -1041,10 +1053,11 @@ describe('LocalFileCtr', () => {
 
       const result = await localFileCtr.listLocalFiles({ path: '/test' });
 
-      expect(result).toHaveLength(2);
+      expect(result.files).toHaveLength(2);
+      expect(result.totalCount).toBe(2);
       // Files without extension should have empty type
-      expect(result[0].type).toBe('');
-      expect(result[1].type).toBe('');
+      expect(result.files[0].type).toBe('');
+      expect(result.files[1].type).toBe('');
     });
   });
 

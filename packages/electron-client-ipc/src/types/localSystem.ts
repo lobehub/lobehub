@@ -41,6 +41,17 @@ export interface ListLocalFileParams {
   sortOrder?: ListLocalFileSortOrder;
 }
 
+export interface ListLocalFilesResult {
+  /**
+   * List of files (truncated to limit)
+   */
+  files: LocalFileItem[];
+  /**
+   * Total count of files before truncation
+   */
+  totalCount: number;
+}
+
 export interface MoveLocalFileParams {
   newPath: string;
   oldPath: string;

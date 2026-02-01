@@ -19,7 +19,7 @@ import {
   ShowSaveDialogResult,
   WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
-import { SYSTEM_FILES_TO_IGNORE , loadFile } from '@lobechat/file-loaders';
+import { SYSTEM_FILES_TO_IGNORE, loadFile } from '@lobechat/file-loaders';
 import { createPatch } from 'diff';
 import { dialog, shell } from 'electron';
 import fg from 'fast-glob';
@@ -223,7 +223,7 @@ export default class LocalFileCtr extends ControllerModule {
     sortBy = 'modifiedTime',
     sortOrder = 'desc',
     limit = 100,
-  }: ListLocalFileParams): Promise<FileResult[]> {
+  }: ListLocalFileParams): Promise<{ files: FileResult[]; totalCount: number }> {
     logger.debug('Listing directory contents:', { dirPath, limit, sortBy, sortOrder });
 
     const results: FileResult[] = [];
@@ -290,20 +290,22 @@ export default class LocalFileCtr extends ControllerModule {
         return sortOrder === 'desc' ? -comparison : comparison;
       });
 
+      const totalCount = results.length;
+
       // Apply limit
       const limitedResults = results.slice(0, limit);
 
       logger.debug('Directory listing successful', {
         dirPath,
         resultCount: limitedResults.length,
-        totalCount: results.length,
+        totalCount,
       });
-      return limitedResults;
+      return { files: limitedResults, totalCount };
     } catch (error) {
       logger.error(`Failed to list directory ${dirPath}:`, error);
       // Rethrow or return an empty array/error object depending on desired behavior
-      // For now, returning empty array on error listing directory itself
-      return [];
+      // For now, returning empty result on error listing directory itself
+      return { files: [], totalCount: 0 };
     }
   }
 
