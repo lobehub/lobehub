@@ -144,7 +144,11 @@ const AgentItem = memo<DiscoverAssistantItem>(
   },
 );
 
-const Agents = memo(() => {
+interface AgentsProps {
+  inModal?: boolean;
+}
+
+const Agents = memo<AgentsProps>(({ inModal }) => {
   const { t } = useTranslation('discover');
   const { identifier } = useDetailContext();
 
@@ -232,7 +236,8 @@ const Agents = memo(() => {
       itemContent={(_, item) => <AgentItem key={item.identifier} {...item} />}
       listClassName={virtuosoGridStyles.list}
       overscan={24}
-      style={{ height: '50vh', width: '100%' }}
+      style={inModal ? { height: '50vh', width: '100%' } : { width: '100%' }}
+      useWindowScroll={!inModal}
     />
   );
 });

@@ -77,7 +77,7 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, n
           {activeTab === McpNavKey.Deployment && <Deployment />}
           {activeTab === McpNavKey.Schema && <Schema />}
           {activeTab === McpNavKey.Score && <Score />}
-          {activeTab === McpNavKey.Agents && <Agents />}
+          {activeTab === McpNavKey.Agents && <Agents inModal />}
         </Flexbox>
       </Flexbox>
     </DetailProvider>
