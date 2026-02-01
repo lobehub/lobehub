@@ -8,6 +8,7 @@
   "codes.DELETED_ACCOUNT_EMAIL": "Bu e-posta silinmiş bir hesapla ilişkilendirilmiş ve kayıt için kullanılamaz",
   "codes.EMAIL_CAN_NOT_BE_UPDATED": "Bu hesabın e-posta adresi güncellenemez",
   "codes.EMAIL_NOT_ALLOWED": "Bu e-posta adresi kayıt için uygun değil",
+  "codes.EMAIL_NOT_FOUND": "Bu hesaba bağlı bir e-posta bulunamadı. Lütfen hesabınıza bir e-posta adresi bağlı olup olmadığını kontrol edin.",
   "codes.EMAIL_NOT_VERIFIED": "Lütfen önce e-posta adresinizi doğrulayın",
   "codes.FAILED_TO_CREATE_SESSION": "Oturum oluşturulamadı",
   "codes.FAILED_TO_CREATE_USER": "Kullanıcı oluşturulamadı",
