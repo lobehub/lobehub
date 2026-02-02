@@ -204,7 +204,7 @@ export interface McpConnection {
   auth?: {
     accessToken?: string;
     token?: string;
-    type: 'none' | 'bearer' | 'oauth2';
+    type: 'none' | 'bearer' | 'oauth' | 'oauth2';
   };
   // STDIO connection parameters
   command?: string;
@@ -233,7 +233,7 @@ export const StreamableHTTPAuthSchema = z
   .object({
     accessToken: z.string().optional(), // OAuth2 Access Token
     token: z.string().optional(), // Bearer Token
-    type: z.enum(['none', 'bearer', 'oauth2']),
+    type: z.enum(['none', 'bearer', 'oauth', 'oauth2']),
   })
   .optional();
 

@@ -23,7 +23,11 @@ export default {
   'error.backToHome': 'Back to Home',
   'error.desc': 'OAuth authorization failed, reason: {{reason}}',
   'error.reason.internal_error': 'Internal Server Error',
+  'error.reason.invalid_grant': 'Authorization was denied or expired. Please connect again.',
   'error.reason.invalid_request': 'Invalid Request Parameters',
+  'error.reason.invalid_state': 'Invalid or expired state. Please try again.',
+  'error.reason.reauth_required': 'Re-authorization required. Please connect again.',
+  'error.reason.server_error': 'Server error. Please try again.',
   'error.title': 'Authorization Failed',
   'handoff.desc.processing':
     'The application is processing the authorization and will redirect to the next page soon...',
@@ -37,5 +41,6 @@ export default {
   'login.userWelcome': 'Welcome back, ',
   'success.subTitle':
     'You have successfully authorized the application to access your account. You may now close this page.',
+  'success.subTitleWithCountdown': 'You may close this page. Auto-closing in {{countdown}}s...',
   'success.title': 'Authorization Successful',
 };

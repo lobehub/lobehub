@@ -34,6 +34,34 @@ vi.mock('@/auth', () => ({
   },
 }));
 
+// stub localStorage for store tests that load global state (e.g. AsyncLocalStorage)
+// Some test environments (happy-dom/node) may have localStorage undefined or incomplete
+const storage: Record<string, string> = {};
+const localStorageStub = {
+  clear: () => {
+    for (const k of Object.keys(storage)) delete storage[k];
+  },
+  getItem: (key: string) => storage[key] ?? null,
+  key: (i: number) => Object.keys(storage)[i] ?? null,
+  get length() {
+    return Object.keys(storage).length;
+  },
+  removeItem: (key: string) => {
+    delete storage[key];
+  },
+  setItem: (key: string, value: string) => {
+    storage[key] = value;
+  },
+};
+const useStub =
+  typeof window === 'undefined' || typeof (globalThis as any).localStorage?.getItem !== 'function';
+if (useStub) {
+  vi.stubGlobal('localStorage', localStorageStub);
+  if (typeof window !== 'undefined') {
+    (window as any).localStorage = localStorageStub;
+  }
+}
+
 // node runtime
 if (typeof window === 'undefined') {
   // test with polyfill crypto

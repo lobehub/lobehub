@@ -7,6 +7,7 @@ export * from './betterAuth';
 export * from './chatGroup';
 export * from './file';
 export * from './generation';
+export * from './mcpOauth';
 export * from './message';
 export * from './nextauth';
 export * from './oidc';

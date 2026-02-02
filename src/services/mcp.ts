@@ -205,7 +205,7 @@ class MCPService {
       auth?: {
         accessToken?: string;
         token?: string;
-        type: 'none' | 'bearer' | 'oauth2';
+        type: 'none' | 'bearer' | 'oauth' | 'oauth2';
       };
       headers?: Record<string, string>;
       identifier: string;

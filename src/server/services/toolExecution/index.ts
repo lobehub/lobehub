@@ -4,6 +4,7 @@ import debug from 'debug';
 
 import { type CloudMCPParams, type ToolCallContent } from '@/libs/mcp';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
+import { REAUTH_REQUIRED, resolveMcpOAuthToken } from '@/server/services/mcp/oauth';
 import {
   DEFAULT_TOOL_RESULT_MAX_LENGTH,
   truncateToolResult,
@@ -163,10 +164,28 @@ export class ToolExecutionService {
         return await this.executeCloudMCPTool(payload, context, mcpParams);
       }
 
+      let resolvedParams = mcpParams;
+      if (mcpParams.auth?.type === 'oauth' && context.serverDB && context.userId) {
+        try {
+          const auth = await resolveMcpOAuthToken(context.serverDB, context.userId, identifier);
+          resolvedParams = { ...mcpParams, auth };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : '';
+          if ((err as any).code === REAUTH_REQUIRED || message === REAUTH_REQUIRED) {
+            return {
+              content: REAUTH_REQUIRED,
+              error: { code: REAUTH_REQUIRED, message: REAUTH_REQUIRED },
+              success: false,
+            };
+          }
+          throw err;
+        }
+      }
+
       // For stdio/http/sse types, use standard MCP service
       const result = await this.mcpService.callTool({
         argsStr: args,
-        clientParams: mcpParams,
+        clientParams: resolvedParams,
         toolName: apiName,
       });
 

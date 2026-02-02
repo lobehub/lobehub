@@ -2,9 +2,10 @@
 
 import { FluentEmoji, Text } from '@lobehub/ui';
 import { Result } from 'antd';
-import { useSearchParams } from '@/libs/next/navigation';
 import React, { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useSearchParams } from '@/libs/next/navigation';
 
 const SuccessPage = memo(() => {
   const { t } = useTranslation('oauth');
@@ -12,15 +13,16 @@ const SuccessPage = memo(() => {
   const [countdown, setCountdown] = useState(3);
 
   useEffect(() => {
-    // Check if this is a LobeHub Skill OAuth callback
     const provider = searchParams.get('provider');
+    const source = searchParams.get('source');
 
     if (provider && window.opener) {
-      // Notify parent window about successful OAuth
+      const type = source === 'mcp' ? 'MCP_OAUTH_SUCCESS' : 'LOBEHUB_SKILL_AUTH_SUCCESS';
       window.opener.postMessage(
         {
           provider,
-          type: 'LOBEHUB_SKILL_AUTH_SUCCESS',
+          source: source ?? undefined,
+          type,
         },
         window.location.origin,
       );

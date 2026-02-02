@@ -129,8 +129,8 @@ export interface AuthConfig {
   // --- Stage 1: 手动配置 ---
   token?: string;
   tokenExpiresAt?: number;
-  // 认证类型
-  type: 'none' | 'bearer' | 'oauth2'; // accessToken 的过期时间戳
+  // 认证类型: oauth = flow-based, token resolved server-side from store
+  type: 'none' | 'bearer' | 'oauth' | 'oauth2'; // accessToken 的过期时间戳
 }
 
 interface HttpMCPClientParams {

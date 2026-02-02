@@ -1,6 +1,10 @@
 import { type CheckMcpInstallResult, type CustomPluginMetadata } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
-import type { LobeChatPluginApi, LobeChatPluginManifest, PluginSchema } from '@lobehub/chat-plugin-sdk';
+import type {
+  LobeChatPluginApi,
+  LobeChatPluginManifest,
+  PluginSchema,
+} from '@lobehub/chat-plugin-sdk';
 import { type DeploymentOption } from '@lobehub/market-sdk';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
 import { TRPCError } from '@trpc/server';
@@ -347,7 +351,7 @@ export class MCPService {
     auth?: {
       accessToken?: string;
       token?: string;
-      type: 'none' | 'bearer' | 'oauth2';
+      type: 'none' | 'bearer' | 'oauth' | 'oauth2';
     },
     headers?: Record<string, string>,
   ): Promise<LobeChatPluginManifest> {
