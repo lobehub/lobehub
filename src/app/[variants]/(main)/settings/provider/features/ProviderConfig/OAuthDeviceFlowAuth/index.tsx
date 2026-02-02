@@ -153,8 +153,11 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
     });
 
     const handleSuccess = useCallback(async () => {
+      // First invalidate and refetch the auth status
       await utils.oauthDeviceFlow.getAuthStatus.invalidate({ providerId });
+      // Then notify parent and reset authenticating state
       onAuthChange?.();
+      setIsAuthenticating(false);
     }, [onAuthChange, providerId, utils.oauthDeviceFlow.getAuthStatus]);
 
     const { state, deviceCodeInfo, error, startAuth, cancelAuth } = useOAuthDeviceFlow({
@@ -192,12 +195,12 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       }
     }, [deviceCodeInfo?.verificationUri]);
 
+    // Reset hasAutoClosedRef when starting new auth
     useEffect(() => {
-      if (state === 'success' && isAuthenticating && !hasAutoClosedRef.current) {
+      if (state === 'success' && !hasAutoClosedRef.current) {
         hasAutoClosedRef.current = true;
-        setIsAuthenticating(false);
       }
-    }, [state, isAuthenticating]);
+    }, [state]);
 
     // Render Hero section with provider logo
     const renderHero = () => (
@@ -209,7 +212,8 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
     // Render content based on authentication state
     const renderContent = () => {
       // Authenticated state - show user info
-      if (isAuthenticated && state === 'idle') {
+      // Show when authenticated and not in the middle of authenticating process
+      if (isAuthenticated && !isAuthenticating) {
         return (
           <div className={styles.content}>
             <Flexbox align="center" gap={16}>

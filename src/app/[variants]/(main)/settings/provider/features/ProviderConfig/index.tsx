@@ -23,6 +23,7 @@ import { z } from 'zod';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
 import { SkeletonInput, SkeletonSwitch } from '@/components/Skeleton';
+import { lambdaQuery } from '@/libs/trpc/client';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import {
   type AiProviderDetailItem,
@@ -143,6 +144,15 @@ const ProviderConfig = memo<ProviderConfigProps>(
     const { t } = useTranslation('modelProvider');
     const [form] = Form.useForm();
 
+    const isOAuthProvider = authType === 'oauthDeviceFlow';
+
+    // Query OAuth authentication status (only for OAuth providers)
+    const { data: oauthStatus } = lambdaQuery.oauthDeviceFlow.getAuthStatus.useQuery(
+      { providerId: id },
+      { enabled: isOAuthProvider, refetchOnWindowFocus: true },
+    );
+    const isOAuthAuthenticated = oauthStatus?.isAuthenticated ?? false;
+
     const [
       data,
       updateAiProviderConfig,
@@ -236,7 +246,6 @@ const ProviderConfig = memo<ProviderConfigProps>(
     });
 
     const isCustom = source === AiProviderSourceEnum.Custom;
-    const isOAuthProvider = authType === 'oauthDeviceFlow';
 
     // OAuth auth change handler
     const handleOAuthChange = useCallback(async () => {
@@ -247,7 +256,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
     }, []);
 
     const apiKeyItem: FormItemProps[] =
-      !showApiKey || authType === 'oauthDeviceFlow'
+      !showApiKey || isOAuthProvider
         ? []
         : (apiKeyItems ?? [
             {
@@ -471,6 +480,9 @@ const ProviderConfig = memo<ProviderConfigProps>(
       title: isOAuthProvider ? '' : headerTitle,
     };
 
+    // For OAuth providers, only show Form when authenticated
+    const shouldShowForm = !isOAuthProvider || isOAuthAuthenticated;
+
     return (
       <>
         {isOAuthProvider && (
@@ -482,16 +494,18 @@ const ProviderConfig = memo<ProviderConfigProps>(
             title={headerTitle}
           />
         )}
-        <Form
-          className={cx(styles.form, className)}
-          form={form}
-          items={[model]}
-          onValuesChange={(_, values) => {
-            debouncedHandleValueChange(id, values);
-          }}
-          variant={'borderless'}
-          {...FORM_STYLE}
-        />
+        {shouldShowForm && (
+          <Form
+            className={cx(styles.form, className)}
+            form={form}
+            items={[model]}
+            onValuesChange={(_, values) => {
+              debouncedHandleValueChange(id, values);
+            }}
+            variant={'borderless'}
+            {...FORM_STYLE}
+          />
+        )}
       </>
     );
   },
