@@ -177,8 +177,16 @@ const NoteFileItem = memo<NoteFileItemProps>(
               )}
             </div>
           ) : (
-            <div className={styles.iconWrapper}>
-              <FileIcon fileName={name} fileType={fileType} size={64} />
+            <div className={styles.noteContent}>
+              <div className={styles.noteTitle}>
+                {emoji && <span style={{ fontSize: 20 }}>{emoji}</span>}
+                <span>{displayTitle}</span>
+              </div>
+              <div className={styles.notePreview}>
+                <span style={{ color: 'var(--lobe-text-tertiary)', fontStyle: 'italic' }}>
+                  No content
+                </span>
+              </div>
             </div>
           )}
         </div>
