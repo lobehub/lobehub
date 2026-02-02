@@ -18,6 +18,7 @@ import type { ValidSearchType } from './utils/queryParser';
 interface CommandMenuContextValue {
   menuContext: MenuContext;
   mounted: boolean;
+  onClose: () => void;
   page: PageType | undefined;
   pages: PageType[];
   pathname: string | null;
@@ -38,10 +39,11 @@ const CommandMenuContext = createContext<CommandMenuContextValue | undefined>(un
 
 interface CommandMenuProviderProps {
   children: ReactNode;
+  onClose: () => void;
   pathname: string | null;
 }
 
-export const CommandMenuProvider = ({ children, pathname }: CommandMenuProviderProps) => {
+export const CommandMenuProvider = ({ children, onClose, pathname }: CommandMenuProviderProps) => {
   const [pages, setPages] = useState<PageType[]>([]);
   const [search, setSearchState] = useState('');
   const [typeFilter, setTypeFilterState] = useState<ValidSearchType | undefined>(undefined);
@@ -71,6 +73,7 @@ export const CommandMenuProvider = ({ children, pathname }: CommandMenuProviderP
     () => ({
       menuContext,
       mounted: true, // Always true after initial render since provider only mounts on client
+      onClose,
       page,
       pages,
       pathname,
@@ -86,6 +89,7 @@ export const CommandMenuProvider = ({ children, pathname }: CommandMenuProviderP
     }),
     [
       menuContext,
+      onClose,
       page,
       pages,
       pathname,

@@ -25,9 +25,10 @@ import type { ThemeMode } from './types';
  * Shared methods for CommandMenu
  */
 export const useCommandMenu = () => {
-  const [open, setOpen] = useGlobalStore((s) => [s.status.showCommandMenu, s.updateSystemStatus]);
+  const [open] = useGlobalStore((s) => [s.status.showCommandMenu]);
   const {
     mounted,
+    onClose,
     search,
     setSearch,
     pages,
@@ -97,15 +98,15 @@ export const useCommandMenu = () => {
   }, [open]);
 
   const closeCommandMenu = useCallback(() => {
-    setOpen({ showCommandMenu: false });
-  }, [setOpen]);
+    onClose();
+  }, [onClose]);
 
   const handleNavigate = useCallback(
     (path: string) => {
       navigate(path);
-      setOpen({ showCommandMenu: false });
+      onClose();
     },
-    [navigate, setOpen],
+    [navigate, onClose],
   );
 
   const handleExternalLink = useCallback(
@@ -115,17 +116,17 @@ export const useCommandMenu = () => {
       } else {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
-      setOpen({ showCommandMenu: false });
+      onClose();
     },
-    [setOpen],
+    [onClose],
   );
 
   const handleThemeChange = useCallback(
     (theme: ThemeMode) => {
       setTheme(theme);
-      setOpen({ showCommandMenu: false });
+      onClose();
     },
-    [setTheme, setOpen],
+    [setTheme, onClose],
   );
 
   const handleAskLobeAI = useCallback(() => {
@@ -133,18 +134,18 @@ export const useCommandMenu = () => {
     if (inboxAgentId && search.trim()) {
       const message = encodeURIComponent(search.trim());
       navigate(`/agent/${inboxAgentId}?message=${message}`);
-      setOpen({ showCommandMenu: false });
+      onClose();
     }
-  }, [inboxAgentId, search, navigate, setOpen]);
+  }, [inboxAgentId, search, navigate, onClose]);
 
   const handleAIPainting = useCallback(() => {
     // Navigate to painting page with search as prompt
     if (search.trim()) {
       const prompt = encodeURIComponent(search.trim());
       navigate(`/image?prompt=${prompt}`);
-      setOpen({ showCommandMenu: false });
+      onClose();
     }
-  }, [search, navigate, setOpen]);
+  }, [search, navigate, onClose]);
 
   const handleBack = useCallback(() => {
     setPages((prev) => prev.slice(0, -1));
@@ -155,9 +156,9 @@ export const useCommandMenu = () => {
       const message = encodeURIComponent(search.trim());
       navigate(`/agent/${selectedAgent.id}?message=${message}`);
       setSelectedAgent(undefined);
-      setOpen({ showCommandMenu: false });
+      onClose();
     }
-  }, [selectedAgent, search, navigate, setSelectedAgent, setOpen]);
+  }, [selectedAgent, search, navigate, setSelectedAgent, onClose]);
 
   const handleCreateSession = useCallback(async () => {
     const result = await createAgent({});
@@ -168,32 +169,32 @@ export const useCommandMenu = () => {
       navigate(`/agent/${result.agentId}`);
     }
 
-    setOpen({ showCommandMenu: false });
-  }, [createAgent, refreshAgentList, navigate, setOpen]);
+    onClose();
+  }, [createAgent, refreshAgentList, navigate, onClose]);
 
   const openNewTopicOrSaveTopic = useChatStore((s) => s.openNewTopicOrSaveTopic);
 
   const handleCreateTopic = useCallback(() => {
     openNewTopicOrSaveTopic();
-    setOpen({ showCommandMenu: false });
-  }, [openNewTopicOrSaveTopic, setOpen]);
+    onClose();
+  }, [openNewTopicOrSaveTopic, onClose]);
 
   const handleCreateLibrary = useCallback(() => {
-    setOpen({ showCommandMenu: false });
+    onClose();
     openCreateLibraryModal({
       onSuccess: (id) => {
         navigate(`/resource/library/${id}`);
       },
     });
-  }, [setOpen, openCreateLibraryModal, navigate]);
+  }, [onClose, openCreateLibraryModal, navigate]);
 
   const handleCreatePage = useCallback(async () => {
     await createPage();
-    setOpen({ showCommandMenu: false });
-  }, [createPage, setOpen]);
+    onClose();
+  }, [createPage, onClose]);
 
   const handleCreateAgentTeam = useCallback(() => {
-    setOpen({ showCommandMenu: false });
+    onClose();
     openGroupWizard({
       onCreateCustom: async (selectedAgents) => {
         await createGroupWithMembers(selectedAgents);
@@ -202,7 +203,7 @@ export const useCommandMenu = () => {
         await createGroupFromTemplate(templateId, selectedMemberTitles);
       },
     });
-  }, [setOpen, openGroupWizard, createGroupWithMembers, createGroupFromTemplate]);
+  }, [onClose, openGroupWizard, createGroupWithMembers, createGroupFromTemplate]);
 
   return {
     closeCommandMenu,

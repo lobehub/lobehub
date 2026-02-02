@@ -8,6 +8,7 @@
   "codes.DELETED_ACCOUNT_EMAIL": "تم ربط هذا البريد الإلكتروني بحساب محذوف ولا يمكن استخدامه للتسجيل",
   "codes.EMAIL_CAN_NOT_BE_UPDATED": "لا يمكن تحديث البريد الإلكتروني لهذا الحساب",
   "codes.EMAIL_NOT_ALLOWED": "هذا البريد الإلكتروني غير مسموح به للتسجيل",
+  "codes.EMAIL_NOT_FOUND": "لا يوجد بريد إلكتروني مرتبط بهذا الحساب. يرجى التحقق مما إذا كان حسابك مرتبطًا ببريد إلكتروني.",
   "codes.EMAIL_NOT_VERIFIED": "يرجى التحقق من بريدك الإلكتروني أولاً",
   "codes.FAILED_TO_CREATE_SESSION": "فشل في إنشاء الجلسة",
   "codes.FAILED_TO_CREATE_USER": "فشل في إنشاء المستخدم",

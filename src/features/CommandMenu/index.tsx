@@ -3,7 +3,7 @@
 import { Avatar } from '@lobehub/ui';
 import { Command } from 'cmdk';
 import { CornerDownLeft } from 'lucide-react';
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
@@ -21,13 +21,19 @@ import CommandInput from './components/CommandInput';
 import { styles } from './styles';
 import { useCommandMenu } from './useCommandMenu';
 
+const CLOSE_ANIMATION_DURATION = 150;
+
+interface CommandMenuContentProps {
+  isClosing: boolean;
+  onClose: () => void;
+}
+
 /**
  * Inner component that uses the context
  */
-const CommandMenuContent = memo(() => {
+const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }) => {
   const { t } = useTranslation('common');
   const {
-    closeCommandMenu,
     handleBack,
     handleSendToSelectedAgent,
     hasSearch,
@@ -61,10 +67,11 @@ const CommandMenuContent = memo(() => {
   }, [page, setSearch]);
 
   return (
-    <div className={styles.overlay} onClick={closeCommandMenu}>
+    <div className={styles.overlay} data-closing={isClosing} onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()}>
         <Command
           className={styles.commandRoot}
+          data-closing={isClosing}
           onKeyDown={(e) => {
             // Enter key to send message to selected agent
             if (e.key === 'Enter' && selectedAgent && search.trim()) {
@@ -86,7 +93,7 @@ const CommandMenuContent = memo(() => {
               } else if (pages.length > 0) {
                 handleBack();
               } else {
-                closeCommandMenu();
+                onClose();
               }
             }
             // Backspace clears selected agent when search is empty, or goes to previous page
@@ -145,7 +152,7 @@ const CommandMenuContent = memo(() => {
             {!page && !selectedAgent && hasSearch && !search.trimStart().startsWith('@') && (
               <SearchResults
                 isLoading={isSearching}
-                onClose={closeCommandMenu}
+                onClose={onClose}
                 onSetTypeFilter={setTypeFilter}
                 results={searchResults}
                 searchQuery={searchQuery}
@@ -169,9 +176,11 @@ CommandMenuContent.displayName = 'CommandMenuContent';
  * Search everything in LobeHub.
  */
 const CommandMenu = memo(() => {
-  const [open] = useGlobalStore((s) => [s.status.showCommandMenu]);
+  const [open, setOpen] = useGlobalStore((s) => [s.status.showCommandMenu, s.updateSystemStatus]);
   const [mounted, setMounted] = useState(false);
   const [appRoot, setAppRoot] = useState<HTMLElement | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+  const [isVisible, setIsVisible] = useState(false);
   const location = useLocation();
   const pathname = location.pathname;
 
@@ -179,6 +188,14 @@ const CommandMenu = memo(() => {
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  // Sync visibility with open state
+  useEffect(() => {
+    if (open) {
+      setIsVisible(true);
+      setIsClosing(false);
+    }
+  }, [open]);
 
   // Find App root node (.ant-app)
   useEffect(() => {
@@ -217,11 +234,21 @@ const CommandMenu = memo(() => {
     };
   }, [mounted]);
 
-  if (!mounted || !open || !appRoot) return null;
+  const handleClose = useCallback(() => {
+    if (isClosing) return;
+    setIsClosing(true);
+    setTimeout(() => {
+      setOpen({ showCommandMenu: false });
+      setIsVisible(false);
+      setIsClosing(false);
+    }, CLOSE_ANIMATION_DURATION);
+  }, [isClosing, setOpen]);
+
+  if (!mounted || !isVisible || !appRoot) return null;
 
   return createPortal(
-    <CommandMenuProvider pathname={pathname}>
-      <CommandMenuContent />
+    <CommandMenuProvider onClose={handleClose} pathname={pathname}>
+      <CommandMenuContent isClosing={isClosing} onClose={handleClose} />
     </CommandMenuProvider>,
     appRoot,
   );

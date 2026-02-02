@@ -253,6 +253,7 @@ export default {
   'cmdk.submitIssue': 'Submit Issue',
   'cmdk.theme': 'Theme',
   'cmdk.themeAuto': 'Auto',
+  'cmdk.themeCurrent': 'Current',
   'cmdk.themeDark': 'Dark',
   'cmdk.themeLight': 'Light',
   'cmdk.toOpen': 'Open',

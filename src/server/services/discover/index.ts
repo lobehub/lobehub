@@ -574,9 +574,9 @@ export class DiscoverService {
 
         examples: Array.isArray((data as any).examples)
           ? (data as any).examples.map((example: any) => ({
-            content: typeof example === 'string' ? example : example.content || '',
-            role: example.role || 'user',
-          }))
+              content: typeof example === 'string' ? example : example.content || '',
+              role: example.role || 'user',
+            }))
           : [],
         forkCount: (data as any).forkCount,
         forkedFromAgentId: (data as any).forkedFromAgentId,
@@ -680,8 +680,7 @@ export class DiscoverService {
     try {
       const normalizedLocale = normalizeLocale(locale);
 
-      let apiSort: 'createdAt' | 'updatedAt' | 'name' | 'mostUsage' | 'recommended' =
-        'recommended';
+      let apiSort: 'createdAt' | 'updatedAt' | 'name' | 'mostUsage' | 'recommended' = 'recommended';
       let haveSkills: boolean | undefined = rest.haveSkills;
 
       switch (sort) {
@@ -813,12 +812,15 @@ export class DiscoverService {
         },
       },
     );
+
+    // Fetch related MCPs
     const list = await this.getMcpList({
       category: mcp.category,
       locale,
       page: 1,
       pageSize: 7,
     });
+
     const result = {
       ...mcp,
       related: list.items.filter((item) => item.identifier !== mcp.identifier).slice(0, 6),
@@ -831,7 +833,9 @@ export class DiscoverService {
     log('getMcpList: params=%O', params);
     const { category, locale, sort } = params;
     const normalizedLocale = normalizeLocale(locale);
-    const shouldOmitCategory = [McpCategory.All, McpCategory.Discover].includes(category as McpCategory)
+    const shouldOmitCategory = [McpCategory.All, McpCategory.Discover].includes(
+      category as McpCategory,
+    );
 
     const result = await this.market.plugins.getPluginList(
       {
@@ -908,6 +912,78 @@ export class DiscoverService {
    */
   increaseAgentInstallCount = async (identifier: string) => {
     await this.market.agents.increaseInstallCount(identifier);
+  };
+
+  /**
+   * Get agents that use a specific plugin
+   */
+  getAgentsByPlugin = async (params: {
+    locale?: string;
+    page?: number;
+    pageSize?: number;
+    pluginId: string;
+  }): Promise<AssistantListResponse> => {
+    log('getAgentsByPlugin: params=%O', params);
+    const { locale, pluginId, page = 1, pageSize = 20 } = params;
+    const normalizedLocale = normalizeLocale(locale);
+
+    try {
+      const data = await this.market.agents.getAgentsByPlugin({
+        locale: normalizedLocale,
+        page,
+        pageSize,
+        pluginId,
+      });
+
+      // Transform to DiscoverAssistantItem format
+      const items: DiscoverAssistantItem[] = (data.items || []).map((item: any) => {
+        const normalizedAuthor = this.normalizeAuthorField(item.author);
+        return {
+          author:
+            normalizedAuthor.name || (item.ownerId !== null ? `User${item.ownerId}` : 'Unknown'),
+          avatar: item.avatar || '',
+          category: item.category,
+          config: {} as any,
+          createdAt: item.createdAt || item.updatedAt || new Date().toISOString(),
+          description: item.description || '',
+          homepage: `https://lobehub.com/discover/assistant/${item.identifier}`,
+          identifier: item.identifier,
+          installCount: item.installCount,
+          knowledgeCount: item.knowledgeCount || 0,
+          pluginCount: item.pluginCount || 0,
+          schemaVersion: 1,
+          tags: item.tags || [],
+          title: item.name || item.identifier,
+          tokenUsage: item.tokenUsage || 0,
+          userName: normalizedAuthor.userName,
+        };
+      });
+
+      const result: AssistantListResponse = {
+        currentPage: data.currentPage || page,
+        items,
+        pageSize: data.pageSize || pageSize,
+        totalCount: data.totalCount || 0,
+        totalPages: data.totalPages || 0,
+      };
+
+      log(
+        'getAgentsByPlugin: returning page %d/%d with %d items',
+        result.currentPage,
+        result.totalPages,
+        result.items.length,
+      );
+      return result;
+    } catch (error) {
+      log('getAgentsByPlugin: error fetching from market SDK: %O', error);
+      return {
+        currentPage: page,
+        items: [],
+        pageSize,
+        totalCount: 0,
+        totalPages: 0,
+      };
+    }
   };
 
   // ============================== Plugin Market ==============================

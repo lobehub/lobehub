@@ -262,6 +262,10 @@ export default {
 
   'mcp.categories.web-search.name': 'Information Retrieval',
 
+  'mcp.details.agents.empty': 'No agents are using this skill yet',
+  'mcp.details.agents.networkError': 'Failed to load data. Check network and retry.',
+  'mcp.details.agents.title': 'Agents Using This Skill',
+
   'mcp.details.connectionType.hybrid.desc':
     'This service can run locally or in the cloud depending on configuration or usage scenario, offering dual operation capability.',
 

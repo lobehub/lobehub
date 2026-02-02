@@ -5,6 +5,7 @@ import { Flexbox, Icon, Tabs, type TabsProps, Tag } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import {
   BookOpenIcon,
+  BotIcon,
   CodeIcon,
   DownloadIcon,
   HistoryIcon,
@@ -143,7 +144,11 @@ const Nav = memo<NavProps>(
               key: McpNavKey.Score,
               label: t('mcp.details.score.title'),
             },
-
+            {
+              icon: <Icon icon={BotIcon} size={16} />,
+              key: McpNavKey.Agents,
+              label: t('mcp.details.agents.title'),
+            },
             !inModal && {
               icon: <Icon icon={HistoryIcon} size={16} />,
               key: McpNavKey.Version,
