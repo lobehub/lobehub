@@ -52,6 +52,10 @@ vi.mock('@/libs/trpc/client', () => ({
   },
 }));
 
+vi.mock('@lobechat/electron-client-ipc', () => ({
+  getElectronIpc: () => mockElectronIpc,
+}));
+
 vi.mock('@/utils/electron/ipc', () => ({
   ensureElectronIpc: () => mockElectronIpc,
 }));

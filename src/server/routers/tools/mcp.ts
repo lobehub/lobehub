@@ -78,12 +78,28 @@ const mcpProcedure = authedProcedure
 export const mcpRouter = router({
   getStreamableMcpServerManifest: mcpProcedure
     .input(GetStreamableMcpServerManifestInputSchema)
-    .query(async ({ input }) => {
+    .query(async ({ input, ctx }) => {
+      let auth = input.auth;
+      if (input.auth?.type === 'oauth' && ctx.userId && ctx.serverDB) {
+        try {
+          const resolved = await resolveMcpOAuthToken(ctx.serverDB, ctx.userId, input.identifier);
+          auth = resolved;
+        } catch (err) {
+          const message = err instanceof Error ? err.message : '';
+          if ((err as any).code === REAUTH_REQUIRED || message === REAUTH_REQUIRED) {
+            throw new TRPCError({
+              code: 'UNAUTHORIZED',
+              message: REAUTH_REQUIRED,
+            });
+          }
+          throw err;
+        }
+      }
       return await mcpService.getStreamableMcpServerManifest(
         input.identifier,
         input.url,
         input.metadata,
-        input.auth,
+        auth,
         input.headers,
       );
     }),

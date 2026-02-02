@@ -1,19 +1,26 @@
 import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
+import { getElectronIpc } from '@lobechat/electron-client-ipc';
 import {
   type ChatToolPayload,
   type CheckMcpInstallResult,
   type CustomPluginMetadata,
 } from '@lobechat/types';
 import { isLocalOrPrivateUrl, safeParseJSON } from '@lobechat/utils';
+import type { DesktopIpcServices } from '@lobehub/desktop-ipc-typings';
 import { type PluginManifest } from '@lobehub/market-sdk';
 import { type CallReportRequest } from '@lobehub/market-types';
 import superjson from 'superjson';
 
 import { type MCPToolCallResult } from '@/libs/mcp';
 import { toolsClient } from '@/libs/trpc/client';
-import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 import { discoverService } from './discover';
+
+const ELECTRON_IPC_UNAVAILABLE =
+  'MCP is not available in this window. Please use the main app window.';
+
+const getDesktopIpc = (): DesktopIpcServices | null =>
+  getElectronIpc() as DesktopIpcServices | null;
 
 /**
  * Calculate byte size of object
@@ -137,9 +144,11 @@ class MCPService {
         });
       } else if (isDesktop && isStdio) {
         // For desktop and stdio, use IPC (main process)
+        const ipc = getDesktopIpc();
+        if (!ipc) throw new Error(ELECTRON_IPC_UNAVAILABLE);
         // Note: IPC doesn't support AbortSignal yet
         const serialized = superjson.serialize(data);
-        const serializedResult = await ensureElectronIpc().mcp.callTool(serialized as any);
+        const serializedResult = await ipc.mcp.callTool(serialized as any);
         result = superjson.deserialize(serializedResult as any) as any;
       } else {
         // For other types, use the toolsClient
@@ -214,14 +223,14 @@ class MCPService {
     },
     signal?: AbortSignal,
   ) {
-    // If in Desktop mode and URL is local address, use IPC (main process)
+    // If in Desktop mode and URL is local address, use IPC (main process) when available
     // This avoids accessing user local services through remote server in production
-    if (isDesktop && isLocalOrPrivateUrl(params.url)) {
+    // In web app window.electronAPI is undefined so getDesktopIpc() returns null and we use toolsClient
+    const ipc = getDesktopIpc();
+    if (isDesktop && isLocalOrPrivateUrl(params.url) && ipc) {
       // Note: IPC doesn't support AbortSignal yet
       const serialized = superjson.serialize(params);
-      const serializedResult = await ensureElectronIpc().mcp.getStreamableMcpServerManifest(
-        serialized as any,
-      );
+      const serializedResult = await ipc.mcp.getStreamableMcpServerManifest(serialized as any);
       return superjson.deserialize(serializedResult as any) as any;
     }
 
@@ -240,11 +249,11 @@ class MCPService {
     _signal?: AbortSignal,
   ) {
     void _signal;
+    const ipc = getDesktopIpc();
+    if (!ipc) throw new Error(ELECTRON_IPC_UNAVAILABLE);
     // Note: IPC doesn't support AbortSignal yet
     const serialized = superjson.serialize({ ...stdioParams, metadata });
-    const serializedResult = await ensureElectronIpc().mcp.getStdioMcpServerManifest(
-      serialized as any,
-    );
+    const serializedResult = await ipc.mcp.getStdioMcpServerManifest(serialized as any);
     return superjson.deserialize(serializedResult as any) as any;
   }
 
@@ -259,14 +268,14 @@ class MCPService {
     _signal?: AbortSignal,
   ): Promise<CheckMcpInstallResult> {
     void _signal;
+    const ipc = getDesktopIpc();
+    if (!ipc) throw new Error(ELECTRON_IPC_UNAVAILABLE);
     // Pass all deployment options to main process for checking
     // Note: IPC doesn't support AbortSignal yet
     const serialized = superjson.serialize({
       deploymentOptions: manifest.deploymentOptions as any,
     });
-    const serializedResult = await ensureElectronIpc().mcp.validMcpServerInstallable(
-      serialized as any,
-    );
+    const serializedResult = await ipc.mcp.validMcpServerInstallable(serialized as any);
     return superjson.deserialize(serializedResult as any) as any;
   }
 }
