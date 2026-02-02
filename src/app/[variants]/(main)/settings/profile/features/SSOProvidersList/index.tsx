@@ -34,8 +34,11 @@ export const SSOProvidersList = memo(() => {
   }, [providers]);
 
   // Get available providers for linking (filter out already linked)
+  // Normalize provider IDs when comparing to handle aliases (e.g. microsoft-entra-id → microsoft)
   const availableProviders = useMemo(() => {
-    return (oAuthSSOProviders || []).filter((provider) => !linkedProviderIds.has(provider));
+    return (oAuthSSOProviders || []).filter(
+      (provider) => !linkedProviderIds.has(normalizeProviderId(provider)),
+    );
   }, [oAuthSSOProviders, linkedProviderIds]);
 
   const handleUnlinkSSO = async (provider: string) => {
