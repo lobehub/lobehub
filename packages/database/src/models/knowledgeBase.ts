@@ -1,7 +1,7 @@
 import { KnowledgeBaseItem } from '@lobechat/types';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 
-import { NewKnowledgeBase, documents, files, knowledgeBaseFiles, knowledgeBases } from '../schemas';
+import { NewKnowledgeBase, documents, knowledgeBaseFiles, knowledgeBases } from '../schemas';
 import { LobeChatDatabase } from '../type';
 
 export class KnowledgeBaseModel {
@@ -29,16 +29,17 @@ export class KnowledgeBaseModel {
     const documentIds = fileIds.filter((id) => id.startsWith('docs_'));
     const directFileIds = fileIds.filter((id) => !id.startsWith('docs_'));
 
-    // Resolve document IDs to their mirror file IDs
-    // For Pages, files.parentId points to the document ID
+    // Resolve document IDs to their mirror file IDs via documents.fileId
     let resolvedFileIds = [...directFileIds];
     if (documentIds.length > 0) {
-      const mirrorFiles = await this.db
-        .select({ id: files.id })
-        .from(files)
-        .where(and(inArray(files.parentId, documentIds), eq(files.userId, this.userId)));
+      const docsWithFiles = await this.db
+        .select({ fileId: documents.fileId })
+        .from(documents)
+        .where(and(inArray(documents.id, documentIds), eq(documents.userId, this.userId)));
 
-      const mirrorFileIds = mirrorFiles.map((file) => file.id);
+      const mirrorFileIds = docsWithFiles
+        .map((doc) => doc.fileId)
+        .filter((id): id is string => id !== null);
       resolvedFileIds = [...resolvedFileIds, ...mirrorFileIds];
 
       // Update documents.knowledgeBaseId for pages
@@ -77,16 +78,17 @@ export class KnowledgeBaseModel {
     const documentIds = ids.filter((id) => id.startsWith('docs_'));
     const directFileIds = ids.filter((id) => !id.startsWith('docs_'));
 
-    // Resolve document IDs to their mirror file IDs
-    // For Pages, files.parentId points to the document ID
+    // Resolve document IDs to their mirror file IDs via documents.fileId
     let resolvedFileIds = [...directFileIds];
     if (documentIds.length > 0) {
-      const mirrorFiles = await this.db
-        .select({ id: files.id })
-        .from(files)
-        .where(and(inArray(files.parentId, documentIds), eq(files.userId, this.userId)));
+      const docsWithFiles = await this.db
+        .select({ fileId: documents.fileId })
+        .from(documents)
+        .where(and(inArray(documents.id, documentIds), eq(documents.userId, this.userId)));
 
-      const mirrorFileIds = mirrorFiles.map((file) => file.id);
+      const mirrorFileIds = docsWithFiles
+        .map((doc) => doc.fileId)
+        .filter((id): id is string => id !== null);
       resolvedFileIds = [...resolvedFileIds, ...mirrorFileIds];
 
       // Clear documents.knowledgeBaseId for pages
