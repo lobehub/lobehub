@@ -70,12 +70,14 @@ tags:
 
   ### Configure Environment Variables
 
-  | Environment Variable    | Type     | Description                                                     |
-  | ----------------------- | -------- | --------------------------------------------------------------- |
-  | `AUTH_SECRET`           | Required | Session encryption key, generate with `openssl rand -base64 32` |
-  | `AUTH_SSO_PROVIDERS`    | Required | Set to `microsoft`                                              |
-  | `AUTH_MICROSOFT_ID`     | Required | Application (client) ID                                         |
-  | `AUTH_MICROSOFT_SECRET` | Required | Client secret value                                             |
+  | Environment Variable           | Type     | Description                                                     |
+  | ------------------------------ | -------- | --------------------------------------------------------------- |
+  | `AUTH_SECRET`                  | Required | Session encryption key, generate with `openssl rand -base64 32` |
+  | `AUTH_SSO_PROVIDERS`           | Required | Set to `microsoft`                                              |
+  | `AUTH_MICROSOFT_ID`            | Required | Application (client) ID                                         |
+  | `AUTH_MICROSOFT_SECRET`        | Required | Client secret value                                             |
+  | `AUTH_MICROSOFT_AUTHORITY_URL` | Optional | Authority URL for Microsoft Entra ID                            |
+  | `AUTH_MICROSOFT_TENANT_ID`     | Optional | Directory (tenant) ID for single-tenant apps                    |
 
   <Callout type={'info'}>
     **Alternative Environment Variables**: For backward compatibility, these
@@ -98,10 +100,6 @@ tags:
 </Callout>
 
 ## Common Issues
-
-### Tenant Configuration
-
-By default, LobeHub uses `common` tenant which allows both organizational and personal Microsoft accounts. If you need single-tenant configuration, you may need to customize the tenant settings.
 
 ### Client Secret Expiration
 

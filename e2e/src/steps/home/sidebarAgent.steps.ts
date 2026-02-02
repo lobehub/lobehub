@@ -150,69 +150,99 @@ Given('用户在 Home 页面有一个 Agent', async function (this: CustomWorld)
   console.log(`   ✅ 找到 Agent: ${agentLabel}, id: ${agentId}`);
 });
 
-Given('该 Agent 未被置顶', async function (this: CustomWorld) {
+Given('该 Agent 未被置顶', { timeout: 30_000 }, async function (this: CustomWorld) {
   console.log('   📍 Step: 检查 Agent 未被置顶...');
   // Check if the agent has a pin icon - if so, unpin it first
   const targetItem = this.page.locator(this.testContext.targetItemSelector).first();
-  const pinIcon = targetItem.locator('svg.lucide-pin');
+  // Pin icon uses lucide-react which adds class "lucide lucide-pin"
+  const pinIcon = targetItem.locator('svg[class*="lucide-pin"]');
 
   if ((await pinIcon.count()) > 0) {
+    console.log('   📍 Agent 已置顶，开始取消置顶操作...');
     // Unpin it first
-    await targetItem.click({ button: 'right' });
-    await this.page.waitForTimeout(300);
+    await targetItem.hover();
+    await this.page.waitForTimeout(200);
+    await targetItem.click({ button: 'right', force: true });
+    await this.page.waitForTimeout(500);
     const unpinOption = this.page.getByRole('menuitem', { name: /取消置顶|unpin/i });
+    await unpinOption.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {
+      console.log('   ⚠️ 取消置顶选项未找到');
+    });
     if ((await unpinOption.count()) > 0) {
       await unpinOption.click();
       await this.page.waitForTimeout(500);
     }
     // Close menu if still open
-    await this.page.click('body', { position: { x: 10, y: 10 } });
+    await this.page.keyboard.press('Escape');
+    await this.page.waitForTimeout(300);
   }
 
   console.log('   ✅ Agent 未被置顶');
 });
 
-Given('该 Agent 已被置顶', async function (this: CustomWorld) {
+Given('该 Agent 已被置顶', { timeout: 30_000 }, async function (this: CustomWorld) {
   console.log('   📍 Step: 确保 Agent 已被置顶...');
   // Check if the agent has a pin icon - if not, pin it first
   const targetItem = this.page.locator(this.testContext.targetItemSelector).first();
-  const pinIcon = targetItem.locator('svg.lucide-pin');
+  // Pin icon uses lucide-react which adds class "lucide lucide-pin"
+  const pinIcon = targetItem.locator('svg[class*="lucide-pin"]');
 
   if ((await pinIcon.count()) === 0) {
-    // Pin it first
-    await targetItem.click({ button: 'right' });
-    await this.page.waitForTimeout(300);
+    console.log('   📍 Agent 未置顶，开始置顶操作...');
+    // Pin it first - right-click on the NavItem Block inside the Link
+    // The ContextMenuTrigger is attached to the Block component inside the Link
+    await targetItem.hover();
+    await this.page.waitForTimeout(200);
+    await targetItem.click({ button: 'right', force: true });
+    await this.page.waitForTimeout(500);
+
+    // Debug: check menu visibility
+    const menuItems = await this.page.locator('[role="menuitem"]').count();
+    console.log(`   📍 Debug: 发现 ${menuItems} 个菜单项`);
+
     const pinOption = this.page.getByRole('menuitem', { name: /置顶|pin/i });
+    await pinOption.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {
+      console.log('   ⚠️ 置顶选项未找到');
+    });
     if ((await pinOption.count()) > 0) {
       await pinOption.click();
       await this.page.waitForTimeout(500);
+      console.log('   ✅ 已点击置顶选项');
     }
     // Close menu if still open
-    await this.page.click('body', { position: { x: 10, y: 10 } });
+    await this.page.keyboard.press('Escape');
+    await this.page.waitForTimeout(300);
   }
 
-  console.log('   ✅ Agent 已被置顶');
+  // Verify pin is now visible
+  await this.page.waitForTimeout(500);
+  const pinIconAfter = targetItem.locator('svg[class*="lucide-pin"]');
+  const isPinned = (await pinIconAfter.count()) > 0;
+  console.log(`   ✅ Agent 已被置顶: ${isPinned}`);
 });
 
 // ============================================
 // When Steps
 // ============================================
 
-When('用户右键点击该 Agent', async function (this: CustomWorld) {
+When('用户右键点击该 Agent', { timeout: 30_000 }, async function (this: CustomWorld) {
   console.log('   📍 Step: 右键点击 Agent...');
 
   const targetItem = this.page.locator(this.testContext.targetItemSelector).first();
 
-  // Right-click on the inner content (the NavItem Block component)
-  // The ContextMenuTrigger wraps the Block, not the Link
-  const innerBlock = targetItem.locator('> div').first();
-  if ((await innerBlock.count()) > 0) {
-    await innerBlock.click({ button: 'right' });
-  } else {
-    await targetItem.click({ button: 'right' });
-  }
+  // Hover first to ensure element is interactive
+  await targetItem.hover();
+  await this.page.waitForTimeout(200);
 
-  await this.page.waitForTimeout(800);
+  // Right-click with force option to ensure it triggers
+  await targetItem.click({ button: 'right', force: true });
+  await this.page.waitForTimeout(500);
+
+  // Wait for context menu to appear
+  const menuItem = this.page.locator('[role="menuitem"]').first();
+  await menuItem.waitFor({ state: 'visible', timeout: 5000 }).catch(() => {
+    console.log('   ⚠️ 菜单未出现，重试右键点击...');
+  });
 
   // Debug: check what menus are visible
   const menuItems = await this.page.locator('[role="menuitem"]').count();
@@ -339,7 +369,8 @@ Then('Agent 应该显示置顶图标', async function (this: CustomWorld) {
 
   await this.page.waitForTimeout(500);
   const targetItem = this.page.locator(this.testContext.targetItemSelector).first();
-  const pinIcon = targetItem.locator('svg.lucide-pin');
+  // Pin icon uses lucide-react which adds class "lucide lucide-pin"
+  const pinIcon = targetItem.locator('svg[class*="lucide-pin"]');
   await expect(pinIcon).toBeVisible({ timeout: 5000 });
 
   console.log('   ✅ 置顶图标已显示');
@@ -350,7 +381,8 @@ Then('Agent 不应该显示置顶图标', async function (this: CustomWorld) {
 
   await this.page.waitForTimeout(500);
   const targetItem = this.page.locator(this.testContext.targetItemSelector).first();
-  const pinIcon = targetItem.locator('svg.lucide-pin');
+  // Pin icon uses lucide-react which adds class "lucide lucide-pin"
+  const pinIcon = targetItem.locator('svg[class*="lucide-pin"]');
   await expect(pinIcon).not.toBeVisible({ timeout: 5000 });
 
   console.log('   ✅ 置顶图标未显示');

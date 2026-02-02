@@ -148,7 +148,7 @@ jobs:
           # 使用 GitHub Hosted Runner
           if [[ "${{ github.event_name }}" != "workflow_dispatch" ]] || [[ "${{ inputs.build_mac }}" == "true" ]]; then
             echo "Using GitHub-Hosted Runner for macOS ARM64"
-            arm_entry='{"os": "macos-14", "name": "macos-arm64"}'
+            arm_entry='{"os": "macos-15", "name": "macos-arm64"}'
             static_matrix=$(echo "$static_matrix" | jq -c --argjson entry "$arm_entry" '. + [$entry]')
           fi
 

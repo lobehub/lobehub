@@ -1,4 +1,5 @@
 export default {
+  'arguments.moreParams': '{{count}} params in total',
   'arguments.title': 'Arguments',
   'builtins.lobe-agent-builder.apiName.getAvailableModels': 'Get available models',
   'builtins.lobe-agent-builder.apiName.getAvailableTools': 'Get available Skills',

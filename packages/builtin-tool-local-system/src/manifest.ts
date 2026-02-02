@@ -7,12 +7,29 @@ export const LocalSystemManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'List files and folders in a specified directory. Input should be a path. Output is a JSON array of file/folder names.',
+        'List files and folders in a specified directory. Returns file/folder names with metadata (size, modified time). Results are sorted by modified time (newest first) by default and limited to 100 items.',
       name: LocalSystemApiName.listLocalFiles,
       parameters: {
         properties: {
+          limit: {
+            default: 100,
+            description: 'Maximum number of items to return (default: 100)',
+            type: 'number',
+          },
           path: {
             description: 'The directory path to list',
+            type: 'string',
+          },
+          sortBy: {
+            default: 'modifiedTime',
+            description: 'Field to sort by (default: modifiedTime)',
+            enum: ['name', 'modifiedTime', 'createdTime', 'size'],
+            type: 'string',
+          },
+          sortOrder: {
+            default: 'desc',
+            description: 'Sort order (default: desc)',
+            enum: ['asc', 'desc'],
             type: 'string',
           },
         },

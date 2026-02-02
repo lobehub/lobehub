@@ -93,10 +93,10 @@ export const createCustomPluginSlice: StateCreator<
 
   updateCustomPlugin: async (id, value) => {
     const { reinstallCustomPlugin } = get();
-    // 1. 更新 list 项信息
+    // 1. Update list item information
     await pluginService.updatePlugin(id, value);
 
-    // 2. 重新安装插件
+    // 2. Reinstall plugin
     await reinstallCustomPlugin(id);
   },
   updateNewCustomPlugin: (newCustomPlugin) => {

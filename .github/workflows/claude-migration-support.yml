@@ -70,12 +70,12 @@ jobs:
             ```
 
             2. Read the latest migration documentation based on the issue:
-            - If issue #11757 (NextAuth): `cat docs/self-hosting/advanced/auth/nextauth-to-betterauth.mdx`
-            - If issue #11707 (Clerk): `cat docs/self-hosting/advanced/auth/clerk-to-betterauth.mdx`
+            - If issue #11757 (NextAuth): `cat docs/self-hosting/migration/v2/auth/nextauth-to-betterauth.mdx`
+            - If issue #11707 (Clerk): `cat docs/self-hosting/migration/v2/auth/clerk-to-betterauth.mdx`
 
             3. Read additional reference files:
-            - Main auth documentation: `cat docs/self-hosting/advanced/auth.mdx`
-            - Migration internals: `cat docs/self-hosting/advanced/auth/migration-internals.mdx`
+            - Main auth documentation: `cat docs/self-hosting/auth.mdx`
+            - Migration internals: `cat docs/self-hosting/migration/v2/auth/migration-internals.mdx`
             - Deprecated env vars checker: `cat scripts/_shared/checkDeprecatedAuth.js`
 
             4. Analyze the user's comment and determine:

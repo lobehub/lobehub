@@ -8,6 +8,7 @@
   "codes.DELETED_ACCOUNT_EMAIL": "このメールアドレスは削除されたアカウントに関連付けられており、登録には使用できません",
   "codes.EMAIL_CAN_NOT_BE_UPDATED": "このアカウントのメールアドレスは変更できません",
   "codes.EMAIL_NOT_ALLOWED": "このメールアドレスでは登録できません",
+  "codes.EMAIL_NOT_FOUND": "このアカウントにはメールアドレスが登録されていません。アカウントにメールアドレスが紐付けられているかご確認ください。",
   "codes.EMAIL_NOT_VERIFIED": "メールアドレスの確認を完了してください",
   "codes.FAILED_TO_CREATE_SESSION": "セッションの作成に失敗しました",
   "codes.FAILED_TO_CREATE_USER": "ユーザーの作成に失敗しました",

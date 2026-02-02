@@ -10,6 +10,7 @@ import {
   type KillCommandParams,
   type KillCommandResult,
   type ListLocalFileParams,
+  type ListLocalFilesResult,
   type LocalFileItem,
   type LocalMoveFilesResultItem,
   type LocalReadFileParams,
@@ -31,7 +32,7 @@ import { ensureElectronIpc } from '@/utils/electron/ipc';
 
 class LocalFileService {
   // File Operations
-  async listLocalFiles(params: ListLocalFileParams): Promise<LocalFileItem[]> {
+  async listLocalFiles(params: ListLocalFileParams): Promise<ListLocalFilesResult> {
     return ensureElectronIpc().localSystem.listLocalFiles(params);
   }
 

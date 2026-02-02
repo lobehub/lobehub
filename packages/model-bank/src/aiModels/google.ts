@@ -653,25 +653,6 @@ const googleChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      imageOutput: true,
-      vision: true,
-    },
-    contextWindowTokens: 1_048_576 + 8192,
-    description: 'A Gemini 2.0 Flash variant optimized for cost efficiency and low latency.',
-    displayName: 'Gemini 2.0 Flash Exp',
-    id: 'gemini-2.0-flash-exp',
-    maxOutput: 8192,
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-02-05',
-    type: 'chat',
-  },
-  {
-    abilities: {
       vision: true,
     },
     contextWindowTokens: 1_048_576 + 32_768,

@@ -46,6 +46,13 @@ LobeHub provides a complete authentication service capability when deployed. The
 - Default: `-`
 - Example: `example.com,admin@other.com`
 
+#### `AUTH_DISABLE_EMAIL_PASSWORD`
+
+- Type: Optional
+- Description: Set to `1` to disable email/password authentication, forcing users to use SSO login only. When enabled, the email input will be hidden on the login page and the signup page will redirect to login.
+- Default: `0`
+- Example: `1`
+
 #### `JWKS_KEY`
 
 - Type: Required
@@ -154,6 +161,20 @@ These settings are required for email verification and password reset features.
 - Description: Client Secret of the Microsoft Entra ID application.
 - Default: `-`
 - Example: `xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+#### `AUTH_MICROSOFT_AUTHORITY_URL`
+
+- Type: Optional
+- Description: Authority URL for the Microsoft Entra ID. This is used to specify the endpoint for authentication requests.
+- Default: `https://login.microsoftonline.com`
+- Example: `https://login.partner.microsoftonline.cn`
+
+#### `AUTH_MICROSOFT_TENANT_ID`
+
+- Type: Optional
+- Description: Directory (tenant) ID for single-tenant Microsoft Entra ID applications.
+- Default: `common`
+- Example: `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
 
 ### AWS Cognito
 

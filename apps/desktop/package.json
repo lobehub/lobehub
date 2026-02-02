@@ -12,11 +12,11 @@
   "main": "./dist/main/index.js",
   "scripts": {
     "build": "electron-vite build",
-    "build-local": "npm run build && electron-builder --dir --config electron-builder.mjs  --c.mac.notarize=false -c.mac.identity=null --c.asar=false",
     "build:linux": "npm run build && electron-builder --linux --config electron-builder.mjs  --publish never",
     "build:mac": "npm run build && electron-builder --mac --config electron-builder.mjs  --publish never",
     "build:mac:local": "npm run build && UPDATE_CHANNEL=nightly electron-builder --mac --config electron-builder.mjs --publish never",
     "build:win": "npm run build && electron-builder --win --config electron-builder.mjs  --publish never",
+    "build-local": "npm run build && electron-builder --dir --config electron-builder.mjs  --c.mac.notarize=false -c.mac.identity=null --c.asar=false",
     "dev": "electron-vite dev",
     "dev:static": "cross-env DESKTOP_RENDERER_STATIC=1 npm run electron:dev",
     "electron:dev": "electron-vite dev",
@@ -46,9 +46,6 @@
     "fetch-socks": "^1.3.2",
     "get-port-please": "^3.2.0",
     "superjson": "^2.2.6"
-  },
-  "optionalDependencies": {
-    "node-mac-permissions": "^2.5.0"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
@@ -102,6 +99,9 @@
     "vite": "^7.2.7",
     "vitest": "^3.2.4",
     "zod": "^3.25.76"
+  },
+  "optionalDependencies": {
+    "node-mac-permissions": "^2.5.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

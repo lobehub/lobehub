@@ -64,6 +64,10 @@ Here is the process for deploying the LobeHub server database version on a Linux
 
   <GenerateSecret envName="AUTH_SECRET" />
 
+  Click the button below to generate `JWKS_KEY` (for signing and verifying JWTs):
+
+  <GenerateJWKSKey />
+
   ```shell
   # Website domain
   APP_URL=https://your-prod-domain.com
@@ -77,7 +81,7 @@ Here is the process for deploying the LobeHub server database version on a Linux
   # Authentication (Better Auth)
   # Session encryption key (generate with: openssl rand -base64 32)
   AUTH_SECRET=jgwsK28dspyVQoIf8/M3IIHl1h6LYYceSYNXeLpy6uk=
-  # JWKS key for signing and verifying JWTs (generate at: https://lobehub.com/docs/self-hosting/environment-variables/auth#jwks_key)
+  # JWKS key for signing and verifying JWTs
   JWKS_KEY='{"keys":[...]}'
 
   # S3 related
@@ -85,7 +89,6 @@ Here is the process for deploying the LobeHub server database version on a Linux
   S3_SECRET_ACCESS_KEY=xxxxxxxxxx
   S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com
   S3_BUCKET=LobeHub
-  S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com
 
   ```
 
@@ -142,7 +145,6 @@ $ docker run -it -d --name lobehub -p 3210:3210 \
   -e S3_SECRET_ACCESS_KEY=xxxxxxxxxx \
   -e S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com \
   -e S3_BUCKET=LobeHub \
-  -e S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com \
   lobehub/lobehub
 ```
 

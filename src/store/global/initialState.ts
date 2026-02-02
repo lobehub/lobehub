@@ -105,18 +105,18 @@ export interface SystemStatus {
   imagePanelWidth: number;
   imageTopicPanelWidth?: number;
   /**
-   * 应用初始化时不启用 PGLite，只有当用户手动开启时才启用
+   * Do not enable PGLite on app initialization, only enable when user manually turns it on
    */
   isEnablePglite?: boolean;
   isShowCredit?: boolean;
   knowledgeBaseModalViewMode?: 'list' | 'masonry';
   language?: LocaleMode;
   /**
-   * 记住用户最后选择的图像生成模型
+   * Remember user's last selected image generation model
    */
   lastSelectedImageModel?: string;
   /**
-   * 记住用户最后选择的图像生成提供商
+   * Remember user's last selected image generation provider
    */
   lastSelectedImageProvider?: string;
   latestChangelogId?: string;
@@ -124,11 +124,11 @@ export interface SystemStatus {
   mobileShowPortal?: boolean;
   mobileShowTopic?: boolean;
   /**
-   * ModelSwitchPanel 的分组模式
+   * ModelSwitchPanel grouping mode
    */
   modelSwitchPanelGroupMode?: 'byModel' | 'byProvider';
   /**
-   * ModelSwitchPanel 的宽度
+   * ModelSwitchPanel width
    */
   modelSwitchPanelWidth?: number;
   noWideScreen?: boolean;
@@ -157,7 +157,7 @@ export interface SystemStatus {
   showSystemRole?: boolean;
   systemRoleExpandedMap: Record<string, boolean>;
   /**
-   * 是否使用短格式显示 token
+   * Whether to display tokens in short format
    */
   tokenDisplayFormatShort?: boolean;
   /**
@@ -177,21 +177,21 @@ export interface GlobalState {
 
   initClientDBProcess?: { costTime?: number; phase: 'wasm' | 'dependencies'; progress: number };
   /**
-   * 客户端数据库初始化状态
-   * 启动时为 Idle，完成为 Ready，报错为 Error
+   * Client database initialization state
+   * Idle on startup, Ready when complete, Error on failure
    */
   initClientDBStage: DatabaseLoadingState;
   isMobile?: boolean;
   /**
-   * 服务端版本过旧，不支持 /api/version 接口
-   * 需要提示用户更新服务端
+   * Server version is too old, does not support /api/version endpoint
+   * Need to prompt user to update server
    */
   isServerVersionOutdated?: boolean;
   isStatusInit?: boolean;
   latestVersion?: string;
   navigate?: NavigateFunction;
   /**
-   * 服务端版本号，用于检测客户端与服务端版本是否一致
+   * Server version number, used to detect client-server version consistency
    */
   serverVersion?: string;
   sidebarKey: SidebarTabKey;

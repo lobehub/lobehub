@@ -39,6 +39,7 @@ export const usePWAInstall = () => {
   }, []);
 
   const installCheck = () => {
+    // Don't show install button when in PWA or environment that doesn't support PWA
     if (isPWA || !isSupportInstallPWA) return false;
     return canInstall;
   };

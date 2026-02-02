@@ -616,7 +616,7 @@ export const chatTopic: StateCreator<
     await topicService.batchRemoveTopics(topics.map((t) => t.id));
     await refreshTopic();
 
-    // 切换到默认 topic
+    // Switch to default topic
     switchTopic(null);
   },
 

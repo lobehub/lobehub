@@ -19,7 +19,7 @@ export const useToggleImageRightPanelHotkey = () => {
   );
 };
 
-// 注册聚合
+// Register aggregate
 
 export const useRegisterImageHotkeys = () => {
   const { enableScope, disableScope } = useHotkeysContext();

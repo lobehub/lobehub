@@ -51,7 +51,7 @@ const getAgentSystemRoleExpanded =
   (agentId: string) =>
   (s: GlobalState): boolean => {
     const map = s.status.systemRoleExpandedMap || {};
-    return map[agentId] === true; // 角色设定默认为折叠状态
+    return map[agentId] === true; // System role is collapsed by default
   };
 
 const disabledModelProvidersSortType = (s: GlobalState) =>

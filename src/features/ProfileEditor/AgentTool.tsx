@@ -271,6 +271,7 @@ const AgentTool = memo<AgentToolProps>(
               key: type.identifier,
               label: (
                 <KlavisServerItem
+                  agentId={effectiveAgentId}
                   identifier={type.identifier}
                   label={type.label}
                   server={getServerByName(type.identifier)}
@@ -279,7 +280,7 @@ const AgentTool = memo<AgentToolProps>(
               ),
             }))
           : [],
-      [isKlavisEnabledInEnv, allKlavisServers],
+      [isKlavisEnabledInEnv, allKlavisServers, effectiveAgentId],
     );
 
     // LobeHub Skill Provider 列表项
@@ -289,10 +290,16 @@ const AgentTool = memo<AgentToolProps>(
           ? LOBEHUB_SKILL_PROVIDERS.map((provider) => ({
               icon: <LobehubSkillIcon icon={provider.icon} label={provider.label} />,
               key: provider.id, // 使用 provider.id 作为 key，与 pluginId 保持一致
-              label: <LobehubSkillServerItem label={provider.label} provider={provider.id} />,
+              label: (
+                <LobehubSkillServerItem
+                  agentId={effectiveAgentId}
+                  label={provider.label}
+                  provider={provider.id}
+                />
+              ),
             }))
           : [],
-      [isLobehubSkillEnabled, allLobehubSkillServers],
+      [isLobehubSkillEnabled, allLobehubSkillServers, effectiveAgentId],
     );
 
     // Handle plugin remove via Tag close - use byId actions

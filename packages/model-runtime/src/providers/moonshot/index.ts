@@ -15,8 +15,9 @@ export interface MoonshotModelCard {
 export const params = {
   baseURL: 'https://api.moonshot.cn/v1',
   chatCompletion: {
+    forceImageBase64: true,
     handlePayload: (payload: ChatStreamPayload) => {
-      const { enabledSearch, messages, temperature, tools, ...rest } = payload;
+      const { enabledSearch, messages, model, temperature, thinking, tools, ...rest } = payload;
 
       const filteredMessages = messages.map((message: any) => {
         let normalizedMessage = message;
@@ -51,12 +52,33 @@ export const params = {
           ]
         : tools;
 
-      // Resolve parameters with normalization
+      const isK25Model = model === 'kimi-k2.5';
+
+      if (isK25Model) {
+        const thinkingParam =
+          thinking?.type === 'disabled' ? { type: 'disabled' } : { type: 'enabled' };
+        const isThinkingEnabled = thinkingParam.type === 'enabled';
+
+        return {
+          ...rest,
+          frequency_penalty: 0,
+          messages: filteredMessages,
+          model,
+          presence_penalty: 0,
+          temperature: isThinkingEnabled ? 1 : 0.6,
+          thinking: thinkingParam,
+          tools: moonshotTools,
+          top_p: 0.95,
+        } as any;
+      }
+
+      // Resolve parameters with normalization for non-K2.5 models
       const resolvedParams = resolveParameters({ temperature }, { normalizeTemperature: true });
 
       return {
         ...rest,
         messages: filteredMessages,
+        model,
         temperature: resolvedParams.temperature,
         tools: moonshotTools,
       } as any;

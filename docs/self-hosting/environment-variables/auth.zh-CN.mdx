@@ -44,6 +44,13 @@ LobeHub 在部署时提供了完善的身份验证服务能力，以下是相关
 - 默认值：`-`
 - 示例：`example.com,admin@other.com`
 
+#### `AUTH_DISABLE_EMAIL_PASSWORD`
+
+- 类型：可选
+- 描述：设置为 `1` 以禁用邮箱密码登录，强制用户使用 SSO 登录。启用后，登录页面将隐藏邮箱输入框，注册页面将重定向到登录页。
+- 默认值：`0`
+- 示例：`1`
+
 #### `JWKS_KEY`
 
 - 类型：必选
@@ -152,6 +159,20 @@ LobeHub 在部署时提供了完善的身份验证服务能力，以下是相关
 - 描述：Microsoft Entra ID 应用的 Client Secret。
 - 默认值：`-`
 - 示例：`xxxxxxxxxxxxxxxxxxxxxxxxxxxxx`
+
+#### `AUTH_MICROSOFT_AUTHORITY_URL`
+
+- 类型：可选
+- 描述：Microsoft Entra ID 的 Authority URL。
+- 默认值：`https://login.microsoftonline.com`
+- 示例：`https://login.partner.microsoftonline.cn`
+
+#### `AUTH_MICROSOFT_TENANT_ID`
+
+- 类型：可选
+- 描述：单租户 Microsoft Entra ID 应用的 Directory (tenant) ID。
+- 默认值：`common`
+- 示例：`xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`
 
 ### AWS Cognito
 

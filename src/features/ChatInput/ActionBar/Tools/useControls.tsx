@@ -176,6 +176,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             key: type.identifier,
             label: (
               <KlavisServerItem
+                agentId={agentId}
                 identifier={type.identifier}
                 label={type.label}
                 server={getServerByName(type.identifier)}
@@ -184,7 +185,7 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
             ),
           }))
         : [],
-    [isKlavisEnabledInEnv, allKlavisServers, installedKlavisIds, recommendedKlavisIds],
+    [isKlavisEnabledInEnv, allKlavisServers, installedKlavisIds, recommendedKlavisIds, agentId],
   );
 
   // LobeHub Skill Provider 列表项 - 只展示已安装或推荐的
@@ -197,10 +198,22 @@ export const useControls = ({ setUpdating }: { setUpdating: (updating: boolean) 
           ).map((provider) => ({
             icon: <LobehubSkillIcon icon={provider.icon} label={provider.label} />,
             key: provider.id, // 使用 provider.id 作为 key，与 pluginId 保持一致
-            label: <LobehubSkillServerItem label={provider.label} provider={provider.id} />,
+            label: (
+              <LobehubSkillServerItem
+                agentId={agentId}
+                label={provider.label}
+                provider={provider.id}
+              />
+            ),
           }))
         : [],
-    [isLobehubSkillEnabled, allLobehubSkillServers, installedLobehubIds, recommendedLobehubIds],
+    [
+      isLobehubSkillEnabled,
+      allLobehubSkillServers,
+      installedLobehubIds,
+      recommendedLobehubIds,
+      agentId,
+    ],
   );
 
   // Builtin 工具列表项（不包含 Klavis 和 LobeHub Skill）

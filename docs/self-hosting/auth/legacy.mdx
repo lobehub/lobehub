@@ -13,7 +13,7 @@ tags:
 # Legacy Authentication
 
 <Callout type={'warning'}>
-  **Legacy Notice**: NextAuth and Clerk are legacy authentication methods. For new deployments, we strongly recommend using [Better Auth](/docs/self-hosting/advanced/auth) for its simplicity and flexibility.
+  **Legacy Notice**: NextAuth and Clerk are legacy authentication methods. For new deployments, we strongly recommend using [Better Auth](/docs/self-hosting/auth) for its simplicity and flexibility.
 </Callout>
 
 This page documents the legacy authentication methods (NextAuth and Clerk) for users who are still using these services.
@@ -27,17 +27,17 @@ LobeHub has deeply integrated with Clerk to provide users with a secure and conv
 By setting the environment variables `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` in LobeHub's environment, you can enable and use Clerk.
 
 <Callout type={'info'}>
-  For detailed Clerk configuration, see [Clerk Configuration Guide](/docs/self-hosting/advanced/auth/clerk).
+  For detailed Clerk configuration, see [Clerk Configuration Guide](/docs/self-hosting/auth/clerk).
 </Callout>
 
 <Callout type={'tip'}>
-  To migrate from Clerk to Better Auth, see the [Clerk Migration Guide](/docs/self-hosting/advanced/auth/clerk-to-betterauth).
+  To migrate from Clerk to Better Auth, see the [Clerk Migration Guide](/docs/self-hosting/migration/v2/auth/clerk-to-betterauth).
 </Callout>
 
 ## Next Auth
 
 <Callout type={'tip'}>
-  To migrate from NextAuth to Better Auth, see the [NextAuth Migration Guide](/docs/self-hosting/advanced/auth/nextauth-to-betterauth).
+  To migrate from NextAuth to Better Auth, see the [NextAuth Migration Guide](/docs/self-hosting/migration/v2/auth/nextauth-to-betterauth).
 </Callout>
 
 Before using NextAuth, please set the following variables in LobeHub's environment variables:
@@ -53,27 +53,27 @@ Before using NextAuth, please set the following variables in LobeHub's environme
 Currently supported identity verification services include:
 
 <Cards>
-  <Card href={'/docs/self-hosting/advanced/auth/next-auth/auth0'} title={'Auth0'} />
+  <Card href={'/docs/self-hosting/auth/next-auth/auth0'} title={'Auth0'} />
 
-  <Card href={'/docs/self-hosting/advanced/auth/next-auth/microsoft-entra-id'} title={'Microsoft Entra ID'} />
+  <Card href={'/docs/self-hosting/auth/next-auth/microsoft-entra-id'} title={'Microsoft Entra ID'} />
 
-  <Card href={'/docs/self-hosting/advanced/auth/next-auth/authentik'} title={'Authentik'} />
+  <Card href={'/docs/self-hosting/auth/next-auth/authentik'} title={'Authentik'} />
 
-  <Card href={'/docs/self-hosting/advanced/auth/next-auth/github'} title={'Github'} />
+  <Card href={'/docs/self-hosting/auth/next-auth/github'} title={'Github'} />
 
-  <Card href={'/docs/self-hosting/advanced/auth/next-auth/zitadel'} title={'ZITADEL'} />
+  <Card href={'/docs/self-hosting/auth/next-auth/zitadel'} title={'ZITADEL'} />
 
-  <Card href={'/docs/self-hosting/advanced/auth/next-auth/cloudflare-zero-trust'} title={'Cloudflare Zero Trust'} />
+  <Card href={'/docs/self-hosting/auth/next-auth/cloudflare-zero-trust'} title={'Cloudflare Zero Trust'} />
 
-  <Card href={'/docs/self-hosting/advanced/auth/next-auth/authelia'} title={'Authelia'} />
+  <Card href={'/docs/self-hosting/auth/next-auth/authelia'} title={'Authelia'} />
 
-  <Card href={'/docs/self-hosting/advanced/auth/next-auth/logto'} title={'Logto'} />
+  <Card href={'/docs/self-hosting/auth/next-auth/logto'} title={'Logto'} />
 
-  <Card href={'/docs/self-hosting/advanced/auth/next-auth/keycloak'} title={'Keycloak'} />
+  <Card href={'/docs/self-hosting/auth/next-auth/keycloak'} title={'Keycloak'} />
 
-  <Card href={'/docs/self-hosting/advanced/auth/next-auth/google'} title={'Google'} />
+  <Card href={'/docs/self-hosting/auth/next-auth/google'} title={'Google'} />
 
-  <Card href={'/docs/self-hosting/advanced/auth/next-auth/okta'} title={'Okta'} />
+  <Card href={'/docs/self-hosting/auth/next-auth/okta'} title={'Okta'} />
 </Cards>
 
 Click on the links to view the corresponding platform's configuration documentation.

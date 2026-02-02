@@ -10,6 +10,7 @@ import type { auth } from '@/auth';
 
 export const {
   linkSocial,
+  oauth2,
   accountInfo,
   listAccounts,
   requestPasswordReset,

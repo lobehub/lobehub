@@ -194,37 +194,6 @@ const wenxinChatModels: AIChatModelCard[] = [
   {
     contextWindowTokens: 131_072,
     description:
-      'ERNIE Speed 128K is a no-I/O-fee model for long-text understanding and large-scale trials.',
-    displayName: 'ERNIE Speed 128K',
-    id: 'ernie-speed-128k',
-    maxOutput: 4096,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description: 'ERNIE Speed 8K is a free, fast model for daily chat and light text tasks.',
-    displayName: 'ERNIE Speed 8K',
-    id: 'ernie-speed-8k',
-    maxOutput: 2048,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 131_072,
-    description:
       'ERNIE Speed Pro 128K is a high-concurrency, high-value model for large-scale online services and enterprise apps.',
     displayName: 'ERNIE Speed Pro 128K',
     id: 'ernie-speed-pro-128k',
@@ -234,22 +203,6 @@ const wenxinChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description:
-      'ERNIE Lite 8K is a lightweight general model for cost-sensitive daily QA and content generation.',
-    displayName: 'ERNIE Lite 8K',
-    id: 'ernie-lite-8k',
-    maxOutput: 2048,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -269,22 +222,6 @@ const wenxinChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description:
-      'ERNIE Tiny 8K is ultra-lightweight for simple QA, classification, and low-cost inference.',
-    displayName: 'ERNIE Tiny 8K',
-    id: 'ernie-tiny-8k',
-    maxOutput: 2048,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -483,24 +420,6 @@ const wenxinChatModels: AIChatModelCard[] = [
       'Qianfan Agent Lite 8K is a lightweight agent model for low-cost multi-turn dialogue and workflows.',
     displayName: 'Qianfan Agent Lite 8K',
     id: 'qianfan-agent-lite-8k',
-    maxOutput: 2048,
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 32_768,
-    description:
-      'Qianfan Agent Speed 32K is a high-throughput agent model for large-scale, multi-task agent apps.',
-    displayName: 'Qianfan Agent Speed 32K',
-    id: 'qianfan-agent-speed-32k',
-    maxOutput: 4096,
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 8192,
-    description:
-      'Qianfan Agent Speed 8K is a high-concurrency agent model for short-to-mid conversations and fast response.',
-    displayName: 'Qianfan Agent Speed 8K',
-    id: 'qianfan-agent-speed-8k',
     maxOutput: 2048,
     type: 'chat',
   },
@@ -1613,24 +1532,6 @@ const wenxinChatModels: AIChatModelCard[] = [
     },
     settings: {
       searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    contextWindowTokens: 32_768,
-    description: 'Qwen3 235B A22B is a general large model for complex tasks.',
-    displayName: 'Qwen3 235B A22B',
-    id: 'qwen3-235b-a22b',
-    maxOutput: 8192,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    settings: {
-      extendParams: ['enableReasoning', 'reasoningBudgetToken'],
     },
     type: 'chat',
   },

@@ -87,11 +87,20 @@ class LocalSystemExecutor extends BaseExecutor<typeof LocalSystemApiEnum> {
 
   listLocalFiles = async (params: ListLocalFileParams): Promise<BuiltinToolResult> => {
     try {
-      const result: LocalFileItem[] = await localFileService.listLocalFiles(params);
+      const result = await localFileService.listLocalFiles(params);
 
-      const state: LocalFileListState = { listResults: result };
+      const state: LocalFileListState = {
+        listResults: result.files,
+        totalCount: result.totalCount,
+      };
 
-      const content = formatFileList(result, params.path);
+      const content = formatFileList({
+        directory: params.path,
+        files: result.files,
+        sortBy: params.sortBy,
+        sortOrder: params.sortOrder,
+        totalCount: result.totalCount,
+      });
 
       return {
         content,

@@ -8,6 +8,7 @@
   "codes.DELETED_ACCOUNT_EMAIL": "Este e-mail está associado a uma conta excluída e não pode ser usado para registro",
   "codes.EMAIL_CAN_NOT_BE_UPDATED": "O e-mail não pode ser atualizado para esta conta",
   "codes.EMAIL_NOT_ALLOWED": "E-mail não permitido para registro",
+  "codes.EMAIL_NOT_FOUND": "Nenhum e-mail associado a esta conta. Verifique se sua conta possui um e-mail vinculado.",
   "codes.EMAIL_NOT_VERIFIED": "Por favor, verifique seu e-mail primeiro",
   "codes.FAILED_TO_CREATE_SESSION": "Falha ao criar sessão",
   "codes.FAILED_TO_CREATE_USER": "Falha ao criar usuário",

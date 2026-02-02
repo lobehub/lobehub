@@ -251,16 +251,16 @@ describe('GoogleGenerativeAIStream', () => {
       expect(chunks).toEqual(
         [
           'id: chat_1',
-          'event: content_part',
-          'data: {"content":"234","partType":"text"}\n',
+          'event: text',
+          'data: "234"\n',
 
           'id: chat_1',
           'event: text',
           'data: ""\n',
 
           'id: chat_1',
-          'event: content_part',
-          `data: {"content":"567890\\n","partType":"text"}\n`,
+          'event: text',
+          `data: "567890\\n"\n`,
           // stop
           'id: chat_1',
           'event: stop',
@@ -384,12 +384,12 @@ describe('GoogleGenerativeAIStream', () => {
           `data: {"content":"**Finalizing Interpretation**\\n\\n","inReasoning":true,"partType":"text"}\n`,
 
           'id: chat_1',
-          'event: content_part',
-          `data: {"content":"简单来说，","partType":"text"}\n`,
+          'event: text',
+          'data: "简单来说，"\n',
 
           'id: chat_1',
-          'event: content_part',
-          `data: {"content":"文本内容。","partType":"text"}\n`,
+          'event: text',
+          'data: "文本内容。"\n',
           // stop
           'id: chat_1',
           'event: stop',
@@ -471,12 +471,12 @@ describe('GoogleGenerativeAIStream', () => {
       expect(chunks).toEqual(
         [
           'id: chat_1',
-          'event: content_part',
-          'data: {"content":"234","partType":"text"}\n',
+          'event: text',
+          'data: "234"\n',
 
           'id: chat_1',
-          'event: content_part',
-          `data: {"content":"567890\\n","partType":"text"}\n`,
+          'event: text',
+          'data: "567890\\n"\n',
           // stop
           'id: chat_1',
           'event: stop',
@@ -1103,7 +1103,7 @@ describe('GoogleGenerativeAIStream', () => {
               content: {
                 parts: [
                   {
-                    text: '**Planning the Solution**\n\nI\'m solidifying my plan...',
+                    text: "**Planning the Solution**\n\nI'm solidifying my plan...",
                     thought: true,
                   },
                 ],
@@ -1900,6 +1900,47 @@ describe('GoogleGenerativeAIStream', () => {
           'data: {"inputTextTokens":10,"outputImageTokens":0,"outputReasoningTokens":5,"outputTextTokens":20,"totalInputTokens":10,"totalOutputTokens":25,"totalTokens":30}\n',
         ].map((i) => i + '\n'),
       );
+    });
+
+    it('should NOT use multimodal processing if only thoughtsTokenCount is present in metadata but no thought parts', async () => {
+      vi.spyOn(uuidModule, 'nanoid').mockReturnValueOnce('1');
+
+      const data = [
+        {
+          candidates: [
+            {
+              content: {
+                parts: [{ text: 'Hello world' }],
+                role: 'model',
+              },
+              index: 0,
+            },
+          ],
+          usageMetadata: {
+            promptTokenCount: 10,
+            candidatesTokenCount: 2,
+            totalTokenCount: 17,
+            thoughtsTokenCount: 5,
+          },
+          modelVersion: 'gemini-2.5-flash',
+        },
+      ];
+
+      const mockGoogleStream = new ReadableStream({
+        start(controller) {
+          data.forEach((item) => {
+            controller.enqueue(item);
+          });
+          controller.close();
+        },
+      });
+
+      const protocolStream = GoogleGenerativeAIStream(mockGoogleStream);
+      const chunks = await decodeStreamChunks(protocolStream);
+
+      // Should use 'text' event, not 'content_part'
+      expect(chunks).toContain('event: text\n');
+      expect(chunks).not.toContain('event: content_part\n');
     });
   });
 });

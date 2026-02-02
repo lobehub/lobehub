@@ -17,20 +17,29 @@ The directory structure of LobeHub is as follows:
 
 ```bash
 src
-├── app        # Next.js App Router implementation with route groups and API routes
-├── components # Reusable UI components
-├── config     # Application configuration files, including client-side and server-side environment variables
-├── features   # Function modules related to business functions, such as agent settings, plugin development pop-ups, etc.
-├── hooks      # Custom utility hooks reused throughout the application
-├── layout     # Application layout components, such as navigation bars, sidebars, etc.
-├── libs       # Third-party integrations (analytics, OIDC, etc.)
-├── locales    # Internationalization language files
-├── server     # Server-side modules and services
-├── services   # Encapsulated backend service interfaces, such as HTTP requests
-├── store      # Zustand store for state management
-├── styles     # Global styles and CSS-in-JS configurations
-├── types      # TypeScript type definition files
-└── utils      # Common utility functions
+├── app            # Next.js App Router implementation with route groups and API routes
+├── business       # Business logic modules (client and server)
+├── components     # Reusable UI components
+├── config         # Application configuration files, including client-side and server-side environment variables
+├── const          # Application constants and enums
+├── envs           # Environment variable definitions and validation (analytics, auth, llm, etc.)
+├── features       # Function modules related to business functions, such as agent settings, plugin development pop-ups, etc.
+├── helpers        # Utility helpers for tool engineering, placeholder parsing, etc.
+├── hooks          # Custom utility hooks reused throughout the application
+├── layout         # Application layout components, such as navigation bars, sidebars, etc.
+├── libs           # Third-party integrations (analytics, OIDC, etc.)
+├── locales        # Internationalization language files
+├── server         # Server-side modules and services
+├── services       # Encapsulated backend service interfaces, such as HTTP requests
+├── store          # Zustand store for state management
+├── styles         # Global styles and CSS-in-JS configurations
+├── tools          # Built-in tools (artifacts, inspectors, interventions, etc.)
+├── types          # TypeScript type definition files
+├── utils          # Common utility functions
+├── auth.ts        # Authentication configuration (Better Auth)
+├── instrumentation.ts      # Application monitoring and telemetry setup
+├── instrumentation.node.ts # Node.js-specific instrumentation
+└── proxy.ts       # Next.js middleware proxy configuration
 ```
 
 ## app

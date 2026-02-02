@@ -76,13 +76,13 @@ export class CloudSandboxExecutionRuntime {
       const files = result.result?.files || [];
       const state: ListLocalFilesState = { files };
 
-      const content = formatFileList(
-        files.map((f: { isDirectory: boolean; name: string }) => ({
+      const content = formatFileList({
+        directory: args.directoryPath,
+        files: files.map((f: { isDirectory: boolean; name: string }) => ({
           isDirectory: f.isDirectory,
           name: f.name,
         })),
-        args.directoryPath,
-      );
+      });
 
       return {
         content,

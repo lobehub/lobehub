@@ -8,6 +8,7 @@
   "codes.DELETED_ACCOUNT_EMAIL": "Questa email è associata a un account eliminato e non può essere utilizzata per la registrazione",
   "codes.EMAIL_CAN_NOT_BE_UPDATED": "L'email non può essere aggiornata per questo account",
   "codes.EMAIL_NOT_ALLOWED": "Email non consentita per la registrazione",
+  "codes.EMAIL_NOT_FOUND": "Nessuna email associata a questo account. Verifica se al tuo account è collegata un'email.",
   "codes.EMAIL_NOT_VERIFIED": "Verifica prima la tua email",
   "codes.FAILED_TO_CREATE_SESSION": "Creazione della sessione non riuscita",
   "codes.FAILED_TO_CREATE_USER": "Creazione dell'utente non riuscita",

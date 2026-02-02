@@ -218,8 +218,13 @@ export default class LocalFileCtr extends ControllerModule {
   }
 
   @IpcMethod()
-  async listLocalFiles({ path: dirPath }: ListLocalFileParams): Promise<FileResult[]> {
-    logger.debug('Listing directory contents:', { dirPath });
+  async listLocalFiles({
+    path: dirPath,
+    sortBy = 'modifiedTime',
+    sortOrder = 'desc',
+    limit = 100,
+  }: ListLocalFileParams): Promise<{ files: FileResult[]; totalCount: number }> {
+    logger.debug('Listing directory contents:', { dirPath, limit, sortBy, sortOrder });
 
     const results: FileResult[] = [];
     try {
@@ -256,22 +261,51 @@ export default class LocalFileCtr extends ControllerModule {
         }
       }
 
-      // Sort entries: folders first, then by name
+      // Sort entries based on sortBy and sortOrder
       results.sort((a, b) => {
-        if (a.isDirectory !== b.isDirectory) {
-          return a.isDirectory ? -1 : 1; // Directories first
+        let comparison = 0;
+
+        switch (sortBy) {
+          case 'name': {
+            comparison = (a.name || '').localeCompare(b.name || '');
+            break;
+          }
+          case 'modifiedTime': {
+            comparison = a.modifiedTime.getTime() - b.modifiedTime.getTime();
+            break;
+          }
+          case 'createdTime': {
+            comparison = a.createdTime.getTime() - b.createdTime.getTime();
+            break;
+          }
+          case 'size': {
+            comparison = a.size - b.size;
+            break;
+          }
+          default: {
+            comparison = a.modifiedTime.getTime() - b.modifiedTime.getTime();
+          }
         }
-        // Add null/undefined checks for robustness if needed, though names should exist
-        return (a.name || '').localeCompare(b.name || ''); // Then sort by name
+
+        return sortOrder === 'desc' ? -comparison : comparison;
       });
 
-      logger.debug('Directory listing successful', { dirPath, resultCount: results.length });
-      return results;
+      const totalCount = results.length;
+
+      // Apply limit
+      const limitedResults = results.slice(0, limit);
+
+      logger.debug('Directory listing successful', {
+        dirPath,
+        resultCount: limitedResults.length,
+        totalCount,
+      });
+      return { files: limitedResults, totalCount };
     } catch (error) {
       logger.error(`Failed to list directory ${dirPath}:`, error);
       // Rethrow or return an empty array/error object depending on desired behavior
-      // For now, returning empty array on error listing directory itself
-      return [];
+      // For now, returning empty result on error listing directory itself
+      return { files: [], totalCount: 0 };
     }
   }
 

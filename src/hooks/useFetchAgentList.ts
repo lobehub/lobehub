@@ -12,7 +12,7 @@ export const useFetchAgentList = () => {
 
   const { isValidating, data } = useFetchAgentListHook(isLogin);
 
-  // isRevalidating: 有缓存数据，后台正在更新
+  // isRevalidating: has cached data, updating in background
   return {
     isRevalidating: isValidating && !!data,
   };

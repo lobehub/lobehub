@@ -4,8 +4,8 @@ export interface SessionGroupState {
   customSessionGroups: CustomSessionGroup[];
   sessionGroupRenamingId: string | null;
   /**
-   * @title 正在更新的分组 ID
-   * @description 用于显示分组更新时的加载状态
+   * @title Group ID being updated
+   * @description Used to display loading state when group is being updated
    */
   sessionGroupUpdatingId: string | null;
   sessionGroups: LobeSessionGroups;

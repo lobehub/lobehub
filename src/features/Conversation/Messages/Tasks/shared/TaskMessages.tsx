@@ -327,11 +327,37 @@ const TaskMessages = memo<TaskMessagesProps>(
       const assistantGroupMessage = messages.find((item) => item.role === 'assistantGroup');
       const userMessage = messages.find((item) => item.role === 'user');
 
-      return {
-        assistantId: assistantGroupMessage?.id ?? '',
-        blocks: assistantGroupMessage?.children ?? [],
-        instruction: userMessage?.content,
-      };
+      // If assistantGroup exists, use its children as blocks
+      if (assistantGroupMessage) {
+        return {
+          assistantId: assistantGroupMessage.id ?? '',
+          blocks: assistantGroupMessage.children ?? [],
+          instruction: userMessage?.content,
+        };
+      }
+
+      // Fallback: support plain assistant message (without tools)
+      // This handles cases where SubAgent returns a simple text response
+      const assistantMessage = messages.find((item) => item.role === 'assistant');
+      if (assistantMessage) {
+        // Convert plain assistant message to block format
+        const block: AssistantContentBlock = {
+          content: assistantMessage.content || '',
+          id: assistantMessage.id,
+        };
+
+        // Copy optional fields if they exist
+        if (assistantMessage.error) block.error = assistantMessage.error;
+        if (assistantMessage.reasoning) block.reasoning = assistantMessage.reasoning;
+
+        return {
+          assistantId: assistantMessage.id ?? '',
+          blocks: [block],
+          instruction: userMessage?.content,
+        };
+      }
+
+      return { assistantId: '', blocks: [], instruction: undefined };
     }, [messages]);
 
     // Calculate total tool calls
