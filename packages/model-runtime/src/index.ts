@@ -8,6 +8,7 @@ export * from './core/usageConverters';
 export * from './helpers';
 export { LobeAkashChatAI } from './providers/akashchat';
 export { LobeAnthropicAI } from './providers/anthropic';
+export { LobeAtlasCloudAI } from './providers/atlascloud';
 export { LobeAzureAI } from './providers/azureai';
 export { LobeAzureOpenAI } from './providers/azureOpenai';
 export { LobeBedrockAI } from './providers/bedrock';
