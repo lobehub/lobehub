@@ -144,12 +144,27 @@ describe('GithubCopilotOAuthService', () => {
         status: 200,
       });
 
+      // Mock fetchUserInfo response
+      mockFetch.mockResolvedValueOnce({
+        json: () =>
+          Promise.resolve({
+            avatar_url: 'https://avatars.githubusercontent.com/u/123',
+            login: 'testuser',
+          }),
+        ok: true,
+        status: 200,
+      });
+
       const result = await service.completeAuthFlow(mockConfig, 'device-code-123');
 
       expect(result).toEqual({
         bearerToken: 'copilot-bearer-token-123',
         bearerTokenExpiresAt: 1700000000 * 1000,
         oauthAccessToken: 'oauth-access-token-123',
+        userInfo: {
+          avatarUrl: 'https://avatars.githubusercontent.com/u/123',
+          username: 'testuser',
+        },
       });
     });
 
