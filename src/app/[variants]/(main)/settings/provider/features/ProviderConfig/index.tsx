@@ -236,31 +236,15 @@ const ProviderConfig = memo<ProviderConfigProps>(
     });
 
     const isCustom = source === AiProviderSourceEnum.Custom;
+    const isOAuthProvider = authType === 'oauthDeviceFlow';
 
-    // OAuth Device Flow authentication item
-    const oauthItem: FormItemProps[] =
-      authType === 'oauthDeviceFlow'
-        ? [
-            {
-              children: isLoading ? (
-                <SkeletonInput />
-              ) : (
-                <OAuthDeviceFlowAuth
-                  name={name || id}
-                  onAuthChange={async () => {
-                    // Only refresh provider data, don't update with form values
-                    // OAuth tokens are saved directly to DB by the tRPC endpoint
-                    await useAiInfraStore.getState().refreshAiProviderDetail();
-                    await useAiInfraStore.getState().refreshAiProviderRuntimeState();
-                  }}
-                  providerId={id}
-                />
-              ),
-              label: t('providerModels.config.oauth.title'),
-              minWidth: undefined,
-            },
-          ]
-        : [];
+    // OAuth auth change handler
+    const handleOAuthChange = useCallback(async () => {
+      // Only refresh provider data, don't update with form values
+      // OAuth tokens are saved directly to DB by the tRPC endpoint
+      await useAiInfraStore.getState().refreshAiProviderDetail();
+      await useAiInfraStore.getState().refreshAiProviderRuntimeState();
+    }, []);
 
     const apiKeyItem: FormItemProps[] =
       !showApiKey || authType === 'oauthDeviceFlow'
@@ -387,7 +371,6 @@ const ProviderConfig = memo<ProviderConfigProps>(
       : undefined;
 
     const configItems = [
-      ...oauthItem,
       ...apiKeyItem,
       endpointItem,
       supportResponsesApi
@@ -430,74 +413,86 @@ const ProviderConfig = memo<ProviderConfigProps>(
 
     const logoUrl = data?.logo ?? logo;
 
-    console.log('id', id);
+    // Header components - shared between OAuth card and Form
+    const headerTitle = (
+      <Flexbox
+        align={'center'}
+        gap={4}
+        horizontal
+        style={{
+          height: 24,
+          maxHeight: 24,
+          ...(enabled ? {} : { filter: 'grayscale(100%)', maxHeight: 24, opacity: 0.66 }),
+        }}
+      >
+        {isCustom ? (
+          <Flexbox align={'center'} gap={8} horizontal>
+            {logoUrl ? (
+              <Avatar avatar={logoUrl} shape={'circle'} size={32} title={name || id} />
+            ) : (
+              <ProviderCombine provider={'not-exist-provider'} size={24} />
+            )}
+            {name}
+          </Flexbox>
+        ) : (
+          <>
+            {title ?? <ProviderCombine provider={id} size={24} />}
+            <Tooltip title={t('providerModels.config.helpDoc')}>
+              <a
+                href={urlJoin(BASE_PROVIDER_DOC_URL, id)}
+                onClick={(e) => e.stopPropagation()}
+                rel="noreferrer"
+                target="_blank"
+              >
+                <Center className={styles.help} height={20} width={20}>
+                  ?
+                </Center>
+              </a>
+            </Tooltip>
+          </>
+        )}
+      </Flexbox>
+    );
+
+    const headerExtra = (
+      <Flexbox align={'center'} gap={8} horizontal>
+        {extra}
+        {isCustom && <UpdateProviderInfo />}
+        {canDeactivate && !(ENABLE_BUSINESS_FEATURES && id === 'lobehub') && (
+          <EnableSwitch id={id} key={id} />
+        )}
+      </Flexbox>
+    );
+
     const model: FormGroupItemType = {
       children: configItems,
-
       defaultActive: true,
-
-      extra: (
-        <Flexbox align={'center'} gap={8} horizontal>
-          {extra}
-
-          {isCustom && <UpdateProviderInfo />}
-          {canDeactivate && !(ENABLE_BUSINESS_FEATURES && id === 'lobehub') && (
-            <EnableSwitch id={id} key={id} />
-          )}
-        </Flexbox>
-      ),
-      title: (
-        <Flexbox
-          align={'center'}
-          gap={4}
-          horizontal
-          style={{
-            height: 24,
-            maxHeight: 24,
-            ...(enabled ? {} : { filter: 'grayscale(100%)', maxHeight: 24, opacity: 0.66 }),
-          }}
-        >
-          {isCustom ? (
-            <Flexbox align={'center'} gap={8} horizontal>
-              {logoUrl ? (
-                <Avatar avatar={logoUrl} shape={'circle'} size={32} title={name || id} />
-              ) : (
-                <ProviderCombine provider={'not-exist-provider'} size={24} />
-              )}
-              {name}
-            </Flexbox>
-          ) : (
-            <>
-              {title ?? <ProviderCombine provider={id} size={24} />}
-              <Tooltip title={t('providerModels.config.helpDoc')}>
-                <a
-                  href={urlJoin(BASE_PROVIDER_DOC_URL, id)}
-                  onClick={(e) => e.stopPropagation()}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  <Center className={styles.help} height={20} width={20}>
-                    ?
-                  </Center>
-                </a>
-              </Tooltip>
-            </>
-          )}
-        </Flexbox>
-      ),
+      extra: isOAuthProvider ? undefined : headerExtra,
+      title: isOAuthProvider ? '' : headerTitle,
     };
 
     return (
-      <Form
-        className={cx(styles.form, className)}
-        form={form}
-        items={[model]}
-        onValuesChange={(_, values) => {
-          debouncedHandleValueChange(id, values);
-        }}
-        variant={'borderless'}
-        {...FORM_STYLE}
-      />
+      <>
+        {isOAuthProvider && (
+          <OAuthDeviceFlowAuth
+            extra={headerExtra}
+            name={name || id}
+            onAuthChange={handleOAuthChange}
+            providerId={id}
+            title={headerTitle}
+          />
+        )}
+        <Form
+          className={cx(styles.form, className)}
+          form={form}
+          items={[model]}
+          onValuesChange={(_, values) => {
+            debouncedHandleValueChange(id, values);
+          }}
+          variant={'borderless'}
+          {...FORM_STYLE}
+        />
+      </>
     );
   },
 );

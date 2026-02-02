@@ -1,11 +1,12 @@
 'use client';
 
 import { CheckCircleFilled } from '@ant-design/icons';
+import { ProviderIcon } from '@lobehub/icons';
 import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
-import { App, Button, Modal, Typography } from 'antd';
-import { cssVar } from 'antd-style';
+import { App, Avatar, Button, Typography } from 'antd';
+import { createStyles, cssVar } from 'antd-style';
 import { ExternalLinkIcon, Loader2Icon, LogOutIcon, UnplugIcon } from 'lucide-react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lambdaQuery } from '@/libs/trpc/client';
@@ -14,239 +15,350 @@ import { useOAuthDeviceFlow } from './useOAuthDeviceFlow';
 
 const { Text, Link } = Typography;
 
+const useStyles = createStyles(({ css, token }) => ({
+  card: css`
+    overflow: hidden;
+
+    width: 100%;
+    margin-block-end: 24px;
+    border: 1px solid ${token.colorBorderSecondary};
+    border-radius: 12px;
+  `,
+  codeBox: css`
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+
+    padding-block: 16px;
+    padding-inline: 24px;
+    border-radius: 12px;
+
+    font-family: monospace;
+    font-size: 28px;
+    font-weight: 600;
+    letter-spacing: 6px;
+
+    background: ${token.colorFillTertiary};
+  `,
+  content: css`
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    align-items: center;
+
+    margin-block: 0 40px;
+    padding-inline: 48px;
+  `,
+  errorText: css`
+    color: ${token.colorError};
+  `,
+  header: css`
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    padding-block: 16px;
+    padding-inline: 24px;
+    border-block-end: 1px solid ${token.colorBorderSecondary};
+  `,
+  hero: css`
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: center;
+    justify-content: center;
+
+    padding-block: 48px 32px;
+    padding-inline: 24px;
+    border-radius: 16px 16px 0 0;
+  `,
+  pollingHint: css`
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+
+    padding-block: 12px;
+    padding-inline: 16px;
+    border-radius: 8px;
+
+    font-size: 13px;
+    color: ${token.colorTextSecondary};
+
+    background: ${token.colorFillQuaternary};
+  `,
+  serviceNote: css`
+    font-size: 13px;
+    color: ${token.colorTextDescription};
+    text-align: center;
+  `,
+  successBadge: css`
+    display: flex;
+    gap: 6px;
+    align-items: center;
+
+    font-size: 13px;
+    color: ${token.colorSuccess};
+  `,
+  userAvatar: css`
+    border: 2px solid ${token.colorBorderSecondary};
+    box-shadow: 0 4px 12px ${token.colorFillSecondary};
+  `,
+  userInfo: css`
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+  `,
+  username: css`
+    font-size: 16px;
+    font-weight: 600;
+    color: ${token.colorText};
+  `,
+}));
+
 export interface OAuthDeviceFlowAuthProps {
+  extra?: ReactNode;
   name: string;
   onAuthChange?: () => void;
   providerId: string;
+  title?: ReactNode;
 }
 
-const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(({ providerId, name, onAuthChange }) => {
-  const { t } = useTranslation('modelProvider');
-  const { modal } = App.useApp();
+const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
+  ({ providerId, name, onAuthChange, title, extra }) => {
+    const { t } = useTranslation('modelProvider');
+    const { modal } = App.useApp();
+    const { styles } = useStyles();
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const hasAutoClosedRef = useRef(false);
+    const [isAuthenticating, setIsAuthenticating] = useState(false);
+    const hasAutoClosedRef = useRef(false);
 
-  const utils = lambdaQuery.useUtils();
+    const utils = lambdaQuery.useUtils();
 
-  const { data: authStatus } = lambdaQuery.oauthDeviceFlow.getAuthStatus.useQuery(
-    { providerId },
-    { refetchOnWindowFocus: true },
-  );
-  const isAuthenticated = authStatus?.isAuthenticated ?? false;
+    const { data: authStatus } = lambdaQuery.oauthDeviceFlow.getAuthStatus.useQuery(
+      { providerId },
+      { refetchOnWindowFocus: true },
+    );
+    const isAuthenticated = authStatus?.isAuthenticated ?? false;
+    const username = authStatus?.username;
+    const avatarUrl = authStatus?.avatarUrl;
 
-  const revokeAuth = lambdaQuery.oauthDeviceFlow.revokeAuth.useMutation({
-    onSuccess: () => {
-      utils.oauthDeviceFlow.getAuthStatus.invalidate({ providerId });
-      onAuthChange?.();
-    },
-  });
-
-  const handleSuccess = useCallback(async () => {
-    await utils.oauthDeviceFlow.getAuthStatus.invalidate({ providerId });
-    onAuthChange?.();
-  }, [onAuthChange, providerId, utils.oauthDeviceFlow.getAuthStatus]);
-
-  const { state, deviceCodeInfo, error, startAuth, cancelAuth } = useOAuthDeviceFlow({
-    onSuccess: handleSuccess,
-    providerId,
-  });
-
-  const handleDisconnect = useCallback(() => {
-    modal.confirm({
-      centered: true,
-      content: t('providerModels.config.oauth.disconnectConfirm'),
-      okButtonProps: { danger: true },
-      okText: t('providerModels.config.oauth.disconnect'),
-      onOk: async () => {
-        await revokeAuth.mutateAsync({ providerId });
+    const revokeAuth = lambdaQuery.oauthDeviceFlow.revokeAuth.useMutation({
+      onSuccess: () => {
+        utils.oauthDeviceFlow.getAuthStatus.invalidate({ providerId });
+        onAuthChange?.();
       },
-      title: t('providerModels.config.oauth.disconnect'),
     });
-  }, [modal, providerId, revokeAuth, t]);
 
-  const handleStartAuth = useCallback(async () => {
-    hasAutoClosedRef.current = false;
-    setIsModalOpen(true);
-    await startAuth();
-  }, [startAuth]);
+    const handleSuccess = useCallback(async () => {
+      await utils.oauthDeviceFlow.getAuthStatus.invalidate({ providerId });
+      onAuthChange?.();
+    }, [onAuthChange, providerId, utils.oauthDeviceFlow.getAuthStatus]);
 
-  const handleCloseModal = useCallback(() => {
-    setIsModalOpen(false);
-    cancelAuth();
-  }, [cancelAuth]);
+    const { state, deviceCodeInfo, error, startAuth, cancelAuth } = useOAuthDeviceFlow({
+      onSuccess: handleSuccess,
+      providerId,
+    });
 
-  const handleOpenBrowser = useCallback(() => {
-    if (deviceCodeInfo?.verificationUri) {
-      window.open(deviceCodeInfo.verificationUri, '_blank');
-    }
-  }, [deviceCodeInfo?.verificationUri]);
+    const handleDisconnect = useCallback(() => {
+      modal.confirm({
+        centered: true,
+        content: t('providerModels.config.oauth.disconnectConfirm'),
+        okButtonProps: { danger: true },
+        okText: t('providerModels.config.oauth.disconnect'),
+        onOk: async () => {
+          await revokeAuth.mutateAsync({ providerId });
+        },
+        title: t('providerModels.config.oauth.disconnect'),
+      });
+    }, [modal, providerId, revokeAuth, t]);
 
-  useEffect(() => {
-    if (state === 'success' && isModalOpen && !hasAutoClosedRef.current) {
-      hasAutoClosedRef.current = true;
-      setIsModalOpen(false);
-    }
-  }, [state, isModalOpen]);
+    const handleStartAuth = useCallback(async () => {
+      hasAutoClosedRef.current = false;
+      setIsAuthenticating(true);
+      await startAuth();
+    }, [startAuth]);
 
-  const renderModalContent = () => {
-    if (state === 'requesting') {
-      return (
-        <Flexbox align="center" gap={12} horizontal justify="center" style={{ minHeight: 120 }}>
-          <Icon icon={Loader2Icon} spin />
-          <Text>{t('providerModels.config.oauth.connecting')}</Text>
-        </Flexbox>
-      );
-    }
+    const handleCancelAuth = useCallback(() => {
+      setIsAuthenticating(false);
+      cancelAuth();
+    }, [cancelAuth]);
 
-    if (state === 'error' && error) {
-      const errorKey = `providerModels.config.oauth.${error}`;
-      return (
-        <Flexbox gap={16}>
-          <Flexbox align="center" gap={8} horizontal>
-            <Icon color={cssVar.colorError} icon={UnplugIcon} size={18} />
-            <Text type="danger">{t(errorKey as any)}</Text>
-          </Flexbox>
-          <Button block onClick={handleStartAuth}>
-            {t('providerModels.config.oauth.retry')}
-          </Button>
-        </Flexbox>
-      );
-    }
+    const handleOpenBrowser = useCallback(() => {
+      if (deviceCodeInfo?.verificationUri) {
+        window.open(deviceCodeInfo.verificationUri, '_blank');
+      }
+    }, [deviceCodeInfo?.verificationUri]);
 
-    if (!deviceCodeInfo) {
-      return (
-        <Flexbox align="center" gap={12} horizontal justify="center" style={{ minHeight: 120 }}>
-          <Icon icon={Loader2Icon} spin />
-          <Text>{t('providerModels.config.oauth.connecting')}</Text>
-        </Flexbox>
-      );
-    }
+    useEffect(() => {
+      if (state === 'success' && isAuthenticating && !hasAutoClosedRef.current) {
+        hasAutoClosedRef.current = true;
+        setIsAuthenticating(false);
+      }
+    }, [state, isAuthenticating]);
 
-    return (
-      <Flexbox gap={20}>
-        <Flexbox gap={8}>
-          <Text type="secondary">{t('providerModels.config.oauth.enterCode')}</Text>
-          <Flexbox align="center" gap={8} horizontal>
-            <Flexbox
-              align="center"
-              flex={1}
-              justify="center"
-              style={{
-                background: cssVar.colorFillTertiary,
-                borderRadius: 8,
-                fontFamily: 'monospace',
-                fontSize: 28,
-                fontWeight: 600,
-                letterSpacing: 6,
-                padding: '16px 20px',
-              }}
-            >
-              {deviceCodeInfo.userCode}
+    // Render Hero section with provider logo
+    const renderHero = () => (
+      <div className={styles.hero}>
+        <ProviderIcon provider={providerId} size={72} type={'avatar'} />
+      </div>
+    );
+
+    // Render content based on authentication state
+    const renderContent = () => {
+      // Authenticated state - show user info
+      if (isAuthenticated && state === 'idle') {
+        return (
+          <div className={styles.content}>
+            <Flexbox align="center" gap={16}>
+              {avatarUrl && <Avatar className={styles.userAvatar} size={56} src={avatarUrl} />}
+              <div className={styles.userInfo}>
+                {username && <span className={styles.username}>{username}</span>}
+                <div className={styles.successBadge}>
+                  <CheckCircleFilled />
+                  <span>{t('providerModels.config.oauth.connected')}</span>
+                </div>
+              </div>
             </Flexbox>
-            <CopyButton content={deviceCodeInfo.userCode} size="small" />
-          </Flexbox>
-        </Flexbox>
+            <Button
+              icon={<Icon icon={LogOutIcon} />}
+              loading={revokeAuth.isPending}
+              onClick={handleDisconnect}
+            >
+              {t('providerModels.config.oauth.disconnect')}
+            </Button>
+            <div className={styles.serviceNote}>
+              {t('providerModels.config.oauth.serviceNote', { name })}
+            </div>
+          </div>
+        );
+      }
 
-        <Button
-          block
-          icon={<Icon icon={ExternalLinkIcon} />}
-          onClick={handleOpenBrowser}
-          type="primary"
-        >
-          {t('providerModels.config.oauth.openBrowser')}
-        </Button>
+      // Authenticating state - show device code
+      if (isAuthenticating) {
+        // Loading state
+        if (state === 'requesting' || !deviceCodeInfo) {
+          return (
+            <div className={styles.content}>
+              <Icon icon={Loader2Icon} size={24} spin />
+              <Text type="secondary">{t('providerModels.config.oauth.connecting')}</Text>
+            </div>
+          );
+        }
 
-        <Link href={deviceCodeInfo.verificationUri} style={{ textAlign: 'center' }} target="_blank">
-          {deviceCodeInfo.verificationUri}
-        </Link>
+        // Error state
+        if (state === 'error' && error) {
+          const errorKey = `providerModels.config.oauth.${error}`;
+          return (
+            <div className={styles.content}>
+              <Flexbox align="center" gap={8} horizontal>
+                <Icon color={cssVar.colorError} icon={UnplugIcon} size={20} />
+                <Text className={styles.errorText}>{t(errorKey as any)}</Text>
+              </Flexbox>
+              <Flexbox gap={12} style={{ width: '100%' }} width={280}>
+                <Button block onClick={handleStartAuth} type="primary">
+                  {t('providerModels.config.oauth.retry')}
+                </Button>
+                <Button block onClick={handleCancelAuth} type="text">
+                  {t('providerModels.config.oauth.cancel')}
+                </Button>
+              </Flexbox>
+            </div>
+          );
+        }
 
-        <Flexbox
-          align="center"
-          gap={8}
-          horizontal
-          justify="center"
-          style={{
-            background: cssVar.colorInfoBg,
-            borderRadius: 6,
-            fontSize: 13,
-            padding: '10px 12px',
-          }}
-        >
-          <Icon icon={Loader2Icon} spin />
-          <span>{t('providerModels.config.oauth.polling')}</span>
-        </Flexbox>
-      </Flexbox>
-    );
-  };
+        // Device code display
+        return (
+          <div className={styles.content}>
+            <Flexbox align="center" gap={12} style={{ width: '100%' }} width={320}>
+              <Text type="secondary">{t('providerModels.config.oauth.enterCode')}</Text>
+              <Flexbox align="center" gap={12} horizontal style={{ width: '100%' }}>
+                <div className={styles.codeBox}>{deviceCodeInfo.userCode}</div>
+                <CopyButton content={deviceCodeInfo.userCode} />
+              </Flexbox>
+            </Flexbox>
 
-  if (isAuthenticated && state === 'idle') {
+            <Flexbox gap={12} style={{ width: '100%' }} width={280}>
+              <Button
+                block
+                icon={<Icon icon={ExternalLinkIcon} />}
+                onClick={handleOpenBrowser}
+                size="large"
+                type="primary"
+              >
+                {t('providerModels.config.oauth.openBrowser')}
+              </Button>
+            </Flexbox>
+
+            <Link
+              href={deviceCodeInfo.verificationUri}
+              style={{ fontSize: 13 }}
+              target="_blank"
+              type="secondary"
+            >
+              {deviceCodeInfo.verificationUri}
+            </Link>
+
+            <div className={styles.pollingHint}>
+              <Icon icon={Loader2Icon} spin />
+              <span>{t('providerModels.config.oauth.polling')}</span>
+            </div>
+
+            <Button onClick={handleCancelAuth} type="text">
+              {t('providerModels.config.oauth.cancel')}
+            </Button>
+          </div>
+        );
+      }
+
+      // Error state (not authenticating)
+      if (state === 'error' && error) {
+        const errorKey = `providerModels.config.oauth.${error}`;
+        return (
+          <div className={styles.content}>
+            <Flexbox align="center" gap={8} horizontal>
+              <Icon color={cssVar.colorError} icon={UnplugIcon} size={18} />
+              <Text className={styles.errorText}>{t(errorKey as any)}</Text>
+            </Flexbox>
+            <Button onClick={handleStartAuth} size="large" type="primary">
+              {t('providerModels.config.oauth.connect', { name })}
+            </Button>
+            <div className={styles.serviceNote}>
+              {t('providerModels.config.oauth.serviceNote', { name })}
+            </div>
+          </div>
+        );
+      }
+
+      // Default state - show connect button
+      return (
+        <div className={styles.content}>
+          <Button onClick={handleStartAuth} size="large" type="primary">
+            {t('providerModels.config.oauth.connect', { name })}
+          </Button>
+          <div className={styles.serviceNote}>
+            {t('providerModels.config.oauth.serviceNote', { name })}
+          </div>
+        </div>
+      );
+    };
+
     return (
-      <Flexbox gap={8} horizontal>
-        <Button
-          icon={
-            <CheckCircleFilled
-              style={{
-                color: cssVar.colorSuccess,
-              }}
-            />
-          }
-          style={{
-            borderColor: cssVar.colorSuccess,
-            color: cssVar.colorSuccess,
-            flex: 1,
-          }}
-        >
-          {t('providerModels.config.oauth.authorized')}
-        </Button>
-        <Button
-          danger
-          icon={<Icon icon={LogOutIcon} />}
-          loading={revokeAuth.isPending}
-          onClick={handleDisconnect}
-        >
-          {t('providerModels.config.oauth.disconnect')}
-        </Button>
-      </Flexbox>
+      <div className={styles.card}>
+        {(title || extra) && (
+          <div className={styles.header}>
+            <div>{title}</div>
+            <div>{extra}</div>
+          </div>
+        )}
+        {renderHero()}
+        {renderContent()}
+      </div>
     );
-  }
-
-  if (state === 'error' && error && !isModalOpen) {
-    const errorKey = `providerModels.config.oauth.${error}`;
-    return (
-      <Flexbox gap={8}>
-        <Flexbox align="center" gap={8} horizontal>
-          <Icon color={cssVar.colorError} icon={UnplugIcon} size={16} />
-          <Text type="danger">{t(errorKey as any)}</Text>
-        </Flexbox>
-        <Button onClick={handleStartAuth} type="primary">
-          {t('providerModels.config.oauth.connect', { name })}
-        </Button>
-      </Flexbox>
-    );
-  }
-
-  return (
-    <>
-      <Button onClick={handleStartAuth} type="primary">
-        {t('providerModels.config.oauth.connect', { name })}
-      </Button>
-
-      <Modal
-        centered
-        closable
-        footer={null}
-        maskClosable={false}
-        onCancel={handleCloseModal}
-        open={isModalOpen}
-        title={t('providerModels.config.oauth.title')}
-        width={400}
-      >
-        {renderModalContent()}
-      </Modal>
-    </>
-  );
-});
+  },
+);
 
 OAuthDeviceFlowAuth.displayName = 'OAuthDeviceFlowAuth';
 

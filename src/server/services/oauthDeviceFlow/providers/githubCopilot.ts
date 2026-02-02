@@ -7,14 +7,46 @@ export interface CopilotTokenResponse {
   token: string;
 }
 
+export interface GithubUserInfo {
+  avatarUrl: string;
+  username: string;
+}
+
 export interface GithubCopilotTokens {
   bearerToken: string;
   bearerTokenExpiresAt: number;
   oauthAccessToken: string;
+  userInfo: GithubUserInfo;
 }
 
 export class GithubCopilotOAuthService extends OAuthDeviceFlowService {
+  private static readonly GITHUB_USER_API = 'https://api.github.com/user';
   private static readonly TOKEN_EXCHANGE_URL = 'https://api.github.com/copilot_internal/v2/token';
+
+  /**
+   * Fetch GitHub user info using OAuth access token
+   */
+  async fetchUserInfo(oauthToken: string): Promise<GithubUserInfo> {
+    const response = await fetch(GithubCopilotOAuthService.GITHUB_USER_API, {
+      headers: {
+        'Accept': 'application/json',
+        'Authorization': `token ${oauthToken}`,
+        'User-Agent': 'LobeChat/1.0',
+      },
+      method: 'GET',
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch GitHub user info: ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    return {
+      avatarUrl: data.avatar_url || '',
+      username: data.login || '',
+    };
+  }
 
   /**
    * Exchange OAuth access token for GitHub Copilot bearer token
@@ -58,6 +90,7 @@ export class GithubCopilotOAuthService extends OAuthDeviceFlowService {
    * Complete the full OAuth flow for GitHub Copilot:
    * 1. Poll for OAuth token
    * 2. Exchange for Copilot bearer token
+   * 3. Fetch GitHub user info
    */
   async completeAuthFlow(
     config: OAuthDeviceFlowConfig,
@@ -70,12 +103,16 @@ export class GithubCopilotOAuthService extends OAuthDeviceFlowService {
     }
 
     const oauthToken = pollResult.tokens.accessToken;
-    const copilotToken = await this.exchangeForCopilotToken(oauthToken);
+    const [copilotToken, userInfo] = await Promise.all([
+      this.exchangeForCopilotToken(oauthToken),
+      this.fetchUserInfo(oauthToken),
+    ]);
 
     return {
       bearerToken: copilotToken.token,
       bearerTokenExpiresAt: copilotToken.expiresAt,
       oauthAccessToken: oauthToken,
+      userInfo,
     };
   }
 

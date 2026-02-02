@@ -57,8 +57,10 @@ export const oauthDeviceFlowRouter = router({
       // Check for OAuth token
       if (keyVaults.oauthAccessToken) {
         return {
+          avatarUrl: keyVaults.githubAvatarUrl as string | undefined,
           expiresAt: keyVaults.oauthTokenExpiresAt || keyVaults.bearerTokenExpiresAt,
           isAuthenticated: true,
+          username: keyVaults.githubUsername as string | undefined,
         };
       }
 
@@ -125,13 +127,15 @@ export const oauthDeviceFlowRouter = router({
             return { status: pollResult.status };
           }
 
-          // Save tokens to keyVaults
+          // Save tokens and user info to keyVaults
           await ctx.aiProviderModel.updateConfig(
             input.providerId,
             {
               keyVaults: {
                 bearerToken: tokens.bearerToken,
                 bearerTokenExpiresAt: String(tokens.bearerTokenExpiresAt),
+                githubAvatarUrl: tokens.userInfo.avatarUrl,
+                githubUsername: tokens.userInfo.username,
                 oauthAccessToken: tokens.oauthAccessToken,
               },
             },
@@ -176,13 +180,15 @@ export const oauthDeviceFlowRouter = router({
   revokeAuth: oauthProcedure
     .input(z.object({ providerId: z.string() }))
     .mutation(async ({ input, ctx }) => {
-      // Clear OAuth tokens from keyVaults
+      // Clear OAuth tokens and user info from keyVaults
       await ctx.aiProviderModel.updateConfig(
         input.providerId,
         {
           keyVaults: {
             bearerToken: undefined,
             bearerTokenExpiresAt: undefined,
+            githubAvatarUrl: undefined,
+            githubUsername: undefined,
             oauthAccessToken: undefined,
             oauthTokenExpiresAt: undefined,
           },

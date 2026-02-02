@@ -198,9 +198,11 @@ export default {
   'providerModels.config.oauth.authorized': 'Authorized',
   'providerModels.config.oauth.authorizedDesc':
     'You have connected to {{name}}. Click to disconnect.',
+  'providerModels.config.oauth.cancel': 'Cancel',
   'providerModels.config.oauth.codeExpired': 'Authorization code has expired. Please try again.',
   'providerModels.config.oauth.connect': 'Connect with {{name}}',
   'providerModels.config.oauth.connectDesc': 'Click to authorize via browser. No API key required.',
+  'providerModels.config.oauth.connected': 'Connected',
   'providerModels.config.oauth.connecting': 'Connecting...',
   'providerModels.config.oauth.copyCode': 'Copy code',
   'providerModels.config.oauth.denied': 'Authorization was denied. Please try again.',
@@ -213,6 +215,7 @@ export default {
   'providerModels.config.oauth.openBrowser': 'Open browser to authorize',
   'providerModels.config.oauth.polling': 'Waiting for authorization...',
   'providerModels.config.oauth.retry': 'Retry',
+  'providerModels.config.oauth.serviceNote': 'Service provided by {{name}}',
   'providerModels.config.oauth.title': 'OAuth Authorization',
   'providerModels.config.responsesApi.desc':
     "Uses OpenAI's next-generation request format specification to unlock advanced features like chain-of-thought (supported by OpenAI models only)",
