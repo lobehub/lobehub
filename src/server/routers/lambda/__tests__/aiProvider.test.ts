@@ -181,6 +181,7 @@ describe('aiProviderRouter', () => {
         mockProviderId,
         { checkModel: 'gpt-4' },
         mockGateKeeper.encrypt,
+        KeyVaultsGateKeeper.getUserKeyVaults,
       );
     });
   });
