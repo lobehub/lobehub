@@ -2,6 +2,7 @@
 export { AgentBuilderContextInjector } from './AgentBuilderContextInjector';
 export { EvalContextSystemInjector } from './EvalContextSystemInjector';
 export { ForceFinishSummaryInjector } from './ForceFinishSummaryInjector';
+export { AgentManagementContextInjector } from './AgentManagementContextInjector';
 export { GroupAgentBuilderContextInjector } from './GroupAgentBuilderContextInjector';
 export { GroupContextInjector } from './GroupContextInjector';
 export { GTDPlanInjector } from './GTDPlanInjector';
@@ -25,6 +26,13 @@ export type {
 } from './AgentBuilderContextInjector';
 export type { EvalContext, EvalContextSystemInjectorConfig } from './EvalContextSystemInjector';
 export type { ForceFinishSummaryInjectorConfig } from './ForceFinishSummaryInjector';
+export type {
+  AgentManagementContext,
+  AgentManagementContextInjectorConfig,
+  AvailableModelInfo,
+  AvailablePluginInfo,
+  AvailableProviderInfo,
+} from './AgentManagementContextInjector';
 export type {
   GroupAgentBuilderContext,
   GroupAgentBuilderContextInjectorConfig,

@@ -2338,6 +2338,7 @@ describe('call_tool executor', () => {
       const mockStore = createMockStore();
       const context = createTestContext({
         agentId: 'supervisor-agent',
+        scope: 'group_agent',
         subAgentId: 'worker-agent',
         topicId: 'group-topic',
       });

@@ -1,5 +1,5 @@
 import { formatAgentProfile } from '@lobechat/prompts';
-import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import type { BuiltinToolResult } from '@lobechat/types';
 
 import { agentService } from '@/services/agent';
 import type { GroupMemberConfig } from '@/services/chatGroup';
@@ -42,10 +42,11 @@ export class GroupAgentBuilderExecutionRuntime {
   async getAgentInfo(
     groupId: string | undefined,
     args: GetAgentInfoParams,
-  ): Promise<BuiltinServerRuntimeOutput> {
+  ): Promise<BuiltinToolResult> {
     if (!groupId) {
       return {
         content: 'No group context available',
+        error: { message: 'No group context available', type: 'NoGroupContext' },
         success: false,
       };
     }
@@ -54,7 +55,11 @@ export class GroupAgentBuilderExecutionRuntime {
     const agent = agentGroupSelectors.getAgentByIdFromGroup(groupId, args.agentId)(state);
 
     if (!agent) {
-      return { content: `Agent "${args.agentId}" not found in this group`, success: false };
+      return {
+        content: `Agent "${args.agentId}" not found in this group`,
+        error: { message: `Agent "${args.agentId}" not found`, type: 'AgentNotFound' },
+        success: false,
+      };
     }
 
     // Return formatted agent profile for the supervisor
@@ -66,7 +71,7 @@ export class GroupAgentBuilderExecutionRuntime {
   /**
    * Search for agents that can be invited to the group
    */
-  async searchAgent(args: SearchAgentParams): Promise<BuiltinServerRuntimeOutput> {
+  async searchAgent(args: SearchAgentParams): Promise<BuiltinToolResult> {
     const { query, limit = 10 } = args;
 
     try {
@@ -107,19 +112,14 @@ export class GroupAgentBuilderExecutionRuntime {
         success: true,
       };
     } catch (error) {
-      const err = error as Error;
-      return {
-        content: `Failed to search agents: ${err.message}`,
-        error,
-        success: false,
-      };
+      return this.handleError(error, 'Failed to search agents');
     }
   }
 
   /**
    * Create a new agent and add it to the group
    */
-  async createAgent(groupId: string, args: CreateAgentParams): Promise<BuiltinServerRuntimeOutput> {
+  async createAgent(groupId: string, args: CreateAgentParams): Promise<BuiltinToolResult> {
     try {
       const state = getChatGroupStoreState();
       const group = agentGroupSelectors.getGroupById(groupId)(state);
@@ -127,7 +127,7 @@ export class GroupAgentBuilderExecutionRuntime {
       if (!group) {
         return {
           content: 'Group not found',
-          error: 'Group not found',
+          error: { message: 'Group not found', type: 'GroupNotFound' },
           success: false,
         };
       }
@@ -149,6 +149,7 @@ export class GroupAgentBuilderExecutionRuntime {
       if (!result.agentId) {
         return {
           content: 'Failed to create agent: No agent ID returned',
+          error: { message: 'No agent ID returned', type: 'CreateError' },
           success: false,
         };
       }
@@ -166,12 +167,7 @@ export class GroupAgentBuilderExecutionRuntime {
         success: true,
       };
     } catch (error) {
-      const err = error as Error;
-      return {
-        content: `Failed to create agent: ${err.message}`,
-        error,
-        success: false,
-      };
+      return this.handleError(error, 'Failed to create agent');
     }
   }
 
@@ -182,7 +178,7 @@ export class GroupAgentBuilderExecutionRuntime {
   async batchCreateAgents(
     groupId: string,
     args: BatchCreateAgentsParams,
-  ): Promise<BuiltinServerRuntimeOutput> {
+  ): Promise<BuiltinToolResult> {
     try {
       const state = getChatGroupStoreState();
       const group = agentGroupSelectors.getGroupById(groupId)(state);
@@ -190,7 +186,7 @@ export class GroupAgentBuilderExecutionRuntime {
       if (!group) {
         return {
           content: 'Group not found',
-          error: 'Group not found',
+          error: { message: 'Group not found', type: 'GroupNotFound' },
           success: false,
         };
       }
@@ -231,19 +227,14 @@ export class GroupAgentBuilderExecutionRuntime {
         success: true,
       };
     } catch (error) {
-      const err = error as Error;
-      return {
-        content: `Failed to create agents: ${err.message}`,
-        error,
-        success: false,
-      };
+      return this.handleError(error, 'Failed to create agents');
     }
   }
 
   /**
    * Invite an agent to the group
    */
-  async inviteAgent(groupId: string, args: InviteAgentParams): Promise<BuiltinServerRuntimeOutput> {
+  async inviteAgent(groupId: string, args: InviteAgentParams): Promise<BuiltinToolResult> {
     try {
       const state = getChatGroupStoreState();
       const group = agentGroupSelectors.getGroupById(groupId)(state);
@@ -251,7 +242,7 @@ export class GroupAgentBuilderExecutionRuntime {
       if (!group) {
         return {
           content: 'Group not found',
-          error: 'Group not found',
+          error: { message: 'Group not found', type: 'GroupNotFound' },
           success: false,
         };
       }
@@ -302,19 +293,14 @@ export class GroupAgentBuilderExecutionRuntime {
         success: wasAdded,
       };
     } catch (error) {
-      const err = error as Error;
-      return {
-        content: `Failed to invite agent: ${err.message}`,
-        error,
-        success: false,
-      };
+      return this.handleError(error, 'Failed to invite agent');
     }
   }
 
   /**
    * Remove an agent from the group
    */
-  async removeAgent(groupId: string, args: RemoveAgentParams): Promise<BuiltinServerRuntimeOutput> {
+  async removeAgent(groupId: string, args: RemoveAgentParams): Promise<BuiltinToolResult> {
     try {
       const state = getChatGroupStoreState();
       const group = agentGroupSelectors.getGroupById(groupId)(state);
@@ -322,7 +308,7 @@ export class GroupAgentBuilderExecutionRuntime {
       if (!group) {
         return {
           content: 'Group not found',
-          error: 'Group not found',
+          error: { message: 'Group not found', type: 'GroupNotFound' },
           success: false,
         };
       }
@@ -379,12 +365,7 @@ export class GroupAgentBuilderExecutionRuntime {
         success: true,
       };
     } catch (error) {
-      const err = error as Error;
-      return {
-        content: `Failed to remove agent: ${err.message}`,
-        error,
-        success: false,
-      };
+      return this.handleError(error, 'Failed to remove agent');
     }
   }
 
@@ -396,7 +377,7 @@ export class GroupAgentBuilderExecutionRuntime {
   async updateAgentPrompt(
     groupId: string,
     args: UpdateAgentPromptParams,
-  ): Promise<BuiltinServerRuntimeOutput> {
+  ): Promise<BuiltinToolResult> {
     try {
       const { agentId, prompt } = args;
 
@@ -432,19 +413,14 @@ export class GroupAgentBuilderExecutionRuntime {
         success: true,
       };
     } catch (error) {
-      const err = error as Error;
-      return {
-        content: `Failed to update agent prompt: ${err.message}`,
-        error,
-        success: false,
-      };
+      return this.handleError(error, 'Failed to update agent prompt');
     }
   }
 
   /**
    * Update group configuration and metadata (unified method)
    */
-  async updateGroup(args: UpdateGroupParams): Promise<BuiltinServerRuntimeOutput> {
+  async updateGroup(args: UpdateGroupParams): Promise<BuiltinToolResult> {
     try {
       const state = getChatGroupStoreState();
       const group = agentGroupSelectors.currentGroup(state);
@@ -452,7 +428,7 @@ export class GroupAgentBuilderExecutionRuntime {
       if (!group) {
         return {
           content: 'No active group found',
-          error: 'No active group found',
+          error: { message: 'No active group found', type: 'NoGroupContext' },
           success: false,
         };
       }
@@ -462,7 +438,7 @@ export class GroupAgentBuilderExecutionRuntime {
       if (!config && !meta) {
         return {
           content: 'No configuration or metadata provided',
-          error: 'No configuration or metadata provided',
+          error: { message: 'No configuration or metadata provided', type: 'NoDataProvided' },
           success: false,
         };
       }
@@ -532,19 +508,14 @@ export class GroupAgentBuilderExecutionRuntime {
         success: true,
       };
     } catch (error) {
-      const err = error as Error;
-      return {
-        content: `Failed to update group: ${err.message}`,
-        error,
-        success: false,
-      };
+      return this.handleError(error, 'Failed to update group');
     }
   }
 
   /**
    * Update group shared prompt/content
    */
-  async updateGroupPrompt(args: UpdateGroupPromptParams): Promise<BuiltinServerRuntimeOutput> {
+  async updateGroupPrompt(args: UpdateGroupPromptParams): Promise<BuiltinToolResult> {
     try {
       const state = getChatGroupStoreState();
       const group = agentGroupSelectors.currentGroup(state);
@@ -552,7 +523,7 @@ export class GroupAgentBuilderExecutionRuntime {
       if (!group) {
         return {
           content: 'No active group found',
-          error: 'No active group found',
+          error: { message: 'No active group found', type: 'NoGroupContext' },
           success: false,
         };
       }
@@ -589,16 +560,10 @@ export class GroupAgentBuilderExecutionRuntime {
         success: true,
       };
     } catch (error) {
-      const err = error as Error;
-      return {
-        content: `Failed to update group prompt: ${err.message}`,
-        error,
-        state: {
-          newPrompt: args.prompt,
-          success: false,
-        } as UpdateGroupPromptState,
+      return this.handleErrorWithState(error, 'Failed to update group prompt', {
+        newPrompt: args.prompt,
         success: false,
-      };
+      } as UpdateGroupPromptState);
     }
   }
 
@@ -612,5 +577,38 @@ export class GroupAgentBuilderExecutionRuntime {
     if (!group) return;
 
     await state.updateGroup(group.id, { content: prompt });
+  }
+
+  // ==================== Error Handling ====================
+
+  private handleError(error: unknown, context: string): BuiltinToolResult {
+    const err = error as Error;
+    return {
+      content: `${context}: ${err.message}`,
+      error: {
+        body: error,
+        message: err.message,
+        type: 'RuntimeError',
+      },
+      success: false,
+    };
+  }
+
+  private handleErrorWithState<T extends object>(
+    error: unknown,
+    context: string,
+    state: T,
+  ): BuiltinToolResult {
+    const err = error as Error;
+    return {
+      content: `${context}: ${err.message}`,
+      error: {
+        body: error,
+        message: err.message,
+        type: 'RuntimeError',
+      },
+      state,
+      success: false,
+    };
   }
 }

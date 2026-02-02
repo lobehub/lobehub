@@ -5,11 +5,11 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client/index.ts",
-    "./executor": "./src/executor.ts",
-    "./executionRuntime": "./src/ExecutionRuntime/index.ts"
+    "./executor": "./src/executor.ts"
   },
   "main": "./src/index.ts",
   "dependencies": {
+    "@lobechat/agent-manager-runtime": "workspace:*",
     "@lobechat/const": "workspace:*",
     "@lobechat/prompts": "workspace:*",
     "type-fest": "^4.18.3"

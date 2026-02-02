@@ -55,7 +55,6 @@ export const agentRouter = router({
             chatConfig: true,
             openingMessage: true,
             openingQuestions: true,
-            plugins: true,
             tags: true,
             tts: true,
           })
@@ -67,7 +66,7 @@ export const agentRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const session = await ctx.sessionModel.create({
-        config: input.config,
+        config: input.config as any,
         session: { groupId: input.groupId },
         type: 'agent',
       });

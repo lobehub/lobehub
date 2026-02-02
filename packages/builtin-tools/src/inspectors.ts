@@ -3,6 +3,10 @@ import {
   AgentBuilderManifest,
 } from '@lobechat/builtin-tool-agent-builder/client';
 import {
+  AgentManagementInspectors,
+  AgentManagementManifest,
+} from '@lobechat/builtin-tool-agent-management/client';
+import {
   CloudSandboxIdentifier,
   CloudSandboxInspectors,
 } from '@lobechat/builtin-tool-cloud-sandbox/client';
@@ -47,6 +51,10 @@ import { type BuiltinInspector } from '@lobechat/types';
  */
 const BuiltinToolInspectors: Record<string, Record<string, BuiltinInspector>> = {
   [AgentBuilderManifest.identifier]: AgentBuilderInspectors as Record<string, BuiltinInspector>,
+  [AgentManagementManifest.identifier]: AgentManagementInspectors as Record<
+    string,
+    BuiltinInspector
+  >,
   [CloudSandboxIdentifier]: CloudSandboxInspectors as Record<string, BuiltinInspector>,
   [GroupAgentBuilderManifest.identifier]: GroupAgentBuilderInspectors as Record<
     string,
