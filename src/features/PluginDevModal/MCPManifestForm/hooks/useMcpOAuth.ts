@@ -97,8 +97,12 @@ export function useMcpOAuth(mcpUrl: string | undefined, pluginId: string) {
     setIsConnecting(true);
     try {
       const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(pluginId)}&source=mcp`;
+      const callbackBase =
+        (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_APP_URL) ||
+        window.location.origin;
       const res = await fetch('/api/mcp/oauth/authorize', {
         body: JSON.stringify({
+          callbackBase,
           mcpUrl,
           pluginId,
           redirectUri,

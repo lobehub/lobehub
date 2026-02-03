@@ -10,55 +10,14 @@ import {
   buildAuthorizeUrl,
   discover,
   generatePKCE,
+  getPublicBaseUrl,
+  isBindAddress,
   registerClient,
 } from '@/server/services/mcp/oauth';
 
 export const dynamic = 'force-dynamic';
 
 const PENDING_TTL_MS = 10 * 60 * 1000; // 10 minutes
-
-/** Host is a bind address or localhost; OAuth providers cannot reach it. */
-function isBindAddress(host: string): boolean {
-  const h = host.toLowerCase();
-  return h === '0.0.0.0' || h === '127.0.0.1' || h === 'localhost' || h.startsWith('127.');
-}
-
-/** Base URL for OAuth callback. When APP_URL is a bind address, use proxy headers or Origin/Referer. */
-function getOAuthCallbackBase(request: NextRequest): string {
-  let appUrl: URL;
-  try {
-    appUrl = new URL(appEnv.APP_URL);
-  } catch {
-    return appEnv.APP_URL;
-  }
-  if (!isBindAddress(appUrl.hostname)) return appEnv.APP_URL;
-
-  const proto = request.headers.get('x-forwarded-proto') || appUrl.protocol.replace(':', '');
-  const forwardedHost = request.headers.get('x-forwarded-host');
-  if (forwardedHost) return `${proto}://${forwardedHost}`;
-
-  const origin = request.headers.get('origin');
-  if (origin) {
-    try {
-      const u = new URL(origin);
-      if (!isBindAddress(u.hostname)) return origin;
-    } catch {
-      // ignore invalid origin
-    }
-  }
-
-  const referer = request.headers.get('referer');
-  if (referer) {
-    try {
-      const u = new URL(referer);
-      if (!isBindAddress(u.hostname)) return u.origin;
-    } catch {
-      // ignore invalid referer
-    }
-  }
-
-  return appEnv.APP_URL;
-}
 
 export async function POST(request: NextRequest) {
   const session = await auth.api.getSession({ headers: request.headers });
@@ -67,21 +26,41 @@ export async function POST(request: NextRequest) {
   }
   const userId = session.user.id;
 
-  let body: { mcpUrl: string; pluginId: string; redirectUri: string };
+  let body: {
+    callbackBase?: string;
+    mcpUrl: string;
+    pluginId: string;
+    redirectUri: string;
+  };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
   }
-  const { mcpUrl, pluginId, redirectUri: successRedirectUri } = body;
+  const {
+    callbackBase: clientCallbackBase,
+    mcpUrl,
+    pluginId,
+    redirectUri: successRedirectUri,
+  } = body;
   if (!mcpUrl || !pluginId || !successRedirectUri) {
     return NextResponse.json(
       { error: 'mcpUrl, pluginId, and redirectUri are required' },
       { status: 400 },
     );
   }
-  // OAuth provider redirects here; use public base (from APP_URL or X-Forwarded-* when APP_URL is bind address)
-  const callbackBase = getOAuthCallbackBase(request);
+  let callbackBase: string;
+  if (clientCallbackBase) {
+    try {
+      const u = new URL(clientCallbackBase);
+      if (!isBindAddress(u.hostname)) callbackBase = u.origin;
+      else callbackBase = getPublicBaseUrl(appEnv.APP_URL, request.headers);
+    } catch {
+      callbackBase = getPublicBaseUrl(appEnv.APP_URL, request.headers);
+    }
+  } else {
+    callbackBase = getPublicBaseUrl(appEnv.APP_URL, request.headers);
+  }
   const oauthRedirectUri = urlJoin(callbackBase, '/api/mcp/oauth/callback');
 
   let mcpBaseUrl: string;

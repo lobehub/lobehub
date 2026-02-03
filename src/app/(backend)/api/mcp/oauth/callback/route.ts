@@ -3,34 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { McpOauthModel } from '@/database/models/mcpOauth';
 import { appEnv } from '@/envs/app';
-import { exchangeCode } from '@/server/services/mcp/oauth';
+import { exchangeCode, getPublicBaseUrl } from '@/server/services/mcp/oauth';
 
 export const dynamic = 'force-dynamic';
 
 const ERROR_PATH = '/oauth/callback/error';
 
-function isBindAddress(host: string): boolean {
-  const h = host.toLowerCase();
-  return h === '0.0.0.0' || h === '127.0.0.1' || h === 'localhost' || h.startsWith('127.');
-}
-
-/** Base URL for redirects. Uses X-Forwarded-* when APP_URL is a bind address. */
-function getRedirectBase(request: NextRequest): string {
-  let appUrl: URL;
-  try {
-    appUrl = new URL(appEnv.APP_URL);
-  } catch {
-    return appEnv.APP_URL;
-  }
-  if (!isBindAddress(appUrl.hostname)) return appEnv.APP_URL;
-  const proto = request.headers.get('x-forwarded-proto') || appUrl.protocol.replace(':', '');
-  const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
-  if (host) return `${proto}://${host}`;
-  return appEnv.APP_URL;
-}
-
 function redirectToError(request: NextRequest, reason: string, errorMessage?: string) {
-  const base = getRedirectBase(request);
+  const base = getPublicBaseUrl(appEnv.APP_URL, request.headers);
   const url = new URL(ERROR_PATH, base);
   url.searchParams.set('reason', reason);
   if (errorMessage) url.searchParams.set('errorMessage', errorMessage);
@@ -81,7 +61,7 @@ export async function GET(request: NextRequest) {
       userId: pending.userId,
     });
 
-    const base = getRedirectBase(request);
+    const base = getPublicBaseUrl(appEnv.APP_URL, request.headers);
     const successUrl = new URL(pending.redirectUri);
     const redirectTo = new URL(successUrl.pathname + successUrl.search, base);
     return NextResponse.redirect(redirectTo.toString());
