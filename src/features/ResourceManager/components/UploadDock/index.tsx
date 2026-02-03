@@ -48,6 +48,9 @@ const styles = createStaticStyles(({ css }) => {
   };
 });
 
+/**
+ * Show & manage current uploading tasks
+ */
 const UploadDock = memo(() => {
   const { t } = useTranslation('file');
   const [show, setShow] = useState(true);

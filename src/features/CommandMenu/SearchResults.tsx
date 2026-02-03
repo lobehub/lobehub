@@ -108,7 +108,7 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'memory': {
-          navigate(`/memory`);
+          navigate(`/memory/preferences?preferenceId=${result.id}`);
           break;
         }
       }
