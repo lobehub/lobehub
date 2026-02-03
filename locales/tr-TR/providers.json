@@ -20,6 +20,7 @@
   "fireworksai.description": "Fireworks AI, işlev çağrısı ve çok modlu işleme özelliklerine sahip gelişmiş dil modeli hizmetleri sunar. Llama-3 tabanlı Firefunction V2, işlev çağrısı, sohbet ve talimat takibi için optimize edilmiştir. FireLLaVA-13B ise karışık görsel-metin girişlerini destekler. Llama ve Mixtral aileleri de öne çıkan modeller arasındadır.",
   "giteeai.description": "Gitee AI Serverless API’leri, geliştiriciler için tak-çalıştır LLM çıkarım hizmetleri sunar.",
   "github.description": "GitHub Modelleri ile geliştiriciler, sektör lideri modelleri kullanarak yapay zeka mühendisi gibi projeler geliştirebilir.",
+  "githubcopilot.description": "GitHub Copilot aboneliğinizle Claude, GPT ve Gemini modellerine erişin.",
   "google.description": "Google’ın Gemini ailesi, metin, kod, görsel, ses ve video gibi çok modlu kullanım için Google DeepMind tarafından geliştirilen en gelişmiş genel amaçlı yapay zekadır. Veri merkezlerinden mobil cihazlara kadar ölçeklenebilir ve yüksek verimlilik sağlar.",
   "groq.description": "Groq’un LPU çıkarım motoru, olağanüstü hız ve verimlilikle öne çıkan kıyaslama performansı sunar. Düşük gecikmeli, bulut tabanlı LLM çıkarımı için yüksek standart belirler.",
   "higress.description": "Higress, Alibaba içinde geliştirilen bulut yerel bir API geçididir. Tengine yeniden yükleme etkisini ve gRPC/Dubbo yük dengelemedeki boşlukları gidermek için tasarlanmıştır.",

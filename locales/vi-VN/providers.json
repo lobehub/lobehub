@@ -20,6 +20,7 @@
   "fireworksai.description": "Fireworks AI cung cấp dịch vụ mô hình ngôn ngữ tiên tiến với gọi hàm và xử lý đa phương thức. Firefunction V2 (dựa trên Llama-3) tối ưu cho gọi hàm, trò chuyện và làm theo hướng dẫn, trong khi FireLLaVA-13B hỗ trợ đầu vào hình ảnh-văn bản kết hợp. Các mô hình nổi bật khác gồm họ Llama và Mixtral.",
   "giteeai.description": "Gitee AI Serverless APIs cung cấp dịch vụ suy luận LLM cắm là chạy cho nhà phát triển.",
   "github.description": "Với GitHub Models, nhà phát triển có thể xây dựng như kỹ sư AI sử dụng các mô hình hàng đầu ngành.",
+  "githubcopilot.description": "Truy cập các mô hình Claude, GPT và Gemini thông qua gói đăng ký GitHub Copilot của bạn.",
   "google.description": "Dòng Gemini của Google là AI đa năng tiên tiến nhất, được phát triển bởi Google DeepMind cho các tác vụ đa phương thức trên văn bản, mã, hình ảnh, âm thanh và video. Có thể mở rộng từ trung tâm dữ liệu đến thiết bị di động với hiệu suất và phạm vi cao.",
   "groq.description": "Công cụ suy luận LPU của Groq mang lại hiệu suất vượt trội với tốc độ và hiệu quả xuất sắc, thiết lập tiêu chuẩn cao cho suy luận LLM đám mây độ trễ thấp.",
   "higress.description": "Higress là cổng API gốc đám mây do Alibaba phát triển để giải quyết ảnh hưởng tải lại Tengine lên kết nối lâu dài và thiếu sót trong cân bằng tải gRPC/Dubbo.",

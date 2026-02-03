@@ -188,6 +188,7 @@
   "cmdk.submitIssue": "問題を報告",
   "cmdk.theme": "テーマ",
   "cmdk.themeAuto": "システムに従う",
+  "cmdk.themeCurrent": "現在のテーマ",
   "cmdk.themeDark": "ダークモード",
   "cmdk.themeLight": "ライトモード",
   "cmdk.toOpen": "開く",

@@ -20,6 +20,7 @@
   "fireworksai.description": "Fireworks AI 提供先进的语言模型服务，支持函数调用与多模态处理。Firefunction V2（基于 Llama-3）优化了函数调用、对话与指令执行，FireLLaVA-13B 支持图文混合输入，另有 Llama 与 Mixtral 系列模型。",
   "giteeai.description": "Gitee AI Serverless API 为开发者提供即插即用的大模型推理服务。",
   "github.description": "通过 GitHub Models，开发者可使用行业领先模型构建 AI 工程项目。",
+  "githubcopilot.description": "通过您的 GitHub Copilot 订阅访问 Claude、GPT 和 Gemini 模型。",
   "google.description": "Google 的 Gemini 系列是其最先进的通用 AI，由 Google DeepMind 构建，支持文本、代码、图像、音频与视频的多模态应用，具备从数据中心到移动设备的高效扩展能力。",
   "groq.description": "Groq 的 LPU 推理引擎在基准测试中表现卓越，具备极高速度与效率，为低延迟云端大模型推理设立新标杆。",
   "higress.description": "Higress 是阿里巴巴内部打造的云原生 API 网关，解决 Tengine 重载对长连接的影响及 gRPC/Dubbo 负载均衡的不足。",

@@ -536,7 +536,7 @@
   "skillStore.tabs.lobehub": "LobeHub",
   "skillStore.title": "Skill Store",
   "skillStore.wantMore.action": "Submit a request →",
-  "skillStore.wantMore.feedback.message": "## Skill Name\n[Please fill in]\n\n## Use Case\nWhen I am ___, I need ___\n\n## Expected Features\n1. \n2. \n3. \n\n## Reference Examples\n(Optional) Are there any similar tools or features for reference?\n\n---\n💡 Tip: The more specific your description, the better we can meet your needs",
+  "skillStore.wantMore.feedback.message": "## Skill Name\n[Please fill in]\n\n## Use Case\nWhen I am ___, I need ___\n\n## Expected Features\n1.\n2.\n3.\n\n## Reference Examples\n(Optional) Are there any similar tools or features for reference?\n\n---\n💡 Tip: The more specific your description, the better we can meet your needs",
   "skillStore.wantMore.feedback.title": "[Skill Request] Summarize the skill you need in one sentence",
   "skillStore.wantMore.reachedEnd": "You've reached the end. Can't find what you need?",
   "startConversation": "Start Conversation",

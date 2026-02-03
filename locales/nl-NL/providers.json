@@ -20,6 +20,7 @@
   "fireworksai.description": "Fireworks AI biedt geavanceerde taalmodeldiensten met functie-aanroepen en multimodale verwerking. Firefunction V2 (gebaseerd op Llama-3) is geoptimaliseerd voor functie-aanroepen, chat en instructievolging, terwijl FireLLaVA-13B gemengde beeld-tekstinvoer ondersteunt. Andere belangrijke modellen zijn de Llama- en Mixtral-families.",
   "giteeai.description": "Gitee AI Serverless API’s bieden plug-and-play LLM-inferentiediensten voor ontwikkelaars.",
   "github.description": "Met GitHub Models kunnen ontwikkelaars als AI-engineers bouwen met toonaangevende modellen.",
+  "githubcopilot.description": "Toegang tot Claude-, GPT- en Gemini-modellen via je GitHub Copilot-abonnement.",
   "google.description": "De Gemini-familie van Google is de meest geavanceerde algemene AI, ontwikkeld door Google DeepMind voor multimodaal gebruik over tekst, code, afbeeldingen, audio en video. Het schaalt van datacenters tot mobiele apparaten met hoge efficiëntie en bereik.",
   "groq.description": "Groq’s LPU-inferentie-engine levert uitzonderlijke benchmarkprestaties met hoge snelheid en efficiëntie, en zet een nieuwe standaard voor cloudgebaseerde LLM-inferentie met lage latentie.",
   "higress.description": "Higress is een cloud-native API-gateway ontwikkeld binnen Alibaba om de impact van Tengine-herlaadacties op langdurige verbindingen en tekortkomingen in gRPC/Dubbo-loadbalancing aan te pakken.",
