@@ -607,11 +607,25 @@ export default {
   'skillStore.tabs.custom': 'Custom',
   'skillStore.tabs.lobehub': 'LobeHub',
   'skillStore.title': 'Skill Store',
-  'skillStore.wantMore.action': 'Request a Skill',
-  'skillStore.wantMore.feedback.message':
-    'I would like to request the following skill to be added:\n\n**Skill Name:**\n\n**Description:**\n\n**Use Case:**\n',
-  'skillStore.wantMore.feedback.title': '[Skill Request] ',
-  'skillStore.wantMore.title': 'Want more skills?',
+  'skillStore.wantMore.action': 'Submit a request →',
+  'skillStore.wantMore.feedback.message': `## Skill Name
+[Please fill in]
+
+## Use Case
+When I am ___, I need ___
+
+## Expected Features
+1.
+2.
+3.
+
+## Reference Examples
+(Optional) Are there any similar tools or features for reference?
+
+---
+💡 Tip: The more specific your description, the better we can meet your needs`,
+  'skillStore.wantMore.feedback.title': '[Skill Request] Summarize the skill you need in one sentence',
+  'skillStore.wantMore.reachedEnd': "You've reached the end. Can't find what you need?",
   'startConversation': 'Start Conversation',
   'storage.actions.export.button': 'Export',
   'storage.actions.export.exportType.agent': 'Export Agent Settings',

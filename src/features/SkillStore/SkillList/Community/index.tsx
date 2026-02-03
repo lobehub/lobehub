@@ -1,6 +1,6 @@
 'use client';
 
-import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
+import { Center, Icon, Text } from '@lobehub/ui';
 import { ServerCrash } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +23,7 @@ export const CommunityList = memo(() => {
     isMcpListInit,
     allItems,
     currentPage,
+    totalPages,
     searchLoading,
     useFetchMCPPluginList,
     loadMoreMCPPlugins,
@@ -32,6 +33,7 @@ export const CommunityList = memo(() => {
     s.isMcpListInit,
     s.mcpPluginItems,
     s.currentPage,
+    s.totalPages,
     s.searchLoading,
     s.useFetchMCPPluginList,
     s.loadMoreMCPPlugins,
@@ -71,10 +73,19 @@ export const CommunityList = memo(() => {
 
     if (allItems.length === 0) return <Empty search={hasSearchKeywords} />;
 
+    // Check if we've reached the end of the list
+    const hasReachedEnd = totalPages !== undefined && currentPage >= totalPages;
+
+    const renderFooter = () => {
+      if (isLoading) return <VirtuosoLoading />;
+      if (hasReachedEnd) return <WantMoreSkills />;
+      return <div style={{ height: 16 }} />;
+    };
+
     return (
       <VirtuosoGrid
         components={{
-          Footer: isLoading ? VirtuosoLoading : () => <div style={{ height: 16 }} />,
+          Footer: renderFooter,
         }}
         data={allItems}
         endReached={loadMoreMCPPlugins}
@@ -83,17 +94,12 @@ export const CommunityList = memo(() => {
         itemContent={(_, item) => <Item {...item} />}
         listClassName={virtuosoGridStyles.list}
         overscan={24}
-        style={{ height: 'calc(60vh - 60px)', width: '100%' }}
+        style={{ height: '60vh', width: '100%' }}
       />
     );
   };
 
-  return (
-    <Flexbox height={'60vh'} width={'100%'}>
-      {renderContent()}
-      <WantMoreSkills />
-    </Flexbox>
-  );
+  return renderContent();
 });
 
 CommunityList.displayName = 'CommunityList';
