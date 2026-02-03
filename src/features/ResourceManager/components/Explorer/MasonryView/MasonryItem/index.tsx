@@ -10,9 +10,9 @@ import {
 import { documentService } from '@/services/document';
 import { type FileListItem } from '@/types/files';
 
-import { useFileItemClick } from '../../hooks/useFileItemClick';
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
 import { useFileItemDropdown } from '../../ItemDropdown/useFileItemDropdown';
+import { useFileItemClick } from '../../hooks/useFileItemClick';
 import DefaultFileItem from './DefaultFileItem';
 import ImageFileItem from './ImageFileItem';
 import MarkdownFileItem from './MarkdownFileItem';

@@ -13,7 +13,7 @@ import { useFetchResources } from '@/store/file/slices/resource/hooks';
 import { type FileListItem } from '@/types/files';
 
 import { useMasonryColumnCount } from '../useMasonryColumnCount';
-import MasonryItemWrapper from './MasonryFileItem/MasonryItemWrapper';
+import MasonryItemWrapper from './MasonryItem/MasonryItemWrapper';
 import MasonryViewSkeleton from './Skeleton';
 
 const MasonryView = memo(function MasonryView() {

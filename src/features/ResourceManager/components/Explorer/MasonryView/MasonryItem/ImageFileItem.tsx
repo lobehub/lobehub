@@ -50,16 +50,16 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       opacity: 1;
     }
   `,
-  imagePlaceholder: css`
+  imageWrapper: css`
+    position: relative;
+
     display: flex;
     align-items: center;
     justify-content: center;
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  imageWrapper: css`
-    position: relative;
+
     width: 100%;
     min-height: 120px;
+
     background: ${cssVar.colorFillQuaternary};
 
     img {
@@ -144,29 +144,27 @@ const ImageFileItem = memo<ImageFileItemProps>(
       <>
         <div className={styles.imageWrapper}>
           {!imageLoaded && (
-            <div className={styles.imagePlaceholder}>
-              <Flexbox
-                align={'center'}
-                gap={12}
-                justify={'center'}
-                paddingBlock={24}
-                paddingInline={12}
+            <Flexbox
+              align={'center'}
+              gap={12}
+              justify={'center'}
+              paddingBlock={24}
+              paddingInline={12}
+            >
+              <FileIcon fileName={name} fileType={fileType} size={48} />
+              <div className={styles.name} style={{ textAlign: 'center' }}>
+                {name}
+              </div>
+              <div
+                style={{
+                  color: 'var(--lobe-chat-text-tertiary)',
+                  fontSize: 12,
+                  textAlign: 'center',
+                }}
               >
-                <FileIcon fileName={name} fileType={fileType} size={48} />
-                <div className={styles.name} style={{ textAlign: 'center' }}>
-                  {name}
-                </div>
-                <div
-                  style={{
-                    color: 'var(--lobe-chat-text-tertiary)',
-                    fontSize: 12,
-                    textAlign: 'center',
-                  }}
-                >
-                  {formatSize(size)}
-                </div>
-              </Flexbox>
-            </div>
+                {formatSize(size)}
+              </div>
+            </Flexbox>
           )}
           {isInView && url && (
             <Image
@@ -186,7 +184,9 @@ const ImageFileItem = memo<ImageFileItemProps>(
                 width: '100%',
               }}
               wrapperStyle={{
-                display: 'block',
+                inset: 0,
+                pointerEvents: imageLoaded ? 'auto' : 'none',
+                position: imageLoaded ? 'relative' : 'absolute',
                 width: '100%',
               }}
             />
