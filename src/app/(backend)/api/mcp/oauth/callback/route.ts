@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import urlJoin from 'url-join';
 
 import { getServerDB } from '@/database/core/db-adaptor';
 import { McpOauthModel } from '@/database/models/mcpOauth';
@@ -41,12 +42,16 @@ export async function GET(request: NextRequest) {
     return redirectToError(request, 'invalid_state');
   }
 
+  // Must match the redirect_uri sent to the provider in the authorize step (our API callback URL).
+  const base = getPublicBaseUrl(appEnv.APP_URL, request.headers);
+  const oauthCallbackUrl = urlJoin(base, '/api/mcp/oauth/callback');
+
   try {
     const tokens = await exchangeCode({
       clientId: pending.clientId,
       code,
       codeVerifier: pending.codeVerifier,
-      redirectUri: pending.redirectUri,
+      redirectUri: oauthCallbackUrl,
       tokenEndpoint,
     });
 
@@ -61,7 +66,6 @@ export async function GET(request: NextRequest) {
       userId: pending.userId,
     });
 
-    const base = getPublicBaseUrl(appEnv.APP_URL, request.headers);
     const successUrl = new URL(pending.redirectUri);
     const redirectTo = new URL(successUrl.pathname + successUrl.search, base);
     return NextResponse.redirect(redirectTo.toString());
