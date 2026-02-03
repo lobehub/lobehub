@@ -18,6 +18,9 @@ import SortDropdown from '../ToolBar/SortDropdown';
 import ViewSwitcher from '../ToolBar/ViewSwitcher';
 import Breadcrumb from './Breadcrumb';
 
+/**
+ * Toolbar for the resource explorer
+ */
 const Header = memo(() => {
   const { t } = useTranslation(['components', 'common', 'file', 'knowledgeBase']);
   const { modal, message } = App.useApp();
