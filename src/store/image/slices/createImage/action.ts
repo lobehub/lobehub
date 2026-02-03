@@ -155,7 +155,4 @@ export class CreateImageActionImpl {
   }
 }
 
-export const createSlice = (set: Setter, get: () => ImageStore, _api?: unknown) =>
-  new CreateImageActionImpl(set, get, _api);
-
 export type CreateImageAction = Pick<CreateImageActionImpl, keyof CreateImageActionImpl>;

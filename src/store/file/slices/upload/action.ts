@@ -42,6 +42,16 @@ interface UploadWithProgressParams {
   source?: string;
 }
 
+interface UploadWithProgressResult {
+  dimensions?: {
+    height: number;
+    width: number;
+  };
+  filename?: string;
+  id: string;
+  url: string;
+}
+
 type Setter = StoreSetter<FileStore>;
 export const createFileUploadSlice = (set: Setter, get: () => FileStore, _api?: unknown) =>
   new FileUploadActionImpl(set, get, _api);
@@ -56,7 +66,9 @@ export class FileUploadActionImpl {
     this.#get = get;
   }
 
-  uploadBase64FileWithProgress = async (base64: string): Promise<any> => {
+  uploadBase64FileWithProgress = async (
+    base64: string,
+  ): Promise<UploadWithProgressResult | undefined> => {
     // Extract image dimensions from base64 data
     const dimensions = await getImageDimensions(base64);
 
@@ -81,7 +93,7 @@ export class FileUploadActionImpl {
     parentId,
     source,
     abortController,
-  }: UploadWithProgressParams): Promise<any> => {
+  }: UploadWithProgressParams): Promise<UploadWithProgressResult | undefined> => {
     const fileArrayBuffer = await file.arrayBuffer();
 
     // 1. extract image dimensions if applicable
