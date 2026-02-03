@@ -28,10 +28,8 @@ const STDIO_ARGS = ['customParams', 'mcp', 'args'];
 const STDIO_ENV = ['customParams', 'mcp', 'env'];
 const MCP_TYPE = ['customParams', 'mcp', 'type'];
 const DESC_TYPE = ['customParams', 'description'];
-// 新增认证相关常量
 const AUTH_TYPE = ['customParams', 'mcp', 'auth', 'type'];
 const AUTH_TOKEN = ['customParams', 'mcp', 'auth', 'token'];
-// 新增 headers 相关常量
 const HEADERS = ['customParams', 'mcp', 'headers'];
 
 const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
@@ -79,7 +77,6 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
         ...(mcpType === 'http' ? [HTTP_URL_KEY] : [STDIO_COMMAND, STDIO_ARGS]),
       ];
 
-      // 如果是 HTTP 类型，还需要验证认证字段（OAuth 不需要 token 字段）
       if (mcpType === 'http') {
         fieldsToValidate.push(AUTH_TYPE);
         const currentAuthType = form.getFieldValue(AUTH_TYPE);
@@ -223,13 +220,37 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
               >
                 <Input placeholder="https://mcp.higress.ai/mcp-github/xxxxx" />
               </FormItem>
-              {oauthDiscoverResult?.requiresOAuth ? (
+              <FormItem
+                desc={t('dev.mcp.auth.desc')}
+                initialValue={'none'}
+                label={t('dev.mcp.auth.label')}
+                name={AUTH_TYPE}
+              >
+                <Radio.Group
+                  options={[
+                    {
+                      label: t('dev.mcp.auth.none'),
+                      value: 'none',
+                    },
+                    {
+                      label: t('dev.mcp.auth.bear'),
+                      value: 'bearer',
+                    },
+                    {
+                      label: t('dev.mcp.auth.oauth.label', {
+                        defaultValue: 'OAuth (Connect)',
+                      }),
+                      value: 'oauth',
+                    },
+                  ]}
+                  style={{ width: '100%' }}
+                />
+              </FormItem>
+              {authType === 'oauth' && (
                 <FormItem
                   desc={t('dev.mcp.auth.oauth.desc', {
                     defaultValue: 'Connect with the provider to authorize this MCP.',
                   })}
-                  label={t('dev.mcp.auth.label')}
-                  name={AUTH_TYPE}
                 >
                   <Flexbox gap={8} horizontal>
                     <Button
@@ -250,8 +271,8 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
                         : t('dev.mcp.oauth.connect', {
                             defaultValue: 'Connect with {{provider}}',
                             provider:
-                              oauthDiscoverResult.providerName ??
-                              new URL(mcpUrl || '').hostname ??
+                              oauthDiscoverResult?.providerName ??
+                              (mcpUrl ? new URL(mcpUrl).hostname : null) ??
                               'Provider',
                           })}
                     </Button>
@@ -262,39 +283,16 @@ const MCPManifestForm = ({ form, isEditMode }: MCPManifestFormProps) => {
                     )}
                   </Flexbox>
                 </FormItem>
-              ) : (
-                <>
-                  <FormItem
-                    desc={t('dev.mcp.auth.desc')}
-                    initialValue={'none'}
-                    label={t('dev.mcp.auth.label')}
-                    name={AUTH_TYPE}
-                  >
-                    <Radio.Group
-                      options={[
-                        {
-                          label: t('dev.mcp.auth.none'),
-                          value: 'none',
-                        },
-                        {
-                          label: t('dev.mcp.auth.bear'),
-                          value: 'bearer',
-                        },
-                      ]}
-                      style={{ width: '100%' }}
-                    />
-                  </FormItem>
-                  {authType === 'bearer' && (
-                    <FormItem
-                      desc={t('dev.mcp.auth.token.desc')}
-                      label={t('dev.mcp.auth.token.label')}
-                      name={AUTH_TOKEN}
-                      rules={[{ message: t('dev.mcp.auth.token.required'), required: true }]}
-                    >
-                      <InputPassword placeholder={t('dev.mcp.auth.token.placeholder')} />
-                    </FormItem>
-                  )}
-                </>
+              )}
+              {authType === 'bearer' && (
+                <FormItem
+                  desc={t('dev.mcp.auth.token.desc')}
+                  label={t('dev.mcp.auth.token.label')}
+                  name={AUTH_TOKEN}
+                  rules={[{ message: t('dev.mcp.auth.token.required'), required: true }]}
+                >
+                  <InputPassword placeholder={t('dev.mcp.auth.token.placeholder')} />
+                </FormItem>
               )}
               <CollapsibleSection title={t('dev.mcp.advanced.title')}>
                 <FormItem

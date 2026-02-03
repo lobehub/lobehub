@@ -17,13 +17,12 @@ function getProtectedResourceWellKnownUrl(mcpBaseUrl: string): string {
 }
 
 /**
- * Fetch protected resource metadata (RFC 9728).
+ * Fetch protected resource metadata (RFC 9728) from a given well-known URL.
  * Returns null on non-2xx or invalid response.
  */
-export async function fetchProtectedResourceMetadata(
-  mcpBaseUrl: string,
+async function fetchWellKnown(
+  wellKnownUrl: string,
 ): Promise<OAuthProtectedResourceMetadata | null> {
-  const wellKnownUrl = getProtectedResourceWellKnownUrl(mcpBaseUrl);
   const res = await fetch(wellKnownUrl, {
     headers: { Accept: 'application/json' },
     signal: AbortSignal.timeout(10_000),
@@ -36,6 +35,23 @@ export async function fetchProtectedResourceMetadata(
     return null;
   }
   return meta;
+}
+
+/**
+ * Fetch protected resource metadata (RFC 9728).
+ * Tries path-based URL first (e.g. https://mcp.example.com/mcp/.well-known/...),
+ * then origin-based fallback (e.g. https://mcp.example.com/.well-known/...) for servers
+ * that only serve well-known at the origin (e.g. Notion MCP).
+ */
+export async function fetchProtectedResourceMetadata(
+  mcpBaseUrl: string,
+): Promise<OAuthProtectedResourceMetadata | null> {
+  const pathBasedUrl = getProtectedResourceWellKnownUrl(mcpBaseUrl);
+  const meta = await fetchWellKnown(pathBasedUrl);
+  if (meta) return meta;
+  const url = new URL(mcpBaseUrl);
+  const originBasedUrl = `${url.origin}/.well-known/oauth-protected-resource`;
+  return fetchWellKnown(originBasedUrl);
 }
 
 /**

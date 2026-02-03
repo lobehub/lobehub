@@ -231,6 +231,7 @@ export default {
   'dev.mcp.auth.desc': 'Select authentication method for MCP server',
   'dev.mcp.auth.label': 'Auth type',
   'dev.mcp.auth.none': 'No auth',
+  'dev.mcp.auth.oauth.label': 'OAuth (Connect)',
   'dev.mcp.auth.placeholder': 'Select auth type',
   'dev.mcp.auth.token.desc': 'Enter your API Key or Bearer Token',
   'dev.mcp.auth.token.label': 'API Key',
