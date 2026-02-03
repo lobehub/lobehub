@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  // OAuth provider redirects here; use APP_URL so callback URL is the public app URL (not request host e.g. 0.0.0.0)
+  // OAuth provider redirects here; use APP_URL so callback is the public app URL
   const oauthRedirectUri = urlJoin(appEnv.APP_URL, '/api/mcp/oauth/callback');
 
   let mcpBaseUrl: string;
