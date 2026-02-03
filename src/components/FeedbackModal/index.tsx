@@ -1,12 +1,11 @@
 'use client';
 
-import { App, Form, Input, Upload } from 'antd';
-import { Button, Flexbox, Icon, Modal } from '@lobehub/ui';
-import { ImagePlus, Send } from 'lucide-react';
-import { memo, useCallback, useEffect, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-
 import { MarketSDK } from '@lobehub/market-sdk';
+import { Button, Flexbox, Icon, Modal } from '@lobehub/ui';
+import { App, Form, Input, Upload } from 'antd';
+import { ImagePlus, Send } from 'lucide-react';
+import { memo, useCallback, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import TextArea from '@/components/TextArea';
 import { useFileStore } from '@/store/file';
@@ -37,16 +36,6 @@ const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }
   const [loading, setLoading] = useState(false);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
-
-  // Set initial values when modal opens
-  useEffect(() => {
-    if (open && initialValues) {
-      form.setFieldsValue({
-        message: initialValues.message,
-        title: initialValues.title,
-      });
-    }
-  }, [form, initialValues, open]);
 
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
   const userEmail = useUserStore(userProfileSelectors.email);
@@ -134,7 +123,12 @@ const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }
       footer={
         <Flexbox gap={8} horizontal justify="flex-end">
           <Button onClick={handleCancel}>{t('cancel')}</Button>
-          <Button icon={<Icon icon={Send} />} loading={loading} onClick={handleSubmit} type="primary">
+          <Button
+            icon={<Icon icon={Send} />}
+            loading={loading}
+            onClick={handleSubmit}
+            type="primary"
+          >
             {t('feedback.submit')}
           </Button>
         </Flexbox>
@@ -144,7 +138,7 @@ const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }
       title={t('feedback.title')}
       width={600}
     >
-      <Form form={form} layout="vertical">
+      <Form form={form} initialValues={initialValues} layout="vertical">
         <Form.Item
           label={t('feedback.fields.title.label')}
           name="title"
