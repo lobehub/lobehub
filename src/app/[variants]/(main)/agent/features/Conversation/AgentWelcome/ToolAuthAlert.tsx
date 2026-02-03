@@ -294,7 +294,9 @@ interface McpOAuthToolAuthItemProps {
 
 const McpOAuthToolAuthItem = memo<McpOAuthToolAuthItemProps>(({ tool }) => {
   const { t } = useTranslation('chat');
-  const { connect, connected, isConnecting } = useMcpOAuth(tool.mcpUrl, tool.identifier);
+  const { connect, connected, isConnecting } = useMcpOAuth(tool.mcpUrl, tool.identifier, {
+    skipDiscover: true,
+  });
 
   const handleAuthorize = useCallback(async () => {
     try {

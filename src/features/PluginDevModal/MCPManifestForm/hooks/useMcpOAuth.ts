@@ -5,7 +5,17 @@ interface McpOAuthDiscoverResult {
   requiresOAuth: boolean;
 }
 
-export function useMcpOAuth(mcpUrl: string | undefined, pluginId: string) {
+export interface UseMcpOAuthOptions {
+  /** When true, skip discovery and fetch connection status immediately (e.g. when we already know the plugin is OAuth). */
+  skipDiscover?: boolean;
+}
+
+export function useMcpOAuth(
+  mcpUrl: string | undefined,
+  pluginId: string,
+  options: UseMcpOAuthOptions = {},
+) {
+  const { skipDiscover = false } = options;
   const [discoverResult, setDiscoverResult] = useState<McpOAuthDiscoverResult | null>(null);
   const [connected, setConnected] = useState<boolean | null>(null);
   const [isConnecting, setIsConnecting] = useState(false);
@@ -45,10 +55,18 @@ export function useMcpOAuth(mcpUrl: string | undefined, pluginId: string) {
     }
   }, [pluginId]);
 
+  // When skipDiscover, only fetch connection status (no discovery round-trip).
   useEffect(() => {
-    if (!mcpUrl || !pluginId) {
-      setDiscoverResult(null);
-      setConnected(null);
+    if (!skipDiscover || !pluginId) return;
+    fetchStatus();
+  }, [skipDiscover, pluginId, fetchStatus]);
+
+  useEffect(() => {
+    if (skipDiscover || !mcpUrl || !pluginId) {
+      if (!skipDiscover) {
+        setDiscoverResult(null);
+        setConnected(null);
+      }
       return;
     }
     let valid = false;
@@ -64,15 +82,16 @@ export function useMcpOAuth(mcpUrl: string | undefined, pluginId: string) {
     setIsDiscovering(true);
     setDiscoverResult(null);
     fetchDiscover(mcpUrl);
-  }, [mcpUrl, pluginId, fetchDiscover]);
+  }, [skipDiscover, mcpUrl, pluginId, fetchDiscover]);
 
   useEffect(() => {
+    if (skipDiscover) return;
     if (!discoverResult?.requiresOAuth || !pluginId) {
       setConnected(null);
       return;
     }
     fetchStatus();
-  }, [discoverResult?.requiresOAuth, pluginId, fetchStatus]);
+  }, [skipDiscover, discoverResult?.requiresOAuth, pluginId, fetchStatus]);
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
