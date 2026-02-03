@@ -1,6 +1,6 @@
 'use client';
 
-import { Center, Icon, Text } from '@lobehub/ui';
+import { Center, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ServerCrash } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +13,7 @@ import Loading from '../Loading';
 import VirtuosoLoading from '../VirtuosoLoading';
 import { virtuosoGridStyles } from '../style';
 import Item from './Item';
+import WantMoreSkills from './WantMoreSkills';
 
 export const CommunityList = memo(() => {
   const { t } = useTranslation('setting');
@@ -82,12 +83,17 @@ export const CommunityList = memo(() => {
         itemContent={(_, item) => <Item {...item} />}
         listClassName={virtuosoGridStyles.list}
         overscan={24}
-        style={{ height: '60vh', width: '100%' }}
+        style={{ height: 'calc(60vh - 60px)', width: '100%' }}
       />
     );
   };
 
-  return renderContent();
+  return (
+    <Flexbox height={'60vh'} width={'100%'}>
+      {renderContent()}
+      <WantMoreSkills />
+    </Flexbox>
+  );
 });
 
 CommunityList.displayName = 'CommunityList';

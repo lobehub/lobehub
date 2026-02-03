@@ -39,7 +39,11 @@ const CloudBanner = dynamic(() => import('@/features/AlertBanner/CloudBanner'));
 const Layout: FC = () => {
   const { isPWA } = usePlatform();
   const { showCloudPromotion } = useServerConfigStore(featureFlagsSelectors);
-  const { isOpen: isFeedbackModalOpen, close: closeFeedbackModal } = useFeedbackModal();
+  const {
+    initialValues: feedbackInitialValues,
+    isOpen: isFeedbackModalOpen,
+    close: closeFeedbackModal,
+  } = useFeedbackModal();
 
   return (
     <HotkeysProvider initiallyActiveScopes={[HotkeyScopeEnum.Global]}>
@@ -84,7 +88,11 @@ const Layout: FC = () => {
         <CmdkLazy />
         {isFeedbackModalOpen && (
           <Suspense fallback={null}>
-            <FeedbackModal onClose={closeFeedbackModal} open={isFeedbackModalOpen} />
+            <FeedbackModal
+              initialValues={feedbackInitialValues}
+              onClose={closeFeedbackModal}
+              open={isFeedbackModalOpen}
+            />
           </Suspense>
         )}
       </Suspense>

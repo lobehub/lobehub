@@ -139,7 +139,7 @@ const MainMenu = memo(() => {
         <CommandItem
           icon={<FeatherIcon />}
           keywords={t('cmdk.keywords.contactUs').split(' ')}
-          onSelect={openFeedbackModal}
+          onSelect={() => openFeedbackModal()}
           value="contact-via-email"
         >
           {t('cmdk.contactUs')}

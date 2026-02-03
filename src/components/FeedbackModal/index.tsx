@@ -3,7 +3,7 @@
 import { App, Form, Input, Upload } from 'antd';
 import { Button, Flexbox, Icon, Modal } from '@lobehub/ui';
 import { ImagePlus, Send } from 'lucide-react';
-import { memo, useCallback, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MarketSDK } from '@lobehub/market-sdk';
@@ -13,7 +13,13 @@ import { useFileStore } from '@/store/file';
 import { userProfileSelectors } from '@/store/user/selectors';
 import { useUserStore } from '@/store/user/store';
 
+interface FeedbackInitialValues {
+  message?: string;
+  title?: string;
+}
+
 interface FeedbackModalProps {
+  initialValues?: FeedbackInitialValues;
   onClose: () => void;
   open: boolean;
 }
@@ -23,7 +29,7 @@ interface FormValues {
   title: string;
 }
 
-const FeedbackModal = memo<FeedbackModalProps>(({ onClose, open }) => {
+const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }) => {
   const { t } = useTranslation('common');
   const { message } = App.useApp();
   const [form] = Form.useForm<FormValues>();
@@ -31,6 +37,16 @@ const FeedbackModal = memo<FeedbackModalProps>(({ onClose, open }) => {
   const [loading, setLoading] = useState(false);
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null);
   const [uploadingScreenshot, setUploadingScreenshot] = useState(false);
+
+  // Set initial values when modal opens
+  useEffect(() => {
+    if (open && initialValues) {
+      form.setFieldsValue({
+        message: initialValues.message,
+        title: initialValues.title,
+      });
+    }
+  }, [form, initialValues, open]);
 
   const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
   const userEmail = useUserStore(userProfileSelectors.email);
