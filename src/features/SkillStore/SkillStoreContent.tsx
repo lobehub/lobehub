@@ -48,14 +48,16 @@ export const SkillStoreContent = () => {
         </Flexbox>
         <Search activeTab={activeTab} onLobeHubSearch={setLobehubKeywords} />
       </Flexbox>
-      <Flexbox flex={1} style={{ display: isLobeHub ? 'flex' : 'none', overflow: 'auto' }}>
-        <LobeHubList keywords={lobehubKeywords} />
-      </Flexbox>
-      <Flexbox flex={1} style={{ display: isCommunity ? 'flex' : 'none', overflow: 'auto' }}>
-        <CommunityList />
-      </Flexbox>
-      <Flexbox flex={1} style={{ display: isCustom ? 'flex' : 'none', overflow: 'auto' }}>
-        <CustomList />
+      <Flexbox height={496}>
+        <Flexbox flex={1} style={{ display: isLobeHub ? 'flex' : 'none', overflow: 'auto' }}>
+          <LobeHubList keywords={lobehubKeywords} />
+        </Flexbox>
+        <Flexbox flex={1} style={{ display: isCommunity ? 'flex' : 'none', overflow: 'auto' }}>
+          <CommunityList />
+        </Flexbox>
+        <Flexbox flex={1} style={{ display: isCustom ? 'flex' : 'none', overflow: 'auto' }}>
+          <CustomList />
+        </Flexbox>
       </Flexbox>
     </Flexbox>
   );
