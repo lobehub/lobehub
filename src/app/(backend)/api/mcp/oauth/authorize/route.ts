@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { randomBytes } from 'node:crypto';
+import urlJoin from 'url-join';
 
 import { auth } from '@/auth';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { McpOauthModel } from '@/database/models/mcpOauth';
+import { appEnv } from '@/envs/app';
 import {
   buildAuthorizeUrl,
   discover,
@@ -35,9 +37,8 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  // OAuth provider will redirect to our callback; we store successRedirectUri to redirect user after exchange
-  const origin = new URL(request.url).origin;
-  const oauthRedirectUri = `${origin}/api/mcp/oauth/callback`;
+  // OAuth provider redirects here; use APP_URL so callback URL is the public app URL (not request host e.g. 0.0.0.0)
+  const oauthRedirectUri = urlJoin(appEnv.APP_URL, '/api/mcp/oauth/callback');
 
   let mcpBaseUrl: string;
   try {
