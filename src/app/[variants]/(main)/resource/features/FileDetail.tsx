@@ -55,11 +55,13 @@ const FileDetail = memo<FileDetailProps>((props) => {
 
   const dataItems = [
     {
-      children: (
+      children: chunkCount ? (
         <Tag icon={<Icon icon={BoltIcon} />} variant={'filled'}>
           {' '}
           {chunkCount}
         </Tag>
+      ) : (
+        t('detail.data.noChunk')
       ),
       key: 'chunkCount',
       label: t('detail.data.chunkCount'),

@@ -9,6 +9,7 @@
   "detail.basic.type": "格式",
   "detail.basic.updatedAt": "更新时间",
   "detail.data.chunkCount": "分块数",
+  "detail.data.noChunk": "无分块",
   "detail.data.embedding.default": "暂未向量化",
   "detail.data.embedding.error": "失败",
   "detail.data.embedding.pending": "待启动",

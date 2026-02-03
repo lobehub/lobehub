@@ -14,7 +14,7 @@ import { documentService } from '@/services/document';
 import { useFileStore } from '@/store/file';
 import { documentSelectors } from '@/store/file/slices/document/selectors';
 
-import Editor from './components/Editor';
+import FileEditor from './components/Editor';
 import Explorer from './components/Explorer';
 import UploadDock from './components/UploadDock';
 
@@ -135,11 +135,7 @@ const ResourceManager = memo(() => {
 
   return (
     <>
-      <DragUploadZone
-        enabledFiles
-        onUploadFiles={handleUploadFiles}
-        style={{ height: '100%' }}
-      >
+      <DragUploadZone enabledFiles onUploadFiles={handleUploadFiles} style={{ height: '100%' }}>
         <Flexbox className={styles.container} height={'100%'} style={cssVariables}>
           {/* Explorer is always rendered to preserve its state */}
           <Explorer />
@@ -147,7 +143,7 @@ const ResourceManager = memo(() => {
           {/* Editor overlay */}
           {mode === 'editor' && (
             <Flexbox className={styles.editorOverlay}>
-              <Editor onBack={handleBack} />
+              <FileEditor onBack={handleBack} />
             </Flexbox>
           )}
 
