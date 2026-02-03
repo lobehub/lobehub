@@ -372,7 +372,8 @@ const ToolAuthAlert = memo(() => {
       const klavisType = KLAVIS_SERVER_TYPES.find((t) => t.identifier === pluginId);
       if (klavisType) {
         const server = klavisServers.find((s) => s.identifier === pluginId);
-        if (!server || server.status === KlavisServerStatus.PENDING_AUTH) {
+        // Only show Klavis when a server exists and needs auth; don't prompt when no server (e.g. user uses MCP instead)
+        if (server && server.status === KlavisServerStatus.PENDING_AUTH) {
           result.push({ ...klavisType, authType: 'klavis', server });
         }
         continue;
