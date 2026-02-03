@@ -100,7 +100,7 @@ const SearchResults = memo<SearchResultsProps>(
           break;
         }
         case 'plugin': {
-          navigate(`/community/plugins/${result.identifier}`);
+          navigate(`/community/mcp/${result.identifier}`);
           break;
         }
         case 'communityAgent': {

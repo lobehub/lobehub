@@ -62,6 +62,7 @@ const AskAgentCommands = memo(() => {
       {/* @Lobe AI option */}
       {showLobeAI && (
         <Command.Item
+          onMouseDown={(e) => e.preventDefault()}
           onSelect={() => handleAgentSelect(inboxAgentId, 'Lobe AI', DEFAULT_INBOX_AVATAR)}
           value="@lobe-ai"
         >
@@ -76,6 +77,7 @@ const AskAgentCommands = memo(() => {
       {filteredAgents.map((agent) => (
         <Command.Item
           key={agent.id}
+          onMouseDown={(e) => e.preventDefault()}
           onSelect={() =>
             handleAgentSelect(
               agent.id,
