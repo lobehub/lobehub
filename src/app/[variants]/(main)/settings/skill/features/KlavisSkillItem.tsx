@@ -289,9 +289,13 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
           }
           style={{ cursor: 'pointer' }}
         >
-          <div className={styles.icon}>{renderIcon()}</div>
+          <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
+            {renderIcon()}
+          </div>
           <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-            <span className={styles.title}>{serverType.label}</span>
+            <span className={`${styles.title} ${!isConnected ? styles.disconnectedTitle : ''}`}>
+              {serverType.label}
+            </span>
             {!isConnected && renderStatus()}
           </Flexbox>
         </Flexbox>

@@ -17,7 +17,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     opacity: 0.5;
   `,
   disconnectedTitle: css`
-    color: ${cssVar.colorTextTertiary};
+    opacity: 0.5;
   `,
   error: css`
     font-size: 14px;
