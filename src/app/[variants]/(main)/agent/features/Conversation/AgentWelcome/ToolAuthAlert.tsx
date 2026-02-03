@@ -9,6 +9,7 @@ import { PlusIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useMcpOAuth } from '@/features/PluginDevModal/MCPManifestForm/hooks/useMcpOAuth';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
@@ -18,6 +19,7 @@ import {
   KlavisServerStatus,
   klavisStoreSelectors,
 } from '@/store/tool/slices/klavisStore';
+import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -45,7 +47,15 @@ interface PendingMarketTool {
   label: string;
 }
 
-type PendingAuthTool = PendingKlavisTool | PendingMarketTool;
+interface PendingMcpOAuthTool {
+  authType: 'mcp-oauth';
+  icon?: string;
+  identifier: string;
+  label: string;
+  mcpUrl: string;
+}
+
+type PendingAuthTool = PendingKlavisTool | PendingMarketTool | PendingMcpOAuthTool;
 
 interface KlavisToolAuthItemProps {
   onAuthComplete: () => void;
@@ -278,6 +288,62 @@ const MarketToolAuthItem = memo<MarketToolAuthItemProps>(({ tool }) => {
 
 MarketToolAuthItem.displayName = 'MarketToolAuthItem';
 
+interface McpOAuthToolAuthItemProps {
+  tool: PendingMcpOAuthTool;
+}
+
+const McpOAuthToolAuthItem = memo<McpOAuthToolAuthItemProps>(({ tool }) => {
+  const { t } = useTranslation('chat');
+  const { connect, connected, isConnecting } = useMcpOAuth(tool.mcpUrl, tool.identifier);
+
+  const handleAuthorize = useCallback(async () => {
+    try {
+      await connect();
+      // When OAuth completes, useMcpOAuth sets connected and this item returns null
+    } catch (error) {
+      console.error('[ToolAuthAlert] MCP OAuth failed:', error);
+    }
+  }, [connect]);
+
+  if (connected) return null;
+
+  const isLoading = isConnecting;
+
+  return (
+    <Flexbox
+      align="center"
+      gap={12}
+      horizontal
+      justify="space-between"
+      onClick={handleAuthorize}
+      style={{
+        cursor: 'pointer',
+      }}
+    >
+      <Flexbox align="center" gap={8} horizontal>
+        {tool.icon ? (
+          <Avatar alt={tool.label} avatar={tool.icon} size={20} style={{ flex: 'none' }} />
+        ) : (
+          <Icon icon={PlusIcon} size={20} />
+        )}
+        <Text>{tool.label}</Text>
+      </Flexbox>
+      <Button
+        disabled={isLoading}
+        icon={PlusIcon}
+        loading={isLoading}
+        onClick={handleAuthorize}
+        size="small"
+        type="text"
+      >
+        {isLoading ? t('toolAuth.authorizing') : t('toolAuth.authorize')}
+      </Button>
+    </Flexbox>
+  );
+});
+
+McpOAuthToolAuthItem.displayName = 'McpOAuthToolAuthItem';
+
 const ToolAuthAlert = memo(() => {
   const { t } = useTranslation('chat');
 
@@ -288,13 +354,29 @@ const ToolAuthAlert = memo(() => {
   // Filter out tools that need authorization
   const pendingAuthTools = useMemo<PendingAuthTool[]>(() => {
     const result: PendingAuthTool[] = [];
+    const toolState = useToolStore.getState();
 
     for (const pluginId of plugins) {
+      const customPlugin = pluginSelectors.getCustomPluginById(pluginId)(toolState);
+      const isMcpOAuth =
+        customPlugin?.customParams?.mcp?.url &&
+        customPlugin.customParams.mcp.auth?.type === 'oauth2';
+      if (isMcpOAuth) {
+        const meta = pluginSelectors.getPluginMetaById(pluginId)(toolState);
+        result.push({
+          authType: 'mcp-oauth',
+          icon: meta?.avatar,
+          identifier: pluginId,
+          label: meta?.title ?? pluginId,
+          mcpUrl: customPlugin.customParams!.mcp!.url!,
+        });
+        continue;
+      }
+
       // Check if this is a Klavis tool
       const klavisType = KLAVIS_SERVER_TYPES.find((t) => t.identifier === pluginId);
       if (klavisType) {
         const server = klavisServers.find((s) => s.identifier === pluginId);
-        // Not installed or pending auth
         if (!server || server.status === KlavisServerStatus.PENDING_AUTH) {
           result.push({ ...klavisType, authType: 'klavis', server });
         }
@@ -332,6 +414,8 @@ const ToolAuthAlert = memo(() => {
                   }}
                   tool={tool}
                 />
+              ) : tool.authType === 'mcp-oauth' ? (
+                <McpOAuthToolAuthItem key={tool.identifier} tool={tool} />
               ) : (
                 <MarketToolAuthItem key={tool.identifier} tool={tool} />
               ),
