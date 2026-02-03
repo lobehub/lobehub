@@ -23,7 +23,7 @@ function isBindAddress(host: string): boolean {
   return h === '0.0.0.0' || h === '127.0.0.1' || h === 'localhost' || h.startsWith('127.');
 }
 
-/** Base URL for OAuth callback. Uses X-Forwarded-* when APP_URL is a bind address (e.g. behind proxy). */
+/** Base URL for OAuth callback. When APP_URL is a bind address, use proxy headers or Origin/Referer. */
 function getOAuthCallbackBase(request: NextRequest): string {
   let appUrl: URL;
   try {
@@ -32,9 +32,31 @@ function getOAuthCallbackBase(request: NextRequest): string {
     return appEnv.APP_URL;
   }
   if (!isBindAddress(appUrl.hostname)) return appEnv.APP_URL;
+
   const proto = request.headers.get('x-forwarded-proto') || appUrl.protocol.replace(':', '');
-  const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
-  if (host) return `${proto}://${host}`;
+  const forwardedHost = request.headers.get('x-forwarded-host');
+  if (forwardedHost) return `${proto}://${forwardedHost}`;
+
+  const origin = request.headers.get('origin');
+  if (origin) {
+    try {
+      const u = new URL(origin);
+      if (!isBindAddress(u.hostname)) return origin;
+    } catch {
+      // ignore invalid origin
+    }
+  }
+
+  const referer = request.headers.get('referer');
+  if (referer) {
+    try {
+      const u = new URL(referer);
+      if (!isBindAddress(u.hostname)) return u.origin;
+    } catch {
+      // ignore invalid referer
+    }
+  }
+
   return appEnv.APP_URL;
 }
 
