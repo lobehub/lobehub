@@ -17,6 +17,27 @@ export const dynamic = 'force-dynamic';
 
 const PENDING_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
+/** Host is a bind address or localhost; OAuth providers cannot reach it. */
+function isBindAddress(host: string): boolean {
+  const h = host.toLowerCase();
+  return h === '0.0.0.0' || h === '127.0.0.1' || h === 'localhost' || h.startsWith('127.');
+}
+
+/** Base URL for OAuth callback. Uses X-Forwarded-* when APP_URL is a bind address (e.g. behind proxy). */
+function getOAuthCallbackBase(request: NextRequest): string {
+  let appUrl: URL;
+  try {
+    appUrl = new URL(appEnv.APP_URL);
+  } catch {
+    return appEnv.APP_URL;
+  }
+  if (!isBindAddress(appUrl.hostname)) return appEnv.APP_URL;
+  const proto = request.headers.get('x-forwarded-proto') || appUrl.protocol.replace(':', '');
+  const host = request.headers.get('x-forwarded-host') || request.headers.get('host');
+  if (host) return `${proto}://${host}`;
+  return appEnv.APP_URL;
+}
+
 export async function POST(request: NextRequest) {
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session?.user?.id) {
@@ -37,8 +58,9 @@ export async function POST(request: NextRequest) {
       { status: 400 },
     );
   }
-  // OAuth provider redirects here; use APP_URL so callback is the public app URL
-  const oauthRedirectUri = urlJoin(appEnv.APP_URL, '/api/mcp/oauth/callback');
+  // OAuth provider redirects here; use public base (from APP_URL or X-Forwarded-* when APP_URL is bind address)
+  const callbackBase = getOAuthCallbackBase(request);
+  const oauthRedirectUri = urlJoin(callbackBase, '/api/mcp/oauth/callback');
 
   let mcpBaseUrl: string;
   try {
