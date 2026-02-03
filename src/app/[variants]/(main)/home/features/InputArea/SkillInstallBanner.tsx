@@ -50,7 +50,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: 20px;
 
     background: color-mix(in srgb, ${cssVar.colorFillQuaternary} 50%, ${cssVar.colorBgContainer});
-    box-shadow: 0 12px 32px rgb(0 0 0 / 4%);
   `,
   icon: css`
     color: ${cssVar.colorTextSecondary};
