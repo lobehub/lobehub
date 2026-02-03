@@ -3,16 +3,17 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { flattenActions } from '../utils/flattenActions';
 import { type NotebookAction, createNotebookAction } from './action';
 import { type NotebookState, initialNotebookState } from './initialState';
 
 export type NotebookStore = NotebookState & NotebookAction;
 
 const createStore: StateCreator<NotebookStore, [['zustand/devtools', never]]> = (
-  ...parameters
+  ...parameters: Parameters<StateCreator<NotebookStore, [['zustand/devtools', never]]>>
 ) => ({
   ...initialNotebookState,
-  ...createNotebookAction(...parameters),
+  ...flattenActions<NotebookAction>([createNotebookAction(...parameters)]),
 });
 
 const devtools = createDevtools('notebook');

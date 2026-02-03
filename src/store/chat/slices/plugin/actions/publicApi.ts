@@ -1,9 +1,9 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import { type ChatToolPayload, type RuntimeStepContext, type UIChatMessage } from '@lobechat/types';
 import i18n from 'i18next';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { type ChatStore } from '@/store/chat/store';
+import { type StoreSetter } from '@/store/types';
 
 import { type OptimisticUpdateContext } from '../../message/actions/optimisticUpdate';
 import { displayMessageSelectors } from '../../message/selectors';
@@ -12,85 +12,59 @@ import { displayMessageSelectors } from '../../message/selectors';
  * Public API for plugin operations
  * These methods are called by UI components or other business scenarios
  */
-export interface PluginPublicApiAction {
-  /**
-   * Fill plugin message content and optionally trigger AI message
-   * @param id - message id
-   * @param content - content to fill
-   * @param triggerAiMessage - whether to trigger AI message
-   * @param context - Optional context for optimistic update (required for Group mode)
-   */
-  fillPluginMessageContent: (
+
+type Setter = StoreSetter<ChatStore>;
+export const pluginPublicApi = (set: Setter, get: () => ChatStore, _api?: unknown) =>
+  new PluginPublicApiActionImpl(set, get, _api);
+
+export class PluginPublicApiActionImpl {
+  readonly #get: () => ChatStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  fillPluginMessageContent = async (
     id: string,
     content: string,
     triggerAiMessage?: boolean,
     context?: OptimisticUpdateContext,
-  ) => Promise<void>;
-
-  /**
-   * Re-invoke a tool message (retry failed plugin call)
-   */
-  reInvokeToolMessage: (id: string) => Promise<void>;
-
-  /**
-   * Summary plugin content using AI
-   */
-  summaryPluginContent: (id: string) => Promise<void>;
-
-  /**
-   * Invoke different type of plugin based on payload type
-   * This is the unified entry point for plugin invocation
-   *
-   * @param id - Tool message ID
-   * @param payload - Tool call payload
-   * @param stepContext - Optional step context with dynamic state like GTD todos
-   */
-  internal_invokeDifferentTypePlugin: (
-    id: string,
-    payload: ChatToolPayload,
-    stepContext?: RuntimeStepContext,
-  ) => Promise<any>;
-}
-
-export const pluginPublicApi: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never]],
-  [],
-  PluginPublicApiAction
-> = (set, get) => ({
-  fillPluginMessageContent: async (id, content, triggerAiMessage, context) => {
-    const { triggerAIMessage, optimisticUpdateMessageContent } = get();
+  ): Promise<void> => {
+    const { triggerAIMessage, optimisticUpdateMessageContent } = this.#get();
 
     await optimisticUpdateMessageContent(id, content, undefined, context);
 
     if (triggerAiMessage) await triggerAIMessage({ parentId: id });
-  },
+  };
 
-  reInvokeToolMessage: async (id) => {
-    const message = displayMessageSelectors.getDisplayMessageById(id)(get());
+  reInvokeToolMessage = async (id: string): Promise<void> => {
+    const message = displayMessageSelectors.getDisplayMessageById(id)(this.#get());
     if (!message || message.role !== 'tool' || !message.plugin) return;
 
     // Get operationId from messageOperationMap
-    const operationId = get().messageOperationMap[id];
+    const operationId = this.#get().messageOperationMap[id];
     const context = operationId ? { operationId } : undefined;
 
     // if there is error content, then clear the error
     if (!!message.pluginError) {
-      get().optimisticUpdateMessagePluginError(id, null, context);
+      this.#get().optimisticUpdateMessagePluginError(id, null, context);
     }
 
     const payload: ChatToolPayload = { ...message.plugin, id: message.tool_call_id! };
 
-    await get().internal_invokeDifferentTypePlugin(id, payload);
-  },
+    await this.#get().internal_invokeDifferentTypePlugin(id, payload);
+  };
 
-  summaryPluginContent: async (id) => {
-    const message = displayMessageSelectors.getDisplayMessageById(id)(get());
+  summaryPluginContent = async (id: string): Promise<void> => {
+    const message = displayMessageSelectors.getDisplayMessageById(id)(this.#get());
     if (!message || message.role !== 'tool') return;
 
-    const { activeAgentId, activeTopicId, activeThreadId } = get();
+    const { activeAgentId, activeTopicId, activeThreadId } = this.#get();
 
-    await get().internal_execAgentRuntime({
+    await this.#get().internal_execAgentRuntime({
       context: {
         agentId: activeAgentId,
         topicId: activeTopicId,
@@ -112,31 +86,40 @@ export const pluginPublicApi: StateCreator<
       parentMessageId: message.id,
       parentMessageType: 'assistant',
     });
-  },
+  };
 
-  internal_invokeDifferentTypePlugin: async (id, payload, stepContext) => {
+  internal_invokeDifferentTypePlugin = async (
+    id: string,
+    payload: ChatToolPayload,
+    stepContext?: RuntimeStepContext,
+  ): Promise<any> => {
     switch (payload.type) {
       case 'standalone': {
-        return await get().invokeStandaloneTypePlugin(id, payload);
+        return await this.#get().invokeStandaloneTypePlugin(id, payload);
       }
 
       case 'markdown': {
-        return await get().invokeMarkdownTypePlugin(id, payload);
+        return await this.#get().invokeMarkdownTypePlugin(id, payload);
       }
 
       case 'builtin': {
         // Pass stepContext to builtin tools for dynamic state access
-        return await get().invokeBuiltinTool(id, payload, stepContext);
+        return await this.#get().invokeBuiltinTool(id, payload, stepContext);
       }
 
       // @ts-ignore
       case 'mcp': {
-        return await get().invokeMCPTypePlugin(id, payload);
+        return await this.#get().invokeMCPTypePlugin(id, payload);
       }
 
       default: {
-        return await get().invokeDefaultTypePlugin(id, payload);
+        return await this.#get().invokeDefaultTypePlugin(id, payload);
       }
     }
-  },
-});
+  };
+}
+
+export type PluginPublicApiAction = Pick<
+  PluginPublicApiActionImpl,
+  keyof PluginPublicApiActionImpl
+>;

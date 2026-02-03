@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { flattenActions } from '../utils/flattenActions';
 import { type AssistantAction, createAssistantSlice } from './slices/assistant/action';
 import { type GroupAgentAction, createGroupAgentSlice } from './slices/groupAgent/action';
 import { type MCPAction, createMCPSlice } from './slices/mcp';
@@ -23,18 +24,28 @@ export type DiscoverStore = MCPAction &
   SocialAction &
   UserAction;
 
+type DiscoverStoreAction = MCPAction &
+  AssistantAction &
+  GroupAgentAction &
+  ProviderAction &
+  ModelAction &
+  PluginAction &
+  SocialAction &
+  UserAction;
+
 const createStore: StateCreator<DiscoverStore, [['zustand/devtools', never]]> = (
-  ...parameters
-) => ({
-  ...createMCPSlice(...parameters),
-  ...createAssistantSlice(...parameters),
-  ...createGroupAgentSlice(...parameters),
-  ...createProviderSlice(...parameters),
-  ...createModelSlice(...parameters),
-  ...createPluginSlice(...parameters),
-  ...createSocialSlice(...parameters),
-  ...createUserSlice(...parameters),
-});
+  ...parameters: Parameters<StateCreator<DiscoverStore, [['zustand/devtools', never]]>>
+) =>
+  flattenActions<DiscoverStoreAction>([
+    createMCPSlice(...parameters),
+    createAssistantSlice(...parameters),
+    createGroupAgentSlice(...parameters),
+    createProviderSlice(...parameters),
+    createModelSlice(...parameters),
+    createPluginSlice(...parameters),
+    createSocialSlice(...parameters),
+    createUserSlice(...parameters),
+  ]);
 
 //  ===============  Implement useStore ============ //
 

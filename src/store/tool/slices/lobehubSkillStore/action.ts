@@ -1,9 +1,9 @@
 import { getLobehubSkillProviderById } from '@lobechat/const';
 import { enableMapSet, produce } from 'immer';
 import useSWR, { type SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { toolsClient } from '@/libs/trpc/client';
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
@@ -23,79 +23,28 @@ const n = setNamespace('lobehubSkillStore');
 /**
  * LobeHub Skill Store Actions
  */
-export interface LobehubSkillStoreAction {
-  /**
-   * Call LobeHub Skill tool
-   */
-  callLobehubSkillTool: (params: CallLobehubSkillToolParams) => Promise<CallLobehubSkillToolResult>;
 
-  /**
-   * Get single Provider connection status
-   * @param provider - Provider ID (e.g., 'linear')
-   */
-  checkLobehubSkillStatus: (provider: string) => Promise<LobehubSkillServer | undefined>;
+type Setter = StoreSetter<ToolStore>;
+export const createLobehubSkillStoreSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
+  new LobehubSkillStoreActionImpl(set, get, _api);
 
-  /**
-   * Get Provider authorization info (URL, code, expiration time)
-   * @param provider - Provider ID (e.g., 'linear')
-   * @param options - Optional scopes and redirectUri
-   * @returns Authorization URL and related info
-   */
-  getLobehubSkillAuthorizeUrl: (
-    provider: string,
-    options?: { redirectUri?: string; scopes?: string[] },
-  ) => Promise<{ authorizeUrl: string; code: string; expiresIn: number }>;
+export class LobehubSkillStoreActionImpl {
+  readonly #get: () => ToolStore;
+  readonly #set: Setter;
 
-  /**
-   * Internal method: Update Server status
-   */
-  internal_updateLobehubSkillServer: (
-    provider: string,
-    update: Partial<LobehubSkillServer>,
-  ) => void;
+  constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
 
-  /**
-   * Refresh Provider Token (if supported)
-   * @param provider - Provider ID
-   */
-  refreshLobehubSkillToken: (provider: string) => Promise<boolean>;
-
-  /**
-   * Refresh Provider tool list
-   * @param provider - Provider ID
-   */
-  refreshLobehubSkillTools: (provider: string) => Promise<void>;
-
-  /**
-   * Disconnect Provider connection
-   * @param provider - Provider ID
-   */
-  revokeLobehubSkill: (provider: string) => Promise<void>;
-
-  /**
-   * Use SWR to fetch user's all connection statuses
-   * @param enabled - Whether to enable fetching
-   */
-  useFetchLobehubSkillConnections: (enabled: boolean) => SWRResponse<LobehubSkillServer[]>;
-
-  /**
-   * Use SWR to fetch tools for a LobeHub Skill provider
-   * @param provider - Provider ID (e.g., 'linear')
-   */
-  useFetchProviderTools: (provider: string | undefined) => SWRResponse<LobehubSkillTool[]>;
-}
-
-export const createLobehubSkillStoreSlice: StateCreator<
-  ToolStore,
-  [['zustand/devtools', never]],
-  [],
-  LobehubSkillStoreAction
-> = (set, get) => ({
-  callLobehubSkillTool: async (params) => {
+  callLobehubSkillTool = async (
+    params: CallLobehubSkillToolParams,
+  ): Promise<CallLobehubSkillToolResult> => {
     const { provider, toolName, args } = params;
     const toolId = `${provider}:${toolName}`;
 
-    set(
+    this.#set(
       produce((draft: LobehubSkillStoreState) => {
         draft.lobehubSkillExecutingToolIds.add(toolId);
       }),
@@ -110,7 +59,7 @@ export const createLobehubSkillStoreSlice: StateCreator<
         toolName,
       });
 
-      set(
+      this.#set(
         produce((draft: LobehubSkillStoreState) => {
           draft.lobehubSkillExecutingToolIds.delete(toolId);
         }),
@@ -122,7 +71,7 @@ export const createLobehubSkillStoreSlice: StateCreator<
     } catch (error) {
       console.error('[LobehubSkill] Failed to call tool:', error);
 
-      set(
+      this.#set(
         produce((draft: LobehubSkillStoreState) => {
           draft.lobehubSkillExecutingToolIds.delete(toolId);
         }),
@@ -145,10 +94,10 @@ export const createLobehubSkillStoreSlice: StateCreator<
         success: false,
       };
     }
-  },
+  };
 
-  checkLobehubSkillStatus: async (provider) => {
-    set(
+  checkLobehubSkillStatus = async (provider: string): Promise<LobehubSkillServer | undefined> => {
+    this.#set(
       produce((draft: LobehubSkillStoreState) => {
         draft.lobehubSkillLoadingIds.add(provider);
       }),
@@ -176,7 +125,7 @@ export const createLobehubSkillStoreSlice: StateCreator<
         tokenExpiresAt: response.connection?.tokenExpiresAt,
       };
 
-      set(
+      this.#set(
         produce((draft: LobehubSkillStoreState) => {
           const existingIndex = draft.lobehubSkillServers.findIndex(
             (s) => s.identifier === provider,
@@ -193,14 +142,14 @@ export const createLobehubSkillStoreSlice: StateCreator<
       );
 
       if (server.isConnected) {
-        get().refreshLobehubSkillTools(provider);
+        this.#get().refreshLobehubSkillTools(provider);
       }
 
       return server;
     } catch (error) {
       console.error('[LobehubSkill] Failed to check status:', error);
 
-      set(
+      this.#set(
         produce((draft: LobehubSkillStoreState) => {
           draft.lobehubSkillLoadingIds.delete(provider);
         }),
@@ -210,9 +159,12 @@ export const createLobehubSkillStoreSlice: StateCreator<
 
       return undefined;
     }
-  },
+  };
 
-  getLobehubSkillAuthorizeUrl: async (provider, options) => {
+  getLobehubSkillAuthorizeUrl = async (
+    provider: string,
+    options?: { redirectUri?: string; scopes?: string[] },
+  ): Promise<{ authorizeUrl: string; code: string; expiresIn: number }> => {
     const response = await toolsClient.market.connectGetAuthorizeUrl.query({
       provider,
       redirectUri: options?.redirectUri,
@@ -224,10 +176,13 @@ export const createLobehubSkillStoreSlice: StateCreator<
       code: response.code,
       expiresIn: response.expiresIn,
     };
-  },
+  };
 
-  internal_updateLobehubSkillServer: (provider, update) => {
-    set(
+  internal_updateLobehubSkillServer = (
+    provider: string,
+    update: Partial<LobehubSkillServer>,
+  ): void => {
+    this.#set(
       produce((draft: LobehubSkillStoreState) => {
         const serverIndex = draft.lobehubSkillServers.findIndex((s) => s.identifier === provider);
         if (serverIndex >= 0) {
@@ -240,14 +195,14 @@ export const createLobehubSkillStoreSlice: StateCreator<
       false,
       n('internal_updateLobehubSkillServer'),
     );
-  },
+  };
 
-  refreshLobehubSkillToken: async (provider) => {
+  refreshLobehubSkillToken = async (provider: string): Promise<boolean> => {
     try {
       const response = await toolsClient.market.connectRefresh.mutate({ provider });
 
       if (response.refreshed) {
-        get().internal_updateLobehubSkillServer(provider, {
+        this.#get().internal_updateLobehubSkillServer(provider, {
           status: LobehubSkillStatus.CONNECTED,
           tokenExpiresAt: response.connection?.tokenExpiresAt,
         });
@@ -258,13 +213,13 @@ export const createLobehubSkillStoreSlice: StateCreator<
       console.error('[LobehubSkill] Failed to refresh token:', error);
       return false;
     }
-  },
+  };
 
-  refreshLobehubSkillTools: async (provider) => {
+  refreshLobehubSkillTools = async (provider: string): Promise<void> => {
     try {
       const response = await toolsClient.market.connectListTools.query({ provider });
 
-      set(
+      this.#set(
         produce((draft: LobehubSkillStoreState) => {
           const serverIndex = draft.lobehubSkillServers.findIndex((s) => s.identifier === provider);
           if (serverIndex >= 0) {
@@ -277,10 +232,10 @@ export const createLobehubSkillStoreSlice: StateCreator<
     } catch (error) {
       console.error('[LobehubSkill] Failed to refresh tools:', error);
     }
-  },
+  };
 
-  revokeLobehubSkill: async (provider) => {
-    set(
+  revokeLobehubSkill = async (provider: string): Promise<void> => {
+    this.#set(
       produce((draft: LobehubSkillStoreState) => {
         draft.lobehubSkillLoadingIds.add(provider);
       }),
@@ -291,7 +246,7 @@ export const createLobehubSkillStoreSlice: StateCreator<
     try {
       await toolsClient.market.connectRevoke.mutate({ provider });
 
-      set(
+      this.#set(
         produce((draft: LobehubSkillStoreState) => {
           draft.lobehubSkillServers = draft.lobehubSkillServers.filter(
             (s) => s.identifier !== provider,
@@ -304,7 +259,7 @@ export const createLobehubSkillStoreSlice: StateCreator<
     } catch (error) {
       console.error('[LobehubSkill] Failed to revoke:', error);
 
-      set(
+      this.#set(
         produce((draft: LobehubSkillStoreState) => {
           draft.lobehubSkillLoadingIds.delete(provider);
         }),
@@ -312,10 +267,10 @@ export const createLobehubSkillStoreSlice: StateCreator<
         n('revokeLobehubSkill/error'),
       );
     }
-  },
+  };
 
-  useFetchLobehubSkillConnections: (enabled) =>
-    useSWR<LobehubSkillServer[]>(
+  useFetchLobehubSkillConnections = (enabled: boolean): SWRResponse<LobehubSkillServer[]> => {
+    return useSWR<LobehubSkillServer[]>(
       enabled ? 'fetchLobehubSkillConnections' : null,
       async () => {
         const response = await toolsClient.market.connectListConnections.query();
@@ -345,7 +300,7 @@ export const createLobehubSkillStoreSlice: StateCreator<
         fallbackData: [],
         onSuccess: (data) => {
           if (data.length > 0) {
-            set(
+            this.#set(
               produce((draft: LobehubSkillStoreState) => {
                 const existingIds = new Set(draft.lobehubSkillServers.map((s) => s.identifier));
                 const newServers = data.filter((s) => !existingIds.has(s.identifier));
@@ -356,16 +311,17 @@ export const createLobehubSkillStoreSlice: StateCreator<
             );
 
             for (const server of data) {
-              get().refreshLobehubSkillTools(server.identifier);
+              this.#get().refreshLobehubSkillTools(server.identifier);
             }
           }
         },
         revalidateOnFocus: false,
       },
-    ),
+    );
+  };
 
-  useFetchProviderTools: (provider) =>
-    useSWR<LobehubSkillTool[]>(
+  useFetchProviderTools = (provider: string | undefined): SWRResponse<LobehubSkillTool[]> => {
+    return useSWR<LobehubSkillTool[]>(
       provider ? `lobehub-skill-tools-${provider}` : null,
       async () => {
         const response = await toolsClient.market.connectListTools.query({ provider: provider! });
@@ -379,5 +335,11 @@ export const createLobehubSkillStoreSlice: StateCreator<
         fallbackData: [],
         revalidateOnFocus: false,
       },
-    ),
-});
+    );
+  };
+}
+
+export type LobehubSkillStoreAction = Pick<
+  LobehubSkillStoreActionImpl,
+  keyof LobehubSkillStoreActionImpl
+>;

@@ -1,39 +1,42 @@
 import { type StateCreator } from 'zustand/vanilla';
 
 import { type ChatStore } from '@/store/chat/store';
+import { flattenActions } from '@/store/utils/flattenActions';
 
-import { type MessageInternalsAction, messageInternals } from './internals';
-import { type MessageOptimisticUpdateAction, messageOptimisticUpdate } from './optimisticUpdate';
-import { type MessagePublicApiAction, messagePublicApi } from './publicApi';
-import { type MessageQueryAction, messageQuery } from './query';
-import { type MessageRuntimeStateAction, messageRuntimeState } from './runtimeState';
+import { type MessageInternalsAction, MessageInternalsActionImpl } from './internals';
+import {
+  type MessageOptimisticUpdateAction,
+  MessageOptimisticUpdateActionImpl,
+} from './optimisticUpdate';
+import { type MessagePublicApiAction, MessagePublicApiActionImpl } from './publicApi';
+import { type MessageQueryAction, MessageQueryActionImpl } from './query';
+import { type MessageRuntimeStateAction, MessageRuntimeStateActionImpl } from './runtimeState';
+
+export type ChatMessageAction = MessagePublicApiAction &
+  MessageOptimisticUpdateAction &
+  MessageQueryAction &
+  MessageRuntimeStateAction &
+  MessageInternalsAction;
 
 /**
  * Combined message action interface
  * Aggregates all message-related actions
  */
-export interface ChatMessageAction
-  extends MessagePublicApiAction,
-    MessageOptimisticUpdateAction,
-    MessageQueryAction,
-    MessageRuntimeStateAction,
-    MessageInternalsAction {
-  /**/
-}
 
-/**
- * Combined message action creator
- * Merges all message action modules
- */
 export const chatMessage: StateCreator<
   ChatStore,
   [['zustand/devtools', never]],
   [],
   ChatMessageAction
-> = (...params) => ({
-  ...messagePublicApi(...params),
-  ...messageOptimisticUpdate(...params),
-  ...messageQuery(...params),
-  ...messageRuntimeState(...params),
-  ...messageInternals(...params),
-});
+> = (
+  ...params: Parameters<
+    StateCreator<ChatStore, [['zustand/devtools', never]], [], ChatMessageAction>
+  >
+) =>
+  flattenActions<ChatMessageAction>([
+    new MessagePublicApiActionImpl(...params),
+    new MessageOptimisticUpdateActionImpl(...params),
+    new MessageQueryActionImpl(...params),
+    new MessageRuntimeStateActionImpl(...params),
+    new MessageInternalsActionImpl(...params),
+  ]);

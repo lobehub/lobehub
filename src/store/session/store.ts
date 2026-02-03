@@ -6,6 +6,7 @@ import { type StateCreator } from 'zustand/vanilla';
 import { isDev } from '@/utils/env';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { flattenActions } from '../utils/flattenActions';
 import { type SessionStoreState, initialState } from './initialState';
 import { type HomeInputAction, createHomeInputSlice } from './slices/homeInput/action';
 import { type RecentAction, createRecentSlice } from './slices/recent/action';
@@ -17,12 +18,18 @@ import { type SessionGroupAction, createSessionGroupSlice } from './slices/sessi
 export interface SessionStore
   extends SessionAction, SessionGroupAction, RecentAction, HomeInputAction, SessionStoreState {}
 
-const createStore: StateCreator<SessionStore, [['zustand/devtools', never]]> = (...parameters) => ({
+type SessionStoreAction = SessionAction & SessionGroupAction & RecentAction & HomeInputAction;
+
+const createStore: StateCreator<SessionStore, [['zustand/devtools', never]]> = (
+  ...parameters: Parameters<StateCreator<SessionStore, [['zustand/devtools', never]]>>
+) => ({
   ...initialState,
-  ...createSessionSlice(...parameters),
-  ...createSessionGroupSlice(...parameters),
-  ...createRecentSlice(...parameters),
-  ...createHomeInputSlice(...parameters),
+  ...flattenActions<SessionStoreAction>([
+    createSessionSlice(...parameters),
+    createSessionGroupSlice(...parameters),
+    createRecentSlice(...parameters),
+    createHomeInputSlice(...parameters),
+  ]),
 });
 
 //  ===============  Implement useStore ============ //

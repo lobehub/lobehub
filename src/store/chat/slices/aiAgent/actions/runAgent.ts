@@ -2,10 +2,10 @@ import { isDesktop } from '@lobechat/const';
 import { type ChatToolPayload } from '@lobechat/types';
 import debug from 'debug';
 import i18n from 'i18next';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { type StreamEvent, agentRuntimeService } from '@/services/agentRuntime';
 import { type ChatStore } from '@/store/chat/store';
+import { type StoreSetter } from '@/store/types';
 
 const log = debug('store:chat:ai-agent:runAgent');
 
@@ -16,31 +16,24 @@ interface StreamingContext {
   tmpAssistantId: string;
   toolsCalling?: ChatToolPayload[];
 }
-export interface AgentAction {
-  internal_cleanupAgentOperation: (assistantId: string) => void;
-  internal_handleAgentError: (assistantId: string, error: string) => void;
-  /**
-   * Agent Runtime 相关方法
-   */
-  internal_handleAgentStreamEvent: (
-    operationId: string,
-    event: StreamEvent,
-    context: StreamingContext,
-  ) => Promise<void>;
-  internal_handleHumanIntervention: (
-    assistantId: string,
-    action: string,
-    data?: any,
-  ) => Promise<void>;
-}
 
-export const agentSlice: StateCreator<ChatStore, [['zustand/devtools', never]], [], AgentAction> = (
-  set,
-  get,
-) => ({
-  internal_cleanupAgentOperation: (assistantId: string) => {
+type Setter = StoreSetter<ChatStore>;
+export const agentSlice = (set: Setter, get: () => ChatStore, _api?: unknown) =>
+  new AgentActionImpl(set, get, _api);
+
+export class AgentActionImpl {
+  readonly #get: () => ChatStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  internal_cleanupAgentOperation = (assistantId: string): void => {
     // Find operation by messageId (assistantId)
-    const messageOpId = get().messageOperationMap[assistantId];
+    const messageOpId = this.#get().messageOperationMap[assistantId];
     if (!messageOpId) {
       log(`No operation found for assistant message ${assistantId}`);
       return;
@@ -49,23 +42,23 @@ export const agentSlice: StateCreator<ChatStore, [['zustand/devtools', never]], 
     log(`Cleaning up agent operation for ${assistantId} (operationId: ${messageOpId})`);
 
     // Cancel the operation (this will trigger the cancel handler which aborts the SSE stream)
-    get().cancelOperation(messageOpId, 'Cleanup requested');
-  },
+    this.#get().cancelOperation(messageOpId, 'Cleanup requested');
+  };
 
-  internal_handleAgentError: (assistantId: string, errorMessage: string) => {
+  internal_handleAgentError = (assistantId: string, errorMessage: string): void => {
     log(`Agent error for ${assistantId}: ${errorMessage}`);
 
     // Find operation by messageId (assistantId) and fail it
-    const messageOpId = get().messageOperationMap[assistantId];
+    const messageOpId = this.#get().messageOperationMap[assistantId];
     if (messageOpId) {
-      get().failOperation(messageOpId, {
+      this.#get().failOperation(messageOpId, {
         message: errorMessage,
         type: 'AgentExecutionError',
       });
     }
 
     // Update error state in frontend only (backend already persists the error)
-    get().internal_dispatchMessage({
+    this.#get().internal_dispatchMessage({
       id: assistantId,
       type: 'updateMessage',
       value: {
@@ -77,23 +70,26 @@ export const agentSlice: StateCreator<ChatStore, [['zustand/devtools', never]], 
     });
 
     // 停止 loading 状态
-    get().internal_toggleMessageLoading(false, assistantId);
+    this.#get().internal_toggleMessageLoading(false, assistantId);
 
     // 清理操作 (this will cancel the operation)
-    get().internal_cleanupAgentOperation(assistantId);
-  },
+    this.#get().internal_cleanupAgentOperation(assistantId);
+  };
 
-  // ======== Agent Runtime 相关方法 ========
-  internal_handleAgentStreamEvent: async (operationId, event, context) => {
-    const { internal_dispatchMessage } = get();
-    const operation = get().operations[operationId];
+  internal_handleAgentStreamEvent = async (
+    operationId: string,
+    event: StreamEvent,
+    context: StreamingContext,
+  ): Promise<void> => {
+    const { internal_dispatchMessage } = this.#get();
+    const operation = this.#get().operations[operationId];
     if (!operation) {
       log(`No operation found for ${operationId}, ignoring event ${event.type}`);
       return;
     }
 
     // 更新操作元数据
-    get().updateOperationMetadata(operationId, {
+    this.#get().updateOperationMetadata(operationId, {
       lastEventId: event.timestamp.toString(),
       stepCount: event.stepIndex,
     });
@@ -125,14 +121,14 @@ export const agentSlice: StateCreator<ChatStore, [['zustand/devtools', never]], 
 
         // Update operation metadata with final state
         if (finalState) {
-          get().updateOperationMetadata(operationId, {
+          this.#get().updateOperationMetadata(operationId, {
             finalStatus: finalState.status || reason,
           });
         }
 
         // Stop loading state
         log(`Stopping loading for completed agent runtime: ${assistantId}`);
-        get().internal_toggleMessageLoading(false, assistantId);
+        this.#get().internal_toggleMessageLoading(false, assistantId);
         break;
       }
 
@@ -236,7 +232,7 @@ export const agentSlice: StateCreator<ChatStore, [['zustand/devtools', never]], 
 
         // 停止 loading 状态
         log(`Stopping loading for ${assistantId}`);
-        get().internal_toggleMessageLoading(false, assistantId);
+        this.#get().internal_toggleMessageLoading(false, assistantId);
 
         // 显示桌面通知
         if (isDesktop) {
@@ -260,14 +256,14 @@ export const agentSlice: StateCreator<ChatStore, [['zustand/devtools', never]], 
         if (phase === 'human_approval' && requiresApproval) {
           // 需要人工批准
           log(`Human approval required for ${assistantId}:`, pendingToolsCalling);
-          get().updateOperationMetadata(operationId, {
+          this.#get().updateOperationMetadata(operationId, {
             needsHumanInput: true,
             pendingApproval: pendingToolsCalling,
           });
 
           // 停止 loading 状态，等待人工干预
           log(`Stopping loading for human approval: ${assistantId}`);
-          get().internal_toggleMessageLoading(false, assistantId);
+          this.#get().internal_toggleMessageLoading(false, assistantId);
         } else if (phase === 'tool_execution' && toolCall) {
           log(`Tool execution started for ${assistantId}: ${toolCall.function?.name}`);
         }
@@ -280,16 +276,16 @@ export const agentSlice: StateCreator<ChatStore, [['zustand/devtools', never]], 
         if (phase === 'tool_execution' && result) {
           log(`Tool execution completed for ${assistantId} in ${executionTime}ms:`, result);
           // 刷新消息以显示工具结果
-          await get().refreshMessages();
+          await this.#get().refreshMessages();
         } else if (phase === 'execution_complete' && finalState) {
           // Agent 执行完成
           log(`Agent execution completed for ${assistantId}:`, finalState);
-          get().updateOperationMetadata(operationId, {
+          this.#get().updateOperationMetadata(operationId, {
             finalStatus: finalState.status,
           });
 
           log(`Stopping loading for completed agent: ${assistantId}`);
-          get().internal_toggleMessageLoading(false, assistantId);
+          this.#get().internal_toggleMessageLoading(false, assistantId);
         }
         break;
       }
@@ -297,7 +293,10 @@ export const agentSlice: StateCreator<ChatStore, [['zustand/devtools', never]], 
       case 'error': {
         const { error, message, phase } = event.data || {};
         log(`Error in ${phase} for ${assistantId}:`, error);
-        get().internal_handleAgentError(assistantId, message || error || 'Unknown agent error');
+        this.#get().internal_handleAgentError(
+          assistantId,
+          message || error || 'Unknown agent error',
+        );
         break;
       }
 
@@ -306,17 +305,21 @@ export const agentSlice: StateCreator<ChatStore, [['zustand/devtools', never]], 
         break;
       }
     }
-  },
+  };
 
-  internal_handleHumanIntervention: async (assistantId: string, action: string, data?: any) => {
+  internal_handleHumanIntervention = async (
+    assistantId: string,
+    action: string,
+    data?: any,
+  ): Promise<void> => {
     // Find operation by messageId (assistantId)
-    const messageOpId = get().messageOperationMap[assistantId];
+    const messageOpId = this.#get().messageOperationMap[assistantId];
     if (!messageOpId) {
       log(`No operation found for assistant message ${assistantId}`);
       return;
     }
 
-    const operation = get().operations[messageOpId];
+    const operation = this.#get().operations[messageOpId];
     if (!operation || !operation.metadata.needsHumanInput) {
       log(`No human intervention needed for operation ${messageOpId}`);
       return;
@@ -333,10 +336,10 @@ export const agentSlice: StateCreator<ChatStore, [['zustand/devtools', never]], 
       });
 
       // 重新开始 loading 状态
-      get().internal_toggleMessageLoading(true, assistantId);
+      this.#get().internal_toggleMessageLoading(true, assistantId);
 
       // 清除人工干预状态
-      get().updateOperationMetadata(messageOpId, {
+      this.#get().updateOperationMetadata(messageOpId, {
         needsHumanInput: false,
         pendingApproval: undefined,
         pendingPrompt: undefined,
@@ -346,10 +349,12 @@ export const agentSlice: StateCreator<ChatStore, [['zustand/devtools', never]], 
       log(`Human intervention ${action} processed for operation ${messageOpId}`);
     } catch (error) {
       log(`Failed to handle human intervention for operation ${messageOpId}:`, error);
-      get().internal_handleAgentError(
+      this.#get().internal_handleAgentError(
         assistantId,
         `Human intervention failed: ${(error as Error).message}`,
       );
     }
-  },
-});
+  };
+}
+
+export type AgentAction = Pick<AgentActionImpl, keyof AgentActionImpl>;

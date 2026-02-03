@@ -1,62 +1,68 @@
 import { type CreateNewEvalEvaluation, type RAGEvalDataSetItem } from '@lobechat/types';
 import type { SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { ragEvalService } from '@/services/ragEval';
 import { type KnowledgeBaseStore } from '@/store/library/store';
+import { type StoreSetter } from '@/store/types';
 
 const FETCH_EVALUATION_LIST_KEY = 'FETCH_EVALUATION_LIST_KEY';
 
-export interface RAGEvalEvaluationAction {
-  checkEvaluationStatus: (id: number) => Promise<void>;
+type Setter = StoreSetter<KnowledgeBaseStore>;
+export const createRagEvalEvaluationSlice = (
+  set: Setter,
+  get: () => KnowledgeBaseStore,
+  _api?: unknown,
+) => new RAGEvalEvaluationActionImpl(set, get, _api);
 
-  createNewEvaluation: (params: CreateNewEvalEvaluation) => Promise<void>;
-  refreshEvaluationList: () => Promise<void>;
+export class RAGEvalEvaluationActionImpl {
+  readonly #get: () => KnowledgeBaseStore;
+  readonly #set: Setter;
 
-  removeEvaluation: (id: number) => Promise<void>;
-  runEvaluation: (id: number) => Promise<void>;
+  constructor(set: Setter, get: () => KnowledgeBaseStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
 
-  useFetchEvaluationList: (knowledgeBaseId: string) => SWRResponse<RAGEvalDataSetItem[]>;
-}
-
-export const createRagEvalEvaluationSlice: StateCreator<
-  KnowledgeBaseStore,
-  [['zustand/devtools', never]],
-  [],
-  RAGEvalEvaluationAction
-> = (set, get) => ({
-  checkEvaluationStatus: async (id) => {
+  checkEvaluationStatus = async (id: number): Promise<void> => {
     await ragEvalService.checkEvaluationStatus(id);
-  },
+  };
 
-  createNewEvaluation: async (params) => {
+  createNewEvaluation = async (params: CreateNewEvalEvaluation): Promise<void> => {
     await ragEvalService.createEvaluation(params);
-    await get().refreshEvaluationList();
-  },
-  refreshEvaluationList: async () => {
+    await this.#get().refreshEvaluationList();
+  };
+
+  refreshEvaluationList = async (): Promise<void> => {
     await mutate(FETCH_EVALUATION_LIST_KEY);
-  },
+  };
 
-  removeEvaluation: async (id) => {
+  removeEvaluation = async (id: number): Promise<void> => {
     await ragEvalService.removeEvaluation(id);
-    // await get().refreshEvaluationList();
-  },
+    // await this.#get().refreshEvaluationList();
+  };
 
-  runEvaluation: async (id) => {
+  runEvaluation = async (id: number): Promise<void> => {
     await ragEvalService.startEvaluationTask(id);
-  },
+  };
 
-  useFetchEvaluationList: (knowledgeBaseId) =>
-    useClientDataSWR<RAGEvalDataSetItem[]>(
+  useFetchEvaluationList = (knowledgeBaseId: string): SWRResponse<RAGEvalDataSetItem[]> => {
+    return useClientDataSWR<RAGEvalDataSetItem[]>(
       [FETCH_EVALUATION_LIST_KEY, knowledgeBaseId],
       () => ragEvalService.getEvaluationList(knowledgeBaseId),
       {
         fallbackData: [],
         onSuccess: () => {
-          if (!get().initDatasetList)
-            set({ initDatasetList: true }, false, 'useFetchDatasets/init');
+          if (!this.#get().initDatasetList)
+            this.#set({ initDatasetList: true }, false, 'useFetchDatasets/init');
         },
       },
-    ),
-});
+    );
+  };
+}
+
+export type RAGEvalEvaluationAction = Pick<
+  RAGEvalEvaluationActionImpl,
+  keyof RAGEvalEvaluationActionImpl
+>;

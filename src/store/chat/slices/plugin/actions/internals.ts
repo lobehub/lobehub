@@ -2,7 +2,6 @@
 import { ToolArgumentsRepairer, ToolNameResolver } from '@lobechat/context-engine';
 import { type ChatToolPayload, type MessageToolCall } from '@lobechat/types';
 import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { type ChatStore } from '@/store/chat/store';
 import { useToolStore } from '@/store/tool';
@@ -11,26 +10,29 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
+import { type StoreSetter } from '@/store/types';
 import { builtinTools } from '@/tools';
 
 /**
  * Internal utility methods and runtime state management
  * These are building blocks used by other actions
  */
-export interface PluginInternalsAction {
-  /**
-   * Transform tool calls from runtime format to storage format
-   */
-  internal_transformToolCalls: (toolCalls: MessageToolCall[]) => ChatToolPayload[];
-}
 
-export const pluginInternals: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never]],
-  [],
-  PluginInternalsAction
-> = () => ({
-  internal_transformToolCalls: (toolCalls) => {
+type Setter = StoreSetter<ChatStore>;
+export const pluginInternals = (set: Setter, get: () => ChatStore, _api?: unknown) =>
+  new PluginInternalsActionImpl(set, get, _api);
+
+export class PluginInternalsActionImpl {
+  readonly #get: () => ChatStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  internal_transformToolCalls = (toolCalls: MessageToolCall[]): ChatToolPayload[] => {
     const toolNameResolver = new ToolNameResolver();
 
     // Build manifests map from tool store
@@ -91,5 +93,10 @@ export const pluginInternals: StateCreator<
         source: sourceMap[payload.identifier],
       };
     });
-  },
-});
+  };
+}
+
+export type PluginInternalsAction = Pick<
+  PluginInternalsActionImpl,
+  keyof PluginInternalsActionImpl
+>;

@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { flattenActions } from '../utils/flattenActions';
 import { type FilesStoreState, initialState } from './initialState';
 import { type FileAction, createFileSlice } from './slices/chat';
 import { type FileChunkAction, createFileChunkSlice } from './slices/chunk';
@@ -25,15 +26,27 @@ export type FileStore = FilesStoreState &
   ResourceAction &
   ResourceState;
 
-const createStore: StateCreator<FileStore, [['zustand/devtools', never]]> = (...parameters) => ({
+type FileStoreAction = FileAction &
+  DocumentAction &
+  TTSFileAction &
+  FileManageAction &
+  FileChunkAction &
+  FileUploadAction &
+  ResourceAction;
+
+const createStore: StateCreator<FileStore, [['zustand/devtools', never]]> = (
+  ...parameters: Parameters<StateCreator<FileStore, [['zustand/devtools', never]]>>
+) => ({
   ...initialState,
-  ...createFileSlice(...parameters),
-  ...createDocumentSlice(...parameters),
-  ...createFileManageSlice(...parameters),
-  ...createTTSFileSlice(...parameters),
-  ...createFileChunkSlice(...parameters),
-  ...createFileUploadSlice(...parameters),
-  ...createResourceSlice(...parameters),
+  ...flattenActions<FileStoreAction>([
+    createFileSlice(...parameters),
+    createDocumentSlice(...parameters),
+    createFileManageSlice(...parameters),
+    createTTSFileSlice(...parameters),
+    createFileChunkSlice(...parameters),
+    createFileUploadSlice(...parameters),
+    createResourceSlice(...parameters),
+  ]),
 });
 
 //  ===============  Implement useStore ============ //

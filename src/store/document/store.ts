@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { flattenActions } from '../utils/flattenActions';
 import { type DocumentAction, createDocumentSlice } from './slices/document';
 import {
   type EditorAction,
@@ -26,11 +27,13 @@ const initialState: DocumentState = {
 };
 
 const createStore: StateCreator<DocumentStore, [['zustand/devtools', never]]> = (
-  ...parameters
+  ...parameters: Parameters<StateCreator<DocumentStore, [['zustand/devtools', never]]>>
 ) => ({
   ...initialState,
-  ...createDocumentSlice(...parameters),
-  ...createEditorSlice(...parameters),
+  ...flattenActions<DocumentStoreAction>([
+    createDocumentSlice(...parameters),
+    createEditorSlice(...parameters),
+  ]),
 });
 
 const devtools = createDevtools('document');

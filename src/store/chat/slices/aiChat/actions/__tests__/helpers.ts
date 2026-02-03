@@ -40,7 +40,7 @@ export const setupMockSelectors = (
  */
 export const setupStoreWithMessages = (
   messages: any[],
-  sessionId = TEST_IDS.SESSION_ID,
+  sessionId: any = TEST_IDS.SESSION_ID,
   topicId: string | null | undefined = TEST_IDS.TOPIC_ID,
 ) => {
   useChatStore.setState({

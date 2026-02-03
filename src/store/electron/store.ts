@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { flattenActions } from '../utils/flattenActions';
 import { type ElectronAppAction, createElectronAppSlice } from './actions/app';
 import {
   type NavigationHistoryAction,
@@ -26,15 +27,23 @@ export interface ElectronStore
   /* empty */
 }
 
+type ElectronStoreAction = ElectronRemoteServerAction &
+  ElectronAppAction &
+  ElectronSettingsAction &
+  NavigationHistoryAction &
+  RecentPagesAction;
+
 const createStore: StateCreator<ElectronStore, [['zustand/devtools', never]]> = (
-  ...parameters
+  ...parameters: Parameters<StateCreator<ElectronStore, [['zustand/devtools', never]]>>
 ) => ({
   ...initialState,
-  ...remoteSyncSlice(...parameters),
-  ...createElectronAppSlice(...parameters),
-  ...settingsSlice(...parameters),
-  ...createNavigationHistorySlice(...parameters),
-  ...createRecentPagesSlice(...parameters),
+  ...flattenActions<ElectronStoreAction>([
+    remoteSyncSlice(...parameters),
+    createElectronAppSlice(...parameters),
+    settingsSlice(...parameters),
+    createNavigationHistorySlice(...parameters),
+    createRecentPagesSlice(...parameters),
+  ]),
 });
 
 //  ===============  Implement useStore ============ //

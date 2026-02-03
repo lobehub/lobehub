@@ -2,11 +2,11 @@
 import { TraceEventType } from '@lobechat/types';
 import { copyToClipboard } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
 import { type ChatStore } from '@/store/chat/store';
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { dbMessageSelectors, displayMessageSelectors } from '../../../selectors';
@@ -19,83 +19,22 @@ const n = setNamespace('m');
  * Public API for components
  * These methods are directly called by UI components
  */
-export interface MessagePublicApiAction {
-  // ===== Create ===== //
-  addAIMessage: () => Promise<void>;
-  addUserMessage: (params: { message: string; fileList?: string[] }) => Promise<void>;
 
-  // ===== Delete ===== //
-  /**
-   * clear message on the active session
-   */
-  clearMessage: () => Promise<void>;
-  /**
-   * Delete a message by id
-   * @param id - message id
-   * @param context - Optional context for optimistic update (required for Group mode)
-   */
-  deleteMessage: (id: string, context?: OptimisticUpdateContext) => Promise<void>;
-  /**
-   * Delete an assistant message and its associated tool messages
-   * @param id - message id
-   * @param context - Optional context for optimistic update (required for Group mode)
-   */
-  deleteAssistantMessage: (id: string, context?: OptimisticUpdateContext) => Promise<void>;
-  deleteDBMessage: (id: string) => Promise<void>;
-  deleteToolMessage: (id: string) => Promise<void>;
-  clearAllMessages: () => Promise<void>;
+type Setter = StoreSetter<ChatStore>;
+export const messagePublicApi = (set: Setter, get: () => ChatStore, _api?: unknown) =>
+  new MessagePublicApiActionImpl(set, get, _api);
 
-  // ===== Update ===== //
-  /**
-   * Update message input box content
-   */
-  updateMessageInput: (message: string) => void;
-  /**
-   * Modify message content
-   * @param id - message id
-   * @param content - new content
-   * @param context - Optional context for optimistic update (required for Group mode)
-   */
-  modifyMessageContent: (
-    id: string,
-    content: string,
-    context?: OptimisticUpdateContext,
-  ) => Promise<void>;
-  toggleMessageEditing: (id: string, editing: boolean) => void;
-  /**
-   * Toggle message collapsed state
-   * @param id - message id
-   * @param collapsed - collapsed state, if not provided, toggle current state
-   * @param context - Optional context for optimistic update (required for Group mode)
-   */
-  toggleMessageCollapsed: (
-    id: string,
-    collapsed?: boolean,
-    context?: OptimisticUpdateContext,
-  ) => Promise<void>;
-  /**
-   * Toggle tool inspect expanded state
-   * @param id - message id
-   * @param expanded - expanded state, if not provided, toggle current state
-   * @param context - Optional context for optimistic update (required for Group mode)
-   */
-  toggleInspectExpanded: (
-    id: string,
-    expanded?: boolean,
-    context?: OptimisticUpdateContext,
-  ) => Promise<void>;
+export class MessagePublicApiActionImpl {
+  readonly #get: () => ChatStore;
+  readonly #set: Setter;
 
-  // ===== Others ===== //
-  copyMessage: (id: string, content: string) => Promise<void>;
-}
+  constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
 
-export const messagePublicApi: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never]],
-  [],
-  MessagePublicApiAction
-> = (set, get) => ({
-  addAIMessage: async () => {
+  addAIMessage = async (): Promise<void> => {
     const {
       optimisticCreateMessage,
       updateMessageInput,
@@ -104,10 +43,10 @@ export const messagePublicApi: StateCreator<
       activeThreadId,
       activeGroupId,
       inputMessage,
-    } = get();
+    } = this.#get();
     if (!activeAgentId) return;
 
-    const parentId = displayMessageSelectors.lastDisplayMessageId(get());
+    const parentId = displayMessageSelectors.lastDisplayMessageId(this.#get());
 
     const result = await optimisticCreateMessage({
       content: inputMessage,
@@ -122,9 +61,15 @@ export const messagePublicApi: StateCreator<
     if (result) {
       updateMessageInput('');
     }
-  },
+  };
 
-  addUserMessage: async ({ message, fileList }) => {
+  addUserMessage = async ({
+    message,
+    fileList,
+  }: {
+    message: string;
+    fileList?: string[];
+  }): Promise<void> => {
     const {
       optimisticCreateMessage,
       updateMessageInput,
@@ -132,10 +77,10 @@ export const messagePublicApi: StateCreator<
       activeAgentId,
       activeThreadId,
       activeGroupId,
-    } = get();
+    } = this.#get();
     if (!activeAgentId) return;
 
-    const parentId = displayMessageSelectors.lastDisplayMessageId(get());
+    const parentId = displayMessageSelectors.lastDisplayMessageId(this.#get());
 
     const result = await optimisticCreateMessage({
       content: message,
@@ -151,15 +96,15 @@ export const messagePublicApi: StateCreator<
     if (result) {
       updateMessageInput('');
     }
-  },
+  };
 
-  deleteAssistantMessage: async (id, context) => {
-    const message = dbMessageSelectors.getDbMessageById(id)(get());
+  deleteAssistantMessage = async (id: string, context?: OptimisticUpdateContext): Promise<void> => {
+    const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
     if (!message) return;
 
     let ids = [message.id];
     if (message.tools) {
-      const allMessages = dbMessageSelectors.activeDbMessages(get());
+      const allMessages = dbMessageSelectors.activeDbMessages(this.#get());
 
       const toolMessageIds = message.tools.flatMap((tool) => {
         const messages = allMessages.filter((m) => m.tool_call_id === tool.id);
@@ -168,10 +113,11 @@ export const messagePublicApi: StateCreator<
       ids = ids.concat(toolMessageIds);
     }
 
-    await get().optimisticDeleteMessages(ids, context);
-  },
-  deleteMessage: async (id, context) => {
-    const message = displayMessageSelectors.getDisplayMessageById(id)(get());
+    await this.#get().optimisticDeleteMessages(ids, context);
+  };
+
+  deleteMessage = async (id: string, context?: OptimisticUpdateContext): Promise<void> => {
+    const message = displayMessageSelectors.getDisplayMessageById(id)(this.#get());
     if (!message) return;
 
     let ids = [message.id];
@@ -190,36 +136,36 @@ export const messagePublicApi: StateCreator<
       ids = ids.concat(toolResultIds);
     }
 
-    await get().optimisticDeleteMessages(ids, context);
-  },
+    await this.#get().optimisticDeleteMessages(ids, context);
+  };
 
-  deleteDBMessage: async (id) => {
-    const message = dbMessageSelectors.getDbMessageById(id)(get());
+  deleteDBMessage = async (id: string): Promise<void> => {
+    const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
     if (!message) return;
 
     let ids = [message.id];
 
-    get().internal_dispatchMessage({ type: 'deleteMessages', ids });
-    const ctx = get().internal_getConversationContext();
+    this.#get().internal_dispatchMessage({ type: 'deleteMessages', ids });
+    const ctx = this.#get().internal_getConversationContext();
     // CRUD operations pass agentId - backend handles sessionId mapping (LOBE-1086)
     const result = await messageService.removeMessages(ids, ctx);
 
     if (result?.success && result.messages) {
-      get().replaceMessages(result.messages, { context: ctx });
+      this.#get().replaceMessages(result.messages, { context: ctx });
     }
-  },
+  };
 
-  deleteToolMessage: async (id) => {
-    const message = dbMessageSelectors.getDbMessageById(id)(get());
+  deleteToolMessage = async (id: string): Promise<void> => {
+    const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
     if (!message || message.role !== 'tool') return;
 
     // Get operationId from messageOperationMap to ensure proper context isolation
-    const operationId = get().messageOperationMap[id];
+    const operationId = this.#get().messageOperationMap[id];
     const context = operationId ? { operationId } : undefined;
 
     const removeToolInAssistantMessage = async () => {
       if (!message.parentId) return;
-      await get().optimisticRemoveToolFromAssistantMessage(
+      await this.#get().optimisticRemoveToolFromAssistantMessage(
         message.parentId,
         message.tool_call_id,
         context,
@@ -228,14 +174,14 @@ export const messagePublicApi: StateCreator<
 
     await Promise.all([
       // 1. remove tool message
-      get().optimisticDeleteMessage(id, context),
+      this.#get().optimisticDeleteMessage(id, context),
       // 2. remove the tool item in the assistant tools
       removeToolInAssistantMessage(),
     ]);
-  },
+  };
 
-  clearMessage: async () => {
-    const { activeAgentId, activeTopicId, activeGroupId, refreshTopic, switchTopic } = get();
+  clearMessage = async (): Promise<void> => {
+    const { activeAgentId, activeTopicId, activeGroupId, refreshTopic, switchTopic } = this.#get();
 
     // For group sessions, we need to clear group messages using groupId
     // For regular sessions, we clear session messages using agentId
@@ -253,68 +199,89 @@ export const messagePublicApi: StateCreator<
     await refreshTopic();
 
     // Clear messages directly since all messages are deleted
-    get().replaceMessages([]);
+    this.#get().replaceMessages([]);
 
     // after remove topic , go back to default topic
     switchTopic(null);
-  },
+  };
 
-  clearAllMessages: async () => {
+  clearAllMessages = async (): Promise<void> => {
     await messageService.removeAllMessages();
     // Clear messages directly since all messages are deleted
-    get().replaceMessages([]);
-  },
+    this.#get().replaceMessages([]);
+  };
 
-  copyMessage: async (id, content) => {
+  copyMessage = async (id: string, content: string): Promise<void> => {
     await copyToClipboard(content);
 
-    get().internal_traceMessage(id, { eventType: TraceEventType.CopyMessage });
-  },
+    this.#get().internal_traceMessage(id, { eventType: TraceEventType.CopyMessage });
+  };
 
-  toggleMessageEditing: (id, editing) => {
-    set(
-      { messageEditingIds: toggleBooleanList(get().messageEditingIds, id, editing) },
+  toggleMessageEditing = (id: string, editing: boolean): void => {
+    this.#set(
+      { messageEditingIds: toggleBooleanList(this.#get().messageEditingIds, id, editing) },
       false,
       'toggleMessageEditing',
     );
-  },
+  };
 
-  updateMessageInput: (message) => {
-    if (isEqual(message, get().inputMessage)) return;
+  updateMessageInput = (message: string): void => {
+    if (isEqual(message, this.#get().inputMessage)) return;
 
-    set({ inputMessage: message }, false, n('updateMessageInput', message));
-  },
+    this.#set({ inputMessage: message }, false, n('updateMessageInput', message));
+  };
 
-  modifyMessageContent: async (id, content, context) => {
+  modifyMessageContent = async (
+    id: string,
+    content: string,
+    context?: OptimisticUpdateContext,
+  ): Promise<void> => {
     // tracing the diff of update
     // due to message content will change, so we need send trace before update,or will get wrong data
-    get().internal_traceMessage(id, {
+    this.#get().internal_traceMessage(id, {
       eventType: TraceEventType.ModifyMessage,
       nextContent: content,
     });
 
-    await get().optimisticUpdateMessageContent(id, content, undefined, context);
-  },
+    await this.#get().optimisticUpdateMessageContent(id, content, undefined, context);
+  };
 
-  toggleMessageCollapsed: async (id, collapsed, context) => {
-    const message = displayMessageSelectors.getDisplayMessageById(id)(get());
+  toggleMessageCollapsed = async (
+    id: string,
+    collapsed?: boolean,
+    context?: OptimisticUpdateContext,
+  ): Promise<void> => {
+    const message = displayMessageSelectors.getDisplayMessageById(id)(this.#get());
     if (!message) return;
 
     // 如果没有传入 collapsed，则取反当前状态
     const nextCollapsed = collapsed ?? !message.metadata?.collapsed;
 
     // 直接调用现有的 optimisticUpdateMessageMetadata
-    await get().optimisticUpdateMessageMetadata(id, { collapsed: nextCollapsed }, context);
-  },
+    await this.#get().optimisticUpdateMessageMetadata(id, { collapsed: nextCollapsed }, context);
+  };
 
-  toggleInspectExpanded: async (id, expanded, context) => {
-    const message = dbMessageSelectors.getDbMessageById(id)(get());
+  toggleInspectExpanded = async (
+    id: string,
+    expanded?: boolean,
+    context?: OptimisticUpdateContext,
+  ): Promise<void> => {
+    const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
     if (!message) return;
 
     // 如果没有传入 expanded，则取反当前状态
     const nextExpanded = expanded ?? !message.metadata?.inspectExpanded;
 
     // 直接调用现有的 optimisticUpdateMessageMetadata
-    await get().optimisticUpdateMessageMetadata(id, { inspectExpanded: nextExpanded }, context);
-  },
-});
+    await this.#get().optimisticUpdateMessageMetadata(
+      id,
+      { inspectExpanded: nextExpanded },
+      context,
+    );
+  };
+}
+
+export type MessagePublicApiAction = Pick<
+  MessagePublicApiActionImpl,
+  keyof MessagePublicApiActionImpl
+>;

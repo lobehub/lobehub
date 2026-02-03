@@ -6,6 +6,7 @@ import type { StateCreator } from 'zustand/vanilla';
 import { isDev } from '@/utils/env';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { flattenActions } from '../utils/flattenActions';
 import { type HomeStoreState, initialState } from './initialState';
 import { type AgentListAction, createAgentListSlice } from './slices/agentList/action';
 import { type GroupAction, createGroupSlice } from './slices/group/action';
@@ -24,13 +25,23 @@ export interface HomeStore
     SidebarUIAction,
     HomeStoreState {}
 
-const createStore: StateCreator<HomeStore, [['zustand/devtools', never]]> = (...parameters) => ({
+type HomeStoreAction = AgentListAction &
+  GroupAction &
+  RecentAction &
+  HomeInputAction &
+  SidebarUIAction;
+
+const createStore: StateCreator<HomeStore, [['zustand/devtools', never]]> = (
+  ...parameters: Parameters<StateCreator<HomeStore, [['zustand/devtools', never]]>>
+) => ({
   ...initialState,
-  ...createAgentListSlice(...parameters),
-  ...createGroupSlice(...parameters),
-  ...createRecentSlice(...parameters),
-  ...createHomeInputSlice(...parameters),
-  ...createSidebarUISlice(...parameters),
+  ...flattenActions<HomeStoreAction>([
+    createAgentListSlice(...parameters),
+    createGroupSlice(...parameters),
+    createRecentSlice(...parameters),
+    createHomeInputSlice(...parameters),
+    createSidebarUISlice(...parameters),
+  ]),
 });
 
 //  ===============  Implement useStore ============ //

@@ -11,7 +11,6 @@ import {
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
 import useSWR, { type SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { message } from '@/components/AntdStaticMethods';
 import { LOADING_FLAT } from '@/const/message';
@@ -23,6 +22,7 @@ import type { ChatStore } from '@/store/chat';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useGlobalStore } from '@/store/global';
 import { globalHelpers } from '@/store/global/helpers';
+import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
 import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
@@ -66,95 +66,30 @@ export interface SwitchTopicOptions {
   skipRefreshMessage?: boolean;
 }
 
-export interface ChatTopicAction {
-  closeAllTopicsDrawer: () => void;
-  favoriteTopic: (id: string, favState: boolean) => Promise<void>;
-  importTopic: (data: string) => Promise<string | undefined>;
-  loadMoreTopics: () => Promise<void>;
-  openAllTopicsDrawer: () => void;
-  openNewTopicOrSaveTopic: () => Promise<void>;
-  refreshTopic: () => Promise<void>;
-  removeAllTopics: () => Promise<void>;
-  removeSessionTopics: () => Promise<void>;
-  removeGroupTopics: (groupId: string) => Promise<void>;
-  removeTopic: (id: string) => Promise<void>;
-  removeUnstarredTopic: () => Promise<void>;
-  saveToTopic: (sessionId?: string) => Promise<string | undefined>;
-  createTopic: (sessionId?: string) => Promise<string | undefined>;
+type Setter = StoreSetter<ChatStore>;
+export const chatTopic = (set: Setter, get: () => ChatStore, _api?: unknown) =>
+  new ChatTopicActionImpl(set, get, _api);
 
-  autoRenameTopicTitle: (id: string) => Promise<void>;
-  duplicateTopic: (id: string) => Promise<void>;
-  summaryTopicTitle: (topicId: string, messages: UIChatMessage[]) => Promise<void>;
-  /**
-   * Switch to a topic or create new topic state
-   * @param id - Topic ID to switch to, or null to switch to "new" state (clears _new key data)
-   * @param options - Options object for configuring the switch behavior
-   */
-  switchTopic: (id?: string | null, options?: SwitchTopicOptions) => Promise<void>;
-  /**
-   * Update topic metadata
-   * @param id - Topic ID to update
-   * @param metadata - Partial metadata to merge with existing metadata
-   */
-  updateTopicMetadata: (id: string, metadata: Partial<ChatTopicMetadata>) => Promise<void>;
-  updateTopicTitle: (id: string, title: string) => Promise<void>;
-  useFetchTopics: (
-    enable: boolean,
-    params: {
-      agentId?: string;
-      excludeTriggers?: string[];
-      groupId?: string;
-      isInbox?: boolean;
-      pageSize?: number;
-    },
-  ) => SWRResponse<{ items: ChatTopic[]; total: number }>;
-  useSearchTopics: (
-    keywords: string | undefined,
-    params: {
-      agentId?: string;
-      groupId?: string;
-    },
-  ) => SWRResponse<ChatTopic[]>;
+export class ChatTopicActionImpl {
+  readonly #get: () => ChatStore;
+  readonly #set: Setter;
 
-  internal_updateTopicTitleInSummary: (id: string, title: string) => void;
-  internal_updateTopicLoading: (id: string, loading: boolean) => void;
-  internal_createTopic: (params: CreateTopicParams) => Promise<string>;
-  internal_updateTopic: (id: string, data: Partial<ChatTopic>) => Promise<void>;
-  internal_dispatchTopic: (payload: ChatTopicDispatch, action?: any) => void;
-  internal_updateTopics: (
-    agentId: string,
-    params: {
-      append?: boolean;
-      currentPage?: number;
-      groupId?: string;
-      items: ChatTopic[];
-      pageSize: number;
-      total: number;
-    },
-  ) => void;
-  /**
-   * Update TopicData properties (loading states, pagination, etc.)
-   */
-  internal_updateTopicData: (key: string, data: Partial<TopicData>) => void;
-}
+  constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
 
-export const chatTopic: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never]],
-  [],
-  ChatTopicAction
-> = (set, get) => ({
-  closeAllTopicsDrawer: () => {
-    set({ allTopicsDrawerOpen: false }, false, n('closeAllTopicsDrawer'));
-  },
+  closeAllTopicsDrawer = (): void => {
+    this.#set({ allTopicsDrawerOpen: false }, false, n('closeAllTopicsDrawer'));
+  };
 
-  openAllTopicsDrawer: () => {
-    set({ allTopicsDrawerOpen: true }, false, n('openAllTopicsDrawer'));
-  },
+  openAllTopicsDrawer = (): void => {
+    this.#set({ allTopicsDrawerOpen: true }, false, n('openAllTopicsDrawer'));
+  };
 
-  // create
-  openNewTopicOrSaveTopic: async () => {
-    const { switchTopic, saveToTopic, refreshMessages, activeTopicId } = get();
+  openNewTopicOrSaveTopic = async (): Promise<void> => {
+    const { switchTopic, saveToTopic, refreshMessages, activeTopicId } = this.#get();
     const hasTopic = !!activeTopicId;
 
     if (hasTopic) switchTopic(null);
@@ -162,30 +97,30 @@ export const chatTopic: StateCreator<
       await saveToTopic();
       refreshMessages();
     }
-  },
+  };
 
-  createTopic: async (sessionId) => {
-    const { activeAgentId, internal_createTopic } = get();
+  createTopic = async (sessionId?: string): Promise<string | undefined> => {
+    const { activeAgentId, internal_createTopic } = this.#get();
 
-    const messages = displayMessageSelectors.activeDisplayMessages(get());
+    const messages = displayMessageSelectors.activeDisplayMessages(this.#get());
 
-    set({ creatingTopic: true }, false, n('creatingTopic/start'));
+    this.#set({ creatingTopic: true }, false, n('creatingTopic/start'));
     const topicId = await internal_createTopic({
       title: t('defaultTitle', { ns: 'topic' }),
       messages: messages.map((m) => m.id),
       sessionId: sessionId || activeAgentId,
     });
-    set({ creatingTopic: false }, false, n('creatingTopic/end'));
+    this.#set({ creatingTopic: false }, false, n('creatingTopic/end'));
 
     return topicId;
-  },
+  };
 
-  saveToTopic: async (sessionId) => {
+  saveToTopic = async (sessionId?: string): Promise<string | undefined> => {
     // if there is no message, stop
-    const messages = displayMessageSelectors.activeDisplayMessages(get());
+    const messages = displayMessageSelectors.activeDisplayMessages(this.#get());
     if (messages.length === 0) return;
 
-    const { activeAgentId, summaryTopicTitle, internal_createTopic } = get();
+    const { activeAgentId, summaryTopicTitle, internal_createTopic } = this.#get();
 
     // 1. create topic and bind these messages
     const topicId = await internal_createTopic({
@@ -194,18 +129,18 @@ export const chatTopic: StateCreator<
       sessionId: sessionId || activeAgentId,
     });
 
-    get().internal_updateTopicLoading(topicId, true);
+    this.#get().internal_updateTopicLoading(topicId, true);
     // 2. auto summary topic Title
     // we don't need to wait for summary, just let it run async
     summaryTopicTitle(topicId, messages);
 
     return topicId;
-  },
+  };
 
-  duplicateTopic: async (id) => {
-    const { refreshTopic, switchTopic } = get();
+  duplicateTopic = async (id: string): Promise<void> => {
+    const { refreshTopic, switchTopic } = this.#get();
 
-    const topic = topicSelectors.getTopicById(id)(get());
+    const topic = topicSelectors.getTopicById(id)(this.#get());
     if (!topic) return;
 
     const newTitle = t('duplicateTitle', { ns: 'chat', title: topic?.title });
@@ -222,10 +157,10 @@ export const chatTopic: StateCreator<
     message.success(t('duplicateSuccess', { ns: 'topic' }));
 
     await switchTopic(newTopicId);
-  },
+  };
 
-  importTopic: async (data) => {
-    const { activeAgentId, activeGroupId, refreshTopic, switchTopic } = get();
+  importTopic = async (data: string): Promise<string | undefined> => {
+    const { activeAgentId, activeGroupId, refreshTopic, switchTopic } = this.#get();
 
     if (!activeAgentId) return;
 
@@ -255,11 +190,11 @@ export const chatTopic: StateCreator<
       console.error('[importTopic] Failed:', error);
       return undefined;
     }
-  },
-  // update
-  summaryTopicTitle: async (topicId, messages) => {
-    const { internal_updateTopicTitleInSummary, internal_updateTopicLoading } = get();
-    const topic = topicSelectors.getTopicById(topicId)(get());
+  };
+
+  summaryTopicTitle = async (topicId: string, messages: UIChatMessage[]): Promise<void> => {
+    const { internal_updateTopicTitleInSummary, internal_updateTopicLoading } = this.#get();
+    const topic = topicSelectors.getTopicById(topicId)(this.#get());
     if (!topic) return;
 
     internal_updateTopicTitleInSummary(topicId, LOADING_FLAT);
@@ -275,7 +210,7 @@ export const chatTopic: StateCreator<
         internal_updateTopicTitleInSummary(topicId, topic.title);
       },
       onFinish: async (text) => {
-        await get().internal_updateTopic(topicId, { title: text });
+        await this.#get().internal_updateTopic(topicId, { title: text });
       },
       onLoadingChange: (loading) => {
         internal_updateTopicLoading(topicId, loading);
@@ -290,12 +225,16 @@ export const chatTopic: StateCreator<
         internal_updateTopicTitleInSummary(topicId, output);
       },
       params: merge(topicConfig, chainSummaryTitle(messages, globalHelpers.getCurrentLanguage())),
-      trace: get().getCurrentTracePayload({ traceName: TraceNameMap.SummaryTopicTitle, topicId }),
+      trace: this.#get().getCurrentTracePayload({
+        traceName: TraceNameMap.SummaryTopicTitle,
+        topicId,
+      }),
     });
-  },
-  favoriteTopic: async (id, favorite) => {
-    const { activeAgentId } = get();
-    await get().internal_updateTopic(id, { favorite });
+  };
+
+  favoriteTopic = async (id: string, favorite: boolean): Promise<void> => {
+    const { activeAgentId } = this.#get();
+    await this.#get().internal_updateTopic(id, { favorite });
 
     if (!activeAgentId) return;
 
@@ -322,41 +261,56 @@ export const chatTopic: StateCreator<
       },
       { revalidate: false },
     );
-  },
+  };
 
-  updateTopicMetadata: async (id, metadata) => {
-    const topic = topicSelectors.getTopicById(id)(get());
+  updateTopicMetadata = async (id: string, metadata: Partial<ChatTopicMetadata>): Promise<void> => {
+    const topic = topicSelectors.getTopicById(id)(this.#get());
     if (!topic) return;
 
     // Optimistic update with merged metadata
     const mergedMetadata = { ...topic.metadata, ...metadata };
-    get().internal_dispatchTopic({ type: 'updateTopic', id, value: { metadata: mergedMetadata } });
+    this.#get().internal_dispatchTopic({
+      type: 'updateTopic',
+      id,
+      value: { metadata: mergedMetadata },
+    });
 
-    get().internal_updateTopicLoading(id, true);
+    this.#get().internal_updateTopicLoading(id, true);
     await topicService.updateTopicMetadata(id, metadata);
-    await get().refreshTopic();
-    get().internal_updateTopicLoading(id, false);
-  },
+    await this.#get().refreshTopic();
+    this.#get().internal_updateTopicLoading(id, false);
+  };
 
-  updateTopicTitle: async (id, title) => {
-    await get().internal_updateTopic(id, { title });
-  },
+  updateTopicTitle = async (id: string, title: string): Promise<void> => {
+    await this.#get().internal_updateTopic(id, { title });
+  };
 
-  autoRenameTopicTitle: async (id) => {
-    const { activeAgentId: agentId, summaryTopicTitle, internal_updateTopicLoading } = get();
+  autoRenameTopicTitle = async (id: string): Promise<void> => {
+    const { activeAgentId: agentId, summaryTopicTitle, internal_updateTopicLoading } = this.#get();
 
     internal_updateTopicLoading(id, true);
     const messages = await messageService.getMessages({ agentId, topicId: id });
 
     await summaryTopicTitle(id, messages);
     internal_updateTopicLoading(id, false);
-  },
+  };
 
-  // query
-  useFetchTopics: (
-    enable,
-    { agentId, excludeTriggers, groupId, pageSize: customPageSize, isInbox },
-  ) => {
+  useFetchTopics = (
+    enable: boolean,
+    {
+      agentId,
+      excludeTriggers,
+      groupId,
+      pageSize: customPageSize,
+      isInbox,
+    }: {
+      agentId?: string;
+      excludeTriggers?: string[];
+      groupId?: string;
+      isInbox?: boolean;
+      pageSize?: number;
+    } = {},
+  ): SWRResponse<{ items: ChatTopic[]; total: number }> => {
     const pageSize = customPageSize || 20;
     const effectiveExcludeTriggers =
       excludeTriggers && excludeTriggers.length > 0 ? excludeTriggers : undefined;
@@ -380,7 +334,7 @@ export const chatTopic: StateCreator<
         // agentId, groupId, isInbox, pageSize come from the outer scope closure
         if (!agentId && !groupId) return { items: [], total: 0 };
 
-        const currentData = get().topicDataMap[containerKey];
+        const currentData = this.#get().topicDataMap[containerKey];
         const lastPageSize = currentData?.pageSize;
         const hasExistingItems = (currentData?.items?.length || 0) > 0;
 
@@ -389,7 +343,7 @@ export const chatTopic: StateCreator<
         const isExpanding =
           hasExistingItems && typeof lastPageSize === 'number' && pageSize > lastPageSize;
         if (isExpanding) {
-          get().internal_updateTopicData(containerKey, { isExpandingPageSize: true });
+          this.#get().internal_updateTopicData(containerKey, { isExpandingPageSize: true });
         }
 
         const result = await topicService.getTopics({
@@ -403,7 +357,7 @@ export const chatTopic: StateCreator<
 
         // Reset expanding state after fetch completes
         if (isExpanding) {
-          get().internal_updateTopicData(containerKey, { isExpandingPageSize: false });
+          this.#get().internal_updateTopicData(containerKey, { isExpandingPageSize: false });
         }
 
         return result;
@@ -416,15 +370,15 @@ export const chatTopic: StateCreator<
           const { items: topics, total: totalCount } = result;
           const hasMore = topics.length >= pageSize;
 
-          const currentData = get().topicDataMap[containerKey];
+          const currentData = this.#get().topicDataMap[containerKey];
 
           // no need to update map if the current key's data exists and is the same
           if (currentData && isEqual(topics, currentData.items)) return;
 
-          set(
+          this.#set(
             {
               topicDataMap: {
-                ...get().topicDataMap,
+                ...this.#get().topicDataMap,
                 [containerKey]: {
                   currentPage: 0,
                   excludeTriggers: effectiveExcludeTriggers,
@@ -442,10 +396,10 @@ export const chatTopic: StateCreator<
         },
       },
     );
-  },
+  };
 
-  loadMoreTopics: async () => {
-    const { activeAgentId, activeGroupId, topicDataMap } = get();
+  loadMoreTopics = async (): Promise<void> => {
+    const { activeAgentId, activeGroupId, topicDataMap } = this.#get();
     const key = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
     const currentData = topicDataMap[key];
 
@@ -454,7 +408,7 @@ export const chatTopic: StateCreator<
     const currentPage = currentData?.currentPage || 0;
     const nextPage = currentPage + 1;
 
-    set(
+    this.#set(
       {
         topicDataMap: {
           ...topicDataMap,
@@ -479,10 +433,10 @@ export const chatTopic: StateCreator<
       const currentTopics = currentData?.items || [];
       const hasMore = result.items.length >= pageSize;
 
-      set(
+      this.#set(
         {
           topicDataMap: {
-            ...get().topicDataMap,
+            ...this.#get().topicDataMap,
             [key]: {
               currentPage: nextPage,
               excludeTriggers,
@@ -498,38 +452,49 @@ export const chatTopic: StateCreator<
         n('loadMoreTopics(success)'),
       );
     } catch {
-      set(
+      this.#set(
         {
           topicDataMap: {
-            ...get().topicDataMap,
-            [key]: { ...get().topicDataMap[key]!, isLoadingMore: false },
+            ...this.#get().topicDataMap,
+            [key]: { ...this.#get().topicDataMap[key]!, isLoadingMore: false },
           },
         },
         false,
         n('loadMoreTopics(error)'),
       );
     }
-  },
-  useSearchTopics: (keywords, { agentId, groupId }) =>
-    useSWR<ChatTopic[]>(
+  };
+
+  useSearchTopics = (
+    keywords: string | undefined,
+    {
+      agentId,
+      groupId,
+    }: {
+      agentId?: string;
+      groupId?: string;
+    } = {},
+  ): SWRResponse<ChatTopic[]> => {
+    return useSWR<ChatTopic[]>(
       keywords ? [SWR_USE_SEARCH_TOPIC, keywords, agentId, groupId] : null,
       ([, keywords, agentId, groupId]: [string, string, string | undefined, string | undefined]) =>
         topicService.searchTopics(keywords, agentId, groupId),
       {
         onSuccess: (data) => {
-          set(
+          this.#set(
             { searchTopics: data, isSearchingTopic: false },
             false,
             n('useSearchTopics(success)', { keywords }),
           );
         },
       },
-    ),
+    );
+  };
 
-  switchTopic: async (id, options) => {
+  switchTopic = async (id?: string | null, options?: SwitchTopicOptions): Promise<void> => {
     const opts = options ?? {};
 
-    const { activeAgentId, activeGroupId } = get();
+    const { activeAgentId, activeGroupId } = this.#get();
 
     // Clear the _new key data in the following cases:
     // 1. When id is null or undefined (switching to empty topic state)
@@ -542,7 +507,7 @@ export const chatTopic: StateCreator<
       // Determine scope: use explicit scope from options, or infer from activeGroupId
       const scope = opts.scope ?? (activeGroupId ? 'group' : 'main');
 
-      get().replaceMessages([], {
+      this.#get().replaceMessages([], {
         context: {
           agentId: activeAgentId,
           groupId: activeGroupId,
@@ -553,18 +518,18 @@ export const chatTopic: StateCreator<
       });
     }
 
-    set(
+    this.#set(
       { activeTopicId: !id ? (null as any) : id, activeThreadId: undefined },
       false,
       n('toggleTopic'),
     );
 
     if (opts.skipRefreshMessage) return;
-    await get().refreshMessages();
-  },
-  // delete
-  removeSessionTopics: async () => {
-    const { switchTopic, activeAgentId, refreshTopic } = get();
+    await this.#get().refreshMessages();
+  };
+
+  removeSessionTopics = async (): Promise<void> => {
+    const { switchTopic, activeAgentId, refreshTopic } = this.#get();
     if (!activeAgentId) return;
 
     await topicService.removeTopicsByAgentId(activeAgentId);
@@ -572,14 +537,14 @@ export const chatTopic: StateCreator<
 
     // switch to default topic
     switchTopic(null);
-  },
+  };
 
-  removeGroupTopics: async (groupId: string) => {
-    const { switchTopic, refreshTopic } = get();
+  removeGroupTopics = async (groupId: string): Promise<void> => {
+    const { switchTopic, refreshTopic } = this.#get();
 
     // Get topics for this specific group from the topic map using topicMapKey
     const key = topicMapKey({ groupId });
-    const groupTopics = get().topicDataMap[key]?.items || [];
+    const groupTopics = this.#get().topicDataMap[key]?.items || [];
     const topicIds = groupTopics.map((t) => t.id);
 
     if (topicIds.length > 0) {
@@ -590,15 +555,17 @@ export const chatTopic: StateCreator<
 
     // switch to default topic
     switchTopic(null);
-  },
-  removeAllTopics: async () => {
-    const { refreshTopic } = get();
+  };
+
+  removeAllTopics = async (): Promise<void> => {
+    const { refreshTopic } = this.#get();
 
     await topicService.removeAllTopic();
     await refreshTopic();
-  },
-  removeTopic: async (id) => {
-    const { activeAgentId, activeGroupId, activeTopicId, switchTopic, refreshTopic } = get();
+  };
+
+  removeTopic = async (id: string): Promise<void> => {
+    const { activeAgentId, activeGroupId, activeTopicId, switchTopic, refreshTopic } = this.#get();
     // Allow deletion when either agentId or groupId is active
     if (!activeAgentId && !activeGroupId) return;
 
@@ -608,37 +575,38 @@ export const chatTopic: StateCreator<
 
     // switch back to default topic
     if (activeTopicId === id) switchTopic(null);
-  },
-  removeUnstarredTopic: async () => {
-    const { refreshTopic, switchTopic } = get();
-    const topics = topicSelectors.currentUnFavTopics(get());
+  };
+
+  removeUnstarredTopic = async (): Promise<void> => {
+    const { refreshTopic, switchTopic } = this.#get();
+    const topics = topicSelectors.currentUnFavTopics(this.#get());
 
     await topicService.batchRemoveTopics(topics.map((t) => t.id));
     await refreshTopic();
 
     // Switch to default topic
     switchTopic(null);
-  },
+  };
 
-  // Internal process method of the topics
-  internal_updateTopicTitleInSummary: (id, title) => {
-    get().internal_dispatchTopic(
+  internal_updateTopicTitleInSummary = (id: string, title: string): void => {
+    this.#get().internal_dispatchTopic(
       { type: 'updateTopic', id, value: { title } },
       'updateTopicTitleInSummary',
     );
-  },
-  refreshTopic: async () => {
-    const { activeAgentId, activeGroupId } = get();
+  };
+
+  refreshTopic = async (): Promise<void> => {
+    const { activeAgentId, activeGroupId } = this.#get();
     // Use topicMapKey to generate the same key used in useFetchTopics
     // Key format: [SWR_USE_FETCH_TOPIC, containerKey, { isInbox, pageSize }]
     const containerKey = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
     await mutate(
       (key) => Array.isArray(key) && key[0] === SWR_USE_FETCH_TOPIC && key[1] === containerKey,
     );
-  },
+  };
 
-  internal_updateTopicLoading: (id, loading) => {
-    set(
+  internal_updateTopicLoading = (id: string, loading: boolean): void => {
+    this.#set(
       (state) => {
         if (loading) return { topicLoadingIds: [...state.topicLoadingIds, id] };
 
@@ -647,47 +615,48 @@ export const chatTopic: StateCreator<
       false,
       n('updateTopicLoading'),
     );
-  },
+  };
 
-  internal_updateTopic: async (id, data) => {
-    get().internal_dispatchTopic({ type: 'updateTopic', id, value: data });
+  internal_updateTopic = async (id: string, data: Partial<ChatTopic>): Promise<void> => {
+    this.#get().internal_dispatchTopic({ type: 'updateTopic', id, value: data });
 
-    get().internal_updateTopicLoading(id, true);
+    this.#get().internal_updateTopicLoading(id, true);
     await topicService.updateTopic(id, data);
-    await get().refreshTopic();
-    get().internal_updateTopicLoading(id, false);
-  },
-  internal_createTopic: async (params) => {
+    await this.#get().refreshTopic();
+    this.#get().internal_updateTopicLoading(id, false);
+  };
+
+  internal_createTopic = async (params: CreateTopicParams): Promise<string> => {
     const tmpId = Date.now().toString();
-    get().internal_dispatchTopic(
+    this.#get().internal_dispatchTopic(
       { type: 'addTopic', value: { ...params, id: tmpId } },
       'internal_createTopic',
     );
 
-    get().internal_updateTopicLoading(tmpId, true);
+    this.#get().internal_updateTopicLoading(tmpId, true);
     const topicId = await topicService.createTopic(params);
-    get().internal_updateTopicLoading(tmpId, false);
+    this.#get().internal_updateTopicLoading(tmpId, false);
 
-    get().internal_updateTopicLoading(topicId, true);
-    await get().refreshTopic();
-    get().internal_updateTopicLoading(topicId, false);
+    this.#get().internal_updateTopicLoading(topicId, true);
+    await this.#get().refreshTopic();
+    this.#get().internal_updateTopicLoading(topicId, false);
 
     return topicId;
-  },
+  };
 
-  internal_dispatchTopic: (payload, action) => {
-    const { activeAgentId, activeGroupId } = get();
+  internal_dispatchTopic = (payload: ChatTopicDispatch, action?: any): void => {
+    const { activeAgentId, activeGroupId } = this.#get();
     const key = topicMapKey({ agentId: activeAgentId, groupId: activeGroupId });
-    const currentData = get().topicDataMap[key];
+    const currentData = this.#get().topicDataMap[key];
     const nextItems = topicReducer(currentData?.items, payload);
 
     // no need to update if is the same
     if (isEqual(nextItems, currentData?.items)) return;
 
-    set(
+    this.#set(
       {
         topicDataMap: {
-          ...get().topicDataMap,
+          ...this.#get().topicDataMap,
           [key]: {
             ...currentData,
             currentPage: currentData?.currentPage ?? 0,
@@ -700,19 +669,29 @@ export const chatTopic: StateCreator<
       false,
       action ?? n(`dispatchTopic/${payload.type}`),
     );
-  },
+  };
 
-  internal_updateTopics: (agentId, params) => {
+  internal_updateTopics = (
+    agentId: string,
+    params: {
+      append?: boolean;
+      currentPage?: number;
+      groupId?: string;
+      items: ChatTopic[];
+      pageSize: number;
+      total: number;
+    },
+  ): void => {
     const { items, total, pageSize, currentPage = 0, append = false, groupId } = params;
     const key = topicMapKey({ agentId, groupId });
-    const currentData = get().topicDataMap[key];
+    const currentData = this.#get().topicDataMap[key];
 
     const nextItems = append ? [...(currentData?.items || []), ...items] : items;
 
-    set(
+    this.#set(
       {
         topicDataMap: {
-          ...get().topicDataMap,
+          ...this.#get().topicDataMap,
           [key]: {
             currentPage,
             hasMore: items.length >= pageSize,
@@ -727,16 +706,16 @@ export const chatTopic: StateCreator<
       false,
       n('internal_updateTopics', { key, append }),
     );
-  },
+  };
 
-  internal_updateTopicData: (key, data) => {
-    const currentData = get().topicDataMap[key];
+  internal_updateTopicData = (key: string, data: Partial<TopicData>): void => {
+    const currentData = this.#get().topicDataMap[key];
     if (!currentData) return;
 
-    set(
+    this.#set(
       {
         topicDataMap: {
-          ...get().topicDataMap,
+          ...this.#get().topicDataMap,
           [key]: {
             ...currentData,
             ...data,
@@ -746,5 +725,7 @@ export const chatTopic: StateCreator<
       false,
       n('internal_updateTopicData', { key, data }),
     );
-  },
-});
+  };
+}
+
+export type ChatTopicAction = Pick<ChatTopicActionImpl, keyof ChatTopicActionImpl>;

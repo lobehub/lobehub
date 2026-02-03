@@ -1,6 +1,6 @@
 import debug from 'debug';
-import { type StateCreator } from 'zustand/vanilla';
 
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
@@ -13,38 +13,31 @@ const log = debug('lobe-store:builtin-tool');
 /**
  * Builtin Tool Action Interface
  */
-export interface BuiltinToolAction {
-  /**
-   * Invoke a builtin tool executor
-   *
-   * @param identifier - Tool identifier (e.g., 'lobe-knowledge-base')
-   * @param apiName - API name (e.g., 'searchKnowledgeBase')
-   * @param params - Parameters parsed from tool call arguments
-   * @param ctx - Execution context with messageId, operationId, signal, etc.
-   * @returns BuiltinToolResult with content, state, error, success, stop
-   */
-  invokeBuiltinTool: (
+
+type Setter = StoreSetter<ToolStore>;
+export const createBuiltinToolSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
+  new BuiltinToolActionImpl(set, get, _api);
+
+export class BuiltinToolActionImpl {
+  readonly #get: () => ToolStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  invokeBuiltinTool = async (
     identifier: string,
     apiName: string,
     params: any,
     ctx: BuiltinToolContext,
-  ) => Promise<BuiltinToolResult>;
-
-  toggleBuiltinToolLoading: (key: string, value: boolean) => void;
-  transformApiArgumentsToAiState: (key: string, params: any) => Promise<string | undefined>;
-}
-
-export const createBuiltinToolSlice: StateCreator<
-  ToolStore,
-  [['zustand/devtools', never]],
-  [],
-  BuiltinToolAction
-> = (set, get) => ({
-  invokeBuiltinTool: async (identifier, apiName, params, ctx) => {
+  ): Promise<BuiltinToolResult> => {
     const executorKey = `${identifier}/${apiName}`;
     log('invokeBuiltinTool: %s', executorKey);
 
-    const { toggleBuiltinToolLoading } = get();
+    const { toggleBuiltinToolLoading } = this.#get();
     toggleBuiltinToolLoading(executorKey, true);
 
     try {
@@ -66,17 +59,20 @@ export const createBuiltinToolSlice: StateCreator<
         success: false,
       };
     }
-  },
+  };
 
-  toggleBuiltinToolLoading: (key, value) => {
-    set({ builtinToolLoading: { [key]: value } }, false, n('toggleBuiltinToolLoading'));
-  },
+  toggleBuiltinToolLoading = (key: string, value: boolean): void => {
+    this.#set({ builtinToolLoading: { [key]: value } }, false, n('toggleBuiltinToolLoading'));
+  };
 
-  transformApiArgumentsToAiState: async (key, params) => {
-    const { builtinToolLoading, toggleBuiltinToolLoading } = get();
+  transformApiArgumentsToAiState = async (
+    key: string,
+    params: any,
+  ): Promise<string | undefined> => {
+    const { builtinToolLoading, toggleBuiltinToolLoading } = this.#get();
     if (builtinToolLoading[key]) return;
 
-    const { [key as keyof BuiltinToolAction]: action } = get();
+    const { [key as keyof BuiltinToolAction]: action } = this.#get();
 
     if (!action) return JSON.stringify(params);
 
@@ -93,5 +89,7 @@ export const createBuiltinToolSlice: StateCreator<
       toggleBuiltinToolLoading(key, false);
       throw e;
     }
-  },
-});
+  };
+}
+
+export type BuiltinToolAction = Pick<BuiltinToolActionImpl, keyof BuiltinToolActionImpl>;

@@ -1,5 +1,3 @@
-import { type StateCreator } from 'zustand/vanilla';
-
 import {
   getPinnedPages,
   savePinnedPages,
@@ -8,6 +6,7 @@ import {
   type CachedPageData,
   type PageReference,
 } from '@/features/Electron/titlebar/RecentlyViewed/types';
+import { type StoreSetter } from '@/store/types';
 
 import type { ElectronStore } from '../store';
 
@@ -25,45 +24,6 @@ export interface RecentPagesState {
 
 // ======== Action Interface ======== //
 
-export interface RecentPagesAction {
-  /**
-   * Add/update a page reference in recent list (auto-dedupe)
-   * @param reference - The page reference to add
-   * @param cached - Optional cached display data (title, avatar, etc.)
-   */
-  addRecentPage: (reference: PageReference, cached?: CachedPageData) => void;
-
-  /**
-   * Clear all recent pages
-   */
-  clearRecentPages: () => void;
-
-  /**
-   * Check if a page is pinned by its ID
-   */
-  isPagePinned: (id: string) => boolean;
-
-  /**
-   * Load pinned pages from localStorage (called on init)
-   */
-  loadPinnedPages: () => void;
-
-  /**
-   * Add a page to pinned list
-   */
-  pinPage: (reference: PageReference) => void;
-
-  /**
-   * Remove a page from recent list by ID
-   */
-  removeRecentPage: (id: string) => void;
-
-  /**
-   * Remove a page from pinned list by ID
-   */
-  unpinPage: (id: string) => void;
-}
-
 // ======== Initial State ======== //
 
 export const recentPagesInitialState: RecentPagesState = {
@@ -73,14 +33,22 @@ export const recentPagesInitialState: RecentPagesState = {
 
 // ======== Action Implementation ======== //
 
-export const createRecentPagesSlice: StateCreator<
-  ElectronStore,
-  [['zustand/devtools', never]],
-  [],
-  RecentPagesAction
-> = (set, get) => ({
-  addRecentPage: (reference, cached) => {
-    const { pinnedPages, recentPages } = get();
+type Setter = StoreSetter<ElectronStore>;
+export const createRecentPagesSlice = (set: Setter, get: () => ElectronStore, _api?: unknown) =>
+  new RecentPagesActionImpl(set, get, _api);
+
+export class RecentPagesActionImpl {
+  readonly #get: () => ElectronStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ElectronStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  addRecentPage = (reference: PageReference, cached?: CachedPageData): void => {
+    const { pinnedPages, recentPages } = this.#get();
     const { id } = reference;
 
     // If pinned, update cached data on pinned entry
@@ -92,7 +60,7 @@ export const createRecentPagesSlice: StateCreator<
           ...updatedPinned[pinnedIndex],
           cached: { ...updatedPinned[pinnedIndex].cached, ...cached },
         };
-        set({ pinnedPages: updatedPinned }, false, 'updatePinnedPageCache');
+        this.#set({ pinnedPages: updatedPinned }, false, 'updatePinnedPageCache');
         savePinnedPages(updatedPinned);
       }
       return;
@@ -119,20 +87,20 @@ export const createRecentPagesSlice: StateCreator<
     // Add to front, enforce limit
     const newRecent = [newEntry, ...filtered].slice(0, RECENT_PAGES_LIMIT);
 
-    set({ recentPages: newRecent }, false, 'addRecentPage');
-  },
+    this.#set({ recentPages: newRecent }, false, 'addRecentPage');
+  };
 
-  clearRecentPages: () => {
-    set({ recentPages: [] }, false, 'clearRecentPages');
-  },
+  clearRecentPages = (): void => {
+    this.#set({ recentPages: [] }, false, 'clearRecentPages');
+  };
 
-  isPagePinned: (id) => {
-    return get().pinnedPages.some((p) => p.id === id);
-  },
+  isPagePinned = (id: string): boolean => {
+    return this.#get().pinnedPages.some((p) => p.id === id);
+  };
 
-  loadPinnedPages: () => {
+  loadPinnedPages = (): void => {
     const pinned = getPinnedPages();
-    const { recentPages } = get();
+    const { recentPages } = this.#get();
 
     const pinnedIds = new Set(pinned.map((p) => p.id));
 
@@ -140,11 +108,11 @@ export const createRecentPagesSlice: StateCreator<
     // This handles the race condition where addRecentPage runs before loadPinnedPages
     const filteredRecent = recentPages.filter((p) => !pinnedIds.has(p.id));
 
-    set({ pinnedPages: pinned, recentPages: filteredRecent }, false, 'loadPinnedPages');
-  },
+    this.#set({ pinnedPages: pinned, recentPages: filteredRecent }, false, 'loadPinnedPages');
+  };
 
-  pinPage: (reference) => {
-    const { pinnedPages, recentPages } = get();
+  pinPage = (reference: PageReference): void => {
+    const { pinnedPages, recentPages } = this.#get();
     const { id } = reference;
 
     // Check if already pinned
@@ -167,17 +135,17 @@ export const createRecentPagesSlice: StateCreator<
     const newPinned = [...pinnedPages, newEntry];
     const newRecent = recentPages.filter((p) => p.id !== id);
 
-    set({ pinnedPages: newPinned, recentPages: newRecent }, false, 'pinPage');
+    this.#set({ pinnedPages: newPinned, recentPages: newRecent }, false, 'pinPage');
     savePinnedPages(newPinned);
-  },
+  };
 
-  removeRecentPage: (id) => {
-    const { recentPages } = get();
-    set({ recentPages: recentPages.filter((p) => p.id !== id) }, false, 'removeRecentPage');
-  },
+  removeRecentPage = (id: string): void => {
+    const { recentPages } = this.#get();
+    this.#set({ recentPages: recentPages.filter((p) => p.id !== id) }, false, 'removeRecentPage');
+  };
 
-  unpinPage: (id) => {
-    const { pinnedPages, recentPages } = get();
+  unpinPage = (id: string): void => {
+    const { pinnedPages, recentPages } = this.#get();
     const page = pinnedPages.find((p) => p.id === id);
 
     if (!page) return;
@@ -187,7 +155,9 @@ export const createRecentPagesSlice: StateCreator<
     // Add back to recent (at the front)
     const newRecent = [page, ...recentPages].slice(0, RECENT_PAGES_LIMIT);
 
-    set({ pinnedPages: newPinned, recentPages: newRecent }, false, 'unpinPage');
+    this.#set({ pinnedPages: newPinned, recentPages: newRecent }, false, 'unpinPage');
     savePinnedPages(newPinned);
-  },
-});
+  };
+}
+
+export type RecentPagesAction = Pick<RecentPagesActionImpl, keyof RecentPagesActionImpl>;

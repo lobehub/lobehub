@@ -4,22 +4,22 @@ import { type EditorContentState, createInitialEditorContentState } from './init
 
 // ============ Action Types ============
 
-interface AddDocumentAction {
+type AddDocumentAction = {
   id: string;
   type: 'addDocument';
   value: Partial<EditorContentState> & { sourceType: EditorContentState['sourceType'] };
-}
+};
 
-interface UpdateDocumentAction {
+type UpdateDocumentAction = {
   id: string;
   type: 'updateDocument';
   value: Partial<EditorContentState>;
-}
+};
 
-interface DeleteDocumentAction {
+type DeleteDocumentAction = {
   id: string;
   type: 'deleteDocument';
-}
+};
 
 export type DocumentDispatch = AddDocumentAction | UpdateDocumentAction | DeleteDocumentAction;
 

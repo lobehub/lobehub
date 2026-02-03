@@ -6,38 +6,39 @@ import {
 } from '@lobechat/types';
 import i18n from 'i18next';
 import type { SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { notification } from '@/components/AntdStaticMethods';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { ragEvalService } from '@/services/ragEval';
 import { type KnowledgeBaseStore } from '@/store/library/store';
+import { type StoreSetter } from '@/store/types';
 
 const FETCH_DATASET_LIST_KEY = 'FETCH_DATASET_LIST';
 const FETCH_DATASET_RECORD_KEY = 'FETCH_DATASET_RECORD_KEY';
 
-export interface RAGEvalDatasetAction {
-  createNewDataset: (params: CreateNewEvalDatasets) => Promise<void>;
+type Setter = StoreSetter<KnowledgeBaseStore>;
+export const createRagEvalDatasetSlice = (
+  set: Setter,
+  get: () => KnowledgeBaseStore,
+  _api?: unknown,
+) => new RAGEvalDatasetActionImpl(set, get, _api);
 
-  importDataset: (file: File, datasetId: number) => Promise<void>;
-  refreshDatasetList: () => Promise<void>;
-  removeDataset: (id: number) => Promise<void>;
-  useFetchDatasetRecords: (datasetId: number | null) => SWRResponse<EvalDatasetRecord[]>;
-  useFetchDatasets: (knowledgeBaseId: string) => SWRResponse<RAGEvalDataSetItem[]>;
-}
+export class RAGEvalDatasetActionImpl {
+  readonly #get: () => KnowledgeBaseStore;
+  readonly #set: Setter;
 
-export const createRagEvalDatasetSlice: StateCreator<
-  KnowledgeBaseStore,
-  [['zustand/devtools', never]],
-  [],
-  RAGEvalDatasetAction
-> = (set, get) => ({
-  createNewDataset: async (params) => {
+  constructor(set: Setter, get: () => KnowledgeBaseStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  createNewDataset = async (params: CreateNewEvalDatasets): Promise<void> => {
     await ragEvalService.createDataset(params);
-    await get().refreshDatasetList();
-  },
+    await this.#get().refreshDatasetList();
+  };
 
-  importDataset: async (file, datasetId) => {
+  importDataset = async (file: File, datasetId: number): Promise<void> => {
     if (!datasetId) return;
     const fileType = file.name.split('.').pop();
 
@@ -62,31 +63,38 @@ export const createRagEvalDatasetSlice: StateCreator<
       }
     }
 
-    await get().refreshDatasetList();
-  },
-  refreshDatasetList: async () => {
-    await mutate(FETCH_DATASET_LIST_KEY);
-  },
+    await this.#get().refreshDatasetList();
+  };
 
-  removeDataset: async (id) => {
+  refreshDatasetList = async (): Promise<void> => {
+    await mutate(FETCH_DATASET_LIST_KEY);
+  };
+
+  removeDataset = async (id: number): Promise<void> => {
     await ragEvalService.removeDataset(id);
-    await get().refreshDatasetList();
-  },
-  useFetchDatasetRecords: (datasetId) =>
-    useClientDataSWR<EvalDatasetRecord[]>(
+    await this.#get().refreshDatasetList();
+  };
+
+  useFetchDatasetRecords = (datasetId: number | null): SWRResponse<EvalDatasetRecord[]> => {
+    return useClientDataSWR<EvalDatasetRecord[]>(
       !!datasetId ? [FETCH_DATASET_RECORD_KEY, datasetId] : null,
       () => ragEvalService.getDatasetRecords(datasetId!),
-    ),
-  useFetchDatasets: (knowledgeBaseId) =>
-    useClientDataSWR<RAGEvalDataSetItem[]>(
+    );
+  };
+
+  useFetchDatasets = (knowledgeBaseId: string): SWRResponse<RAGEvalDataSetItem[]> => {
+    return useClientDataSWR<RAGEvalDataSetItem[]>(
       [FETCH_DATASET_LIST_KEY, knowledgeBaseId],
       () => ragEvalService.getDatasets(knowledgeBaseId),
       {
         fallbackData: [],
         onSuccess: () => {
-          if (!get().initDatasetList)
-            set({ initDatasetList: true }, false, 'useFetchDatasets/init');
+          if (!this.#get().initDatasetList)
+            this.#set({ initDatasetList: true }, false, 'useFetchDatasets/init');
         },
       },
-    ),
-});
+    );
+  };
+}
+
+export type RAGEvalDatasetAction = Pick<RAGEvalDatasetActionImpl, keyof RAGEvalDatasetActionImpl>;

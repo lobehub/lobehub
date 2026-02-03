@@ -23,7 +23,7 @@ export const revalidateResources = async (params?: ResourceQueryParams) => {
 /**
  * Custom SWR hook for fetching resources with caching and revalidation
  */
-export const useFetchResources = (params: ResourceQueryParams | null, enable = true) => {
+export const useFetchResources = (params: ResourceQueryParams | null, enable: any = true) => {
   return useClientDataSWR(
     enable && params ? [SWR_KEY_RESOURCES, params] : null,
     async ([, queryParams]: [string, ResourceQueryParams]) => {
@@ -40,7 +40,7 @@ export const useFetchResources = (params: ResourceQueryParams | null, enable = t
       onSuccess: (data: { hasMore: boolean; items: any[]; total?: number }) => {
         const { resourceList, resourceMap } = useFileStore.getState();
 
-        const newResourceMap = new Map(data.items.map((item: any) => [item.id, item]));
+        const newResourceMap = new Map(data.items.map((item) => [item.id, item]));
         const newResourceList = data.items;
 
         // Only update store if data actually changed

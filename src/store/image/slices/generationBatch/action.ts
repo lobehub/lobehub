@@ -1,12 +1,12 @@
 import { isEqual } from 'es-toolkit/compat';
 import { useRef } from 'react';
 import type { SWRResponse } from 'swr';
-import { type StateCreator } from 'zustand';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { type GetGenerationStatusResult } from '@/server/routers/lambda/generation';
 import { generationService } from '@/services/generation';
 import { generationBatchService } from '@/services/generationBatch';
+import { type StoreSetter } from '@/store/types';
 import { AsyncTaskStatus } from '@/types/asyncTask';
 import { type GenerationBatch } from '@/types/generation';
 import { setNamespace } from '@/utils/storeDebug';
@@ -23,66 +23,54 @@ const SWR_USE_CHECK_GENERATION_STATUS = 'SWR_USE_CHECK_GENERATION_STATUS';
 
 // ====== action interface ====== //
 
-export interface GenerationBatchAction {
-  setTopicBatchLoaded: (topicId: string) => void;
-  internal_dispatchGenerationBatch: (
-    topicId: string,
-    payload: GenerationBatchDispatch,
-    action?: string,
-  ) => void;
-  removeGeneration: (generationId: string) => Promise<void>;
-  internal_deleteGeneration: (generationId: string) => Promise<void>;
-  removeGenerationBatch: (batchId: string, topicId: string) => Promise<void>;
-  internal_deleteGenerationBatch: (batchId: string, topicId: string) => Promise<void>;
-  refreshGenerationBatches: () => Promise<void>;
-  useCheckGenerationStatus: (
-    generationId: string,
-    asyncTaskId: string,
-    topicId: string,
-    enable?: boolean,
-  ) => SWRResponse<GetGenerationStatusResult>;
-  useFetchGenerationBatches: (topicId?: string | null) => SWRResponse<GenerationBatch[]>;
-}
-
 // ====== action implementation ====== //
 
-export const createGenerationBatchSlice: StateCreator<
-  ImageStore,
-  [['zustand/devtools', never]],
-  [],
-  GenerationBatchAction
-> = (set, get) => ({
-  setTopicBatchLoaded: (topicId: string) => {
+type Setter = StoreSetter<ImageStore>;
+export const createGenerationBatchSlice = (set: Setter, get: () => ImageStore, _api?: unknown) =>
+  new GenerationBatchActionImpl(set, get, _api);
+
+export class GenerationBatchActionImpl {
+  readonly #get: () => ImageStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ImageStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  setTopicBatchLoaded = (topicId: string): void => {
     const nextMap = {
-      ...get().generationBatchesMap,
+      ...this.#get().generationBatchesMap,
       [topicId]: [],
     };
 
     // no need to update map if the map is the same
-    if (isEqual(nextMap, get().generationBatchesMap)) return;
+    if (isEqual(nextMap, this.#get().generationBatchesMap)) return;
 
-    set(
+    this.#set(
       {
         generationBatchesMap: nextMap,
       },
       false,
       n('setTopicBatchLoaded'),
     );
-  },
+  };
 
-  removeGeneration: async (generationId: string) => {
-    const { internal_deleteGeneration, activeGenerationTopicId, refreshGenerationBatches } = get();
+  removeGeneration = async (generationId: string): Promise<void> => {
+    const { internal_deleteGeneration, activeGenerationTopicId, refreshGenerationBatches } =
+      this.#get();
 
     await internal_deleteGeneration(generationId);
 
     // 检查删除后是否有batch变成空的，如果有则删除空batch
     if (activeGenerationTopicId) {
-      const updatedBatches = get().generationBatchesMap[activeGenerationTopicId] || [];
+      const updatedBatches = this.#get().generationBatchesMap[activeGenerationTopicId] || [];
       const emptyBatches = updatedBatches.filter((batch) => batch.generations.length === 0);
 
       // 删除所有空的batch
       for (const emptyBatch of emptyBatches) {
-        await get().internal_deleteGenerationBatch(emptyBatch.id, activeGenerationTopicId);
+        await this.#get().internal_deleteGenerationBatch(emptyBatch.id, activeGenerationTopicId);
       }
 
       // 如果删除了空batch，再次刷新数据确保一致性
@@ -90,16 +78,16 @@ export const createGenerationBatchSlice: StateCreator<
         await refreshGenerationBatches();
       }
     }
-  },
+  };
 
-  internal_deleteGeneration: async (generationId: string) => {
+  internal_deleteGeneration = async (generationId: string): Promise<void> => {
     const { activeGenerationTopicId, refreshGenerationBatches, internal_dispatchGenerationBatch } =
-      get();
+      this.#get();
 
     if (!activeGenerationTopicId) return;
 
     // 找到包含该 generation 的 batch
-    const currentBatches = get().generationBatchesMap[activeGenerationTopicId] || [];
+    const currentBatches = this.#get().generationBatchesMap[activeGenerationTopicId] || [];
     const targetBatch = currentBatches.find((batch) =>
       batch.generations.some((gen) => gen.id === generationId),
     );
@@ -118,15 +106,15 @@ export const createGenerationBatchSlice: StateCreator<
 
     // 3. 刷新数据确保一致性
     await refreshGenerationBatches();
-  },
+  };
 
-  removeGenerationBatch: async (batchId: string, topicId: string) => {
-    const { internal_deleteGenerationBatch } = get();
+  removeGenerationBatch = async (batchId: string, topicId: string): Promise<void> => {
+    const { internal_deleteGenerationBatch } = this.#get();
     await internal_deleteGenerationBatch(batchId, topicId);
-  },
+  };
 
-  internal_deleteGenerationBatch: async (batchId: string, topicId: string) => {
-    const { internal_dispatchGenerationBatch, refreshGenerationBatches } = get();
+  internal_deleteGenerationBatch = async (batchId: string, topicId: string): Promise<void> => {
+    const { internal_dispatchGenerationBatch, refreshGenerationBatches } = this.#get();
 
     // 1. 立即更新前端状态（乐观更新）
     internal_dispatchGenerationBatch(
@@ -140,38 +128,42 @@ export const createGenerationBatchSlice: StateCreator<
 
     // 3. 刷新数据确保一致性
     await refreshGenerationBatches();
-  },
+  };
 
-  internal_dispatchGenerationBatch: (topicId, payload, action) => {
-    const currentBatches = get().generationBatchesMap[topicId] || [];
+  internal_dispatchGenerationBatch = (
+    topicId: string,
+    payload: GenerationBatchDispatch,
+    action?: string,
+  ): void => {
+    const currentBatches = this.#get().generationBatchesMap[topicId] || [];
     const nextBatches = generationBatchReducer(currentBatches, payload);
 
     const nextMap = {
-      ...get().generationBatchesMap,
+      ...this.#get().generationBatchesMap,
       [topicId]: nextBatches,
     };
 
     // no need to update map if the map is the same
-    if (isEqual(nextMap, get().generationBatchesMap)) return;
+    if (isEqual(nextMap, this.#get().generationBatchesMap)) return;
 
-    set(
+    this.#set(
       {
         generationBatchesMap: nextMap,
       },
       false,
       action ?? n(`dispatchGenerationBatch/${payload.type}`),
     );
-  },
+  };
 
-  refreshGenerationBatches: async () => {
-    const { activeGenerationTopicId } = get();
+  refreshGenerationBatches = async (): Promise<void> => {
+    const { activeGenerationTopicId } = this.#get();
     if (activeGenerationTopicId) {
       await mutate([SWR_USE_FETCH_GENERATION_BATCHES, activeGenerationTopicId]);
     }
-  },
+  };
 
-  useFetchGenerationBatches: (topicId) =>
-    useClientDataSWR<GenerationBatch[]>(
+  useFetchGenerationBatches = (topicId?: string | null): SWRResponse<GenerationBatch[]> => {
+    return useClientDataSWR<GenerationBatch[]>(
       topicId ? [SWR_USE_FETCH_GENERATION_BATCHES, topicId] : null,
       async ([, topicId]: [string, string]) => {
         return generationBatchService.getGenerationBatches(topicId);
@@ -179,14 +171,14 @@ export const createGenerationBatchSlice: StateCreator<
       {
         onSuccess: (data) => {
           const nextMap = {
-            ...get().generationBatchesMap,
+            ...this.#get().generationBatchesMap,
             [topicId!]: data,
           };
 
           // no need to update map if the map is the same
-          if (isEqual(nextMap, get().generationBatchesMap)) return;
+          if (isEqual(nextMap, this.#get().generationBatchesMap)) return;
 
-          set(
+          this.#set(
             {
               generationBatchesMap: nextMap,
             },
@@ -195,9 +187,15 @@ export const createGenerationBatchSlice: StateCreator<
           );
         },
       },
-    ),
+    );
+  };
 
-  useCheckGenerationStatus: (generationId, asyncTaskId, topicId, enable = true) => {
+  useCheckGenerationStatus = (
+    generationId: string,
+    asyncTaskId: string,
+    topicId: string,
+    enable: boolean = true,
+  ): SWRResponse<GetGenerationStatusResult> => {
     const requestCountRef = useRef(0);
     const isErrorRef = useRef(false);
 
@@ -250,7 +248,7 @@ export const createGenerationBatchSlice: StateCreator<
           isErrorRef.current = false;
 
           // 找到对应的 batch，generation 数据库记录包含 generationBatchId
-          const currentBatches = get().generationBatchesMap[topicId] || [];
+          const currentBatches = this.#get().generationBatchesMap[topicId] || [];
           const targetBatch = currentBatches.find((batch) =>
             batch.generations.some((gen) => gen.id === generationId),
           );
@@ -265,7 +263,7 @@ export const createGenerationBatchSlice: StateCreator<
 
             if (data.generation) {
               // 更新 generation 数据
-              get().internal_dispatchGenerationBatch(
+              this.#get().internal_dispatchGenerationBatch(
                 topicId,
                 {
                   type: 'updateGenerationInBatch',
@@ -280,12 +278,13 @@ export const createGenerationBatchSlice: StateCreator<
 
               // 如果生成成功且有缩略图，检查当前 topic 是否有 imageUrl
               if (data.status === AsyncTaskStatus.Success && data.generation.asset?.thumbnailUrl) {
-                const currentTopic =
-                  generationTopicSelectors.getGenerationTopicById(topicId)(get());
+                const currentTopic = generationTopicSelectors.getGenerationTopicById(topicId)(
+                  this.#get(),
+                );
 
                 // 如果当前 topic 没有 imageUrl，使用这个 generation 的 thumbnailUrl 更新
                 if (currentTopic && !currentTopic.coverUrl) {
-                  await get().updateGenerationTopicCover(
+                  await this.#get().updateGenerationTopicCover(
                     topicId,
                     data.generation.asset.thumbnailUrl,
                   );
@@ -294,10 +293,15 @@ export const createGenerationBatchSlice: StateCreator<
             }
 
             // 在成功或失败后都要 refreshGenerationBatches
-            await get().refreshGenerationBatches();
+            await this.#get().refreshGenerationBatches();
           }
         },
       },
     );
-  },
-});
+  };
+}
+
+export type GenerationBatchAction = Pick<
+  GenerationBatchActionImpl,
+  keyof GenerationBatchActionImpl
+>;

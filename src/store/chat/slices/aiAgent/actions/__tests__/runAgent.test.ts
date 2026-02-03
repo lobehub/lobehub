@@ -29,7 +29,7 @@ const resetTestEnvironment = () => {
 };
 
 // Helper to create streaming context
-const createStreamingContext = (overrides = {}) => ({
+const createStreamingContext = (overrides: any = {}) => ({
   assistantId: '',
   content: '',
   reasoning: '',

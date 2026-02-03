@@ -279,9 +279,12 @@ describe('KnowledgeSlice Actions', () => {
         useAgentStore.setState({ activeAgentId: 'agent-1' });
       });
 
-      const { result } = renderHook(() => useAgentStore().useFetchFilesAndKnowledgeBases('agent-1'), {
-        wrapper: withSWR,
-      });
+      const { result } = renderHook(
+        () => useAgentStore().useFetchFilesAndKnowledgeBases('agent-1'),
+        {
+          wrapper: withSWR,
+        },
+      );
 
       await waitFor(() => expect(result.current.data).toEqual(mockData));
 
@@ -295,9 +298,12 @@ describe('KnowledgeSlice Actions', () => {
         useAgentStore.setState({ activeAgentId: 'agent-1' });
       });
 
-      const { result } = renderHook(() => useAgentStore().useFetchFilesAndKnowledgeBases('agent-1'), {
-        wrapper: withSWR,
-      });
+      const { result } = renderHook(
+        () => useAgentStore().useFetchFilesAndKnowledgeBases('agent-1'),
+        {
+          wrapper: withSWR,
+        },
+      );
 
       await waitFor(() => expect(result.current.data).toEqual([]));
     });

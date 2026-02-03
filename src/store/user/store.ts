@@ -4,6 +4,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { flattenActions } from '../utils/flattenActions';
 import { type UserState, initialState } from './initialState';
 import { type UserAuthAction, createAuthSlice } from './slices/auth/action';
 import { type CommonAction, createCommonSlice } from './slices/common/action';
@@ -20,13 +21,23 @@ export type UserStore = UserState &
   CommonAction &
   OnboardingAction;
 
-const createStore: StateCreator<UserStore, [['zustand/devtools', never]]> = (...parameters) => ({
+type UserStoreAction = UserSettingsAction &
+  PreferenceAction &
+  UserAuthAction &
+  CommonAction &
+  OnboardingAction;
+
+const createStore: StateCreator<UserStore, [['zustand/devtools', never]]> = (
+  ...parameters: Parameters<StateCreator<UserStore, [['zustand/devtools', never]]>>
+) => ({
   ...initialState,
-  ...createSettingsSlice(...parameters),
-  ...createPreferenceSlice(...parameters),
-  ...createAuthSlice(...parameters),
-  ...createCommonSlice(...parameters),
-  ...createOnboardingSlice(...parameters),
+  ...flattenActions<UserStoreAction>([
+    createSettingsSlice(...parameters),
+    createPreferenceSlice(...parameters),
+    createAuthSlice(...parameters),
+    createCommonSlice(...parameters),
+    createOnboardingSlice(...parameters),
+  ]),
 });
 
 //  ===============  Implement useStore ============ //

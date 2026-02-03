@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { flattenActions } from '../utils/flattenActions';
 import { type AgentStoreState, initialState } from './initialState';
 import { type AgentSliceAction, createAgentSlice } from './slices/agent';
 import { type BuiltinAgentSliceAction, createBuiltinAgentSlice } from './slices/builtin';
@@ -21,13 +22,23 @@ export interface AgentStore
     PluginSliceAction,
     AgentStoreState {}
 
-const createStore: StateCreator<AgentStore, [['zustand/devtools', never]]> = (...parameters) => ({
+type AgentStoreAction = AgentSliceAction &
+  BuiltinAgentSliceAction &
+  CronSliceAction &
+  KnowledgeSliceAction &
+  PluginSliceAction;
+
+const createStore: StateCreator<AgentStore, [['zustand/devtools', never]]> = (
+  ...parameters: Parameters<StateCreator<AgentStore, [['zustand/devtools', never]]>>
+) => ({
   ...initialState,
-  ...createAgentSlice(...parameters),
-  ...createBuiltinAgentSlice(...parameters),
-  ...createCronSlice(...parameters),
-  ...createKnowledgeSlice(...parameters),
-  ...createPluginSlice(...parameters),
+  ...flattenActions<AgentStoreAction>([
+    createAgentSlice(...parameters),
+    createBuiltinAgentSlice(...parameters),
+    createCronSlice(...parameters),
+    createKnowledgeSlice(...parameters),
+    createPluginSlice(...parameters),
+  ]),
 });
 
 //  ===============  implement useStore ============ //

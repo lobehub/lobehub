@@ -10,7 +10,7 @@ import { getAgentStoreState } from '@/store/agent';
 import { type ChatGroupStore } from '@/store/agentGroup/store';
 import { useChatStore } from '@/store/chat';
 import { type StoreSetter } from '@/store/types';
-import { createActionProxy } from '@/store/utils/createActionProxy';
+import { flattenActions } from '@/store/utils/flattenActions';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ChatGroupState } from './initialState';
@@ -267,8 +267,12 @@ export const chatGroupAction: StateCreator<
   [['zustand/devtools', never]],
   [],
   ChatGroupAction
-> = (...params) =>
-  createActionProxy<ChatGroupAction>([
+> = (
+  ...params: Parameters<
+    StateCreator<ChatGroupStore, [['zustand/devtools', never]], [], ChatGroupAction>
+  >
+) =>
+  flattenActions<ChatGroupAction>([
     new ChatGroupInternalAction(...params),
     new ChatGroupLifecycleAction(...params),
     new ChatGroupMemberAction(...params),

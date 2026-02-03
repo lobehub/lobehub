@@ -14,6 +14,7 @@ import { createDevtools } from '@/store/middleware/createDevtools';
 import { type GlobalServerConfig } from '@/types/serverConfig';
 import { merge } from '@/utils/merge';
 
+import { flattenActions } from '../utils/flattenActions';
 import { type ServerConfigAction, createServerConfigSlice } from './action';
 
 interface ServerConfigState {
@@ -35,15 +36,17 @@ const initialState: ServerConfigState = {
 
 export interface ServerConfigStore extends ServerConfigState, ServerConfigAction {}
 
+type ServerConfigStoreAction = ServerConfigAction;
+
 type CreateStore = (
   initState: Partial<ServerConfigStore>,
 ) => StateCreator<ServerConfigStore, [['zustand/devtools', never]]>;
 
 const createStore: CreateStore =
-  (runtimeState) =>
+  (runtimeState: any) =>
   (...params) => ({
     ...merge(initialState, runtimeState),
-    ...createServerConfigSlice(...params),
+    ...flattenActions<ServerConfigStoreAction>([createServerConfigSlice(...params)]),
   });
 
 //  ===============  Implement useStore ============ //

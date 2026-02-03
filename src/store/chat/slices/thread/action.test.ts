@@ -353,7 +353,9 @@ describe('thread action', () => {
 
       (threadService.removeThread as Mock).mockResolvedValue(undefined);
 
-      const refreshThreadsSpy = vi.spyOn(result.current, 'refreshThreads').mockResolvedValue();
+      const refreshThreadsSpy = vi
+        .spyOn(result.current, 'refreshThreads')
+        .mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.removeThread('thread-id');
@@ -371,7 +373,7 @@ describe('thread action', () => {
       });
 
       (threadService.removeThread as Mock).mockResolvedValue(undefined);
-      vi.spyOn(result.current, 'refreshThreads').mockResolvedValue();
+      vi.spyOn(result.current, 'refreshThreads').mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.removeThread('thread-id');
@@ -388,7 +390,7 @@ describe('thread action', () => {
       });
 
       (threadService.removeThread as Mock).mockResolvedValue(undefined);
-      vi.spyOn(result.current, 'refreshThreads').mockResolvedValue();
+      vi.spyOn(result.current, 'refreshThreads').mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.removeThread('different-thread-id');
@@ -404,7 +406,7 @@ describe('thread action', () => {
 
       const internalUpdateSpy = vi
         .spyOn(result.current, 'internal_updateThread')
-        .mockResolvedValue();
+        .mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.updateThreadTitle('thread-id', 'New Title');
@@ -462,7 +464,7 @@ describe('thread action', () => {
 
       const internalUpdateSpy = vi
         .spyOn(result.current, 'internal_updateThread')
-        .mockResolvedValue();
+        .mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.summaryThreadTitle('thread-id', messages);
@@ -507,7 +509,7 @@ describe('thread action', () => {
         },
       );
 
-      vi.spyOn(result.current, 'internal_updateThread').mockResolvedValue();
+      vi.spyOn(result.current, 'internal_updateThread').mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.summaryThreadTitle('thread-id', []);
@@ -545,7 +547,7 @@ describe('thread action', () => {
         await onError?.();
       });
 
-      vi.spyOn(result.current, 'internal_updateThread').mockResolvedValue();
+      vi.spyOn(result.current, 'internal_updateThread').mockResolvedValue(undefined);
 
       await act(async () => {
         await result.current.summaryThreadTitle('thread-id', []);
@@ -646,7 +648,7 @@ describe('thread action', () => {
       (threadService.updateThread as Mock).mockResolvedValue(undefined);
 
       const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchThread');
-      const refreshSpy = vi.spyOn(result.current, 'refreshThreads').mockResolvedValue();
+      const refreshSpy = vi.spyOn(result.current, 'refreshThreads').mockResolvedValue(undefined);
       const loadingSpy = vi.spyOn(result.current, 'internal_updateThreadLoading');
 
       await act(async () => {

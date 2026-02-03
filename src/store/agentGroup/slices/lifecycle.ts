@@ -25,7 +25,7 @@ export class ChatGroupLifecycleAction {
   createGroup = async (
     newGroup: Omit<NewChatGroup, 'userId'>,
     agentIds?: string[],
-    silent = false,
+    silent: any = false,
   ) => {
     const { switchToGroup, refreshAgentList } = getHomeStoreState();
 

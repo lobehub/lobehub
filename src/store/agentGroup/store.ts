@@ -8,7 +8,9 @@ import { type ChatGroupState, initialChatGroupState } from './initialState';
 
 export type ChatGroupStore = ChatGroupState & ChatGroupAction;
 
-const createStore: StateCreator<ChatGroupStore, [['zustand/devtools', never]]> = (...params) => ({
+const createStore: StateCreator<ChatGroupStore, [['zustand/devtools', never]]> = (
+  ...params: Parameters<StateCreator<ChatGroupStore, [['zustand/devtools', never]]>>
+) => ({
   ...initialChatGroupState,
   ...chatGroupAction(...params),
 });

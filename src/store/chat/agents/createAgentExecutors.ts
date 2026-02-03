@@ -520,7 +520,7 @@ export const createAgentExecutors = (context: {
           toolName,
           !!runtimeContext?.stepContext?.todos,
         );
-        const result = await context
+        const result: any = await context
           .get()
           .internal_invokeDifferentTypePlugin(
             toolMessageId,

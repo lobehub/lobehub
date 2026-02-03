@@ -167,7 +167,7 @@ describe('createCommonSlice', () => {
       );
 
       await waitFor(() => {
-        expect(preference.current.data.preference).toEqual(savedPreference);
+        expect(preference.current.data?.preference).toEqual(savedPreference);
         expect(result.current.isUserStateInit).toBeTruthy();
         expect(result.current.preference).toEqual(savedPreference);
       });

@@ -3,6 +3,7 @@ import { createWithEqualityFn } from 'zustand/traditional';
 import { type StateCreator } from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
+import { flattenActions } from '../utils/flattenActions';
 import { type ToolStoreState, initialState } from './initialState';
 import { type BuiltinToolAction, createBuiltinToolSlice } from './slices/builtin';
 import { type CustomPluginAction, createCustomPluginSlice } from './slices/customPlugin';
@@ -26,15 +27,27 @@ export type ToolStore = ToolStoreState &
   KlavisStoreAction &
   LobehubSkillStoreAction;
 
-const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (...parameters) => ({
+type ToolStoreAction = CustomPluginAction &
+  PluginAction &
+  PluginStoreAction &
+  BuiltinToolAction &
+  PluginMCPStoreAction &
+  KlavisStoreAction &
+  LobehubSkillStoreAction;
+
+const createStore: StateCreator<ToolStore, [['zustand/devtools', never]]> = (
+  ...parameters: Parameters<StateCreator<ToolStore, [['zustand/devtools', never]]>>
+) => ({
   ...initialState,
-  ...createPluginSlice(...parameters),
-  ...createCustomPluginSlice(...parameters),
-  ...createPluginStoreSlice(...parameters),
-  ...createBuiltinToolSlice(...parameters),
-  ...createMCPPluginStoreSlice(...parameters),
-  ...createKlavisStoreSlice(...parameters),
-  ...createLobehubSkillStoreSlice(...parameters),
+  ...flattenActions<ToolStoreAction>([
+    createPluginSlice(...parameters),
+    createCustomPluginSlice(...parameters),
+    createPluginStoreSlice(...parameters),
+    createBuiltinToolSlice(...parameters),
+    createMCPPluginStoreSlice(...parameters),
+    createKlavisStoreSlice(...parameters),
+    createLobehubSkillStoreSlice(...parameters),
+  ]),
 });
 
 //  ===============  Implement useStore ============ //

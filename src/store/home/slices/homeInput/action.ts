@@ -1,5 +1,4 @@
 import type { NavigateFunction } from 'react-router-dom';
-import type { StateCreator } from 'zustand/vanilla';
 
 import { chatGroupService } from '@/services/chatGroup';
 import { documentService } from '@/services/document';
@@ -8,34 +7,33 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import type { HomeStore } from '@/store/home/store';
+import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { StarterMode } from './initialState';
 
 const n = setNamespace('homeInput');
 
-export interface HomeInputAction {
-  clearInputMode: () => void;
-  sendAsAgent: (message: string) => Promise<string>;
-  sendAsGroup: (message: string) => Promise<string>;
-  sendAsResearch: (message: string) => Promise<void>;
-  sendAsWrite: (message: string) => Promise<string>;
-  setInputActiveMode: (mode: StarterMode) => void;
-  setNavigate: (navigate: NavigateFunction) => void;
-}
+type Setter = StoreSetter<HomeStore>;
+export const createHomeInputSlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
+  new HomeInputActionImpl(set, get, _api);
 
-export const createHomeInputSlice: StateCreator<
-  HomeStore,
-  [['zustand/devtools', never]],
-  [],
-  HomeInputAction
-> = (set, get) => ({
-  clearInputMode: () => {
-    set({ inputActiveMode: null }, false, n('clearInputMode'));
-  },
+export class HomeInputActionImpl {
+  readonly #get: () => HomeStore;
+  readonly #set: Setter;
 
-  sendAsAgent: async (message) => {
-    set({ homeInputLoading: true }, false, n('sendAsAgent/start'));
+  constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  clearInputMode = (): void => {
+    this.#set({ inputActiveMode: null }, false, n('clearInputMode'));
+  };
+
+  sendAsAgent = async (message: string): Promise<string> => {
+    this.#set({ homeInputLoading: true }, false, n('sendAsAgent/start'));
 
     try {
       const agentState = getAgentStoreState();
@@ -59,13 +57,13 @@ export const createHomeInputSlice: StateCreator<
       });
 
       // 3. Navigate to Agent profile page
-      const { navigate } = get();
+      const { navigate } = this.#get();
       if (navigate) {
         navigate(`/agent/${result.agentId}/profile`);
       }
 
       // 4. Refresh agent list
-      get().refreshAgentList();
+      this.#get().refreshAgentList();
 
       // 5. Update agentBuilder's model config and send initial message
       if (result.agentId) {
@@ -84,16 +82,16 @@ export const createHomeInputSlice: StateCreator<
       }
 
       // 6. Clear mode
-      set({ inputActiveMode: null }, false, n('sendAsAgent/clearMode'));
+      this.#set({ inputActiveMode: null }, false, n('sendAsAgent/clearMode'));
 
       return result.agentId!;
     } finally {
-      set({ homeInputLoading: false }, false, n('sendAsAgent/end'));
+      this.#set({ homeInputLoading: false }, false, n('sendAsAgent/end'));
     }
-  },
+  };
 
-  sendAsGroup: async (message) => {
-    set({ homeInputLoading: true }, false, n('sendAsGroup/start'));
+  sendAsGroup = async (message: string): Promise<string> => {
+    this.#set({ homeInputLoading: true }, false, n('sendAsGroup/start'));
 
     try {
       const agentState = getAgentStoreState();
@@ -119,10 +117,10 @@ export const createHomeInputSlice: StateCreator<
       await groupStore.loadGroups();
 
       // 4. Refresh sidebar agent list
-      get().refreshAgentList();
+      this.#get().refreshAgentList();
 
       // 5. Navigate to Group profile page
-      const { navigate } = get();
+      const { navigate } = this.#get();
       if (navigate) {
         navigate(`/group/${group.id}/profile`);
       }
@@ -144,24 +142,24 @@ export const createHomeInputSlice: StateCreator<
       }
 
       // 7. Clear mode
-      set({ inputActiveMode: null }, false, n('sendAsGroup/clearMode'));
+      this.#set({ inputActiveMode: null }, false, n('sendAsGroup/clearMode'));
 
       return group.id;
     } finally {
-      set({ homeInputLoading: false }, false, n('sendAsGroup/end'));
+      this.#set({ homeInputLoading: false }, false, n('sendAsGroup/end'));
     }
-  },
+  };
 
-  sendAsResearch: async (message) => {
+  sendAsResearch = async (message: string): Promise<void> => {
     // TODO: Implement DeepResearch mode
     console.log('sendAsResearch:', message);
 
     // Clear mode
-    set({ inputActiveMode: null }, false, n('sendAsResearch'));
-  },
+    this.#set({ inputActiveMode: null }, false, n('sendAsResearch'));
+  };
 
-  sendAsWrite: async (message) => {
-    set({ homeInputLoading: true }, false, n('sendAsWrite/start'));
+  sendAsWrite = async (message: string): Promise<string> => {
+    this.#set({ homeInputLoading: true }, false, n('sendAsWrite/start'));
 
     try {
       const agentState = getAgentStoreState();
@@ -182,7 +180,7 @@ export const createHomeInputSlice: StateCreator<
       });
 
       // 3. Navigate to Page
-      const { navigate } = get();
+      const { navigate } = this.#get();
       if (navigate) {
         navigate(`/page/${newDoc.id}`);
       }
@@ -204,19 +202,21 @@ export const createHomeInputSlice: StateCreator<
       }
 
       // 5. Clear mode
-      set({ inputActiveMode: null }, false, n('sendAsWrite/clearMode'));
+      this.#set({ inputActiveMode: null }, false, n('sendAsWrite/clearMode'));
 
       return newDoc.id;
     } finally {
-      set({ homeInputLoading: false }, false, n('sendAsWrite/end'));
+      this.#set({ homeInputLoading: false }, false, n('sendAsWrite/end'));
     }
-  },
+  };
 
-  setInputActiveMode: (mode) => {
-    set({ inputActiveMode: mode }, false, n('setInputActiveMode', mode));
-  },
+  setInputActiveMode = (mode: StarterMode): void => {
+    this.#set({ inputActiveMode: mode }, false, n('setInputActiveMode', mode));
+  };
 
-  setNavigate: (navigate) => {
-    set({ navigate }, false, n('setNavigate'));
-  },
-});
+  setNavigate = (navigate: NavigateFunction): void => {
+    this.#set({ navigate }, false, n('setNavigate'));
+  };
+}
+
+export type HomeInputAction = Pick<HomeInputActionImpl, keyof HomeInputActionImpl>;

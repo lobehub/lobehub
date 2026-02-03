@@ -1,11 +1,11 @@
 import { LOBE_CHAT_CLOUD } from '@lobechat/business-const';
 import { t } from 'i18next';
 import { sha256 } from 'js-sha256';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { message } from '@/components/AntdStaticMethods';
 import { fileService } from '@/services/file';
 import { uploadService } from '@/services/upload';
+import { type StoreSetter } from '@/store/types';
 import { type FileMetadata, type UploadFileItem } from '@/types/files';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
 
@@ -42,36 +42,21 @@ interface UploadWithProgressParams {
   source?: string;
 }
 
-interface UploadWithProgressResult {
-  dimensions?: {
-    height: number;
-    width: number;
-  };
-  filename?: string;
-  id: string;
-  url: string;
-}
+type Setter = StoreSetter<FileStore>;
+export const createFileUploadSlice = (set: Setter, get: () => FileStore, _api?: unknown) =>
+  new FileUploadActionImpl(set, get, _api);
 
-export interface FileUploadAction {
-  uploadBase64FileWithProgress: (
-    base64: string,
-    params?: {
-      onStatusUpdate?: OnStatusUpdate;
-    },
-  ) => Promise<UploadWithProgressResult | undefined>;
+export class FileUploadActionImpl {
+  readonly #get: () => FileStore;
+  readonly #set: Setter;
 
-  uploadWithProgress: (
-    params: UploadWithProgressParams,
-  ) => Promise<UploadWithProgressResult | undefined>;
-}
+  constructor(set: Setter, get: () => FileStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
 
-export const createFileUploadSlice: StateCreator<
-  FileStore,
-  [['zustand/devtools', never]],
-  [],
-  FileUploadAction
-> = () => ({
-  uploadBase64FileWithProgress: async (base64) => {
+  uploadBase64FileWithProgress = async (base64: string): Promise<any> => {
     // Extract image dimensions from base64 data
     const dimensions = await getImageDimensions(base64);
 
@@ -86,8 +71,9 @@ export const createFileUploadSlice: StateCreator<
       url: metadata.path,
     });
     return { ...res, dimensions, filename: metadata.filename };
-  },
-  uploadWithProgress: async ({
+  };
+
+  uploadWithProgress = async ({
     file,
     onStatusUpdate,
     knowledgeBaseId,
@@ -95,7 +81,7 @@ export const createFileUploadSlice: StateCreator<
     parentId,
     source,
     abortController,
-  }) => {
+  }: UploadWithProgressParams): Promise<any> => {
     const fileArrayBuffer = await file.arrayBuffer();
 
     // 1. extract image dimensions if applicable
@@ -182,5 +168,7 @@ export const createFileUploadSlice: StateCreator<
     });
 
     return { ...data, dimensions, filename: file.name };
-  },
-});
+  };
+}
+
+export type FileUploadAction = Pick<FileUploadActionImpl, keyof FileUploadActionImpl>;

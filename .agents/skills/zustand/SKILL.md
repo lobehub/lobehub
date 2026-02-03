@@ -76,3 +76,58 @@ internal_createTopic: async (params) => {
 
 - Action patterns: `references/action-patterns.md`
 - Slice organization: `references/slice-organization.md`
+
+## Class-Based Action Migration (2026)
+
+We are migrating some slices from `StateCreator` objects to **class-based actions**.
+
+### Pattern
+- Define a class that encapsulates actions and receives `(set, get, api)` in the constructor.
+- Use `#private` fields (e.g., `#set`, `#get`) to avoid leaking internals when spreading class instances.
+- Prefer shared typing helpers:
+  - `StoreSetter<T>` from `@/store/types` for `set`.
+  - `PublicActions<T>` to hide private fields from action types.
+- Export the class from `slices/*` and compose in `action.ts` with `createActionProxy`.
+
+```ts
+type PublicActions<T> = { [K in keyof T]: T[K] };
+
+class ChatGroupInternalAction {
+  readonly #get: () => ChatGroupState;
+  readonly #set: StoreSetter<ChatGroupStore>;
+  constructor(set: StoreSetter<ChatGroupStore>, get: () => ChatGroupState, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+  // ...
+}
+
+export type ChatGroupAction = PublicActions<
+  ChatGroupInternalAction & ChatGroupLifecycleAction & ChatGroupMemberAction & ChatGroupCurdAction
+>;
+
+export const chatGroupAction: StateCreator<ChatGroupStore, [['zustand/devtools', never]], [], ChatGroupAction> =
+  (...params) =>
+    createActionProxy<ChatGroupAction>([
+      new ChatGroupInternalAction(...params),
+      new ChatGroupLifecycleAction(...params),
+      new ChatGroupMemberAction(...params),
+      new ChatGroupCurdAction(...params),
+    ]);
+```
+
+### Composition
+- `action.ts` composes via `createActionProxy` to merge action instances.
+- `PublicActions<T>` strips `#private` fields from the exposed action type.
+
+### Store-Access Types
+- For class methods that depend on actions in other classes, define explicit store augmentations:
+  - `ChatGroupStoreWithSwitchTopic` for lifecycle `switchTopic`
+  - `ChatGroupStoreWithRefresh` for member refresh
+  - `ChatGroupStoreWithInternal` for curd `internal_dispatchChatGroup`
+
+### Do / Don't
+- **Do**: keep constructor signature aligned with `StateCreator` params `(set, get, api)`.
+- **Do**: use `#private` to avoid `set/get` being exposed via object spread.
+- **Don't**: keep both old slice objects and class actions active at the same time.

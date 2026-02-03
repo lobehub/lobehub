@@ -22,7 +22,7 @@ export type OperationType =
   | 'createAssistantMessage' // Create assistant message (sub-operation of execAgentRuntime)
   // === LLM execution (sub-operations) ===
   | 'callLLM' // Call LLM streaming response (sub-operation of execAgentRuntime)
-  // === (sub-operations) ===
+  // === (sub-operations) = ==
   | 'reasoning' // AI reasoning process (child operation)
 
   // === RAG and retrieval ===

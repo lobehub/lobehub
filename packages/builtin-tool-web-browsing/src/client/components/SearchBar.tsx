@@ -69,7 +69,7 @@ const SearchBar = memo<SearchBarProps>(
         searchTimeRange: time_range,
       };
       onSearch?.(data);
-      await reSearchWithSearXNG(messageId, data, { aiSummary });
+      await reSearchWithSearXNG(messageId, data);
     };
 
     const searchComponent = (

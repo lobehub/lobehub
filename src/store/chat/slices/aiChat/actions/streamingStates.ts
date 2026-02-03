@@ -1,35 +1,33 @@
 import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { type ChatStore } from '@/store/chat/store';
+import { type StoreSetter } from '@/store/types';
 
 /**
  * Manages loading states during streaming operations
  */
-export interface StreamingStatesAction {
-  /**
-   * Toggles the loading state for search workflow
-   */
-  internal_toggleSearchWorkflow: (loading: boolean, id?: string) => void;
-  /**
-   * Controls the streaming state of tool calling processes, updating the UI accordingly
-   */
-  internal_toggleToolCallingStreaming: (id: string, streaming: boolean[] | undefined) => void;
-}
 
-export const streamingStates: StateCreator<
-  ChatStore,
-  [['zustand/devtools', never]],
-  [],
-  StreamingStatesAction
-> = (set, get) => ({
-  internal_toggleSearchWorkflow: (loading, id) => {
-    return get().internal_toggleLoadingArrays('searchWorkflowLoadingIds', loading, id);
-  },
+type Setter = StoreSetter<ChatStore>;
+export const streamingStates = (set: Setter, get: () => ChatStore, _api?: unknown) =>
+  new StreamingStatesActionImpl(set, get, _api);
 
-  internal_toggleToolCallingStreaming: (id, streaming) => {
-    const previous = get().toolCallingStreamIds;
+export class StreamingStatesActionImpl {
+  readonly #get: () => ChatStore;
+  readonly #set: Setter;
+
+  constructor(set: Setter, get: () => ChatStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
+
+  internal_toggleSearchWorkflow = (loading: boolean, id?: string): void => {
+    this.#get().internal_toggleLoadingArrays('searchWorkflowLoadingIds', loading, id);
+  };
+
+  internal_toggleToolCallingStreaming = (id: string, streaming: boolean[] | undefined): void => {
+    const previous = this.#get().toolCallingStreamIds;
     const next = produce(previous, (draft) => {
       if (!!streaming) {
         draft[id] = streaming;
@@ -40,11 +38,16 @@ export const streamingStates: StateCreator<
 
     if (isEqual(previous, next)) return;
 
-    set(
+    this.#set(
       { toolCallingStreamIds: next },
 
       false,
       `toggleToolCallingStreaming/${!!streaming ? 'start' : 'end'}`,
     );
-  },
-});
+  };
+}
+
+export type StreamingStatesAction = Pick<
+  StreamingStatesActionImpl,
+  keyof StreamingStatesActionImpl
+>;

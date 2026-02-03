@@ -1,6 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix,typescript-sort-keys/interface */
 import { t } from 'i18next';
-import { type StateCreator } from 'zustand/vanilla';
 
 import { message } from '@/components/AntdStaticMethods';
 import { agentService } from '@/services/agent';
@@ -9,91 +8,27 @@ import { homeService } from '@/services/home';
 import { sessionService } from '@/services/session';
 import { getAgentStoreState } from '@/store/agent';
 import type { HomeStore } from '@/store/home/store';
+import { type StoreSetter } from '@/store/types';
 import { type SessionGroupItem } from '@/types/session';
 import { setNamespace } from '@/utils/storeDebug';
 
 const n = setNamespace('sidebarUI');
 
-export interface SidebarUIAction {
-  // ========== Agent Operations ==========
-  /**
-   * Duplicate an agent using agentService
-   */
-  duplicateAgent: (agentId: string, newTitle?: string) => Promise<void>;
-  /**
-   * Duplicate a chat group (multi-agent group)
-   */
-  duplicateAgentGroup: (groupId: string, newTitle?: string) => Promise<void>;
-  /**
-   * Pin or unpin an agent
-   */
-  pinAgent: (agentId: string, pinned: boolean) => Promise<void>;
-  /**
-   * Pin or unpin an agent group
-   */
-  pinAgentGroup: (groupId: string, pinned: boolean) => Promise<void>;
-  /**
-   * Remove an agent
-   */
-  removeAgent: (agentId: string) => Promise<void>;
-  /**
-   * Remove an agent group (group chat)
-   */
-  removeAgentGroup: (groupId: string) => Promise<void>;
-  /**
-   * Rename an agent group (group chat)
-   */
-  renameAgentGroup: (groupId: string, title: string) => Promise<void>;
-  /**
-   * Update agent's group
-   */
-  updateAgentGroup: (agentId: string, groupId: string | null) => Promise<void>;
+type Setter = StoreSetter<HomeStore>;
+export const createSidebarUISlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
+  new SidebarUIActionImpl(set, get, _api);
 
-  // ========== Group Operations ==========
-  /**
-   * Add a new group
-   */
-  addGroup: (name: string) => Promise<string>;
-  /**
-   * Remove a group
-   */
-  removeGroup: (groupId: string) => Promise<void>;
-  /**
-   * Update group name
-   */
-  updateGroupName: (groupId: string, name: string) => Promise<void>;
-  /**
-   * Update group sort order
-   */
-  updateGroupSort: (items: SessionGroupItem[]) => Promise<void>;
+export class SidebarUIActionImpl {
+  readonly #get: () => HomeStore;
+  readonly #set: Setter;
 
-  // ========== UI State Actions ==========
-  /**
-   * Set agent renaming id
-   */
-  setAgentRenamingId: (id: string | null) => void;
-  /**
-   * Set agent updating id
-   */
-  setAgentUpdatingId: (id: string | null) => void;
-  /**
-   * Set group renaming id
-   */
-  setGroupRenamingId: (id: string | null) => void;
-  /**
-   * Set group updating id
-   */
-  setGroupUpdatingId: (id: string | null) => void;
-}
+  constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
+    void _api;
+    this.#set = set;
+    this.#get = get;
+  }
 
-export const createSidebarUISlice: StateCreator<
-  HomeStore,
-  [['zustand/devtools', never]],
-  [],
-  SidebarUIAction
-> = (set, get) => ({
-  // ========== Agent Operations ==========
-  duplicateAgent: async (agentId, newTitle?: string) => {
+  duplicateAgent = async (agentId: string, newTitle?: string): Promise<void> => {
     const messageLoadingKey = 'duplicateAgent.loading';
 
     message.loading({
@@ -110,16 +45,16 @@ export const createSidebarUISlice: StateCreator<
       return;
     }
 
-    await get().refreshAgentList();
+    await this.#get().refreshAgentList();
     message.destroy(messageLoadingKey);
     message.success(t('duplicateSession.success', { ns: 'chat' }));
 
     // Switch to the new agent
     const agentStore = getAgentStoreState();
     agentStore.setActiveAgentId(result.agentId);
-  },
+  };
 
-  duplicateAgentGroup: async (groupId, newTitle?: string) => {
+  duplicateAgentGroup = async (groupId: string, newTitle?: string): Promise<void> => {
     const messageLoadingKey = 'duplicateAgentGroup.loading';
 
     message.loading({
@@ -136,64 +71,63 @@ export const createSidebarUISlice: StateCreator<
       return;
     }
 
-    await get().refreshAgentList();
+    await this.#get().refreshAgentList();
     message.destroy(messageLoadingKey);
     message.success(t('duplicateSession.success', { ns: 'chat' }));
 
     // Switch to the new group (using supervisor agent id)
     const agentStore = getAgentStoreState();
     agentStore.setActiveAgentId(result.supervisorAgentId);
-  },
+  };
 
-  pinAgent: async (agentId, pinned) => {
+  pinAgent = async (agentId: string, pinned: boolean): Promise<void> => {
     await agentService.updateAgentPinned(agentId, pinned);
-    await get().refreshAgentList();
-  },
+    await this.#get().refreshAgentList();
+  };
 
-  pinAgentGroup: async (groupId, pinned) => {
+  pinAgentGroup = async (groupId: string, pinned: boolean): Promise<void> => {
     await chatGroupService.updateGroup(groupId, { pinned });
-    await get().refreshAgentList();
-  },
+    await this.#get().refreshAgentList();
+  };
 
-  removeAgent: async (agentId) => {
+  removeAgent = async (agentId: string): Promise<void> => {
     await agentService.removeAgent(agentId);
-    await get().refreshAgentList();
-  },
+    await this.#get().refreshAgentList();
+  };
 
-  removeAgentGroup: async (groupId) => {
+  removeAgentGroup = async (groupId: string): Promise<void> => {
     // Delete the group
     await chatGroupService.deleteGroup(groupId);
-    await get().refreshAgentList();
-  },
+    await this.#get().refreshAgentList();
+  };
 
-  renameAgentGroup: async (groupId, title) => {
+  renameAgentGroup = async (groupId: string, title: string): Promise<void> => {
     await chatGroupService.updateGroup(groupId, { title });
-    await get().refreshAgentList();
-  },
+    await this.#get().refreshAgentList();
+  };
 
-  updateAgentGroup: async (agentId, groupId) => {
+  updateAgentGroup = async (agentId: string, groupId: string | null): Promise<void> => {
     await homeService.updateAgentSessionGroupId(agentId, groupId === 'default' ? null : groupId);
-    await get().refreshAgentList();
-  },
+    await this.#get().refreshAgentList();
+  };
 
-  // ========== Group Operations ==========
-  addGroup: async (name) => {
+  addGroup = async (name: string): Promise<string> => {
     const id = await sessionService.createSessionGroup(name);
-    await get().refreshAgentList();
+    await this.#get().refreshAgentList();
     return id;
-  },
+  };
 
-  removeGroup: async (groupId) => {
+  removeGroup = async (groupId: string): Promise<void> => {
     await sessionService.removeSessionGroup(groupId);
-    await get().refreshAgentList();
-  },
+    await this.#get().refreshAgentList();
+  };
 
-  updateGroupName: async (groupId, name) => {
+  updateGroupName = async (groupId: string, name: string): Promise<void> => {
     await sessionService.updateSessionGroup(groupId, { name });
-    await get().refreshAgentList();
-  },
+    await this.#get().refreshAgentList();
+  };
 
-  updateGroupSort: async (items) => {
+  updateGroupSort = async (items: SessionGroupItem[]): Promise<void> => {
     const sortMap = items.map((item, index) => ({ id: item.id, sort: index }));
 
     message.loading({
@@ -206,23 +140,24 @@ export const createSidebarUISlice: StateCreator<
     message.destroy('updateGroupSort');
     message.success(t('sessionGroup.sortSuccess', { ns: 'chat' }));
 
-    await get().refreshAgentList();
-  },
+    await this.#get().refreshAgentList();
+  };
 
-  // ========== UI State Actions ==========
-  setAgentRenamingId: (id) => {
-    set({ agentRenamingId: id }, false, n('setAgentRenamingId'));
-  },
+  setAgentRenamingId = (id: string | null): void => {
+    this.#set({ agentRenamingId: id }, false, n('setAgentRenamingId'));
+  };
 
-  setAgentUpdatingId: (id) => {
-    set({ agentUpdatingId: id }, false, n('setAgentUpdatingId'));
-  },
+  setAgentUpdatingId = (id: string | null): void => {
+    this.#set({ agentUpdatingId: id }, false, n('setAgentUpdatingId'));
+  };
 
-  setGroupRenamingId: (id) => {
-    set({ groupRenamingId: id }, false, n('setGroupRenamingId'));
-  },
+  setGroupRenamingId = (id: string | null): void => {
+    this.#set({ groupRenamingId: id }, false, n('setGroupRenamingId'));
+  };
 
-  setGroupUpdatingId: (id) => {
-    set({ groupUpdatingId: id }, false, n('setGroupUpdatingId'));
-  },
-});
+  setGroupUpdatingId = (id: string | null): void => {
+    this.#set({ groupUpdatingId: id }, false, n('setGroupUpdatingId'));
+  };
+}
+
+export type SidebarUIAction = Pick<SidebarUIActionImpl, keyof SidebarUIActionImpl>;
