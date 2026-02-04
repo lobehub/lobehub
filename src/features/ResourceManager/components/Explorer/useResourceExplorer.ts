@@ -108,7 +108,7 @@ export const useResourceExplorer = ({
         return;
       }
 
-      if (type === 'addToOtherKnowledgeBase') {
+      if (type === 'moveToOtherKnowledgeBase') {
         openAddModal({
           fileIds: selectFileIds,
           knowledgeBaseId: libraryId,

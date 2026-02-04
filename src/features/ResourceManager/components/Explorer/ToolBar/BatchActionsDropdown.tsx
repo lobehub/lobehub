@@ -18,7 +18,7 @@ import ActionIconWithChevron from './ActionIconWithChevron';
 
 export type MultiSelectActionType =
   | 'addToKnowledgeBase'
-  | 'addToOtherKnowledgeBase'
+  | 'moveToOtherKnowledgeBase'
   | 'batchChunking'
   | 'delete'
   | 'deleteLibrary'
@@ -119,8 +119,8 @@ const BatchActionsDropdown = memo<BatchActionsDropdownProps>(({ selectCount, onA
           children: addToKnowledgeBaseSubmenu as any,
           disabled: selectCount === 0,
           icon: <Icon icon={BookPlusIcon} />,
-          key: 'addToOtherKnowledgeBase',
-          label: t('FileManager.actions.addToOtherKnowledgeBase'),
+          key: 'moveToOtherKnowledgeBase',
+          label: t('FileManager.actions.moveToOtherKnowledgeBase'),
         });
       }
     } else if (availableKnowledgeBases.length > 0) {

@@ -7,7 +7,7 @@
   "DragUpload.dragFileTitle": "上传文件",
   "DragUpload.dragTitle": "上传图片",
   "FileManager.actions.addToKnowledgeBase": "添加到资源库",
-  "FileManager.actions.addToOtherKnowledgeBase": "添加到其他资源库",
+  "FileManager.actions.moveToOtherKnowledgeBase": "移动到其他资源库",
   "FileManager.actions.batchChunking": "批量分块",
   "FileManager.actions.chunking": "分块",
   "FileManager.actions.chunkingTooltip": "将文件拆分为多个文本块并向量化后，可用于语义检索和文件对话",

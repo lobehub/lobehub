@@ -7,7 +7,7 @@ import { type State, type ViewMode, initialState } from './initialState';
 
 export type MultiSelectActionType =
   | 'addToKnowledgeBase'
-  | 'addToOtherKnowledgeBase'
+  | 'moveToOtherKnowledgeBase'
   | 'batchChunking'
   | 'delete'
   | 'deleteLibrary'
@@ -158,7 +158,7 @@ export const store: CreateStore = (publicState) => (set, get) => ({
         return;
       }
 
-      case 'addToOtherKnowledgeBase': {
+      case 'moveToOtherKnowledgeBase': {
         // Modal operations need to be handled in component layer
         // Store just marks that action was requested
         // Component will handle opening modal via useAddFilesToKnowledgeBaseModal hook

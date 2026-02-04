@@ -16,7 +16,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 export type MultiSelectActionType =
   | 'addToKnowledgeBase'
-  | 'addToOtherKnowledgeBase'
+  | 'moveToOtherKnowledgeBase'
   | 'batchChunking'
   | 'delete'
   | 'deleteLibrary'
@@ -103,12 +103,12 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
                   color={'default'}
                   icon={<Icon icon={BookPlusIcon} />}
                   onClick={() => {
-                    onActionClick('addToOtherKnowledgeBase');
+                    onActionClick('moveToOtherKnowledgeBase');
                   }}
                   size={'small'}
                   variant={'filled'}
                 >
-                  {t('FileManager.actions.addToOtherKnowledgeBase')}
+                  {t('FileManager.actions.moveToOtherKnowledgeBase')}
                 </Button>
               </>
             ) : (
