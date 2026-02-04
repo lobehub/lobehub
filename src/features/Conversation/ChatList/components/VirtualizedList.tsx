@@ -145,7 +145,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
         onScroll={handleScroll}
         onScrollEnd={handleScrollEnd}
         ref={virtuaRef}
-        style={{ height: '100%', paddingBottom: 24 }}
+        style={{ height: '100%', overflowAnchor: 'none', paddingBottom: 24 }}
       >
         {(messageId, index): ReactElement => {
           const isAgentCouncil = messageId.includes('agentCouncil');
