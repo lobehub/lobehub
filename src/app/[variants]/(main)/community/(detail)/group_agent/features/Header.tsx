@@ -75,7 +75,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   // Fetch favorite status
   const { data: favoriteStatus, mutate: mutateFavorite } = useSWR(
     identifier && isAuthenticated ? ['favorite-status', 'agent', identifier] : null,
-    () => socialService.checkFavoriteStatus('agent', identifier!),
+    () => socialService.checkFavoriteStatus('agent-group', identifier!),
     { revalidateOnFocus: false },
   );
 
@@ -100,10 +100,10 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     setFavoriteLoading(true);
     try {
       if (isFavorited) {
-        await socialService.removeFavorite('agent', identifier);
+        await socialService.removeFavorite('agent-group', identifier);
         message.success(t('assistant.unfavoriteSuccess'));
       } else {
-        await socialService.addFavorite('agent', identifier);
+        await socialService.addFavorite('agent-group', identifier);
         message.success(t('assistant.favoriteSuccess'));
       }
       await mutateFavorite();

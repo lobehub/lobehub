@@ -17,7 +17,7 @@ const socialPublicProcedure = publicProcedure
   .use(marketSDK);
 
 // Schema definitions
-const targetTypeSchema = z.enum(['agent', 'plugin']);
+const targetTypeSchema = z.enum(['agent', 'plugin', 'agent-group']);
 
 const paginationSchema = z.object({
   limit: z.number().optional(),
