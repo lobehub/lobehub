@@ -532,6 +532,13 @@
       "when": 1769362978088,
       "tag": "0075_add_user_memory_persona",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1770179814971,
+      "tag": "0076_add_message_group_index",
+      "breakpoints": true
     }
   ],
   "version": "6"

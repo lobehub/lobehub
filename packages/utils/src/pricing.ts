@@ -2,9 +2,9 @@ import { Pricing, PricingUnit, PricingUnitName } from 'model-bank';
 
 /**
  * Internal helper to extract the displayed unit rate from a pricing unit by strategy
- * - fixed → rate
- * - tiered → tiers[0].rate
- * - lookup → first price value
+ * - fixed: rate
+ * - tiered: tiers[0].rate
+ * - lookup: first price value
  */
 const getRateFromUnit = (unit: PricingUnit): number | undefined => {
   switch (unit.strategy) {
@@ -39,9 +39,9 @@ export const getUnitRateByName = (
 
 /**
  * Get text input unit rate from pricing
- * - fixed → rate
- * - tiered → tiers[0].rate
- * - lookup → Object.values(lookup.prices)[0]
+ * - fixed: rate
+ * - tiered: tiers[0].rate
+ * - lookup: Object.values(lookup.prices)[0]
  */
 export function getTextInputUnitRate(pricing?: Pricing): number | undefined {
   return getUnitRateByName(pricing, 'textInput');

@@ -33,7 +33,7 @@ const Nav = memo(() => {
   const switchTopic = useChatStore((s) => s.switchTopic);
   const [openNewTopicOrSaveTopic] = useChatStore((s) => [s.openNewTopicOrSaveTopic]);
 
-  const { mutate, isValidating } = useActionSWR('openNewTopicOrSaveTopic', openNewTopicOrSaveTopic);
+  const { mutate } = useActionSWR('openNewTopicOrSaveTopic', openNewTopicOrSaveTopic);
   const handleNewTopic = () => {
     // If in agent sub-route, navigate back to agent chat first
     if (isProfileActive && agentId) {
@@ -46,7 +46,6 @@ const Nav = memo(() => {
     <Flexbox gap={1} paddingInline={4}>
       <NavItem
         icon={MessageSquarePlusIcon}
-        loading={isValidating}
         onClick={handleNewTopic}
         title={tTopic('actions.addNewTopic')}
       />

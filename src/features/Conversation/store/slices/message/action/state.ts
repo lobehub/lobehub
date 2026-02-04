@@ -14,6 +14,11 @@ import { dataSelectors } from '../../data/selectors';
  */
 export interface MessageStateAction {
   /**
+   * Cancel compression and restore original messages
+   */
+  cancelCompression: (id: string) => Promise<void>;
+
+  /**
    * Copy message content to clipboard
    */
   copyMessage: (id: string, content: string) => Promise<void>;
@@ -50,6 +55,26 @@ export const messageStateSlice: StateCreator<
   [],
   MessageStateAction
 > = (set, get) => ({
+  cancelCompression: async (id) => {
+    const message = dataSelectors.getDisplayMessageById(id)(get());
+    if (!message || message.role !== 'compressedGroup') return;
+
+    const { context, replaceMessages } = get();
+    if (!context.agentId || !context.topicId) return;
+
+    // Call service to cancel compression
+    const { messages } = await messageService.cancelCompression({
+      agentId: context.agentId,
+      groupId: context.groupId,
+      messageGroupId: id,
+      threadId: context.threadId,
+      topicId: context.topicId,
+    });
+
+    // Replace messages with restored original messages
+    replaceMessages(messages);
+  },
+
   copyMessage: async (id, content) => {
     const { hooks } = get();
 

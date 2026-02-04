@@ -45,7 +45,7 @@ export class LinuxMenu extends BaseMenuPlatform implements IMenuPlatform {
     this.buildAndSetAppMenu(options);
   }
 
-  // --- 私有方法：定义菜单模板和逻辑 ---
+  // --- Private methods: define menu templates and logic ---
 
   private getAppMenuTemplate(options?: MenuOptions): MenuItemConstructorOptions[] {
     const showDev = isDev || options?.showDevItems;

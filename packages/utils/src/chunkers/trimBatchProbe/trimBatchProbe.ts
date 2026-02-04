@@ -202,7 +202,7 @@ export const handleSingle = async (
  *    to avoid breaking structured XML/JSON-like content mid-way.
  *
  * Bisection example (8 segments, keep newest):
- *   try 4 (fits?) → yes → try 6 → no → try 5 → yes ⇒ best=5
+ *   try 4 (fits?) -> yes -> try 6 -> no -> try 5 -> yes => best=5
  *   if compact retry needed, repeat with build(true) and pick the better fit.
  *
  * This minimizes structural breakage by preferring whole built segments and only truncating the last one as a last resort.

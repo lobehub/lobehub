@@ -48,23 +48,23 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
   }
 
   refresh(options?: MenuOptions): void {
-    // 重建Application menu
+    // Rebuild Application menu
     this.buildAndSetAppMenu(options);
-    // 如果托盘菜单存在，也重建它（如果需要动态更新）
+    // If tray menu exists, rebuild it as well (if dynamic update is needed)
     // this.trayMenu = this.buildTrayMenu();
-    // 需要考虑如何更新现有托盘图标的菜单
+    // Need to consider how to update the menu for existing tray icons
   }
 
-  // --- 私有方法：定义菜单模板和逻辑 ---
+  // --- Private methods: define menu templates and logic ---
 
   private getAppMenuTemplate(options?: MenuOptions): MenuItemConstructorOptions[] {
     const appName = app.getName();
     const showDev = isDev || options?.showDevItems;
-    // 创建命名空间翻译函数
+    // Create namespaced translation function
     const t = this.app.i18n.ns('menu');
 
-    // 添加调试日志
-    // console.log('[MacOSMenu] 菜单渲染, i18n实例:', !!this.app.i18n);
+    // Add debug logging
+    // console.log('[MacOSMenu] Menu rendering, i18n instance:', !!this.app.i18n);
 
     const template: MenuItemConstructorOptions[] = [
       {
@@ -324,7 +324,7 @@ export class MacOSMenu extends BaseMenuPlatform implements IMenuPlatform {
           },
           {
             click: () => {
-              // @ts-expect-error cache 目录好像暂时不在类型定义里
+              // @ts-expect-error cache directory seems to be temporarily missing from type definitions
               const cachePath = app.getPath('cache');
 
               const updaterCachePath = path.join(cachePath, `${app.getName()}-updater`);

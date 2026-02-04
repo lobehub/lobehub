@@ -32,6 +32,8 @@
   "chatList.longMessageDetail": "查看详情",
   "clearCurrentMessages": "清空当前会话消息",
   "compressedHistory": "压缩历史",
+  "compression.cancel": "取消压缩",
+  "compression.cancelConfirm": "确定要取消压缩吗？这将恢复原始消息。",
   "compression.history": "历史记录",
   "compression.summary": "摘要",
   "confirmClearCurrentMessages": "确认清空当前会话消息吗？清空后无法恢复",

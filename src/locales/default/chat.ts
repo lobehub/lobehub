@@ -41,6 +41,9 @@ export default {
   'chatList.longMessageDetail': 'View Details',
   'clearCurrentMessages': 'Clear current session messages',
   'compressedHistory': 'Compressed History',
+  'compression.cancel': 'Uncompress',
+  'compression.cancelConfirm':
+    'Are you sure you want to uncompress? This will restore the original messages.',
   'compression.history': 'History',
   'compression.summary': 'Summary',
   'confirmClearCurrentMessages':
