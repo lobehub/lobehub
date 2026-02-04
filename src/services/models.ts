@@ -75,7 +75,7 @@ export class ModelsService {
       const runtimeProvider = resolveRuntimeProvider(provider);
       const enableFetchOnClient = isEnableFetchOnClient(provider);
 
-      console.log('enableFetchOnClient：', enableFetchOnClient);
+      console.log('enableFetchOnClient:', enableFetchOnClient);
       let res: Response;
       if (enableFetchOnClient) {
         const agentRuntime = await initializeWithClientStore({
