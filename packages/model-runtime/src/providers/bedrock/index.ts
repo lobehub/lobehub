@@ -28,8 +28,8 @@ import { AgentRuntimeError } from '../../utils/createError';
 import { debugStream } from '../../utils/debugStream';
 import { getModelPricing } from '../../utils/getModelPricing';
 import { StreamingResponse } from '../../utils/response';
-import { resolveCacheTTL } from '../anthropic/resolveCacheTTL';
-import { resolveMaxTokens } from '../anthropic/resolveMaxTokens';
+import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCacheTTL';
+import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
 
 /**
  * A prompt constructor for HuggingFace LLama 2 chat models.

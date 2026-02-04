@@ -1,99 +1,130 @@
+import type Anthropic from '@anthropic-ai/sdk';
+import type { ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 
 import {
-  type OpenAICompatibleFactoryOptions,
-  createOpenAICompatibleRuntime,
-} from '../../core/openaiCompatibleFactory';
-import { resolveParameters } from '../../core/parameterResolver';
+  buildDefaultAnthropicPayload,
+  createAnthropicCompatibleParams,
+  createAnthropicCompatibleRuntime,
+} from '../../core/anthropicCompatibleFactory';
 import { ChatStreamPayload } from '../../types';
+import { getModelPropertyWithFallback } from '../../utils/getFallbackModelProperty';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 
 export interface MoonshotModelCard {
   id: string;
 }
 
-export const params = {
-  baseURL: 'https://api.moonshot.cn/v1',
-  chatCompletion: {
-    forceImageBase64: true,
-    handlePayload: (payload: ChatStreamPayload) => {
-      const { enabledSearch, messages, model, temperature, thinking, tools, ...rest } = payload;
+const DEFAULT_MOONSHOT_BASE_URL = 'https://api.moonshot.ai/anthropic';
 
-      const filteredMessages = messages.map((message: any) => {
-        let normalizedMessage = message;
+const normalizeMoonshotMessages = (messages: ChatStreamPayload['messages']) =>
+  messages.map((message) => {
+    if (message.role !== 'assistant') return message;
+    if (message.content !== '' && message.content !== null && message.content !== undefined)
+      return message;
 
-        // Add a space for empty assistant messages (#8418)
-        if (message.role === 'assistant' && (!message.content || message.content === '')) {
-          normalizedMessage = { ...normalizedMessage, content: ' ' };
-        }
+    /** Add a non-empty placeholder to preserve assistant turn ordering (#8418). */
+    return { ...message, content: [{ text: ' ', type: 'text' as const }] };
+  });
 
-        // Interleaved thinking
-        if (message.role === 'assistant' && message.reasoning) {
-          const { reasoning, ...messageWithoutReasoning } = normalizedMessage;
-          return {
-            ...messageWithoutReasoning,
-            ...(!reasoning.signature && reasoning.content
-              ? { reasoning_content: reasoning.content }
-              : {}),
-          };
-        }
-        return normalizedMessage;
-      });
+const appendMoonshotSearchTool = (
+  tools: Anthropic.MessageCreateParams['tools'] | undefined,
+  enabledSearch?: boolean,
+) => {
+  if (!enabledSearch) return tools;
 
-      const moonshotTools = enabledSearch
-        ? [
-            ...(tools || []),
-            {
-              function: {
-                name: '$web_search',
-              },
-              type: 'builtin_function',
-            },
-          ]
-        : tools;
+  const moonshotSearchTool = {
+    function: { name: '$web_search' },
+    type: 'builtin_function',
+  } as any;
 
-      const isK25Model = model === 'kimi-k2.5';
+  return tools?.length ? [...tools, moonshotSearchTool] : [moonshotSearchTool];
+};
 
-      if (isK25Model) {
-        const thinkingParam =
-          thinking?.type === 'disabled' ? { type: 'disabled' } : { type: 'enabled' };
-        const isThinkingEnabled = thinkingParam.type === 'enabled';
+const buildMoonshotPayload = async (
+  payload: ChatStreamPayload,
+): Promise<Anthropic.MessageCreateParams> => {
+  const normalizedMessages = normalizeMoonshotMessages(payload.messages);
+  const resolvedMaxTokens =
+    payload.max_tokens ??
+    (await getModelPropertyWithFallback<number | undefined>(
+      payload.model,
+      'maxOutput',
+      ModelProvider.Moonshot,
+    )) ??
+    8192;
 
-        return {
-          ...rest,
-          frequency_penalty: 0,
-          messages: filteredMessages,
-          model,
-          presence_penalty: 0,
-          temperature: isThinkingEnabled ? 1 : 0.6,
-          thinking: thinkingParam,
-          tools: moonshotTools,
-          top_p: 0.95,
-        } as any;
-      }
+  const basePayload = await buildDefaultAnthropicPayload({
+    ...payload,
+    enabledSearch: false,
+    max_tokens: resolvedMaxTokens,
+    messages: normalizedMessages,
+  });
 
-      // Resolve parameters with normalization for non-K2.5 models
-      const resolvedParams = resolveParameters({ temperature }, { normalizeTemperature: true });
+  const tools = appendMoonshotSearchTool(basePayload.tools, payload.enabledSearch);
+  const basePayloadWithSearch = { ...basePayload, tools };
 
-      return {
-        ...rest,
-        messages: filteredMessages,
-        model,
-        temperature: resolvedParams.temperature,
-        tools: moonshotTools,
-      } as any;
+  const isK25Model = payload.model === 'kimi-k2.5';
+  if (!isK25Model) return basePayloadWithSearch;
+
+  const resolvedThinkingBudget = payload.thinking?.budget_tokens
+    ? Math.min(payload.thinking.budget_tokens, resolvedMaxTokens - 1)
+    : 1024;
+  const thinkingParam =
+    payload.thinking?.type === 'disabled'
+      ? ({ type: 'disabled' } as const)
+      : ({ budget_tokens: resolvedThinkingBudget, type: 'enabled' } as const);
+  const isThinkingEnabled = thinkingParam.type === 'enabled';
+
+  return {
+    ...basePayloadWithSearch,
+    temperature: isThinkingEnabled ? 1 : 0.6,
+    thinking: thinkingParam,
+    top_p: 0.95,
+  };
+};
+
+const fetchMoonshotModels = async ({
+  apiKey,
+  baseURL,
+}: {
+  apiKey?: string;
+  baseURL: string;
+}): Promise<ChatModelCard[]> => {
+  if (!apiKey) {
+    throw new Error('Missing Moonshot API key for model listing');
+  }
+
+  const response = await fetch(`${baseURL}/v1/models`, {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'anthropic-version': '2023-06-01',
+      'x-api-key': apiKey,
     },
+    method: 'GET',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch Moonshot models: ${response.status} ${response.statusText}`);
+  }
+
+  const modelsPage = (await response.json()) as { data?: MoonshotModelCard[] };
+  const modelList = modelsPage.data || [];
+
+  return processModelList(modelList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
+};
+
+export const params = createAnthropicCompatibleParams({
+  baseURL: DEFAULT_MOONSHOT_BASE_URL,
+  chatCompletion: {
+    handlePayload: buildMoonshotPayload,
   },
+  customClient: {},
   debug: {
     chatCompletion: () => process.env.DEBUG_MOONSHOT_CHAT_COMPLETION === '1',
   },
-  models: async ({ client }) => {
-    const modelsPage = (await client.models.list()) as any;
-    const modelList: MoonshotModelCard[] = modelsPage.data;
-
-    return processModelList(modelList, MODEL_LIST_CONFIGS.moonshot, 'moonshot');
-  },
+  models: fetchMoonshotModels,
   provider: ModelProvider.Moonshot,
-} satisfies OpenAICompatibleFactoryOptions;
+});
 
-export const LobeMoonshotAI = createOpenAICompatibleRuntime(params);
+export const LobeMoonshotAI = createAnthropicCompatibleRuntime(params);
