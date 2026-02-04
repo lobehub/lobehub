@@ -149,6 +149,7 @@ export const messages = pgTable(
     index('messages_thread_id_idx').on(table.threadId),
     index('messages_agent_id_idx').on(table.agentId),
     index('messages_group_id_idx').on(table.groupId),
+    index('messages_message_group_id_idx').on(table.messageGroupId),
   ],
 );
 

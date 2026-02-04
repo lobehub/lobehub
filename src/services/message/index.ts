@@ -276,6 +276,20 @@ export class MessageService {
       messages: (result.messages || []) as unknown as UIChatMessage[],
     };
   };
+
+  /**
+   * Cancel compression by deleting the compression group and restoring original messages
+   */
+  cancelCompression = async (params: {
+    agentId: string;
+    groupId?: string | null;
+    messageGroupId: string;
+    threadId?: string | null;
+    topicId: string;
+  }): Promise<{ messages: UIChatMessage[] }> => {
+    const result = await lambdaClient.message.cancelCompression.mutate(params);
+    return { messages: (result.messages || []) as unknown as UIChatMessage[] };
+  };
 }
 
 export const messageService = new MessageService();
