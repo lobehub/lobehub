@@ -62,7 +62,7 @@ export type RuntimeClass = new (options?: any) => LobeRuntimeAI;
 
 interface RouterInstance {
   apiType: keyof typeof baseRuntimeMap;
-  baseURLPattern?: RegExp | string;
+  baseURLPattern?: RegExp;
   models?: string[];
   options: RouterOptions;
   runtime?: RuntimeClass;
@@ -180,15 +180,9 @@ export const createRouterRuntime = ({
       const resolvedRouters = await this.resolveRouters(model);
       const baseURL = this._options.baseURL;
 
-      // Priority 1: Match by baseURLPattern
+      // Priority 1: Match by baseURLPattern (RegExp only)
       if (baseURL) {
-        const baseURLMatch = resolvedRouters.find((router) => {
-          if (!router.baseURLPattern) return false;
-          if (typeof router.baseURLPattern === 'string') {
-            return baseURL.includes(router.baseURLPattern);
-          }
-          return router.baseURLPattern.test(baseURL);
-        });
+        const baseURLMatch = resolvedRouters.find((router) => router.baseURLPattern?.test(baseURL));
         if (baseURLMatch) return baseURLMatch;
       }
 

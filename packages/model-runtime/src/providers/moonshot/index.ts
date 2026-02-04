@@ -211,6 +211,7 @@ export const LobeMoonshotAnthropicAI = createAnthropicCompatibleRuntime(anthropi
 export const LobeMoonshotOpenAI = createOpenAICompatibleRuntime({
   baseURL: DEFAULT_MOONSHOT_BASE_URL,
   chatCompletion: {
+    forceImageBase64: true,
     handlePayload: buildMoonshotOpenAIPayload,
   },
   debug: {
