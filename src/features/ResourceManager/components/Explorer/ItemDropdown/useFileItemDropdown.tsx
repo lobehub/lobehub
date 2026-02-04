@@ -108,9 +108,17 @@ export const useFileItemDropdown = ({
               ns: 'knowledgeBase',
             }),
           );
-        } catch (e) {
+        } catch (e: any) {
           console.error(e);
-          message.error(t('addToKnowledgeBase.error', { ns: 'knowledgeBase' }));
+          // Check for duplicate key error (file already exists in the library)
+          // Server throws CONFLICT error code for duplicate entries
+          const isDuplicateError =
+            e?.data?.code === 'CONFLICT' || e?.message === 'FILE_ALREADY_IN_KNOWLEDGE_BASE';
+          if (isDuplicateError) {
+            message.warning(t('addToKnowledgeBase.alreadyExists', { ns: 'knowledgeBase' }));
+          } else {
+            message.error(t('addToKnowledgeBase.error', { ns: 'knowledgeBase' }));
+          }
         }
       },
     }));
