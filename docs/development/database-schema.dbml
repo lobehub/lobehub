@@ -643,6 +643,7 @@ table messages {
     thread_id [name: 'messages_thread_id_idx']
     agent_id [name: 'messages_agent_id_idx']
     group_id [name: 'messages_group_id_idx']
+    message_group_id [name: 'messages_message_group_id_idx']
   }
 }
 

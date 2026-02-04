@@ -1,0 +1,1 @@
+CREATE INDEX "messages_message_group_id_idx" ON "messages" USING btree ("message_group_id");
