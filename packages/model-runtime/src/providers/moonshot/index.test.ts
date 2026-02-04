@@ -422,6 +422,118 @@ describe('LobeMoonshotAnthropicAI', () => {
         expect(payload.thinking).toBeUndefined();
       });
     });
+
+    describe('interleaved thinking', () => {
+      it('should convert reasoning to thinking block for assistant messages', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            {
+              content: 'Response',
+              role: 'assistant',
+              reasoning: { content: 'My reasoning process' },
+            } as any,
+            { content: 'Follow-up', role: 'user' },
+          ],
+          model: 'kimi-k2.5',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.content).toEqual([
+          { type: 'thinking', thinking: 'My reasoning process' },
+          { type: 'text', text: 'Response' },
+        ]);
+      });
+
+      it('should handle empty content with reasoning', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            {
+              content: '',
+              role: 'assistant',
+              reasoning: { content: 'My reasoning process' },
+            } as any,
+            { content: 'Follow-up', role: 'user' },
+          ],
+          model: 'kimi-k2.5',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.content).toEqual([
+          { type: 'thinking', thinking: 'My reasoning process' },
+        ]);
+      });
+
+      it('should not add thinking block when reasoning has signature', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            {
+              content: 'Response',
+              role: 'assistant',
+              reasoning: { content: 'My reasoning', signature: 'some-signature' },
+            } as any,
+            { content: 'Follow-up', role: 'user' },
+          ],
+          model: 'kimi-k2.5',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        // Should not have thinking block, just text
+        expect(assistantMessage?.content).toBe('Response');
+      });
+
+      it('should handle assistant message with tool_calls and reasoning', async () => {
+        await instance.chat({
+          messages: [
+            { content: 'Hello', role: 'user' },
+            {
+              content: '',
+              role: 'assistant',
+              reasoning: { content: 'Thinking about tools' },
+              tool_calls: [
+                {
+                  id: 'call_1',
+                  type: 'function',
+                  function: { name: 'get_weather', arguments: '{"city":"Beijing"}' },
+                },
+              ],
+            } as any,
+            {
+              content: '{"temp": 20}',
+              role: 'tool',
+              tool_call_id: 'call_1',
+            } as any,
+          ],
+          model: 'kimi-k2.5',
+        });
+
+        const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
+
+        expect(assistantMessage?.content).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ type: 'thinking', thinking: 'Thinking about tools' }),
+            expect.objectContaining({ type: 'tool_use', name: 'get_weather' }),
+          ]),
+        );
+      });
+    });
   });
 });
 

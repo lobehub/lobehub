@@ -21,16 +21,37 @@ export interface MoonshotModelCard {
 const DEFAULT_MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
 const DEFAULT_MOONSHOT_ANTHROPIC_BASE_URL = 'https://api.moonshot.ai/anthropic';
 
+const buildThinkingBlock = (reasoning: any) =>
+  reasoning?.content && !reasoning?.signature
+    ? { thinking: reasoning.content, type: 'thinking' as const }
+    : null;
+
+const toContentArray = (content: any) =>
+  Array.isArray(content) ? content : [{ text: content, type: 'text' as const }];
+
+const isEmptyContent = (content: any) =>
+  content === '' || content === null || content === undefined;
+
 /**
- * Normalize empty assistant messages by adding a space placeholder (#8418)
+ * Normalize assistant messages:
+ * - Add space placeholder for empty content (#8418)
+ * - Convert reasoning to thinking block for interleaved thinking
  */
 const normalizeMoonshotMessages = (messages: ChatStreamPayload['messages']) =>
-  messages.map((message) => {
+  messages.map((message: any) => {
     if (message.role !== 'assistant') return message;
-    if (message.content !== '' && message.content !== null && message.content !== undefined)
-      return message;
 
-    return { ...message, content: [{ text: ' ', type: 'text' as const }] };
+    const { reasoning, ...rest } = message;
+    const thinkingBlock = buildThinkingBlock(reasoning);
+
+    if (isEmptyContent(message.content)) {
+      const placeholder = { text: ' ', type: 'text' as const };
+      return { ...rest, content: thinkingBlock ? [thinkingBlock] : [placeholder] };
+    }
+
+    if (!thinkingBlock) return rest;
+
+    return { ...rest, content: [thinkingBlock, ...toContentArray(message.content)] };
   });
 
 /**

@@ -29,7 +29,7 @@ import { postProcessModelList } from '../../utils/postProcessModelList';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import { LobeRuntimeAI } from '../BaseAI';
 import { CreateImageOptions, CustomClientOptions } from '../openaiCompatibleFactory';
-import { baseRuntimeMap } from './baseRuntimeMap';
+import type { ApiType, RuntimeClass } from './apiTypes';
 
 const log = debug('lobe-model-runtime:router-runtime');
 
@@ -51,17 +51,15 @@ interface ProviderIniOptions extends Record<string, any> {
  * `apiType` allows switching provider when falling back.
  */
 interface RouterOptionItem extends ProviderIniOptions {
-  apiType?: keyof typeof baseRuntimeMap;
+  apiType?: ApiType;
   id?: string;
   remark?: string;
 }
 
 type RouterOptions = RouterOptionItem | RouterOptionItem[];
 
-export type RuntimeClass = new (options?: any) => LobeRuntimeAI;
-
 interface RouterInstance {
-  apiType: keyof typeof baseRuntimeMap;
+  apiType: ApiType;
   baseURLPattern?: RegExp;
   models?: string[];
   options: RouterOptions;
@@ -213,15 +211,15 @@ export const createRouterRuntime = ({
      * Build a runtime instance for a specific option item.
      * Option items can override apiType to switch providers for fallback.
      */
-    private createRuntimeFromOption(
+    private async createRuntimeFromOption(
       router: RouterInstance,
       optionItem: RouterOptionItem,
-    ): {
+    ): Promise<{
       channelId?: string;
-      id: keyof typeof baseRuntimeMap;
+      id: ApiType;
       remark?: string;
       runtime: LobeRuntimeAI;
-    } {
+    }> {
       const { apiType: optionApiType, id: channelId, remark, ...optionOverrides } = optionItem;
       const resolvedApiType = optionApiType ?? router.apiType;
       const finalOptions = { ...this._params, ...this._options, ...optionOverrides };
@@ -255,6 +253,7 @@ export const createRouterRuntime = ({
         };
       }
 
+      const { baseRuntimeMap } = await import('./baseRuntimeMap');
       const providerAI =
         resolvedApiType === router.apiType
           ? (router.runtime ?? baseRuntimeMap[resolvedApiType] ?? LobeOpenAI)
@@ -293,7 +292,7 @@ export const createRouterRuntime = ({
           id: resolvedApiType,
           remark,
           runtime,
-        } = this.createRuntimeFromOption(matchedRouter, optionItem);
+        } = await this.createRuntimeFromOption(matchedRouter, optionItem);
 
         try {
           const result = await requestHandler(runtime);
@@ -344,19 +343,21 @@ export const createRouterRuntime = ({
 
     async models() {
       const resolvedRouters = await this.resolveRouters();
-      const runtimes = resolvedRouters.map((router) => {
-        const routerOptions = this.normalizeRouterOptions(router);
-        const { id: resolvedApiType, runtime } = this.createRuntimeFromOption(
-          router,
-          routerOptions[0],
-        );
+      const runtimes = await Promise.all(
+        resolvedRouters.map(async (router) => {
+          const routerOptions = this.normalizeRouterOptions(router);
+          const { id: resolvedApiType, runtime } = await this.createRuntimeFromOption(
+            router,
+            routerOptions[0],
+          );
 
-        return {
-          id: resolvedApiType,
-          models: router.models,
-          runtime,
-        };
-      });
+          return {
+            id: resolvedApiType,
+            models: router.models,
+            runtime,
+          };
+        }),
+      );
 
       if (modelsOption && typeof modelsOption === 'function') {
         // If it's a functional configuration, use the last runtime's client to call the function
