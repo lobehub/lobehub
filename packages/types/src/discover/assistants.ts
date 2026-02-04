@@ -62,6 +62,7 @@ export interface DiscoverAssistantItem extends Omit<LobeAgentSettings, 'meta'>, 
   status?: AgentStatus;
   tokenUsage: number;
   type?: AgentType;
+  updatedAt?: string;
   userName?: string;
 }
 
