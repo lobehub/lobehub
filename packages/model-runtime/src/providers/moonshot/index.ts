@@ -21,23 +21,31 @@ export interface MoonshotModelCard {
 const DEFAULT_MOONSHOT_BASE_URL = 'https://api.moonshot.ai/v1';
 const DEFAULT_MOONSHOT_ANTHROPIC_BASE_URL = 'https://api.moonshot.ai/anthropic';
 
+// Shared constants and helpers
+const MOONSHOT_SEARCH_TOOL = { function: { name: '$web_search' }, type: 'builtin_function' } as any;
+const isKimiK25Model = (model: string) => model === 'kimi-k2.5';
+const isEmptyContent = (content: any) =>
+  content === '' || content === null || content === undefined;
+const hasValidReasoning = (reasoning: any) => reasoning?.content && !reasoning?.signature;
+
+const getK25Params = (isThinkingEnabled: boolean) => ({
+  temperature: isThinkingEnabled ? 1 : 0.6,
+  top_p: 0.95,
+});
+
+const appendSearchTool = <T>(tools: T[] | undefined, enabledSearch?: boolean): T[] | undefined => {
+  if (!enabledSearch) return tools;
+  return tools?.length ? [...tools, MOONSHOT_SEARCH_TOOL] : [MOONSHOT_SEARCH_TOOL];
+};
+
+// Anthropic format helpers
 const buildThinkingBlock = (reasoning: any) =>
-  reasoning?.content && !reasoning?.signature
-    ? { thinking: reasoning.content, type: 'thinking' as const }
-    : null;
+  hasValidReasoning(reasoning) ? { thinking: reasoning.content, type: 'thinking' as const } : null;
 
 const toContentArray = (content: any) =>
   Array.isArray(content) ? content : [{ text: content, type: 'text' as const }];
 
-const isEmptyContent = (content: any) =>
-  content === '' || content === null || content === undefined;
-
-/**
- * Normalize assistant messages:
- * - Add space placeholder for empty content (#8418)
- * - Convert reasoning to thinking block for interleaved thinking
- */
-const normalizeMoonshotMessages = (messages: ChatStreamPayload['messages']) =>
+const normalizeMessagesForAnthropic = (messages: ChatStreamPayload['messages']) =>
   messages.map((message: any) => {
     if (message.role !== 'assistant') return message;
 
@@ -50,26 +58,22 @@ const normalizeMoonshotMessages = (messages: ChatStreamPayload['messages']) =>
     }
 
     if (!thinkingBlock) return rest;
-
     return { ...rest, content: [thinkingBlock, ...toContentArray(message.content)] };
   });
 
-/**
- * Append Moonshot web search tool for builtin search capability
- */
-const appendMoonshotSearchTool = (
-  tools: Anthropic.MessageCreateParams['tools'] | undefined,
-  enabledSearch?: boolean,
-) => {
-  if (!enabledSearch) return tools;
+// OpenAI format helpers
+const normalizeMessagesForOpenAI = (messages: ChatStreamPayload['messages']) =>
+  messages.map((message: any) => {
+    if (message.role !== 'assistant') return message;
 
-  const moonshotSearchTool = {
-    function: { name: '$web_search' },
-    type: 'builtin_function',
-  } as any;
+    const { reasoning, ...rest } = message;
+    const normalized = isEmptyContent(message.content) ? { ...rest, content: ' ' } : rest;
 
-  return tools?.length ? [...tools, moonshotSearchTool] : [moonshotSearchTool];
-};
+    if (hasValidReasoning(reasoning)) {
+      return { ...normalized, reasoning_content: reasoning.content };
+    }
+    return normalized;
+  });
 
 /**
  * Build Moonshot Anthropic format payload with special handling for kimi-k2.5 thinking
@@ -77,7 +81,6 @@ const appendMoonshotSearchTool = (
 const buildMoonshotAnthropicPayload = async (
   payload: ChatStreamPayload,
 ): Promise<Anthropic.MessageCreateParams> => {
-  const normalizedMessages = normalizeMoonshotMessages(payload.messages);
   const resolvedMaxTokens =
     payload.max_tokens ??
     (await getModelPropertyWithFallback<number | undefined>(
@@ -91,14 +94,13 @@ const buildMoonshotAnthropicPayload = async (
     ...payload,
     enabledSearch: false,
     max_tokens: resolvedMaxTokens,
-    messages: normalizedMessages,
+    messages: normalizeMessagesForAnthropic(payload.messages),
   });
 
-  const tools = appendMoonshotSearchTool(basePayload.tools, payload.enabledSearch);
+  const tools = appendSearchTool(basePayload.tools, payload.enabledSearch);
   const basePayloadWithSearch = { ...basePayload, tools };
 
-  const isK25Model = payload.model === 'kimi-k2.5';
-  if (!isK25Model) return basePayloadWithSearch;
+  if (!isKimiK25Model(payload.model)) return basePayloadWithSearch;
 
   const resolvedThinkingBudget = payload.thinking?.budget_tokens
     ? Math.min(payload.thinking.budget_tokens, resolvedMaxTokens - 1)
@@ -107,13 +109,11 @@ const buildMoonshotAnthropicPayload = async (
     payload.thinking?.type === 'disabled'
       ? ({ type: 'disabled' } as const)
       : ({ budget_tokens: resolvedThinkingBudget, type: 'enabled' } as const);
-  const isThinkingEnabled = thinkingParam.type === 'enabled';
 
   return {
     ...basePayloadWithSearch,
-    temperature: isThinkingEnabled ? 1 : 0.6,
+    ...getK25Params(thinkingParam.type === 'enabled'),
     thinking: thinkingParam,
-    top_p: 0.95,
   };
 };
 
@@ -125,71 +125,33 @@ const buildMoonshotOpenAIPayload = (
 ): OpenAI.ChatCompletionCreateParamsStreaming => {
   const { enabledSearch, messages, model, temperature, thinking, tools, ...rest } = payload;
 
-  // Normalize messages: handle empty assistant messages and interleaved thinking
-  const normalizedMessages = messages.map((message: any) => {
-    let normalizedMessage = message;
+  const normalizedMessages = normalizeMessagesForOpenAI(messages);
+  const moonshotTools = appendSearchTool(tools, enabledSearch);
 
-    // Add a space for empty assistant messages (#8418)
-    if (
-      message.role === 'assistant' &&
-      (message.content === '' || message.content === null || message.content === undefined)
-    ) {
-      normalizedMessage = { ...normalizedMessage, content: ' ' };
-    }
-
-    // Interleaved thinking: convert reasoning to reasoning_content
-    if (message.role === 'assistant' && message.reasoning) {
-      const { reasoning, ...messageWithoutReasoning } = normalizedMessage;
-      return {
-        ...messageWithoutReasoning,
-        ...(!reasoning.signature && reasoning.content
-          ? { reasoning_content: reasoning.content }
-          : {}),
-      };
-    }
-    return normalizedMessage;
-  });
-
-  const moonshotTools = enabledSearch
-    ? [
-        ...(tools || []),
-        {
-          function: { name: '$web_search' },
-          type: 'builtin_function',
-        },
-      ]
-    : tools;
-
-  const isK25Model = model === 'kimi-k2.5';
-
-  if (isK25Model) {
+  if (isKimiK25Model(model)) {
     const thinkingParam =
       thinking?.type === 'disabled' ? { type: 'disabled' } : { type: 'enabled' };
-    const isThinkingEnabled = thinkingParam.type === 'enabled';
 
     return {
       ...rest,
+      ...getK25Params(thinkingParam.type === 'enabled'),
       frequency_penalty: 0,
       messages: normalizedMessages,
       model,
       presence_penalty: 0,
       stream: payload.stream ?? true,
-      temperature: isThinkingEnabled ? 1 : 0.6,
       thinking: thinkingParam,
       tools: moonshotTools?.length ? moonshotTools : undefined,
-      top_p: 0.95,
     } as any;
   }
-
-  // Moonshot temperature is normalized by dividing by 2
-  const normalizedTemperature = temperature !== undefined ? temperature / 2 : undefined;
 
   return {
     ...rest,
     messages: normalizedMessages,
     model,
     stream: payload.stream ?? true,
-    temperature: normalizedTemperature,
+    // Moonshot temperature is normalized by dividing by 2
+    temperature: temperature !== undefined ? temperature / 2 : undefined,
     tools: moonshotTools?.length ? moonshotTools : undefined,
   } as OpenAI.ChatCompletionCreateParamsStreaming;
 };
