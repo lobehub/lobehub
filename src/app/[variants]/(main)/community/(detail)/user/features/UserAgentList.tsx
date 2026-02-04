@@ -17,7 +17,7 @@ interface UserAgentListProps {
 
 const UserAgentList = memo<UserAgentListProps>(({ rows = 4, pageSize = 8 }) => {
   const { t } = useTranslation('discover');
-  const { agents, agentCount, forkedAgents = [], isOwner } = useUserDetailContext();
+  const { agents, agentCount, forkedAgents = [], favoriteAgents = [], isOwner } = useUserDetailContext();
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>('published');
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,6 +29,9 @@ const UserAgentList = memo<UserAgentListProps>(({ rows = 4, pageSize = 8 }) => {
     if (statusFilter === 'forked') {
       // Show only forked agents (those with forkedFromAgentId)
       allAgents = forkedAgents;
+    } else if (statusFilter === 'favorite') {
+      // Show only favorited agents
+      allAgents = favoriteAgents;
     } else {
       // Filter by status for non-forked agents
       allAgents = allAgents.filter((agent) => {

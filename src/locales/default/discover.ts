@@ -898,6 +898,7 @@ export default {
   'user.statusFilter.all': 'All',
   'user.statusFilter.archived': 'Archived',
   'user.statusFilter.deprecated': 'Deprecated',
+  'user.statusFilter.favorite': 'Favorite',
   'user.statusFilter.forked': 'Forked',
   'user.statusFilter.published': 'Published',
   'user.statusFilter.unpublished': 'Under Review',

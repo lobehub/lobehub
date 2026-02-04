@@ -61,12 +61,14 @@ const UserDetailPage = memo<UserDetailPageProps>(({ mobile }) => {
 
   const contextConfig = useMemo(() => {
     if (!data || !data.user) return null;
-    const { user, agents, agentGroups, forkedAgents, forkedAgentGroups } = data;
+    const { user, agents, agentGroups, forkedAgents, forkedAgentGroups, favoriteAgents, favoriteAgentGroups } = data;
     const totalInstalls = agents.reduce((sum, agent) => sum + (agent.installCount || 0), 0);
     return {
       agentCount: agents.length,
       agentGroups: agentGroups || [],
       agents,
+      favoriteAgentGroups: favoriteAgentGroups || [],
+      favoriteAgents: favoriteAgents || [],
       forkedAgentGroups: forkedAgentGroups || [],
       forkedAgents: forkedAgents || [],
       groupCount: agentGroups?.length || 0,

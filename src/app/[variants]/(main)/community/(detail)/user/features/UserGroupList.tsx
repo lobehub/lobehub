@@ -16,7 +16,7 @@ interface UserGroupListProps {
 
 const UserGroupList = memo<UserGroupListProps>(({ rows = 4, pageSize = 8 }) => {
   const { t } = useTranslation('discover');
-  const { agentGroups = [], groupCount, forkedAgentGroups = [], isOwner } = useUserDetailContext();
+  const { agentGroups = [], groupCount, forkedAgentGroups = [], favoriteAgentGroups = [], isOwner } = useUserDetailContext();
   const [currentPage, setCurrentPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<StatusFilterValue>('published');
   const [searchQuery, setSearchQuery] = useState('');
@@ -28,6 +28,9 @@ const UserGroupList = memo<UserGroupListProps>(({ rows = 4, pageSize = 8 }) => {
     if (statusFilter === 'forked') {
       // Show only forked groups (those with forkedFromAgentId)
       allGroups = forkedAgentGroups;
+    } else if (statusFilter === 'favorite') {
+      // Show only favorited groups
+      allGroups = favoriteAgentGroups;
     } else {
       // Filter by status for non-forked groups
       allGroups = allGroups.filter((group) => {

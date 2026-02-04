@@ -495,6 +495,7 @@
   "user.statusFilter.all": "全部",
   "user.statusFilter.archived": "已归档",
   "user.statusFilter.deprecated": "已废弃",
+  "user.statusFilter.favorite": "已收藏",
   "user.statusFilter.forked": "已派生",
   "user.statusFilter.published": "已发布",
   "user.statusFilter.unpublished": "审核中",

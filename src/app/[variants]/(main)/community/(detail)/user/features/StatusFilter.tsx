@@ -4,7 +4,7 @@ import { Select } from 'antd';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-export type StatusFilterValue = 'published' | 'unpublished' | 'deprecated' | 'archived' | 'forked';
+export type StatusFilterValue = 'published' | 'unpublished' | 'deprecated' | 'archived' | 'forked' | 'favorite';
 
 interface StatusFilterProps {
   onChange: (value: StatusFilterValue) => void;
@@ -20,6 +20,7 @@ const StatusFilter = memo<StatusFilterProps>(({ value, onChange }) => {
     { label: t('user.statusFilter.deprecated'), value: 'deprecated' as const },
     { label: t('user.statusFilter.archived'), value: 'archived' as const },
     { label: t('user.statusFilter.forked'), value: 'forked' as const },
+    { label: t('user.statusFilter.favorite'), value: 'favorite' as const },
   ];
 
   return (
