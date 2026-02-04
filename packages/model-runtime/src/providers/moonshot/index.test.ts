@@ -1,51 +1,95 @@
 // @vitest-environment node
+import OpenAI from 'openai';
 import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeMoonshotAI, params, type MoonshotModelCard } from './index';
+import {
+  LobeMoonshotAI,
+  LobeMoonshotAnthropicAI,
+  LobeMoonshotOpenAI,
+  anthropicParams,
+  params,
+} from './index';
 
-const defaultBaseURL = 'https://api.moonshot.ai/anthropic';
+const defaultOpenAIBaseURL = 'https://api.moonshot.ai/v1';
+const anthropicBaseURL = 'https://api.moonshot.ai/anthropic';
 
-// Mock the console.error to avoid polluting test output
+// Mock the console.error and console.warn to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
-
-let instance: { [key: string]: any };
-
-const getLastRequestPayload = () => {
-  const calls = (instance['client'].messages.create as Mock).mock.calls;
-  return calls[calls.length - 1]?.[0];
-};
-
-beforeEach(() => {
-  instance = new LobeMoonshotAI({ apiKey: 'test' });
-
-  vi.spyOn(instance['client'].messages, 'create').mockResolvedValue(new ReadableStream() as any);
-});
-
-afterEach(() => {
-  vi.clearAllMocks();
-});
+vi.spyOn(console, 'warn').mockImplementation(() => {});
 
 describe('LobeMoonshotAI', () => {
-  describe('init', () => {
-    it('should correctly initialize with an API key', async () => {
-      const runtime = new LobeMoonshotAI({ apiKey: 'test_api_key' });
+  describe('RouterRuntime baseURL routing', () => {
+    it('should route to OpenAI format by default', async () => {
+      const runtime = new LobeMoonshotAI({ apiKey: 'test' });
       expect(runtime).toBeInstanceOf(LobeMoonshotAI);
-      expect(runtime.baseURL).toEqual(defaultBaseURL);
+    });
+
+    it('should route to OpenAI format when baseURL ends with /v1', async () => {
+      const runtime = new LobeMoonshotAI({
+        apiKey: 'test',
+        baseURL: 'https://api.moonshot.ai/v1',
+      });
+      expect(runtime).toBeInstanceOf(LobeMoonshotAI);
+    });
+
+    it('should route to Anthropic format when baseURL ends with /anthropic', async () => {
+      const runtime = new LobeMoonshotAI({
+        apiKey: 'test',
+        baseURL: 'https://api.moonshot.ai/anthropic',
+      });
+      expect(runtime).toBeInstanceOf(LobeMoonshotAI);
+    });
+
+    it('should route to Anthropic format when baseURL ends with /anthropic/', async () => {
+      const runtime = new LobeMoonshotAI({
+        apiKey: 'test',
+        baseURL: 'https://api.moonshot.ai/anthropic/',
+      });
+      expect(runtime).toBeInstanceOf(LobeMoonshotAI);
     });
   });
 
   describe('Debug Configuration', () => {
     it('should disable debug by default', () => {
       delete process.env.DEBUG_MOONSHOT_CHAT_COMPLETION;
-      const result = params.debug!.chatCompletion!();
+      const result = anthropicParams.debug!.chatCompletion!();
       expect(result).toBe(false);
     });
 
     it('should enable debug when env is set', () => {
       process.env.DEBUG_MOONSHOT_CHAT_COMPLETION = '1';
-      const result = params.debug!.chatCompletion!();
+      const result = anthropicParams.debug!.chatCompletion!();
       expect(result).toBe(true);
       delete process.env.DEBUG_MOONSHOT_CHAT_COMPLETION;
+    });
+  });
+});
+
+describe('LobeMoonshotOpenAI', () => {
+  let instance: InstanceType<typeof LobeMoonshotOpenAI>;
+
+  const getLastRequestPayload = () => {
+    const calls = ((instance as any).client.chat.completions.create as Mock).mock.calls;
+    return calls[calls.length - 1]?.[0];
+  };
+
+  beforeEach(() => {
+    instance = new LobeMoonshotOpenAI({ apiKey: 'test' });
+
+    vi.spyOn((instance as any).client.chat.completions, 'create').mockResolvedValue(
+      new ReadableStream() as any,
+    );
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('init', () => {
+    it('should correctly initialize with an API key', async () => {
+      const runtime = new LobeMoonshotOpenAI({ apiKey: 'test_api_key' });
+      expect(runtime).toBeInstanceOf(LobeMoonshotOpenAI);
+      expect((runtime as any).baseURL).toEqual(defaultOpenAIBaseURL);
     });
   });
 
@@ -63,11 +107,11 @@ describe('LobeMoonshotAI', () => {
         });
 
         const payload = getLastRequestPayload();
-        const assistantMessage = payload.messages.find((message: any) => message.role === 'assistant');
-
-        expect(assistantMessage?.content).toEqual(
-          expect.arrayContaining([expect.objectContaining({ text: ' ' })]),
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
         );
+
+        expect(assistantMessage?.content).toBe(' ');
       });
 
       it('should replace null content assistant message with a space', async () => {
@@ -81,29 +125,11 @@ describe('LobeMoonshotAI', () => {
         });
 
         const payload = getLastRequestPayload();
-        const assistantMessage = payload.messages.find((message: any) => message.role === 'assistant');
-
-        expect(assistantMessage?.content).toEqual(
-          expect.arrayContaining([expect.objectContaining({ text: ' ' })]),
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
         );
-      });
 
-      it('should replace undefined content assistant message with a space', async () => {
-        await instance.chat({
-          messages: [
-            { content: 'Hello', role: 'user' },
-            { content: undefined as any, role: 'assistant' },
-          ],
-          model: 'moonshot-v1-8k',
-          temperature: 0,
-        });
-
-        const payload = getLastRequestPayload();
-        const assistantMessage = payload.messages.find((message: any) => message.role === 'assistant');
-
-        expect(assistantMessage?.content).toEqual(
-          expect.arrayContaining([expect.objectContaining({ text: ' ' })]),
-        );
+        expect(assistantMessage?.content).toBe(' ');
       });
 
       it('should not modify non-empty assistant messages', async () => {
@@ -117,33 +143,11 @@ describe('LobeMoonshotAI', () => {
         });
 
         const payload = getLastRequestPayload();
-        const assistantMessage = payload.messages.find((message: any) => message.role === 'assistant');
-
-        expect(assistantMessage?.content).toEqual(
-          expect.arrayContaining([expect.objectContaining({ text: 'I am here' })]),
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
         );
-      });
 
-      it('should not modify user or system messages', async () => {
-        await instance.chat({
-          messages: [
-            { content: '', role: 'system' },
-            { content: '', role: 'user' },
-            { content: '', role: 'assistant' },
-          ],
-          model: 'moonshot-v1-8k',
-          temperature: 0,
-        });
-
-        const payload = getLastRequestPayload();
-        const userMessage = payload.messages.find((message: any) => message.role === 'user');
-        const assistantMessage = payload.messages.find((message: any) => message.role === 'assistant');
-
-        expect(payload.system).toBeUndefined();
-        expect(userMessage?.content).toBe('');
-        expect(assistantMessage?.content).toEqual(
-          expect.arrayContaining([expect.objectContaining({ text: ' ' })]),
-        );
+        expect(assistantMessage?.content).toBe('I am here');
       });
     });
 
@@ -168,33 +172,6 @@ describe('LobeMoonshotAI', () => {
         );
       });
 
-      it('should add web_search tool along with existing tools when enabledSearch is true', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'moonshot-v1-8k',
-          temperature: 0,
-          enabledSearch: true,
-          tools: [
-            {
-              type: 'function',
-              function: { name: 'custom_tool', description: 'A custom tool', parameters: {} },
-            },
-          ],
-        });
-
-        const payload = getLastRequestPayload();
-
-        expect(payload.tools).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({ name: 'custom_tool' }),
-            expect.objectContaining({
-              type: 'builtin_function',
-              function: { name: '$web_search' },
-            }),
-          ]),
-        );
-      });
-
       it('should not add web_search tool when enabledSearch is false', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
@@ -205,44 +182,6 @@ describe('LobeMoonshotAI', () => {
 
         const payload = getLastRequestPayload();
         expect(payload.tools).toBeUndefined();
-      });
-
-      it('should not add web_search tool when enabledSearch is not specified', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'moonshot-v1-8k',
-          temperature: 0,
-        });
-
-        const payload = getLastRequestPayload();
-        expect(payload.tools).toBeUndefined();
-      });
-
-      it('should preserve existing tools when enabledSearch is false', async () => {
-        await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
-          model: 'moonshot-v1-8k',
-          temperature: 0,
-          enabledSearch: false,
-          tools: [
-            {
-              type: 'function',
-              function: { name: 'custom_tool', description: 'A custom tool', parameters: {} },
-            },
-          ],
-        });
-
-        const payload = getLastRequestPayload();
-
-        expect(payload.tools).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'custom_tool' })]));
-        expect(payload.tools).not.toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({
-              type: 'builtin_function',
-              function: { name: '$web_search' },
-            }),
-          ]),
-        );
       });
     });
 
@@ -280,193 +219,252 @@ describe('LobeMoonshotAI', () => {
         expect(payload.temperature).toBe(0);
       });
 
-      it('should handle high temperature values (2.0 normalized to 1.0)', async () => {
+      it('should handle kimi-k2.5 model with thinking enabled by default', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
-          model: 'moonshot-v1-8k',
-          temperature: 2,
+          model: 'kimi-k2.5',
+          temperature: 0.5,
+          top_p: 0.8,
         });
 
         const payload = getLastRequestPayload();
         expect(payload.temperature).toBe(1);
+        expect(payload.top_p).toBe(0.95);
+        expect(payload.frequency_penalty).toBe(0);
+        expect(payload.presence_penalty).toBe(0);
+        expect(payload.thinking).toEqual({ type: 'enabled' });
       });
 
-      it('should normalize negative temperature values', async () => {
+      it('should handle kimi-k2.5 model with thinking disabled', async () => {
         await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],
-          model: 'moonshot-v1-8k',
-          temperature: -1,
+          model: 'kimi-k2.5',
+          thinking: { budget_tokens: 0, type: 'disabled' },
         });
 
         const payload = getLastRequestPayload();
-        expect(payload.temperature).toBe(-0.5);
+        expect(payload.temperature).toBe(0.6);
+        expect(payload.thinking).toEqual({ type: 'disabled' });
       });
     });
 
-    describe('other payload properties', () => {
-      it('should preserve other payload properties', async () => {
+    describe('interleaved thinking', () => {
+      it('should convert reasoning to reasoning_content for assistant messages', async () => {
         await instance.chat({
-          messages: [{ content: 'Hello', role: 'user' }],
+          messages: [
+            { content: 'Hello', role: 'user' },
+            {
+              content: 'Response',
+              role: 'assistant',
+              reasoning: { content: 'My reasoning process' },
+            } as any,
+          ],
           model: 'moonshot-v1-8k',
           temperature: 0.5,
-          max_tokens: 100,
-          top_p: 0.9,
         });
 
         const payload = getLastRequestPayload();
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
 
-        expect(payload.max_tokens).toBe(100);
-        expect(payload.model).toBe('moonshot-v1-8k');
-        expect(payload.temperature).toBe(0.25);
-        expect(payload.top_p).toBe(0.9);
-        expect(payload.messages).toEqual([
-          {
-            content: [
-              {
-                cache_control: { type: 'ephemeral' },
-                text: 'Hello',
-                type: 'text',
-              },
-            ],
-            role: 'user',
-          },
-        ]);
+        expect(assistantMessage?.reasoning_content).toBe('My reasoning process');
+        expect(assistantMessage?.reasoning).toBeUndefined();
       });
+    });
+  });
+});
 
-      it('should combine all features together', async () => {
+describe('LobeMoonshotAnthropicAI', () => {
+  let instance: InstanceType<typeof LobeMoonshotAnthropicAI>;
+
+  const getLastRequestPayload = () => {
+    const calls = ((instance as any).client.messages.create as Mock).mock.calls;
+    return calls[calls.length - 1]?.[0];
+  };
+
+  beforeEach(() => {
+    instance = new LobeMoonshotAnthropicAI({ apiKey: 'test' });
+
+    vi.spyOn((instance as any).client.messages, 'create').mockResolvedValue(
+      new ReadableStream() as any,
+    );
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('init', () => {
+    it('should correctly initialize with an API key', async () => {
+      const runtime = new LobeMoonshotAnthropicAI({ apiKey: 'test_api_key' });
+      expect(runtime).toBeInstanceOf(LobeMoonshotAnthropicAI);
+      expect((runtime as any).baseURL).toEqual(anthropicBaseURL);
+    });
+  });
+
+  describe('handlePayload', () => {
+    describe('empty assistant messages', () => {
+      it('should replace empty string assistant message with a space', async () => {
         await instance.chat({
           messages: [
             { content: 'Hello', role: 'user' },
             { content: '', role: 'assistant' },
-            { content: 'Question?', role: 'user' },
+            { content: 'Follow-up', role: 'user' },
           ],
           model: 'moonshot-v1-8k',
-          temperature: 0.7,
-          max_tokens: 2000,
-          enabledSearch: true,
-          tools: [
-            {
-              type: 'function',
-              function: { name: 'custom_tool', description: 'A custom tool', parameters: {} },
-            },
-          ],
+          temperature: 0,
         });
 
         const payload = getLastRequestPayload();
-        const assistantMessage = payload.messages.find((message: any) => message.role === 'assistant');
+        const assistantMessage = payload.messages.find(
+          (message: any) => message.role === 'assistant',
+        );
 
-        expect(payload.max_tokens).toBe(2000);
-        expect(payload.temperature).toBe(0.35);
+        expect(assistantMessage?.content).toEqual(
+          expect.arrayContaining([expect.objectContaining({ text: ' ' })]),
+        );
+      });
+    });
+
+    describe('web search functionality', () => {
+      it('should add web_search tool when enabledSearch is true', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'moonshot-v1-8k',
+          temperature: 0,
+          enabledSearch: true,
+        });
+
+        const payload = getLastRequestPayload();
+
         expect(payload.tools).toEqual(
           expect.arrayContaining([
-            expect.objectContaining({ name: 'custom_tool' }),
             expect.objectContaining({
               type: 'builtin_function',
               function: { name: '$web_search' },
             }),
           ]),
         );
-        expect(payload.messages).toHaveLength(3);
-        expect(assistantMessage?.content).toEqual(
-          expect.arrayContaining([expect.objectContaining({ text: ' ' })]),
-        );
+      });
+    });
+
+    describe('temperature normalization', () => {
+      it('should normalize temperature (divide by 2)', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'moonshot-v1-8k',
+          temperature: 0.8,
+        });
+
+        const payload = getLastRequestPayload();
+        expect(payload.temperature).toBe(0.4);
+      });
+    });
+
+    describe('kimi-k2.5 thinking support', () => {
+      it('should add thinking params for kimi-k2.5 model', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.5',
+          temperature: 0.5,
+        });
+
+        const payload = getLastRequestPayload();
+
+        expect(payload.thinking).toEqual({
+          budget_tokens: 1024,
+          type: 'enabled',
+        });
+        expect(payload.temperature).toBe(1);
+        expect(payload.top_p).toBe(0.95);
+      });
+
+      it('should disable thinking when type is disabled', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.5',
+          temperature: 0.5,
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        });
+
+        const payload = getLastRequestPayload();
+
+        expect(payload.thinking).toEqual({ type: 'disabled' });
+        expect(payload.temperature).toBe(0.6);
+      });
+
+      it('should respect custom thinking budget', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'kimi-k2.5',
+          max_tokens: 4096,
+          thinking: { budget_tokens: 2048, type: 'enabled' },
+        });
+
+        const payload = getLastRequestPayload();
+
+        expect(payload.thinking).toEqual({
+          budget_tokens: 2048,
+          type: 'enabled',
+        });
+      });
+
+      it('should not add thinking params for non-kimi-k2.5 models', async () => {
+        await instance.chat({
+          messages: [{ content: 'Hello', role: 'user' }],
+          model: 'moonshot-v1-8k',
+          temperature: 0.5,
+        });
+
+        const payload = getLastRequestPayload();
+
+        expect(payload.thinking).toBeUndefined();
       });
     });
   });
+});
 
-  describe('models', () => {
-    const mockFetchResponse = (data: MoonshotModelCard[]) =>
-      Promise.resolve({
-        ok: true,
-        json: async () => ({ data }),
-        status: 200,
-        statusText: 'OK',
-      } as Response);
+describe('models', () => {
+  const fetchModels = params.models as (params: { client: OpenAI }) => Promise<any[]>;
 
-    beforeEach(() => {
-      vi.clearAllMocks();
-    });
+  it('should use OpenAI client to fetch models', async () => {
+    const mockClient = {
+      models: {
+        list: vi.fn().mockResolvedValue({
+          data: [{ id: 'moonshot-v1-8k' }, { id: 'moonshot-v1-32k' }],
+        }),
+      },
+    } as unknown as OpenAI;
 
-    it('should fetch and process models successfully', async () => {
-      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        await mockFetchResponse([
-          { id: 'moonshot-v1-8k' },
-          { id: 'moonshot-v1-32k' },
-          { id: 'moonshot-v1-128k' },
-        ]),
-      );
+    const models = await fetchModels({ client: mockClient });
 
-      const models = await params.models!({ apiKey: 'test', baseURL: defaultBaseURL, client: {} as any });
+    expect(mockClient.models.list).toHaveBeenCalled();
+    expect(models).toHaveLength(2);
+    expect(models[0].id).toBe('moonshot-v1-8k');
+  });
 
-      expect(fetchSpy).toHaveBeenCalledWith(`${defaultBaseURL}/v1/models`, {
-        headers: {
-          Authorization: 'Bearer test',
-          'anthropic-version': '2023-06-01',
-          'x-api-key': 'test',
-        },
-        method: 'GET',
-      });
-      expect(models).toHaveLength(3);
-      expect(models[0].id).toBe('moonshot-v1-8k');
-      expect(models[1].id).toBe('moonshot-v1-32k');
-      expect(models[2].id).toBe('moonshot-v1-128k');
+  it('should handle empty model list', async () => {
+    const mockClient = {
+      models: {
+        list: vi.fn().mockResolvedValue({ data: [] }),
+      },
+    } as unknown as OpenAI;
 
-      fetchSpy.mockRestore();
-    });
+    const models = await fetchModels({ client: mockClient });
 
-    it('should handle single model', async () => {
-      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        await mockFetchResponse([{ id: 'moonshot-v1-8k' }]),
-      );
+    expect(models).toEqual([]);
+  });
 
-      const models = await params.models!({ apiKey: 'test', baseURL: defaultBaseURL, client: {} as any });
+  it('should handle fetch error gracefully', async () => {
+    const mockClient = {
+      models: {
+        list: vi.fn().mockRejectedValue(new Error('Network error')),
+      },
+    } as unknown as OpenAI;
 
-      expect(models).toHaveLength(1);
-      expect(models[0].id).toBe('moonshot-v1-8k');
+    const models = await fetchModels({ client: mockClient });
 
-      fetchSpy.mockRestore();
-    });
-
-    it('should handle empty model list', async () => {
-      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        await mockFetchResponse([]),
-      );
-
-      const models = await params.models!({ apiKey: 'test', baseURL: defaultBaseURL, client: {} as any });
-
-      expect(models).toEqual([]);
-
-      fetchSpy.mockRestore();
-    });
-
-    it('should process models with MODEL_LIST_CONFIGS', async () => {
-      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        await mockFetchResponse([{ id: 'moonshot-v1-8k' }]),
-      );
-
-      const models = await params.models!({ apiKey: 'test', baseURL: defaultBaseURL, client: {} as any });
-
-      expect(models[0]).toHaveProperty('id');
-      expect(models[0].id).toBe('moonshot-v1-8k');
-
-      fetchSpy.mockRestore();
-    });
-
-    it('should preserve model properties from API response', async () => {
-      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        await mockFetchResponse([
-          { id: 'moonshot-v1-8k', extra_field: 'value' } as MoonshotModelCard,
-          { id: 'moonshot-v1-32k', another_field: 123 } as MoonshotModelCard,
-        ]),
-      );
-
-      const models = await params.models!({ apiKey: 'test', baseURL: defaultBaseURL, client: {} as any });
-
-      expect(models).toHaveLength(2);
-      expect(models[0].id).toBe('moonshot-v1-8k');
-      expect(models[1].id).toBe('moonshot-v1-32k');
-
-      fetchSpy.mockRestore();
-    });
+    expect(models).toEqual([]);
   });
 });

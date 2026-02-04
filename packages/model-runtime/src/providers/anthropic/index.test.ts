@@ -15,7 +15,7 @@ const invalidErrorType = 'InvalidProviderAPIKey';
 // Mock the console.error to avoid polluting test output
 vi.spyOn(console, 'error').mockImplementation(() => {});
 
-let instance: LobeAnthropicAI;
+let instance: InstanceType<typeof LobeAnthropicAI>;
 
 beforeEach(() => {
   instance = new LobeAnthropicAI({ apiKey: 'test' });
@@ -585,15 +585,15 @@ describe('LobeAnthropicAI', () => {
 
         expect(result).toEqual(
           expect.objectContaining({
-          max_tokens: 4096,
-          messages: [
-            {
-              content: [{ cache_control: { type: 'ephemeral' }, text: 'Hello', type: 'text' }],
-              role: 'user',
-            },
-          ],
-          model: 'claude-3-haiku-20240307',
-          temperature: 0.25,
+            max_tokens: 4096,
+            messages: [
+              {
+                content: [{ cache_control: { type: 'ephemeral' }, text: 'Hello', type: 'text' }],
+                role: 'user',
+              },
+            ],
+            model: 'claude-3-haiku-20240307',
+            temperature: 0.25,
           }),
         );
       });
@@ -612,22 +612,22 @@ describe('LobeAnthropicAI', () => {
 
         expect(result).toEqual(
           expect.objectContaining({
-          max_tokens: 4096,
-          messages: [
-            {
-              content: [{ cache_control: { type: 'ephemeral' }, text: 'Hello', type: 'text' }],
-              role: 'user',
-            },
-          ],
-          model: 'claude-3-haiku-20240307',
-          system: [
-            {
-              cache_control: { type: 'ephemeral' },
-              text: 'You are a helpful assistant',
-              type: 'text',
-            },
-          ],
-          temperature: 0.35,
+            max_tokens: 4096,
+            messages: [
+              {
+                content: [{ cache_control: { type: 'ephemeral' }, text: 'Hello', type: 'text' }],
+                role: 'user',
+              },
+            ],
+            model: 'claude-3-haiku-20240307',
+            system: [
+              {
+                cache_control: { type: 'ephemeral' },
+                text: 'You are a helpful assistant',
+                type: 'text',
+              },
+            ],
+            temperature: 0.35,
           }),
         );
       });
@@ -655,16 +655,18 @@ describe('LobeAnthropicAI', () => {
 
         expect(result).toEqual(
           expect.objectContaining({
-          max_tokens: 4096,
-          messages: [
-            {
-              content: [{ cache_control: { type: 'ephemeral' }, text: 'Use a tool', type: 'text' }],
-              role: 'user',
-            },
-          ],
-          model: 'claude-3-haiku-20240307',
-          temperature: 0.4,
-          tools: [{ name: 'tool1', description: 'desc1' }],
+            max_tokens: 4096,
+            messages: [
+              {
+                content: [
+                  { cache_control: { type: 'ephemeral' }, text: 'Use a tool', type: 'text' },
+                ],
+                role: 'user',
+              },
+            ],
+            model: 'claude-3-haiku-20240307',
+            temperature: 0.4,
+            tools: [{ name: 'tool1', description: 'desc1' }],
           }),
         );
 
@@ -877,15 +879,15 @@ describe('LobeAnthropicAI', () => {
         // When thinking is disabled, it should be treated as if thinking wasn't provided
         expect(result).toEqual(
           expect.objectContaining({
-          max_tokens: 4096,
-          messages: [
-            {
-              content: [{ cache_control: { type: 'ephemeral' }, text: 'Hello', type: 'text' }],
-              role: 'user',
-            },
-          ],
-          model: 'claude-3-haiku-20240307',
-          temperature: 0.35,
+            max_tokens: 4096,
+            messages: [
+              {
+                content: [{ cache_control: { type: 'ephemeral' }, text: 'Hello', type: 'text' }],
+                role: 'user',
+              },
+            ],
+            model: 'claude-3-haiku-20240307',
+            temperature: 0.35,
           }),
         );
       });

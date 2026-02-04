@@ -58,10 +58,11 @@ interface RouterOptionItem extends ProviderIniOptions {
 
 type RouterOptions = RouterOptionItem | RouterOptionItem[];
 
-export type RuntimeClass = typeof LobeOpenAI;
+export type RuntimeClass = new (options?: any) => LobeRuntimeAI;
 
 interface RouterInstance {
   apiType: keyof typeof baseRuntimeMap;
+  baseURLPattern?: RegExp | string;
   models?: string[];
   options: RouterOptions;
   runtime?: RuntimeClass;
@@ -177,14 +178,31 @@ export const createRouterRuntime = ({
 
     private async resolveMatchedRouter(model: string): Promise<RouterInstance> {
       const resolvedRouters = await this.resolveRouters(model);
-      return (
-        resolvedRouters.find((router) => {
-          if (router.models && router.models.length > 0) {
-            return router.models.includes(model);
+      const baseURL = this._options.baseURL;
+
+      // Priority 1: Match by baseURLPattern
+      if (baseURL) {
+        const baseURLMatch = resolvedRouters.find((router) => {
+          if (!router.baseURLPattern) return false;
+          if (typeof router.baseURLPattern === 'string') {
+            return baseURL.includes(router.baseURLPattern);
           }
-          return false;
-        }) ?? resolvedRouters.at(-1)!
-      );
+          return router.baseURLPattern.test(baseURL);
+        });
+        if (baseURLMatch) return baseURLMatch;
+      }
+
+      // Priority 2: Match by models
+      const modelMatch = resolvedRouters.find((router) => {
+        if (router.models && router.models.length > 0) {
+          return router.models.includes(model);
+        }
+        return false;
+      });
+      if (modelMatch) return modelMatch;
+
+      // Fallback: Use the last router
+      return resolvedRouters.at(-1)!;
     }
 
     private normalizeRouterOptions(router: RouterInstance): RouterOptionItem[] {
