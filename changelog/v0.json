@@ -1,42 +1,54 @@
 [
   {
     "children": {
-      "features": ["Support server db mode with Postgres / Drizzle ORM / tRPC."]
+      "features": [
+        "Support server db mode with Postgres / Drizzle ORM / tRPC."
+      ]
     },
     "date": "2024-06-17",
     "version": "0.163.0"
   },
   {
     "children": {
-      "fixes": ["Fix issues for client fetch."]
+      "fixes": [
+        "Fix issues for client fetch."
+      ]
     },
     "date": "2024-06-16",
     "version": "0.162.25"
   },
   {
     "children": {
-      "improvements": ["Update error card style, Update settings footer style and about page."]
+      "improvements": [
+        "Update error card style, Update settings footer style and about page."
+      ]
     },
     "date": "2024-06-14",
     "version": "0.162.24"
   },
   {
     "children": {
-      "improvements": ["Add Qwen2 models, Add Zhipu new models."]
+      "improvements": [
+        "Add Qwen2 models, Add Zhipu new models."
+      ]
     },
     "date": "2024-06-12",
     "version": "0.162.23"
   },
   {
     "children": {
-      "improvements": ["Expand Clear tooltip maxWidth."]
+      "improvements": [
+        "Expand Clear tooltip maxWidth."
+      ]
     },
     "date": "2024-06-11",
     "version": "0.162.22"
   },
   {
     "children": {
-      "improvements": ["Do not show noDescription in new sesstion."]
+      "improvements": [
+        "Do not show noDescription in new sesstion."
+      ]
     },
     "date": "2024-06-09",
     "version": "0.162.21"
@@ -48,21 +60,27 @@
   },
   {
     "children": {
-      "fixes": ["Fix OpenAi BaseURL in api form."]
+      "fixes": [
+        "Fix OpenAi BaseURL in api form."
+      ]
     },
     "date": "2024-06-07",
     "version": "0.162.19"
   },
   {
     "children": {
-      "improvements": ["Refactor model provider implement."]
+      "improvements": [
+        "Refactor model provider implement."
+      ]
     },
     "date": "2024-06-06",
     "version": "0.162.18"
   },
   {
     "children": {
-      "fixes": ["Fix response.undefined error with some provider."]
+      "fixes": [
+        "Fix response.undefined error with some provider."
+      ]
     },
     "date": "2024-06-04",
     "version": "0.162.17"
@@ -74,56 +92,72 @@
   },
   {
     "children": {
-      "fixes": ["Fix send button loading on only add user message."]
+      "fixes": [
+        "Fix send button loading on only add user message."
+      ]
     },
     "date": "2024-06-03",
     "version": "0.162.15"
   },
   {
     "children": {
-      "improvements": ["Improve loading state."]
+      "improvements": [
+        "Improve loading state."
+      ]
     },
     "date": "2024-06-03",
     "version": "0.162.14"
   },
   {
     "children": {
-      "improvements": ["Improve config upload modal."]
+      "improvements": [
+        "Improve config upload modal."
+      ]
     },
     "date": "2024-06-01",
     "version": "0.162.13"
   },
   {
     "children": {
-      "improvements": ["Refactor session meta method."]
+      "improvements": [
+        "Refactor session meta method."
+      ]
     },
     "date": "2024-05-31",
     "version": "0.162.12"
   },
   {
     "children": {
-      "fixes": ["Fix import config."]
+      "fixes": [
+        "Fix import config."
+      ]
     },
     "date": "2024-05-29",
     "version": "0.162.11"
   },
   {
     "children": {
-      "improvements": ["Refactor the config import for server import."]
+      "improvements": [
+        "Refactor the config import for server import."
+      ]
     },
     "date": "2024-05-29",
     "version": "0.162.10"
   },
   {
     "children": {
-      "improvements": ["Refactor the settings to add optimistic updating."]
+      "improvements": [
+        "Refactor the settings to add optimistic updating."
+      ]
     },
     "date": "2024-05-29",
     "version": "0.162.9"
   },
   {
     "children": {
-      "improvements": ["Add optimistic loading for image uploading."]
+      "improvements": [
+        "Add optimistic loading for image uploading."
+      ]
     },
     "date": "2024-05-28",
     "version": "0.162.8"
@@ -139,21 +173,27 @@
   },
   {
     "children": {
-      "fixes": ["Fix the default agent not work correctly on new device."]
+      "fixes": [
+        "Fix the default agent not work correctly on new device."
+      ]
     },
     "date": "2024-05-28",
     "version": "0.162.6"
   },
   {
     "children": {
-      "improvements": ["Add SYSTEM_AGENT env."]
+      "improvements": [
+        "Add SYSTEM_AGENT env."
+      ]
     },
     "date": "2024-05-28",
     "version": "0.162.5"
   },
   {
     "children": {
-      "fixes": ["Fix auto focus issues."]
+      "fixes": [
+        "Fix auto focus issues."
+      ]
     },
     "date": "2024-05-28",
     "version": "0.162.4"
@@ -165,28 +205,36 @@
   },
   {
     "children": {
-      "improvements": ["Refactor agent store data."]
+      "improvements": [
+        "Refactor agent store data."
+      ]
     },
     "date": "2024-05-28",
     "version": "0.162.2"
   },
   {
     "children": {
-      "improvements": ["Improve the display effect of plug-in API name and description."]
+      "improvements": [
+        "Improve the display effect of plug-in API name and description."
+      ]
     },
     "date": "2024-05-27",
     "version": "0.162.1"
   },
   {
     "children": {
-      "features": ["Support topic agent."]
+      "features": [
+        "Support topic agent."
+      ]
     },
     "date": "2024-05-27",
     "version": "0.162.0"
   },
   {
     "children": {
-      "fixes": ["Fix trpc/edge path error when setting NEXT_PUBLIC_BASE_PATH."]
+      "fixes": [
+        "Fix trpc/edge path error when setting NEXT_PUBLIC_BASE_PATH."
+      ]
     },
     "date": "2024-05-27",
     "version": "0.161.25"
@@ -202,70 +250,90 @@
   },
   {
     "children": {
-      "improvements": ["Fix PluginStore layout."]
+      "improvements": [
+        "Fix PluginStore layout."
+      ]
     },
     "date": "2024-05-27",
     "version": "0.161.23"
   },
   {
     "children": {
-      "fixes": ["Fix connection checker."]
+      "fixes": [
+        "Fix connection checker."
+      ]
     },
     "date": "2024-05-26",
     "version": "0.161.22"
   },
   {
     "children": {
-      "fixes": ["Fix the batch import error."]
+      "fixes": [
+        "Fix the batch import error."
+      ]
     },
     "date": "2024-05-26",
     "version": "0.161.21"
   },
   {
     "children": {
-      "fixes": ["Fix vercel build."]
+      "fixes": [
+        "Fix vercel build."
+      ]
     },
     "date": "2024-05-26",
     "version": "0.161.20"
   },
   {
     "children": {
-      "improvements": ["Update token tag popover style."]
+      "improvements": [
+        "Update token tag popover style."
+      ]
     },
     "date": "2024-05-25",
     "version": "0.161.19"
   },
   {
     "children": {
-      "fixes": ["Fix aws log."]
+      "fixes": [
+        "Fix aws log."
+      ]
     },
     "date": "2024-05-25",
     "version": "0.161.18"
   },
   {
     "children": {
-      "improvements": ["Migrate some agent config to chatConfig."]
+      "improvements": [
+        "Migrate some agent config to chatConfig."
+      ]
     },
     "date": "2024-05-25",
     "version": "0.161.17"
   },
   {
     "children": {
-      "fixes": ["Fix bedrock show by default on vercel."]
+      "fixes": [
+        "Fix bedrock show by default on vercel."
+      ]
     },
     "date": "2024-05-25",
     "version": "0.161.16"
   },
   {
     "children": {
-      "fixes": ["Fix avatar missing on client DB mode."]
+      "fixes": [
+        "Fix avatar missing on client DB mode."
+      ]
     },
     "date": "2024-05-24",
     "version": "0.161.15"
   },
   {
     "children": {
-      "improvements": ["Refactor the global app status and fix PWA installer."]
+      "improvements": [
+        "Refactor the global app status and fix PWA installer."
+      ]
     },
     "date": "2024-05-24",
     "version": "0.161.14"
@@ -277,28 +345,36 @@
   },
   {
     "children": {
-      "improvements": ["Refactor the home redirect implement."]
+      "improvements": [
+        "Refactor the home redirect implement."
+      ]
     },
     "date": "2024-05-23",
     "version": "0.161.12"
   },
   {
     "children": {
-      "improvements": ["Improve PWA install guide."]
+      "improvements": [
+        "Improve PWA install guide."
+      ]
     },
     "date": "2024-05-23",
     "version": "0.161.11"
   },
   {
     "children": {
-      "fixes": ["Refactor user store and fix custom model list form."]
+      "fixes": [
+        "Refactor user store and fix custom model list form."
+      ]
     },
     "date": "2024-05-23",
     "version": "0.161.10"
   },
   {
     "children": {
-      "improvements": ["Fix image style and improve drag upload box."]
+      "improvements": [
+        "Fix image style and improve drag upload box."
+      ]
     },
     "date": "2024-05-23",
     "version": "0.161.9"
@@ -310,7 +386,9 @@
   },
   {
     "children": {
-      "improvements": ["Refactor to serverDB ENV."]
+      "improvements": [
+        "Refactor to serverDB ENV."
+      ]
     },
     "date": "2024-05-22",
     "version": "0.161.7"
@@ -322,43 +400,57 @@
   },
   {
     "children": {
-      "improvements": ["Move feature flags ENV."]
+      "improvements": [
+        "Move feature flags ENV."
+      ]
     },
     "date": "2024-05-22",
     "version": "0.161.5"
   },
   {
     "children": {
-      "improvements": ["Refactor the app ENV."],
-      "fixes": ["Fix market and plugin cache."]
+      "improvements": [
+        "Refactor the app ENV."
+      ],
+      "fixes": [
+        "Fix market and plugin cache."
+      ]
     },
     "date": "2024-05-22",
     "version": "0.161.4"
   },
   {
     "children": {
-      "improvements": ["Refactor the langfuse env."]
+      "improvements": [
+        "Refactor the langfuse env."
+      ]
     },
     "date": "2024-05-22",
     "version": "0.161.3"
   },
   {
     "children": {
-      "improvements": ["Refactor the llm env."]
+      "improvements": [
+        "Refactor the llm env."
+      ]
     },
     "date": "2024-05-22",
     "version": "0.161.2"
   },
   {
     "children": {
-      "improvements": ["Fix setting modal style problem."]
+      "improvements": [
+        "Fix setting modal style problem."
+      ]
     },
     "date": "2024-05-22",
     "version": "0.161.1"
   },
   {
     "children": {
-      "features": ["Add system agent to select another model provider for translation."]
+      "features": [
+        "Add system agent to select another model provider for translation."
+      ]
     },
     "date": "2024-05-21",
     "version": "0.161.0"
@@ -374,7 +466,9 @@
   },
   {
     "children": {
-      "fixes": ["Fix duplicate model panel key."]
+      "fixes": [
+        "Fix duplicate model panel key."
+      ]
     },
     "date": "2024-05-21",
     "version": "0.160.7"
@@ -390,77 +484,99 @@
   },
   {
     "children": {
-      "improvements": ["Refactor analytics env."]
+      "improvements": [
+        "Refactor analytics env."
+      ]
     },
     "date": "2024-05-20",
     "version": "0.160.5"
   },
   {
     "children": {
-      "improvements": ["Modify bedrock provided model."]
+      "improvements": [
+        "Modify bedrock provided model."
+      ]
     },
     "date": "2024-05-20",
     "version": "0.160.4"
   },
   {
     "children": {
-      "improvements": ["Add two feature flags: check_updates 、welcome_suggest."]
+      "improvements": [
+        "Add two feature flags: check_updates 、welcome_suggest."
+      ]
     },
     "date": "2024-05-19",
     "version": "0.160.3"
   },
   {
     "children": {
-      "fixes": ["Upgrade antd and fix lint type."]
+      "fixes": [
+        "Upgrade antd and fix lint type."
+      ]
     },
     "date": "2024-05-19",
     "version": "0.160.2"
   },
   {
     "children": {
-      "fixes": ["Fix enable ollama env."]
+      "fixes": [
+        "Fix enable ollama env."
+      ]
     },
     "date": "2024-05-18",
     "version": "0.160.1"
   },
   {
     "children": {
-      "features": ["Bump version and add enable ollama env."]
+      "features": [
+        "Bump version and add enable ollama env."
+      ]
     },
     "date": "2024-05-18",
     "version": "0.160.0"
   },
   {
     "children": {
-      "improvements": ["Refactor the create message flow to fix some bugs."]
+      "improvements": [
+        "Refactor the create message flow to fix some bugs."
+      ]
     },
     "date": "2024-05-15",
     "version": "0.159.12"
   },
   {
     "children": {
-      "improvements": ["Add Gemini 1.5 Flash model."]
+      "improvements": [
+        "Add Gemini 1.5 Flash model."
+      ]
     },
     "date": "2024-05-15",
     "version": "0.159.11"
   },
   {
     "children": {
-      "improvements": ["Fix setting modal on responsive and some other style problem."]
+      "improvements": [
+        "Fix setting modal on responsive and some other style problem."
+      ]
     },
     "date": "2024-05-15",
     "version": "0.159.10"
   },
   {
     "children": {
-      "fixes": ["Fix agent config on page init."]
+      "fixes": [
+        "Fix agent config on page init."
+      ]
     },
     "date": "2024-05-14",
     "version": "0.159.9"
   },
   {
     "children": {
-      "fixes": ["Fix retry issue when hide page."]
+      "fixes": [
+        "Fix retry issue when hide page."
+      ]
     },
     "date": "2024-05-14",
     "version": "0.159.8"
@@ -472,93 +588,123 @@
   },
   {
     "children": {
-      "fixes": ["Login button not show on user panel."]
+      "fixes": [
+        "Login button not show on user panel."
+      ]
     },
     "date": "2024-05-14",
     "version": "0.159.6"
   },
   {
     "children": {
-      "improvements": ["Fix scroll and expand."]
+      "improvements": [
+        "Fix scroll and expand."
+      ]
     },
     "date": "2024-05-14",
     "version": "0.159.5"
   },
   {
     "children": {
-      "fixes": ["Refresh model config form & mobile footer button lost."],
-      "improvements": ["Add GPT-4o model, update perplexity models, updates 01.AI model list."]
+      "fixes": [
+        "Refresh model config form & mobile footer button lost."
+      ],
+      "improvements": [
+        "Add GPT-4o model, update perplexity models, updates 01.AI model list."
+      ]
     },
     "date": "2024-05-14",
     "version": "0.159.4"
   },
   {
     "children": {
-      "fixes": ["Fix DeepSeek using wrong model ID."]
+      "fixes": [
+        "Fix DeepSeek using wrong model ID."
+      ]
     },
     "date": "2024-05-14",
     "version": "0.159.3"
   },
   {
     "children": {
-      "fixes": ["Dragging text mistakenly as image."]
+      "fixes": [
+        "Dragging text mistakenly as image."
+      ]
     },
     "date": "2024-05-14",
     "version": "0.159.2"
   },
   {
     "children": {
-      "improvements": ["Move next-auth hooks to user store actions."],
-      "fixes": ["Pin antd@5.17.0 to fix build error."]
+      "improvements": [
+        "Move next-auth hooks to user store actions."
+      ],
+      "fixes": [
+        "Pin antd@5.17.0 to fix build error."
+      ]
     },
     "date": "2024-05-14",
     "version": "0.159.1"
   },
   {
     "children": {
-      "features": ["Support DeepSeek as new model provider."]
+      "features": [
+        "Support DeepSeek as new model provider."
+      ]
     },
     "date": "2024-05-14",
     "version": "0.159.0"
   },
   {
     "children": {
-      "improvements": ["Fix TelemetryNotification zindex."]
+      "improvements": [
+        "Fix TelemetryNotification zindex."
+      ]
     },
     "date": "2024-05-13",
     "version": "0.158.2"
   },
   {
     "children": {
-      "improvements": ["Add PWA install and metadata & ld generate."]
+      "improvements": [
+        "Add PWA install and metadata & ld generate."
+      ]
     },
     "date": "2024-05-13",
     "version": "0.158.1"
   },
   {
     "children": {
-      "features": ["Add user profile page."]
+      "features": [
+        "Add user profile page."
+      ]
     },
     "date": "2024-05-13",
     "version": "0.158.0"
   },
   {
     "children": {
-      "fixes": ["Fix azure openai stream."]
+      "fixes": [
+        "Fix azure openai stream."
+      ]
     },
     "date": "2024-05-13",
     "version": "0.157.2"
   },
   {
     "children": {
-      "fixes": ["Fix dalle error."]
+      "fixes": [
+        "Fix dalle error."
+      ]
     },
     "date": "2024-05-12",
     "version": "0.157.1"
   },
   {
     "children": {
-      "features": ["upgrade to the new tool calls mode."]
+      "features": [
+        "upgrade to the new tool calls mode."
+      ]
     },
     "date": "2024-05-11",
     "version": "0.157.0"
@@ -570,7 +716,9 @@
   },
   {
     "children": {
-      "fixes": ["Azure OpenAI Vision models issue."]
+      "fixes": [
+        "Azure OpenAI Vision models issue."
+      ]
     },
     "date": "2024-05-10",
     "version": "0.156.1"
@@ -580,7 +728,9 @@
       "improvements": [
         "Improve groq location error, improve location error, improve model provider ux, support groq proxy url."
       ],
-      "features": ["Support perplexity proxy url."],
+      "features": [
+        "Support perplexity proxy url."
+      ],
       "fixes": [
         "Fix anthropic messages need pairs, fix parameter conditions for perplexity, fix Perplexity duplicate token."
       ]
@@ -595,21 +745,27 @@
   },
   {
     "children": {
-      "fixes": ["Fix mobile session style."]
+      "fixes": [
+        "Fix mobile session style."
+      ]
     },
     "date": "2024-05-09",
     "version": "0.155.8"
   },
   {
     "children": {
-      "fixes": ["Fix panel expand."]
+      "fixes": [
+        "Fix panel expand."
+      ]
     },
     "date": "2024-05-08",
     "version": "0.155.7"
   },
   {
     "children": {
-      "fixes": ["Fix editing long message issue."]
+      "fixes": [
+        "Fix editing long message issue."
+      ]
     },
     "date": "2024-05-08",
     "version": "0.155.6"
@@ -621,14 +777,18 @@
   },
   {
     "children": {
-      "fixes": ["Fix Agent Settings Form."]
+      "fixes": [
+        "Fix Agent Settings Form."
+      ]
     },
     "date": "2024-05-08",
     "version": "0.155.4"
   },
   {
     "children": {
-      "improvements": ["Optimized MaxToken Slider."]
+      "improvements": [
+        "Optimized MaxToken Slider."
+      ]
     },
     "date": "2024-05-08",
     "version": "0.155.3"
@@ -640,105 +800,135 @@
   },
   {
     "children": {
-      "improvements": ["Improve llm list when all closed."]
+      "improvements": [
+        "Improve llm list when all closed."
+      ]
     },
     "date": "2024-05-07",
     "version": "0.155.1"
   },
   {
     "children": {
-      "features": ["Add DataStatistics."]
+      "features": [
+        "Add DataStatistics."
+      ]
     },
     "date": "2024-05-07",
     "version": "0.155.0"
   },
   {
     "children": {
-      "improvements": ["Refactor the message slice internal method name."]
+      "improvements": [
+        "Refactor the message slice internal method name."
+      ]
     },
     "date": "2024-05-07",
     "version": "0.154.7"
   },
   {
     "children": {
-      "improvements": ["Add gemini-1.0-pro-002."]
+      "improvements": [
+        "Add gemini-1.0-pro-002."
+      ]
     },
     "date": "2024-05-07",
     "version": "0.154.6"
   },
   {
     "children": {
-      "improvements": ["Update LLM Settings Form styles."]
+      "improvements": [
+        "Update LLM Settings Form styles."
+      ]
     },
     "date": "2024-05-06",
     "version": "0.154.5"
   },
   {
     "children": {
-      "fixes": ["Fix next auth config."]
+      "fixes": [
+        "Fix next auth config."
+      ]
     },
     "date": "2024-05-06",
     "version": "0.154.4"
   },
   {
     "children": {
-      "fixes": ["Fix docker build."]
+      "fixes": [
+        "Fix docker build."
+      ]
     },
     "date": "2024-05-06",
     "version": "0.154.3"
   },
   {
     "children": {
-      "fixes": ["Fix docker build."]
+      "fixes": [
+        "Fix docker build."
+      ]
     },
     "date": "2024-05-06",
     "version": "0.154.2"
   },
   {
     "children": {
-      "fixes": ["Fix agent meta input disabled."]
+      "fixes": [
+        "Fix agent meta input disabled."
+      ]
     },
     "date": "2024-05-05",
     "version": "0.154.1"
   },
   {
     "children": {
-      "features": ["Support clerk as auth provider."]
+      "features": [
+        "Support clerk as auth provider."
+      ]
     },
     "date": "2024-05-05",
     "version": "0.154.0"
   },
   {
     "children": {
-      "improvements": ["Imporve mobile styles and loading skeleton."]
+      "improvements": [
+        "Imporve mobile styles and loading skeleton."
+      ]
     },
     "date": "2024-05-04",
     "version": "0.153.1"
   },
   {
     "children": {
-      "features": ["Add Settings Intercepting Routes."]
+      "features": [
+        "Add Settings Intercepting Routes."
+      ]
     },
     "date": "2024-05-04",
     "version": "0.153.0"
   },
   {
     "children": {
-      "fixes": ["Disabled autogenerate field icon when empty system role."]
+      "fixes": [
+        "Disabled autogenerate field icon when empty system role."
+      ]
     },
     "date": "2024-05-04",
     "version": "0.152.12"
   },
   {
     "children": {
-      "improvements": ["Add user panel and refactor the next-auth."]
+      "improvements": [
+        "Add user panel and refactor the next-auth."
+      ]
     },
     "date": "2024-05-03",
     "version": "0.152.11"
   },
   {
     "children": {
-      "improvements": ["Improve market layout styles and mobile style."]
+      "improvements": [
+        "Improve market layout styles and mobile style."
+      ]
     },
     "date": "2024-05-03",
     "version": "0.152.10"
@@ -750,141 +940,183 @@
   },
   {
     "children": {
-      "improvements": ["User store add an auth slice."]
+      "improvements": [
+        "User store add an auth slice."
+      ]
     },
     "date": "2024-05-03",
     "version": "0.152.8"
   },
   {
     "children": {
-      "improvements": ["Refactor setting layout and improve setting design."]
+      "improvements": [
+        "Refactor setting layout and improve setting design."
+      ]
     },
     "date": "2024-05-02",
     "version": "0.152.7"
   },
   {
     "children": {
-      "improvements": ["AutoScroll to the fully end."]
+      "improvements": [
+        "AutoScroll to the fully end."
+      ]
     },
     "date": "2024-05-02",
     "version": "0.152.6"
   },
   {
     "children": {
-      "fixes": ["Fix Setings Layout."]
+      "fixes": [
+        "Fix Setings Layout."
+      ]
     },
     "date": "2024-05-02",
     "version": "0.152.5"
   },
   {
     "children": {
-      "improvements": ["Refactor Market Layout."]
+      "improvements": [
+        "Refactor Market Layout."
+      ]
     },
     "date": "2024-05-01",
     "version": "0.152.1"
   },
   {
     "children": {
-      "features": ["Import settings from url."]
+      "features": [
+        "Import settings from url."
+      ]
     },
     "date": "2024-04-30",
     "version": "0.152.0"
   },
   {
     "children": {
-      "fixes": ["Fix telemetry preference modal and default agent config error."]
+      "fixes": [
+        "Fix telemetry preference modal and default agent config error."
+      ]
     },
     "date": "2024-04-30",
     "version": "0.151.11"
   },
   {
     "children": {
-      "improvements": ["Refactor Welcome Layout."]
+      "improvements": [
+        "Refactor Welcome Layout."
+      ]
     },
     "date": "2024-04-30",
     "version": "0.151.10"
   },
   {
     "children": {
-      "fixes": ["Minimax truncationed output."]
+      "fixes": [
+        "Minimax truncationed output."
+      ]
     },
     "date": "2024-04-30",
     "version": "0.151.9"
   },
   {
     "children": {
-      "improvements": ["Move NavBar to [@nav](https://github.com/nav) slot route."]
+      "improvements": [
+        "Move NavBar to [@nav](https://github.com/nav) slot route."
+      ]
     },
     "date": "2024-04-30",
     "version": "0.151.8"
   },
   {
     "children": {
-      "improvements": ["Add 404 and Error page."]
+      "improvements": [
+        "Add 404 and Error page."
+      ]
     },
     "date": "2024-04-30",
     "version": "0.151.7"
   },
   {
     "children": {
-      "fixes": ["Plugins with multiple settings cannot be correctly configured."]
+      "fixes": [
+        "Plugins with multiple settings cannot be correctly configured."
+      ]
     },
     "date": "2024-04-30",
     "version": "0.151.6"
   },
   {
     "children": {
-      "fixes": ["Effectively interrupt auto scrolling."],
-      "improvements": ["Revise some text."]
+      "fixes": [
+        "Effectively interrupt auto scrolling."
+      ],
+      "improvements": [
+        "Revise some text."
+      ]
     },
     "date": "2024-04-30",
     "version": "0.151.5"
   },
   {
     "children": {
-      "improvements": ["Move app page to the (main) layout group."]
+      "improvements": [
+        "Move app page to the (main) layout group."
+      ]
     },
     "date": "2024-04-29",
     "version": "0.151.4"
   },
   {
     "children": {
-      "improvements": ["Patching models info."]
+      "improvements": [
+        "Patching models info."
+      ]
     },
     "date": "2024-04-29",
     "version": "0.151.3"
   },
   {
     "children": {
-      "fixes": ["Fix only inject welcome question in inbox."]
+      "fixes": [
+        "Fix only inject welcome question in inbox."
+      ]
     },
     "date": "2024-04-29",
     "version": "0.151.2"
   },
   {
     "children": {
-      "improvements": ["Improve Inbox Assistant Welcome Guide."]
+      "improvements": [
+        "Improve Inbox Assistant Welcome Guide."
+      ]
     },
     "date": "2024-04-29",
     "version": "0.151.1"
   },
   {
     "children": {
-      "features": ["Support minimax as a new provider."]
+      "features": [
+        "Support minimax as a new provider."
+      ]
     },
     "date": "2024-04-29",
     "version": "0.151.0"
   },
   {
     "children": {
-      "improvements": ["Rename globalStore to userStore."]
+      "improvements": [
+        "Rename globalStore to userStore."
+      ]
     },
     "date": "2024-04-28",
     "version": "0.150.10"
   },
   {
     "children": {
-      "improvements": ["Refactor feature flags store to server config store."]
+      "improvements": [
+        "Refactor feature flags store to server config store."
+      ]
     },
     "date": "2024-04-28",
     "version": "0.150.9"
@@ -896,92 +1128,120 @@
   },
   {
     "children": {
-      "fixes": ["Suport to fetch model list on client."]
+      "fixes": [
+        "Suport to fetch model list on client."
+      ]
     },
     "date": "2024-04-28",
     "version": "0.150.7"
   },
   {
     "children": {
-      "fixes": ["Fix /api/proxy internal proxy attack."]
+      "fixes": [
+        "Fix /api/proxy internal proxy attack."
+      ]
     },
     "date": "2024-04-28",
     "version": "0.150.6"
   },
   {
     "children": {
-      "fixes": ["Fix the plugin string env and search error."]
+      "fixes": [
+        "Fix the plugin string env and search error."
+      ]
     },
     "date": "2024-04-27",
     "version": "0.150.5"
   },
   {
     "children": {
-      "improvements": ["Hide default model tag and show ollama provider by default."]
+      "improvements": [
+        "Hide default model tag and show ollama provider by default."
+      ]
     },
     "date": "2024-04-27",
     "version": "0.150.4"
   },
   {
     "children": {
-      "fixes": ["Fix docker build."]
+      "fixes": [
+        "Fix docker build."
+      ]
     },
     "date": "2024-04-27",
     "version": "0.150.3"
   },
   {
     "children": {
-      "fixes": ["Fix display error when using DEFAULT_AGENT_CONFIG env."]
+      "fixes": [
+        "Fix display error when using DEFAULT_AGENT_CONFIG env."
+      ]
     },
     "date": "2024-04-27",
     "version": "0.150.2"
   },
   {
     "children": {
-      "fixes": ["Fix display error when using DEFAULT_AGENT_CONFIG env."]
+      "fixes": [
+        "Fix display error when using DEFAULT_AGENT_CONFIG env."
+      ]
     },
     "date": "2024-04-27",
     "version": "0.150.1"
   },
   {
     "children": {
-      "features": ["Support feature flags."]
+      "features": [
+        "Support feature flags."
+      ]
     },
     "date": "2024-04-26",
     "version": "0.150.0"
   },
   {
     "children": {
-      "fixes": ["Fix ollama host issue."]
+      "fixes": [
+        "Fix ollama host issue."
+      ]
     },
     "date": "2024-04-26",
     "version": "0.149.6"
   },
   {
     "children": {
-      "improvements": ["Sperate SessionStore to a new AgentStore."],
-      "fixes": ["Fix not handle ollama error correctly."]
+      "improvements": [
+        "Sperate SessionStore to a new AgentStore."
+      ],
+      "fixes": [
+        "Fix not handle ollama error correctly."
+      ]
     },
     "date": "2024-04-25",
     "version": "0.149.5"
   },
   {
     "children": {
-      "fixes": ["Fix chat client request not support abort."]
+      "fixes": [
+        "Fix chat client request not support abort."
+      ]
     },
     "date": "2024-04-25",
     "version": "0.149.4"
   },
   {
     "children": {
-      "improvements": ["Add displaying the message \"Reset Successfully.\"."]
+      "improvements": [
+        "Add displaying the message \"Reset Successfully.\"."
+      ]
     },
     "date": "2024-04-25",
     "version": "0.149.3"
   },
   {
     "children": {
-      "improvements": ["Support to create ai message."]
+      "improvements": [
+        "Support to create ai message."
+      ]
     },
     "date": "2024-04-24",
     "version": "0.149.2"
@@ -993,42 +1253,54 @@
   },
   {
     "children": {
-      "features": ["Fully support ollama with browser request mode."]
+      "features": [
+        "Fully support ollama with browser request mode."
+      ]
     },
     "date": "2024-04-24",
     "version": "0.149.0"
   },
   {
     "children": {
-      "improvements": ["Update Ollama model 240421."]
+      "improvements": [
+        "Update Ollama model 240421."
+      ]
     },
     "date": "2024-04-24",
     "version": "0.148.10"
   },
   {
     "children": {
-      "improvements": ["Refactor for session server mode."]
+      "improvements": [
+        "Refactor for session server mode."
+      ]
     },
     "date": "2024-04-23",
     "version": "0.148.9"
   },
   {
     "children": {
-      "improvements": ["update some gemini deployment restrictions."]
+      "improvements": [
+        "update some gemini deployment restrictions."
+      ]
     },
     "date": "2024-04-23",
     "version": "0.148.8"
   },
   {
     "children": {
-      "fixes": ["Fix qwen-1.5-chat-72B context window in togetherai."]
+      "fixes": [
+        "Fix qwen-1.5-chat-72B context window in togetherai."
+      ]
     },
     "date": "2024-04-23",
     "version": "0.148.7"
   },
   {
     "children": {
-      "fixes": ["Add Windows Phone, iPadOS, BlackBerry OS, Linux OS and Chrome OS sync icons."],
+      "fixes": [
+        "Add Windows Phone, iPadOS, BlackBerry OS, Linux OS and Chrome OS sync icons."
+      ],
       "improvements": [
         "Support more model Icons: dbrx, command-r, openchat, rwkv, Bert-vits2, Stable Diffusion, WizardLM, adobe firefly, skylark."
       ]
@@ -1038,14 +1310,18 @@
   },
   {
     "children": {
-      "improvements": ["Support together ai to fetch model list."]
+      "improvements": [
+        "Support together ai to fetch model list."
+      ]
     },
     "date": "2024-04-22",
     "version": "0.148.5"
   },
   {
     "children": {
-      "fixes": ["Fix model list menu not display correctly."]
+      "fixes": [
+        "Fix model list menu not display correctly."
+      ]
     },
     "date": "2024-04-21",
     "version": "0.148.4"
@@ -1057,21 +1333,27 @@
   },
   {
     "children": {
-      "improvements": ["Add LLaMA 3 in groq + Mixtral 8x22B model."]
+      "improvements": [
+        "Add LLaMA 3 in groq + Mixtral 8x22B model."
+      ]
     },
     "date": "2024-04-21",
     "version": "0.148.2"
   },
   {
     "children": {
-      "fixes": ["Fix topic title not auto generate."]
+      "fixes": [
+        "Fix topic title not auto generate."
+      ]
     },
     "date": "2024-04-20",
     "version": "0.148.1"
   },
   {
     "children": {
-      "features": ["Support chat completion call at client side."]
+      "features": [
+        "Support chat completion call at client side."
+      ]
     },
     "date": "2024-04-20",
     "version": "0.148.0"
@@ -1083,21 +1365,27 @@
   },
   {
     "children": {
-      "improvements": ["Optimized file upload buttons and prompts."]
+      "improvements": [
+        "Optimized file upload buttons and prompts."
+      ]
     },
     "date": "2024-04-19",
     "version": "0.147.21"
   },
   {
     "children": {
-      "improvements": ["Improve aync session experience."]
+      "improvements": [
+        "Improve aync session experience."
+      ]
     },
     "date": "2024-04-18",
     "version": "0.147.20"
   },
   {
     "children": {
-      "improvements": ["Add M and B support max token in ModelInfoTags."]
+      "improvements": [
+        "Add M and B support max token in ModelInfoTags."
+      ]
     },
     "date": "2024-04-18",
     "version": "0.147.19"
@@ -1113,49 +1401,63 @@
   },
   {
     "children": {
-      "improvements": ["Refactor service to a uniform interface."]
+      "improvements": [
+        "Refactor service to a uniform interface."
+      ]
     },
     "date": "2024-04-16",
     "version": "0.147.17"
   },
   {
     "children": {
-      "improvements": ["Refactor the auth."]
+      "improvements": [
+        "Refactor the auth."
+      ]
     },
     "date": "2024-04-14",
     "version": "0.147.16"
   },
   {
     "children": {
-      "fixes": ["Fix tool call error with gpt-4-turbo."]
+      "fixes": [
+        "Fix tool call error with gpt-4-turbo."
+      ]
     },
     "date": "2024-04-14",
     "version": "0.147.15"
   },
   {
     "children": {
-      "improvements": ["Enable gemini-1.5-pro-latest model by default."]
+      "improvements": [
+        "Enable gemini-1.5-pro-latest model by default."
+      ]
     },
     "date": "2024-04-14",
     "version": "0.147.14"
   },
   {
     "children": {
-      "improvements": ["Refactor the service with browser db invoke."]
+      "improvements": [
+        "Refactor the service with browser db invoke."
+      ]
     },
     "date": "2024-04-14",
     "version": "0.147.13"
   },
   {
     "children": {
-      "improvements": ["Move client db to a new folder."]
+      "improvements": [
+        "Move client db to a new folder."
+      ]
     },
     "date": "2024-04-14",
     "version": "0.147.12"
   },
   {
     "children": {
-      "fixes": ["Support drag or copy to upload file by model ability."]
+      "fixes": [
+        "Support drag or copy to upload file by model ability."
+      ]
     },
     "date": "2024-04-14",
     "version": "0.147.11"
@@ -1167,21 +1469,27 @@
   },
   {
     "children": {
-      "fixes": ["Fix custom model list not display correctly."]
+      "fixes": [
+        "Fix custom model list not display correctly."
+      ]
     },
     "date": "2024-04-12",
     "version": "0.147.9"
   },
   {
     "children": {
-      "improvements": ["Update README.md."]
+      "improvements": [
+        "Update README.md."
+      ]
     },
     "date": "2024-04-12",
     "version": "0.147.8"
   },
   {
     "children": {
-      "fixes": ["Pin next to 14.1.4 to fix deployment."]
+      "fixes": [
+        "Pin next to 14.1.4 to fix deployment."
+      ]
     },
     "date": "2024-04-12",
     "version": "0.147.7"
@@ -1197,36 +1505,48 @@
   },
   {
     "children": {
-      "fixes": ["Fix only search topics in current session."]
+      "fixes": [
+        "Fix only search topics in current session."
+      ]
     },
     "date": "2024-04-11",
     "version": "0.147.5"
   },
   {
     "children": {
-      "fixes": ["Add more builtin OpenRouter models."],
-      "improvements": ["Adjust minimum width value for DraggablePanel component."]
+      "fixes": [
+        "Add more builtin OpenRouter models."
+      ],
+      "improvements": [
+        "Adjust minimum width value for DraggablePanel component."
+      ]
     },
     "date": "2024-04-11",
     "version": "0.147.4"
   },
   {
     "children": {
-      "improvements": ["Support Google Proxy URL."]
+      "improvements": [
+        "Support Google Proxy URL."
+      ]
     },
     "date": "2024-04-11",
     "version": "0.147.3"
   },
   {
     "children": {
-      "fixes": ["Fix custom model not display correctly."]
+      "fixes": [
+        "Fix custom model not display correctly."
+      ]
     },
     "date": "2024-04-11",
     "version": "0.147.2"
   },
   {
     "children": {
-      "fixes": ["Fix normalizeLocale with first matching locale."]
+      "fixes": [
+        "Fix normalizeLocale with first matching locale."
+      ]
     },
     "date": "2024-04-11",
     "version": "0.147.1"
@@ -1239,14 +1559,18 @@
       "features": [
         "Refactor to support azure openai provider, support close openai, support display model list, support model config modal, support model list with model providers, support open router auto model list, support openai model fetcher, support update model config, support user config model."
       ],
-      "fixes": ["Fix db migration, fix db migration."]
+      "fixes": [
+        "Fix db migration, fix db migration."
+      ]
     },
     "date": "2024-04-10",
     "version": "0.147.0"
   },
   {
     "children": {
-      "fixes": ["Pin ai@3.0.19 to fix error with chat stream output."]
+      "fixes": [
+        "Pin ai@3.0.19 to fix error with chat stream output."
+      ]
     },
     "date": "2024-04-10",
     "version": "0.146.2"
@@ -1258,29 +1582,39 @@
   },
   {
     "children": {
-      "features": ["Add support for ZITADEL SSO provider."]
+      "features": [
+        "Add support for ZITADEL SSO provider."
+      ]
     },
     "date": "2024-04-08",
     "version": "0.146.0"
   },
   {
     "children": {
-      "improvements": ["Refactor the model settings for more clean code."],
-      "fixes": ["Fix normalize russian locale."]
+      "improvements": [
+        "Refactor the model settings for more clean code."
+      ],
+      "fixes": [
+        "Fix normalize russian locale."
+      ]
     },
     "date": "2024-04-07",
     "version": "0.145.13"
   },
   {
     "children": {
-      "fixes": ["Fix typo of azure-id sso provider."]
+      "fixes": [
+        "Fix typo of azure-id sso provider."
+      ]
     },
     "date": "2024-04-04",
     "version": "0.145.12"
   },
   {
     "children": {
-      "fixes": ["Fix page crash when using browser as the stt engine."]
+      "fixes": [
+        "Fix page crash when using browser as the stt engine."
+      ]
     },
     "date": "2024-04-03",
     "version": "0.145.11"
@@ -1292,22 +1626,30 @@
   },
   {
     "children": {
-      "improvements": ["Improve scrollbar style."]
+      "improvements": [
+        "Improve scrollbar style."
+      ]
     },
     "date": "2024-04-02",
     "version": "0.145.9"
   },
   {
     "children": {
-      "improvements": ["Refactor SSO providers."],
-      "fixes": ["Fix plugins dropdown menu overflow."]
+      "improvements": [
+        "Refactor SSO providers."
+      ],
+      "fixes": [
+        "Fix plugins dropdown menu overflow."
+      ]
     },
     "date": "2024-04-02",
     "version": "0.145.8"
   },
   {
     "children": {
-      "fixes": ["Fix DraggablePanel bar interfere with the operation of the scrollbar."]
+      "fixes": [
+        "Fix DraggablePanel bar interfere with the operation of the scrollbar."
+      ]
     },
     "date": "2024-04-02",
     "version": "0.145.7"
@@ -1319,42 +1661,54 @@
   },
   {
     "children": {
-      "fixes": ["Add qwen api models patch in ollama."]
+      "fixes": [
+        "Add qwen api models patch in ollama."
+      ]
     },
     "date": "2024-03-30",
     "version": "0.145.5"
   },
   {
     "children": {
-      "fixes": ["Fix plugin install loading state error."]
+      "fixes": [
+        "Fix plugin install loading state error."
+      ]
     },
     "date": "2024-03-29",
     "version": "0.145.4"
   },
   {
     "children": {
-      "fixes": ["Fix antd locale."]
+      "fixes": [
+        "Fix antd locale."
+      ]
     },
     "date": "2024-03-29",
     "version": "0.145.3"
   },
   {
     "children": {
-      "fixes": ["Fix google ultra model id."]
+      "fixes": [
+        "Fix google ultra model id."
+      ]
     },
     "date": "2024-03-29",
     "version": "0.145.2"
   },
   {
     "children": {
-      "fixes": ["Fix Google Gemini pro 1.5 and system role not take effect."]
+      "fixes": [
+        "Fix Google Gemini pro 1.5 and system role not take effect."
+      ]
     },
     "date": "2024-03-29",
     "version": "0.145.1"
   },
   {
     "children": {
-      "features": ["Support TogetherAI as new model provider."]
+      "features": [
+        "Support TogetherAI as new model provider."
+      ]
     },
     "date": "2024-03-29",
     "version": "0.145.0"
@@ -1366,49 +1720,63 @@
   },
   {
     "children": {
-      "features": ["Support authentik as sso."]
+      "features": [
+        "Support authentik as sso."
+      ]
     },
     "date": "2024-03-29",
     "version": "0.144.0"
   },
   {
     "children": {
-      "features": ["Add Bulgarian translation."]
+      "features": [
+        "Add Bulgarian translation."
+      ]
     },
     "date": "2024-03-28",
     "version": "0.143.0"
   },
   {
     "children": {
-      "fixes": ["Fix Add agent and Converse button not jump."]
+      "fixes": [
+        "Fix Add agent and Converse button not jump."
+      ]
     },
     "date": "2024-03-28",
     "version": "0.142.9"
   },
   {
     "children": {
-      "fixes": ["Fix gemini 1.5 pro model id to support gemini new models."]
+      "fixes": [
+        "Fix gemini 1.5 pro model id to support gemini new models."
+      ]
     },
     "date": "2024-03-28",
     "version": "0.142.8"
   },
   {
     "children": {
-      "fixes": ["Fix the missing German locale."]
+      "fixes": [
+        "Fix the missing German locale."
+      ]
     },
     "date": "2024-03-27",
     "version": "0.142.7"
   },
   {
     "children": {
-      "fixes": ["Fix normalize german locale."]
+      "fixes": [
+        "Fix normalize german locale."
+      ]
     },
     "date": "2024-03-26",
     "version": "0.142.6"
   },
   {
     "children": {
-      "fixes": ["Fix mobile click, fix mobile click issue."]
+      "fixes": [
+        "Fix mobile click, fix mobile click issue."
+      ]
     },
     "date": "2024-03-26",
     "version": "0.142.5"
@@ -1420,14 +1788,18 @@
   },
   {
     "children": {
-      "fixes": ["Pin next-auth temporary to fix build error."]
+      "fixes": [
+        "Pin next-auth temporary to fix build error."
+      ]
     },
     "date": "2024-03-26",
     "version": "0.142.3"
   },
   {
     "children": {
-      "fixes": ["Support openrouter custom models env."]
+      "fixes": [
+        "Support openrouter custom models env."
+      ]
     },
     "date": "2024-03-25",
     "version": "0.142.2"
@@ -1439,85 +1811,111 @@
   },
   {
     "children": {
-      "features": ["Support 01.AI as a new provider."]
+      "features": [
+        "Support 01.AI as a new provider."
+      ]
     },
     "date": "2024-03-25",
     "version": "0.142.0"
   },
   {
     "children": {
-      "fixes": ["Fix window icon and scrollbar style."]
+      "fixes": [
+        "Fix window icon and scrollbar style."
+      ]
     },
     "date": "2024-03-22",
     "version": "0.141.2"
   },
   {
     "children": {
-      "improvements": ["Refactor the Vercel Aanlytics and support Google Aanlytics."]
+      "improvements": [
+        "Refactor the Vercel Aanlytics and support Google Aanlytics."
+      ]
     },
     "date": "2024-03-22",
     "version": "0.141.1"
   },
   {
     "children": {
-      "features": ["Using YJS and WebRTC to support sync data between different devices."]
+      "features": [
+        "Using YJS and WebRTC to support sync data between different devices."
+      ]
     },
     "date": "2024-03-22",
     "version": "0.141.0"
   },
   {
     "children": {
-      "improvements": ["add Moonshot Kimi Reverse model to Moonshot model provider.."]
+      "improvements": [
+        "add Moonshot Kimi Reverse model to Moonshot model provider.."
+      ]
     },
     "date": "2024-03-22",
     "version": "0.140.1"
   },
   {
     "children": {
-      "features": ["Add gemini 1.5 pro support."]
+      "features": [
+        "Add gemini 1.5 pro support."
+      ]
     },
     "date": "2024-03-22",
     "version": "0.140.0"
   },
   {
     "children": {
-      "fixes": ["Fix code block display issue."],
-      "improvements": ["The bottom safe area height of iOS."]
+      "fixes": [
+        "Fix code block display issue."
+      ],
+      "improvements": [
+        "The bottom safe area height of iOS."
+      ]
     },
     "date": "2024-03-22",
     "version": "0.139.2"
   },
   {
     "children": {
-      "improvements": ["Improve model tags."]
+      "improvements": [
+        "Improve model tags."
+      ]
     },
     "date": "2024-03-17",
     "version": "0.139.1"
   },
   {
     "children": {
-      "features": ["Support openrouter as a new model provider."]
+      "features": [
+        "Support openrouter as a new model provider."
+      ]
     },
     "date": "2024-03-16",
     "version": "0.139.0"
   },
   {
     "children": {
-      "improvements": ["Update Markdown in ChatItem."]
+      "improvements": [
+        "Update Markdown in ChatItem."
+      ]
     },
     "date": "2024-03-15",
     "version": "0.138.2"
   },
   {
     "children": {
-      "fixes": ["Fix URL typo."]
+      "fixes": [
+        "Fix URL typo."
+      ]
     },
     "date": "2024-03-15",
     "version": "0.138.1"
   },
   {
     "children": {
-      "features": ["Support groq as a model provider."]
+      "features": [
+        "Support groq as a model provider."
+      ]
     },
     "date": "2024-03-15",
     "version": "0.138.0"
@@ -1529,7 +1927,9 @@
   },
   {
     "children": {
-      "features": ["Support azure-ad as a new sso provider."]
+      "features": [
+        "Support azure-ad as a new sso provider."
+      ]
     },
     "date": "2024-03-15",
     "version": "0.136.0"
@@ -1546,35 +1946,45 @@
   },
   {
     "children": {
-      "improvements": ["Upgrade plugin db schema."]
+      "improvements": [
+        "Upgrade plugin db schema."
+      ]
     },
     "date": "2024-03-14",
     "version": "0.135.2"
   },
   {
     "children": {
-      "improvements": ["Refactor the db model."]
+      "improvements": [
+        "Refactor the db model."
+      ]
     },
     "date": "2024-03-14",
     "version": "0.135.1"
   },
   {
     "children": {
-      "features": ["Add claude 3 to bedrock provider."]
+      "features": [
+        "Add claude 3 to bedrock provider."
+      ]
     },
     "date": "2024-03-14",
     "version": "0.135.0"
   },
   {
     "children": {
-      "improvements": ["Add more model display name."]
+      "improvements": [
+        "Add more model display name."
+      ]
     },
     "date": "2024-03-13",
     "version": "0.134.1"
   },
   {
     "children": {
-      "features": ["Support anthropic proxy url."]
+      "features": [
+        "Support anthropic proxy url."
+      ]
     },
     "date": "2024-03-13",
     "version": "0.134.0"
@@ -1586,105 +1996,135 @@
   },
   {
     "children": {
-      "fixes": ["Fix sitemap missing in docker building."]
+      "fixes": [
+        "Fix sitemap missing in docker building."
+      ]
     },
     "date": "2024-03-11",
     "version": "0.133.4"
   },
   {
     "children": {
-      "fixes": ["Fix the max token of claude 3."]
+      "fixes": [
+        "Fix the max token of claude 3."
+      ]
     },
     "date": "2024-03-10",
     "version": "0.133.3"
   },
   {
     "children": {
-      "fixes": ["Fix qwen model id and improve anthropic logo text color."]
+      "fixes": [
+        "Fix qwen model id and improve anthropic logo text color."
+      ]
     },
     "date": "2024-03-10",
     "version": "0.133.2"
   },
   {
     "children": {
-      "fixes": ["Fix sitemap config."]
+      "fixes": [
+        "Fix sitemap config."
+      ]
     },
     "date": "2024-03-08",
     "version": "0.133.1"
   },
   {
     "children": {
-      "features": ["Support Mistral model provider."]
+      "features": [
+        "Support Mistral model provider."
+      ]
     },
     "date": "2024-03-07",
     "version": "0.133.0"
   },
   {
     "children": {
-      "fixes": ["Fix anthropic streaming on Vercel/Cloudflare."]
+      "fixes": [
+        "Fix anthropic streaming on Vercel/Cloudflare."
+      ]
     },
     "date": "2024-03-07",
     "version": "0.132.2"
   },
   {
     "children": {
-      "fixes": ["Fix hydration error while OAuth callback."]
+      "fixes": [
+        "Fix hydration error while OAuth callback."
+      ]
     },
     "date": "2024-03-06",
     "version": "0.132.1"
   },
   {
     "children": {
-      "features": ["Support anthropic as model provider."]
+      "features": [
+        "Support anthropic as model provider."
+      ]
     },
     "date": "2024-03-05",
     "version": "0.132.0"
   },
   {
     "children": {
-      "features": ["Support langfuse integration."]
+      "features": [
+        "Support langfuse integration."
+      ]
     },
     "date": "2024-03-05",
     "version": "0.131.0"
   },
   {
     "children": {
-      "improvements": ["Update gpt-3.5-turbo model card."]
+      "improvements": [
+        "Update gpt-3.5-turbo model card."
+      ]
     },
     "date": "2024-03-03",
     "version": "0.130.7"
   },
   {
     "children": {
-      "improvements": ["Refactor the plugin and tool slice."]
+      "improvements": [
+        "Refactor the plugin and tool slice."
+      ]
     },
     "date": "2024-03-01",
     "version": "0.130.6"
   },
   {
     "children": {
-      "improvements": ["Support switch model with tag."]
+      "improvements": [
+        "Support switch model with tag."
+      ]
     },
     "date": "2024-03-01",
     "version": "0.130.5"
   },
   {
     "children": {
-      "improvements": ["Refactor the core chatStream and plugin gateway auth."]
+      "improvements": [
+        "Refactor the core chatStream and plugin gateway auth."
+      ]
     },
     "date": "2024-02-29",
     "version": "0.130.4"
   },
   {
     "children": {
-      "improvements": ["Refactor the google api route and add more tests for chat route."]
+      "improvements": [
+        "Refactor the google api route and add more tests for chat route."
+      ]
     },
     "date": "2024-02-29",
     "version": "0.130.3"
   },
   {
     "children": {
-      "fixes": ["Update azure OpenAI api version options to latest."]
+      "fixes": [
+        "Update azure OpenAI api version options to latest."
+      ]
     },
     "date": "2024-02-29",
     "version": "0.130.2"
@@ -1696,14 +2136,18 @@
   },
   {
     "children": {
-      "features": ["Support multiple API Keys."]
+      "features": [
+        "Support multiple API Keys."
+      ]
     },
     "date": "2024-02-27",
     "version": "0.130.0"
   },
   {
     "children": {
-      "fixes": ["Fix github url."]
+      "fixes": [
+        "Fix github url."
+      ]
     },
     "date": "2024-02-25",
     "version": "0.129.6"
@@ -1724,14 +2168,18 @@
   },
   {
     "children": {
-      "improvements": ["Add gemma model logo for ollama."]
+      "improvements": [
+        "Add gemma model logo for ollama."
+      ]
     },
     "date": "2024-02-23",
     "version": "0.129.3"
   },
   {
     "children": {
-      "fixes": ["Fix OAuth don't get user id from session."]
+      "fixes": [
+        "Fix OAuth don't get user id from session."
+      ]
     },
     "date": "2024-02-23",
     "version": "0.129.2"
@@ -1743,21 +2191,27 @@
   },
   {
     "children": {
-      "features": ["Support perplexity AI provider."]
+      "features": [
+        "Support perplexity AI provider."
+      ]
     },
     "date": "2024-02-22",
     "version": "0.129.0"
   },
   {
     "children": {
-      "fixes": ["Fix the robots.txt config."]
+      "fixes": [
+        "Fix the robots.txt config."
+      ]
     },
     "date": "2024-02-21",
     "version": "0.128.10"
   },
   {
     "children": {
-      "fixes": ["Fix the robots.txt config."]
+      "fixes": [
+        "Fix the robots.txt config."
+      ]
     },
     "date": "2024-02-20",
     "version": "0.128.9"
@@ -1769,70 +2223,90 @@
   },
   {
     "children": {
-      "improvements": ["Improve docs url and add more docs."]
+      "improvements": [
+        "Improve docs url and add more docs."
+      ]
     },
     "date": "2024-02-20",
     "version": "0.128.7"
   },
   {
     "children": {
-      "fixes": ["Fix OAuth errors on Docker deployment."]
+      "fixes": [
+        "Fix OAuth errors on Docker deployment."
+      ]
     },
     "date": "2024-02-20",
     "version": "0.128.6"
   },
   {
     "children": {
-      "fixes": ["Fix the document url."]
+      "fixes": [
+        "Fix the document url."
+      ]
     },
     "date": "2024-02-18",
     "version": "0.128.5"
   },
   {
     "children": {
-      "fixes": ["Fix documents i18n."]
+      "fixes": [
+        "Fix documents i18n."
+      ]
     },
     "date": "2024-02-18",
     "version": "0.128.4"
   },
   {
     "children": {
-      "improvements": ["Refactor with chat docs site."]
+      "improvements": [
+        "Refactor with chat docs site."
+      ]
     },
     "date": "2024-02-18",
     "version": "0.128.3"
   },
   {
     "children": {
-      "fixes": ["Fix agent avatar click wrong navigation."]
+      "fixes": [
+        "Fix agent avatar click wrong navigation."
+      ]
     },
     "date": "2024-02-15",
     "version": "0.128.2"
   },
   {
     "children": {
-      "fixes": ["Fix auto lang switch."]
+      "fixes": [
+        "Fix auto lang switch."
+      ]
     },
     "date": "2024-02-15",
     "version": "0.128.1"
   },
   {
     "children": {
-      "features": ["Support define default agent config with DEFAULT_AGENT_CONFIG ENV."]
+      "features": [
+        "Support define default agent config with DEFAULT_AGENT_CONFIG ENV."
+      ]
     },
     "date": "2024-02-14",
     "version": "0.128.0"
   },
   {
     "children": {
-      "improvements": ["Refactor the sidebar to fix first render state."]
+      "improvements": [
+        "Refactor the sidebar to fix first render state."
+      ]
     },
     "date": "2024-02-14",
     "version": "0.127.2"
   },
   {
     "children": {
-      "improvements": ["Improve settings tabs style and refactor the LLM setting page."]
+      "improvements": [
+        "Improve settings tabs style and refactor the LLM setting page."
+      ]
     },
     "date": "2024-02-14",
     "version": "0.127.1"
@@ -1844,44 +2318,60 @@
   },
   {
     "children": {
-      "improvements": ["Refactor with the auth code."],
-      "fixes": ["Fix middleware auth console error."]
+      "improvements": [
+        "Refactor with the auth code."
+      ],
+      "fixes": [
+        "Fix middleware auth console error."
+      ]
     },
     "date": "2024-02-12",
     "version": "0.126.5"
   },
   {
     "children": {
-      "improvements": ["Update Model provider request url."],
-      "fixes": ["Fix auth error in console, fix token tag usage display."]
+      "improvements": [
+        "Update Model provider request url."
+      ],
+      "fixes": [
+        "Fix auth error in console, fix token tag usage display."
+      ]
     },
     "date": "2024-02-11",
     "version": "0.126.4"
   },
   {
     "children": {
-      "fixes": ["Fix auth layout error."]
+      "fixes": [
+        "Fix auth layout error."
+      ]
     },
     "date": "2024-02-09",
     "version": "0.126.3"
   },
   {
     "children": {
-      "fixes": ["Fix OAuth throws an error on Vercel deploy."]
+      "fixes": [
+        "Fix OAuth throws an error on Vercel deploy."
+      ]
     },
     "date": "2024-02-09",
     "version": "0.126.2"
   },
   {
     "children": {
-      "fixes": ["Add basePath to support subdirectory."]
+      "fixes": [
+        "Add basePath to support subdirectory."
+      ]
     },
     "date": "2024-02-09",
     "version": "0.126.1"
   },
   {
     "children": {
-      "features": ["Support umami analytics."],
+      "features": [
+        "Support umami analytics."
+      ],
       "fixes": [
         "The back button on the chat setting page can correctly return to the configured Agent chat page."
       ]
@@ -1891,71 +2381,93 @@
   },
   {
     "children": {
-      "features": ["Support login & session authentication via OAuth 2.0 (Auth0)."]
+      "features": [
+        "Support login & session authentication via OAuth 2.0 (Auth0)."
+      ]
     },
     "date": "2024-02-08",
     "version": "0.125.0"
   },
   {
     "children": {
-      "fixes": ["Fix use azure api key error."]
+      "fixes": [
+        "Fix use azure api key error."
+      ]
     },
     "date": "2024-02-07",
     "version": "0.124.3"
   },
   {
     "children": {
-      "improvements": ["Add moonshot i18n."]
+      "improvements": [
+        "Add moonshot i18n."
+      ]
     },
     "date": "2024-02-06",
     "version": "0.124.2"
   },
   {
     "children": {
-      "improvements": ["Improve direction UX."]
+      "improvements": [
+        "Improve direction UX."
+      ]
     },
     "date": "2024-02-06",
     "version": "0.124.1"
   },
   {
     "children": {
-      "features": ["Support Moonshot AI Provider."]
+      "features": [
+        "Support Moonshot AI Provider."
+      ]
     },
     "date": "2024-02-06",
     "version": "0.124.0"
   },
   {
     "children": {
-      "improvements": ["Improve clear topic tips."]
+      "improvements": [
+        "Improve clear topic tips."
+      ]
     },
     "date": "2024-02-06",
     "version": "0.123.4"
   },
   {
     "children": {
-      "fixes": ["Fix non-https crypto.subtile missing error."]
+      "fixes": [
+        "Fix non-https crypto.subtile missing error."
+      ]
     },
     "date": "2024-02-06",
     "version": "0.123.3"
   },
   {
     "children": {
-      "fixes": ["Fix docker build."]
+      "fixes": [
+        "Fix docker build."
+      ]
     },
     "date": "2024-02-06",
     "version": "0.123.2"
   },
   {
     "children": {
-      "fixes": ["Improve auth control of plugin gateways, update dockerfile."],
-      "improvements": ["Add gpt-4-all feature flag."]
+      "fixes": [
+        "Improve auth control of plugin gateways, update dockerfile."
+      ],
+      "improvements": [
+        "Add gpt-4-all feature flag."
+      ]
     },
     "date": "2024-02-05",
     "version": "0.123.1"
   },
   {
     "children": {
-      "features": ["Support Google / Zhipu / AWS Bedrock model providers."]
+      "features": [
+        "Support Google / Zhipu / AWS Bedrock model providers."
+      ]
     },
     "date": "2024-02-05",
     "version": "0.123.0"
@@ -1967,14 +2479,18 @@
   },
   {
     "children": {
-      "improvements": ["Allow user to add agent without redirection."]
+      "improvements": [
+        "Allow user to add agent without redirection."
+      ]
     },
     "date": "2024-02-03",
     "version": "0.122.8"
   },
   {
     "children": {
-      "improvements": ["Update the gpt-4-1106-preview model to gpt-4-0125-preview."]
+      "improvements": [
+        "Update the gpt-4-1106-preview model to gpt-4-0125-preview."
+      ]
     },
     "date": "2024-02-02",
     "version": "0.122.7"
@@ -1986,190 +2502,246 @@
   },
   {
     "children": {
-      "fixes": ["The plugin has a hallucination and gets stuck."]
+      "fixes": [
+        "The plugin has a hallucination and gets stuck."
+      ]
     },
     "date": "2024-01-31",
     "version": "0.122.5"
   },
   {
     "children": {
-      "fixes": ["Fix plugin gateway auth."]
+      "fixes": [
+        "Fix plugin gateway auth."
+      ]
     },
     "date": "2024-01-30",
     "version": "0.122.4"
   },
   {
     "children": {
-      "improvements": ["Refactor the setting storage from localStorage to indexedDB."]
+      "improvements": [
+        "Refactor the setting storage from localStorage to indexedDB."
+      ]
     },
     "date": "2024-01-30",
     "version": "0.122.3"
   },
   {
     "children": {
-      "fixes": ["Fix unexpected topic switch when favoriting topic."]
+      "fixes": [
+        "Fix unexpected topic switch when favoriting topic."
+      ]
     },
     "date": "2024-01-30",
     "version": "0.122.2"
   },
   {
     "children": {
-      "improvements": ["Fix antd tab width flicker when show function debug."]
+      "improvements": [
+        "Fix antd tab width flicker when show function debug."
+      ]
     },
     "date": "2024-01-29",
     "version": "0.122.1"
   },
   {
     "children": {
-      "features": ["Add create agent action in group menu."]
+      "features": [
+        "Add create agent action in group menu."
+      ]
     },
     "date": "2024-01-29",
     "version": "0.122.0"
   },
   {
     "children": {
-      "fixes": ["Pin ahooks to fix test ci and settings crash."]
+      "fixes": [
+        "Pin ahooks to fix test ci and settings crash."
+      ]
     },
     "date": "2024-01-29",
     "version": "0.121.4"
   },
   {
     "children": {
-      "improvements": ["Improve stop loading icon."]
+      "improvements": [
+        "Improve stop loading icon."
+      ]
     },
     "date": "2024-01-26",
     "version": "0.121.3"
   },
   {
     "children": {
-      "improvements": ["Remove centered prop from CreateGroupModal."]
+      "improvements": [
+        "Remove centered prop from CreateGroupModal."
+      ]
     },
     "date": "2024-01-25",
     "version": "0.121.2"
   },
   {
     "children": {
-      "fixes": ["Automatically fill in the wrong password."],
-      "improvements": ["Fix default plugins height unstabled when scrolling."]
+      "fixes": [
+        "Automatically fill in the wrong password."
+      ],
+      "improvements": [
+        "Fix default plugins height unstabled when scrolling."
+      ]
     },
     "date": "2024-01-24",
     "version": "0.121.1"
   },
   {
     "children": {
-      "features": ["Add session group manager."]
+      "features": [
+        "Add session group manager."
+      ]
     },
     "date": "2024-01-24",
     "version": "0.121.0"
   },
   {
     "children": {
-      "improvements": ["Fix share image tags not align."]
+      "improvements": [
+        "Fix share image tags not align."
+      ]
     },
     "date": "2024-01-22",
     "version": "0.120.6"
   },
   {
     "children": {
-      "improvements": ["Update locale and add test for globalStore."]
+      "improvements": [
+        "Update locale and add test for globalStore."
+      ]
     },
     "date": "2024-01-21",
     "version": "0.120.5"
   },
   {
     "children": {
-      "fixes": ["Refactor url state management and fix some detail experience."]
+      "fixes": [
+        "Refactor url state management and fix some detail experience."
+      ]
     },
     "date": "2024-01-21",
     "version": "0.120.4"
   },
   {
     "children": {
-      "improvements": ["Refactor antd i18n and improve locale order."]
+      "improvements": [
+        "Refactor antd i18n and improve locale order."
+      ]
     },
     "date": "2024-01-19",
     "version": "0.120.3"
   },
   {
     "children": {
-      "fixes": ["Fix setPluginMessage can not stop create ai message."]
+      "fixes": [
+        "Fix setPluginMessage can not stop create ai message."
+      ]
     },
     "date": "2024-01-17",
     "version": "0.120.2"
   },
   {
     "children": {
-      "fixes": ["Fix list scrolling white screen on mobile."]
+      "fixes": [
+        "Fix list scrolling white screen on mobile."
+      ]
     },
     "date": "2024-01-16",
     "version": "0.120.1"
   },
   {
     "children": {
-      "features": ["Adding Arabic Language Support."]
+      "features": [
+        "Adding Arabic Language Support."
+      ]
     },
     "date": "2024-01-15",
     "version": "0.120.0"
   },
   {
     "children": {
-      "improvements": ["Add delete and regenerate for function message."]
+      "improvements": [
+        "Add delete and regenerate for function message."
+      ]
     },
     "date": "2024-01-10",
     "version": "0.119.13"
   },
   {
     "children": {
-      "fixes": ["Fix new line after sending messages with enter key."]
+      "fixes": [
+        "Fix new line after sending messages with enter key."
+      ]
     },
     "date": "2024-01-09",
     "version": "0.119.12"
   },
   {
     "children": {
-      "improvements": ["Refactor ChatInput to support cmd+enter."]
+      "improvements": [
+        "Refactor ChatInput to support cmd+enter."
+      ]
     },
     "date": "2024-01-09",
     "version": "0.119.11"
   },
   {
     "children": {
-      "fixes": ["Debug information cannot be selected."]
+      "fixes": [
+        "Debug information cannot be selected."
+      ]
     },
     "date": "2024-01-08",
     "version": "0.119.10"
   },
   {
     "children": {
-      "improvements": ["Fix ChatInput fullscreen display not correct."]
+      "improvements": [
+        "Fix ChatInput fullscreen display not correct."
+      ]
     },
     "date": "2024-01-08",
     "version": "0.119.9"
   },
   {
     "children": {
-      "fixes": ["Fix spotting tool call correctly."]
+      "fixes": [
+        "Fix spotting tool call correctly."
+      ]
     },
     "date": "2024-01-07",
     "version": "0.119.8"
   },
   {
     "children": {
-      "improvements": ["Improve share modal style."]
+      "improvements": [
+        "Improve share modal style."
+      ]
     },
     "date": "2024-01-07",
     "version": "0.119.7"
   },
   {
     "children": {
-      "improvements": ["Improve conversation style."]
+      "improvements": [
+        "Improve conversation style."
+      ]
     },
     "date": "2024-01-06",
     "version": "0.119.6"
   },
   {
     "children": {
-      "improvements": ["Fix topic i18n."]
+      "improvements": [
+        "Fix topic i18n."
+      ]
     },
     "date": "2024-01-06",
     "version": "0.119.5"
@@ -2179,21 +2751,27 @@
       "improvements": [
         "Fix BackBottom zIndex, improve chat list on mobile, improve chat list scrolling to bottom at initial render, improve custom model input, improve topic scroll."
       ],
-      "fixes": ["Fix auto scroll error and BackBottom error."]
+      "fixes": [
+        "Fix auto scroll error and BackBottom error."
+      ]
     },
     "date": "2024-01-06",
     "version": "0.119.4"
   },
   {
     "children": {
-      "fixes": ["Fix deploy error. Changed SquareAsterisk to AsteriskSquare."]
+      "fixes": [
+        "Fix deploy error. Changed SquareAsterisk to AsteriskSquare."
+      ]
     },
     "date": "2024-01-06",
     "version": "0.119.3"
   },
   {
     "children": {
-      "fixes": ["Fix function call error with smooth animation."]
+      "fixes": [
+        "Fix function call error with smooth animation."
+      ]
     },
     "date": "2024-01-05",
     "version": "0.119.2"
@@ -2205,201 +2783,261 @@
   },
   {
     "children": {
-      "improvements": ["Refactor the ChatList."],
+      "improvements": [
+        "Refactor the ChatList."
+      ],
       "features": [
         "Support auto rename topic, support delete and regenerate message, support duplicate session, support duplicate topic."
       ],
-      "fixes": ["Fix can't uninstall custom plugin in custom plugin modal."]
+      "fixes": [
+        "Fix can't uninstall custom plugin in custom plugin modal."
+      ]
     },
     "date": "2024-01-04",
     "version": "0.119.0"
   },
   {
     "children": {
-      "fixes": ["Add chat defaultNS."]
+      "fixes": [
+        "Add chat defaultNS."
+      ]
     },
     "date": "2024-01-03",
     "version": "0.118.10"
   },
   {
     "children": {
-      "improvements": ["Add leaving protect alert."]
+      "improvements": [
+        "Add leaving protect alert."
+      ]
     },
     "date": "2024-01-03",
     "version": "0.118.9"
   },
   {
     "children": {
-      "improvements": ["Add Vietnamese files and add the vi-VN option in the General Settings."]
+      "improvements": [
+        "Add Vietnamese files and add the vi-VN option in the General Settings."
+      ]
     },
     "date": "2024-01-03",
     "version": "0.118.8"
   },
   {
     "children": {
-      "fixes": ["Desensitize openai base url in the error response."]
+      "fixes": [
+        "Desensitize openai base url in the error response."
+      ]
     },
     "date": "2024-01-03",
     "version": "0.118.7"
   },
   {
     "children": {
-      "improvements": ["Migration the ChatList into Conversation."]
+      "improvements": [
+        "Migration the ChatList into Conversation."
+      ]
     },
     "date": "2024-01-03",
     "version": "0.118.6"
   },
   {
     "children": {
-      "fixes": ["Mobile device return to the previous page error."]
+      "fixes": [
+        "Mobile device return to the previous page error."
+      ]
     },
     "date": "2024-01-02",
     "version": "0.118.5"
   },
   {
     "children": {
-      "fixes": ["Update dalle identifier to fix unstable dalle function call."]
+      "fixes": [
+        "Update dalle identifier to fix unstable dalle function call."
+      ]
     },
     "date": "2024-01-02",
     "version": "0.118.4"
   },
   {
     "children": {
-      "fixes": ["Fix parse error of tool calls at end."]
+      "fixes": [
+        "Fix parse error of tool calls at end."
+      ]
     },
     "date": "2024-01-01",
     "version": "0.118.3"
   },
   {
     "children": {
-      "fixes": ["Pin antd version to fix chat page crash."]
+      "fixes": [
+        "Pin antd version to fix chat page crash."
+      ]
     },
     "date": "2023-12-31",
     "version": "0.118.2"
   },
   {
     "children": {
-      "fixes": ["Fix dalle image download error."]
+      "fixes": [
+        "Fix dalle image download error."
+      ]
     },
     "date": "2023-12-30",
     "version": "0.118.1"
   },
   {
     "children": {
-      "features": ["Support markdown type plugin."]
+      "features": [
+        "Support markdown type plugin."
+      ]
     },
     "date": "2023-12-29",
     "version": "0.118.0"
   },
   {
     "children": {
-      "fixes": ["The input box is prone to losing focus."]
+      "fixes": [
+        "The input box is prone to losing focus."
+      ]
     },
     "date": "2023-12-29",
     "version": "0.117.5"
   },
   {
     "children": {
-      "fixes": ["Fix messages not refresh when creating a new topic."]
+      "fixes": [
+        "Fix messages not refresh when creating a new topic."
+      ]
     },
     "date": "2023-12-28",
     "version": "0.117.4"
   },
   {
     "children": {
-      "fixes": ["Fix tool calls at end, fix vision model max tokens, improve vision model checker."]
+      "fixes": [
+        "Fix tool calls at end, fix vision model max tokens, improve vision model checker."
+      ]
     },
     "date": "2023-12-28",
     "version": "0.117.3"
   },
   {
     "children": {
-      "fixes": ["Fix market locale missing."]
+      "fixes": [
+        "Fix market locale missing."
+      ]
     },
     "date": "2023-12-28",
     "version": "0.117.2"
   },
   {
     "children": {
-      "improvements": ["Add image download functionality to DALL·E render component."]
+      "improvements": [
+        "Add image download functionality to DALL·E render component."
+      ]
     },
     "date": "2023-12-27",
     "version": "0.117.1"
   },
   {
     "children": {
-      "features": ["Support plugin settings env."],
-      "fixes": ["Improve topic search experience."]
+      "features": [
+        "Support plugin settings env."
+      ],
+      "fixes": [
+        "Improve topic search experience."
+      ]
     },
     "date": "2023-12-27",
     "version": "0.117.0"
   },
   {
     "children": {
-      "fixes": ["Fix input box losing focus after sending a message on the desktop."]
+      "fixes": [
+        "Fix input box losing focus after sending a message on the desktop."
+      ]
     },
     "date": "2023-12-27",
     "version": "0.116.5"
   },
   {
     "children": {
-      "fixes": ["Fix ShareModal."]
+      "fixes": [
+        "Fix ShareModal."
+      ]
     },
     "date": "2023-12-26",
     "version": "0.116.4"
   },
   {
     "children": {
-      "improvements": ["Fix typo."]
+      "improvements": [
+        "Fix typo."
+      ]
     },
     "date": "2023-12-26",
     "version": "0.116.3"
   },
   {
     "children": {
-      "improvements": ["Update Modal style."]
+      "improvements": [
+        "Update Modal style."
+      ]
     },
     "date": "2023-12-26",
     "version": "0.116.2"
   },
   {
     "children": {
-      "improvements": ["Support slider and select plugin setting render."]
+      "improvements": [
+        "Support slider and select plugin setting render."
+      ]
     },
     "date": "2023-12-26",
     "version": "0.116.1"
   },
   {
     "children": {
-      "features": ["Support OpenAI tool calls."]
+      "features": [
+        "Support OpenAI tool calls."
+      ]
     },
     "date": "2023-12-26",
     "version": "0.116.0"
   },
   {
     "children": {
-      "fixes": ["Fix remove tts and translate not working."]
+      "fixes": [
+        "Fix remove tts and translate not working."
+      ]
     },
     "date": "2023-12-26",
     "version": "0.115.13"
   },
   {
     "children": {
-      "fixes": ["Fix active setting tab after click agent setting button."]
+      "fixes": [
+        "Fix active setting tab after click agent setting button."
+      ]
     },
     "date": "2023-12-25",
     "version": "0.115.12"
   },
   {
     "children": {
-      "fixes": ["Fix agent system role modal scrolling when content is too long."]
+      "fixes": [
+        "Fix agent system role modal scrolling when content is too long."
+      ]
     },
     "date": "2023-12-25",
     "version": "0.115.11"
   },
   {
     "children": {
-      "improvements": ["Fix some style problem."]
+      "improvements": [
+        "Fix some style problem."
+      ]
     },
     "date": "2023-12-25",
     "version": "0.115.10"
@@ -2415,70 +3053,90 @@
   },
   {
     "children": {
-      "fixes": ["Fix CUSTOM_MODEL - operator not working."]
+      "fixes": [
+        "Fix CUSTOM_MODEL - operator not working."
+      ]
     },
     "date": "2023-12-24",
     "version": "0.115.8"
   },
   {
     "children": {
-      "fixes": ["Fix auto scrolling when generating message."]
+      "fixes": [
+        "Fix auto scrolling when generating message."
+      ]
     },
     "date": "2023-12-23",
     "version": "0.115.7"
   },
   {
     "children": {
-      "fixes": ["Fix maxTokens params still work when disable enableMaxTokens."]
+      "fixes": [
+        "Fix maxTokens params still work when disable enableMaxTokens."
+      ]
     },
     "date": "2023-12-23",
     "version": "0.115.6"
   },
   {
     "children": {
-      "fixes": ["Fix image display error."]
+      "fixes": [
+        "Fix image display error."
+      ]
     },
     "date": "2023-12-23",
     "version": "0.115.5"
   },
   {
     "children": {
-      "improvements": ["Refactor the ChatMessage type."]
+      "improvements": [
+        "Refactor the ChatMessage type."
+      ]
     },
     "date": "2023-12-23",
     "version": "0.115.4"
   },
   {
     "children": {
-      "improvements": ["Refactor and clean global store and chat store."]
+      "improvements": [
+        "Refactor and clean global store and chat store."
+      ]
     },
     "date": "2023-12-23",
     "version": "0.115.3"
   },
   {
     "children": {
-      "fixes": ["Fix envs like CUSTOM_MODELS don't work with docker deployment."]
+      "fixes": [
+        "Fix envs like CUSTOM_MODELS don't work with docker deployment."
+      ]
     },
     "date": "2023-12-23",
     "version": "0.115.2"
   },
   {
     "children": {
-      "improvements": ["Lock ui version to fix setting form style."]
+      "improvements": [
+        "Lock ui version to fix setting form style."
+      ]
     },
     "date": "2023-12-22",
     "version": "0.115.1"
   },
   {
     "children": {
-      "features": ["Support Dall·E 3."]
+      "features": [
+        "Support Dall·E 3."
+      ]
     },
     "date": "2023-12-22",
     "version": "0.115.0"
   },
   {
     "children": {
-      "improvements": ["Support it-IT nl-NL and pl-PL locales."]
+      "improvements": [
+        "Support it-IT nl-NL and pl-PL locales."
+      ]
     },
     "date": "2023-12-22",
     "version": "0.114.9"
@@ -2490,7 +3148,9 @@
   },
   {
     "children": {
-      "improvements": ["Move the conversation and chatInput to features folder."]
+      "improvements": [
+        "Move the conversation and chatInput to features folder."
+      ]
     },
     "date": "2023-12-22",
     "version": "0.114.7"
@@ -2502,14 +3162,18 @@
   },
   {
     "children": {
-      "improvements": ["Fix plugin iframe width."]
+      "improvements": [
+        "Fix plugin iframe width."
+      ]
     },
     "date": "2023-12-19",
     "version": "0.114.5"
   },
   {
     "children": {
-      "fixes": ["Fix agent system role modal scrolling when content is too long."]
+      "fixes": [
+        "Fix agent system role modal scrolling when content is too long."
+      ]
     },
     "date": "2023-12-19",
     "version": "0.114.4"
@@ -2521,28 +3185,36 @@
   },
   {
     "children": {
-      "fixes": ["Fix chat error when message has image with non-vision model."]
+      "fixes": [
+        "Fix chat error when message has image with non-vision model."
+      ]
     },
     "date": "2023-12-17",
     "version": "0.114.2"
   },
   {
     "children": {
-      "fixes": ["Inject tool description into agent system role."]
+      "fixes": [
+        "Inject tool description into agent system role."
+      ]
     },
     "date": "2023-12-16",
     "version": "0.114.1"
   },
   {
     "children": {
-      "features": ["Supports setting multiple access code."]
+      "features": [
+        "Supports setting multiple access code."
+      ]
     },
     "date": "2023-12-16",
     "version": "0.114.0"
   },
   {
     "children": {
-      "fixes": ["Fix fontsize setting and audio download style."]
+      "fixes": [
+        "Fix fontsize setting and audio download style."
+      ]
     },
     "date": "2023-12-16",
     "version": "0.113.1"
@@ -2554,7 +3226,9 @@
   },
   {
     "children": {
-      "fixes": ["Fix locales."]
+      "fixes": [
+        "Fix locales."
+      ]
     },
     "date": "2023-12-16",
     "version": "0.112.1"
@@ -2567,50 +3241,66 @@
       "features": [
         "Introduce plugin detail modal, support OpenAI plugin manifest, support OpenAPI Authentication, support OpenAPI schema in lobe plugin, support parse openapi schema."
       ],
-      "fixes": ["Fix function apiName length, try with node mode plugins."]
+      "fixes": [
+        "Fix function apiName length, try with node mode plugins."
+      ]
     },
     "date": "2023-12-16",
     "version": "0.112.0"
   },
   {
     "children": {
-      "fixes": ["Fix deployment build failure."]
+      "fixes": [
+        "Fix deployment build failure."
+      ]
     },
     "date": "2023-12-15",
     "version": "0.111.6"
   },
   {
     "children": {
-      "fixes": ["Wrong locale language in en_US."]
+      "fixes": [
+        "Wrong locale language in en_US."
+      ]
     },
     "date": "2023-12-14",
     "version": "0.111.5"
   },
   {
     "children": {
-      "fixes": ["Revert \"🐛 fix: clean up gpt-3.5 model\"."]
+      "fixes": [
+        "Revert \"🐛 fix: clean up gpt-3.5 model\"."
+      ]
     },
     "date": "2023-12-14",
     "version": "0.111.4"
   },
   {
     "children": {
-      "fixes": ["Fix the history-count text."]
+      "fixes": [
+        "Fix the history-count text."
+      ]
     },
     "date": "2023-12-14",
     "version": "0.111.3"
   },
   {
     "children": {
-      "fixes": ["Change topic-deletion hotkey."],
-      "improvements": ["Fix image display in safari (fix."]
+      "fixes": [
+        "Change topic-deletion hotkey."
+      ],
+      "improvements": [
+        "Fix image display in safari (fix."
+      ]
     },
     "date": "2023-12-13",
     "version": "0.111.2"
   },
   {
     "children": {
-      "fixes": ["Fix locale typo."]
+      "fixes": [
+        "Fix locale typo."
+      ]
     },
     "date": "2023-12-13",
     "version": "0.111.1"
@@ -2622,42 +3312,54 @@
   },
   {
     "children": {
-      "fixes": ["Add cancel button text i18n for delete assistant modal."]
+      "fixes": [
+        "Add cancel button text i18n for delete assistant modal."
+      ]
     },
     "date": "2023-12-13",
     "version": "0.110.10"
   },
   {
     "children": {
-      "fixes": ["ChatInput should have maxHeight."]
+      "fixes": [
+        "ChatInput should have maxHeight."
+      ]
     },
     "date": "2023-12-13",
     "version": "0.110.9"
   },
   {
     "children": {
-      "fixes": ["Clean up gpt-3.5 model."]
+      "fixes": [
+        "Clean up gpt-3.5 model."
+      ]
     },
     "date": "2023-12-12",
     "version": "0.110.8"
   },
   {
     "children": {
-      "fixes": ["Fix language settings may not take effect."]
+      "fixes": [
+        "Fix language settings may not take effect."
+      ]
     },
     "date": "2023-12-11",
     "version": "0.110.7"
   },
   {
     "children": {
-      "fixes": ["Sharp missing in docker production."]
+      "fixes": [
+        "Sharp missing in docker production."
+      ]
     },
     "date": "2023-12-11",
     "version": "0.110.6"
   },
   {
     "children": {
-      "fixes": ["Fix setting plugin i18n."]
+      "fixes": [
+        "Fix setting plugin i18n."
+      ]
     },
     "date": "2023-12-10",
     "version": "0.110.5"
@@ -2669,70 +3371,90 @@
   },
   {
     "children": {
-      "improvements": ["Refactor with new plugin implement with dexie db."]
+      "improvements": [
+        "Refactor with new plugin implement with dexie db."
+      ]
     },
     "date": "2023-12-08",
     "version": "0.110.3"
   },
   {
     "children": {
-      "improvements": ["Fix ChatInputArea style and typo (resolve."]
+      "improvements": [
+        "Fix ChatInputArea style and typo (resolve."
+      ]
     },
     "date": "2023-12-08",
     "version": "0.110.2"
   },
   {
     "children": {
-      "fixes": ["Sharp missing in production."]
+      "fixes": [
+        "Sharp missing in production."
+      ]
     },
     "date": "2023-12-08",
     "version": "0.110.1"
   },
   {
     "children": {
-      "features": ["Local TTS Player."]
+      "features": [
+        "Local TTS Player."
+      ]
     },
     "date": "2023-12-07",
     "version": "0.110.0"
   },
   {
     "children": {
-      "fixes": ["Fix agent settings crash with old pluginManifest."]
+      "fixes": [
+        "Fix agent settings crash with old pluginManifest."
+      ]
     },
     "date": "2023-12-07",
     "version": "0.109.1"
   },
   {
     "children": {
-      "features": ["Introducing plugin store and refactor with tool concept."]
+      "features": [
+        "Introducing plugin store and refactor with tool concept."
+      ]
     },
     "date": "2023-12-06",
     "version": "0.109.0"
   },
   {
     "children": {
-      "features": ["Hide the password form item in the settings when there is no ACCESS_CODE env."]
+      "features": [
+        "Hide the password form item in the settings when there is no ACCESS_CODE env."
+      ]
     },
     "date": "2023-12-03",
     "version": "0.108.0"
   },
   {
     "children": {
-      "fixes": ["Fix custom agent meta issue."]
+      "fixes": [
+        "Fix custom agent meta issue."
+      ]
     },
     "date": "2023-12-03",
     "version": "0.107.16"
   },
   {
     "children": {
-      "fixes": ["Fix messages flickering when creating topic."]
+      "fixes": [
+        "Fix messages flickering when creating topic."
+      ]
     },
     "date": "2023-12-03",
     "version": "0.107.15"
   },
   {
     "children": {
-      "fixes": ["Fix opt+delete fail in inputing (resolve."]
+      "fixes": [
+        "Fix opt+delete fail in inputing (resolve."
+      ]
     },
     "date": "2023-12-03",
     "version": "0.107.14"
@@ -2751,14 +3473,18 @@
   },
   {
     "children": {
-      "fixes": ["Fix topic not refresh when switching sessions quickly."]
+      "fixes": [
+        "Fix topic not refresh when switching sessions quickly."
+      ]
     },
     "date": "2023-12-02",
     "version": "0.107.12"
   },
   {
     "children": {
-      "fixes": ["Fix switch model don't work on mobile."]
+      "fixes": [
+        "Fix switch model don't work on mobile."
+      ]
     },
     "date": "2023-12-01",
     "version": "0.107.11"
@@ -2770,119 +3496,153 @@
   },
   {
     "children": {
-      "fixes": ["Switch session causing problem."]
+      "fixes": [
+        "Switch session causing problem."
+      ]
     },
     "date": "2023-11-30",
     "version": "0.107.9"
   },
   {
     "children": {
-      "improvements": ["Fix chatitem gap."]
+      "improvements": [
+        "Fix chatitem gap."
+      ]
     },
     "date": "2023-11-30",
     "version": "0.107.8"
   },
   {
     "children": {
-      "fixes": ["Improve plugin message display."]
+      "fixes": [
+        "Improve plugin message display."
+      ]
     },
     "date": "2023-11-30",
     "version": "0.107.7"
   },
   {
     "children": {
-      "fixes": ["修正调用插件查询的显示问题."]
+      "fixes": [
+        "修正调用插件查询的显示问题."
+      ]
     },
     "date": "2023-11-30",
     "version": "0.107.6"
   },
   {
     "children": {
-      "fixes": ["修正调用插件查询的显示问题."]
+      "fixes": [
+        "修正调用插件查询的显示问题."
+      ]
     },
     "date": "2023-11-30",
     "version": "0.107.5"
   },
   {
     "children": {
-      "fixes": ["Fix a bug that remove all topics when clear message."]
+      "fixes": [
+        "Fix a bug that remove all topics when clear message."
+      ]
     },
     "date": "2023-11-30",
     "version": "0.107.4"
   },
   {
     "children": {
-      "fixes": ["Fix a bug that trigger plugin's message type error."]
+      "fixes": [
+        "Fix a bug that trigger plugin's message type error."
+      ]
     },
     "date": "2023-11-30",
     "version": "0.107.3"
   },
   {
     "children": {
-      "fixes": ["Fix a bug that export a session without messages."]
+      "fixes": [
+        "Fix a bug that export a session without messages."
+      ]
     },
     "date": "2023-11-30",
     "version": "0.107.2"
   },
   {
     "children": {
-      "improvements": ["优化文案."]
+      "improvements": [
+        "优化文案."
+      ]
     },
     "date": "2023-11-30",
     "version": "0.107.1"
   },
   {
     "children": {
-      "features": ["Refactor the persist layer from zustand's persist to dexie ORM."]
+      "features": [
+        "Refactor the persist layer from zustand's persist to dexie ORM."
+      ]
     },
     "date": "2023-11-30",
     "version": "0.107.0"
   },
   {
     "children": {
-      "features": ["Support custom deletion, addition, and renaming of models."]
+      "features": [
+        "Support custom deletion, addition, and renaming of models."
+      ]
     },
     "date": "2023-11-29",
     "version": "0.106.0"
   },
   {
     "children": {
-      "fixes": ["Add some env to Dockerfile."]
+      "fixes": [
+        "Add some env to Dockerfile."
+      ]
     },
     "date": "2023-11-27",
     "version": "0.105.2"
   },
   {
     "children": {
-      "fixes": ["Fix agent market detail scroll error."]
+      "fixes": [
+        "Fix agent market detail scroll error."
+      ]
     },
     "date": "2023-11-27",
     "version": "0.105.1"
   },
   {
     "children": {
-      "features": ["Standalone pluginn can get more arguments on init."]
+      "features": [
+        "Standalone pluginn can get more arguments on init."
+      ]
     },
     "date": "2023-11-22",
     "version": "0.105.0"
   },
   {
     "children": {
-      "features": ["Support using env variable to set regions for OpenAI Edge Functions.."]
+      "features": [
+        "Support using env variable to set regions for OpenAI Edge Functions.."
+      ]
     },
     "date": "2023-11-21",
     "version": "0.104.0"
   },
   {
     "children": {
-      "fixes": ["Image optimization in docker standalone build."]
+      "fixes": [
+        "Image optimization in docker standalone build."
+      ]
     },
     "date": "2023-11-21",
     "version": "0.103.1"
   },
   {
     "children": {
-      "features": ["Support the auto create topic configuration."]
+      "features": [
+        "Support the auto create topic configuration."
+      ]
     },
     "date": "2023-11-20",
     "version": "0.103.0"
@@ -2894,112 +3654,144 @@
   },
   {
     "children": {
-      "fixes": ["Fix plugin not work correct when adding agent from market."]
+      "fixes": [
+        "Fix plugin not work correct when adding agent from market."
+      ]
     },
     "date": "2023-11-20",
     "version": "0.102.3"
   },
   {
     "children": {
-      "fixes": ["Fix model tag missing."]
+      "fixes": [
+        "Fix model tag missing."
+      ]
     },
     "date": "2023-11-20",
     "version": "0.102.2"
   },
   {
     "children": {
-      "fixes": ["Fix image upload list missing."]
+      "fixes": [
+        "Fix image upload list missing."
+      ]
     },
     "date": "2023-11-19",
     "version": "0.102.1"
   },
   {
     "children": {
-      "features": ["Support TTS & STT."]
+      "features": [
+        "Support TTS & STT."
+      ]
     },
     "date": "2023-11-19",
     "version": "0.102.0"
   },
   {
     "children": {
-      "fixes": ["Agent details sidebar and market page height overflow."]
+      "fixes": [
+        "Agent details sidebar and market page height overflow."
+      ]
     },
     "date": "2023-11-18",
     "version": "0.101.7"
   },
   {
     "children": {
-      "improvements": ["Add config to renderErrorMessages, Use new Alert ui."]
+      "improvements": [
+        "Add config to renderErrorMessages, Use new Alert ui."
+      ]
     },
     "date": "2023-11-17",
     "version": "0.101.6"
   },
   {
     "children": {
-      "fixes": ["Improve openai error info."]
+      "fixes": [
+        "Improve openai error info."
+      ]
     },
     "date": "2023-11-17",
     "version": "0.101.5"
   },
   {
     "children": {
-      "fixes": ["Fix the plugin array merge error when fork agent from market."]
+      "fixes": [
+        "Fix the plugin array merge error when fork agent from market."
+      ]
     },
     "date": "2023-11-14",
     "version": "0.101.4"
   },
   {
     "children": {
-      "improvements": ["Improve password ui to make it more clear."]
+      "improvements": [
+        "Improve password ui to make it more clear."
+      ]
     },
     "date": "2023-11-14",
     "version": "0.101.3"
   },
   {
     "children": {
-      "improvements": ["upload image to vision model adapting to mobile device."]
+      "improvements": [
+        "upload image to vision model adapting to mobile device."
+      ]
     },
     "date": "2023-11-14",
     "version": "0.101.2"
   },
   {
     "children": {
-      "fixes": ["Fix market search (fix."]
+      "fixes": [
+        "Fix market search (fix."
+      ]
     },
     "date": "2023-11-14",
     "version": "0.101.1"
   },
   {
     "children": {
-      "features": ["Support upload images to chat with gpt4-vision model."]
+      "features": [
+        "Support upload images to chat with gpt4-vision model."
+      ]
     },
     "date": "2023-11-14",
     "version": "0.101.0"
   },
   {
     "children": {
-      "improvements": ["Refactor the input area to suit the files upload feature."]
+      "improvements": [
+        "Refactor the input area to suit the files upload feature."
+      ]
     },
     "date": "2023-11-11",
     "version": "0.100.5"
   },
   {
     "children": {
-      "fixes": ["Hotkey disabled in form tags."]
+      "fixes": [
+        "Hotkey disabled in form tags."
+      ]
     },
     "date": "2023-11-11",
     "version": "0.100.4"
   },
   {
     "children": {
-      "fixes": ["Fix market error."]
+      "fixes": [
+        "Fix market error."
+      ]
     },
     "date": "2023-11-09",
     "version": "0.100.3"
   },
   {
     "children": {
-      "fixes": ["Upgrade viewport for nextjs 14."]
+      "fixes": [
+        "Upgrade viewport for nextjs 14."
+      ]
     },
     "date": "2023-11-09",
     "version": "0.100.2"
@@ -3011,148 +3803,192 @@
   },
   {
     "children": {
-      "features": ["Platform check utils."]
+      "features": [
+        "Platform check utils."
+      ]
     },
     "date": "2023-11-09",
     "version": "0.100.0"
   },
   {
     "children": {
-      "improvements": ["Add max height to model menu in chat input area."]
+      "improvements": [
+        "Add max height to model menu in chat input area."
+      ]
     },
     "date": "2023-11-08",
     "version": "0.99.1"
   },
   {
     "children": {
-      "features": ["Add Environment Variable for custom model name when deploying."]
+      "features": [
+        "Add Environment Variable for custom model name when deploying."
+      ]
     },
     "date": "2023-11-08",
     "version": "0.99.0"
   },
   {
     "children": {
-      "fixes": ["Fix redirect to welcome problem when there are topics in inbox."]
+      "fixes": [
+        "Fix redirect to welcome problem when there are topics in inbox."
+      ]
     },
     "date": "2023-11-07",
     "version": "0.98.3"
   },
   {
     "children": {
-      "improvements": ["Refactor antd locale file to useSWR."]
+      "improvements": [
+        "Refactor antd locale file to useSWR."
+      ]
     },
     "date": "2023-11-07",
     "version": "0.98.2"
   },
   {
     "children": {
-      "improvements": ["Update welcome assetes."]
+      "improvements": [
+        "Update welcome assetes."
+      ]
     },
     "date": "2023-11-07",
     "version": "0.98.1"
   },
   {
     "children": {
-      "features": ["Support latest openai model."]
+      "features": [
+        "Support latest openai model."
+      ]
     },
     "date": "2023-11-07",
     "version": "0.98.0"
   },
   {
     "children": {
-      "fixes": ["Use pnpm to fix docker release."]
+      "fixes": [
+        "Use pnpm to fix docker release."
+      ]
     },
     "date": "2023-11-06",
     "version": "0.97.1"
   },
   {
     "children": {
-      "features": ["Add open new topic when open a topic."],
-      "fixes": ["Fix toggle back to default topic when clearing topic."]
+      "features": [
+        "Add open new topic when open a topic."
+      ],
+      "fixes": [
+        "Fix toggle back to default topic when clearing topic."
+      ]
     },
     "date": "2023-11-05",
     "version": "0.97.0"
   },
   {
     "children": {
-      "improvements": ["Update topic list header."]
+      "improvements": [
+        "Update topic list header."
+      ]
     },
     "date": "2023-11-04",
     "version": "0.96.9"
   },
   {
     "children": {
-      "fixes": ["Fix a bug that weather plugin is not work correctly, template remove sharp deps."]
+      "fixes": [
+        "Fix a bug that weather plugin is not work correctly, template remove sharp deps."
+      ]
     },
     "date": "2023-10-31",
     "version": "0.96.8"
   },
   {
     "children": {
-      "fixes": ["Fix a bug when click inbox not switch back to chat page."]
+      "fixes": [
+        "Fix a bug when click inbox not switch back to chat page."
+      ]
     },
     "date": "2023-10-31",
     "version": "0.96.7"
   },
   {
     "children": {
-      "fixes": ["Improve plausible analytics ENV."]
+      "fixes": [
+        "Improve plausible analytics ENV."
+      ]
     },
     "date": "2023-10-30",
     "version": "0.96.6"
   },
   {
     "children": {
-      "fixes": ["Fix docker image optimization error log."]
+      "fixes": [
+        "Fix docker image optimization error log."
+      ]
     },
     "date": "2023-10-29",
     "version": "0.96.5"
   },
   {
     "children": {
-      "fixes": ["Fix agents market locale fallback to english."]
+      "fixes": [
+        "Fix agents market locale fallback to english."
+      ]
     },
     "date": "2023-10-29",
     "version": "0.96.4"
   },
   {
     "children": {
-      "improvements": ["Fix SessionList on mobile."]
+      "improvements": [
+        "Fix SessionList on mobile."
+      ]
     },
     "date": "2023-10-28",
     "version": "0.96.3"
   },
   {
     "children": {
-      "improvements": ["Fix some styles and make updates to various files."]
+      "improvements": [
+        "Fix some styles and make updates to various files."
+      ]
     },
     "date": "2023-10-28",
     "version": "0.96.2"
   },
   {
     "children": {
-      "improvements": ["Add guide to market page."]
+      "improvements": [
+        "Add guide to market page."
+      ]
     },
     "date": "2023-10-28",
     "version": "0.96.1"
   },
   {
     "children": {
-      "features": ["Improve pin mode about session group."]
+      "features": [
+        "Improve pin mode about session group."
+      ]
     },
     "date": "2023-10-27",
     "version": "0.96.0"
   },
   {
     "children": {
-      "improvements": ["Improve plugin message ui."]
+      "improvements": [
+        "Improve plugin message ui."
+      ]
     },
     "date": "2023-10-25",
     "version": "0.95.1"
   },
   {
     "children": {
-      "improvements": ["优化 plugin 文件夹命名以支持 standalone 类型的插件."],
+      "improvements": [
+        "优化 plugin 文件夹命名以支持 standalone 类型的插件."
+      ],
       "features": [
         "Support function call at message end, support plugin settings modal, support plugin state and settings."
       ]
@@ -3162,121 +3998,159 @@
   },
   {
     "children": {
-      "fixes": ["Fallback agent market index to en when not find correct locale."]
+      "fixes": [
+        "Fallback agent market index to en when not find correct locale."
+      ]
     },
     "date": "2023-10-22",
     "version": "0.94.5"
   },
   {
     "children": {
-      "fixes": ["Fix break cn chars in stream mode."]
+      "fixes": [
+        "Fix break cn chars in stream mode."
+      ]
     },
     "date": "2023-10-21",
     "version": "0.94.4"
   },
   {
     "children": {
-      "fixes": ["Fix agent share format."]
+      "fixes": [
+        "Fix agent share format."
+      ]
     },
     "date": "2023-10-19",
     "version": "0.94.3"
   },
   {
     "children": {
-      "fixes": ["Fix agent market with other locales."]
+      "fixes": [
+        "Fix agent market with other locales."
+      ]
     },
     "date": "2023-10-19",
     "version": "0.94.2"
   },
   {
     "children": {
-      "improvements": ["Update ShareAgentButton."]
+      "improvements": [
+        "Update ShareAgentButton."
+      ]
     },
     "date": "2023-10-19",
     "version": "0.94.1"
   },
   {
     "children": {
-      "features": ["Add agent share."]
+      "features": [
+        "Add agent share."
+      ]
     },
     "date": "2023-10-18",
     "version": "0.94.0"
   },
   {
     "children": {
-      "improvements": ["Refactor chain."],
-      "features": ["Support multi-language translate."]
+      "improvements": [
+        "Refactor chain."
+      ],
+      "features": [
+        "Support multi-language translate."
+      ]
     },
     "date": "2023-10-18",
     "version": "0.93.0"
   },
   {
     "children": {
-      "features": ["Support translate message to current language."]
+      "features": [
+        "Support translate message to current language."
+      ]
     },
     "date": "2023-10-18",
     "version": "0.92.0"
   },
   {
     "children": {
-      "features": ["Add hotkeys."]
+      "features": [
+        "Add hotkeys."
+      ]
     },
     "date": "2023-10-17",
     "version": "0.91.0"
   },
   {
     "children": {
-      "fixes": ["Fix ActionBar props and regenerate btn with error message."]
+      "fixes": [
+        "Fix ActionBar props and regenerate btn with error message."
+      ]
     },
     "date": "2023-10-17",
     "version": "0.90.3"
   },
   {
     "children": {
-      "improvements": ["Refactor OpenAIStreamPayload with chat name."]
+      "improvements": [
+        "Refactor OpenAIStreamPayload with chat name."
+      ]
     },
     "date": "2023-10-17",
     "version": "0.90.2"
   },
   {
     "children": {
-      "improvements": ["Fix lazyload height."]
+      "improvements": [
+        "Fix lazyload height."
+      ]
     },
     "date": "2023-10-17",
     "version": "0.90.1"
   },
   {
     "children": {
-      "features": ["Add Lazyload."]
+      "features": [
+        "Add Lazyload."
+      ]
     },
     "date": "2023-10-17",
     "version": "0.90.0"
   },
   {
     "children": {
-      "improvements": ["Refactor ChatList onActionsClick."]
+      "improvements": [
+        "Refactor ChatList onActionsClick."
+      ]
     },
     "date": "2023-10-17",
     "version": "0.89.10"
   },
   {
     "children": {
-      "fixes": ["Fix ChatList FC Render."]
+      "fixes": [
+        "Fix ChatList FC Render."
+      ]
     },
     "date": "2023-10-17",
     "version": "0.89.9"
   },
   {
     "children": {
-      "improvements": ["Refactor ChatList."],
-      "fixes": ["Fix type."]
+      "improvements": [
+        "Refactor ChatList."
+      ],
+      "fixes": [
+        "Fix type."
+      ]
     },
     "date": "2023-10-16",
     "version": "0.89.8"
   },
   {
     "children": {
-      "fixes": ["Fix setting tab highlight (fix."]
+      "fixes": [
+        "Fix setting tab highlight (fix."
+      ]
     },
     "date": "2023-10-16",
     "version": "0.89.7"
@@ -3297,28 +4171,36 @@
   },
   {
     "children": {
-      "fixes": ["Fix qwen, chatglm request failed."]
+      "fixes": [
+        "Fix qwen, chatglm request failed."
+      ]
     },
     "date": "2023-10-15",
     "version": "0.89.4"
   },
   {
     "children": {
-      "fixes": ["Fix plugin error with nginx reverse proxy."]
+      "fixes": [
+        "Fix plugin error with nginx reverse proxy."
+      ]
     },
     "date": "2023-10-12",
     "version": "0.89.3"
   },
   {
     "children": {
-      "improvements": ["Modify onClick event in SessionHeader, change title in Loading component,."]
+      "improvements": [
+        "Modify onClick event in SessionHeader, change title in Loading component,."
+      ]
     },
     "date": "2023-10-12",
     "version": "0.89.2"
   },
   {
     "children": {
-      "fixes": ["Remove useless dynamic import."]
+      "fixes": [
+        "Remove useless dynamic import."
+      ]
     },
     "date": "2023-10-12",
     "version": "0.89.1"
@@ -3339,28 +4221,36 @@
   },
   {
     "children": {
-      "features": ["Support custom model name."]
+      "features": [
+        "Support custom model name."
+      ]
     },
     "date": "2023-10-11",
     "version": "0.87.0"
   },
   {
     "children": {
-      "fixes": ["Fix clear session error."]
+      "fixes": [
+        "Fix clear session error."
+      ]
     },
     "date": "2023-10-11",
     "version": "0.86.5"
   },
   {
     "children": {
-      "improvements": ["Improve api key form."]
+      "improvements": [
+        "Improve api key form."
+      ]
     },
     "date": "2023-10-11",
     "version": "0.86.4"
   },
   {
     "children": {
-      "fixes": ["Fix docker image."]
+      "fixes": [
+        "Fix docker image."
+      ]
     },
     "date": "2023-10-11",
     "version": "0.86.3"
@@ -3372,14 +4262,18 @@
   },
   {
     "children": {
-      "fixes": ["Fix docker reverse proxy don't work."]
+      "fixes": [
+        "Fix docker reverse proxy don't work."
+      ]
     },
     "date": "2023-10-11",
     "version": "0.86.1"
   },
   {
     "children": {
-      "features": ["Support docker deploy."]
+      "features": [
+        "Support docker deploy."
+      ]
     },
     "date": "2023-10-10",
     "version": "0.86.0"
@@ -3395,35 +4289,45 @@
   },
   {
     "children": {
-      "fixes": ["Add apikey form when there is no default api key in env."]
+      "fixes": [
+        "Add apikey form when there is no default api key in env."
+      ]
     },
     "date": "2023-10-10",
     "version": "0.85.2"
   },
   {
     "children": {
-      "fixes": ["Fix mobile safe area (fix."]
+      "fixes": [
+        "Fix mobile safe area (fix."
+      ]
     },
     "date": "2023-10-10",
     "version": "0.85.1"
   },
   {
     "children": {
-      "features": ["Add ja_JP, ko_KR and update workflow."]
+      "features": [
+        "Add ja_JP, ko_KR and update workflow."
+      ]
     },
     "date": "2023-10-10",
     "version": "0.85.0"
   },
   {
     "children": {
-      "features": ["Support detect new version and upgrade action."]
+      "features": [
+        "Support detect new version and upgrade action."
+      ]
     },
     "date": "2023-10-10",
     "version": "0.84.0"
   },
   {
     "children": {
-      "fixes": ["Fix rsc layout."]
+      "fixes": [
+        "Fix rsc layout."
+      ]
     },
     "date": "2023-10-09",
     "version": "0.83.10"
@@ -3440,57 +4344,75 @@
   },
   {
     "children": {
-      "fixes": ["Fix shuffle, use search url with agent item."],
-      "improvements": ["Better tag style, improve loading state."]
+      "fixes": [
+        "Fix shuffle, use search url with agent item."
+      ],
+      "improvements": [
+        "Better tag style, improve loading state."
+      ]
     },
     "date": "2023-10-07",
     "version": "0.83.7"
   },
   {
     "children": {
-      "improvements": ["Update modal style."]
+      "improvements": [
+        "Update modal style."
+      ]
     },
     "date": "2023-10-06",
     "version": "0.83.6"
   },
   {
     "children": {
-      "fixes": ["Fix agent market list."]
+      "fixes": [
+        "Fix agent market list."
+      ]
     },
     "date": "2023-10-06",
     "version": "0.83.5"
   },
   {
     "children": {
-      "fixes": ["Fix agent settings."]
+      "fixes": [
+        "Fix agent settings."
+      ]
     },
     "date": "2023-10-06",
     "version": "0.83.4"
   },
   {
     "children": {
-      "improvements": ["Refactor the settings layout to rsc."]
+      "improvements": [
+        "Refactor the settings layout to rsc."
+      ]
     },
     "date": "2023-10-06",
     "version": "0.83.3"
   },
   {
     "children": {
-      "fixes": ["Fix setCookie method that set cookie with sub-path."]
+      "fixes": [
+        "Fix setCookie method that set cookie with sub-path."
+      ]
     },
     "date": "2023-10-06",
     "version": "0.83.2"
   },
   {
     "children": {
-      "improvements": ["Refactor settings page entry."]
+      "improvements": [
+        "Refactor settings page entry."
+      ]
     },
     "date": "2023-10-06",
     "version": "0.83.1"
   },
   {
     "children": {
-      "features": ["Upgrade locale with SSR."]
+      "features": [
+        "Upgrade locale with SSR."
+      ]
     },
     "date": "2023-10-06",
     "version": "0.83.0"
@@ -3502,35 +4424,45 @@
   },
   {
     "children": {
-      "improvements": ["Refactor / route to reduce page js size."]
+      "improvements": [
+        "Refactor / route to reduce page js size."
+      ]
     },
     "date": "2023-09-30",
     "version": "0.82.8"
   },
   {
     "children": {
-      "improvements": ["Refactor the api router to app route handlers."]
+      "improvements": [
+        "Refactor the api router to app route handlers."
+      ]
     },
     "date": "2023-09-30",
     "version": "0.82.7"
   },
   {
     "children": {
-      "fixes": ["Fix share default config, pin openai to fix type error."]
+      "fixes": [
+        "Fix share default config, pin openai to fix type error."
+      ]
     },
     "date": "2023-09-29",
     "version": "0.82.6"
   },
   {
     "children": {
-      "improvements": ["Update theme color and styling of mobile settings page."]
+      "improvements": [
+        "Update theme color and styling of mobile settings page."
+      ]
     },
     "date": "2023-09-29",
     "version": "0.82.5"
   },
   {
     "children": {
-      "fixes": ["修正 localStorage 不存在造成设置页刷新 500 保存的问题."]
+      "fixes": [
+        "修正 localStorage 不存在造成设置页刷新 500 保存的问题."
+      ]
     },
     "date": "2023-09-29",
     "version": "0.82.4"
@@ -3546,14 +4478,18 @@
   },
   {
     "children": {
-      "improvements": ["Refactor settings page and mobile ux."]
+      "improvements": [
+        "Refactor settings page and mobile ux."
+      ]
     },
     "date": "2023-09-28",
     "version": "0.82.2"
   },
   {
     "children": {
-      "fixes": ["Fix share screenshot scrollbar."]
+      "fixes": [
+        "Fix share screenshot scrollbar."
+      ]
     },
     "date": "2023-09-27",
     "version": "0.82.1"
@@ -3565,63 +4501,81 @@
   },
   {
     "children": {
-      "features": ["Add several analytics sdk."]
+      "features": [
+        "Add several analytics sdk."
+      ]
     },
     "date": "2023-09-27",
     "version": "0.81.0"
   },
   {
     "children": {
-      "improvements": ["Switch Modal components to @lobehub/ui."]
+      "improvements": [
+        "Switch Modal components to @lobehub/ui."
+      ]
     },
     "date": "2023-09-27",
     "version": "0.80.2"
   },
   {
     "children": {
-      "improvements": ["Fix conversation mobile view area."]
+      "improvements": [
+        "Fix conversation mobile view area."
+      ]
     },
     "date": "2023-09-27",
     "version": "0.80.1"
   },
   {
     "children": {
-      "features": ["Improve user experience and ensure consistency."]
+      "features": [
+        "Improve user experience and ensure consistency."
+      ]
     },
     "date": "2023-09-27",
     "version": "0.80.0"
   },
   {
     "children": {
-      "improvements": ["Fix safearea in mobile."]
+      "improvements": [
+        "Fix safearea in mobile."
+      ]
     },
     "date": "2023-09-27",
     "version": "0.79.8"
   },
   {
     "children": {
-      "improvements": ["Use hook to check PWA env."]
+      "improvements": [
+        "Use hook to check PWA env."
+      ]
     },
     "date": "2023-09-27",
     "version": "0.79.7"
   },
   {
     "children": {
-      "improvements": ["Optimize PWA style and scroll effect."]
+      "improvements": [
+        "Optimize PWA style and scroll effect."
+      ]
     },
     "date": "2023-09-27",
     "version": "0.79.6"
   },
   {
     "children": {
-      "fixes": ["Fix URI error."]
+      "fixes": [
+        "Fix URI error."
+      ]
     },
     "date": "2023-09-26",
     "version": "0.79.5"
   },
   {
     "children": {
-      "improvements": ["Move dir from page to app and remove .page suffix."]
+      "improvements": [
+        "Move dir from page to app and remove .page suffix."
+      ]
     },
     "date": "2023-09-26",
     "version": "0.79.4"
@@ -3648,14 +4602,18 @@
   },
   {
     "children": {
-      "improvements": ["Show topic tooltip on left side."]
+      "improvements": [
+        "Show topic tooltip on left side."
+      ]
     },
     "date": "2023-09-21",
     "version": "0.78.1"
   },
   {
     "children": {
-      "features": ["Auto create topic when chatting."]
+      "features": [
+        "Auto create topic when chatting."
+      ]
     },
     "date": "2023-09-17",
     "version": "0.78.0"
@@ -3667,88 +4625,114 @@
   },
   {
     "children": {
-      "fixes": ["Fix lint."]
+      "fixes": [
+        "Fix lint."
+      ]
     },
     "date": "2023-09-14",
     "version": "0.77.1"
   },
   {
     "children": {
-      "features": ["Update localization files and add translations for different languages."]
+      "features": [
+        "Update localization files and add translations for different languages."
+      ]
     },
     "date": "2023-09-14",
     "version": "0.77.0"
   },
   {
     "children": {
-      "fixes": ["Fix client config."]
+      "fixes": [
+        "Fix client config."
+      ]
     },
     "date": "2023-09-11",
     "version": "0.76.2"
   },
   {
     "children": {
-      "fixes": ["Fix save topic button."]
+      "fixes": [
+        "Fix save topic button."
+      ]
     },
     "date": "2023-09-11",
     "version": "0.76.1"
   },
   {
     "children": {
-      "features": ["Support Azure OpenAI Deploy env."]
+      "features": [
+        "Support Azure OpenAI Deploy env."
+      ]
     },
     "date": "2023-09-11",
     "version": "0.76.0"
   },
   {
     "children": {
-      "improvements": ["Update loading style and compatible with unknown agent identifier."],
+      "improvements": [
+        "Update loading style and compatible with unknown agent identifier."
+      ],
       "features": [
         "Add agents market and improve UI components, Add and refactor components for chat input feature, Add functions for generating and analyzing JSON files, generating resource files and table of contents, and formatting console output, Add new settings for Azure OpenAI and OpenAI in locales files, Add new string, create AgentModal component, implement GridCardItem and Loading components, import AgentModal, Add SideBar component, new actions, and update market store state and selectors, Add translations and new setting to \"setting.json\", Improve functionality and user interface of market page, Modify market features components and update CSS styles, support add agent to chat."
       ],
-      "fixes": ["Fix fetcher, Fix market sidebar scroll and add i18n."]
+      "fixes": [
+        "Fix fetcher, Fix market sidebar scroll and add i18n."
+      ]
     },
     "date": "2023-09-11",
     "version": "0.75.0"
   },
   {
     "children": {
-      "features": ["Add russian locally, Update Russian and English locally (LLM tab)."]
+      "features": [
+        "Add russian locally, Update Russian and English locally (LLM tab)."
+      ]
     },
     "date": "2023-09-11",
     "version": "0.74.0"
   },
   {
     "children": {
-      "features": ["Support Azure OpenAI."]
+      "features": [
+        "Support Azure OpenAI."
+      ]
     },
     "date": "2023-09-10",
     "version": "0.73.0"
   },
   {
     "children": {
-      "fixes": ["Use en-US when no suit lang with plugin index."]
+      "fixes": [
+        "Use en-US when no suit lang with plugin index."
+      ]
     },
     "date": "2023-09-10",
     "version": "0.72.4"
   },
   {
     "children": {
-      "fixes": ["Fix sessionList double click on mobile."]
+      "fixes": [
+        "Fix sessionList double click on mobile."
+      ]
     },
     "date": "2023-09-09",
     "version": "0.72.3"
   },
   {
     "children": {
-      "fixes": ["Fix mobile switch when session selected."]
+      "fixes": [
+        "Fix mobile switch when session selected."
+      ]
     },
     "date": "2023-09-09",
     "version": "0.72.2"
   },
   {
     "children": {
-      "fixes": ["修正异步水合造成的初始状态不稳定的问题."]
+      "fixes": [
+        "修正异步水合造成的初始状态不稳定的问题."
+      ]
     },
     "date": "2023-09-09",
     "version": "0.72.1"
@@ -3758,85 +4742,111 @@
       "features": [
         "Add plugin market Setting Modal, 支持快速刷新与预览 manifest, 适配插件 i18n 方案."
       ],
-      "fixes": ["修正删除插件时错误开启的问题."],
-      "improvements": ["优化 manifest 预览的尺寸."]
+      "fixes": [
+        "修正删除插件时错误开启的问题."
+      ],
+      "improvements": [
+        "优化 manifest 预览的尺寸."
+      ]
     },
     "date": "2023-09-09",
     "version": "0.72.0"
   },
   {
     "children": {
-      "fixes": ["Fix mobile route."]
+      "fixes": [
+        "Fix mobile route."
+      ]
     },
     "date": "2023-09-09",
     "version": "0.71.1"
   },
   {
     "children": {
-      "features": ["Migrate localStorage to indexedDB."]
+      "features": [
+        "Migrate localStorage to indexedDB."
+      ]
     },
     "date": "2023-09-09",
     "version": "0.71.0"
   },
   {
     "children": {
-      "fixes": ["Fix route."]
+      "fixes": [
+        "Fix route."
+      ]
     },
     "date": "2023-09-09",
     "version": "0.70.4"
   },
   {
     "children": {
-      "improvements": ["Better mobile style."]
+      "improvements": [
+        "Better mobile style."
+      ]
     },
     "date": "2023-09-09",
     "version": "0.70.3"
   },
   {
     "children": {
-      "fixes": ["修正移动端路由问题."]
+      "fixes": [
+        "修正移动端路由问题."
+      ]
     },
     "date": "2023-09-08",
     "version": "0.70.2"
   },
   {
     "children": {
-      "improvements": ["Refactor settingsSelectors to globalSelectors."]
+      "improvements": [
+        "Refactor settingsSelectors to globalSelectors."
+      ]
     },
     "date": "2023-09-08",
     "version": "0.70.1"
   },
   {
     "children": {
-      "features": ["Refactor to url state."]
+      "features": [
+        "Refactor to url state."
+      ]
     },
     "date": "2023-09-08",
     "version": "0.70.0"
   },
   {
     "children": {
-      "improvements": ["Migrate openai-edge to openai."]
+      "improvements": [
+        "Migrate openai-edge to openai."
+      ]
     },
     "date": "2023-09-06",
     "version": "0.69.1"
   },
   {
     "children": {
-      "features": ["Add new import statement for \"Flexbox\" component in \"Empty\" component."]
+      "features": [
+        "Add new import statement for \"Flexbox\" component in \"Empty\" component."
+      ]
     },
     "date": "2023-09-06",
     "version": "0.69.0"
   },
   {
     "children": {
-      "fixes": ["修正数组合并逻辑，修正被移除插件无法看到的问题."]
+      "fixes": [
+        "修正数组合并逻辑，修正被移除插件无法看到的问题."
+      ]
     },
     "date": "2023-09-03",
     "version": "0.68.1"
   },
   {
     "children": {
-      "features": ["Plugin default use iframe render."]
+      "features": [
+        "Plugin default use iframe render."
+      ]
     },
     "date": "2023-09-03",
     "version": "0.68.0"
@@ -3848,35 +4858,45 @@
   },
   {
     "children": {
-      "features": ["Add russian locally."]
+      "features": [
+        "Add russian locally."
+      ]
     },
     "date": "2023-09-02",
     "version": "0.66.0"
   },
   {
     "children": {
-      "fixes": ["修正 defaultAgent 无法正常变更的问题."]
+      "fixes": [
+        "修正 defaultAgent 无法正常变更的问题."
+      ]
     },
     "date": "2023-09-01",
     "version": "0.65.1"
   },
   {
     "children": {
-      "features": ["支持本地插件自定义 gateway."]
+      "features": [
+        "支持本地插件自定义 gateway."
+      ]
     },
     "date": "2023-08-29",
     "version": "0.65.0"
   },
   {
     "children": {
-      "improvements": ["Update i18n."]
+      "improvements": [
+        "Update i18n."
+      ]
     },
     "date": "2023-08-29",
     "version": "0.64.1"
   },
   {
     "children": {
-      "improvements": ["Remove no need i18n."],
+      "improvements": [
+        "Remove no need i18n."
+      ],
       "features": [
         "增加自定义插件的增删改配置功能，完善自定义插件表单的校验逻辑，支持本地插件侧的请求与错误呈现，新增插件配置 Dev 弹窗，绑定本地插件的增删改逻辑."
       ]
@@ -3886,170 +4906,228 @@
   },
   {
     "children": {
-      "improvements": ["Refactor with new market url."]
+      "improvements": [
+        "Refactor with new market url."
+      ]
     },
     "date": "2023-08-28",
     "version": "0.63.3"
   },
   {
     "children": {
-      "improvements": ["Refactor AgentSettings."]
+      "improvements": [
+        "Refactor AgentSettings."
+      ]
     },
     "date": "2023-08-27",
     "version": "0.63.2"
   },
   {
     "children": {
-      "improvements": ["Refactor the selectors import."]
+      "improvements": [
+        "Refactor the selectors import."
+      ]
     },
     "date": "2023-08-27",
     "version": "0.63.1"
   },
   {
     "children": {
-      "features": ["support sharing to shareGPT."]
+      "features": [
+        "support sharing to shareGPT."
+      ]
     },
     "date": "2023-08-27",
     "version": "0.63.0"
   },
   {
     "children": {
-      "fixes": ["Fix plugin settings error."]
+      "fixes": [
+        "Fix plugin settings error."
+      ]
     },
     "date": "2023-08-26",
     "version": "0.62.1"
   },
   {
     "children": {
-      "features": ["支持超过 4k 的会话使用 16k 总结标题."],
-      "fixes": ["Fix plugin settings error."],
-      "improvements": ["优化清理会话的操作路径，优化默认角色的配置."]
+      "features": [
+        "支持超过 4k 的会话使用 16k 总结标题."
+      ],
+      "fixes": [
+        "Fix plugin settings error."
+      ],
+      "improvements": [
+        "优化清理会话的操作路径，优化默认角色的配置."
+      ]
     },
     "date": "2023-08-26",
     "version": "0.62.0"
   },
   {
     "children": {
-      "features": ["新增自动滚动."]
+      "features": [
+        "新增自动滚动."
+      ]
     },
     "date": "2023-08-26",
     "version": "0.61.0"
   },
   {
     "children": {
-      "improvements": ["优化文案."]
+      "improvements": [
+        "优化文案."
+      ]
     },
     "date": "2023-08-26",
     "version": "0.60.4"
   },
   {
     "children": {
-      "fixes": ["Fix global state merge error."]
+      "fixes": [
+        "Fix global state merge error."
+      ]
     },
     "date": "2023-08-26",
     "version": "0.60.3"
   },
   {
     "children": {
-      "fixes": ["Fix fetch plugin header error."]
+      "fixes": [
+        "Fix fetch plugin header error."
+      ]
     },
     "date": "2023-08-26",
     "version": "0.60.2"
   },
   {
     "children": {
-      "fixes": ["Fix settings storage error."]
+      "fixes": [
+        "Fix settings storage error."
+      ]
     },
     "date": "2023-08-26",
     "version": "0.60.1"
   },
   {
     "children": {
-      "improvements": ["Refactor with new market index url."],
-      "features": ["支持插件 manifest 加载失败后重试."]
+      "improvements": [
+        "Refactor with new market index url."
+      ],
+      "features": [
+        "支持插件 manifest 加载失败后重试."
+      ]
     },
     "date": "2023-08-26",
     "version": "0.60.0"
   },
   {
     "children": {
-      "features": ["支持展示插件插件状态，支持插件 i18n 模式展示."]
+      "features": [
+        "支持展示插件插件状态，支持插件 i18n 模式展示."
+      ]
     },
     "date": "2023-08-26",
     "version": "0.59.0"
   },
   {
     "children": {
-      "features": ["Implement responsive design for mobile devices."]
+      "features": [
+        "Implement responsive design for mobile devices."
+      ]
     },
     "date": "2023-08-26",
     "version": "0.58.0"
   },
   {
     "children": {
-      "improvements": ["Refactor to ChatErrorType."],
+      "improvements": [
+        "Refactor to ChatErrorType."
+      ],
       "features": [
         "完善插件请求的错误处理，支持修改与记录插件的配置，支持发送插件配置信息，支持渲染 manifest 中的 settings, 支持设置不正确时进行插件的配置，新增插件请求状态的错误处理."
       ],
-      "fixes": ["修正缓存旧数据的报错问题."]
+      "fixes": [
+        "修正缓存旧数据的报错问题."
+      ]
     },
     "date": "2023-08-26",
     "version": "0.57.0"
   },
   {
     "children": {
-      "features": ["Use new plugin manifest to support plugin’s multi api."]
+      "features": [
+        "Use new plugin manifest to support plugin’s multi api."
+      ]
     },
     "date": "2023-08-24",
     "version": "0.56.0"
   },
   {
     "children": {
-      "improvements": ["Refactor plugin api with @lobehub/chat-plugins-gateway."]
+      "improvements": [
+        "Refactor plugin api with @lobehub/chat-plugins-gateway."
+      ]
     },
     "date": "2023-08-22",
     "version": "0.55.1"
   },
   {
     "children": {
-      "improvements": ["完成插件市场 loading 态样式."],
-      "features": ["初步完成插件市场动态加载全链路，实现插件组件的动态加载."],
-      "fixes": ["Fix error, 修正无法正常开启插件的问题，修正测试，补充插件 store 的水合逻辑."]
+      "improvements": [
+        "完成插件市场 loading 态样式."
+      ],
+      "features": [
+        "初步完成插件市场动态加载全链路，实现插件组件的动态加载."
+      ],
+      "fixes": [
+        "Fix error, 修正无法正常开启插件的问题，修正测试，补充插件 store 的水合逻辑."
+      ]
     },
     "date": "2023-08-22",
     "version": "0.55.0"
   },
   {
     "children": {
-      "fixes": ["Fix not cannot change setting error."]
+      "fixes": [
+        "Fix not cannot change setting error."
+      ]
     },
     "date": "2023-08-21",
     "version": "0.54.4"
   },
   {
     "children": {
-      "improvements": ["Refactor plugin request."]
+      "improvements": [
+        "Refactor plugin request."
+      ]
     },
     "date": "2023-08-21",
     "version": "0.54.3"
   },
   {
     "children": {
-      "improvements": ["修正图片选项的样式问题."]
+      "improvements": [
+        "修正图片选项的样式问题."
+      ]
     },
     "date": "2023-08-16",
     "version": "0.54.2"
   },
   {
     "children": {
-      "fixes": ["修正 i18n 失效的问题."]
+      "fixes": [
+        "修正 i18n 失效的问题."
+      ]
     },
     "date": "2023-08-16",
     "version": "0.54.1"
   },
   {
     "children": {
-      "features": ["Add new features and improve user interface and functionality."]
+      "features": [
+        "Add new features and improve user interface and functionality."
+      ]
     },
     "date": "2023-08-15",
     "version": "0.54.0"
@@ -4061,21 +5139,27 @@
   },
   {
     "children": {
-      "improvements": ["Replace cdn."]
+      "improvements": [
+        "Replace cdn."
+      ]
     },
     "date": "2023-08-15",
     "version": "0.52.1"
   },
   {
     "children": {
-      "features": ["Add avatar compress."]
+      "features": [
+        "Add avatar compress."
+      ]
     },
     "date": "2023-08-15",
     "version": "0.52.0"
   },
   {
     "children": {
-      "features": ["Add Footer component and modify Token and index files."]
+      "features": [
+        "Add Footer component and modify Token and index files."
+      ]
     },
     "date": "2023-08-15",
     "version": "0.51.0"
@@ -4091,28 +5175,36 @@
   },
   {
     "children": {
-      "features": ["Add BackToBottom to conversation, Update icons and text in various components."]
+      "features": [
+        "Add BackToBottom to conversation, Update icons and text in various components."
+      ]
     },
     "date": "2023-08-15",
     "version": "0.49.0"
   },
   {
     "children": {
-      "features": ["Import SiOpenai icon and replace 'Tag' component in chat feature."]
+      "features": [
+        "Import SiOpenai icon and replace 'Tag' component in chat feature."
+      ]
     },
     "date": "2023-08-15",
     "version": "0.48.0"
   },
   {
     "children": {
-      "features": ["Add and update UI elements and agent configuration."]
+      "features": [
+        "Add and update UI elements and agent configuration."
+      ]
     },
     "date": "2023-08-15",
     "version": "0.47.0"
   },
   {
     "children": {
-      "improvements": ["Fix SystemRole Skeleton padding."]
+      "improvements": [
+        "Fix SystemRole Skeleton padding."
+      ]
     },
     "date": "2023-08-14",
     "version": "0.46.1"
@@ -4122,37 +5214,51 @@
       "features": [
         "Update styling and functionality of AgentPrompt and EditableMessage components, 支持停止生成消息."
       ],
-      "fixes": ["Remove input highlight."]
+      "fixes": [
+        "Remove input highlight."
+      ]
     },
     "date": "2023-08-14",
     "version": "0.46.0"
   },
   {
     "children": {
-      "features": ["优化每个角色的初始引导."],
-      "improvements": ["优化初始化加载状态，等到会话加载完毕再显示内容."]
+      "features": [
+        "优化每个角色的初始引导."
+      ],
+      "improvements": [
+        "优化初始化加载状态，等到会话加载完毕再显示内容."
+      ]
     },
     "date": "2023-08-14",
     "version": "0.45.0"
   },
   {
     "children": {
-      "improvements": ["优化 Chat Skeleton 样式，优化 Inbox 样式."]
+      "improvements": [
+        "优化 Chat Skeleton 样式，优化 Inbox 样式."
+      ]
     },
     "date": "2023-08-13",
     "version": "0.44.4"
   },
   {
     "children": {
-      "improvements": ["修正话题列表无法滚动的问题."],
-      "fixes": ["修正 inbox 点击重新生成会报错的问题."]
+      "improvements": [
+        "修正话题列表无法滚动的问题."
+      ],
+      "fixes": [
+        "修正 inbox 点击重新生成会报错的问题."
+      ]
     },
     "date": "2023-08-13",
     "version": "0.44.3"
   },
   {
     "children": {
-      "fixes": ["修正重新生成时切分历史消息的逻辑."]
+      "fixes": [
+        "修正重新生成时切分历史消息的逻辑."
+      ]
     },
     "date": "2023-08-13",
     "version": "0.44.2"
@@ -4176,14 +5282,18 @@
   },
   {
     "children": {
-      "features": ["支持切换语言."]
+      "features": [
+        "支持切换语言."
+      ]
     },
     "date": "2023-08-12",
     "version": "0.43.0"
   },
   {
     "children": {
-      "improvements": ["暂时隐藏 Hero 模板."]
+      "improvements": [
+        "暂时隐藏 Hero 模板."
+      ]
     },
     "date": "2023-08-12",
     "version": "0.42.3"
@@ -4193,21 +5303,27 @@
       "improvements": [
         "将 useSettings 更名为 useGlobalStore, 将原本的 settings 更名为 global, 收敛切换 SideBar 方法为 useSwitchSideBarOnInit, 重构需本地缓存的状态为 preference."
       ],
-      "fixes": ["修正移除 session 时的路由跳转逻辑."]
+      "fixes": [
+        "修正移除 session 时的路由跳转逻辑."
+      ]
     },
     "date": "2023-08-12",
     "version": "0.42.2"
   },
   {
     "children": {
-      "improvements": ["优化 App 首页 Loading 态."]
+      "improvements": [
+        "优化 App 首页 Loading 态."
+      ]
     },
     "date": "2023-08-12",
     "version": "0.42.1"
   },
   {
     "children": {
-      "features": ["Add Welcome page."]
+      "features": [
+        "Add Welcome page."
+      ]
     },
     "date": "2023-08-11",
     "version": "0.42.0"
@@ -4223,144 +5339,192 @@
   },
   {
     "children": {
-      "improvements": ["重构 settings store 代码写法."]
+      "improvements": [
+        "重构 settings store 代码写法."
+      ]
     },
     "date": "2023-08-10",
     "version": "0.41.1"
   },
   {
     "children": {
-      "features": ["支持持久化隐藏 Topic 功能."],
-      "improvements": ["优化第一次水合逻辑."]
+      "features": [
+        "支持持久化隐藏 Topic 功能."
+      ],
+      "improvements": [
+        "优化第一次水合逻辑."
+      ]
     },
     "date": "2023-08-10",
     "version": "0.41.0"
   },
   {
     "children": {
-      "improvements": ["优化 Topic 的水合加载效果."]
+      "improvements": [
+        "优化 Topic 的水合加载效果."
+      ]
     },
     "date": "2023-08-10",
     "version": "0.40.7"
   },
   {
     "children": {
-      "improvements": ["优化水合前的加载效果."]
+      "improvements": [
+        "优化水合前的加载效果."
+      ]
     },
     "date": "2023-08-10",
     "version": "0.40.6"
   },
   {
     "children": {
-      "improvements": ["增加未初始化的 loading 态."]
+      "improvements": [
+        "增加未初始化的 loading 态."
+      ]
     },
     "date": "2023-08-10",
     "version": "0.40.5"
   },
   {
     "children": {
-      "improvements": ["优化 Header 样式."]
+      "improvements": [
+        "优化 Header 样式."
+      ]
     },
     "date": "2023-08-10",
     "version": "0.40.4"
   },
   {
     "children": {
-      "fixes": ["修正没有 prompt 的编辑与保存按钮的问题."]
+      "fixes": [
+        "修正没有 prompt 的编辑与保存按钮的问题."
+      ]
     },
     "date": "2023-08-10",
     "version": "0.40.3"
   },
   {
     "children": {
-      "fixes": ["修正 defaults 造成的 config 报错."]
+      "fixes": [
+        "修正 defaults 造成的 config 报错."
+      ]
     },
     "date": "2023-08-08",
     "version": "0.40.2"
   },
   {
     "children": {
-      "fixes": ["优化 openai 接口的错误处理逻辑."]
+      "fixes": [
+        "优化 openai 接口的错误处理逻辑."
+      ]
     },
     "date": "2023-08-06",
     "version": "0.40.1"
   },
   {
     "children": {
-      "features": ["Add new dependency, add Tag and PluginTag components, update HeaderTitle."]
+      "features": [
+        "Add new dependency, add Tag and PluginTag components, update HeaderTitle."
+      ]
     },
     "date": "2023-08-05",
     "version": "0.40.0"
   },
   {
     "children": {
-      "improvements": ["修正 assistant 消息没有 background 的问题."]
+      "improvements": [
+        "修正 assistant 消息没有 background 的问题."
+      ]
     },
     "date": "2023-08-05",
     "version": "0.39.4"
   },
   {
     "children": {
-      "fixes": ["优化 405 报错返回内容，并优化 openai 服务端超时处理逻辑."]
+      "fixes": [
+        "优化 405 报错返回内容，并优化 openai 服务端超时处理逻辑."
+      ]
     },
     "date": "2023-08-04",
     "version": "0.39.3"
   },
   {
     "children": {
-      "improvements": ["优化 topic 样式."]
+      "improvements": [
+        "优化 topic 样式."
+      ]
     },
     "date": "2023-08-04",
     "version": "0.39.2"
   },
   {
     "children": {
-      "fixes": ["修正 basePath 在生产环境下不生效的问题."]
+      "fixes": [
+        "修正 basePath 在生产环境下不生效的问题."
+      ]
     },
     "date": "2023-08-04",
     "version": "0.39.1"
   },
   {
     "children": {
-      "features": ["支持多轮的插件意图识别，支持自定义 OpenAI 代理地址."],
-      "improvements": ["优化插件的展示逻辑."]
+      "features": [
+        "支持多轮的插件意图识别，支持自定义 OpenAI 代理地址."
+      ],
+      "improvements": [
+        "优化插件的展示逻辑."
+      ]
     },
     "date": "2023-08-04",
     "version": "0.39.0"
   },
   {
     "children": {
-      "features": ["Add topic empty."]
+      "features": [
+        "Add topic empty."
+      ]
     },
     "date": "2023-08-04",
     "version": "0.38.0"
   },
   {
     "children": {
-      "features": ["支持使用全局助手的设置作为默认助手的创建角色."]
+      "features": [
+        "支持使用全局助手的设置作为默认助手的创建角色."
+      ]
     },
     "date": "2023-08-03",
     "version": "0.37.0"
   },
   {
     "children": {
-      "improvements": ["Refactor zustand usage with v4.4."]
+      "improvements": [
+        "Refactor zustand usage with v4.4."
+      ]
     },
     "date": "2023-08-03",
     "version": "0.36.1"
   },
   {
     "children": {
-      "features": ["实现自定义历史消息数功能."],
-      "fixes": ["Fix setting type."],
-      "improvements": ["Fix session item height."]
+      "features": [
+        "实现自定义历史消息数功能."
+      ],
+      "fixes": [
+        "Fix setting type."
+      ],
+      "improvements": [
+        "Fix session item height."
+      ]
     },
     "date": "2023-08-03",
     "version": "0.36.0"
   },
   {
     "children": {
-      "improvements": ["Update doc mode and token tags."]
+      "improvements": [
+        "Update doc mode and token tags."
+      ]
     },
     "date": "2023-07-31",
     "version": "0.35.1"
@@ -4385,28 +5549,36 @@
   },
   {
     "children": {
-      "features": ["支持输入模板预处理."]
+      "features": [
+        "支持输入模板预处理."
+      ]
     },
     "date": "2023-07-30",
     "version": "0.33.0"
   },
   {
     "children": {
-      "features": ["支持会话置顶."]
+      "features": [
+        "支持会话置顶."
+      ]
     },
     "date": "2023-07-30",
     "version": "0.32.0"
   },
   {
     "children": {
-      "features": ["支持展示 token 使用量."]
+      "features": [
+        "支持展示 token 使用量."
+      ]
     },
     "date": "2023-07-30",
     "version": "0.31.0"
   },
   {
     "children": {
-      "improvements": ["优化搜索引擎插件展示."]
+      "improvements": [
+        "优化搜索引擎插件展示."
+      ]
     },
     "date": "2023-07-30",
     "version": "0.30.1"
@@ -4422,14 +5594,18 @@
   },
   {
     "children": {
-      "features": ["实现单个会话和角色的导出功能，实现清空所有会话消息."]
+      "features": [
+        "实现单个会话和角色的导出功能，实现清空所有会话消息."
+      ]
     },
     "date": "2023-07-30",
     "version": "0.29.0"
   },
   {
     "children": {
-      "improvements": ["重构 settings 相关类型."],
+      "improvements": [
+        "重构 settings 相关类型."
+      ],
       "features": [
         "优化 SideBar 实现，激活态指示更加明确，实现 session 导入功能，实现配置导出功能."
       ]
@@ -4439,51 +5615,69 @@
   },
   {
     "children": {
-      "fixes": ["修正日志超过 4096 长度的问题."]
+      "fixes": [
+        "修正日志超过 4096 长度的问题."
+      ]
     },
     "date": "2023-07-29",
     "version": "0.27.4"
   },
   {
     "children": {
-      "fixes": ["修正返回结果导致插件无法正常识别的问题."],
-      "improvements": ["优化样式."]
+      "fixes": [
+        "修正返回结果导致插件无法正常识别的问题."
+      ],
+      "improvements": [
+        "优化样式."
+      ]
     },
     "date": "2023-07-29",
     "version": "0.27.3"
   },
   {
     "children": {
-      "improvements": ["重构并优化文档抓取插件能力."]
+      "improvements": [
+        "重构并优化文档抓取插件能力."
+      ]
     },
     "date": "2023-07-29",
     "version": "0.27.2"
   },
   {
     "children": {
-      "improvements": ["优化搜索引擎样式."]
+      "improvements": [
+        "优化搜索引擎样式."
+      ]
     },
     "date": "2023-07-29",
     "version": "0.27.1"
   },
   {
     "children": {
-      "features": ["优化搜索引擎插件交互展示."],
-      "improvements": ["优化兜底结果展示."]
+      "features": [
+        "优化搜索引擎插件交互展示."
+      ],
+      "improvements": [
+        "优化兜底结果展示."
+      ]
     },
     "date": "2023-07-29",
     "version": "0.27.0"
   },
   {
     "children": {
-      "improvements": ["优化 setting Layout 实现."]
+      "improvements": [
+        "优化 setting Layout 实现."
+      ]
     },
     "date": "2023-07-29",
     "version": "0.26.1"
   },
   {
     "children": {
-      "features": ["support password auth and error."]
+      "features": [
+        "support password auth and error."
+      ]
     },
     "date": "2023-07-28",
     "version": "0.26.0"
@@ -4504,101 +5698,135 @@
   },
   {
     "children": {
-      "features": ["Add new features, update URLs, customize appearance, and implement components"]
+      "features": [
+        "Add new features, update URLs, customize appearance, and implement components"
+      ]
     },
     "date": "2023-07-26",
     "version": "0.23.0"
   },
   {
     "children": {
-      "improvements": ["优化 tooltip 显示."]
+      "improvements": [
+        "优化 tooltip 显示."
+      ]
     },
     "date": "2023-07-26",
     "version": "0.22.2"
   },
   {
     "children": {
-      "fixes": ["修正自定义 OpenAI API Key 的使用问题."]
+      "fixes": [
+        "修正自定义 OpenAI API Key 的使用问题."
+      ]
     },
     "date": "2023-07-25",
     "version": "0.22.1"
   },
   {
     "children": {
-      "features": ["支持使用自定义 OpenAI Key."]
+      "features": [
+        "支持使用自定义 OpenAI Key."
+      ]
     },
     "date": "2023-07-25",
     "version": "0.22.0"
   },
   {
     "children": {
-      "improvements": ["Move component folder."],
-      "features": ["支持快捷配置模型、温度."]
+      "improvements": [
+        "Move component folder."
+      ],
+      "features": [
+        "支持快捷配置模型、温度."
+      ]
     },
     "date": "2023-07-25",
     "version": "0.21.0"
   },
   {
     "children": {
-      "features": ["实现话题模块."]
+      "features": [
+        "实现话题模块."
+      ]
     },
     "date": "2023-07-25",
     "version": "0.20.0"
   },
   {
     "children": {
-      "improvements": ["将 message reducer 提取到独立文件夹中，清理无用代码实现."],
-      "features": ["数据结构层完成 topic 模型改造."]
+      "improvements": [
+        "将 message reducer 提取到独立文件夹中，清理无用代码实现."
+      ],
+      "features": [
+        "数据结构层完成 topic 模型改造."
+      ]
     },
     "date": "2023-07-24",
     "version": "0.19.0"
   },
   {
     "children": {
-      "improvements": ["修正 markdown li 丢失的问题."]
+      "improvements": [
+        "修正 markdown li 丢失的问题."
+      ]
     },
     "date": "2023-07-24",
     "version": "0.18.2"
   },
   {
     "children": {
-      "improvements": ["优化新会话的创建逻辑 session."]
+      "improvements": [
+        "优化新会话的创建逻辑 session."
+      ]
     },
     "date": "2023-07-24",
     "version": "0.18.1"
   },
   {
     "children": {
-      "features": ["实现会话展示模式切换，并优化默认创建角色的配置."]
+      "features": [
+        "实现会话展示模式切换，并优化默认创建角色的配置."
+      ]
     },
     "date": "2023-07-24",
     "version": "0.18.0"
   },
   {
     "children": {
-      "features": ["表单配置支持设定各项高级参数."]
+      "features": [
+        "表单配置支持设定各项高级参数."
+      ]
     },
     "date": "2023-07-24",
     "version": "0.17.0"
   },
   {
     "children": {
-      "improvements": ["优化 document title."]
+      "improvements": [
+        "优化 document title."
+      ]
     },
     "date": "2023-07-24",
     "version": "0.16.1"
   },
   {
     "children": {
-      "features": ["支持自动跳转到第一条会话."],
-      "improvements": ["修正插件的展示文案."]
+      "features": [
+        "支持自动跳转到第一条会话."
+      ],
+      "improvements": [
+        "修正插件的展示文案."
+      ]
     },
     "date": "2023-07-24",
     "version": "0.16.0"
   },
   {
     "children": {
-      "improvements": ["更新插件文案."]
+      "improvements": [
+        "更新插件文案."
+      ]
     },
     "date": "2023-07-24",
     "version": "0.15.1"
@@ -4614,143 +5842,189 @@
   },
   {
     "children": {
-      "features": ["支持网页抓取."]
+      "features": [
+        "支持网页抓取."
+      ]
     },
     "date": "2023-07-24",
     "version": "0.14.0"
   },
   {
     "children": {
-      "fixes": ["修正搜索引擎插件的实现问题."]
+      "fixes": [
+        "修正搜索引擎插件的实现问题."
+      ]
     },
     "date": "2023-07-23",
     "version": "0.13.1"
   },
   {
     "children": {
-      "features": ["优化插件模式下的用户体验."]
+      "features": [
+        "优化插件模式下的用户体验."
+      ]
     },
     "date": "2023-07-23",
     "version": "0.13.0"
   },
   {
     "children": {
-      "fixes": ["修正 message parentId 不正确的问题."]
+      "fixes": [
+        "修正 message parentId 不正确的问题."
+      ]
     },
     "date": "2023-07-23",
     "version": "0.12.1"
   },
   {
     "children": {
-      "features": ["支持插件列表 与 基于 Serpapi 的搜索引擎插件."]
+      "features": [
+        "支持插件列表 与 基于 Serpapi 的搜索引擎插件."
+      ]
     },
     "date": "2023-07-23",
     "version": "0.12.0"
   },
   {
     "children": {
-      "improvements": ["Update manifest, 增加国际化文案."],
-      "features": ["支持查询天气."]
+      "improvements": [
+        "Update manifest, 增加国际化文案."
+      ],
+      "features": [
+        "支持查询天气."
+      ]
     },
     "date": "2023-07-23",
     "version": "0.11.0"
   },
   {
     "children": {
-      "improvements": ["优化模型在 list 中的展示逻辑."]
+      "improvements": [
+        "优化模型在 list 中的展示逻辑."
+      ]
     },
     "date": "2023-07-23",
     "version": "0.10.2"
   },
   {
     "children": {
-      "improvements": ["修正对话中用户头像的问题."]
+      "improvements": [
+        "修正对话中用户头像的问题."
+      ]
     },
     "date": "2023-07-22",
     "version": "0.10.1"
   },
   {
     "children": {
-      "features": ["支持复制与编辑会话消息."]
+      "features": [
+        "支持复制与编辑会话消息."
+      ]
     },
     "date": "2023-07-22",
     "version": "0.10.0"
   },
   {
     "children": {
-      "features": ["展示模型类型."]
+      "features": [
+        "展示模型类型."
+      ]
     },
     "date": "2023-07-22",
     "version": "0.9.0"
   },
   {
     "children": {
-      "fixes": ["Fix miss manifest.json link, 优化 model tag 展示逻辑."]
+      "fixes": [
+        "Fix miss manifest.json link, 优化 model tag 展示逻辑."
+      ]
     },
     "date": "2023-07-22",
     "version": "0.8.2"
   },
   {
     "children": {
-      "fixes": ["Fix import."]
+      "fixes": [
+        "Fix import."
+      ]
     },
     "date": "2023-07-22",
     "version": "0.8.1"
   },
   {
     "children": {
-      "features": ["支持 pwa 模式."]
+      "features": [
+        "支持 pwa 模式."
+      ]
     },
     "date": "2023-07-22",
     "version": "0.8.0"
   },
   {
     "children": {
-      "features": ["支持展示来自模型的标记信息."]
+      "features": [
+        "支持展示来自模型的标记信息."
+      ]
     },
     "date": "2023-07-22",
     "version": "0.7.0"
   },
   {
     "children": {
-      "fixes": ["Add deps."]
+      "fixes": [
+        "Add deps."
+      ]
     },
     "date": "2023-07-22",
     "version": "0.6.1"
   },
   {
     "children": {
-      "improvements": ["重构 selector 文件组织."],
-      "features": ["补充 token 详情."]
+      "improvements": [
+        "重构 selector 文件组织."
+      ],
+      "features": [
+        "补充 token 详情."
+      ]
     },
     "date": "2023-07-22",
     "version": "0.6.0"
   },
   {
     "children": {
-      "features": ["支持选择 Emoji."],
-      "fixes": ["修正 total token 计算不正确的问题."]
+      "features": [
+        "支持选择 Emoji."
+      ],
+      "fixes": [
+        "修正 total token 计算不正确的问题."
+      ]
     },
     "date": "2023-07-22",
     "version": "0.5.0"
   },
   {
     "children": {
-      "improvements": ["优化 edit 代码结构."]
+      "improvements": [
+        "优化 edit 代码结构."
+      ]
     },
     "date": "2023-07-22",
     "version": "0.4.3"
   },
   {
     "children": {
-      "improvements": ["Fix input style, fix layout."]
+      "improvements": [
+        "Fix input style, fix layout."
+      ]
     },
     "date": "2023-07-22",
     "version": "0.4.2"
   },
   {
     "children": {
-      "fixes": ["Fix SSR style error."]
+      "fixes": [
+        "Fix SSR style error."
+      ]
     },
     "date": "2023-07-22",
     "version": "0.4.1"
@@ -4766,14 +6040,18 @@
   },
   {
     "children": {
-      "features": ["Add new files, modify components, and adjust layout and styling."]
+      "features": [
+        "Add new files, modify components, and adjust layout and styling."
+      ]
     },
     "date": "2023-07-18",
     "version": "0.3.0"
   },
   {
     "children": {
-      "features": ["Add import statement and define CSS styles for Avatar component."]
+      "features": [
+        "Add import statement and define CSS styles for Avatar component."
+      ]
     },
     "date": "2023-07-18",
     "version": "0.2.0"
