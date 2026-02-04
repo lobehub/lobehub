@@ -8,7 +8,6 @@ export default {
   'DragUpload.dragFileTitle': 'Upload Files',
   'DragUpload.dragTitle': 'Upload Images',
   'FileManager.actions.addToLibrary': 'Add to Library',
-  'FileManager.actions.moveToOtherLibrary': 'Move to another Library',
   'FileManager.actions.batchChunking': 'Batch Chunking',
   'FileManager.actions.chunking': 'Chunking',
   'FileManager.actions.chunkingTooltip':
@@ -21,7 +20,7 @@ export default {
   'FileManager.actions.confirmDeleteMultiFiles':
     'You are about to delete the selected {{count}} files. Once deleted, they cannot be recovered. Please confirm your action.',
   'FileManager.actions.confirmRemoveFromLibrary':
-    'You're about to remove {{count}} selected file(s) from the Library. They'll still be available in All Files. Confirm to continue.',
+    "You're about to remove {{count}} selected file(s) from the Library. They'll still be available in All Files. Confirm to continue.",
   'FileManager.actions.copyUrl': 'Copy Link',
   'FileManager.actions.copyUrlSuccess': 'File url copied successfully.',
   'FileManager.actions.createChunkingTask': 'Preparing...',
@@ -34,6 +33,7 @@ export default {
   'FileManager.actions.moveHere': 'Move here',
   'FileManager.actions.moveSuccess': 'File moved successfully',
   'FileManager.actions.moveToFolder': 'Move to...',
+  'FileManager.actions.moveToOtherLibrary': 'Move to another Library',
   'FileManager.actions.moveToRoot': 'Move to root directory',
   'FileManager.actions.moving': 'Moving...',
   'FileManager.actions.removeFromLibrary': 'Remove from Library',
