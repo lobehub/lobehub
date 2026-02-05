@@ -1,5 +1,5 @@
-import { ModelParamsSchema } from '../standard-parameters';
-import { AIChatModelCard, AIImageModelCard } from '../types';
+import type { ModelParamsSchema } from '../standard-parameters';
+import type { AIChatModelCard, AIImageModelCard } from '../types';
 
 /**
  * gemini implicit caching not extra cost
@@ -903,7 +903,6 @@ export const nanoBananaProParameters: ModelParamsSchema = {
   },
 };
 
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 const googleImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana Pro',
@@ -1005,7 +1004,6 @@ const googleImageModels: AIImageModelCard[] = [
     },
   },
 ];
-/* eslint-enable sort-keys-fix/sort-keys-fix */
 
 export const allModels = [...googleChatModels, ...googleImageModels];
 

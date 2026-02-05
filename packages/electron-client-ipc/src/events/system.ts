@@ -1,4 +1,4 @@
-import { ThemeAppearance, ThemeMode } from '../types';
+import type { ThemeAppearance, ThemeMode } from '../types';
 
 export interface SystemBroadcastEvents {
   localeChanged: (data: { locale: string }) => void;

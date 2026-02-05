@@ -14,7 +14,7 @@ describe('cacheManager.ts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
-    cacheManager = new TTLCacheManager(60000); // 60 second TTL
+    cacheManager = new TTLCacheManager(60_000); // 60 second TTL
     mockFetcher = vi.fn();
   });
 
@@ -29,7 +29,7 @@ describe('cacheManager.ts', () => {
     });
 
     it('should create instance with custom TTL', () => {
-      const cache = new TTLCacheManager(30000);
+      const cache = new TTLCacheManager(30_000);
       expect(cache).toBeInstanceOf(TTLCacheManager);
     });
 
@@ -64,7 +64,7 @@ describe('cacheManager.ts', () => {
       const result1 = await cacheManager.get('test-key', mockFetcher);
 
       // Advance time by 30 seconds (within TTL)
-      vi.advanceTimersByTime(30000);
+      vi.advanceTimersByTime(30_000);
 
       // Second call
       const result2 = await cacheManager.get('test-key', mockFetcher);
@@ -83,7 +83,7 @@ describe('cacheManager.ts', () => {
       const result1 = await cacheManager.get('test-key', mockFetcher);
 
       // Advance time beyond TTL
-      vi.advanceTimersByTime(70000);
+      vi.advanceTimersByTime(70_000);
 
       // Second call after TTL expiration
       const result2 = await cacheManager.get('test-key', mockFetcher);
@@ -375,7 +375,7 @@ describe('cacheManager.ts', () => {
       expect(cacheManager.has('test-key')).toBe(true);
 
       // Advance time beyond TTL
-      vi.advanceTimersByTime(70000);
+      vi.advanceTimersByTime(70_000);
 
       // has() checks existence regardless of expiration
       expect(cacheManager.has('test-key')).toBe(true);
@@ -401,7 +401,7 @@ describe('cacheManager.ts', () => {
       expect(cacheManager.isValid('test-key')).toBe(true);
 
       // Advance time beyond TTL
-      vi.advanceTimersByTime(70000);
+      vi.advanceTimersByTime(70_000);
 
       expect(cacheManager.isValid('test-key')).toBe(false);
     });
@@ -413,7 +413,7 @@ describe('cacheManager.ts', () => {
       expect(cacheManager.isValid('test-key')).toBe(true);
 
       // Advance time to just before TTL expiration
-      vi.advanceTimersByTime(59999);
+      vi.advanceTimersByTime(59_999);
 
       expect(cacheManager.isValid('test-key')).toBe(true);
     });
@@ -425,7 +425,7 @@ describe('cacheManager.ts', () => {
       expect(cacheManager.isValid('test-key')).toBe(true);
 
       // Advance time to exact TTL expiration
-      vi.advanceTimersByTime(60000);
+      vi.advanceTimersByTime(60_000);
 
       expect(cacheManager.isValid('test-key')).toBe(false);
     });
@@ -460,13 +460,13 @@ describe('cacheManager.ts', () => {
     });
 
     it('should handle very long TTL', async () => {
-      const longTTLCache = new TTLCacheManager(1000000000); // Very long TTL
+      const longTTLCache = new TTLCacheManager(1_000_000_000); // Very long TTL
       mockFetcher.mockResolvedValue('test-value');
 
       await longTTLCache.get('test-key', mockFetcher);
       expect(longTTLCache.isValid('test-key')).toBe(true);
 
-      vi.advanceTimersByTime(999999999);
+      vi.advanceTimersByTime(999_999_999);
       expect(longTTLCache.isValid('test-key')).toBe(true);
     });
   });
@@ -493,7 +493,7 @@ describe('cacheManager.ts', () => {
     });
 
     it('should handle very long keys', async () => {
-      const longKey = 'a'.repeat(10000);
+      const longKey = 'a'.repeat(10_000);
       mockFetcher.mockResolvedValue('long-key-value');
 
       const result = await cacheManager.get(longKey, mockFetcher);

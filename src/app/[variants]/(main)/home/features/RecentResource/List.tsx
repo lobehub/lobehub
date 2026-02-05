@@ -31,11 +31,11 @@ const RecentResourceList = memo(() => {
     return (
       <Link
         key={file.id}
+        to={fileUrl}
         style={{
           color: 'inherit',
           textDecoration: 'none',
         }}
-        to={fileUrl}
       >
         <RecentResourceItem file={file} />
       </Link>

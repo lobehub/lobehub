@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { EdgeConfig } from '@lobechat/edge-config';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AssistantStore } from './index';
 
@@ -19,7 +19,7 @@ describe('AssistantStore', () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
     // @ts-expect-error
-    global.fetch = undefined;
+    globalThis.fetch = undefined;
   });
 
   it('should return the default index URL when no language is provided', () => {
@@ -71,14 +71,14 @@ describe('AssistantStore', () => {
   });
 
   it('should return empty agents array with schema version when fetch fails', async () => {
-    global.fetch = vi.fn().mockRejectedValue(new Error('fetch failed'));
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('fetch failed'));
     const store = new AssistantStore();
     const result = await store.getAgentIndex();
     expect(result).toEqual([]);
   });
 
   it('should handle fetch error and return empty agents with schema version when error.ok is false', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       text: () => Promise.resolve('Error'),
     });
@@ -96,7 +96,7 @@ describe('AssistantStore', () => {
       schemaVersion: 1,
     };
 
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: () => Promise.resolve({ ...mockAgents }),
@@ -127,7 +127,7 @@ describe('AssistantStore', () => {
       schemaVersion: 1,
     };
 
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: () => Promise.resolve({ ...mockAgents }),
@@ -171,7 +171,7 @@ describe('AssistantStore', () => {
         clone: () => ({ json: () => Promise.resolve({ ...mockAgents }) }),
       });
 
-    global.fetch = fetchMock as any;
+    globalThis.fetch = fetchMock as any;
 
     // @ts-expect-error
     EdgeConfig.isEnabled.mockReturnValue(false);
@@ -185,10 +185,9 @@ describe('AssistantStore', () => {
   });
 
   it('should throw error for unexpected error in getAgentIndex', async () => {
-    global.fetch = vi.fn().mockRejectedValue(new Error('something else'));
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('something else'));
     const store = new AssistantStore();
 
-    // eslint-disable-next-line @typescript-eslint/no-empty-function
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(store.getAgentIndex()).rejects.toThrow('something else');

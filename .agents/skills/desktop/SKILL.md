@@ -17,6 +17,7 @@ LobeChat desktop is built on Electron with main-renderer architecture:
 ## Adding New Desktop Features
 
 ### 1. Create Controller
+
 Location: `apps/desktop/src/main/controllers/`
 
 ```typescript
@@ -36,14 +37,21 @@ export default class NewFeatureCtr extends ControllerModule {
 Register in `apps/desktop/src/main/controllers/registry.ts`.
 
 ### 2. Define IPC Types
+
 Location: `packages/electron-client-ipc/src/types.ts`
 
 ```typescript
-export interface SomeParams { /* ... */ }
-export interface SomeResult { success: boolean; error?: string }
+export interface SomeParams {
+  /* ... */
+}
+export interface SomeResult {
+  success: boolean;
+  error?: string;
+}
 ```
 
 ### 3. Create Renderer Service
+
 Location: `src/services/electron/`
 
 ```typescript
@@ -57,14 +65,17 @@ export const newFeatureService = async (params: SomeParams) => {
 ```
 
 ### 4. Implement Store Action
+
 Location: `src/store/`
 
 ### 5. Add Tests
+
 Location: `apps/desktop/src/main/controllers/__tests__/`
 
 ## Detailed Guides
 
 See `references/` for specific topics:
+
 - **Feature implementation**: `references/feature-implementation.md`
 - **Local tools workflow**: `references/local-tools.md`
 - **Menu configuration**: `references/menu-config.md`

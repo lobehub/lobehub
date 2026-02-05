@@ -21,10 +21,10 @@ const ExperiencesGridView = memo<GridViewProps>(({ experiences, isLoading, onCli
       hasMore={experiencesHasMore}
       isLoading={isLoading}
       items={experiences}
-      onLoadMore={loadMoreExperiences}
       renderItem={(experience) => (
         <ExperienceCard experience={experience} onClick={() => onClick(experience)} />
       )}
+      onLoadMore={loadMoreExperiences}
     />
   );
 });

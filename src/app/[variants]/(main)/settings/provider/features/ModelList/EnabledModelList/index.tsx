@@ -43,6 +43,8 @@ const EnabledModelList = ({ activeTab }: EnabledModelListProps) => {
               <ActionIcon
                 icon={ToggleLeft}
                 loading={batchLoading}
+                size={'small'}
+                title={t('providerModels.list.enabledActions.disableAll')}
                 onClick={async () => {
                   setBatchLoading(true);
                   await batchToggleAiModels(
@@ -51,17 +53,15 @@ const EnabledModelList = ({ activeTab }: EnabledModelListProps) => {
                   );
                   setBatchLoading(false);
                 }}
-                size={'small'}
-                title={t('providerModels.list.enabledActions.disableAll')}
               />
 
               <ActionIcon
                 icon={ArrowDownUpIcon}
+                size={'small'}
+                title={t('providerModels.list.enabledActions.sort')}
                 onClick={() => {
                   setOpen(true);
                 }}
-                size={'small'}
-                title={t('providerModels.list.enabledActions.sort')}
               />
             </Flexbox>
           </TooltipGroup>
@@ -69,10 +69,10 @@ const EnabledModelList = ({ activeTab }: EnabledModelListProps) => {
         {open && (
           <SortModelModal
             defaultItems={enabledModels}
+            open={open}
             onCancel={() => {
               setOpen(false);
             }}
-            open={open}
           />
         )}
       </Flexbox>

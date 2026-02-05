@@ -75,6 +75,10 @@ const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams>>(({ args 
     <Accordion className={styles.container} defaultExpandedKeys={[]} gap={0} variant={'borderless'}>
       {tasksWithAgents.map((task, index) => (
         <AccordionItem
+          itemKey={task.agentId || String(index)}
+          key={task.agentId || index}
+          paddingBlock={8}
+          paddingInline={4}
           action={
             <div className={styles.assignee}>
               <Avatar
@@ -86,12 +90,8 @@ const ExecuteTasksRender = memo<BuiltinRenderProps<ExecuteTasksParams>>(({ args 
               <span>{task.agent?.title}</span>
             </div>
           }
-          itemKey={task.agentId || String(index)}
-          key={task.agentId || index}
-          paddingBlock={8}
-          paddingInline={4}
           title={
-            <Flexbox align={'center'} gap={8} horizontal style={{ minWidth: 0 }}>
+            <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
               <span className={styles.index}>{index + 1}.</span>
               <Text className={styles.taskTitle} weight={500}>
                 {task.title || 'Task'}

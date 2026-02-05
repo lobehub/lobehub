@@ -1,4 +1,4 @@
-import {
+import type {
   SSOProvider,
   UserGeneralConfig,
   UserGuide,
@@ -14,15 +14,9 @@ import type { PartialDeep } from 'type-fest';
 import { merge } from '@/utils/merge';
 import { today } from '@/utils/time';
 
-import {
-  NewUser,
-  UserItem,
-  UserSettingsItem,
-  nextauthAccounts,
-  userSettings,
-  users,
-} from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { NewUser, UserItem, UserSettingsItem } from '../schemas';
+import { nextauthAccounts, users, userSettings } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 type DecryptUserKeyVaults = (
   encryptKeyVaultsStr: string | null,

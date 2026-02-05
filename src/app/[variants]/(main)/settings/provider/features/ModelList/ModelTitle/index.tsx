@@ -63,8 +63,8 @@ const ModelTitle = memo<ModelFetcherProps>(
           zIndex: 15,
         }}
       >
-        <Flexbox align={'center'} gap={0} horizontal justify={'space-between'}>
-          <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={0} justify={'space-between'}>
+          <Flexbox horizontal align={'center'} gap={8}>
             <Text strong style={{ fontSize: 16 }}>
               {t('providerModels.list.title')}
             </Text>
@@ -79,13 +79,13 @@ const ModelTitle = memo<ModelFetcherProps>(
                     <ActionIcon
                       icon={CircleX}
                       loading={clearRemoteModelsLoading}
+                      size={'small'}
+                      title={t('providerModels.list.fetcher.clear')}
                       onClick={async () => {
                         setClearRemoteModelsLoading(true);
                         await clearObtainedModels(provider);
                         setClearRemoteModelsLoading(false);
                       }}
-                      size={'small'}
-                      title={t('providerModels.list.fetcher.clear')}
                     />
                   )}
                 </div>
@@ -95,13 +95,13 @@ const ModelTitle = memo<ModelFetcherProps>(
           {isLoading ? (
             <Skeleton.Button active size={'small'} style={{ width: 120 }} />
           ) : isEmpty ? null : (
-            <Flexbox gap={8} horizontal>
+            <Flexbox horizontal gap={8}>
               {!mobile && (
                 <Search
+                  value={searchKeyword}
                   onChange={(value) => {
                     useAiInfraStore.setState({ modelSearchKeyword: value });
                   }}
-                  value={searchKeyword}
                 />
               )}
               <Space.Compact>
@@ -109,6 +109,7 @@ const ModelTitle = memo<ModelFetcherProps>(
                   <Button
                     icon={LucideRefreshCcwDot}
                     loading={fetchRemoteModelsLoading}
+                    size={'small'}
                     onClick={async () => {
                       setFetchRemoteModelsLoading(true);
                       try {
@@ -118,7 +119,6 @@ const ModelTitle = memo<ModelFetcherProps>(
                       }
                       setFetchRemoteModelsLoading(false);
                     }}
-                    size={'small'}
                   >
                     {fetchRemoteModelsLoading
                       ? t('providerModels.list.fetcher.fetching')
@@ -129,10 +129,10 @@ const ModelTitle = memo<ModelFetcherProps>(
                   <>
                     <Button
                       icon={PlusIcon}
+                      size={'small'}
                       onClick={() => {
                         setShowModal(true);
                       }}
-                      size={'small'}
                     />
                     <CreateNewModelModal open={showModal} setOpen={setShowModal} />
                   </>
@@ -164,11 +164,11 @@ const ModelTitle = memo<ModelFetcherProps>(
 
         {mobile && (
           <Search
+            value={searchKeyword}
+            variant={'filled'}
             onChange={(value) => {
               useAiInfraStore.setState({ modelSearchKeyword: value });
             }}
-            value={searchKeyword}
-            variant={'filled'}
           />
         )}
       </Flexbox>

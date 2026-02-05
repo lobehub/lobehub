@@ -42,10 +42,10 @@ const ModeHeader = memo(() => {
 
   return (
     <Block
+      horizontal
       align="center"
       className={styles.container}
       gap={8}
-      horizontal
       padding={4}
       variant={'filled'}
     >
@@ -55,11 +55,11 @@ const ModeHeader = memo(() => {
       </Text>
       <ActionIcon
         icon={X}
-        onClick={clearInputMode}
         size="small"
         style={{
           borderRadius: 16,
         }}
+        onClick={clearInputMode}
       />
     </Block>
   );

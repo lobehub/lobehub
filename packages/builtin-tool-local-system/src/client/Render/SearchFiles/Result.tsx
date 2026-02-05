@@ -1,5 +1,5 @@
-import { type FileResult } from '@lobechat/builtin-tool-local-system';
-import { type ChatMessagePluginError } from '@lobechat/types';
+import type { FileResult } from '@lobechat/builtin-tool-local-system';
+import type { ChatMessagePluginError } from '@lobechat/types';
 import { Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 

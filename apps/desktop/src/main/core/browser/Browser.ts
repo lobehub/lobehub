@@ -1,14 +1,16 @@
-import { APP_WINDOW_MIN_SIZE, TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
-import {
-  BrowserWindow,
-  BrowserWindowConstructorOptions,
-  session as electronSession,
-  ipcMain,
-  screen,
-} from 'electron';
 import console from 'node:console';
 import { join } from 'node:path';
+
+import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
+import type { MainBroadcastEventKey, MainBroadcastParams } from '@lobechat/electron-client-ipc';
+import type {
+  BrowserWindowConstructorOptions} from 'electron';
+import {
+  BrowserWindow,
+  ipcMain,
+  screen,
+  session as electronSession,
+} from 'electron';
 
 import { preloadDir, resourcesDir } from '@/const/dir';
 import { isMac } from '@/const/env';
@@ -119,8 +121,6 @@ export default class Browser {
     const resolvedState = this.stateManager.resolveState({ height, width });
     logger.info(`Creating new BrowserWindow instance: ${this.identifier}`);
     logger.debug(`[${this.identifier}] Resolved window state: ${JSON.stringify(resolvedState)}`);
-
-
 
     return new BrowserWindow({
       ...rest,

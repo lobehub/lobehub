@@ -5,16 +5,15 @@
  */
 import { WebBrowsingApiName, WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebBrowsingExecutionRuntime } from '@lobechat/builtin-tool-web-browsing/executionRuntime';
-import {
-  BaseExecutor,
-  type BuiltinToolContext,
-  type BuiltinToolResult,
-  type CrawlMultiPagesQuery,
-  type CrawlPluginState,
-  SEARCH_SEARXNG_NOT_CONFIG,
-  type SearchQuery,
+import type {
+  BuiltinToolContext,
+  BuiltinToolResult,
+  CrawlMultiPagesQuery,
+  CrawlPluginState,
+  SearchQuery,
 } from '@lobechat/types';
-import { type CrawlSuccessResult } from '@lobechat/web-crawler';
+import { BaseExecutor, SEARCH_SEARXNG_NOT_CONFIG } from '@lobechat/types';
+import type { CrawlSuccessResult } from '@lobechat/web-crawler';
 
 import { notebookService } from '@/services/notebook';
 import { searchService } from '@/services/search';

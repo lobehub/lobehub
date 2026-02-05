@@ -25,12 +25,12 @@ const Overview = memo(() => {
 
       {/* Developed by */}
       <Flexbox gap={8}>
-        <Flexbox align="center" gap={4} horizontal>
+        <Flexbox horizontal align="center" gap={4}>
           <span className={styles.sectionTitle}>{t('skillDetail.developedBy')}</span>
           <span
             className={styles.authorLink}
-            onClick={handleAuthorClick}
             style={{ cursor: authorUrl ? 'pointer' : 'default' }}
+            onClick={handleAuthorClick}
           >
             {author}
             {authorUrl && <Icon icon={ExternalLink} size={12} />}
@@ -44,13 +44,13 @@ const Overview = memo(() => {
       {/* Details */}
       <Flexbox gap={12}>
         <span className={styles.sectionTitle}>{t('skillDetail.details')}</span>
-        <Flexbox gap={16} horizontal>
+        <Flexbox horizontal gap={16}>
           <div className={styles.detailItem}>
             <span className={styles.detailLabel}>{t('skillDetail.author')}</span>
             <span
               className={styles.authorLink}
-              onClick={handleAuthorClick}
               style={{ cursor: authorUrl ? 'pointer' : 'default' }}
+              onClick={handleAuthorClick}
             >
               {author}
               {authorUrl && <Icon icon={ExternalLink} size={12} />}

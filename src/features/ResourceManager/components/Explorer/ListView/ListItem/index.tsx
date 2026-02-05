@@ -5,7 +5,8 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon, FileText, FolderIcon } from 'lucide-react';
-import { type DragEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { DragEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
 
@@ -19,7 +20,7 @@ import FileIcon from '@/components/FileIcon';
 import { clearTreeFolderCache } from '@/features/ResourceManager/components/LibraryHierarchy';
 import { PAGE_FILE_TYPE } from '@/features/ResourceManager/constants';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
-import { type FileListItem as FileListItemType } from '@/types/files';
+import type { FileListItem as FileListItemType } from '@/types/files';
 import { formatSize } from '@/utils/format';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 
@@ -205,7 +206,8 @@ const FileListItem = memo<FileListItemProps>(
         emoji: sourceType === 'document' || fileType === PAGE_FILE_TYPE ? metadata?.emoji : null,
         isFolder: fileType === 'custom/folder',
         // PDF and Office files should not be treated as pages, even if they have sourceType='document'
-        isPage: !isPDF && !isOfficeFile && (sourceType === 'document' || fileType === PAGE_FILE_TYPE),
+        isPage:
+          !isPDF && !isOfficeFile && (sourceType === 'document' || fileType === PAGE_FILE_TYPE),
         isSupportedForChunking: !isChunkingUnsupported(fileType),
       };
     }, [fileType, sourceType, metadata?.emoji, name]);
@@ -369,7 +371,14 @@ const FileListItem = memo<FileListItemProps>(
     return (
       <ContextMenuTrigger items={menuItems}>
         <Flexbox
+          horizontal
           align={'center'}
+          data-drop-target-id={id}
+          data-is-folder={String(isFolder)}
+          data-row-index={index}
+          draggable={!!resourceManagerState.libraryId}
+          height={48}
+          paddingInline={8}
           className={cx(
             styles.container,
             'file-list-item-group',
@@ -378,12 +387,10 @@ const FileListItem = memo<FileListItemProps>(
             isDragging && styles.dragging,
             isOver && styles.dragOver,
           )}
-          data-drop-target-id={id}
-          data-is-folder={String(isFolder)}
-          data-row-index={index}
-          draggable={!!resourceManagerState.libraryId}
-          height={48}
-          horizontal
+          style={{
+            borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
+            userSelect: 'none',
+          }}
           onDragEnd={handleDragEnd}
           onDragLeave={handleDragLeave}
           onDragOver={handleDragOver}
@@ -391,14 +398,10 @@ const FileListItem = memo<FileListItemProps>(
           onDrop={handleDrop}
           onMouseEnter={() => onHoverChange(true)}
           onMouseLeave={() => onHoverChange(false)}
-          paddingInline={8}
-          style={{
-            borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
-            userSelect: 'none',
-          }}
         >
           <Center
             height={40}
+            style={{ paddingInline: 4 }}
             onClick={(e) => {
               e.stopPropagation();
 
@@ -411,16 +414,14 @@ const FileListItem = memo<FileListItemProps>(
                 e.preventDefault();
               }
             }}
-            style={{ paddingInline: 4 }}
           >
             <Checkbox checked={selected} />
           </Center>
           <Flexbox
+            horizontal
             align={'center'}
             className={styles.item}
             distribution={'space-between'}
-            horizontal
-            onClick={handleItemClick}
             style={{
               flexShrink: 0,
               maxWidth: columnWidths.name,
@@ -428,8 +429,9 @@ const FileListItem = memo<FileListItemProps>(
               paddingInline: 8,
               width: columnWidths.name,
             }}
+            onClick={handleItemClick}
           >
-            <Flexbox align={'center'} className={styles.nameContainer} horizontal>
+            <Flexbox horizontal align={'center'} className={styles.nameContainer}>
               <Flexbox
                 align={'center'}
                 justify={'center'}
@@ -451,9 +453,14 @@ const FileListItem = memo<FileListItemProps>(
               </Flexbox>
               {isRenaming && isFolder ? (
                 <Input
+                  ref={inputRef}
+                  size="small"
+                  style={{ flex: 1, maxWidth: 400 }}
+                  value={renamingValue}
                   onBlur={handleRenameConfirm}
                   onChange={(e) => setRenamingValue(e.target.value)}
                   onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -463,11 +470,6 @@ const FileListItem = memo<FileListItemProps>(
                       handleRenameCancel();
                     }
                   }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  ref={inputRef}
-                  size="small"
-                  style={{ flex: 1, maxWidth: 400 }}
-                  value={renamingValue}
                 />
               ) : (
                 <TruncatedFileName
@@ -477,14 +479,14 @@ const FileListItem = memo<FileListItemProps>(
               )}
             </Flexbox>
             <Flexbox
+              horizontal
               align={'center'}
               gap={8}
-              horizontal
+              paddingInline={8}
+              onPointerDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
               }}
-              onPointerDown={(e) => e.stopPropagation()}
-              paddingInline={8}
             >
               {!isFolder &&
                 !isPage &&
@@ -503,11 +505,11 @@ const FileListItem = memo<FileListItemProps>(
                       disabled={!isSupportedForChunking}
                       icon={FileBoxIcon}
                       loading={fileStoreState.isCreatingFileParseTask}
+                      size={'small'}
+                      type={'text'}
                       onClick={() => {
                         fileStoreState.parseFiles([id]);
                       }}
-                      size={'small'}
-                      type={'text'}
                     >
                       {t(
                         fileStoreState.isCreatingFileParseTask

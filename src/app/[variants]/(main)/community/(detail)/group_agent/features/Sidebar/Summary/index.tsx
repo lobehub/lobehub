@@ -15,6 +15,8 @@ const Summary = memo(() => {
     <Collapse
       defaultActiveKey={['summary']}
       expandIconPlacement={'end'}
+      size={'small'}
+      variant={'borderless'}
       items={[
         {
           children: (
@@ -33,8 +35,6 @@ const Summary = memo(() => {
           }),
         },
       ]}
-      size={'small'}
-      variant={'borderless'}
     />
   );
 });

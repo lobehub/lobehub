@@ -21,13 +21,13 @@ const EditableModal = memo(() => {
 
   return (
     <EditorModal
+      open={!!editingMemoryId}
+      value={editingMemoryContent}
       onCancel={clearEditingMemory}
       onConfirm={async (value) => {
         if (!editingMemoryId || !editingMemoryLayer) return;
         await updateMemory(editingMemoryId, value, layerMap[editingMemoryLayer]);
       }}
-      open={!!editingMemoryId}
-      value={editingMemoryContent}
     />
   );
 });

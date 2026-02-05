@@ -1,4 +1,5 @@
-import { ChatInputActions, type ChatInputActionsProps } from '@lobehub/editor/react';
+import type { ChatInputActionsProps } from '@lobehub/editor/react';
+import { ChatInputActions } from '@lobehub/editor/react';
 import { memo, useMemo } from 'react';
 
 import { useGlobalStore } from '@/store/global';
@@ -6,9 +7,11 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/slices/preference/selectors';
 
-import { type ActionKeys, actionMap } from '../ActionBar/config';
+import type { ActionKeys } from '../ActionBar/config';
+import { actionMap } from '../ActionBar/config';
 import { useChatInputStore } from '../store';
-import { ActionBarContext, type DropdownPlacement } from './context';
+import type { DropdownPlacement } from './context';
+import { ActionBarContext } from './context';
 
 const mapActionsToItems = (keys: ActionKeys[]): ChatInputActionsProps['items'] =>
   keys.map((actionKey, index) => {
@@ -66,7 +69,7 @@ const ActionToolbar = memo<ActionToolbarProps>(({ dropdownPlacement, extraAction
   const contextValue = useMemo(() => ({ dropdownPlacement }), [dropdownPlacement]);
 
   return (
-    <ActionBarContext.Provider value={contextValue}>
+    <ActionBarContext value={contextValue}>
       <ChatInputActions
         collapseOffset={mobile ? 48 : 80}
         defaultGroupCollapse={true}
@@ -76,7 +79,7 @@ const ActionToolbar = memo<ActionToolbarProps>(({ dropdownPlacement, extraAction
           toggleExpandInputActionbar(!v);
         }}
       />
-    </ActionBarContext.Provider>
+    </ActionBarContext>
   );
 });
 

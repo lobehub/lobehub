@@ -166,7 +166,7 @@ export const modifyNextConfig = async (TEMP_DIR: string) => {
           edits.push({
             end: range.start.index + 1,
             start: range.start.index + 1,
-            text: "\n  outputFileTracingRoot: process.env.ELECTRON_BUILD_PROJECT_ROOT || process.cwd(),",
+            text: '\n  outputFileTracingRoot: process.env.ELECTRON_BUILD_PROJECT_ROOT || process.cwd(),',
           });
         }
       }

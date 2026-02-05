@@ -33,7 +33,7 @@ export const klavisEnv = getKlavisConfig();
  * IMPORTANT: This should only be called from server-side code
  */
 export const getServerKlavisApiKey = (): string | undefined => {
-  if (typeof window !== 'undefined') {
+  if (typeof globalThis.window !== 'undefined') {
     console.error('[Klavis] Attempted to access API key from client-side!');
     return undefined;
   }

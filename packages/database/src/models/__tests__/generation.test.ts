@@ -1,21 +1,21 @@
 // @vitest-environment node
-import { AsyncTaskStatus, ImageGenerationAsset } from '@lobechat/types';
-import { FileSource } from '@lobechat/types';
+import type { ImageGenerationAsset } from '@lobechat/types';
+import { AsyncTaskStatus, FileSource } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { getTestDB } from '../../core/getTestDB';
+import type { NewGeneration } from '../../schemas';
 import {
-  NewGeneration,
   asyncTasks,
   files,
   generationBatches,
-  generationTopics,
   generations,
+  generationTopics,
   users,
 } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { GenerationModel } from '../generation';
-import { getTestDB } from '../../core/getTestDB';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 
@@ -72,7 +72,7 @@ const testGeneration: Omit<NewGeneration, 'userId'> = {
   generationBatchId: 'test-batch-id',
   asyncTaskId: '550e8400-e29b-41d4-a716-446655440000', // 使用有效的 asyncTaskId
   fileId: null, // 使用 null 避免外键约束
-  seed: 12345,
+  seed: 12_345,
   asset: {
     url: 'asset-url.jpg',
     thumbnailUrl: 'thumbnail-url.jpg',
@@ -85,7 +85,7 @@ const testFile = {
   id: 'test-file-id',
   name: 'generated-image.jpg',
   url: 'https://example.com/generated-image.jpg',
-  size: 1048576,
+  size: 1_048_576,
   fileType: 'image/jpeg',
   source: FileSource.ImageGeneration,
   userId,
@@ -119,7 +119,7 @@ beforeEach(async () => {
     id: 'new-file-id',
     name: 'mock-generated-image.jpg',
     url: 'https://example.com/mock-generated-image.jpg',
-    size: 1048576,
+    size: 1_048_576,
     fileType: 'image/jpeg',
     source: FileSource.ImageGeneration,
     userId,
@@ -252,7 +252,7 @@ describe('GenerationModel', () => {
         .returning();
 
       const updateData = {
-        seed: 54321,
+        seed: 54_321,
         asset: {
           url: 'updated-asset.jpg',
           thumbnailUrl: 'updated-thumbnail.jpg',
@@ -282,7 +282,7 @@ describe('GenerationModel', () => {
         .values({ ...testGeneration, userId: otherUserId })
         .returning();
 
-      const updateData = { seed: 99999 };
+      const updateData = { seed: 99_999 };
 
       await generationModel.update(otherUserGeneration.id, updateData);
 
@@ -299,13 +299,13 @@ describe('GenerationModel', () => {
         .values({ ...testGeneration, userId })
         .returning();
 
-      await generationModel.update(createdGeneration.id, { seed: 11111 });
+      await generationModel.update(createdGeneration.id, { seed: 11_111 });
 
       const updatedGeneration = await serverDB.query.generations.findFirst({
         where: eq(generations.id, createdGeneration.id),
       });
 
-      expect(updatedGeneration?.seed).toBe(11111);
+      expect(updatedGeneration?.seed).toBe(11_111);
       expect(updatedGeneration?.generationBatchId).toBe(testGeneration.generationBatchId);
     });
   });
@@ -327,7 +327,7 @@ describe('GenerationModel', () => {
       const newFileData = {
         name: 'new-generated-image.jpg',
         url: 'https://example.com/new-generated-image.jpg',
-        size: 2097152,
+        size: 2_097_152,
         fileType: 'image/jpeg',
       };
 
@@ -515,7 +515,7 @@ describe('GenerationModel', () => {
         generationBatchId: 'batch-id',
         asyncTaskId: '550e8400-e29b-41d4-a716-446655440000',
         fileId: 'file-id',
-        seed: 12345,
+        seed: 12_345,
         asset: {
           url: 'original-asset.jpg',
           thumbnailUrl: 'original-thumbnail.jpg',
@@ -549,7 +549,7 @@ describe('GenerationModel', () => {
           width: 1024,
           height: 1024,
         },
-        seed: 12345,
+        seed: 12_345,
         asyncTaskId: '550e8400-e29b-41d4-a716-446655440000',
         task: {
           id: '550e8400-e29b-41d4-a716-446655440000',
@@ -568,7 +568,7 @@ describe('GenerationModel', () => {
         generationBatchId: 'batch-id',
         asyncTaskId: '550e8400-e29b-41d4-a716-446655440000',
         fileId: null,
-        seed: 12345,
+        seed: 12_345,
         asset: null,
         accessedAt: new Date(),
         createdAt: new Date(),
@@ -592,7 +592,7 @@ describe('GenerationModel', () => {
       expect(result).toMatchObject({
         id: 'test-gen-id',
         asset: null,
-        seed: 12345,
+        seed: 12_345,
         asyncTaskId: '550e8400-e29b-41d4-a716-446655440000',
         task: {
           id: '550e8400-e29b-41d4-a716-446655440000',
@@ -610,7 +610,7 @@ describe('GenerationModel', () => {
         generationBatchId: 'batch-id',
         asyncTaskId: null,
         fileId: null,
-        seed: 12345,
+        seed: 12_345,
         asset: null,
         accessedAt: new Date(),
         createdAt: new Date(),
@@ -623,7 +623,7 @@ describe('GenerationModel', () => {
       expect(result).toMatchObject({
         id: 'test-gen-id',
         asset: null,
-        seed: 12345,
+        seed: 12_345,
         asyncTaskId: null,
         task: {
           id: '',
@@ -641,7 +641,7 @@ describe('GenerationModel', () => {
         generationBatchId: 'batch-id',
         asyncTaskId: null,
         fileId: null,
-        seed: 12345,
+        seed: 12_345,
         asset: {
           url: 'failing-asset.jpg',
           thumbnailUrl: 'failing-thumbnail.jpg',
@@ -706,7 +706,7 @@ describe('GenerationModel', () => {
       expect(transformedOtherGeneration).toBeNull();
 
       // Test update isolation - should not affect other user's data
-      await generationModel.update(otherUserGenerationCreated.id, { seed: 99999 });
+      await generationModel.update(otherUserGenerationCreated.id, { seed: 99_999 });
       const otherUserGenerationUnchanged = await serverDB.query.generations.findFirst({
         where: eq(generations.id, otherUserGenerationCreated.id),
       });

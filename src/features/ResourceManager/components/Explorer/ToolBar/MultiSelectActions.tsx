@@ -40,9 +40,9 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
 
     return (
       <Flexbox
+        horizontal
         align={'center'}
         gap={12}
-        horizontal
         style={{
           borderBlockEnd: `1px solid ${cssVar.colorBorderSecondary}`,
           height: 40,
@@ -50,12 +50,12 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
         }}
       >
         <Flexbox
+          horizontal
           align={'center'}
           className={styles.total}
           gap={8}
-          horizontal
-          onClick={onClickCheckbox}
           paddingInline={4}
+          onClick={onClickCheckbox}
         >
           <Checkbox
             checked={selectCount === total}
@@ -76,11 +76,12 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
           )}
         </Flexbox>
         {isSelectedFiles && (
-          <Flexbox gap={8} horizontal>
+          <Flexbox horizontal gap={8}>
             {libraryId ? (
               <>
                 <Button
                   icon={BookMinusIcon}
+                  size={'small'}
                   onClick={() => {
                     modal.confirm({
                       okButtonProps: {
@@ -95,18 +96,17 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
                       }),
                     });
                   }}
-                  size={'small'}
                 >
                   {t('FileManager.actions.removeFromLibrary')}
                 </Button>
                 <Button
                   color={'default'}
                   icon={<Icon icon={BookPlusIcon} />}
+                  size={'small'}
+                  variant={'filled'}
                   onClick={() => {
                     onActionClick('moveToOtherKnowledgeBase');
                   }}
-                  size={'small'}
-                  variant={'filled'}
                 >
                   {t('FileManager.actions.moveToOtherLibrary')}
                 </Button>
@@ -115,11 +115,11 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
               <Button
                 color={'default'}
                 icon={<Icon icon={BookPlusIcon} />}
+                size={'small'}
+                variant={'filled'}
                 onClick={() => {
                   onActionClick('addToKnowledgeBase');
                 }}
-                size={'small'}
-                variant={'filled'}
               >
                 {t('FileManager.actions.addToLibrary')}
               </Button>
@@ -127,18 +127,20 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
             <Button
               color={'default'}
               icon={<Icon icon={FileBoxIcon} />}
+              size={'small'}
+              variant={'filled'}
               onClick={async () => {
                 await onActionClick('batchChunking');
               }}
-              size={'small'}
-              variant={'filled'}
             >
               {t('FileManager.actions.batchChunking')}
             </Button>
             <Button
-              color={'danger'}
               danger
+              color={'danger'}
               icon={<Icon icon={Trash2Icon} />}
+              size={'small'}
+              variant={'filled'}
               onClick={async () => {
                 modal.confirm({
                   okButtonProps: {
@@ -151,8 +153,6 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
                   title: t('FileManager.actions.confirmDeleteMultiFiles', { count: selectCount }),
                 });
               }}
-              size={'small'}
-              variant={'filled'}
             >
               {t('delete', { ns: 'common' })}
             </Button>

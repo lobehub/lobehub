@@ -18,7 +18,7 @@ describe('browserless', () => {
 
   it('should return undefined on fetch error', async () => {
     process.env.BROWSERLESS_TOKEN = 'test-token';
-    global.fetch = vi.fn().mockRejectedValue(new Error('Fetch error'));
+    globalThis.fetch = vi.fn().mockRejectedValue(new Error('Fetch error'));
 
     const result = await browserless('https://example.com', { filterOptions: {} });
     expect(result).toBeUndefined();
@@ -26,7 +26,7 @@ describe('browserless', () => {
 
   it('should return undefined when content is empty', async () => {
     process.env.BROWSERLESS_TOKEN = 'test-token';
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       text: vi.fn().mockResolvedValue('<html></html>'),
     } as any);
 
@@ -36,7 +36,7 @@ describe('browserless', () => {
 
   it('should return undefined when title is "Just a moment..."', async () => {
     process.env.BROWSERLESS_TOKEN = 'test-token';
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       text: vi.fn().mockResolvedValue('<html><title>Just a moment...</title></html>'),
     } as any);
 
@@ -46,7 +46,7 @@ describe('browserless', () => {
 
   it('should return crawl result on successful fetch', async () => {
     process.env.BROWSERLESS_TOKEN = 'test-token';
-    global.fetch = vi.fn().mockResolvedValue({
+    globalThis.fetch = vi.fn().mockResolvedValue({
       text: vi.fn().mockResolvedValue(`
         <html>
           <head>
@@ -78,7 +78,7 @@ describe('browserless', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       text: vi.fn().mockResolvedValue('<html><title>Test</title></html>'),
     });
-    global.fetch = fetchMock;
+    globalThis.fetch = fetchMock;
 
     await browserless('https://example.com', { filterOptions: {} });
 
@@ -91,7 +91,7 @@ describe('browserless', () => {
   it('should allow requests to permitted file types', async () => {
     const allowedExtensions = ['html', 'css', 'js', 'json', 'xml', 'webmanifest', 'txt', 'md'];
     const pattern = new RegExp(
-      '.*\\.(?!(html|css|js|json|xml|webmanifest|txt|md)(\\?|#|$))[\\w-]+(?:[\\?#].*)?$',
+      '.*\\.(?!(html|css|js|json|xml|webmanifest|txt|md)(\\?|#|$))[\\w-]+(?:[?#].*)?$',
     );
 
     allowedExtensions.forEach((ext) => {
@@ -104,7 +104,7 @@ describe('browserless', () => {
   it('should reject requests to non-permitted file types', async () => {
     const rejectedExtensions = ['jpg', 'png', 'gif', 'pdf', 'doc', 'mp4', 'wav'];
     const pattern = new RegExp(
-      '.*\\.(?!(html|css|js|json|xml|webmanifest|txt|md)(\\?|#|$))[\\w-]+(?:[\\?#].*)?$',
+      '.*\\.(?!(html|css|js|json|xml|webmanifest|txt|md)(\\?|#|$))[\\w-]+(?:[?#].*)?$',
     );
 
     rejectedExtensions.forEach((ext) => {
@@ -119,7 +119,7 @@ describe('browserless', () => {
     const originalEnv = { ...process.env };
     process.env.BROWSERLESS_TOKEN = 'test-token';
     process.env.BROWSERLESS_URL = customUrl;
-    global.fetch = vi.fn().mockImplementation((url) => {
+    globalThis.fetch = vi.fn().mockImplementation((url) => {
       expect(url).toContain(customUrl);
       return Promise.resolve({
         text: () => Promise.resolve('<html><title>Test</title></html>'),
@@ -128,7 +128,7 @@ describe('browserless', () => {
 
     await browserless('https://example.com', { filterOptions: {} });
 
-    expect(global.fetch).toHaveBeenCalled();
+    expect(globalThis.fetch).toHaveBeenCalled();
 
     process.env = originalEnv;
   });

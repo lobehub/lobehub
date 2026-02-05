@@ -1,20 +1,21 @@
 import { enableMapSet, produce } from 'immer';
-import useSWR, { type SWRResponse } from 'swr';
+import type { SWRResponse } from 'swr';
+import useSWR from 'swr';
 
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
-import { type StoreSetter } from '@/store/types';
+import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type ToolStore } from '../../store';
-import { type KlavisStoreState } from './initialState';
-import {
-  type CallKlavisToolParams,
-  type CallKlavisToolResult,
-  type CreateKlavisServerParams,
-  type KlavisServer,
-  KlavisServerStatus,
-  type KlavisTool,
+import type { ToolStore } from '../../store';
+import type { KlavisStoreState } from './initialState';
+import type {
+  CallKlavisToolParams,
+  CallKlavisToolResult,
+  CreateKlavisServerParams,
+  KlavisServer,
+  KlavisTool,
 } from './types';
+import { KlavisServerStatus } from './types';
 
 enableMapSet();
 
@@ -133,7 +134,7 @@ export class KlavisStoreActionImpl {
         produce((draft: KlavisStoreState) => {
           // Check if already exists (using identifier), update if exists
           const existingIndex = draft.servers.findIndex((s) => s.identifier === identifier);
-          if (existingIndex >= 0) {
+          if (existingIndex !== -1) {
             draft.servers[existingIndex] = server;
           } else {
             draft.servers.push(server);
@@ -241,7 +242,7 @@ export class KlavisStoreActionImpl {
         produce((draft: KlavisStoreState) => {
           // Find server using identifier
           const serverIndex = draft.servers.findIndex((s) => s.identifier === identifier);
-          if (serverIndex >= 0) {
+          if (serverIndex !== -1) {
             draft.servers[serverIndex].tools = tools;
             draft.servers[serverIndex].status = KlavisServerStatus.CONNECTED;
             draft.servers[serverIndex].isAuthenticated = true;
@@ -273,7 +274,7 @@ export class KlavisStoreActionImpl {
         produce((draft: KlavisStoreState) => {
           // Find server using identifier
           const serverIndex = draft.servers.findIndex((s) => s.identifier === identifier);
-          if (serverIndex >= 0) {
+          if (serverIndex !== -1) {
             draft.servers[serverIndex].status = KlavisServerStatus.ERROR;
             draft.servers[serverIndex].errorMessage =
               error instanceof Error ? error.message : String(error);

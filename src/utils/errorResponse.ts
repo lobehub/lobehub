@@ -1,6 +1,8 @@
 import { AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
-import { AgentRuntimeErrorType, type ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { ChatErrorType, type ErrorResponse, type ErrorType } from '@lobechat/types';
+import type { ILobeAgentRuntimeErrorType } from '@lobechat/model-runtime';
+import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
+import type { ErrorResponse, ErrorType } from '@lobechat/types';
+import { ChatErrorType } from '@lobechat/types';
 
 /**
  * Error types that indicate a real authentication failure.
@@ -89,5 +91,5 @@ export const createErrorResponse = (
     headers[AUTH_REQUIRED_HEADER] = 'true';
   }
 
-  return new Response(JSON.stringify(data), { headers, status: statusCode });
+  return Response.json(data, { headers, status: statusCode });
 };

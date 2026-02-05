@@ -433,7 +433,7 @@ describe('LobeComfyUI Runtime', () => {
           height: 896,
           steps: 25,
           cfg: 8.5,
-          seed: 12345,
+          seed: 12_345,
         },
       };
 
@@ -469,7 +469,7 @@ describe('LobeComfyUI Runtime', () => {
               height: 896,
               steps: 25,
               cfg: 8.5,
-              seed: 12345,
+              seed: 12_345,
             },
           }),
         }),

@@ -10,8 +10,8 @@ import { useToolStore } from '@/store/tool';
 
 import Empty from '../Empty';
 import Loading from '../Loading';
-import VirtuosoLoading from '../VirtuosoLoading';
 import { virtuosoGridStyles } from '../style';
+import VirtuosoLoading from '../VirtuosoLoading';
 import Item from './Item';
 import WantMoreSkills from './WantMoreSkills';
 
@@ -84,17 +84,17 @@ export const CommunityList = memo(() => {
 
     return (
       <VirtuosoGrid
-        components={{
-          Footer: renderFooter,
-        }}
         data={allItems}
         endReached={loadMoreMCPPlugins}
-        increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
+        increaseViewportBy={typeof globalThis.window !== 'undefined' ? window.innerHeight : 0}
         itemClassName={virtuosoGridStyles.item}
         itemContent={(_, item) => <Item {...item} />}
         listClassName={virtuosoGridStyles.list}
         overscan={24}
         style={{ height: '60vh', width: '100%' }}
+        components={{
+          Footer: renderFooter,
+        }}
       />
     );
   };

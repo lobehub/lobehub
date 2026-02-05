@@ -11,7 +11,7 @@ const SizeSelect = memo(() => {
     value: size,
   }));
 
-  return <Select onChange={setValue} options={options} value={value} />;
+  return <Select options={options} value={value} onChange={setValue} />;
 });
 
 export default SizeSelect;

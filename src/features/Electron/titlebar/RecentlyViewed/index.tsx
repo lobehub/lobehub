@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useElectronStore } from '@/store/electron';
 
-import Section from './Section';
 import { useResolvedPages } from './hooks/useResolvedPages';
+import Section from './Section';
 import { useStyles } from './styles';
 
 interface RecentlyViewedProps {
@@ -38,13 +38,13 @@ const RecentlyViewed = memo<RecentlyViewedProps>(({ onClose }) => {
 
   return (
     <Flexbox className={styles.container}>
-      <Section isPinned items={pinnedPages} onClose={onClose} title={t('navigation.pinned')} />
+      <Section isPinned items={pinnedPages} title={t('navigation.pinned')} onClose={onClose} />
       {pinnedPages.length > 0 && recentPages.length > 0 && <div className={styles.divider} />}
       <Section
         isPinned={false}
         items={recentPages}
-        onClose={onClose}
         title={t('navigation.recentView')}
+        onClose={onClose}
       />
     </Flexbox>
   );

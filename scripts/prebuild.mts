@@ -1,9 +1,9 @@
-import { execSync } from 'node:child_process';
-import { createRequire } from 'node:module';
 import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
+import { execSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,8 +22,10 @@ if (isDesktop) {
   dotenvExpand.expand(dotenv.config());
 }
 
-const AUTH_SECRET_DOC_URL = 'https://lobehub.com/docs/self-hosting/environment-variables/auth#auth-secret';
-const KEY_VAULTS_SECRET_DOC_URL = 'https://lobehub.com/docs/self-hosting/environment-variables/basic#key-vaults-secret';
+const AUTH_SECRET_DOC_URL =
+  'https://lobehub.com/docs/self-hosting/environment-variables/auth#auth-secret';
+const KEY_VAULTS_SECRET_DOC_URL =
+  'https://lobehub.com/docs/self-hosting/environment-variables/basic#key-vaults-secret';
 
 /**
  * Check for required environment variables in server database mode
@@ -51,12 +53,13 @@ const checkRequiredEnvVars = () => {
       console.error(`    📖 Documentation: ${docUrl}\n`);
     }
     console.error('Please configure these environment variables and redeploy.');
-    console.error('\n💡 TIP: If you previously used NEXT_AUTH_SECRET, simply rename it to AUTH_SECRET.');
+    console.error(
+      '\n💡 TIP: If you previously used NEXT_AUTH_SECRET, simply rename it to AUTH_SECRET.',
+    );
     console.error('═'.repeat(70) + '\n');
     process.exit(1);
   }
 };
-
 
 const getCommandVersion = (command: string): string | null => {
   try {
@@ -87,7 +90,9 @@ const printEnvInfo = () => {
   console.log(`    APP_URL: ${process.env.APP_URL ?? '(not set)'}`);
   console.log(`    VERCEL_URL: ${process.env.VERCEL_URL ?? '(not set)'}`);
   console.log(`    VERCEL_BRANCH_URL: ${process.env.VERCEL_BRANCH_URL ?? '(not set)'}`);
-  console.log(`    VERCEL_PROJECT_PRODUCTION_URL: ${process.env.VERCEL_PROJECT_PRODUCTION_URL ?? '(not set)'}`);
+  console.log(
+    `    VERCEL_PROJECT_PRODUCTION_URL: ${process.env.VERCEL_PROJECT_PRODUCTION_URL ?? '(not set)'}`,
+  );
   console.log(`    AUTH_EMAIL_VERIFICATION: ${process.env.AUTH_EMAIL_VERIFICATION ?? '(not set)'}`);
   console.log(`    AUTH_ENABLE_MAGIC_LINK: ${process.env.AUTH_ENABLE_MAGIC_LINK ?? '(not set)'}`);
 
@@ -96,14 +101,18 @@ const printEnvInfo = () => {
   console.log(`    AUTH_SSO_PROVIDERS: ${ssoProviders ?? '(not set)'}`);
 
   if (ssoProviders) {
-    const getEnvPrefix = (provider: string) => `AUTH_${provider.toUpperCase().replaceAll('-', '_')}`;
+    const getEnvPrefix = (provider: string) =>
+      `AUTH_${provider.toUpperCase().replaceAll('-', '_')}`;
 
-    const providers = ssoProviders.split(/[,，]/).map(p => p.trim()).filter(Boolean);
+    const providers = ssoProviders
+      .split(/[,，]/)
+      .map((p) => p.trim())
+      .filter(Boolean);
     const missingProviders: string[] = [];
 
     for (const provider of providers) {
       const envPrefix = getEnvPrefix(provider);
-      const hasEnvVar = Object.keys(process.env).some(key => key.startsWith(envPrefix));
+      const hasEnvVar = Object.keys(process.env).some((key) => key.startsWith(envPrefix));
       if (!hasEnvVar) {
         missingProviders.push(provider);
       }
@@ -112,7 +121,9 @@ const printEnvInfo = () => {
     if (missingProviders.length > 0) {
       console.log('\n  ⚠️  SSO Provider Configuration Warning:');
       for (const provider of missingProviders) {
-        console.log(`    - "${provider}" is configured but no ${getEnvPrefix(provider)}_* env vars found`);
+        console.log(
+          `    - "${provider}" is configured but no ${getEnvPrefix(provider)}_* env vars found`,
+        );
       }
     }
   }
@@ -121,7 +132,7 @@ const printEnvInfo = () => {
 };
 
 // 创建需要排除的特性映射
-/* eslint-disable sort-keys-fix/sort-keys-fix */
+
 const partialBuildPages = [
   // no need for bundle analyzer (frontend only)
   {

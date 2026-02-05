@@ -3,8 +3,8 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { zodValidator } from '@/app/(backend)/middleware/validate';
+import type { DesktopDownloadType } from '@/server/services/desktopRelease';
 import {
-  type DesktopDownloadType,
   getLatestDesktopReleaseFromGithub,
   getStableDesktopReleaseInfoFromUpdateServer,
   resolveDesktopDownload,

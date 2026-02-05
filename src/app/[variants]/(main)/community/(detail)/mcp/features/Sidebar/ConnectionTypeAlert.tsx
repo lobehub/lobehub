@@ -22,7 +22,7 @@ const ConnectionTypeAlert = memo(() => {
       description={t(`mcp.details.connectionType.${connectionType}.desc`)}
       showIcon={false}
       title={
-        <Flexbox align={'center'} gap={6} horizontal>
+        <Flexbox horizontal align={'center'} gap={6}>
           <Icon icon={icons[connectionType]} size={20} />
           {t(`mcp.details.connectionType.${connectionType}.title`)}
         </Flexbox>

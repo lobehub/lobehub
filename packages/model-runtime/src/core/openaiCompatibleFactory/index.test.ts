@@ -2,10 +2,11 @@
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
-import { ChatStreamCallbacks, ChatStreamPayload } from '../../types/chat';
+import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import type { ChatStreamCallbacks, ChatStreamPayload } from '../../types/chat';
 import { AgentRuntimeErrorType } from '../../types/error';
 import * as debugStreamModule from '../../utils/debugStream';
 import * as openaiHelpers from '../contextBuilders/openai';
@@ -58,7 +59,7 @@ describe('LobeOpenAICompatibleFactory', () => {
   // Polyfill File for Node environment used in image tests
   if (typeof File === 'undefined') {
     // @ts-ignore
-    global.File = class MockFile {
+    globalThis.File = class MockFile {
       constructor(
         public parts: any[],
         public name: string,
@@ -160,7 +161,7 @@ describe('LobeOpenAICompatibleFactory', () => {
 
         // Collect all chunks
         const chunks = [];
-        // eslint-disable-next-line no-constant-condition
+
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
@@ -266,7 +267,6 @@ describe('LobeOpenAICompatibleFactory', () => {
         const decoder = new TextDecoder();
         const reader = result.body!.getReader();
 
-        // eslint-disable-next-line no-constant-condition
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
@@ -336,7 +336,6 @@ describe('LobeOpenAICompatibleFactory', () => {
         const reader = result.body!.getReader();
         const stream: string[] = [];
 
-        // eslint-disable-next-line no-constant-condition
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
@@ -352,7 +351,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           'data: {"inputTextTokens":5,"outputTextTokens":5,"totalInputTokens":5,"totalOutputTokens":5,"totalTokens":10}\n\n',
           'id: output_speed\n',
           'event: speed\n',
-          expect.stringMatching(/^data: {.*"tps":.*,"ttft":.*}\n\n$/), // tps ttft should be calculated with elapsed time
+          expect.stringMatching(/^data: \{.*"tps":.*,"ttft":.*\}\n\n$/), // tps ttft should be calculated with elapsed time
           'id: a\n',
           'event: stop\n',
           'data: "stop"\n\n',
@@ -410,7 +409,6 @@ describe('LobeOpenAICompatibleFactory', () => {
         const reader = result.body!.getReader();
         const stream: string[] = [];
 
-        // eslint-disable-next-line no-constant-condition
         while (true) {
           const { value, done } = await reader.read();
           if (done) break;
@@ -429,7 +427,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           'data: {"inputTextTokens":5,"outputTextTokens":5,"totalInputTokens":5,"totalOutputTokens":5,"totalTokens":10,"cost":0.000005}\n\n',
           'id: output_speed\n',
           'event: speed\n',
-          expect.stringMatching(/^data: {.*"tps":.*,"ttft":.*}\n\n$/), // tps ttft should be calculated with elapsed time
+          expect.stringMatching(/^data: \{.*"tps":.*,"ttft":.*\}\n\n$/), // tps ttft should be calculated with elapsed time
           'id: a\n',
           'event: stop\n',
           'data: "stop"\n\n',
@@ -601,7 +599,7 @@ describe('LobeOpenAICompatibleFactory', () => {
             signal: controller.signal,
           }),
         );
-      }, 10000);
+      }, 10_000);
     });
 
     describe('Error', () => {
@@ -885,7 +883,6 @@ describe('LobeOpenAICompatibleFactory', () => {
               const reader = readableStream.getReader();
               const process = async () => {
                 try {
-                  // eslint-disable-next-line no-constant-condition
                   while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
@@ -1043,13 +1040,13 @@ describe('LobeOpenAICompatibleFactory', () => {
               model: 'any-model',
               temperature: 0,
             });
-          } catch (e) {
+          } catch {
             // Catch errors from incomplete mocking, we only care that responses.create was called
           }
 
           expect(mockResponsesCreate).toHaveBeenCalled();
         },
-        { timeout: 10000 },
+        { timeout: 10_000 },
       );
 
       it(
@@ -1084,7 +1081,7 @@ describe('LobeOpenAICompatibleFactory', () => {
               model: 'prefix-special-model-suffix',
               temperature: 0,
             });
-          } catch (e) {
+          } catch {
             // Catch errors from incomplete mocking
           }
           expect(spy).toHaveBeenCalledTimes(1);
@@ -1104,7 +1101,7 @@ describe('LobeOpenAICompatibleFactory', () => {
               model: 'special-xyz',
               temperature: 0,
             });
-          } catch (e) {
+          } catch {
             // Catch errors from incomplete mocking
           }
           expect(spy).toHaveBeenCalledTimes(2);
@@ -1116,12 +1113,12 @@ describe('LobeOpenAICompatibleFactory', () => {
               model: 'unrelated-model',
               temperature: 0,
             });
-          } catch (e) {
+          } catch {
             // Catch errors
           }
           expect(spy).toHaveBeenCalledTimes(2); // Ensure no additional calls were made
         },
-        { timeout: 10000 },
+        { timeout: 10_000 },
       );
     });
 
@@ -2734,7 +2731,7 @@ describe('LobeOpenAICompatibleFactory', () => {
           },
           contextWindowTokens: 200_000,
           description:
-            "Claude 3 Haiku is Anthropic’s fastest and most compact model, designed for near-instant responses with fast, accurate performance.",
+            'Claude 3 Haiku is Anthropic’s fastest and most compact model, designed for near-instant responses with fast, accurate performance.',
           displayName: 'Claude 3 Haiku',
           enabled: false,
           id: 'claude-3-haiku-20240307',
@@ -2790,7 +2787,8 @@ describe('LobeOpenAICompatibleFactory', () => {
             deploymentName: 'gpt-4o-mini',
           },
           contextWindowTokens: 128_000,
-          description: 'GPT-4o Mini is a small, efficient model with performance similar to GPT-4o.',
+          description:
+            'GPT-4o Mini is a small, efficient model with performance similar to GPT-4o.',
           displayName: 'GPT 4o Mini',
           enabled: false,
           id: 'gpt-4o-mini',

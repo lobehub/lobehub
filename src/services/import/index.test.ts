@@ -45,7 +45,7 @@ vi.mock('@/utils/uuid', () => ({
 describe('ImportService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.spyOn(Date, 'now').mockReturnValue(1000000);
+    vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
     vi.spyOn(console, 'log').mockImplementation(() => {});
   });
 
@@ -71,10 +71,10 @@ describe('ImportService', () => {
     describe('small dataset (< 500 items)', () => {
       it('should import via POST when total items < 500', async () => {
         const mockData = {
-          messages: Array(100).fill({ id: '1', content: 'test' }),
-          sessionGroups: Array(50).fill({ id: '1', name: 'test' }),
-          sessions: Array(100).fill({ id: '1', type: 'agent' }),
-          topics: Array(100).fill({ id: '1', title: 'test' }),
+          messages: Array.from({ length: 100 }).fill({ id: '1', content: 'test' }),
+          sessionGroups: Array.from({ length: 50 }).fill({ id: '1', name: 'test' }),
+          sessions: Array.from({ length: 100 }).fill({ id: '1', type: 'agent' }),
+          topics: Array.from({ length: 100 }).fill({ id: '1', title: 'test' }),
           version: 1,
         };
 
@@ -107,7 +107,7 @@ describe('ImportService', () => {
 
       it('should handle error during small dataset import', async () => {
         const mockData = {
-          messages: Array(100).fill({ id: '1', content: 'test' }),
+          messages: Array.from({ length: 100 }).fill({ id: '1', content: 'test' }),
           version: 1,
         };
 
@@ -143,7 +143,7 @@ describe('ImportService', () => {
 
       it('should calculate duration correctly', async () => {
         const mockData = {
-          messages: Array(10).fill({ id: '1', content: 'test' }),
+          messages: Array.from({ length: 10 }).fill({ id: '1', content: 'test' }),
           version: 1,
         };
 
@@ -157,7 +157,7 @@ describe('ImportService', () => {
         let callCount = 0;
         vi.spyOn(Date, 'now').mockImplementation(() => {
           callCount++;
-          return callCount === 1 ? 1000000 : 1005000; // 5 second difference
+          return callCount === 1 ? 1_000_000 : 1_005_000; // 5 second difference
         });
 
         vi.mocked(lambdaClient.importer.importByPost.mutate).mockResolvedValue(mockResult);
@@ -175,7 +175,7 @@ describe('ImportService', () => {
     describe('large dataset (>= 500 items)', () => {
       it('should upload to S3 and import via file when total items >= 500', async () => {
         const mockData = {
-          messages: Array(500).fill({ id: '1', content: 'test' }),
+          messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
           version: 1,
         };
 
@@ -226,7 +226,7 @@ describe('ImportService', () => {
 
       it('should handle upload error', async () => {
         const mockData = {
-          messages: Array(500).fill({ id: '1', content: 'test' }),
+          messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
           version: 1,
         };
 
@@ -243,7 +243,7 @@ describe('ImportService', () => {
 
       it('should handle import error after successful upload', async () => {
         const mockData = {
-          messages: Array(500).fill({ id: '1', content: 'test' }),
+          messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
           version: 1,
         };
 
@@ -287,7 +287,7 @@ describe('ImportService', () => {
 
       it('should trigger file upload progress callback', async () => {
         const mockData = {
-          messages: Array(500).fill({ id: '1', content: 'test' }),
+          messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
           version: 1,
         };
 
@@ -340,7 +340,7 @@ describe('ImportService', () => {
     describe('edge cases', () => {
       it('should handle data with exactly 499 items via POST', async () => {
         const mockData = {
-          messages: Array(499).fill({ id: '1', content: 'test' }),
+          messages: Array.from({ length: 499 }).fill({ id: '1', content: 'test' }),
           version: 1,
         };
 
@@ -361,7 +361,7 @@ describe('ImportService', () => {
 
       it('should handle data with exactly 500 items via file upload', async () => {
         const mockData = {
-          messages: Array(500).fill({ id: '1', content: 'test' }),
+          messages: Array.from({ length: 500 }).fill({ id: '1', content: 'test' }),
           version: 1,
         };
 
@@ -410,7 +410,7 @@ describe('ImportService', () => {
 
       it('should work without callbacks', async () => {
         const mockData = {
-          messages: Array(10).fill({ id: '1', content: 'test' }),
+          messages: Array.from({ length: 10 }).fill({ id: '1', content: 'test' }),
           version: 1,
         };
 
@@ -433,8 +433,8 @@ describe('ImportService', () => {
       it('should import PostgreSQL data via POST when total items < 500', async () => {
         const mockData = {
           data: {
-            users: Array(100).fill({ id: 1, name: 'test' }),
-            sessions: Array(200).fill({ id: 1, name: 'test' }),
+            users: Array.from({ length: 100 }).fill({ id: 1, name: 'test' }),
+            sessions: Array.from({ length: 200 }).fill({ id: 1, name: 'test' }),
           },
           mode: 'postgres' as const,
           schemaHash: 'hash123',
@@ -466,7 +466,7 @@ describe('ImportService', () => {
       it('should handle error during PostgreSQL data import', async () => {
         const mockData = {
           data: {
-            users: Array(100).fill({ id: 1, name: 'test' }),
+            users: Array.from({ length: 100 }).fill({ id: 1, name: 'test' }),
           },
           mode: 'pglite' as const,
           schemaHash: 'hash123',
@@ -504,7 +504,7 @@ describe('ImportService', () => {
       it('should upload to S3 and import via file when total items >= 500', async () => {
         const mockData = {
           data: {
-            messages: Array(500).fill({ id: 1, content: 'test' }),
+            messages: Array.from({ length: 500 }).fill({ id: 1, content: 'test' }),
           },
           mode: 'postgres' as const,
           schemaHash: 'hash123',
@@ -552,9 +552,9 @@ describe('ImportService', () => {
       it('should handle multiple tables with varying sizes', async () => {
         const mockData = {
           data: {
-            users: Array(100).fill({ id: 1 }),
-            messages: Array(300).fill({ id: 1 }),
-            sessions: Array(150).fill({ id: 1 }),
+            users: Array.from({ length: 100 }).fill({ id: 1 }),
+            messages: Array.from({ length: 300 }).fill({ id: 1 }),
+            sessions: Array.from({ length: 150 }).fill({ id: 1 }),
           },
           mode: 'postgres' as const,
           schemaHash: 'hash123',
@@ -592,7 +592,7 @@ describe('ImportService', () => {
       it('should work without options', async () => {
         const mockData = {
           data: {
-            users: Array(10).fill({ id: 1, name: 'test' }),
+            users: Array.from({ length: 10 }).fill({ id: 1, name: 'test' }),
           },
           mode: 'pglite' as const,
           schemaHash: 'hash123',
@@ -632,9 +632,9 @@ describe('ImportService', () => {
       it('should calculate total length correctly across multiple tables', async () => {
         const mockData = {
           data: {
-            table1: Array(100).fill({}),
-            table2: Array(200).fill({}),
-            table3: Array(199).fill({}),
+            table1: Array.from({ length: 100 }).fill({}),
+            table2: Array.from({ length: 200 }).fill({}),
+            table3: Array.from({ length: 199 }).fill({}),
           },
           mode: 'postgres' as const,
           schemaHash: 'hash123',

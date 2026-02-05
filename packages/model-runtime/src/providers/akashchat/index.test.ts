@@ -253,8 +253,8 @@ describe('LobeAkashChatAI - custom features', () => {
         models: {
           list: vi.fn().mockResolvedValue({
             data: [
-              { created: 1234567890, id: 'llama-3.1-8b-instruct', owned_by: 'meta' },
-              { created: 1234567891, id: 'DeepSeek-V3-1', owned_by: 'deepseek' },
+              { created: 1_234_567_890, id: 'llama-3.1-8b-instruct', owned_by: 'meta' },
+              { created: 1_234_567_891, id: 'DeepSeek-V3-1', owned_by: 'deepseek' },
             ],
           }),
         },
@@ -273,7 +273,7 @@ describe('LobeAkashChatAI - custom features', () => {
         baseURL: 'https://chatapi.akash.network/api/v1',
         models: {
           list: vi.fn().mockResolvedValue({
-            data: [{ created: 1234567890, id: 'llama-3.1-8b-instruct', owned_by: 'meta' }],
+            data: [{ created: 1_234_567_890, id: 'llama-3.1-8b-instruct', owned_by: 'meta' }],
           }),
         },
       };

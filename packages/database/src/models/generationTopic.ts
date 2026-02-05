@@ -1,10 +1,11 @@
-import { GenerationAsset, ImageGenerationTopic } from '@lobechat/types';
+import type { GenerationAsset, ImageGenerationTopic } from '@lobechat/types';
 import { and, desc, eq } from 'drizzle-orm';
 
 import { FileService } from '@/server/services/file';
 
-import { GenerationTopicItem, generationTopics } from '../schemas/generation';
-import { LobeChatDatabase } from '../type';
+import type { GenerationTopicItem } from '../schemas/generation';
+import { generationTopics } from '../schemas/generation';
+import type { LobeChatDatabase } from '../type';
 
 export class GenerationTopicModel {
   private userId: string;

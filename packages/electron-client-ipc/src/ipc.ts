@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-empty-interface */
 import type { StreamInvokeRequestParams } from './types';
 
 type IpcInvoke = <T = unknown>(event: string, ...data: unknown[]) => Promise<T>;
@@ -47,16 +46,19 @@ declare global {
   interface Window {
     electronAPI?: {
       invoke?: IpcInvoke;
-      onStreamInvoke: (params: StreamInvokeRequestParams, callbacks: StreamerCallbacks) => () => void;
+      onStreamInvoke: (
+        params: StreamInvokeRequestParams,
+        callbacks: StreamerCallbacks,
+      ) => () => void;
     };
   }
 }
 
 export const getElectronIpc = (): DesktopIpcServices | null => {
-  if (typeof window === 'undefined') return null;
+  if (typeof globalThis.window === 'undefined') return null;
   if (cachedProxy) return cachedProxy;
 
-  const invoke = window.electronAPI?.invoke;
+  const invoke = globalThis.electronAPI?.invoke;
   if (!invoke) return null;
 
   cachedProxy = createInvokeProxy<DesktopIpcServices>(invoke);

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
 import { LobeMistralAI, params } from './index';
 
@@ -106,11 +106,11 @@ describe('LobeMistralAI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'open-mistral-7b',
-        temperature: 2.0,
+        temperature: 2,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-        expect.objectContaining({ temperature: 1.0 }),
+        expect.objectContaining({ temperature: 1 }),
         expect.anything(),
       );
     });
@@ -287,7 +287,7 @@ describe('LobeMistralAI - custom features', () => {
         data: [
           {
             id: 'mistral-large-latest',
-            max_context_length: 128000,
+            max_context_length: 128_000,
             capabilities: {
               function_calling: true,
               vision: false,
@@ -296,7 +296,7 @@ describe('LobeMistralAI - custom features', () => {
           },
           {
             id: 'mistral-small-latest',
-            max_context_length: 32000,
+            max_context_length: 32_000,
             capabilities: {
               function_calling: true,
               vision: false,
@@ -311,14 +311,14 @@ describe('LobeMistralAI - custom features', () => {
       expect(models).toHaveLength(2);
       expect(models[0]).toMatchObject({
         id: 'mistral-large-latest',
-        contextWindowTokens: 128000,
+        contextWindowTokens: 128_000,
         functionCall: true,
         vision: false,
         description: 'Mistral Large model',
       });
       expect(models[1]).toMatchObject({
         id: 'mistral-small-latest',
-        contextWindowTokens: 32000,
+        contextWindowTokens: 32_000,
         functionCall: true,
         vision: false,
         description: 'Mistral Small model',
@@ -330,7 +330,7 @@ describe('LobeMistralAI - custom features', () => {
         data: [
           {
             id: 'pixtral-12b-latest',
-            max_context_length: 128000,
+            max_context_length: 128_000,
             capabilities: {
               function_calling: true,
               vision: true,
@@ -355,7 +355,7 @@ describe('LobeMistralAI - custom features', () => {
         data: [
           {
             id: 'mistral-large-latest',
-            max_context_length: 128000,
+            max_context_length: 128_000,
             capabilities: {
               function_calling: true,
               vision: false,
@@ -406,7 +406,7 @@ describe('LobeMistralAI - custom features', () => {
         data: [
           {
             id: 'MISTRAL-LARGE-LATEST',
-            max_context_length: 128000,
+            max_context_length: 128_000,
             capabilities: {
               function_calling: true,
               vision: false,
@@ -429,7 +429,7 @@ describe('LobeMistralAI - custom features', () => {
         data: [
           {
             id: 'mistral-large-latest',
-            max_context_length: 128000,
+            max_context_length: 128_000,
             capabilities: {
               function_calling: true,
               vision: false,
@@ -462,7 +462,7 @@ describe('LobeMistralAI - custom features', () => {
         data: [
           {
             id: 'pixtral-large-latest',
-            max_context_length: 128000,
+            max_context_length: 128_000,
             capabilities: {
               function_calling: true,
               vision: true,
@@ -477,7 +477,7 @@ describe('LobeMistralAI - custom features', () => {
       expect(models).toHaveLength(1);
       expect(models[0]).toMatchObject({
         id: 'pixtral-large-latest',
-        contextWindowTokens: 128000,
+        contextWindowTokens: 128_000,
         functionCall: true,
         vision: true,
         description: 'Multimodal large model',
@@ -495,13 +495,13 @@ describe('LobeMistralAI - custom features', () => {
           },
           {
             id: 'model-2',
-            max_context_length: 32768,
+            max_context_length: 32_768,
             capabilities: { function_calling: true, vision: false },
             description: 'Medium context',
           },
           {
             id: 'model-3',
-            max_context_length: 200000,
+            max_context_length: 200_000,
             capabilities: { function_calling: true, vision: true },
             description: 'Large context',
           },
@@ -512,8 +512,8 @@ describe('LobeMistralAI - custom features', () => {
 
       expect(models).toHaveLength(3);
       expect(models[0].contextWindowTokens).toBe(4096);
-      expect(models[1].contextWindowTokens).toBe(32768);
-      expect(models[2].contextWindowTokens).toBe(200000);
+      expect(models[1].contextWindowTokens).toBe(32_768);
+      expect(models[2].contextWindowTokens).toBe(200_000);
     });
 
     it('should handle mixed capability models', async () => {
@@ -530,7 +530,7 @@ describe('LobeMistralAI - custom features', () => {
           },
           {
             id: 'vision-model',
-            max_context_length: 16384,
+            max_context_length: 16_384,
             capabilities: {
               function_calling: false,
               vision: true,
@@ -565,7 +565,7 @@ describe('LobeMistralAI - custom features', () => {
         data: [
           {
             id: 'complete-model',
-            max_context_length: 100000,
+            max_context_length: 100_000,
             capabilities: {
               function_calling: true,
               vision: true,
@@ -781,12 +781,12 @@ describe('LobeMistralAI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'open-mistral-7b',
-        max_tokens: 100000,
+        max_tokens: 100_000,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          max_tokens: 100000,
+          max_tokens: 100_000,
         }),
         expect.anything(),
       );

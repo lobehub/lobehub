@@ -47,10 +47,10 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, n
     return (
       <Center
         height={'100%'}
+        width={'100%'}
         style={{
           background: theme.colorBgContainerSecondary,
         }}
-        width={'100%'}
       >
         <Empty
           description={t('store.emptySelectHint')}
@@ -66,8 +66,8 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, n
       <Flexbox gap={16}>
         <Header inModal />
         <Nav
-          activeTab={activeTab as McpNavKey}
           inModal
+          activeTab={activeTab as McpNavKey}
           noSettings={noSettings}
           setActiveTab={setActiveTab}
         />

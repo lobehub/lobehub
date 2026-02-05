@@ -23,7 +23,9 @@ describe('MarketOIDC.buildAuthUrl', () => {
 
     expect(url).toContain('https://market.lobehub.com/lobehub-oidc/auth?');
     expect(url).toContain(`client_id=${encodeURIComponent('lobehub-desktop')}`);
-    expect(url).toContain(`redirect_uri=${encodeURIComponent('https://market.lobehub.com/lobehub-oidc/callback/desktop')}`);
+    expect(url).toContain(
+      `redirect_uri=${encodeURIComponent('https://market.lobehub.com/lobehub-oidc/callback/desktop')}`,
+    );
     expect(url).toContain(`state=${encodeURIComponent('state_value')}`);
     expect(url).toContain(`code_challenge=${encodeURIComponent('code_challenge')}`);
 
@@ -34,5 +36,3 @@ describe('MarketOIDC.buildAuthUrl', () => {
     expect(MARKET_OIDC_ENDPOINTS.auth).toBe('/lobehub-oidc/auth');
   });
 });
-
-

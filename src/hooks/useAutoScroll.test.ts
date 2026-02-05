@@ -11,7 +11,7 @@ describe('useAutoScroll', () => {
 
   beforeEach(() => {
     rafCallbacks = [];
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+    vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
       rafCallbacks.push(cb);
       return rafCallbacks.length;
     });

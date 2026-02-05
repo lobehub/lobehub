@@ -17,7 +17,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     position: absolute;
     z-index: 10;
     inset-block-start: 0;
-    inset-inline: 0 0;
+    inset-inline: 0;
 
     background: ${cssVar.colorBgLayout};
   `,
@@ -28,6 +28,8 @@ const Header = memo(() => {
 
   return (
     <ChatHeader
+      left={<Nav />}
+      styles={{ center: { display: 'none' } }}
       center={
         showSearch && (
           <Flexbox align={'center'} className={styles.search} paddingBlock={8} paddingInline={16}>
@@ -35,7 +37,6 @@ const Header = memo(() => {
           </Flexbox>
         )
       }
-      left={<Nav />}
       right={
         showSearch ? (
           <Flexbox align={'center'} className={styles.search} paddingBlock={8} paddingInline={16}>
@@ -44,8 +45,8 @@ const Header = memo(() => {
         ) : (
           <ActionIcon
             icon={SearchIcon}
-            onClick={() => setShowSearch(true)}
             size={MOBILE_HEADER_ICON_SIZE}
+            onClick={() => setShowSearch(true)}
           />
         )
       }
@@ -53,7 +54,6 @@ const Header = memo(() => {
         ...mobileHeaderSticky,
         overflow: 'unset',
       }}
-      styles={{ center: { display: 'none' } }}
     />
   );
 });

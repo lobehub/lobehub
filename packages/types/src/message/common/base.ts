@@ -2,7 +2,7 @@ import type { IPluginErrorType } from '@lobehub/chat-plugin-sdk';
 import { z } from 'zod';
 
 import type { ILobeAgentRuntimeErrorType } from '../../agentRuntime';
-import { ErrorType } from '../../fetch';
+import type { ErrorType } from '../../fetch';
 
 /**
  * Chat message error object

@@ -21,7 +21,7 @@ export const downloadFile = async (
     const blob = await response.blob();
 
     // Create download link
-    const blobUrl = window.URL.createObjectURL(blob);
+    const blobUrl = globalThis.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = blobUrl;
     link.download = fileName;
@@ -33,7 +33,7 @@ export const downloadFile = async (
 
     // Cleanup
     link.remove();
-    window.URL.revokeObjectURL(blobUrl);
+    globalThis.URL.revokeObjectURL(blobUrl);
   } catch (error) {
     console.log('Download failed:', error);
 

@@ -1,6 +1,7 @@
 'use client';
 
-import { Component, type ErrorInfo, type ReactNode } from 'react';
+import type { ErrorInfo, ReactNode } from 'react';
+import { Component } from 'react';
 
 interface BootErrorBoundaryProps {
   children: ReactNode;
@@ -41,7 +42,6 @@ class BootErrorBoundary extends Component<BootErrorBoundaryProps, BootErrorBound
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    // eslint-disable-next-line no-console
     console.error('Unexpected boot error captured by BootErrorBoundary', error, errorInfo);
 
     if (!this.hasBooted && this.tryHardReload()) {
@@ -58,28 +58,26 @@ class BootErrorBoundary extends Component<BootErrorBoundaryProps, BootErrorBound
   }
 
   private resetReloadAttempts() {
-    if (typeof window === 'undefined') return;
+    if (typeof globalThis.window === 'undefined') return;
     try {
-      window.sessionStorage.removeItem(RELOAD_SESSION_KEY);
+      globalThis.sessionStorage.removeItem(RELOAD_SESSION_KEY);
     } catch (error) {
       // Access to sessionStorage can fail in restricted environments; ignore.
       if (process.env.NODE_ENV === 'development') {
-        // eslint-disable-next-line no-console
         console.warn('BootErrorBoundary failed to reset reload attempts', error);
       }
     }
   }
 
   private tryHardReload() {
-    if (typeof window === 'undefined') return false;
+    if (typeof globalThis.window === 'undefined') return false;
 
     try {
       const maxReloads = this.props.maxBootReloads ?? DEFAULT_MAX_RELOADS;
-      const attempts = Number(window.sessionStorage.getItem(RELOAD_SESSION_KEY) ?? '0');
-      const href = window.location.href;
+      const attempts = Number(globalThis.sessionStorage.getItem(RELOAD_SESSION_KEY) ?? '0');
+      const href = globalThis.location.href;
 
       if (attempts >= maxReloads) {
-        // eslint-disable-next-line no-console
         console.warn('BootErrorBoundary reached max reload attempts', {
           attempts,
           href,
@@ -88,13 +86,11 @@ class BootErrorBoundary extends Component<BootErrorBoundaryProps, BootErrorBound
         return false;
       }
 
-      // eslint-disable-next-line no-console
       console.info('BootErrorBoundary forcing hard reload', { attempts, href, maxReloads });
-      window.sessionStorage.setItem(RELOAD_SESSION_KEY, String(attempts + 1));
+      globalThis.sessionStorage.setItem(RELOAD_SESSION_KEY, String(attempts + 1));
     } catch (error) {
       // If sessionStorage is unavailable, we still attempt a reload once.
       if (process.env.NODE_ENV === 'development') {
-        // eslint-disable-next-line no-console
         console.warn('BootErrorBoundary failed to persist reload attempts', error);
       }
     }
@@ -104,7 +100,7 @@ class BootErrorBoundary extends Component<BootErrorBoundaryProps, BootErrorBound
   }
 
   private forceHardReload() {
-    const { location } = window;
+    const { location } = globalThis;
 
     // Append a cache-busting query parameter so the browser bypasses cached assets.
     const url = new URL(location.href);
@@ -114,8 +110,8 @@ class BootErrorBoundary extends Component<BootErrorBoundaryProps, BootErrorBound
   }
 
   private cleanForceReloadMarker() {
-    if (typeof window === 'undefined') return;
-    const { history, location } = window;
+    if (typeof globalThis.window === 'undefined') return;
+    const { history, location } = globalThis;
 
     const url = new URL(location.href);
 

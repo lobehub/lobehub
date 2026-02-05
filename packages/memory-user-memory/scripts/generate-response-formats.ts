@@ -8,9 +8,9 @@ import type { GenerateObjectSchema } from '@lobechat/model-runtime';
 import {
   ActivityMemorySchema,
   ContextMemorySchema,
+  ExperienceMemorySchema,
   IdentityActionsSchema,
   PreferenceMemorySchema,
-  ExperienceMemorySchema,
 } from '../src/schemas';
 import { buildGenerateObjectSchema } from '../src/utils/zod';
 
@@ -26,12 +26,12 @@ const writeSchema = async (name: string, schema: any, description: string) => {
 
   const outPath = join(OUTPUT_DIR, `${name}.json`);
   await writeFile(outPath, JSON.stringify(responseFormat, null, 2), 'utf8');
-  // eslint-disable-next-line no-console
+
   console.log(`Wrote ${outPath}`);
 };
 
 const writeGenerateObjectSchema = async (name: string, generateSchema: GenerateObjectSchema) => {
-  const responseFormat: { json_schema: GenerateObjectSchema, type: 'json_schema' } = {
+  const responseFormat: { json_schema: GenerateObjectSchema; type: 'json_schema' } = {
     json_schema: {
       name: generateSchema.name || name,
       schema: generateSchema.schema,
@@ -42,7 +42,7 @@ const writeGenerateObjectSchema = async (name: string, generateSchema: GenerateO
 
   const outPath = join(OUTPUT_DIR, `${name}.json`);
   await writeFile(outPath, JSON.stringify(responseFormat, null, 2), 'utf8');
-  // eslint-disable-next-line no-console
+
   console.log(`Wrote ${outPath}`);
 };
 
@@ -57,7 +57,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  // eslint-disable-next-line no-console
   console.error(err);
   exit(1);
 });

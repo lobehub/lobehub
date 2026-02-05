@@ -5,9 +5,9 @@ import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import InlineTable from '@/components/InlineTable';
 import Link from '@/libs/router/Link';
 import { usePathname } from '@/libs/router/navigation';
-import InlineTable from '@/components/InlineTable';
 
 import PublishedTime from '../../../../../../../../../components/PublishedTime';
 import { useDetailContext } from '../../../../../../../../../features/MCPPluginDetail/DetailProvider';
@@ -22,20 +22,23 @@ const Versions = memo(() => {
       <Title>{t('mcp.details.versions.title')}</Title>
       <Block variant={'outlined'}>
         <InlineTable
+          dataSource={versions}
+          rowKey={'version'}
+          size={'middle'}
           columns={[
             {
               dataIndex: 'version',
               render: (_, record) => (
                 <Link
+                  style={{ color: 'inherit' }}
                   href={qs.stringifyUrl({
                     query: {
                       version: record.version,
                     },
                     url: pathname,
                   })}
-                  style={{ color: 'inherit' }}
                 >
-                  <Flexbox align={'center'} gap={8} horizontal>
+                  <Flexbox horizontal align={'center'} gap={8}>
                     <code style={{ fontSize: 14 }}>{record.version}</code>
                     {record.isLatest && (
                       <Tag color={'info'}>{t('mcp.details.versions.table.isLatest')}</Tag>
@@ -62,9 +65,6 @@ const Versions = memo(() => {
               title: t('mcp.details.versions.table.publishAt'),
             },
           ]}
-          dataSource={versions}
-          rowKey={'version'}
-          size={'middle'}
         />
       </Block>
     </Flexbox>

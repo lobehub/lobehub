@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AssistantStore } from '@/server/modules/AssistantStore';
 import { PluginStore } from '@/server/modules/PluginStore';
-import { AssistantSorts, ModelSorts, PluginSorts, ProviderSorts } from '@/types/discover';
+import { ModelSorts, PluginSorts, ProviderSorts } from '@/types/discover';
 
 import { DiscoverService } from './index';
 
@@ -47,7 +47,7 @@ vi.mock('model-bank', async (importOriginal) => {
         displayName: 'Claude 3 Opus',
         description: 'Anthropic Claude 3 Opus model',
         providerId: 'anthropic',
-        contextWindowTokens: 200000,
+        contextWindowTokens: 200_000,
         abilities: {
           vision: true,
           reasoning: true,

@@ -33,11 +33,11 @@ const IdentityRightPanel = memo(() => {
         <Text
           as={'h1'}
           fontSize={20}
+          weight={'bold'}
           style={{
             lineHeight: 1.4,
             marginBottom: 0,
           }}
-          weight={'bold'}
         >
           {identity.title}
         </Text>

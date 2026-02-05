@@ -8,9 +8,9 @@ const IntentUnderstanding = () => {
   const { t } = useTranslation('chat');
 
   return (
-    <Flexbox align={'center'} gap={8} horizontal>
+    <Flexbox horizontal align={'center'} gap={8}>
       <CircleLoader />
-      <Flexbox className={shinyTextStyles.shinyText} horizontal>
+      <Flexbox horizontal className={shinyTextStyles.shinyText}>
         {t('intentUnderstanding.title')}
       </Flexbox>
     </Flexbox>

@@ -1,4 +1,4 @@
-import { SidebarAgentItem, SidebarAgentListResponse, SidebarGroup } from '@lobechat/types';
+import type { SidebarAgentItem, SidebarAgentListResponse, SidebarGroup } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { and, desc, eq, ilike, inArray, not, or } from 'drizzle-orm';
 
@@ -10,7 +10,7 @@ import {
   sessionGroups,
   sessions,
 } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 
 // Re-export types for backward compatibility
 export type {

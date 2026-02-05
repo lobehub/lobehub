@@ -364,7 +364,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'meta-llama/Meta-Llama-3.1-8B-Instruct',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'meta-llama',
             architecture: {
               input_modalities: ['text'],
@@ -384,7 +384,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'microsoft/Phi-3-mini-4k-instruct',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'microsoft',
             architecture: {
               input_modalities: ['text'],
@@ -404,7 +404,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -422,7 +422,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'test-model',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'test',
             architecture: {
               input_modalities: ['text'],
@@ -440,7 +440,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -458,7 +458,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'vision-model-1',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'test',
             architecture: {
               input_modalities: ['image', 'text'],
@@ -475,7 +475,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'vision-model-2',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'test',
             architecture: {
               input_modalities: ['image'],
@@ -492,7 +492,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -511,7 +511,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'meta-llama/llama-3.3-70b-instruct',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'meta-llama',
             architecture: {
               input_modalities: ['text'],
@@ -529,7 +529,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -552,7 +552,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'META-LLAMA/LLAMA-3.3-70B-INSTRUCT',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'meta-llama',
             architecture: {
               input_modalities: ['text'],
@@ -569,7 +569,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -587,7 +587,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'unknown/unknown-model',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'unknown',
             architecture: {
               input_modalities: ['text'],
@@ -604,7 +604,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -625,7 +625,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'meta-llama/llama-3.3-70b-instruct',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'meta-llama',
             architecture: {
               input_modalities: ['text'],
@@ -643,7 +643,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -663,7 +663,7 @@ describe('LobeHuggingFaceAI', () => {
         data: [],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -674,14 +674,14 @@ describe('LobeHuggingFaceAI', () => {
     });
 
     it('should handle API errors gracefully', async () => {
-      global.fetch = vi.fn().mockRejectedValue(new Error('API Error'));
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error('API Error'));
 
       const result = await params.models!();
       expect(result).toEqual([]);
     });
 
     it('should handle invalid JSON response', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => {
           throw new Error('Invalid JSON');
@@ -699,7 +699,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'meta-llama/llama-3.3-70b-instruct',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'meta-llama',
             architecture: {
               input_modalities: ['text'],
@@ -717,7 +717,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -738,7 +738,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'meta-llama/llama-3.3-70b-instruct',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'meta-llama',
             architecture: {
               input_modalities: ['text'],
@@ -755,7 +755,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -777,7 +777,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'zai-org/GLM-4.6',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'zai-org',
             architecture: {
               input_modalities: ['text'],
@@ -787,7 +787,7 @@ describe('LobeHuggingFaceAI', () => {
               {
                 provider: 'novita',
                 status: 'live',
-                context_length: 204800,
+                context_length: 204_800,
                 pricing: {
                   input: 0.6,
                   output: 2.2,
@@ -809,7 +809,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -819,7 +819,7 @@ describe('LobeHuggingFaceAI', () => {
 
       const model = models[0];
       // 应该从 novita provider 回退获取到 context_length
-      expect(model.contextWindowTokens).toBe(204800);
+      expect(model.contextWindowTokens).toBe(204_800);
       // 应该从 zai-org provider 获取到 supports_tools
       expect(model.functionCall).toBe(true);
     });
@@ -831,7 +831,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'test/model',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'test',
             architecture: {
               input_modalities: ['text'],
@@ -857,7 +857,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -879,7 +879,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'author/complete-model',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'author',
             architecture: {
               input_modalities: ['text'],
@@ -905,7 +905,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -927,7 +927,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'deepseek-ai/DeepSeek-V3.2-Exp',
             object: 'model',
-            created: 1759126046,
+            created: 1_759_126_046,
             owned_by: 'deepseek-ai',
             architecture: {
               input_modalities: ['text'],
@@ -937,7 +937,7 @@ describe('LobeHuggingFaceAI', () => {
               {
                 provider: 'novita',
                 status: 'live',
-                context_length: 163840,
+                context_length: 163_840,
                 pricing: {
                   input: 0.27,
                   output: 0.41,
@@ -951,7 +951,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -961,7 +961,7 @@ describe('LobeHuggingFaceAI', () => {
 
       const model = models[0];
       // 应该从 novita provider 获取完整信息
-      expect(model.contextWindowTokens).toBe(163840);
+      expect(model.contextWindowTokens).toBe(163_840);
       expect(model.functionCall).toBe(true);
       expect(model.id).toBe('deepseek-ai/DeepSeek-V3.2-Exp');
     });
@@ -974,7 +974,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'test/model',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'test',
             architecture: {
               input_modalities: ['text'],
@@ -1006,7 +1006,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -1028,7 +1028,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'zai-org/GLM-4.6',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'zai-org',
             architecture: {
               input_modalities: ['text'],
@@ -1038,7 +1038,7 @@ describe('LobeHuggingFaceAI', () => {
               {
                 provider: 'novita',
                 status: 'live',
-                context_length: 204800,
+                context_length: 204_800,
                 pricing: {
                   input: 0.6,
                   output: 2.2,
@@ -1058,7 +1058,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);
@@ -1089,7 +1089,7 @@ describe('LobeHuggingFaceAI', () => {
           {
             id: 'author/model',
             object: 'model',
-            created: 1759170171,
+            created: 1_759_170_171,
             owned_by: 'author',
             architecture: {
               input_modalities: ['text'],
@@ -1119,7 +1119,7 @@ describe('LobeHuggingFaceAI', () => {
         ],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => mockResponse,
       } as Response);

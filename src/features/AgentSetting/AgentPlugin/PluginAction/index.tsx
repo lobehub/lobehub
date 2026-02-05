@@ -16,15 +16,15 @@ const PluginSwitch = memo<{ identifier: string }>(({ identifier }) => {
   ]);
 
   return (
-    <Flexbox align={'center'} gap={8} horizontal>
+    <Flexbox horizontal align={'center'} gap={8}>
       <Switch
+        loading={pluginManifestLoading[identifier]}
         checked={
           // 如果在加载中，说明激活了
           pluginManifestLoading[identifier] || !hasPlugin
             ? false
             : userEnabledPlugins.includes(identifier)
         }
-        loading={pluginManifestLoading[identifier]}
         onChange={() => {
           toggleAgentPlugin(identifier);
         }}

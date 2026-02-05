@@ -14,16 +14,16 @@ const HeaderAvatar = memo<{ size?: number }>(() => {
       clickable
       flex={'none'}
       height={32}
+      padding={2}
+      variant={'borderless'}
+      width={32}
+      style={{
+        overflow: 'hidden',
+      }}
       onClick={(e) => {
         e.stopPropagation();
         openChatSettings();
       }}
-      padding={2}
-      style={{
-        overflow: 'hidden',
-      }}
-      variant={'borderless'}
-      width={32}
     >
       <SupervisorAvatar size={28} />
     </Block>

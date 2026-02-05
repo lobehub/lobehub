@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { PipelineContext } from '../../types';
+import type { PipelineContext } from '../../types';
 import { TaskMessageProcessor } from '../TaskMessage';
 
 describe('TaskMessageProcessor', () => {
@@ -231,7 +231,7 @@ Result content here`,
           content: 'Result',
           metadata: { instruction: 'Task', customField: 'value' },
           agentName: 'Agent',
-          createdAt: 1234567890,
+          createdAt: 1_234_567_890,
           extra: { foo: 'bar' },
         },
       ]);
@@ -239,7 +239,7 @@ Result content here`,
       const result = await processor.process(context);
 
       expect(result.messages[0].id).toBe('msg-1');
-      expect(result.messages[0].createdAt).toBe(1234567890);
+      expect(result.messages[0].createdAt).toBe(1_234_567_890);
       expect(result.messages[0].extra).toEqual({ foo: 'bar' });
       expect(result.messages[0].metadata.customField).toBe('value');
     });

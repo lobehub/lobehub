@@ -1,9 +1,9 @@
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { agentsToSessions } from '@/database/schemas';
-import { type LobeChatDatabase } from '@/database/type';
+import type { LobeChatDatabase } from '@/database/type';
 
-import { type ConversationContextInput } from '../_schema/context';
+import type { ConversationContextInput } from '../_schema/context';
 
 export interface ResolvedContext {
   agentId: string | null;
@@ -97,7 +97,9 @@ export const batchResolveAgentIdFromSessions = async (
   const relations = await db
     .select({ agentId: agentsToSessions.agentId, sessionId: agentsToSessions.sessionId })
     .from(agentsToSessions)
-    .where(and(eq(agentsToSessions.userId, userId), inArray(agentsToSessions.sessionId, sessionIds)));
+    .where(
+      and(eq(agentsToSessions.userId, userId), inArray(agentsToSessions.sessionId, sessionIds)),
+    );
 
   return new Map(relations.map((r) => [r.sessionId, r.agentId]));
 };

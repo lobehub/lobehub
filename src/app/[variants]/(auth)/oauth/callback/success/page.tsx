@@ -2,9 +2,10 @@
 
 import { FluentEmoji, Text } from '@lobehub/ui';
 import { Result } from 'antd';
-import { useSearchParams } from '@/libs/next/navigation';
 import React, { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useSearchParams } from '@/libs/next/navigation';
 
 const SuccessPage = memo(() => {
   const { t } = useTranslation('oauth');
@@ -22,7 +23,7 @@ const SuccessPage = memo(() => {
           provider,
           type: 'LOBEHUB_SKILL_AUTH_SUCCESS',
         },
-        window.location.origin,
+        globalThis.location.origin,
       );
 
       // Start countdown and close window after 3 seconds

@@ -235,7 +235,7 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
   return (
     shouldRenderSection && (
       <Flexbox>
-        <Flexbox align="center" horizontal justify="space-between">
+        <Flexbox horizontal align="center" justify="space-between">
           <Text style={{ fontSize: 12, marginTop: 8 }} type={'secondary'}>
             {t('providerModels.list.disabled')}
           </Text>
@@ -303,7 +303,7 @@ const DisabledModels = memo<DisabledModelsProps>(({ activeTab, providerId }) => 
           ))}
         </TooltipGroup>
 
-        <Flexbox align="center" horizontal justify="center" paddingBlock={8}>
+        <Flexbox horizontal align="center" justify="center" paddingBlock={8}>
           <div ref={loadMoreRef} style={{ height: 1, width: '0' }} />
           {(isInitialLoading || isLoadingMore) && (
             <Text style={{ fontSize: 12, marginTop: 4 }} type={'secondary'}>

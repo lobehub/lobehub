@@ -14,8 +14,6 @@ export abstract class ComfyUIInternalError extends Error {
     this.reason = reason;
     this.details = details;
 
-    if (Error.captureStackTrace) {
-      Error.captureStackTrace(this, ComfyUIInternalError);
-    }
+    if (Error.captureStackTrace) {}
   }
 }

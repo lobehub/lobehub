@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, it, vi } from 'vitest';
 
 import { testProvider } from './providerTestUtils';
 

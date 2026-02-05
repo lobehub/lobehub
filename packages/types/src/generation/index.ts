@@ -1,4 +1,4 @@
-import { AsyncTaskError, AsyncTaskStatus } from '../asyncTask';
+import type { AsyncTaskError, AsyncTaskStatus } from '../asyncTask';
 
 export interface ImageGenerationTopic {
   coverUrl?: string | null;

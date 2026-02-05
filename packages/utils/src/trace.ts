@@ -1,4 +1,5 @@
-import { LOBE_CHAT_TRACE_HEADER, LOBE_CHAT_TRACE_ID, TracePayload } from '@lobechat/const';
+import type { TracePayload } from '@lobechat/const';
+import { LOBE_CHAT_TRACE_HEADER, LOBE_CHAT_TRACE_ID } from '@lobechat/const';
 
 export const getTracePayload = (req: Request): TracePayload | undefined => {
   const header = req.headers.get(LOBE_CHAT_TRACE_HEADER);

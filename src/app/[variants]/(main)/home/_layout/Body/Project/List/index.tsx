@@ -25,7 +25,7 @@ const ProjectList = memo(() => {
   const isEmpty = data.length === 0;
 
   if (isEmpty) {
-    return <EmptyNavItem onClick={createProject} title={t('project.create')} />;
+    return <EmptyNavItem title={t('project.create')} onClick={createProject} />;
   }
 
   return (
@@ -34,11 +34,11 @@ const ProjectList = memo(() => {
         <Link
           aria-label={item.id}
           key={item.id}
+          to={LIBRARY_URL(item.id)}
           onClick={(e) => {
             e.preventDefault();
             navigate(LIBRARY_URL(item.id));
           }}
-          to={LIBRARY_URL(item.id)}
         >
           <Item {...item} key={item.id} />
         </Link>

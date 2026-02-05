@@ -5,7 +5,7 @@ import { OAuthDeviceFlowService } from '../index';
 
 // Mock fetch
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch;
 
 describe('OAuthDeviceFlowService', () => {
   let service: OAuthDeviceFlowService;

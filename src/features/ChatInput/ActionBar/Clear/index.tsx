@@ -38,8 +38,6 @@ const Clear = memo(() => {
     <Popconfirm
       arrow={false}
       okButtonProps={{ danger: true, type: 'primary' }}
-      onConfirm={clearCurrentMessages}
-      onOpenChange={updateConfirmOpened}
       open={confirmOpened}
       placement={popconfirmPlacement}
       title={
@@ -47,6 +45,8 @@ const Clear = memo(() => {
           {t('confirmClearCurrentMessages', { ns: 'chat' })}
         </div>
       }
+      onConfirm={clearCurrentMessages}
+      onOpenChange={updateConfirmOpened}
     >
       <Action
         icon={Eraser}

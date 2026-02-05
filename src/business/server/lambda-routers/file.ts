@@ -7,6 +7,5 @@ export interface BusinessFileUploadCheckParams {
 }
 
 export async function businessFileUploadCheck(
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _params: BusinessFileUploadCheckParams,
 ): Promise<void> {}

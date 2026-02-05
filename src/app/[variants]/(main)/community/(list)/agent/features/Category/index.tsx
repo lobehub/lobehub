@@ -49,6 +49,8 @@ const Category = memo(() => {
 
   return (
     <CategoryMenu
+      mode={'inline'}
+      selectedKeys={[category]}
       items={cates.map((item) => {
         const itemData = items.find((i) => i.category === item.key);
         return {
@@ -81,9 +83,7 @@ const Category = memo(() => {
           label: <Link to={genUrl(item.key)}>{item.label}</Link>,
         };
       })}
-      mode={'inline'}
       onClick={(v) => handleClick(v.key as AssistantCategory)}
-      selectedKeys={[category]}
     />
   );
 });

@@ -9,7 +9,8 @@ import { messageService } from '@/services/message';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import type { Store as ConversationStore } from '../../action';
-import { type MessageDispatch, messagesReducer } from './reducer';
+import type { MessageDispatch } from './reducer';
+import { messagesReducer } from './reducer';
 import { dataSelectors } from './selectors';
 
 const log = debug('lobe-render:features:Conversation');
@@ -75,7 +76,7 @@ export const dataSlice: StateCreator<
     if (payload.type === 'updateMessageGroupMetadata') {
       const displayMessages = get().displayMessages;
       const index = displayMessages.findIndex((m) => m.id === payload.id);
-      if (index < 0) return;
+      if (index === -1) return;
 
       const newDisplayMessages = [...displayMessages];
       newDisplayMessages[index] = {

@@ -1,10 +1,11 @@
-import { FilesTabs, QueryFileListParams, SortType } from '@lobechat/types';
+import type { QueryFileListParams } from '@lobechat/types';
+import { FilesTabs, SortType } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 
 import { DocumentModel } from '../../models/document';
 import { FileModel } from '../../models/file';
 import { documents, files, knowledgeBaseFiles } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 
 export interface KnowledgeItem {
   chunkTaskId?: string | null;
@@ -305,7 +306,7 @@ export class KnowledgeRepo {
     showFilesInKnowledgeBase,
     parentId,
   }: QueryFileListParams = {}): ReturnType<typeof sql> {
-    let whereConditions: any[] = [sql`f.user_id = ${this.userId}`];
+    const whereConditions: any[] = [sql`f.user_id = ${this.userId}`];
 
     // Parent ID filter
     if (parentId !== undefined) {
@@ -432,7 +433,7 @@ export class KnowledgeRepo {
     knowledgeBaseId,
     parentId,
   }: QueryFileListParams = {}): ReturnType<typeof sql> {
-    let whereConditions: any[] = [
+    const whereConditions: any[] = [
       sql`${documents.userId} = ${this.userId}`,
       sql`${documents.sourceType} != ${'file'}`,
     ];

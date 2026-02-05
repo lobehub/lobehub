@@ -5,7 +5,7 @@ import { exa } from '../exa';
 
 // Mock dependencies
 vi.mock('../../utils/withTimeout', () => ({
-  DEFAULT_TIMEOUT: 30000,
+  DEFAULT_TIMEOUT: 30_000,
   withTimeout: vi.fn(),
 }));
 
@@ -51,7 +51,7 @@ describe('exa crawler', () => {
       url: 'https://example.com',
     });
 
-    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30000);
+    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30_000);
   });
 
   it('should handle missing API key', async () => {
@@ -75,7 +75,7 @@ describe('exa crawler', () => {
     await exa('https://example.com', { filterOptions: {} });
 
     // Check that fetch was called with empty API key header
-    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30000);
+    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30_000);
   });
 
   it('should return undefined when no results are returned', async () => {

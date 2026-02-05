@@ -3,7 +3,8 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import { LobeVercelAIGatewayAI, VercelAIGatewayModelCard, formatPrice, params } from './index';
+import type { VercelAIGatewayModelCard } from './index';
+import { formatPrice, LobeVercelAIGatewayAI, params } from './index';
 
 testProvider({
   Runtime: LobeVercelAIGatewayAI,

@@ -43,9 +43,9 @@ const CronTopicList = memo<CronTopicListProps>(({ itemKey }) => {
     <ActionIcon
       disabled={!agentId}
       icon={Plus}
-      onClick={handleCreateCronJob}
       size={'small'}
       title={t('agentCronJobs.addJob')}
+      onClick={handleCreateCronJob}
     />
   );
 
@@ -57,7 +57,7 @@ const CronTopicList = memo<CronTopicListProps>(({ itemKey }) => {
         paddingBlock={4}
         paddingInline={'8px 4px'}
         title={
-          <Flexbox align="center" gap={4} horizontal>
+          <Flexbox horizontal align="center" gap={4}>
             <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
               {t('agentCronJobs.title')}
             </Text>
@@ -78,14 +78,14 @@ const CronTopicList = memo<CronTopicListProps>(({ itemKey }) => {
         paddingBlock={4}
         paddingInline={'8px 4px'}
         title={
-          <Flexbox align="center" gap={4} horizontal>
+          <Flexbox horizontal align="center" gap={4}>
             <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
               {t('agentCronJobs.title')}
             </Text>
           </Flexbox>
         }
       >
-        <EmptyNavItem onClick={handleCreateCronJob} title={t('agentCronJobs.addJob')} />
+        <EmptyNavItem title={t('agentCronJobs.addJob')} onClick={handleCreateCronJob} />
       </AccordionItem>
     );
   }
@@ -99,7 +99,7 @@ const CronTopicList = memo<CronTopicListProps>(({ itemKey }) => {
       paddingBlock={4}
       paddingInline={'8px 4px'}
       title={
-        <Flexbox align="center" gap={4} horizontal>
+        <Flexbox horizontal align="center" gap={4}>
           <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
             {t('agentCronJobs.title')}
           </Text>

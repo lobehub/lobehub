@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { COMPONENT_NODE_MAPPINGS } from '@/server/services/comfyui/config/constants';
-import { SYSTEM_COMPONENTS } from '@/server/services/comfyui/config/systemComponents';
 import {
-  type ComponentInfo,
   getComponentDisplayName,
   getComponentFolderPath,
   getComponentInfo,

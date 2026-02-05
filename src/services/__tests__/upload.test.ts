@@ -40,7 +40,7 @@ describe('UploadService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // Mock Date.now
-    vi.spyOn(Date, 'now').mockImplementation(() => 3600000); // 1 hour in milliseconds
+    vi.spyOn(Date, 'now').mockImplementation(() => 3_600_000); // 1 hour in milliseconds
   });
 
   describe('uploadFileToS3', () => {
@@ -60,7 +60,7 @@ describe('UploadService', () => {
           addEventListener: vi.fn(),
         },
       };
-      global.XMLHttpRequest = vi.fn(() => xhrMock) as any;
+      globalThis.XMLHttpRequest = vi.fn(() => xhrMock) as any;
 
       // Mock createS3PreSignedUrl
       vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate).mockResolvedValue(mockPreSignUrl);
@@ -115,7 +115,7 @@ describe('UploadService', () => {
           addEventListener: vi.fn(),
         },
       };
-      global.XMLHttpRequest = vi.fn(() => xhrMock) as any;
+      globalThis.XMLHttpRequest = vi.fn(() => xhrMock) as any;
 
       // Mock createS3PreSignedUrl
       vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate).mockResolvedValue(mockPreSignUrl);
@@ -198,7 +198,7 @@ describe('UploadService', () => {
           addEventListener: vi.fn(),
         },
       };
-      global.XMLHttpRequest = vi.fn(() => xhrMock) as any;
+      globalThis.XMLHttpRequest = vi.fn(() => xhrMock) as any;
 
       // Mock createS3PreSignedUrl
       vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate).mockResolvedValue(mockPreSignUrl);
@@ -238,7 +238,7 @@ describe('UploadService', () => {
           addEventListener: vi.fn(),
         },
       };
-      global.XMLHttpRequest = vi.fn(() => xhrMock) as any;
+      globalThis.XMLHttpRequest = vi.fn(() => xhrMock) as any;
 
       // Mock createS3PreSignedUrl
       vi.mocked(lambdaClient.upload.createS3PreSignedUrl.mutate).mockResolvedValue(mockPreSignUrl);
@@ -368,7 +368,7 @@ describe('UploadService', () => {
 
   describe('getImageFileByUrlWithCORS', () => {
     beforeEach(() => {
-      global.fetch = vi.fn();
+      globalThis.fetch = vi.fn();
     });
 
     it('should fetch and create file from URL', async () => {
@@ -376,13 +376,13 @@ describe('UploadService', () => {
       const filename = 'test.png';
       const mockArrayBuffer = new ArrayBuffer(8);
 
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         arrayBuffer: () => Promise.resolve(mockArrayBuffer),
       } as Response);
 
       const result = await uploadService.getImageFileByUrlWithCORS(url, filename);
 
-      expect(global.fetch).toHaveBeenCalledWith(API_ENDPOINTS.proxy, {
+      expect(globalThis.fetch).toHaveBeenCalledWith(API_ENDPOINTS.proxy, {
         body: url,
         method: 'POST',
       });
@@ -397,7 +397,7 @@ describe('UploadService', () => {
       const fileType = 'image/jpeg';
       const mockArrayBuffer = new ArrayBuffer(8);
 
-      vi.mocked(global.fetch).mockResolvedValue({
+      vi.mocked(globalThis.fetch).mockResolvedValue({
         arrayBuffer: () => Promise.resolve(mockArrayBuffer),
       } as Response);
 

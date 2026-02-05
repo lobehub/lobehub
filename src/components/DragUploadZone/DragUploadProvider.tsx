@@ -1,15 +1,7 @@
 'use client';
 
-import {
-  type ReactNode,
-  createContext,
-  memo,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from 'react';
+import type { ReactNode } from 'react';
+import { createContext, memo, useCallback, useEffect, useRef, useState } from 'react';
 
 interface DragUploadContextValue {
   /**
@@ -25,7 +17,7 @@ const DragUploadContext = createContext<DragUploadContextValue>({
 /**
  * Hook to access global drag state
  */
-export const useDragUploadContext = () => useContext(DragUploadContext);
+export const useDragUploadContext = () => use(DragUploadContext);
 
 interface DragUploadProviderProps {
   children: ReactNode;
@@ -75,24 +67,20 @@ export const DragUploadProvider = memo<DragUploadProviderProps>(({ children }) =
   }, []);
 
   useEffect(() => {
-    window.addEventListener('dragenter', handleDragEnter);
-    window.addEventListener('dragover', handleDragOver);
-    window.addEventListener('dragleave', handleDragLeave);
-    window.addEventListener('drop', handleDrop);
+    globalThis.addEventListener('dragenter', handleDragEnter);
+    globalThis.addEventListener('dragover', handleDragOver);
+    globalThis.addEventListener('dragleave', handleDragLeave);
+    globalThis.addEventListener('drop', handleDrop);
 
     return () => {
-      window.removeEventListener('dragenter', handleDragEnter);
-      window.removeEventListener('dragover', handleDragOver);
-      window.removeEventListener('dragleave', handleDragLeave);
-      window.removeEventListener('drop', handleDrop);
+      globalThis.removeEventListener('dragenter', handleDragEnter);
+      globalThis.removeEventListener('dragover', handleDragOver);
+      globalThis.removeEventListener('dragleave', handleDragLeave);
+      globalThis.removeEventListener('drop', handleDrop);
     };
   }, [handleDragEnter, handleDragOver, handleDragLeave, handleDrop]);
 
-  return (
-    <DragUploadContext.Provider value={{ isDraggingGlobally }}>
-      {children}
-    </DragUploadContext.Provider>
-  );
+  return <DragUploadContext value={{ isDraggingGlobally }}>{children}</DragUploadContext>;
 });
 
 DragUploadProvider.displayName = 'DragUploadProvider';

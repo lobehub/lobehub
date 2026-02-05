@@ -4,7 +4,8 @@ import { isDesktop } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { type MouseEvent, type ReactNode, Suspense, memo, useCallback } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
+import { memo, Suspense, useCallback } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
 
@@ -43,8 +44,8 @@ export interface MessageItemProps {
   enableHistoryDivider?: boolean;
   endRender?: ReactNode;
   id: string;
-  inPortalThread?: boolean;
   index: number;
+  inPortalThread?: boolean;
   isLatestItem?: boolean;
 }
 
@@ -87,7 +88,7 @@ const MessageItem = memo<MessageItemProps>(
           const { electronSystemService } = await import('@/services/electron/system');
 
           // Get selected text for context menu features like Look Up and Search
-          const selection = window.getSelection();
+          const selection = globalThis.getSelection();
           const selectionText = selection?.toString() || '';
 
           electronSystemService.showContextMenu('chat', {

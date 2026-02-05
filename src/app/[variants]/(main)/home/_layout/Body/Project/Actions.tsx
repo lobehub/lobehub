@@ -7,7 +7,7 @@ import { useProjectMenuItems } from '../../hooks';
 const Actions = memo(() => {
   const { createProject } = useProjectMenuItems();
 
-  return <ActionIcon icon={PlusIcon} onClick={createProject} size={'small'} />;
+  return <ActionIcon icon={PlusIcon} size={'small'} onClick={createProject} />;
 });
 
 export default Actions;

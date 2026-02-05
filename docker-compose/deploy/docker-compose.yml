@@ -59,11 +59,12 @@ services:
     volumes:
       - rustfs-data:/data
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/health >/dev/null 2>&1 || exit 1"]
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:9000/health >/dev/null 2>&1 || exit 1']
       interval: 5s
       timeout: 3s
       retries: 30
-    command: ["--access-key","${RUSTFS_ACCESS_KEY}","--secret-key","${RUSTFS_SECRET_KEY}","/data"]
+    command:
+      ['--access-key', '${RUSTFS_ACCESS_KEY}', '--secret-key', '${RUSTFS_SECRET_KEY}', '/data']
 
   rustfs-init:
     image: minio/mc:latest
@@ -74,17 +75,8 @@ services:
     volumes:
       - ./bucket.config.json:/bucket.config.json:ro
     entrypoint: /bin/sh
-    command: -c '
-        set -eux;
-        echo "S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}, S3_SECRET_KEY=${RUSTFS_SECRET_KEY}";
-        mc --version;
-        mc alias set rustfs "http://network-service:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}";
-        mc ls rustfs || true;
-        mc mb "rustfs/lobe" --ignore-existing;
-        mc admin info rustfs || true;
-        mc anonymous set-json "/bucket.config.json" "rustfs/lobe";
-      '
-    restart: "no"
+    command: -c ' set -eux; echo "S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}, S3_SECRET_KEY=${RUSTFS_SECRET_KEY}"; mc --version; mc alias set rustfs "http://network-service:9000" "${RUSTFS_ACCESS_KEY}" "${RUSTFS_SECRET_KEY}"; mc ls rustfs || true; mc mb "rustfs/lobe" --ignore-existing; mc admin info rustfs || true; mc anonymous set-json "/bucket.config.json" "rustfs/lobe"; '
+    restart: 'no'
     networks:
       - lobe-network
 

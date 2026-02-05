@@ -34,12 +34,12 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
   const iconButton = (
     <ActionIcon
       icon={Share2}
-      onClick={enableTopicLinkShare ? undefined : () => setIsModalOpen(true)}
       size={mobile ? MOBILE_HEADER_ICON_SIZE : DESKTOP_HEADER_ICON_SIZE}
       title={t('share')}
       tooltipProps={{
         placement: 'bottom',
       }}
+      onClick={enableTopicLinkShare ? undefined : () => setIsModalOpen(true)}
     />
   );
 
@@ -50,7 +50,7 @@ const ShareButton = memo<ShareButtonProps>(({ mobile, setOpen, open }) => {
       ) : (
         iconButton
       )}
-      <ShareModal onCancel={() => setIsModalOpen(false)} open={isModalOpen} />
+      <ShareModal open={isModalOpen} onCancel={() => setIsModalOpen(false)} />
     </>
   );
 });

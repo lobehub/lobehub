@@ -1,14 +1,14 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useEffect } from 'react';
 import { renderHook } from '@testing-library/react';
+import { useEffect } from 'react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 describe('PageEditor beforeunload handler', () => {
   let addEventListenerSpy: ReturnType<typeof vi.spyOn>;
   let removeEventListenerSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    addEventListenerSpy = vi.spyOn(window, 'addEventListener');
-    removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
+    addEventListenerSpy = vi.spyOn(globalThis, 'addEventListener');
+    removeEventListenerSpy = vi.spyOn(globalThis, 'removeEventListener');
   });
 
   afterEach(() => {
@@ -28,7 +28,7 @@ describe('PageEditor beforeunload handler', () => {
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     const event = new Event('beforeunload') as BeforeUnloadEvent;
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(handleBeforeUnload).toHaveBeenCalled();
     expect(preventDefaultMock).toHaveBeenCalled();
@@ -49,7 +49,7 @@ describe('PageEditor beforeunload handler', () => {
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     const event = new Event('beforeunload') as BeforeUnloadEvent;
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(handleBeforeUnload).toHaveBeenCalled();
     expect(preventDefaultMock).not.toHaveBeenCalled();

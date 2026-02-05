@@ -1,9 +1,9 @@
-import { type ChatTopic, type ExportedTopic, type UIChatMessage } from '@lobechat/types';
+import type { ChatTopic, ExportedTopic, UIChatMessage } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 
 import { LOADING_FLAT } from '@/const/message';
 
-import { type BaseExportOptions } from './type';
+import type { BaseExportOptions } from './type';
 
 interface FullExportParams extends BaseExportOptions {
   messages: UIChatMessage[];
@@ -23,7 +23,6 @@ export const generateFullExport = ({
   const exportedMessages: Record<string, any>[] = messages
     .filter((m) => m.content !== LOADING_FLAT)
     .map((m) =>
-      /* eslint-disable sort-keys-fix/sort-keys-fix */
       cleanObject({
         // Core fields
         content: m.content,

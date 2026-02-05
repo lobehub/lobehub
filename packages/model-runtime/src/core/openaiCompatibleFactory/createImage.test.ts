@@ -1,9 +1,9 @@
 // @vitest-environment node
 import * as imageToBase64Module from '@lobechat/utils';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CreateImagePayload } from '../../types/image';
+import type { CreateImagePayload } from '../../types/image';
 import * as uriParserModule from '../../utils/uriParser';
 import { createOpenAICompatibleImage } from './createImage';
 
@@ -13,7 +13,7 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 // Polyfill File for Node environment
 if (typeof File === 'undefined') {
   // @ts-ignore
-  global.File = class MockFile {
+  globalThis.File = class MockFile {
     constructor(
       public parts: any[],
       public name: string,
@@ -567,8 +567,8 @@ describe('createOpenAICompatibleImage', () => {
       };
 
       // Mock fetch for image download
-      const mockArrayBuffer = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer;
-      global.fetch = vi.fn().mockResolvedValue({
+      const mockArrayBuffer = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0]).buffer;
+      globalThis.fetch = vi.fn().mockResolvedValue({
         ok: true,
         arrayBuffer: async () => mockArrayBuffer,
         headers: {

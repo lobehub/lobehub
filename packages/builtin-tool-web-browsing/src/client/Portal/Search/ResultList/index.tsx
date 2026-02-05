@@ -1,4 +1,4 @@
-import { type UniformSearchResult } from '@lobechat/types';
+import type { UniformSearchResult } from '@lobechat/types';
 import React, { memo, useCallback } from 'react';
 import { Virtuoso } from 'react-virtuoso';
 

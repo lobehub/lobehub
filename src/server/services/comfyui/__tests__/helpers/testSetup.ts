@@ -34,7 +34,7 @@ export function setupComfyUIMocks() {
   }));
 
   // Mock fetch globally
-  global.fetch = vi.fn();
+  globalThis.fetch = vi.fn();
 
   // Mock console.error to avoid polluting test output
   vi.spyOn(console, 'error').mockImplementation(() => {});

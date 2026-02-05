@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CreateImageOptions } from '../../core/openaiCompatibleFactory';
-import { CreateImagePayload } from '../../types/image';
+import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateImagePayload } from '../../types/image';
 import { createVolcengineImage } from './createImage';
 
 // Mock dependencies
@@ -174,7 +174,7 @@ describe('createVolcengineImage', () => {
 
       payload.params = {
         prompt: 'test prompt',
-        seed: 12345,
+        seed: 12_345,
         size: '1024x1024',
       };
 
@@ -184,7 +184,7 @@ describe('createVolcengineImage', () => {
         model: 'doubao-seedream-3-0-t2i',
         watermark: false,
         prompt: 'test prompt',
-        seed: 12345,
+        seed: 12_345,
         size: '1024x1024',
       });
     });

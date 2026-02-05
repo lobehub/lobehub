@@ -1,4 +1,5 @@
-import { IconType, SiCaldotcom, SiGithub } from '@icons-pack/react-simple-icons';
+import type { IconType } from '@icons-pack/react-simple-icons';
+import { SiCaldotcom, SiGithub } from '@icons-pack/react-simple-icons';
 import { Klavis } from 'klavis';
 
 export interface KlavisServerType {

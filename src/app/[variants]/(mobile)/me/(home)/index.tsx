@@ -30,9 +30,9 @@ const MeHomePage = memo(() => {
         <BrandWatermark />
       </Center>
       <ChangelogModal
-        onClose={handleCloseChangelogModal}
         open={isChangelogModalOpen}
         shouldLoad={shouldLoadChangelog}
+        onClose={handleCloseChangelogModal}
       />
     </>
   );

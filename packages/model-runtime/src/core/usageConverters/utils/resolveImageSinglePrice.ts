@@ -1,4 +1,4 @@
-import { Pricing } from 'model-bank';
+import type { Pricing } from 'model-bank';
 
 export interface ImageSinglePriceResult {
   approximatePrice?: number;

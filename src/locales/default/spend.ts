@@ -15,7 +15,8 @@ export default {
   'table.columns.type.enums.chat': 'Text Generation',
   'table.columns.type.enums.imageGeneration': 'Image Generation',
   'table.columns.type.title': 'Type',
-  'table.desc': 'Details of computing credits usage for text generation, embedding, image generation, etc.',
+  'table.desc':
+    'Details of computing credits usage for text generation, embedding, image generation, etc.',
   'table.more': 'View Details',
   'table.title': 'Computing Credits Usage Details',
   'table.totalToken.input': 'Input',

@@ -41,16 +41,23 @@ const SetupGuide = memo(() => {
               <Steps
                 className={styles.steps}
                 direction={'vertical'}
+                size={'small'}
+                style={{ '--steps-icon-color': iconColor } as React.CSSProperties}
                 items={[
                   {
                     description: (
                       <Trans
-                        components={[
-                          <span key="0" />,
-                          <a href={'https://ollama.com/download'} key="1" rel="noreferrer" target="_blank" />,
-                        ]}
                         i18nKey={'OllamaSetupGuide.install.description'}
                         ns={'components'}
+                        components={[
+                          <span key="0" />,
+                          <a
+                            href={'https://ollama.com/download'}
+                            key="1"
+                            rel="noreferrer"
+                            target="_blank"
+                          />,
+                        ]}
                       />
                     ),
                     status: 'process',
@@ -64,7 +71,7 @@ const SetupGuide = memo(() => {
                         <Flexbox gap={8}>
                           {t('OllamaSetupGuide.cors.macos')}
                           <Snippet language={'bash'}>
-                            {/* eslint-disable-next-line react/no-unescaped-entities */}
+                            {}
                             launchctl setenv OLLAMA_ORIGINS "*"
                           </Snippet>
                           {t('OllamaSetupGuide.cors.reboot')}
@@ -75,8 +82,6 @@ const SetupGuide = memo(() => {
                     title: t('OllamaSetupGuide.cors.title'),
                   },
                 ]}
-                size={'small'}
-                style={{ '--steps-icon-color': iconColor } as React.CSSProperties}
               />
             ),
             key: 'macos',
@@ -87,16 +92,23 @@ const SetupGuide = memo(() => {
               <Steps
                 className={styles.steps}
                 direction={'vertical'}
+                size={'small'}
+                style={{ '--steps-icon-color': iconColor } as React.CSSProperties}
                 items={[
                   {
                     description: (
                       <Trans
-                        components={[
-                          <span key="0" />,
-                          <a href={'https://ollama.com/download'} key="1" rel="noreferrer" target="_blank" />,
-                        ]}
                         i18nKey={'OllamaSetupGuide.install.description'}
                         ns={'components'}
+                        components={[
+                          <span key="0" />,
+                          <a
+                            href={'https://ollama.com/download'}
+                            key="1"
+                            rel="noreferrer"
+                            target="_blank"
+                          />,
+                        ]}
                       />
                     ),
                     status: 'process',
@@ -114,8 +126,6 @@ const SetupGuide = memo(() => {
                     title: t('OllamaSetupGuide.cors.title'),
                   },
                 ]}
-                size={'small'}
-                style={{ '--steps-icon-color': iconColor } as React.CSSProperties}
               />
             ),
             key: 'windows',
@@ -126,6 +136,8 @@ const SetupGuide = memo(() => {
               <Steps
                 className={styles.steps}
                 direction={'vertical'}
+                size={'small'}
+                style={{ '--steps-icon-color': iconColor } as React.CSSProperties}
                 items={[
                   {
                     description: (
@@ -136,6 +148,8 @@ const SetupGuide = memo(() => {
                         </Snippet>
                         <div>
                           <Trans
+                            i18nKey={'OllamaSetupGuide.install.linux.manual'}
+                            ns={'components'}
                             components={[
                               <span key="0" />,
                               <a
@@ -145,8 +159,6 @@ const SetupGuide = memo(() => {
                                 target="_blank"
                               />,
                             ]}
-                            i18nKey={'OllamaSetupGuide.install.linux.manual'}
-                            ns={'components'}
                           />
                         </div>
                       </Flexbox>
@@ -160,18 +172,17 @@ const SetupGuide = memo(() => {
                         <div>{t('OllamaSetupGuide.cors.description')}</div>
 
                         <div>{t('OllamaSetupGuide.cors.linux.systemd')}</div>
-                        {/* eslint-disable-next-line react/no-unescaped-entities */}
+                        {}
                         <Snippet language={'bash'}> sudo systemctl edit ollama.service</Snippet>
                         {t('OllamaSetupGuide.cors.linux.env')}
                         <Highlighter
-                          // eslint-disable-next-line react/no-children-prop
+                          fullFeatured
+                          showLanguage
+                          fileName={'ollama.service'}
+                          language={'bash'}
                           children={`[Service]
 
 Environment="OLLAMA_ORIGINS=*"`}
-                          fileName={'ollama.service'}
-                          fullFeatured
-                          language={'bash'}
-                          showLanguage
                         />
                         {t('OllamaSetupGuide.cors.linux.reboot')}
                       </Flexbox>
@@ -180,8 +191,6 @@ Environment="OLLAMA_ORIGINS=*"`}
                     title: t('OllamaSetupGuide.cors.title'),
                   },
                 ]}
-                size={'small'}
-                style={{ '--steps-icon-color': iconColor } as React.CSSProperties}
               />
             ),
             key: 'linux',
@@ -192,6 +201,8 @@ Environment="OLLAMA_ORIGINS=*"`}
               <Steps
                 className={styles.steps}
                 direction={'vertical'}
+                size={'small'}
+                style={{ '--steps-icon-color': iconColor } as React.CSSProperties}
                 items={[
                   {
                     description: (
@@ -209,12 +220,12 @@ Environment="OLLAMA_ORIGINS=*"`}
                       <Flexbox gap={8}>
                         {t('OllamaSetupGuide.cors.description')}
                         <Highlighter
-                          fileName={'ollama.service'}
                           fullFeatured
-                          language={'bash'}
                           showLanguage
+                          fileName={'ollama.service'}
+                          language={'bash'}
                         >
-                          {/* eslint-disable-next-line react/no-unescaped-entities */}
+                          {}
                           docker run -d --gpus=all -v ollama:/root/.ollama -e OLLAMA_ORIGINS="*" -p
                           11434:11434 --name ollama ollama/ollama
                         </Highlighter>
@@ -224,8 +235,6 @@ Environment="OLLAMA_ORIGINS=*"`}
                     title: t('OllamaSetupGuide.cors.title'),
                   },
                 ]}
-                size={'small'}
-                style={{ '--steps-icon-color': iconColor } as React.CSSProperties}
               />
             ),
             key: 'docker',

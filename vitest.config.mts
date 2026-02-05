@@ -40,7 +40,6 @@ export default defineConfig({
   ],
   test: {
     alias: {
-      /* eslint-disable sort-keys-fix/sort-keys-fix */
       '@/database/_deprecated': resolve(__dirname, './src/database/_deprecated'),
       '@/database': resolve(__dirname, './packages/database/src'),
       '@/utils/client/switchLang': resolve(__dirname, './src/utils/client/switchLang'),

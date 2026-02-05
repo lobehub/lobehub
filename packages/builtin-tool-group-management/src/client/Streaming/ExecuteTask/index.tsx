@@ -45,7 +45,7 @@ export const ExecuteTaskStreaming = memo<BuiltinStreamingProps<ExecuteTaskParams
   return (
     <div className={styles.container}>
       <Flexbox gap={8}>
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           <Avatar
             avatar={agent?.avatar || DEFAULT_AVATAR}
             background={agent?.backgroundColor || theme.colorBgContainer}

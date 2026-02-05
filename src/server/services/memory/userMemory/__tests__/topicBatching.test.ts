@@ -14,8 +14,8 @@ describe('forEachBatchSequential', () => {
   });
 
   it('throws when batch size is not positive', async () => {
-    await expect(
-      forEachBatchSequential([1, 2, 3], 0, async () => {}),
-    ).rejects.toThrowError('batchSize must be greater than 0');
+    await expect(forEachBatchSequential([1, 2, 3], 0, async () => {})).rejects.toThrowError(
+      'batchSize must be greater than 0',
+    );
   });
 });

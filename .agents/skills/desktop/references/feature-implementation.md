@@ -22,7 +22,10 @@ Main Process                    Renderer Process
 
 ```typescript
 // apps/desktop/src/main/controllers/NotificationCtr.ts
-import type { ShowDesktopNotificationParams, DesktopNotificationResult } from '@lobechat/electron-client-ipc';
+import type {
+  ShowDesktopNotificationParams,
+  DesktopNotificationResult,
+} from '@lobechat/electron-client-ipc';
 import { Notification } from 'electron';
 import { ControllerModule, IpcMethod } from '@/controllers';
 
@@ -30,7 +33,9 @@ export default class NotificationCtr extends ControllerModule {
   static override readonly groupName = 'notification';
 
   @IpcMethod()
-  async showDesktopNotification(params: ShowDesktopNotificationParams): Promise<DesktopNotificationResult> {
+  async showDesktopNotification(
+    params: ShowDesktopNotificationParams,
+  ): Promise<DesktopNotificationResult> {
     if (!Notification.isSupported()) {
       return { error: 'Notifications not supported', success: false };
     }
@@ -72,8 +77,7 @@ import { ensureElectronIpc } from '@/utils/electron/ipc';
 const ipc = ensureElectronIpc();
 
 export const notificationService = {
-  show: (params: ShowDesktopNotificationParams) =>
-    ipc.notification.showDesktopNotification(params),
+  show: (params: ShowDesktopNotificationParams) => ipc.notification.showDesktopNotification(params),
 };
 ```
 

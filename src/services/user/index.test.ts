@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+
 import { testService } from '~test-utils';
 
 import { UserService, userService } from './index';

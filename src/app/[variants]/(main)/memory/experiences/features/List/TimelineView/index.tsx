@@ -26,13 +26,13 @@ const ExperienceTimelineView = memo<ExperienceTimelineViewProps>(
         groupBy="day"
         hasMore={experiencesHasMore}
         isLoading={isLoading}
-        onLoadMore={loadMoreExperiences}
         renderHeader={(periodKey) => <PeriodHeader groupBy="day" periodKey={periodKey} />}
         renderItem={(experience) => (
           <TimelineItemWrapper>
             <ExperienceCard experience={experience} onClick={onCardClick} />
           </TimelineItemWrapper>
         )}
+        onLoadMore={loadMoreExperiences}
       />
     );
   },

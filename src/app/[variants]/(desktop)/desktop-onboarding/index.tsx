@@ -2,7 +2,7 @@
 
 import { APP_WINDOW_MIN_SIZE } from '@lobechat/desktop-bridge';
 import { Flexbox, Skeleton } from '@lobehub/ui';
-import { Suspense, memo, useCallback, useEffect, useState } from 'react';
+import { memo, Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';
@@ -155,7 +155,7 @@ const DesktopOnboardingPage = memo(() => {
           .catch(console.error)
           .finally(() => {
             // Use hard reload instead of SPA navigation to ensure the app boots with the new desktop state.
-            window.location.replace('/');
+            globalThis.location.replace('/');
           });
 
         return prev;

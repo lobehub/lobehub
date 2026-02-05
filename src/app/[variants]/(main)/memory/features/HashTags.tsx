@@ -17,13 +17,13 @@ const HashTags = memo<HashTagsProps>(({ hashTags }) => {
           <Tag
             icon={<Icon icon={HashIcon} />}
             key={index}
+            variant={'borderless'}
             style={{
               color: cssVar.colorTextDescription,
               gap: 2,
               marginRight: 12,
               paddingInline: 0,
             }}
-            variant={'borderless'}
           >
             {tag}
           </Tag>

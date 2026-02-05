@@ -149,7 +149,7 @@ describe('Service Integration - Module Level', () => {
       // 这应该使用统一的 mocks
       try {
         await imageService.createImage(params);
-      } catch (error) {
+      } catch {
         // 预期在 mock 环境中可能有错误
       }
 

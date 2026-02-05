@@ -4,14 +4,14 @@
  * Business logic for image processing including URL fetching
  * and workflow execution
  */
-import { type PromptBuilder } from '@saintno/comfyui-sdk';
+import type { CreateImagePayload, CreateImageResponse } from '@lobechat/model-runtime';
+import type { PromptBuilder } from '@saintno/comfyui-sdk';
 import debug from 'debug';
 
-import type { CreateImagePayload, CreateImageResponse } from '@lobechat/model-runtime';
-import { type ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
+import type { ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
 import { ErrorHandlerService } from '@/server/services/comfyui/core/errorHandlerService';
-import { type ModelResolverService } from '@/server/services/comfyui/core/modelResolverService';
-import { type WorkflowBuilderService } from '@/server/services/comfyui/core/workflowBuilderService';
+import type { ModelResolverService } from '@/server/services/comfyui/core/modelResolverService';
+import type { WorkflowBuilderService } from '@/server/services/comfyui/core/workflowBuilderService';
 import { ServicesError } from '@/server/services/comfyui/errors';
 import { imageResizer } from '@/server/services/comfyui/utils/imageResizer';
 import { WorkflowDetector } from '@/server/services/comfyui/utils/workflowDetector';
@@ -143,7 +143,7 @@ export class ImageService {
       let originalHeight: number | undefined;
 
       // Only use sharp on server-side (Node.js environment)
-      if (typeof window === 'undefined') {
+      if (typeof globalThis.window === 'undefined') {
         const sharpModule = await import('sharp');
         const sharp = sharpModule.default;
         const sharpInstance = sharp(buffer);
@@ -195,7 +195,7 @@ export class ImageService {
           });
 
           // Resize image using sharp (only on server-side)
-          if (typeof window === 'undefined') {
+          if (typeof globalThis.window === 'undefined') {
             const sharpModule = await import('sharp');
             const sharp = sharpModule.default;
             buffer = Buffer.from(

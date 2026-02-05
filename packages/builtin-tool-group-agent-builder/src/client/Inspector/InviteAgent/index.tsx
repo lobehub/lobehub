@@ -51,15 +51,17 @@ export const InviteAgentInspector = memo<
 
   return (
     <Flexbox
+      horizontal
       align={'center'}
       className={cx(styles.root, (isArgumentsStreaming || isLoading) && shinyTextStyles.shinyText)}
       gap={8}
-      horizontal
     >
       <span className={styles.title}>
         {t('builtins.lobe-group-agent-builder.apiName.inviteAgent')}:
       </span>
-      {avatar && <Avatar avatar={avatar} shape={'square'} size={20} title={displayName || undefined} />}
+      {avatar && (
+        <Avatar avatar={avatar} shape={'square'} size={20} title={displayName || undefined} />
+      )}
       {displayName && <span>{displayName}</span>}
       {!isLoading && isSuccess && (
         <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />

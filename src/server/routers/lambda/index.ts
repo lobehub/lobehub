@@ -89,13 +89,12 @@ export const lambdaRouter = router({
   user: userRouter,
   userMemories: userMemoriesRouter,
   userMemory: userMemoryRouter,
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
+
   accountDeletion: accountDeletionRouter,
   referral: referralRouter,
   spend: spendRouter,
   subscription: subscriptionRouter,
   topUp: topUpRouter,
-  /* eslint-enable sort-keys-fix/sort-keys-fix */
 });
 
 export type LambdaRouter = typeof lambdaRouter;

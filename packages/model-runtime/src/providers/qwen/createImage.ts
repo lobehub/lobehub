@@ -1,8 +1,9 @@
 import createDebug from 'debug';
 
-import { CreateImageOptions } from '../../core/openaiCompatibleFactory';
-import { CreateImagePayload, CreateImageResponse } from '../../types/image';
-import { type TaskResult, asyncifyPolling } from '../../utils/asyncifyPolling';
+import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type { TaskResult } from '../../utils/asyncifyPolling';
+import { asyncifyPolling } from '../../utils/asyncifyPolling';
 import { AgentRuntimeError } from '../../utils/createError';
 
 const log = createDebug('lobe-image:qwen');

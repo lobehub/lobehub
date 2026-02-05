@@ -1,4 +1,4 @@
-import { type NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 import { describe, expect, it } from 'vitest';
 
 import { createRouteMatcher } from './createRouteMatcher';
@@ -57,7 +57,6 @@ describe('createRouteMatcher', () => {
       expect(matcher(createMockRequest('/trpc/user.get'))).toBe(true);
       expect(matcher(createMockRequest('/trpc/chat.create'))).toBe(true);
     });
-
   });
 
   describe('multiple patterns', () => {

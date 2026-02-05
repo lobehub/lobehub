@@ -88,7 +88,7 @@ export const useCommandMenu = () => {
   // Close on Escape key and prevent body scroll
   useEffect(() => {
     if (open) {
-      const originalStyle = window.getComputedStyle(document.body).overflow;
+      const originalStyle = globalThis.getComputedStyle(document.body).overflow;
       document.body.style.overflow = 'hidden';
 
       return () => {

@@ -9,7 +9,7 @@ export abstract class BaseProcessor implements ContextProcessor {
   abstract readonly name: string;
 
   // Keep parameters for compatibility with existing subclass constructor signatures, but do no processing
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   constructor(_options: ProcessorOptions = {}) {}
 
   /**

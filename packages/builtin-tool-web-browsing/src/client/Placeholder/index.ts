@@ -12,4 +12,6 @@ export const WebBrowsingPlaceholders = {
   [WebBrowsingApiName.search]: Search,
 };
 
-export { CrawlMultiPages, CrawlSinglePage, Search };
+export { default as CrawlMultiPages } from './CrawlMultiPages';
+export { default as CrawlSinglePage } from './CrawlSinglePage';
+export { Search } from './Search';

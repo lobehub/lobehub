@@ -12,7 +12,7 @@ describe('AnthropicStream', () => {
         return {
           next: async () => {
             switch (count) {
-              case 0:
+              case 0: {
                 count++;
                 return {
                   done: false,
@@ -21,7 +21,8 @@ describe('AnthropicStream', () => {
                     message: { id: 'message_1', metadata: {} },
                   },
                 };
-              case 1:
+              }
+              case 1: {
                 count++;
                 return {
                   done: false,
@@ -30,7 +31,8 @@ describe('AnthropicStream', () => {
                     delta: { type: 'text_delta', text: 'Hello' },
                   },
                 };
-              case 2:
+              }
+              case 2: {
                 count++;
                 return {
                   done: false,
@@ -39,7 +41,8 @@ describe('AnthropicStream', () => {
                     delta: { type: 'text_delta', text: ' world!' },
                   },
                 };
-              case 3:
+              }
+              case 3: {
                 count++;
                 return {
                   done: false,
@@ -48,8 +51,10 @@ describe('AnthropicStream', () => {
                     delta: { stop_reason: 'stop' },
                   },
                 };
-              default:
+              }
+              default: {
                 return { done: true, value: undefined };
+              }
             }
           },
         };
@@ -409,7 +414,7 @@ describe('AnthropicStream', () => {
           usage: {
             input_tokens: 6,
             cache_creation_input_tokens: 457,
-            cache_read_input_tokens: 17918,
+            cache_read_input_tokens: 17_918,
             output_tokens: 2,
           },
         },

@@ -1,6 +1,6 @@
-/* eslint-disable unicorn/no-process-exit */
-import fs from 'fs-extra';
 import path from 'node:path';
+
+import fs from 'fs-extra';
 
 type ReleaseType = 'stable' | 'beta' | 'nightly';
 

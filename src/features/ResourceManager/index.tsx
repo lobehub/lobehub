@@ -135,7 +135,7 @@ const ResourceManager = memo(() => {
 
   return (
     <>
-      <DragUploadZone enabledFiles onUploadFiles={handleUploadFiles} style={{ height: '100%' }}>
+      <DragUploadZone enabledFiles style={{ height: '100%' }} onUploadFiles={handleUploadFiles}>
         <Flexbox className={styles.container} height={'100%'} style={cssVariables}>
           {/* Explorer is always rendered to preserve its state */}
           <Explorer />
@@ -153,11 +153,11 @@ const ResourceManager = memo(() => {
               <PageEditor
                 emoji={currentDocument?.metadata?.emoji as string | undefined}
                 knowledgeBaseId={libraryId}
+                pageId={currentViewItemId}
+                title={currentDocument?.title}
                 onBack={handleBack}
                 onEmojiChange={handleEmojiChange}
                 onTitleChange={handleTitleChange}
-                pageId={currentViewItemId}
-                title={currentDocument?.title}
               />
             </Flexbox>
           )}

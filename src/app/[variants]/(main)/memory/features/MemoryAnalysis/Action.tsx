@@ -17,8 +17,8 @@ const AnalysisAction = memo<Props>(({ iconOnly }) => {
     () =>
       range[0] || range[1]
         ? t('analysis.modal.rangeSelected', {
-            end: range[1]?.toISOString().slice(0, 10)?.replaceAll('-', '/') ||
-              t('analysis.range.end'),
+            end:
+              range[1]?.toISOString().slice(0, 10)?.replaceAll('-', '/') || t('analysis.range.end'),
             start:
               range[0]?.toISOString().slice(0, 10)?.replaceAll('-', '/') ||
               t('analysis.range.start'),
@@ -31,8 +31,8 @@ const AnalysisAction = memo<Props>(({ iconOnly }) => {
     <AnalysisTrigger
       footerNote={footerNote}
       iconOnly={iconOnly}
-      onRangeChange={setRange}
       range={range}
+      onRangeChange={setRange}
     />
   );
 });

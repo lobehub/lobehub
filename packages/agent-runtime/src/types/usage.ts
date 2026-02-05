@@ -1,4 +1,4 @@
-import { ModelUsage } from '@lobechat/types';
+import type { ModelUsage } from '@lobechat/types';
 
 /**
  * Token usage tracking for different types of operations

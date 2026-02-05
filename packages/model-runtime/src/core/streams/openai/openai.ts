@@ -1,22 +1,25 @@
-import { ChatCitationItem, ChatMessageError } from '@lobechat/types';
-import OpenAI from 'openai';
+import type { ChatCitationItem, ChatMessageError } from '@lobechat/types';
+import type OpenAI from 'openai';
 import type { Stream } from 'openai/streaming';
 
-import { ChatStreamCallbacks } from '../../../types';
-import { AgentRuntimeErrorType, ILobeAgentRuntimeErrorType } from '../../../types/error';
+import type { ChatStreamCallbacks } from '../../../types';
+import type { ILobeAgentRuntimeErrorType } from '../../../types/error';
+import { AgentRuntimeErrorType } from '../../../types/error';
 import { convertOpenAIUsage } from '../../usageConverters';
-import {
+import type {
   ChatPayloadForTransformStream,
-  FIRST_CHUNK_ERROR_KEY,
   StreamContext,
   StreamProtocolChunk,
   StreamProtocolToolCallChunk,
   StreamToolCallChunkData,
+} from '../protocol';
+import {
   convertIterableToStream,
   createCallbacksTransformer,
   createFirstErrorHandleTransformer,
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
+  FIRST_CHUNK_ERROR_KEY,
   generateToolCallId,
 } from '../protocol';
 
@@ -42,7 +45,7 @@ const processMarkdownBase64Images = (text: string): { cleanedText: string; urls:
   if (!text) return { cleanedText: text, urls: [] };
 
   const urls: string[] = [];
-  const mdRegex = /!\[[^\]]*]\(\s*(data:image\/[\d+.A-Za-z-]+;base64,[^\s)]+)\s*\)/g;
+  const mdRegex = /!\[[^\]]*\]\(\s*(data:image\/[\d+.A-Za-z-]+;base64,[^\s)]+)\s*\)/g;
   let cleanedText = text;
   let m: RegExpExecArray | null;
 
@@ -550,7 +553,6 @@ const transformOpenAIStream = (
 
     const err = e as Error;
 
-    /* eslint-disable sort-keys-fix/sort-keys-fix */
     const errorData = {
       body: {
         message:
@@ -559,7 +561,6 @@ const transformOpenAIStream = (
       },
       type: errorName,
     } as ChatMessageError;
-    /* eslint-enable */
 
     return { data: errorData, id: chunk.id, type: 'error' };
   }

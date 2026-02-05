@@ -1,8 +1,8 @@
 'use client';
 
 import { Skeleton } from '@lobehub/ui';
-import { type SkeletonProps } from 'antd';
-import { createStaticStyles, cx , responsive } from 'antd-style';
+import type { SkeletonProps } from 'antd';
+import { createStaticStyles, cx, responsive } from 'antd-style';
 import { memo } from 'react';
 
 const styles = createStaticStyles(

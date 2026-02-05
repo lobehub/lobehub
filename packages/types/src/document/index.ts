@@ -14,14 +14,14 @@ export interface LobeDocument {
   editorData: Record<string, any> | null;
 
   /**
-   * File type or extension
-   */
-  fileType: string;
-
-  /**
    * Original filename
    */
   filename: string;
+
+  /**
+   * File type or extension
+   */
+  fileType: string;
 
   id: string;
 

@@ -1,8 +1,8 @@
-import { type ImageType } from '@/hooks/useScreenshot';
+import type { ImageType } from '@/hooks/useScreenshot';
 
 export enum WidthMode {
   Narrow = 'narrow',
-  Wide = 'wide'
+  Wide = 'wide',
 }
 
 export type FieldType = {

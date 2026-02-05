@@ -19,15 +19,17 @@ const toggleBooleanList = (ids: string[], id: string, value: boolean) => {
       if (!draft.includes(id)) draft.push(id);
     } else {
       const index = draft.indexOf(id);
-      if (index >= 0) draft.splice(index, 1);
+      if (index !== -1) draft.splice(index, 1);
     }
   });
 };
 
-export const messageEditingSlice: StateCreator<State, [['zustand/devtools', never]], [], MessageEditingAction> = (
-  set,
-  get,
-) => ({
+export const messageEditingSlice: StateCreator<
+  State,
+  [['zustand/devtools', never]],
+  [],
+  MessageEditingAction
+> = (set, get) => ({
   toggleMessageEditing: (id, editing) => {
     set(
       { messageEditingIds: toggleBooleanList(get().messageEditingIds, id, editing) },

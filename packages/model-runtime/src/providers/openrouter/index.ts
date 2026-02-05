@@ -1,11 +1,9 @@
 import { ModelProvider } from 'model-bank';
 
-import {
-  OpenAICompatibleFactoryOptions,
-  createOpenAICompatibleRuntime,
-} from '../../core/openaiCompatibleFactory';
+import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
+import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { processMultiProviderModelList } from '../../utils/modelParse';
-import { OpenRouterModelCard, OpenRouterReasoning } from './type';
+import type { OpenRouterModelCard, OpenRouterReasoning } from './type';
 
 const formatPrice = (price?: string) => {
   if (price === undefined || price === '-1') return undefined;
@@ -16,12 +14,16 @@ export const params = {
   baseURL: 'https://openrouter.ai/api/v1',
   chatCompletion: {
     handlePayload: (payload) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { reasoning_effort, thinking, reasoning: _reasoning, thinkingLevel, ...rest } = payload;
 
       let reasoning: OpenRouterReasoning | undefined;
 
-      if (thinking?.type || thinking?.budget_tokens !== undefined || reasoning_effort || thinkingLevel) {
+      if (
+        thinking?.type ||
+        thinking?.budget_tokens !== undefined ||
+        reasoning_effort ||
+        thinkingLevel
+      ) {
         if (thinking?.type === 'disabled') {
           reasoning = { enabled: false };
         } else if (thinking?.budget_tokens !== undefined) {
@@ -30,8 +32,7 @@ export const params = {
           };
         } else if (reasoning_effort) {
           reasoning = { effort: reasoning_effort };
-        }
-        else if (thinkingLevel) {
+        } else if (thinkingLevel) {
           reasoning = { effort: thinkingLevel };
         }
       }

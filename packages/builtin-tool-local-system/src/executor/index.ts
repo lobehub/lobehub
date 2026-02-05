@@ -38,25 +38,26 @@ import {
   formatRenameResult,
   formatWriteResult,
 } from '@lobechat/prompts';
-import { BaseExecutor, type BuiltinToolResult } from '@lobechat/types';
+import type { BuiltinToolResult } from '@lobechat/types';
+import { BaseExecutor } from '@lobechat/types';
 
 import { localFileService } from '@/services/electron/localFileService';
 
-import {
-  type EditLocalFileState,
-  type GetCommandOutputState,
-  type GlobFilesState,
-  type GrepContentState,
-  type KillCommandState,
-  type LocalFileListState,
-  type LocalFileSearchState,
-  type LocalMoveFilesState,
-  type LocalReadFileState,
-  type LocalReadFilesState,
-  type LocalRenameFileState,
-  LocalSystemIdentifier,
-  type RunCommandState,
+import type {
+  EditLocalFileState,
+  GetCommandOutputState,
+  GlobFilesState,
+  GrepContentState,
+  KillCommandState,
+  LocalFileListState,
+  LocalFileSearchState,
+  LocalMoveFilesState,
+  LocalReadFilesState,
+  LocalReadFileState,
+  LocalRenameFileState,
+  RunCommandState,
 } from '../types';
+import { LocalSystemIdentifier } from '../types';
 
 const LocalSystemApiEnum = {
   editLocalFile: 'editLocalFile' as const,

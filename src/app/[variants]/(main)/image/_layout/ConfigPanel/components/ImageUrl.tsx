@@ -24,7 +24,7 @@ const ImageUrl = memo(() => {
     }
   };
 
-  return <ImageUpload maxFileSize={maxFileSize} onChange={handleChange} value={imageUrl} />;
+  return <ImageUpload maxFileSize={maxFileSize} value={imageUrl} onChange={handleChange} />;
 });
 
 export default ImageUrl;

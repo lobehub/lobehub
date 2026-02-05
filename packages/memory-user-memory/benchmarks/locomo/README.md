@@ -112,8 +112,8 @@ Set the required envs and execute:
 
 ```bash
 MEMORY_USER_MEMORY_LOBEHUB_BASE_URL="http://localhost:3000" \
-MEMORY_USER_MEMORY_BENCHMARKS_LOCOMO_DATASETS="path/to/locomo/dataset/data/locomo10.json" \
-bun run tsx lobehub/packages/memory-user-memory/benchmarks/locomo/run.ts
+  MEMORY_USER_MEMORY_BENCHMARKS_LOCOMO_DATASETS="path/to/locomo/dataset/data/locomo10.json" \
+  bun run tsx lobehub/packages/memory-user-memory/benchmarks/locomo/run.ts
 ```
 
 Only samples whose IDs pass the filter in `run.ts` (currently `conv-26`) will ingest; adjust the filter if you need more samples.

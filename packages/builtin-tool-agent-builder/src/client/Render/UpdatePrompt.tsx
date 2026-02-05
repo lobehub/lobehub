@@ -1,4 +1,4 @@
-import { BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { CheckCircle, FileText } from 'lucide-react';
@@ -54,7 +54,7 @@ const UpdatePrompt = memo<BuiltinRenderProps<UpdatePromptParams, UpdatePromptSta
 
     return (
       <Flexbox className={styles.container} gap={8}>
-        <Flexbox align={'center'} className={styles.statusRow} gap={6} horizontal>
+        <Flexbox horizontal align={'center'} className={styles.statusRow} gap={6}>
           <CheckCircle size={14} />
           <span className={styles.statusText}>
             {newPrompt ? 'System prompt updated' : 'System prompt cleared'}
@@ -63,7 +63,7 @@ const UpdatePrompt = memo<BuiltinRenderProps<UpdatePromptParams, UpdatePromptSta
 
         {newPrompt && (
           <Flexbox className={styles.promptCard} gap={8}>
-            <Flexbox align={'center'} gap={6} horizontal>
+            <Flexbox horizontal align={'center'} gap={6}>
               <FileText className={styles.fileIcon} size={14} />
               <span className={styles.promptLabel}>
                 New prompt ({newPrompt.length} characters):

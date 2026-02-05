@@ -5,7 +5,7 @@ import type { PipelineContext, ProcessorOptions } from '../types';
 
 const log = debug('context-engine:processor:PlaceholderVariablesProcessor');
 
-const placeholderVariablesRegex = /{{(.*?)}}/g;
+const placeholderVariablesRegex = /\{\{(.*?)\}\}/g;
 
 export type PlaceholderValue = unknown | (() => unknown);
 export type PlaceholderValueMap = Record<string, PlaceholderValue>;
@@ -92,7 +92,7 @@ export const parsePlaceholderVariables = (
 
       // Debug: check if text contains {{username}} pattern
       if (result.includes('username') || result.includes('{{')) {
-        const matches = result.match(/{{[^}]*}}/g);
+        const matches = result.match(/\{\{[^}]*\}\}/g);
         log('All {{...}} patterns found in text: %o', matches);
       }
 

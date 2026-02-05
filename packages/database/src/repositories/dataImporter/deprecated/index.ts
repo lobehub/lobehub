@@ -7,13 +7,13 @@ import {
   agents,
   agentsToSessions,
   messagePlugins,
-  messageTranslates,
   messages,
+  messageTranslates,
   sessionGroups,
   sessions,
   topics,
 } from '../../../schemas';
-import { LobeChatDatabase } from '../../../type';
+import type { LobeChatDatabase } from '../../../type';
 
 interface ImportResult {
   added: number;
@@ -39,10 +39,10 @@ export class DeprecatedDataImporterRepos {
   importData = async (data: ImporterEntryData) => {
     if (data.version > this.supportVersion) throw new Error('Unsupported version');
 
-    let sessionGroupResult: ImportResult = { added: 0, errors: 0, skips: 0 };
-    let sessionResult: ImportResult = { added: 0, errors: 0, skips: 0 };
-    let topicResult: ImportResult = { added: 0, errors: 0, skips: 0 };
-    let messageResult: ImportResult = { added: 0, errors: 0, skips: 0 };
+    const sessionGroupResult: ImportResult = { added: 0, errors: 0, skips: 0 };
+    const sessionResult: ImportResult = { added: 0, errors: 0, skips: 0 };
+    const topicResult: ImportResult = { added: 0, errors: 0, skips: 0 };
+    const messageResult: ImportResult = { added: 0, errors: 0, skips: 0 };
 
     let sessionGroupIdMap: Record<string, string> = {};
     let sessionIdMap: Record<string, string> = {};

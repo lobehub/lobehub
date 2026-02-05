@@ -1,6 +1,8 @@
-import { Flexbox, type FlexboxProps, Icon, type IconProps, Text } from '@lobehub/ui';
+import type { FlexboxProps, IconProps } from '@lobehub/ui';
+import { Flexbox, Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { type ReactNode, Suspense, memo, useState } from 'react';
+import type { ReactNode } from 'react';
+import { memo, Suspense, useState } from 'react';
 
 interface GroupBlockProps extends Omit<FlexboxProps, 'title'> {
   action?: ReactNode;
@@ -30,21 +32,22 @@ const GroupBlock = memo<GroupBlockProps>(
         onMouseLeave={() => setIsHovered(false)}
         {...rest}
       >
-        <Flexbox align={'center'} horizontal justify={'space-between'}>
+        <Flexbox horizontal align={'center'} justify={'space-between'}>
           <Flexbox
+            horizontal
             align={'center'}
             flex={1}
             gap={8}
-            horizontal
             justify={'flex-start'}
             style={{ overflow: 'hidden' }}
           >
             <Icon color={cssVar.colorTextDescription} icon={icon} size={18} />
-            <Text color={cssVar.colorTextSecondary} ellipsis>
+            <Text ellipsis color={cssVar.colorTextSecondary}>
               {title}
             </Text>
           </Flexbox>
           <Flexbox
+            horizontal
             align={'center'}
             className={cx(
               styles.action,
@@ -52,7 +55,6 @@ const GroupBlock = memo<GroupBlockProps>(
             )}
             flex={'none'}
             gap={2}
-            horizontal
             justify={'flex-end'}
           >
             {action}

@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 import debug from 'debug';
 
 import type { OpenAIChatMessage } from '@/types/index';
@@ -22,10 +21,10 @@ import {
 } from '../../processors';
 import {
   AgentBuilderContextInjector,
-  GTDPlanInjector,
-  GTDTodoInjector,
   GroupAgentBuilderContextInjector,
   GroupContextInjector,
+  GTDPlanInjector,
+  GTDTodoInjector,
   HistorySummaryProvider,
   KnowledgeInjector,
   PageEditorContextInjector,

@@ -5,8 +5,8 @@ import type { PartialDeep } from 'type-fest';
 
 import { merge } from '@/utils/merge';
 
+import type { AgentItem } from '../schemas';
 import {
-  AgentItem,
   agents,
   agentsFiles,
   agentsKnowledgeBases,
@@ -16,7 +16,7 @@ import {
   knowledgeBases,
   sessions,
 } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase } from '../type';
 
 export class AgentModel {
   private userId: string;
@@ -426,7 +426,7 @@ export class AgentModel {
     }
 
     // Build data to be merged, excluding params (processed separately)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     const { params: _params, ...restData } = data;
     const mergedValue = merge(agent, restData);
 
@@ -447,7 +447,7 @@ export class AgentModel {
     }
 
     // Remove timestamp fields to let Drizzle's $onUpdate handle them automatically
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     const { updatedAt: _, accessedAt: __, createdAt: ___, ...updateData } = mergedValue;
 
     return this.db

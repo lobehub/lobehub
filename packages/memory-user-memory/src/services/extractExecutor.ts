@@ -1,5 +1,5 @@
 import type { LobeChatDatabase } from '@lobechat/database';
-import { ModelRuntime } from '@lobechat/model-runtime';
+import type { ModelRuntime } from '@lobechat/model-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import {
   gateKeeperCallDurationHistogram,
@@ -19,7 +19,7 @@ import {
   PreferenceExtractor,
   UserMemoryGateKeeper,
 } from '../extractors';
-import {
+import type {
   BaseExtractorDependencies,
   ExtractorOptions,
   ExtractorRunOptions,
@@ -27,8 +27,8 @@ import {
   GatekeeperOptions,
   MemoryExtractionAgent,
   MemoryExtractionJob,
-  MemoryExtractionLLMConfig,
   MemoryExtractionLayerOutputs,
+  MemoryExtractionLLMConfig,
   MemoryExtractionResult,
 } from '../types';
 
@@ -63,11 +63,11 @@ export interface MemoryExtractionServiceOptions {
 }
 
 export interface MemoryExtractionLayerOutputTypes {
-  [LayersEnum.Context]: Awaited<ReturnType<ContextExtractor['structuredCall']>>;
   [LayersEnum.Activity]: Awaited<ReturnType<ActivityExtractor['structuredCall']>>;
+  [LayersEnum.Context]: Awaited<ReturnType<ContextExtractor['structuredCall']>>;
   [LayersEnum.Experience]: Awaited<ReturnType<ExperienceExtractor['structuredCall']>>;
-  [LayersEnum.Preference]: Awaited<ReturnType<PreferenceExtractor['structuredCall']>>;
   [LayersEnum.Identity]: Awaited<ReturnType<IdentityExtractor['structuredCall']>>;
+  [LayersEnum.Preference]: Awaited<ReturnType<PreferenceExtractor['structuredCall']>>;
 }
 
 export type MemoryExtractionLayerOutputType = {

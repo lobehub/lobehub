@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { AzureOpenAI } from 'openai';
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as openaiCompatibleFactoryModule from '../../core/openaiCompatibleFactory';
 import * as debugStreamModule from '../../utils/debugStream';
@@ -108,7 +109,7 @@ describe('LobeAzureOpenAI', () => {
                 logprobs: null,
               },
             ],
-            created: 1715516381,
+            created: 1_715_516_381,
             id: 'chatcmpl-9O2SzeGv5xy6yz0TcQNA1DHHLJ8N1',
             model: 'gpt-35-turbo-16k',
             object: 'chat.completion.chunk',
@@ -129,7 +130,7 @@ describe('LobeAzureOpenAI', () => {
                 logprobs: null,
               },
             ],
-            created: 1715516381,
+            created: 1_715_516_381,
             id: 'chatcmpl-9O2SzeGv5xy6yz0TcQNA1DHHLJ8N1',
             model: 'gpt-35-turbo-16k',
             object: 'chat.completion.chunk',
@@ -150,7 +151,7 @@ describe('LobeAzureOpenAI', () => {
                 logprobs: null,
               },
             ],
-            created: 1715516381,
+            created: 1_715_516_381,
             id: 'chatcmpl-9O2SzeGv5xy6yz0TcQNA1DHHLJ8N1',
             model: 'gpt-35-turbo-16k',
             object: 'chat.completion.chunk',

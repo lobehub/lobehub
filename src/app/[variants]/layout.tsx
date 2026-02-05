@@ -1,8 +1,9 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { SpeedInsights } from '@vercel/speed-insights/next';
-import { type ResolvingViewport } from 'next';
+import type { ResolvingViewport } from 'next';
 import Script from 'next/script';
-import { type ReactNode, Suspense } from 'react';
+import type { ReactNode } from 'react';
+import { Suspense } from 'react';
 import { isRtlLang } from 'rtl-detect';
 
 import BusinessGlobalProvider from '@/business/client/BusinessGlobalProvider';
@@ -11,8 +12,8 @@ import { DEFAULT_LANG } from '@/const/locale';
 import { isDesktop } from '@/const/version';
 import AuthProvider from '@/layout/AuthProvider';
 import GlobalProvider from '@/layout/GlobalProvider';
-import { type Locales } from '@/locales/resources';
-import { type DynamicLayoutProps } from '@/types/next';
+import type { Locales } from '@/locales/resources';
+import type { DynamicLayoutProps } from '@/types/next';
 import { RouteVariants } from '@/utils/server/routeVariants';
 
 const inVercel = process.env.VERCEL === '1';
@@ -44,9 +45,9 @@ const RootLayout = async ({ children, params }: RootLayoutProps) => {
   };
 
   return (
-    <html dir={direction} lang={locale} suppressHydrationWarning>
+    <html suppressHydrationWarning dir={direction} lang={locale}>
       <head>
-        {/* eslint-disable-next-line @typescript-eslint/no-use-before-define */}
+        {}
         <script dangerouslySetInnerHTML={{ __html: `(${outdateBrowserScript.toString()})();` }} />
         {process.env.DEBUG_REACT_SCAN === '1' && (
           <Script
@@ -111,7 +112,7 @@ function outdateBrowserScript() {
 
   const isOutdateBrowser = !(supportsImportMaps() && supportsCascadeLayers());
   if (isOutdateBrowser) {
-    window.location.href = '/not-compatible.html';
+    globalThis.location.href = '/not-compatible.html';
     return true;
   }
   return false;

@@ -40,6 +40,8 @@ const MarketAuthConfirmModal = memo<MarketAuthConfirmModalProps>(
     const footer = (
       <Text align={'center'} as={'div'} fontSize={13} type={'secondary'}>
         <Trans
+          i18nKey={'authorize.footer.agreement'}
+          ns={'marketAuth'}
           components={{
             privacy: (
               <a
@@ -58,27 +60,25 @@ const MarketAuthConfirmModal = memo<MarketAuthConfirmModalProps>(
               </a>
             ),
           }}
-          i18nKey={'authorize.footer.agreement'}
-          ns={'marketAuth'}
         />
       </Text>
     );
     return (
       <Modal
-        cancelText={t('authorize.cancel')}
         centered
+        cancelText={t('authorize.cancel')}
+        okText={t('authorize.confirm')}
+        open={open}
+        title={null}
+        width={440}
         classNames={{
           container: cx(styles.container, isDarkMode && styles.container_dark),
         }}
-        okText={t('authorize.confirm')}
-        onCancel={onCancel}
-        onOk={onConfirm}
-        open={open}
         paddings={{
           desktop: 24,
         }}
-        title={null}
-        width={440}
+        onCancel={onCancel}
+        onOk={onConfirm}
       >
         <AuthCard
           footer={footer}

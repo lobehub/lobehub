@@ -1,8 +1,8 @@
 'use client';
 
 import { Avatar, Block, Flexbox, Icon, Text } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
 import type { ItemType } from 'antd/es/menu/interface';
+import { useTheme } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { BrainIcon, MessageSquareHeartIcon, MessagesSquareIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -75,22 +75,22 @@ const Content = memo(() => {
         height={'100%'}
         paddingBlock={24}
         paddingInline={8}
+        width={200}
         style={{
           background: theme.colorBgLayout,
           borderRight: `1px solid ${theme.colorBorderSecondary}`,
         }}
-        width={200}
       >
         <Block
+          horizontal
           align={'center'}
           gap={8}
-          horizontal
           paddingBlock={'14px 16px'}
           paddingInline={4}
+          variant={'borderless'}
           style={{
             overflow: 'hidden',
           }}
-          variant={'borderless'}
         >
           <Avatar
             avatar={isInbox ? DEFAULT_INBOX_AVATAR : meta.avatar || DEFAULT_AVATAR}
@@ -103,11 +103,11 @@ const Content = memo(() => {
           </Text>
         </Block>
         <Menu
-          items={menuItems}
-          onClick={({ key }) => setTab(key as ChatSettingsTabs)}
           selectable
+          items={menuItems}
           selectedKeys={[tab]}
           style={{ width: '100%' }}
+          onClick={({ key }) => setTab(key as ChatSettingsTabs)}
         />
       </Flexbox>
       <Flexbox
@@ -121,9 +121,9 @@ const Content = memo(() => {
           id={agentId}
           loading={false}
           meta={meta}
+          tab={tab}
           onConfigChange={updateAgentConfig}
           onMetaChange={updateAgentMeta}
-          tab={tab}
         />
       </Flexbox>
     </Flexbox>

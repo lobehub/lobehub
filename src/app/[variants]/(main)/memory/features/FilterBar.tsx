@@ -21,27 +21,27 @@ const FilterBar = memo<FilterBarProps>(
     const { t } = useTranslation('memory');
 
     return (
-      <Flexbox align={'center'} gap={12} horizontal>
+      <Flexbox horizontal align={'center'} gap={12}>
         <SearchBar
           allowClear
           defaultValue={searchValue}
+          placeholder={t('filter.search')}
+          prefix={<Search size={16} />}
+          style={{ flex: 1 }}
+          onSearch={(v) => onSearch(v)}
           onInputChange={(v) => {
             if (!v) {
               onSearch(v);
             }
           }}
-          onSearch={(v) => onSearch(v)}
-          placeholder={t('filter.search')}
-          prefix={<Search size={16} />}
-          style={{ flex: 1 }}
         />
         {sortOptions && sortOptions.length > 0 && onSortChange && (
           <Select
-            onChange={(value) => onSortChange(value as string)}
             options={sortOptions}
             prefix={<Icon icon={ArrowDownNarrowWide} style={{ marginRight: 4 }} />}
             style={{ minWidth: 150 }}
             value={sortValue}
+            onChange={(value) => onSortChange(value as string)}
           />
         )}
       </Flexbox>

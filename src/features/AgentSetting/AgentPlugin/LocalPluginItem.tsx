@@ -21,13 +21,13 @@ const MarketList = memo<{ id: string }>(({ id }) => {
   useFetchPluginList();
 
   return (
-    <Flexbox align={'center'} gap={8} horizontal>
+    <Flexbox horizontal align={'center'} gap={8}>
       <Switch
+        loading={pluginManifestLoading[id]}
         checked={
           // 如果在加载中，说明激活了
           pluginManifestLoading[id] || !hasPlugin ? false : plugins.includes(id)
         }
-        loading={pluginManifestLoading[id]}
         onChange={(checked) => {
           toggleAgentPlugin(id);
           if (checked) {

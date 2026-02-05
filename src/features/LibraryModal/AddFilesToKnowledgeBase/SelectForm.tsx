@@ -32,10 +32,7 @@ const SelectForm = memo<CreateFormProps>(({ onClose, knowledgeBaseId, fileIds })
       message.success({
         content: (
           <Trans
-            components={[
-              <span key="0" />,
-              <Link key="1" to={`/knowledge/library/${values.id}`} />,
-            ]}
+            components={[<span key="0" />, <Link key="1" to={`/knowledge/library/${values.id}`} />]}
             i18nKey={'addToKnowledgeBase.addSuccess'}
             ns={'knowledgeBase'}
           />
@@ -51,16 +48,18 @@ const SelectForm = memo<CreateFormProps>(({ onClose, knowledgeBaseId, fileIds })
 
   return (
     <Form
+      gap={16}
+      itemsType={'flat'}
+      layout={'vertical'}
       footer={
         <Button block htmlType={'submit'} loading={loading} type={'primary'}>
           {t('addToKnowledgeBase.confirm')}
         </Button>
       }
-      gap={16}
       items={[
         {
           children: (
-            <Block align={'center'} gap={8} horizontal padding={16} variant={'filled'}>
+            <Block horizontal align={'center'} gap={8} padding={16} variant={'filled'}>
               <MaterialFileTypeIcon filename={''} size={32} />
               {t('addToKnowledgeBase.totalFiles', { count: fileIds.length })}
             </Block>
@@ -72,18 +71,18 @@ const SelectForm = memo<CreateFormProps>(({ onClose, knowledgeBaseId, fileIds })
             <Select
               autoFocus
               loading={isLoading}
+              placeholder={t('addToKnowledgeBase.id.placeholder')}
               options={(data || [])
                 .filter((item) => item.id !== knowledgeBaseId)
                 .map((item) => ({
                   label: (
-                    <Flexbox gap={8} horizontal>
+                    <Flexbox horizontal gap={8}>
                       <RepoIcon />
                       {item.name}
                     </Flexbox>
                   ),
                   value: item.id,
                 }))}
-              placeholder={t('addToKnowledgeBase.id.placeholder')}
             />
           ),
           label: t('addToKnowledgeBase.id.title'),
@@ -91,8 +90,6 @@ const SelectForm = memo<CreateFormProps>(({ onClose, knowledgeBaseId, fileIds })
           rules: [{ message: t('addToKnowledgeBase.id.required'), required: true }],
         },
       ]}
-      itemsType={'flat'}
-      layout={'vertical'}
       onFinish={onFinish}
     />
   );

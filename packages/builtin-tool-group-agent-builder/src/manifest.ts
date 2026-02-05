@@ -92,7 +92,6 @@ export const GroupAgentBuilderManifest: BuiltinToolManifest = {
             description: 'Array of agent definitions to create',
             items: {
               properties: {
-                /* eslint-disable sort-keys-fix/sort-keys-fix */
                 avatar: {
                   description: "An emoji or image URL for the agent's avatar (optional).",
                   type: 'string',
@@ -116,7 +115,6 @@ export const GroupAgentBuilderManifest: BuiltinToolManifest = {
                   items: { type: 'string' },
                   type: 'array',
                 },
-                /* eslint-enable sort-keys-fix/sort-keys-fix */
               },
               required: ['avatar', 'title', 'description', 'systemRole'],
               type: 'object',

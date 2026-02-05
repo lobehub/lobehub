@@ -1,4 +1,4 @@
-import { BuiltinIntervention } from '@lobechat/types';
+import type { BuiltinIntervention } from '@lobechat/types';
 
 import { GroupManagementApiName } from '../../types';
 import ExecuteTaskIntervention from './ExecuteTask';

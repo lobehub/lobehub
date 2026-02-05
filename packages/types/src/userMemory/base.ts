@@ -20,10 +20,7 @@ export interface UserMemory {
   userId: string | null;
 }
 
-export type UserMemoryWithoutVectors = Omit<
-  UserMemory,
-  'summaryVector1024' | 'detailsVector1024'
->;
+export type UserMemoryWithoutVectors = Omit<UserMemory, 'summaryVector1024' | 'detailsVector1024'>;
 
 export type UserMemoryListItem = Omit<
   UserMemoryWithoutVectors,

@@ -1,12 +1,12 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { major, minor } from 'semver';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { withSWR } from '~test-utils';
 
 import { CURRENT_VERSION } from '@/const/version';
 import { globalService } from '@/services/global';
 import { useGlobalStore } from '@/store/global/index';
 import { initialState } from '@/store/global/initialState';
+import { withSWR } from '~test-utils';
 
 vi.mock('zustand/traditional');
 

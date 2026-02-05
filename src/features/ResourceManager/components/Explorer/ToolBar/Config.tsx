@@ -13,9 +13,9 @@ const Config = memo<ConfigProps>(({ config, onConfigChange }) => {
 
   return (
     <Flexbox
+      horizontal
       align={'center'}
       gap={8}
-      horizontal
       onClick={() => {
         onConfigChange({ showFilesInKnowledgeBase: !config.showFilesInKnowledgeBase });
       }}

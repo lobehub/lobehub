@@ -10,7 +10,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 40px;
     height: 40px;
 
-    @media (max-width: 768px) {
+    @media (width <= 768px) {
       width: 32px;
       height: 32px;
     }
@@ -20,7 +20,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     height: 1px;
     background-color: ${cssVar.colorBorderSecondary};
 
-    @media (max-width: 768px) {
+    @media (width <= 768px) {
       width: 24px;
     }
   `,
@@ -38,7 +38,7 @@ const OAuthApplicationLogo = memo<OAuthApplicationLogoProps>(
     return isFirstParty ? (
       <Avatar alt={clientDisplayName} avatar={logoUrl!} shape={'square'} size={size} />
     ) : (
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         {logoUrl ? (
           <Avatar alt={clientDisplayName} avatar={logoUrl} size={size} />
         ) : (

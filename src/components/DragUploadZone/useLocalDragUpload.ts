@@ -1,4 +1,3 @@
-/* eslint-disable no-undef */
 import { useCallback } from 'react';
 
 /**

@@ -28,13 +28,13 @@ const SettingButton = memo<{ mobile?: boolean }>(({ mobile }) => {
     <>
       <ActionIcon
         icon={AlignJustify}
-        onClick={() => openChatSettings()}
         size={mobile ? MOBILE_HEADER_ICON_SIZE : DESKTOP_HEADER_ICON_SIZE}
         title={t('openChatSettings.title', { ns: 'hotkey' })}
         tooltipProps={{
           hotkey,
           placement: 'bottom',
         }}
+        onClick={() => openChatSettings()}
       />
 
       <AgentSettingsEditor key={id} />

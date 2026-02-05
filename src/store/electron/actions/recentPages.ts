@@ -2,11 +2,11 @@ import {
   getPinnedPages,
   savePinnedPages,
 } from '@/features/Electron/titlebar/RecentlyViewed/storage';
-import {
-  type CachedPageData,
-  type PageReference,
+import type {
+  CachedPageData,
+  PageReference,
 } from '@/features/Electron/titlebar/RecentlyViewed/types';
-import { type StoreSetter } from '@/store/types';
+import type { StoreSetter } from '@/store/types';
 
 import type { ElectronStore } from '../store';
 
@@ -53,7 +53,7 @@ export class RecentPagesActionImpl {
 
     // If pinned, update cached data on pinned entry
     const pinnedIndex = pinnedPages.findIndex((p) => p.id === id);
-    if (pinnedIndex >= 0) {
+    if (pinnedIndex !== -1) {
       if (cached) {
         const updatedPinned = [...pinnedPages];
         updatedPinned[pinnedIndex] = {
@@ -68,7 +68,7 @@ export class RecentPagesActionImpl {
 
     // Find existing entry
     const existingIndex = recentPages.findIndex((p) => p.id === id);
-    const existingEntry = existingIndex >= 0 ? recentPages[existingIndex] : null;
+    const existingEntry = existingIndex !== -1 ? recentPages[existingIndex] : null;
 
     // Merge cached data: new cached takes precedence, but preserve existing fields if not provided
     const mergedCached = cached ? { ...existingEntry?.cached, ...cached } : existingEntry?.cached;
@@ -82,7 +82,7 @@ export class RecentPagesActionImpl {
 
     // Remove existing if present
     const filtered =
-      existingIndex >= 0 ? recentPages.filter((_, i) => i !== existingIndex) : recentPages;
+      existingIndex !== -1 ? recentPages.filter((_, i) => i !== existingIndex) : recentPages;
 
     // Add to front, enforce limit
     const newRecent = [newEntry, ...filtered].slice(0, RECENT_PAGES_LIMIT);

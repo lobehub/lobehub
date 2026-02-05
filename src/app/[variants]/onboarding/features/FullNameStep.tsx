@@ -46,12 +46,13 @@ const FullNameStep = memo<FullNameStepProps>(({ onBack, onNext }) => {
   return (
     <Flexbox gap={16}>
       <LobeMessage sentences={[t('username.title'), t('username.title2'), t('username.title3')]} />
-      <Flexbox align={'center'} gap={12} horizontal>
+      <Flexbox horizontal align={'center'} gap={12}>
         <Input
           autoFocus
-          onChange={(e) => setValue(e.target.value)}
-          onPressEnter={handleNext}
           placeholder={t('username.placeholder')}
+          size="large"
+          title={t('username.hint')}
+          value={value}
           prefix={
             <Icon
               color={cssVar.colorTextDescription}
@@ -62,7 +63,6 @@ const FullNameStep = memo<FullNameStepProps>(({ onBack, onNext }) => {
               }}
             />
           }
-          size="large"
           styles={{
             input: {
               fontSize: 28,
@@ -72,26 +72,26 @@ const FullNameStep = memo<FullNameStepProps>(({ onBack, onNext }) => {
           suffix={
             <SendButton
               disabled={!value?.trim() || isNavigating}
-              onClick={handleNext}
+              type="primary"
               style={{
                 zoom: 1.5,
               }}
-              type="primary"
+              onClick={handleNext}
             />
           }
-          title={t('username.hint')}
-          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onPressEnter={handleNext}
         />
       </Flexbox>
       <Flexbox horizontal justify={'flex-start'} style={{ marginTop: 32 }}>
         <Button
           disabled={isNavigating}
           icon={Undo2Icon}
-          onClick={handleBack}
+          type={'text'}
           style={{
             color: cssVar.colorTextDescription,
           }}
-          type={'text'}
+          onClick={handleBack}
         >
           {t('back')}
         </Button>

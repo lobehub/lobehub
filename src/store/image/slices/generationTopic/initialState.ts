@@ -1,4 +1,4 @@
-import { type ImageGenerationTopic } from '@/types/generation';
+import type { ImageGenerationTopic } from '@/types/generation';
 
 export interface GenerationTopicState {
   activeGenerationTopicId: string | null;
@@ -8,7 +8,9 @@ export interface GenerationTopicState {
 
 export const initialGenerationTopicState: GenerationTopicState = {
   activeGenerationTopicId:
-    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('topic') : null,
+    typeof globalThis.window !== 'undefined'
+      ? new URLSearchParams(globalThis.location.search).get('topic')
+      : null,
   loadingGenerationTopicIds: [],
   generationTopics: [],
 };

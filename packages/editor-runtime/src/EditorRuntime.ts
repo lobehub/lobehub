@@ -1,5 +1,6 @@
-import { type PageContentContext } from '@lobechat/prompts';
-import { type IEditor, LITEXML_APPLY_COMMAND, LITEXML_MODIFY_COMMAND } from '@lobehub/editor';
+import type { PageContentContext } from '@lobechat/prompts';
+import type { IEditor } from '@lobehub/editor';
+import { LITEXML_APPLY_COMMAND, LITEXML_MODIFY_COMMAND } from '@lobehub/editor';
 import debug from 'debug';
 
 import type {
@@ -96,7 +97,7 @@ export class EditorRuntime {
     let extractedTitle: string | undefined;
 
     // Check if markdown starts with a # title heading
-    const titleMatch = /^#\s+(.+?)(?:\r?\n|$)/.exec(markdown);
+    const titleMatch = /^#\s+(.+)(?:\r?\n|$)/.exec(markdown);
     if (titleMatch) {
       extractedTitle = titleMatch[1].trim();
       // Remove the title line from markdown
@@ -288,7 +289,7 @@ export class EditorRuntime {
 
     // Match elements with id attributes and their content
     // Pattern: <tagName id="nodeId" ...>content</tagName>
-    const elementRegex = /<(\w+)\s+[^>]*id="([^"]+)"[^>]*>([\S\s]*?)<\/\1>/g;
+    const elementRegex = /<(\w+)\s[^>]*id="([^"]+)"[^>]*>([\s\S]*?)<\/\1>/g;
     let match;
 
     while ((match = elementRegex.exec(litexml)) !== null) {

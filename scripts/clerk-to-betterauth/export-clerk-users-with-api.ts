@@ -1,9 +1,9 @@
-/* eslint-disable unicorn/prefer-top-level-await, unicorn/no-process-exit */
+import './_internal/env';
+
 import { writeFile } from 'node:fs/promises';
 
 import { getClerkSecret, getMigrationMode, resolveDataPaths } from './_internal/config';
-import './_internal/env';
-import { ClerkApiUser, ClerkUser } from './_internal/types';
+import type { ClerkApiUser, ClerkUser } from './_internal/types';
 
 /**
  * Fetch all Clerk users via REST API and persist them into a local JSON file.
@@ -150,10 +150,7 @@ async function fetchAllClerkUsers(secretKey: string): Promise<ClerkUser[]> {
   const userMap = new Map<string, ClerkUser>();
 
   // Get total count first
-  const countResponse = await fetchClerkApi<{ total_count: number }>(
-    secretKey,
-    '/users/count',
-  );
+  const countResponse = await fetchClerkApi<{ total_count: number }>(secretKey, '/users/count');
   const totalCount = countResponse.total_count;
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
   const offsets = Array.from({ length: totalPages }, (_, pageIndex) => pageIndex * PAGE_SIZE);

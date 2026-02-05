@@ -1,4 +1,4 @@
-import { CreateMessageParams, UIChatMessage, UpdateMessageRAGParams } from '@lobechat/types';
+import type { CreateMessageParams, UIChatMessage, UpdateMessageRAGParams } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { describe, expect, it, vi } from 'vitest';
 

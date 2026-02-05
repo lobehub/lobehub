@@ -5,9 +5,8 @@ import { FileBoxIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import FileIcon from '@/components/FileIcon';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
-import { type AsyncTaskStatus, type IAsyncTaskError } from '@/types/asyncTask';
+import type { AsyncTaskStatus, IAsyncTaskError } from '@/types/asyncTask';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 import markdownToTxt from '@/utils/markdownToTxt';
 
@@ -211,13 +210,13 @@ const NoteFileItem = memo<NoteFileItemProps>(
             <Tooltip title={t('FileManager.actions.chunkingTooltip')}>
               <div
                 className={cx('floatingChunkBadge', styles.floatingChunkBadge)}
+                style={{ cursor: 'pointer' }}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!isCreatingFileParseTask) {
                     parseFiles([id]);
                   }
                 }}
-                style={{ cursor: 'pointer' }}
               >
                 <Button
                   icon={FileBoxIcon}

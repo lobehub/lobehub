@@ -1,4 +1,4 @@
-import {
+import type {
   EditLocalFileParams,
   EditLocalFileResult,
   GetCommandOutputParams,
@@ -23,7 +23,7 @@ import {
   RunCommandResult,
   WriteLocalFileParams,
 } from '@lobechat/electron-client-ipc';
-import { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
   EditLocalFileState,
@@ -34,8 +34,8 @@ import type {
   LocalFileListState,
   LocalFileSearchState,
   LocalMoveFilesState,
-  LocalReadFileState,
   LocalReadFilesState,
+  LocalReadFileState,
   LocalRenameFileState,
   RunCommandState,
 } from '../types';

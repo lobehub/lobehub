@@ -3,7 +3,8 @@ import { AnimatePresence, m as motion } from 'motion/react';
 import { useMemo } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
-import { type ActionKeys, ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import type { ActionKeys } from '@/features/ChatInput';
+import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
@@ -68,26 +69,26 @@ const InputArea = () => {
       <Flexbox style={{ paddingBottom: showSkillBanner ? 32 : 0, position: 'relative' }}>
         {showSkillBanner && <SkillInstallBanner />}
         <DragUploadZone
-          onUploadFiles={handleUploadFiles}
           style={{ position: 'relative', zIndex: 1 }}
+          onUploadFiles={handleUploadFiles}
         >
           <ChatInputProvider
             agentId={inboxAgentId}
             allowExpand={false}
+            leftActions={leftActions}
             chatInputEditorRef={(instance) => {
               if (!instance) return;
               useChatStore.setState({ mainInputEditor: instance });
             }}
-            leftActions={leftActions}
-            onMarkdownContentChange={(content) => {
-              useChatStore.setState({ inputMessage: content });
-            }}
-            onSend={send}
             sendButtonProps={{
               disabled: loading,
               generating: loading,
               onStop: () => {},
               shape: 'round',
+            }}
+            onSend={send}
+            onMarkdownContentChange={(content) => {
+              useChatStore.setState({ inputMessage: content });
             }}
           >
             <DesktopChatInput

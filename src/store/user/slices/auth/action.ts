@@ -1,6 +1,6 @@
-import { type SSOProvider } from '@lobechat/types';
+import type { SSOProvider } from '@lobechat/types';
 
-import { type StoreSetter } from '@/store/types';
+import type { StoreSetter } from '@/store/types';
 
 import type { UserStore } from '../../store';
 
@@ -66,7 +66,7 @@ export class UserAuthActionImpl {
         onSuccess: () => {
           // Use window.location.href to trigger a full page reload
           // This ensures all client-side state (React, Zustand, cache) is cleared
-          window.location.href = '/signin';
+          globalThis.location.href = '/signin';
         },
       },
     });
@@ -80,7 +80,7 @@ export class UserAuthActionImpl {
     }
 
     const currentUrl = location.toString();
-    window.location.href = `/signin?callbackUrl=${encodeURIComponent(currentUrl)}`;
+    globalThis.location.href = `/signin?callbackUrl=${encodeURIComponent(currentUrl)}`;
   };
 
   refreshAuthProviders = async (): Promise<void> => {

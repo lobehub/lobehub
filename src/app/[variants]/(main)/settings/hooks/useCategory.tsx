@@ -13,8 +13,8 @@ import {
   Gift,
   Image as ImageIcon,
   Info,
-  KeyIcon,
   KeyboardIcon,
+  KeyIcon,
   Map,
   MessageSquareTextIcon,
   Mic2,
@@ -35,8 +35,8 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 
 export enum SettingsGroupKey {
-  AIConfig = 'ai-config',
   Account = 'account',
+  AIConfig = 'ai-config',
   Profile = 'profile',
   Subscription = 'subscription',
   System = 'system',

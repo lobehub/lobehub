@@ -1,7 +1,7 @@
 import {
-  DEFAULT_WEIGHTS,
   calculateScore,
   createScoreItems,
+  DEFAULT_WEIGHTS,
 } from '../../../../../../features/MCP/calculateScore';
 
 describe('calculateScore', () => {

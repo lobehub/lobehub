@@ -1,11 +1,7 @@
 'use client';
 
-import {
-  KLAVIS_SERVER_TYPES,
-  type KlavisServerType,
-  LOBEHUB_SKILL_PROVIDERS,
-  type LobehubSkillProviderType,
-} from '@lobechat/const';
+import type { KlavisServerType, LobehubSkillProviderType } from '@lobechat/const';
+import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { Avatar, Icon, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -24,7 +20,7 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
-import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
+import type { LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
 
 /**
  * Klavis 服务器图标组件
@@ -268,18 +264,18 @@ const PluginTag = memo<PluginTagProps>(
 
     return (
       <Tag
-        className={styles.tag}
         closable
+        className={styles.tag}
         closeIcon={<X size={12} />}
         color={showErrorState ? 'error' : undefined}
         icon={renderIcon()}
-        onClose={onRemove}
+        variant={isDarkMode ? 'filled' : 'outlined'}
         title={
           showErrorState
             ? t('tools.notInstalledWarning', { defaultValue: 'This tool is not installed' })
             : undefined
         }
-        variant={isDarkMode ? 'filled' : 'outlined'}
+        onClose={onRemove}
       >
         {getDisplayText()}
       </Tag>

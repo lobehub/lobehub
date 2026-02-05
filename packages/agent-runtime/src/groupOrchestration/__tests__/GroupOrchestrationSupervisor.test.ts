@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AgentState } from '../../types/state';
-import {
-  GroupOrchestrationSupervisor,
-  type GroupOrchestrationSupervisorConfig,
-} from '../GroupOrchestrationSupervisor';
+import type { GroupOrchestrationSupervisorConfig } from '../GroupOrchestrationSupervisor';
+import { GroupOrchestrationSupervisor } from '../GroupOrchestrationSupervisor';
 import type { ExecutorResult } from '../types';
 
 // Helper to create mock AgentState
@@ -162,7 +160,7 @@ describe('GroupOrchestrationSupervisor', () => {
           params: {
             agentId: 'agent-1',
             instruction: 'Analyze data',
-            timeout: 30000,
+            timeout: 30_000,
             toolMessageId: 'tool-msg-1',
           },
           skipCallSupervisor: false,
@@ -176,7 +174,7 @@ describe('GroupOrchestrationSupervisor', () => {
         payload: {
           agentId: 'agent-1',
           instruction: 'Analyze data',
-          timeout: 30000,
+          timeout: 30_000,
           title: undefined,
           toolMessageId: 'tool-msg-1',
         },
@@ -194,7 +192,7 @@ describe('GroupOrchestrationSupervisor', () => {
           params: {
             agentId: 'agent-1',
             instruction: 'Analyze data',
-            timeout: 30000,
+            timeout: 30_000,
             title: 'Data Analysis Task',
             toolMessageId: 'tool-msg-1',
           },
@@ -209,7 +207,7 @@ describe('GroupOrchestrationSupervisor', () => {
         payload: {
           agentId: 'agent-1',
           instruction: 'Analyze data',
-          timeout: 30000,
+          timeout: 30_000,
           title: 'Data Analysis Task',
           toolMessageId: 'tool-msg-1',
         },

@@ -8,90 +8,82 @@ import { useDetailContext } from '../../DetailProvider';
 
 const { Title, Text, Paragraph } = Typography;
 
-const MemberCard = memo(
-  ({
-    agent,
-    currentVersion,
-  }: {
-    agent: any;
-    currentVersion: any;
-  }) => {
-    const { t } = useTranslation('discover');
-    const isSupervisor = agent.role === 'supervisor';
+const MemberCard = memo(({ agent, currentVersion }: { agent: any; currentVersion: any }) => {
+  const { t } = useTranslation('discover');
+  const isSupervisor = agent.role === 'supervisor';
 
-    return (
-      <Card hoverable>
-        <Flexbox gap={12}>
-          {/* Avatar and Basic Info */}
-          <Flexbox align="center" gap={12} horizontal>
-            <Avatar avatar={currentVersion.avatar || agent.name[0]} size={48} />
-            <Flexbox flex={1} gap={4}>
-              <Flexbox align="center" gap={8} horizontal>
-                <Title level={5} style={{ margin: 0 }}>
-                  {currentVersion.name || agent.name}
-                </Title>
-                {isSupervisor ? (
-                  <Tag color="gold" icon={<Crown size={12} />}>
-                    {t('members.supervisor', { defaultValue: 'Supervisor' })}
-                  </Tag>
-                ) : (
-                  <Tag color="blue" icon={<User size={12} />}>
-                    {t('members.participant', { defaultValue: 'Participant' })}
-                  </Tag>
-                )}
-              </Flexbox>
-              <Text type="secondary">{agent.identifier}</Text>
+  return (
+    <Card hoverable>
+      <Flexbox gap={12}>
+        {/* Avatar and Basic Info */}
+        <Flexbox horizontal align="center" gap={12}>
+          <Avatar avatar={currentVersion.avatar || agent.name[0]} size={48} />
+          <Flexbox flex={1} gap={4}>
+            <Flexbox horizontal align="center" gap={8}>
+              <Title level={5} style={{ margin: 0 }}>
+                {currentVersion.name || agent.name}
+              </Title>
+              {isSupervisor ? (
+                <Tag color="gold" icon={<Crown size={12} />}>
+                  {t('members.supervisor', { defaultValue: 'Supervisor' })}
+                </Tag>
+              ) : (
+                <Tag color="blue" icon={<User size={12} />}>
+                  {t('members.participant', { defaultValue: 'Participant' })}
+                </Tag>
+              )}
             </Flexbox>
+            <Text type="secondary">{agent.identifier}</Text>
           </Flexbox>
+        </Flexbox>
 
-          {/* Description */}
-          {currentVersion.description && (
-            <Paragraph ellipsis={{ rows: 2 }} style={{ margin: 0 }} type="secondary">
-              {currentVersion.description}
+        {/* Description */}
+        {currentVersion.description && (
+          <Paragraph ellipsis={{ rows: 2 }} style={{ margin: 0 }} type="secondary">
+            {currentVersion.description}
+          </Paragraph>
+        )}
+
+        {/* System Role (if available) */}
+        {currentVersion.config?.systemRole && (
+          <Flexbox gap={4}>
+            <Text strong>{t('members.systemRole', { defaultValue: 'System Role' })}:</Text>
+            <Paragraph ellipsis={{ rows: 3 }} style={{ margin: 0 }} type="secondary">
+              {currentVersion.config.systemRole}
             </Paragraph>
-          )}
-
-          {/* System Role (if available) */}
-          {currentVersion.config?.systemRole && (
-            <Flexbox gap={4}>
-              <Text strong>{t('members.systemRole', { defaultValue: 'System Role' })}:</Text>
-              <Paragraph ellipsis={{ rows: 3 }} style={{ margin: 0 }} type="secondary">
-                {currentVersion.config.systemRole}
-              </Paragraph>
-            </Flexbox>
-          )}
-
-          {/* Metadata */}
-          <Flexbox gap={8} horizontal wrap="wrap">
-            {currentVersion.version && (
-              <Text type="secondary">
-                {t('members.version', { defaultValue: 'Version' })}: {currentVersion.version}
-              </Text>
-            )}
-            {currentVersion.tokenUsage !== undefined && (
-              <Text type="secondary">
-                {t('members.tokenUsage', { defaultValue: 'Token Usage' })}:{' '}
-                {currentVersion.tokenUsage}
-              </Text>
-            )}
           </Flexbox>
+        )}
 
-          {/* URL */}
-          {currentVersion.url && (
-            <Text
-              copyable={{ text: currentVersion.url }}
-              ellipsis
-              style={{ fontSize: 12 }}
-              type="secondary"
-            >
-              {currentVersion.url}
+        {/* Metadata */}
+        <Flexbox horizontal gap={8} wrap="wrap">
+          {currentVersion.version && (
+            <Text type="secondary">
+              {t('members.version', { defaultValue: 'Version' })}: {currentVersion.version}
+            </Text>
+          )}
+          {currentVersion.tokenUsage !== undefined && (
+            <Text type="secondary">
+              {t('members.tokenUsage', { defaultValue: 'Token Usage' })}:{' '}
+              {currentVersion.tokenUsage}
             </Text>
           )}
         </Flexbox>
-      </Card>
-    );
-  },
-);
+
+        {/* URL */}
+        {currentVersion.url && (
+          <Text
+            ellipsis
+            copyable={{ text: currentVersion.url }}
+            style={{ fontSize: 12 }}
+            type="secondary"
+          >
+            {currentVersion.url}
+          </Text>
+        )}
+      </Flexbox>
+    </Card>
+  );
+});
 
 MemberCard.displayName = 'MemberCard';
 

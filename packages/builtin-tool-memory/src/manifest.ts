@@ -9,7 +9,7 @@ import {
   MERGE_STRATEGIES,
   RELATIONSHIPS,
 } from '@lobechat/types';
-import { JSONSchema7 } from 'json-schema';
+import type { JSONSchema7 } from 'json-schema';
 
 import { systemPrompt } from './systemRole';
 import { MemoryApiName } from './types';

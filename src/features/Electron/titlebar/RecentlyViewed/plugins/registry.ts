@@ -1,10 +1,5 @@
-/* eslint-disable no-dupe-class-members */
-import { type PageReference, type PageType, type ResolvedPageData } from '../types';
-import {
-  type BaseRecentlyViewedPlugin,
-  type PluginContext,
-  type RecentlyViewedPlugin,
-} from './types';
+import type { PageReference, PageType, ResolvedPageData } from '../types';
+import type { BaseRecentlyViewedPlugin, PluginContext, RecentlyViewedPlugin } from './types';
 
 /**
  * Plugin registry for RecentlyViewed system

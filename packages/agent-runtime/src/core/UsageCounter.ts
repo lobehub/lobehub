@@ -1,12 +1,12 @@
-import { ModelUsage } from '@lobechat/types';
+import type { ModelUsage } from '@lobechat/types';
 
-import { Cost, Usage } from '../types/usage';
+import type { Cost, Usage } from '../types/usage';
 
 /**
  * UsageCounter - Pure accumulator for usage and cost tracking
  * Focuses only on usage/cost calculations without managing state
  */
-/* eslint-disable unicorn/no-static-only-class */
+
 export class UsageCounter {
   /**
    * Create default usage statistics
@@ -137,7 +137,7 @@ export class UsageCounter {
     newUsage.llm.apiCalls += 1;
 
     // Ensure cost exists if modelUsage has cost
-    let newCost = cost
+    const newCost = cost
       ? structuredClone(cost)
       : modelUsage.cost
         ? this.createDefaultCost()
@@ -221,7 +221,7 @@ export class UsageCounter {
     newUsage.tools.totalTimeMs += executionTime;
 
     // Ensure cost exists if toolCost is provided
-    let newCost = cost ? structuredClone(cost) : toolCost ? this.createDefaultCost() : undefined;
+    const newCost = cost ? structuredClone(cost) : toolCost ? this.createDefaultCost() : undefined;
 
     if (toolCost && newCost) {
       let toolCostEntry = newCost.tools.byTool.find((entry) => entry.name === toolName);

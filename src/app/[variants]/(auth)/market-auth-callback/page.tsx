@@ -20,7 +20,7 @@ const MarketAuthCallbackPage = () => {
   useEffect(() => {
     console.log('[MarketAuthCallback] Processing authorization callback');
 
-    const urlParams = new URLSearchParams(window.location.search);
+    const urlParams = new URLSearchParams(globalThis.location.search);
     const code = urlParams.get('code');
     const state = urlParams.get('state');
     const error = urlParams.get('error');
@@ -38,7 +38,7 @@ const MarketAuthCallbackPage = () => {
             error: errorDescription || error,
             type: 'MARKET_AUTH_ERROR',
           },
-          window.location.origin,
+          globalThis.location.origin,
         );
       }
       return;
@@ -57,7 +57,7 @@ const MarketAuthCallbackPage = () => {
             state,
             type: 'MARKET_AUTH_SUCCESS',
           },
-          window.location.origin,
+          globalThis.location.origin,
         );
       }
 
@@ -85,7 +85,7 @@ const MarketAuthCallbackPage = () => {
             error: 'Missing authorization parameters',
             type: 'MARKET_AUTH_ERROR',
           },
-          window.location.origin,
+          globalThis.location.origin,
         );
       }
     }
@@ -146,7 +146,7 @@ const MarketAuthCallbackPage = () => {
   const getExtra = () => {
     if (status === 'error') {
       return (
-        <Button block onClick={() => window.close()} size={'large'} style={{ minWidth: 240 }}>
+        <Button block size={'large'} style={{ minWidth: 240 }} onClick={() => window.close()}>
           {t('callback.buttons.close')}
         </Button>
       );

@@ -1,4 +1,4 @@
-import { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 import { imagenGenParameters, nanoBananaParameters } from './google';
 
 // ref: https://cloud.google.com/vertex-ai/generative-ai/docs/learn/models
@@ -405,7 +405,6 @@ const vertexaiChatModels: AIChatModelCard[] = [
   },
 ];
 
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 const vertexaiImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana',

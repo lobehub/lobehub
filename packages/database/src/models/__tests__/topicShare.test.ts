@@ -3,8 +3,8 @@ import { TRPCError } from '@trpc/server';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { agents, sessions, topicShares, topics, users } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import { agents, sessions, topics, topicShares, users } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
 import { TopicShareModel } from '../topicShare';
 
 const serverDB: LobeChatDatabase = await getTestDB();

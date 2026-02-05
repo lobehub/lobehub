@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as desensitizeTool from '../../utils/desensitizeUrl';
 import { CloudflareStreamTransformer, desensitizeCloudflareUrl, fillUrl } from './cloudflare';
@@ -109,7 +109,7 @@ describe('cloudflareHelpers', () => {
         await transformer.transform(chunk, undefined!);
 
         // Assert
-        expect(chunks.join()).toBe('');
+        expect(chunks.join(',')).toBe('');
       });
 
       it('should split and concat delayed chunks', async () => {

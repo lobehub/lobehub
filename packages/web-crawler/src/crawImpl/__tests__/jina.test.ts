@@ -4,7 +4,7 @@ import { jina } from '../jina';
 
 describe('jina crawler', () => {
   const mockFetch = vi.fn();
-  global.fetch = mockFetch;
+  globalThis.fetch = mockFetch;
 
   beforeEach(() => {
     vi.resetAllMocks();

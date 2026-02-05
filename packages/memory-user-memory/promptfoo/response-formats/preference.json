@@ -60,38 +60,21 @@
                       "type": "object",
                       "properties": {
                         "app": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
+                          "type": ["string", "null"],
                           "description": "App or product name this applies to"
                         },
                         "feature": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "route": {
-                          "type": [
-                            "string",
-                            "null"
-                          ]
+                          "type": ["string", "null"]
                         },
                         "surface": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
+                          "type": ["string", "null"],
                           "description": "e.g., chat, emails, code review, notes"
                         }
                       },
-                      "required": [
-                        "app",
-                        "feature",
-                        "route",
-                        "surface"
-                      ],
+                      "required": ["app", "feature", "route", "surface"],
                       "additionalProperties": false
                     },
                     {
@@ -128,31 +111,19 @@
                           "description": "Who stated the preference; use 'User' for the user"
                         },
                         "applicableWhen": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
+                          "type": ["string", "null"],
                           "description": "Conditions where this preference applies"
                         },
                         "notApplicableWhen": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
+                          "type": ["string", "null"],
                           "description": "Conditions where it does not apply"
                         },
                         "scenario": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
+                          "type": ["string", "null"],
                           "description": "Applicable scenario or use case"
                         },
                         "trigger": {
-                          "type": [
-                            "string",
-                            "null"
-                          ],
+                          "type": ["string", "null"],
                           "description": "What prompted this preference"
                         }
                       },
@@ -217,9 +188,7 @@
         "description": "Array of extracted preference memory items, could be empty if decided no relevant preference to extract"
       }
     },
-    "required": [
-      "memories"
-    ],
+    "required": ["memories"],
     "additionalProperties": false
   },
   "type": "json_schema"

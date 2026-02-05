@@ -60,10 +60,7 @@
                     "type": "object",
                     "properties": {
                       "extra": {
-                        "type": [
-                          "string",
-                          "null"
-                        ],
+                        "type": ["string", "null"],
                         "description": "Additional metadata about the object, should always be a valid JSON string if present"
                       },
                       "name": {
@@ -72,22 +69,11 @@
                       },
                       "type": {
                         "type": "string",
-                        "enum": [
-                          "application",
-                          "item",
-                          "knowledge",
-                          "other",
-                          "person",
-                          "place"
-                        ],
+                        "enum": ["application", "item", "knowledge", "other", "person", "place"],
                         "description": "Type/category of the associated object"
                       }
                     },
-                    "required": [
-                      "extra",
-                      "name",
-                      "type"
-                    ],
+                    "required": ["extra", "name", "type"],
                     "additionalProperties": false
                   },
                   "description": "Array of objects describing involved roles, entities, or resources, [] empty if none"
@@ -98,10 +84,7 @@
                     "type": "object",
                     "properties": {
                       "extra": {
-                        "type": [
-                          "string",
-                          "null"
-                        ],
+                        "type": ["string", "null"],
                         "description": "Additional metadata about the subject, should always be a valid JSON string if present"
                       },
                       "name": {
@@ -110,34 +93,18 @@
                       },
                       "type": {
                         "type": "string",
-                        "enum": [
-                          "item",
-                          "other",
-                          "person",
-                          "pet"
-                        ],
+                        "enum": ["item", "other", "person", "pet"],
                         "description": "Type/category of the associated subject"
                       }
                     },
-                    "required": [
-                      "extra",
-                      "name",
-                      "type"
-                    ],
+                    "required": ["extra", "name", "type"],
                     "additionalProperties": false
                   },
                   "description": "Array of JSON objects describing involved subjects or participants, [] empty if none"
                 },
                 "currentStatus": {
                   "type": "string",
-                  "enum": [
-                    "aborted",
-                    "cancelled",
-                    "completed",
-                    "on_hold",
-                    "ongoing",
-                    "planned"
-                  ],
+                  "enum": ["aborted", "cancelled", "completed", "on_hold", "ongoing", "planned"],
                   "description": "High level status markers (must be one of 'planned', 'ongoing', 'completed', 'aborted', 'on_hold', 'cancelled')"
                 },
                 "description": {
@@ -201,9 +168,7 @@
         "description": "Array of extracted context memory items, could be empty if decided no relevant context to extract"
       }
     },
-    "required": [
-      "memories"
-    ],
+    "required": ["memories"],
     "additionalProperties": false
   },
   "type": "json_schema"

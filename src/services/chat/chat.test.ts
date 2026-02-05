@@ -1,13 +1,8 @@
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { LobeTool } from '@lobechat/types';
-import { UIChatMessage } from '@lobechat/types';
-import { ChatErrorType } from '@lobechat/types';
-import { ChatStreamPayload } from '@lobechat/types';
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import type { ChatErrorType, ChatStreamPayload, LobeTool, UIChatMessage } from '@lobechat/types';
 import { act } from '@testing-library/react';
-import { type Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DEFAULT_USER_AVATAR } from '@/const/meta';
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import * as toolEngineeringModule from '@/helpers/toolEngineering';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
@@ -58,7 +53,7 @@ vi.mock('i18next', () => ({
 
 vi.stubGlobal(
   'fetch',
-  vi.fn(() => Promise.resolve(new Response(JSON.stringify({ some: 'data' })))),
+  vi.fn(() => Promise.resolve(Response.json({ some: 'data' }))),
 );
 
 // Mock image processing utilities
@@ -678,9 +673,9 @@ describe('ChatService', () => {
             role: 'user',
             content: 'https://vercel.com/ 请分析 chatGPT 关键词\n\n',
             sessionId: 'inbox',
-            createdAt: 1702723964330,
+            createdAt: 1_702_723_964_330,
             id: 'vyQvEw6V',
-            updatedAt: 1702723964330,
+            updatedAt: 1_702_723_964_330,
             extra: {},
           },
         ] as UIChatMessage[];
@@ -1286,11 +1281,11 @@ describe('ChatService', () => {
       const options = {};
       const mockResponse = new Response('Plugin Result', { status: 200 });
 
-      global.fetch = vi.fn(() => Promise.resolve(mockResponse));
+      globalThis.fetch = vi.fn(() => Promise.resolve(mockResponse));
 
       const result = await chatService.runPluginApi(params, options);
 
-      expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.any(Object));
+      expect(globalThis.fetch).toHaveBeenCalledWith(expect.any(String), expect.any(Object));
       expect(result.text).toBe('Plugin Result');
     });
 
@@ -1315,7 +1310,7 @@ describe('ChatService', () => {
           if (options?.onMessageHandle) {
             options.onMessageHandle({ type: 'text', text: 'AI response' });
           }
-          return Promise.resolve(new Response(''));
+          return new Response('');
         });
 
       const params = {
@@ -1362,7 +1357,7 @@ describe('ChatService', () => {
           if (options?.onErrorHandle) {
             options.onErrorHandle({ message: 'translated_response.404', type: 404 });
           }
-          return Promise.resolve(new Response(''));
+          return new Response('');
         });
 
       const params = {

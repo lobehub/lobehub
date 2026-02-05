@@ -6,7 +6,7 @@ import { getTestDB } from '../../core/getTestDB';
 import { messageGroups, messages } from '../../schemas/message';
 import { topics } from '../../schemas/topic';
 import { users } from '../../schemas/user';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { CompressionRepository } from './index';
 
 const userId = 'compression-test-user';
@@ -267,7 +267,7 @@ describe('CompressionRepository', () => {
       });
 
       // Verify messages are compressed
-      let compressedMessages = await compressionRepo.getCompressedMessages(groupId);
+      const compressedMessages = await compressionRepo.getCompressedMessages(groupId);
       expect(compressedMessages).toHaveLength(2);
 
       // Delete the group

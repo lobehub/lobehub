@@ -42,7 +42,7 @@ async function migrateFile(relativePath: string): Promise<MigrationResult | null
 
   // Check what hooks are being imported from @/libs/next/navigation
   const importMatch = content.match(
-    /import\s*{([^}]+)}\s*from\s*["']@\/libs\/next\/navigation["']/,
+    /import\s*\{([^}]+)\}\s*from\s*["']@\/libs\/next\/navigation["']/,
   );
 
   if (!importMatch) {
@@ -97,7 +97,7 @@ async function migrateFile(relativePath: string): Promise<MigrationResult | null
 
   // Replace the old import with new imports
   newContent = newContent.replace(
-    /import\s*{[^}]+}\s*from\s*["']@\/libs\/next\/navigation["'];?\n?/,
+    /import\s*\{[^}]+\}\s*from\s*["']@\/libs\/next\/navigation["'];?\n?/,
     newImports.join('\n') + '\n',
   );
 

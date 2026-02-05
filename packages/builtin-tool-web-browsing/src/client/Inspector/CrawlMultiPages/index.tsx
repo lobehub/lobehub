@@ -1,6 +1,6 @@
 'use client';
 
-import { type BuiltinInspectorProps } from '@lobechat/types';
+import type { BuiltinInspectorProps } from '@lobechat/types';
 import { cx } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

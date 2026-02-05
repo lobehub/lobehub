@@ -1,4 +1,4 @@
-import { Mock, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { toolService } from '../tool';
 import openAPIV3 from './openai/OpenAPI_V3.json';
@@ -67,7 +67,7 @@ describe('ToolService', () => {
         version: '1',
       };
 
-      global.fetch = vi.fn(() =>
+      globalThis.fetch = vi.fn(() =>
         Promise.resolve({
           headers: new Headers({ 'content-type': 'application/json' }),
           ok: true,
@@ -92,7 +92,7 @@ describe('ToolService', () => {
     it('should return error on manifestInvalid', async () => {
       const fakeManifest = { name: 'TestPlugin', version: '1.0.0' };
       const manifestUrl = 'http://fake-url.com/manifest.json';
-      global.fetch = vi.fn(() =>
+      globalThis.fetch = vi.fn(() =>
         Promise.resolve({
           headers: new Headers({ 'content-type': 'application/json' }),
           ok: true,
@@ -109,7 +109,7 @@ describe('ToolService', () => {
 
     it('should return error on fetchError', async () => {
       const manifestUrl = 'http://fake-url.com/manifest.json';
-      global.fetch = vi.fn(() => Promise.reject(new Error('Network error')));
+      globalThis.fetch = vi.fn(() => Promise.reject(new Error('Network error')));
 
       try {
         await toolService.getToolManifest(manifestUrl);
@@ -122,7 +122,7 @@ describe('ToolService', () => {
     it('should return error on manifestInvalid', async () => {
       const fakeManifest = { name: 'TestPlugin', version: '1.0.0' };
       const manifestUrl = 'http://fake-url.com/manifest.json';
-      global.fetch = vi.fn(() =>
+      globalThis.fetch = vi.fn(() =>
         Promise.resolve({
           ok: false,
           headers: new Headers({ 'content-type': 'application/json' }),
@@ -163,7 +163,7 @@ describe('ToolService', () => {
           version: '1',
         };
 
-        global.fetch = vi.fn((url) =>
+        globalThis.fetch = vi.fn((url) =>
           Promise.resolve({
             ok: true,
             headers: new Headers({ 'content-type': 'application/json' }),
@@ -200,7 +200,7 @@ describe('ToolService', () => {
           version: '1',
         };
 
-        global.fetch = vi.fn((url) =>
+        globalThis.fetch = vi.fn((url) =>
           Promise.resolve({
             ok: true,
             headers: new Headers({ 'content-type': 'application/json' }),

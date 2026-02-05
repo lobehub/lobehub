@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix */
 import type { ILobeAgentRuntimeErrorType } from './agentRuntime';
 
 export const ChatErrorType = {
@@ -37,7 +36,6 @@ export const ChatErrorType = {
   ServiceUnavailable: 503,
   GatewayTimeout: 504,
 } as const;
-/* eslint-enable */
 
 export type ErrorType = (typeof ChatErrorType)[keyof typeof ChatErrorType];
 

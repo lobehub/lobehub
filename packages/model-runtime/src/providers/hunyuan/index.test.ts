@@ -2,7 +2,7 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
 import { LobeHunyuanAI, params } from './index';
 
@@ -35,7 +35,7 @@ describe('LobeHunyuanAI', () => {
         {
           id: '939fbdb8dbb9b4c5944cbbe687c977c2',
           object: 'chat.completion.chunk',
-          created: 1741000456,
+          created: 1_741_000_456,
           model: 'hunyuan-turbo',
           system_fingerprint: '',
           choices: [
@@ -68,7 +68,7 @@ describe('LobeHunyuanAI', () => {
         {
           id: '939fbdb8dbb9b4c5944cbbe687c977c2',
           object: 'chat.completion.chunk',
-          created: 1741000456,
+          created: 1_741_000_456,
           model: 'hunyuan-turbo',
           system_fingerprint: '',
           choices: [

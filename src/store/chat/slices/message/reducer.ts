@@ -1,10 +1,10 @@
-import {
-  type ChatMessageExtra,
-  type ChatPluginPayload,
-  type ChatToolPayload,
-  type CreateMessageParams,
-  type MessagePluginItem,
-  type UIChatMessage,
+import type {
+  ChatMessageExtra,
+  ChatPluginPayload,
+  ChatToolPayload,
+  CreateMessageParams,
+  MessagePluginItem,
+  UIChatMessage,
 } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import i18n from 'i18next';
@@ -107,7 +107,7 @@ export const messagesReducer = (
         const { id, value } = payload;
 
         const index = draftState.findIndex((i) => i.id === id);
-        if (index >= 0) {
+        if (index !== -1) {
           draftState[index] = merge(draftState[index], { ...value, updatedAt: Date.now() });
         }
       });
@@ -210,7 +210,7 @@ export const messagesReducer = (
 
         const index = message.tools.findIndex((tool) => tool.id === tool_call_id);
 
-        if (index < 0) return;
+        if (index === -1) return;
         message.tools[index] = merge(message.tools[index], value);
 
         message.updatedAt = Date.now();
@@ -235,7 +235,7 @@ export const messagesReducer = (
 
         const index = draft.findIndex((m) => m.id === id);
 
-        if (index >= 0) draft.splice(index, 1);
+        if (index !== -1) draft.splice(index, 1);
       });
     }
     case 'deleteMessages': {

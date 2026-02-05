@@ -36,22 +36,22 @@ export default memo(() => {
     <MobileContentLayout header={<MobileHeader />}>
       <PageTitle title={t('header.sessionWithName', { name: title })} />
       <Tabs
-        activeKey={tab}
         compact
+        activeKey={tab}
         items={cateItems as any}
-        onChange={(value) => setTab(value as ChatSettingsTabs)}
         style={{
           borderBottom: `1px solid ${cssVar.colorBorderSecondary}`,
         }}
+        onChange={(value) => setTab(value as ChatSettingsTabs)}
       />
       <AgentSettings
         config={config}
         id={id}
         loading={isLoading}
         meta={meta}
+        tab={tab}
         onConfigChange={updateAgentConfig}
         onMetaChange={updateAgentMeta}
-        tab={tab}
       />
       <Footer />
     </MobileContentLayout>

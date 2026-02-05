@@ -1,2 +1,2 @@
-export * from './benchmarkLoCoMo'
+export * from './benchmarkLoCoMo';
 export * from './shared';

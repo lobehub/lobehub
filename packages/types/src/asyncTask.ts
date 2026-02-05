@@ -20,14 +20,10 @@ export enum AsyncTaskErrorType {
    * Free plan users are not allowed to use this feature
    */
   FreePlanLimit = 'FreePlanLimit',
-  /**
-   * Subscription plan limit reached (paid users run out of credits)
-   */
-  SubscriptionPlanLimit = 'SubscriptionPlanLimit',
-  /* ↑ cloud slot ↑ */
-
   // eslint-disable-next-line typescript-sort-keys/string-enum
   InvalidProviderAPIKey = 'InvalidProviderAPIKey',
+  /* ↑ cloud slot ↑ */
+
   /**
    * Model not found on server
    */
@@ -37,6 +33,10 @@ export enum AsyncTaskErrorType {
    */
   NoChunkError = 'NoChunkError',
   ServerError = 'ServerError',
+  /**
+   * Subscription plan limit reached (paid users run out of credits)
+   */
+  SubscriptionPlanLimit = 'SubscriptionPlanLimit',
   /**
    * this happens when the task is not trigger successfully
    */

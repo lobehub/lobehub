@@ -12,12 +12,12 @@ const Description = memo<{ message: string; status: number }>(({ message, status
     <Flexbox gap={8}>
       {t(`response.${status}` as any)}
       <Flexbox
-        gap={4}
         horizontal
+        gap={4}
+        style={{ cursor: 'pointer', fontSize: 12 }}
         onClick={() => {
           setShow(!show);
         }}
-        style={{ cursor: 'pointer', fontSize: 12 }}
       >
         {t('fetchError.detail')} <Icon icon={show ? ChevronUp : ChevronDown} />
       </Flexbox>

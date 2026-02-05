@@ -5,8 +5,8 @@ import type {
   AgentInstructionExecTask,
   AgentInstructionExecTasks,
   ExecTaskItem,
-  GeneralAgentCallLLMInstructionPayload,
   GeneralAgentCallingToolInstructionPayload,
+  GeneralAgentCallLLMInstructionPayload,
 } from '@lobechat/agent-runtime';
 import type { ChatToolPayload } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';

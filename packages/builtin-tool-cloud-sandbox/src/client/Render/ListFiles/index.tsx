@@ -1,12 +1,12 @@
 'use client';
 
-import { type BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { File, Folder } from 'lucide-react';
 import { memo } from 'react';
 
-import { type ListLocalFilesState } from '../../../types';
+import type { ListLocalFilesState } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -62,11 +62,11 @@ const ListFiles = memo<BuiltinRenderProps<ListLocalFilesParams, ListLocalFilesSt
     return (
       <Flexbox className={styles.container} gap={8}>
         {/* Directory path */}
-        <Flexbox align={'center'} horizontal justify={'space-between'}>
-          <Text as={'span'} code ellipsis fontSize={12}>
+        <Flexbox horizontal align={'center'} justify={'space-between'}>
+          <Text code ellipsis as={'span'} fontSize={12}>
             📁 {args.directoryPath}
           </Text>
-          <Text as={'span'} code fontSize={11} type={'secondary'}>
+          <Text code as={'span'} fontSize={11} type={'secondary'}>
             {pluginState.files.length} items
           </Text>
         </Flexbox>
@@ -76,24 +76,24 @@ const ListFiles = memo<BuiltinRenderProps<ListLocalFilesParams, ListLocalFilesSt
           <Flexbox gap={2}>
             {sortedFiles.map((file, index) => (
               <Flexbox
+                horizontal
                 align={'center'}
                 className={styles.fileItem}
-                horizontal
                 justify={'space-between'}
                 key={index}
               >
-                <Flexbox align={'center'} gap={8} horizontal>
+                <Flexbox horizontal align={'center'} gap={8}>
                   {file.isDirectory ? (
                     <Folder className={styles.folderIcon} size={14} />
                   ) : (
                     <File className={styles.fileIcon} size={14} />
                   )}
-                  <Text as={'span'} code fontSize={12}>
+                  <Text code as={'span'} fontSize={12}>
                     {file.name}
                   </Text>
                 </Flexbox>
                 {!file.isDirectory && file.size !== undefined && (
-                  <Text as={'span'} code fontSize={11} type={'secondary'}>
+                  <Text code as={'span'} fontSize={11} type={'secondary'}>
                     {formatSize(file.size)}
                   </Text>
                 )}

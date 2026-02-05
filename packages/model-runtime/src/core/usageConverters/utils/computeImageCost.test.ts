@@ -1,7 +1,8 @@
 import type { Pricing } from 'model-bank';
 import { describe, expect, it } from 'vitest';
 
-import { ImageGenerationParams, computeImageCost } from './computeImageCost';
+import type { ImageGenerationParams } from './computeImageCost';
+import { computeImageCost } from './computeImageCost';
 
 describe('computeImageCost', () => {
   describe('lookup pricing strategy', () => {
@@ -40,7 +41,7 @@ describe('computeImageCost', () => {
       // Assert - Match the production log output
       expect(result).toBeDefined();
       expect(result?.totalCost).toBe(0.04);
-      expect(result?.totalCredits).toBe(40000); // $0.04 * 100000 credits per dollar
+      expect(result?.totalCredits).toBe(40_000); // $0.04 * 100000 credits per dollar
       expect(result?.breakdown?.lookupKey).toBe('standard_1024x1024');
       expect(result?.breakdown?.pricePerImage).toBe(0.04);
       expect(result?.breakdown?.imageCount).toBe(1);
@@ -72,7 +73,7 @@ describe('computeImageCost', () => {
 
       expect(result).toBeDefined();
       expect(result?.totalCost).toBe(0.36); // 0.12 * 3
-      expect(result?.totalCredits).toBe(360000); // $0.36 * 100000
+      expect(result?.totalCredits).toBe(360_000); // $0.36 * 100000
       expect(result?.breakdown?.lookupKey).toBe('hd_1024x1792');
       expect(result?.breakdown?.imageCount).toBe(3);
     });
@@ -182,7 +183,7 @@ describe('computeImageCost', () => {
 
       expect(result).toBeDefined();
       expect(result?.totalCost).toBe(0.05);
-      expect(result?.totalCredits).toBe(50000); // $0.05 * 100000
+      expect(result?.totalCredits).toBe(50_000); // $0.05 * 100000
       expect(result?.breakdown?.pricePerImage).toBe(0.05);
       expect(result?.breakdown?.imageCount).toBe(1);
       expect(result?.breakdown?.lookupKey).toBeUndefined();
@@ -206,7 +207,7 @@ describe('computeImageCost', () => {
 
       expect(result).toBeDefined();
       expect(result?.totalCost).toBe(0.1); // 0.02 * 5
-      expect(result?.totalCredits).toBe(100000);
+      expect(result?.totalCredits).toBe(100_000);
       expect(result?.breakdown?.imageCount).toBe(5);
     });
 

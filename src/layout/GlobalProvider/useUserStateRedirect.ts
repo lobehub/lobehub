@@ -12,7 +12,7 @@ import type { UserInitializationState } from '@/types/user';
 
 const redirectIfNotOn = (currentPath: string, path: string) => {
   if (!currentPath.startsWith(path)) {
-    window.location.href = path;
+    globalThis.location.href = path;
   }
 };
 
@@ -65,7 +65,7 @@ export const useDesktopUserStateRedirect = () => {
 
 export const useWebUserStateRedirect = () =>
   useCallback((state: UserInitializationState) => {
-    const { pathname } = window.location;
+    const { pathname } = globalThis.location;
 
     if (state.isInviteCodeRequired === true) {
       redirectIfNotOn(pathname, '/invite-code');
@@ -75,9 +75,9 @@ export const useWebUserStateRedirect = () =>
     // Redirect away from invite-code page if no longer required
     // Skip redirect if force=true is present (for re-entering invite code)
     if (pathname.startsWith('/invite-code')) {
-      const params = new URLSearchParams(window.location.search);
+      const params = new URLSearchParams(globalThis.location.search);
       if (params.get('force') !== 'true') {
-        window.location.href = '/';
+        globalThis.location.href = '/';
         return;
       }
     }

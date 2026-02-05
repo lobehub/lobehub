@@ -1,15 +1,16 @@
-import { type CategoryItem, type CategoryListQuery } from '@lobehub/market-sdk';
-import useSWR, { type SWRResponse } from 'swr';
+import type { CategoryItem, CategoryListQuery } from '@lobehub/market-sdk';
+import type { SWRResponse } from 'swr';
+import useSWR from 'swr';
 
 import { discoverService } from '@/services/discover';
-import { type DiscoverStore } from '@/store/discover';
+import type { DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
-import { type StoreSetter } from '@/store/types';
-import {
-  type DiscoverGroupAgentDetail,
-  type GroupAgentListResponse,
-  type GroupAgentQueryParams,
-  type IdentifiersResponse,
+import type { StoreSetter } from '@/store/types';
+import type {
+  DiscoverGroupAgentDetail,
+  GroupAgentListResponse,
+  GroupAgentQueryParams,
+  IdentifiersResponse,
 } from '@/types/discover';
 
 type Setter = StoreSetter<DiscoverStore>;

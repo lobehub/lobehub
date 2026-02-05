@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
 import { LobeWenxinAI, params } from './index';
 
@@ -35,7 +35,7 @@ describe('LobeWenxinAI', () => {
         {
           id: 'as-bhrxwy5fq1',
           object: 'chat.completion.chunk',
-          created: 1741000028,
+          created: 1_741_000_028,
           model: 'ernie-4.0-8k-latest',
           choices: [
             {
@@ -61,7 +61,7 @@ describe('LobeWenxinAI', () => {
         {
           id: 'as-bhrxwy5fq1',
           object: 'chat.completion.chunk',
-          created: 1741000028,
+          created: 1_741_000_028,
           model: 'ernie-4.0-8k-latest',
           choices: [
             {

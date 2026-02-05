@@ -1,8 +1,10 @@
-import { CreateThreadParams, ThreadStatus } from '@lobechat/types';
+import type { CreateThreadParams } from '@lobechat/types';
+import { ThreadStatus } from '@lobechat/types';
 import { and, desc, eq } from 'drizzle-orm';
 
-import { ThreadItem, threads } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { ThreadItem } from '../schemas';
+import { threads } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 const queryColumns = {
   agentId: threads.agentId,

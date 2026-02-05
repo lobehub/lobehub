@@ -9,7 +9,7 @@ describe('sanitizeError', () => {
       code: 401,
       request: {
         headers: {
-          authorization: 'Bearer sk-1234567890',
+          'authorization': 'Bearer sk-1234567890',
           'content-type': 'application/json',
           'ocp-apim-subscription-key': 'azure-key-123',
         },
@@ -78,10 +78,10 @@ describe('sanitizeError', () => {
 
   it('should be case insensitive for sensitive field detection', () => {
     const errorWithMixedCase = {
-      message: 'Error',
-      Authorization: 'Bearer token',
+      'message': 'Error',
+      'Authorization': 'Bearer token',
       'API-KEY': 'secret',
-      Headers: { token: 'secret' },
+      'Headers': { token: 'secret' },
     };
 
     const sanitized = sanitizeError(errorWithMixedCase);

@@ -21,8 +21,8 @@ echo "✅ 设置脚本执行权限"
 
 # 检查是否安装了 serve
 if ! command -v npx &> /dev/null; then
-    echo "❌ 需要安装 Node.js 和 npm"
-    exit 1
+  echo "❌ 需要安装 Node.js 和 npm"
+  exit 1
 fi
 
 # 创建示例 latest-mac.yml

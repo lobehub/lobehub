@@ -19,7 +19,7 @@ const DesktopOnboardingRedirect = () => {
     if (getDesktopOnboardingCompleted()) return;
 
     // Redirect to SPA onboarding route.
-    if (window.location.pathname !== '/desktop-onboarding') {
+    if (globalThis.location.pathname !== '/desktop-onboarding') {
       navigate('/desktop-onboarding', { replace: true });
     }
   }, []);

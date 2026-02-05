@@ -7,7 +7,7 @@ import { search1api } from '../search1api';
 describe('search1api crawler', () => {
   // Mock fetch function
   const mockFetch = vi.fn();
-  global.fetch = mockFetch;
+  globalThis.fetch = mockFetch;
 
   // Original env
   let originalEnv: NodeJS.ProcessEnv;

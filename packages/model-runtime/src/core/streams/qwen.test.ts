@@ -1,7 +1,7 @@
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { StreamContext } from './protocol';
+import type { StreamContext } from './protocol';
 import { QwenAIStream, transformQwenStream } from './qwen';
 
 describe('QwenAIStream', () => {
@@ -497,7 +497,7 @@ describe('QwenAIStream', () => {
           id: 'chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075',
           model: 'deepseek-v3',
           object: 'chat.completion.chunk',
-          created: 1767574524,
+          created: 1_767_574_524,
         });
         controller.enqueue({
           choices: [
@@ -510,7 +510,7 @@ describe('QwenAIStream', () => {
           id: 'chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075',
           model: 'deepseek-v3',
           object: 'chat.completion.chunk',
-          created: 1767574524,
+          created: 1_767_574_524,
         });
         controller.enqueue({
           choices: [
@@ -523,7 +523,7 @@ describe('QwenAIStream', () => {
           id: 'chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075',
           model: 'deepseek-v3',
           object: 'chat.completion.chunk',
-          created: 1767574524,
+          created: 1_767_574_524,
         });
 
         // First tool call chunk with id, name, and partial arguments
@@ -550,7 +550,7 @@ describe('QwenAIStream', () => {
           id: 'chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075',
           model: 'deepseek-v3',
           object: 'chat.completion.chunk',
-          created: 1767574524,
+          created: 1_767_574_524,
         });
 
         // Subsequent tool call chunk with only incremental arguments (no id)
@@ -575,7 +575,7 @@ describe('QwenAIStream', () => {
           id: 'chatcmpl-4f901cb2-91bc-9763-a2c8-3ed58e9f4075',
           model: 'deepseek-v3',
           object: 'chat.completion.chunk',
-          created: 1767574524,
+          created: 1_767_574_524,
         });
 
         controller.close();
@@ -639,7 +639,7 @@ describe('parallel tool calls streaming bug', () => {
       {
         id: streamId,
         object: 'chat.completion.chunk',
-        created: 1768906556,
+        created: 1_768_906_556,
         model: 'qwen3-max',
         choices: [
           {
@@ -663,7 +663,7 @@ describe('parallel tool calls streaming bug', () => {
       {
         id: streamId,
         object: 'chat.completion.chunk',
-        created: 1768906556,
+        created: 1_768_906_556,
         model: 'qwen3-max',
         choices: [
           {
@@ -686,7 +686,7 @@ describe('parallel tool calls streaming bug', () => {
       {
         id: streamId,
         object: 'chat.completion.chunk',
-        created: 1768906556,
+        created: 1_768_906_556,
         model: 'qwen3-max',
         choices: [
           {
@@ -704,7 +704,7 @@ describe('parallel tool calls streaming bug', () => {
       {
         id: streamId,
         object: 'chat.completion.chunk',
-        created: 1768906556,
+        created: 1_768_906_556,
         model: 'qwen3-max',
         choices: [
           {
@@ -718,7 +718,7 @@ describe('parallel tool calls streaming bug', () => {
       {
         id: streamId,
         object: 'chat.completion.chunk',
-        created: 1768906556,
+        created: 1_768_906_556,
         model: 'qwen3-max',
         choices: [
           {
@@ -732,7 +732,7 @@ describe('parallel tool calls streaming bug', () => {
       {
         id: streamId,
         object: 'chat.completion.chunk',
-        created: 1768906556,
+        created: 1_768_906_556,
         model: 'qwen3-max',
         choices: [
           {
@@ -755,7 +755,7 @@ describe('parallel tool calls streaming bug', () => {
       {
         id: streamId,
         object: 'chat.completion.chunk',
-        created: 1768906556,
+        created: 1_768_906_556,
         model: 'qwen3-max',
         choices: [
           {
@@ -773,7 +773,7 @@ describe('parallel tool calls streaming bug', () => {
       {
         id: streamId,
         object: 'chat.completion.chunk',
-        created: 1768906556,
+        created: 1_768_906_556,
         model: 'qwen3-max',
         choices: [
           {
@@ -787,7 +787,7 @@ describe('parallel tool calls streaming bug', () => {
       {
         id: streamId,
         object: 'chat.completion.chunk',
-        created: 1768906556,
+        created: 1_768_906_556,
         model: 'qwen3-max',
         choices: [
           {
@@ -810,7 +810,7 @@ describe('parallel tool calls streaming bug', () => {
       {
         id: streamId,
         object: 'chat.completion.chunk',
-        created: 1768906556,
+        created: 1_768_906_556,
         model: 'qwen3-max',
         choices: [
           {
@@ -826,7 +826,7 @@ describe('parallel tool calls streaming bug', () => {
       {
         id: streamId,
         object: 'chat.completion.chunk',
-        created: 1768906556,
+        created: 1_768_906_556,
         model: 'qwen3-max',
         choices: [
           {
@@ -840,7 +840,7 @@ describe('parallel tool calls streaming bug', () => {
       {
         id: streamId,
         object: 'chat.completion.chunk',
-        created: 1768906556,
+        created: 1_768_906_556,
         model: 'qwen3-max',
         choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
       },

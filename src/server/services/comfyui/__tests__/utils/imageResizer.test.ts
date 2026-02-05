@@ -1,10 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  type Architecture,
-  ImageResizer,
-  imageResizer,
-} from '@/server/services/comfyui/utils/imageResizer';
+import type { Architecture } from '@/server/services/comfyui/utils/imageResizer';
+import { ImageResizer, imageResizer } from '@/server/services/comfyui/utils/imageResizer';
 
 // Mock debug module
 vi.mock('debug', () => ({
@@ -206,7 +203,7 @@ describe('imageResizer.ts', () => {
         });
 
         it('should handle very large dimensions', () => {
-          const result = resizer.calculateTargetDimensions(10000, 10000, 'FLUX');
+          const result = resizer.calculateTargetDimensions(10_000, 10_000, 'FLUX');
 
           expect(result.needsResize).toBe(true);
           expect(result.width).toBeLessThanOrEqual(1440);
@@ -398,7 +395,7 @@ describe('imageResizer.ts', () => {
         expect(minResult.needsResize).toBe(true);
 
         // Test maximum boundary
-        const maxResult = resizer.calculateTargetDimensions(10000, 10000, arch);
+        const maxResult = resizer.calculateTargetDimensions(10_000, 10_000, arch);
         expect(maxResult.needsResize).toBe(true);
       });
     });

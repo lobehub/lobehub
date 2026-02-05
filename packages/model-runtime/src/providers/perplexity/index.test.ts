@@ -2,7 +2,7 @@
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
 import { LobePerplexityAI } from './index';
 
@@ -69,7 +69,7 @@ describe('LobePerplexityAI', () => {
         {
           id: '506d64fb-e7f2-4d94-b80f-158369e9446d',
           model: 'sonar-pro',
-          created: 1739896615,
+          created: 1_739_896_615,
           object: 'chat.completion.chunk',
           choices: [
             {
@@ -92,7 +92,7 @@ describe('LobePerplexityAI', () => {
         {
           id: '506d64fb-e7f2-4d94-b80f-158369e9446d',
           model: 'sonar-pro',
-          created: 1739896615,
+          created: 1_739_896_615,
           usage: {
             prompt_tokens: 4,
             completion_tokens: 3,
@@ -128,7 +128,7 @@ describe('LobePerplexityAI', () => {
         {
           id: '506d64fb-e7f2-4d94-b80f-158369e9446d',
           model: 'sonar-pro',
-          created: 1739896615,
+          created: 1_739_896_615,
           usage: {
             prompt_tokens: 4,
             completion_tokens: 9,
@@ -164,7 +164,7 @@ describe('LobePerplexityAI', () => {
         {
           id: '506d64fb-e7f2-4d94-b80f-158369e9446d',
           model: 'sonar-reasoning-pro',
-          created: 1741250924,
+          created: 1_741_250_924,
           usage: {
             prompt_tokens: 2,
             completion_tokens: 685,

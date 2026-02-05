@@ -269,16 +269,16 @@ export class ShortcutManager {
    - 注入 App 实例
 
 ```typescript
-import { ControllerModule, IpcMethod } from '@/controllers'
+import { ControllerModule, IpcMethod } from '@/controllers';
 
 export class ControllerModule implements IControllerModule {
   constructor(public app: App) {
-    this.app = app
+    this.app = app;
   }
 }
 
 export class BrowserWindowsCtr extends ControllerModule {
-  static override readonly groupName = 'windows' // must be readonly
+  static override readonly groupName = 'windows'; // must be readonly
 
   @IpcMethod()
   openSettingsWindow(params?: OpenSettingsWindowOptions) {

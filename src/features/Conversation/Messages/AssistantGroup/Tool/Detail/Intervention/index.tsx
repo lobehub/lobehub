@@ -1,6 +1,6 @@
 import { safeParseJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
-import { Suspense, memo, useCallback, useRef, useState } from 'react';
+import { memo, Suspense, useCallback, useRef, useState } from 'react';
 
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
@@ -103,8 +103,8 @@ const Intervention = memo<InterventionProps>(
             args={safeParseJSON(requestArgs || '')}
             identifier={identifier}
             messageId={id}
-            onArgsChange={handleArgsChange}
             registerBeforeApprove={registerBeforeApprove}
+            onArgsChange={handleArgsChange}
           />
           <Flexbox horizontal justify={'space-between'}>
             <ModeSelector />
@@ -113,8 +113,8 @@ const Intervention = memo<InterventionProps>(
               approvalMode={approvalMode}
               identifier={identifier}
               messageId={id}
-              onBeforeApprove={handleBeforeApprove}
               toolCallId={toolCallId}
+              onBeforeApprove={handleBeforeApprove}
             />
           </Flexbox>
         </Flexbox>

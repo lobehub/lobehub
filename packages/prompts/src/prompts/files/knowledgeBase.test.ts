@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { FileContent } from '../knowledgeBaseQA';
-import { promptAgentKnowledge } from './knowledgeBase';
 import type { KnowledgeBaseInfo } from './knowledgeBase';
+import { promptAgentKnowledge } from './knowledgeBase';
 
 describe('promptAgentKnowledge', () => {
   it('should return empty string when no files and no knowledge bases', () => {

@@ -1,12 +1,13 @@
 // @vitest-environment node
 import { eq } from 'drizzle-orm';
-import { AiProviderModelListItem } from 'model-bank';
+import type { AiProviderModelListItem } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { AiModelSelectItem, NewAiModelItem, aiModels, users } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
-import { AiModelModel } from '../aiModel';
 import { getTestDB } from '../../core/getTestDB';
+import type { NewAiModelItem } from '../../schemas';
+import { aiModels, users } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import { AiModelModel } from '../aiModel';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 

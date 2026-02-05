@@ -1,5 +1,5 @@
 import type { Pricing } from 'model-bank';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import { describe, expect, it } from 'vitest';
 
 import { convertOpenAIImageUsage, convertOpenAIResponseUsage, convertOpenAIUsage } from './openai';
@@ -423,7 +423,7 @@ describe('convertOpenAIImageUsage', () => {
       totalInputTokens: 14,
       totalOutputTokens: 4160,
       totalTokens: 4174,
-      cost: 0.16647, // Based on pricing: 14 * 5/1M + 0 * 10/1M + 4160 * 40/1M = 0.00007 + 0 + 0.1664 = 0.16647
+      cost: 0.166_47, // Based on pricing: 14 * 5/1M + 0 * 10/1M + 4160 * 40/1M = 0.00007 + 0 + 0.1664 = 0.16647
     });
   });
 });

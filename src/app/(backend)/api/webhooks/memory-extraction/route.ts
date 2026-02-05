@@ -2,10 +2,10 @@ import { NextResponse } from 'next/server';
 
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import {
-  MemoryExtractionExecutor,
-  MemoryExtractionWorkflowService,
   buildWorkflowPayloadInput,
+  MemoryExtractionExecutor,
   memoryExtractionPayloadSchema,
+  MemoryExtractionWorkflowService,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 

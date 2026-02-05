@@ -53,14 +53,14 @@ const FollowButton = memo<FollowButtonProps>(({ userId }) => {
   return (
     <Button
       loading={loading}
-      onClick={handleClick}
       shape={'round'}
       size={'large'}
+      type={isFollowing ? 'default' : 'primary'}
       style={{
         fontWeight: 500,
         minWidth: 120,
       }}
-      type={isFollowing ? 'default' : 'primary'}
+      onClick={handleClick}
     >
       {isFollowing ? t('user.unfollow') : t('user.follow')}
     </Button>

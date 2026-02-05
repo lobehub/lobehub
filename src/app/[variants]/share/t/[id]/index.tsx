@@ -12,8 +12,8 @@ import NotFound from '@/components/404';
 import Loading from '@/components/Loading/BrandTextLoading';
 import { lambdaClient } from '@/libs/trpc/client';
 
-import SharedMessageList from './SharedMessageList';
 import ActionBar from './features/ActionBar';
+import SharedMessageList from './SharedMessageList';
 
 const styles = createStaticStyles(({ css }) => ({
   errorContainer: css`
@@ -56,13 +56,13 @@ const ShareTopicPage = memo(() => {
         <Center className={styles.errorContainer}>
           <NotFound
             desc={t('sharePage.error.unauthorized.subtitle')}
+            status={''}
+            title={t('sharePage.error.unauthorized.title')}
             extra={
               <Button href="/signin" type="primary">
                 {t('sharePage.error.unauthorized.action')}
               </Button>
             }
-            status={''}
-            title={t('sharePage.error.unauthorized.title')}
           />
         </Center>
       );

@@ -1,10 +1,12 @@
 'use client';
 
 import { ActionIcon, Checkbox, Flexbox, Icon, SortableList } from '@lobehub/ui';
-import { Input, InputRef } from 'antd';
+import type { InputRef } from 'antd';
+import { Input } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CircleArrowRight, Trash2 } from 'lucide-react';
-import { ChangeEvent, KeyboardEvent, memo, useCallback, useEffect, useRef } from 'react';
+import type { ChangeEvent, KeyboardEvent } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTodoListStore } from './store';
@@ -126,42 +128,42 @@ const TodoItemRow = memo<TodoItemRowProps>(({ id, placeholder }) => {
   }, [id, toggleItem]);
 
   return (
-    <Flexbox align="center" className={styles.itemRow} gap={4} horizontal width="100%">
+    <Flexbox horizontal align="center" className={styles.itemRow} gap={4} width="100%">
       <SortableList.DragHandle className={cx(styles.dragHandle, 'drag-handle')} size="small" />
       {isProcessing ? (
         <Icon
           icon={CircleArrowRight}
-          onClick={handleToggle}
           size={16}
           style={{ color: cssVar.colorInfo, cursor: 'pointer', flexShrink: 0 }}
+          onClick={handleToggle}
         />
       ) : (
         <Checkbox
           backgroundColor={cssVar.colorSuccess}
           checked={isCompleted}
-          onChange={handleToggle}
           shape={'circle'}
           style={{ borderWidth: 1.5 }}
+          onChange={handleToggle}
         />
       )}
       <Input
         className={cx(isCompleted && styles.textCompleted, isProcessing && styles.textProcessing)}
-        onChange={handleChange}
-        onFocus={handleFocus}
-        onKeyDown={handleKeyDown}
         placeholder={defaultPlaceholder}
         ref={inputRef}
         size="small"
         style={{ flex: 1 }}
         value={text}
         variant="borderless"
+        onChange={handleChange}
+        onFocus={handleFocus}
+        onKeyDown={handleKeyDown}
       />
       <ActionIcon
         className={cx(styles.deleteIcon, 'delete-icon')}
         icon={Trash2}
-        onClick={handleDelete}
         size="small"
         tabIndex={-1}
+        onClick={handleDelete}
       />
     </Flexbox>
   );

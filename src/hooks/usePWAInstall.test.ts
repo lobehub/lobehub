@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { PWA_INSTALL_ID } from '@/const/layoutTokens';
 
-import { usePWAInstall } from './usePWAInstall';
 import { usePlatform } from './usePlatform';
+import { usePWAInstall } from './usePWAInstall';
 
 // Mocks
 vi.mock('./usePlatform', () => ({

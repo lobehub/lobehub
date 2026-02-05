@@ -138,7 +138,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
       // Verify origin for security
-      if (event.origin !== window.location.origin) return;
+      if (event.origin !== globalThis.location.origin) return;
 
       if (event.data?.type === 'LOBEHUB_SKILL_AUTH_SUCCESS' && event.data?.provider === provider) {
         console.log('[LobehubSkill] OAuth success message received for provider:', provider);
@@ -178,7 +178,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
     setIsConnecting(true);
     try {
       // Use /oauth/callback/success as redirect URI with provider param for auto-enable
-      const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`;
+      const redirectUri = `${globalThis.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`;
       const { authorizeUrl } = await getAuthorizeUrl(provider, { redirectUri });
       openOAuthWindow(authorizeUrl);
     } catch (error) {
@@ -198,8 +198,8 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
   const renderRightControl = () => {
     if (isConnecting) {
       return (
-        <Flexbox align="center" gap={4} horizontal onClick={(e) => e.stopPropagation()}>
-          <Icon icon={Loader2} spin />
+        <Flexbox horizontal align="center" gap={4} onClick={(e) => e.stopPropagation()}>
+          <Icon spin icon={Loader2} />
         </Flexbox>
       );
     }
@@ -207,14 +207,14 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
     if (!server) {
       return (
         <Flexbox
+          horizontal
           align="center"
           gap={4}
-          horizontal
+          style={{ cursor: 'pointer', opacity: 0.65 }}
           onClick={(e) => {
             e.stopPropagation();
             handleConnect();
           }}
-          style={{ cursor: 'pointer', opacity: 0.65 }}
         >
           {t('tools.lobehubSkill.connect', { defaultValue: 'Connect' })}
           <Icon icon={SquareArrowOutUpRight} size="small" />
@@ -225,7 +225,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
     switch (server.status) {
       case LobehubSkillStatus.CONNECTED: {
         if (isToggling) {
-          return <Icon icon={Loader2} spin />;
+          return <Icon spin icon={Loader2} />;
         }
         return (
           <Checkbox
@@ -240,27 +240,27 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
       case LobehubSkillStatus.CONNECTING: {
         if (isWaitingAuth) {
           return (
-            <Flexbox align="center" gap={4} horizontal onClick={(e) => e.stopPropagation()}>
-              <Icon icon={Loader2} spin />
+            <Flexbox horizontal align="center" gap={4} onClick={(e) => e.stopPropagation()}>
+              <Icon spin icon={Loader2} />
             </Flexbox>
           );
         }
         return (
           <Flexbox
+            horizontal
             align="center"
             gap={4}
-            horizontal
+            style={{ cursor: 'pointer', opacity: 0.65 }}
             onClick={async (e) => {
               e.stopPropagation();
               try {
-                const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`;
+                const redirectUri = `${globalThis.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`;
                 const { authorizeUrl } = await getAuthorizeUrl(provider, { redirectUri });
                 openOAuthWindow(authorizeUrl);
               } catch (error) {
                 console.error('[LobehubSkill] Failed to get authorize URL:', error);
               }
             }}
-            style={{ cursor: 'pointer', opacity: 0.65 }}
           >
             {t('tools.lobehubSkill.authorize', { defaultValue: 'Authorize' })}
             <Icon icon={SquareArrowOutUpRight} size="small" />
@@ -270,14 +270,14 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
       case LobehubSkillStatus.NOT_CONNECTED: {
         return (
           <Flexbox
+            horizontal
             align="center"
             gap={4}
-            horizontal
+            style={{ cursor: 'pointer', opacity: 0.65 }}
             onClick={(e) => {
               e.stopPropagation();
               handleConnect();
             }}
-            style={{ cursor: 'pointer', opacity: 0.65 }}
           >
             {t('tools.lobehubSkill.connect', { defaultValue: 'Connect' })}
             <Icon icon={SquareArrowOutUpRight} size="small" />
@@ -299,9 +299,9 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
 
   return (
     <Flexbox
+      horizontal
       align={'center'}
       gap={24}
-      horizontal
       justify={'space-between'}
       onClick={(e) => {
         e.stopPropagation();
@@ -310,7 +310,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
         }
       }}
     >
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         {label}
       </Flexbox>
       {renderRightControl()}

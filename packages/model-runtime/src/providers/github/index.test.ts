@@ -3,7 +3,8 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import { GithubModelCard, LobeGithubAI, params } from './index';
+import type { GithubModelCard } from './index';
+import { LobeGithubAI, params } from './index';
 
 // Basic provider tests
 testProvider({
@@ -328,7 +329,7 @@ describe('LobeGithubAI - custom features', () => {
     ];
 
     it('should fetch and format models successfully', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         json: async () => mockGithubModels,
       });
 
@@ -342,7 +343,7 @@ describe('LobeGithubAI - custom features', () => {
     });
 
     it('should format model with all capabilities', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         json: async () => [mockGithubModels[0]],
       });
 
@@ -360,7 +361,7 @@ describe('LobeGithubAI - custom features', () => {
     });
 
     it('should format model with reasoning tag', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         json: async () => [mockGithubModels[2]],
       });
 
@@ -372,7 +373,7 @@ describe('LobeGithubAI - custom features', () => {
     });
 
     it('should handle model without tool-calling capability', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         json: async () => [mockGithubModels[2]],
       });
 
@@ -384,7 +385,7 @@ describe('LobeGithubAI - custom features', () => {
     });
 
     it('should handle model without multimodal/vision tags', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         json: async () => [mockGithubModels[1]],
       });
 
@@ -396,7 +397,7 @@ describe('LobeGithubAI - custom features', () => {
     });
 
     it('should handle invalid version format', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         json: async () => [mockGithubModels[3]],
       });
 
@@ -413,7 +414,7 @@ describe('LobeGithubAI - custom features', () => {
         version: '2024-01-15',
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         json: async () => [validVersionModel],
       });
 
@@ -429,7 +430,7 @@ describe('LobeGithubAI - custom features', () => {
         tags: [],
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         json: async () => [visionModel],
       });
 
@@ -439,7 +440,7 @@ describe('LobeGithubAI - custom features', () => {
     });
 
     it('should handle empty model list', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         json: async () => [],
       });
 
@@ -451,13 +452,13 @@ describe('LobeGithubAI - custom features', () => {
     });
 
     it('should handle fetch errors gracefully', async () => {
-      global.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
+      globalThis.fetch = vi.fn().mockRejectedValue(new Error('Network error'));
 
       await expect(params.models!()).rejects.toThrow('Network error');
     });
 
     it('should handle invalid JSON response', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         json: async () => {
           throw new Error('Invalid JSON');
         },
@@ -486,7 +487,7 @@ describe('LobeGithubAI - custom features', () => {
         version: '',
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         json: async () => [minimalModel],
       });
 
@@ -510,7 +511,7 @@ describe('LobeGithubAI - custom features', () => {
         },
       };
 
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         json: async () => [testModel],
       });
 
@@ -520,7 +521,7 @@ describe('LobeGithubAI - custom features', () => {
     });
 
     it('should handle multiple models with different features', async () => {
-      global.fetch = vi.fn().mockResolvedValue({
+      globalThis.fetch = vi.fn().mockResolvedValue({
         json: async () => mockGithubModels,
       });
 

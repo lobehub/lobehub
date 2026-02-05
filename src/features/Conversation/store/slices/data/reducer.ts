@@ -119,7 +119,7 @@ export const messagesReducer = (
     case 'updateMessage': {
       const { id, value } = payload;
       const index = state.findIndex((m) => m.id === id);
-      if (index < 0) return state;
+      if (index === -1) return state;
 
       return produce(state, (draft) => {
         draft[index] = merge(draft[index], { ...value, updatedAt: Date.now() });
@@ -129,7 +129,7 @@ export const messagesReducer = (
     case 'updateMessageExtra': {
       const { id, key, value } = payload;
       const index = state.findIndex((m) => m.id === id);
-      if (index < 0) return state;
+      if (index === -1) return state;
 
       return produce(state, (draft) => {
         const message = draft[index];
@@ -145,7 +145,7 @@ export const messagesReducer = (
     case 'updateMessageMetadata': {
       const { id, value } = payload;
       const index = state.findIndex((m) => m.id === id);
-      if (index < 0) return state;
+      if (index === -1) return state;
 
       return produce(state, (draft) => {
         const message = draft[index];
@@ -157,7 +157,7 @@ export const messagesReducer = (
     case 'updatePluginState': {
       const { id, key, value } = payload;
       const index = state.findIndex((m) => m.id === id);
-      if (index < 0) return state;
+      if (index === -1) return state;
 
       const message = state[index];
       const newPluginState = message.pluginState
@@ -176,7 +176,7 @@ export const messagesReducer = (
     case 'updateMessagePlugin': {
       const { id, value } = payload;
       const index = state.findIndex((m) => m.id === id);
-      if (index < 0) return state;
+      if (index === -1) return state;
 
       const message = state[index];
       if (message.role !== 'tool') return state;
@@ -190,7 +190,7 @@ export const messagesReducer = (
     case 'addMessageTool': {
       const { id, value } = payload;
       const index = state.findIndex((m) => m.id === id);
-      if (index < 0) return state;
+      if (index === -1) return state;
 
       const message = state[index];
       if (message.role !== 'assistant') return state;
@@ -212,7 +212,7 @@ export const messagesReducer = (
     case 'deleteMessageTool': {
       const { id, tool_call_id } = payload;
       const index = state.findIndex((m) => m.id === id);
-      if (index < 0) return state;
+      if (index === -1) return state;
 
       const message = state[index];
       if (message.role !== 'assistant' || !message.tools) return state;
@@ -226,13 +226,13 @@ export const messagesReducer = (
     case 'updateMessageTools': {
       const { id, value, tool_call_id } = payload;
       const index = state.findIndex((m) => m.id === id);
-      if (index < 0) return state;
+      if (index === -1) return state;
 
       const message = state[index];
       if (message.role !== 'assistant' || !message.tools) return state;
 
       const toolIndex = message.tools.findIndex((tool) => tool.id === tool_call_id);
-      if (toolIndex < 0) return state;
+      if (toolIndex === -1) return state;
 
       return produce(state, (draft) => {
         draft[index].tools![toolIndex] = merge(draft[index].tools![toolIndex], value);
@@ -256,7 +256,7 @@ export const messagesReducer = (
     case 'deleteMessage': {
       const { id } = payload;
       const index = state.findIndex((m) => m.id === id);
-      if (index < 0) return state;
+      if (index === -1) return state;
 
       return produce(state, (draft) => {
         draft.splice(index, 1);

@@ -3,5 +3,3 @@ declare module '@lobehub/ui' {
     'data-no-highlight'?: boolean;
   }
 }
-
-export {};

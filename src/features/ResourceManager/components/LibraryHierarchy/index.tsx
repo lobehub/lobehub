@@ -13,10 +13,10 @@ import type { ResourceQueryParams } from '@/types/resource';
 import { HierarchyNode } from './HierarchyNode';
 import TreeSkeleton from './TreeSkeleton';
 import {
-  TREE_REFRESH_EVENT,
   getTreeState,
   resourceItemToTreeItem,
   sortTreeItems,
+  TREE_REFRESH_EVENT,
 } from './treeState';
 import type { TreeItem } from './types';
 
@@ -265,7 +265,7 @@ const LibraryHierarchy = memo(() => {
 
   // Listen for external tree refresh events (triggered when cache is cleared)
   useEffect(() => {
-    if (typeof window === 'undefined') return;
+    if (typeof globalThis.window === 'undefined') return;
 
     const handleTreeRefresh = (event: Event) => {
       const detail = (event as CustomEvent<{ knowledgeBaseId?: string }>).detail;
@@ -273,9 +273,9 @@ const LibraryHierarchy = memo(() => {
       forceUpdate();
     };
 
-    window.addEventListener(TREE_REFRESH_EVENT, handleTreeRefresh);
+    globalThis.addEventListener(TREE_REFRESH_EVENT, handleTreeRefresh);
     return () => {
-      window.removeEventListener(TREE_REFRESH_EVENT, handleTreeRefresh);
+      globalThis.removeEventListener(TREE_REFRESH_EVENT, handleTreeRefresh);
     };
   }, [libraryId, forceUpdate]);
 
@@ -370,7 +370,7 @@ const LibraryHierarchy = memo(() => {
   return (
     <Flexbox paddingInline={4} style={{ height: '100%' }}>
       <VList
-        bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
+        bufferSize={typeof globalThis.window !== 'undefined' ? window.innerHeight : 0}
         style={{ height: '100%' }}
       >
         {visibleNodes.map(({ item, key, level }) => (
@@ -381,10 +381,10 @@ const LibraryHierarchy = memo(() => {
               item={item}
               level={level}
               loadingFolders={loadingFolders}
-              onLoadFolder={handleLoadFolder}
-              onToggleFolder={handleToggleFolder}
               selectedKey={selectedKey}
               updateKey={updateKey}
+              onLoadFolder={handleLoadFolder}
+              onToggleFolder={handleToggleFolder}
             />
           </div>
         ))}

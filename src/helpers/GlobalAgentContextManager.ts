@@ -27,7 +27,7 @@ const CONTEXT_KEY = '__LOBE_GLOBAL_AGENT_CONTEXT__';
 
 class GlobalAgentContextManager {
   private get context(): LobeGlobalAgentContext {
-    if (typeof window === 'undefined') return {};
+    if (typeof globalThis.window === 'undefined') return {};
     if (!window[CONTEXT_KEY]) {
       window[CONTEXT_KEY] = {};
     }
@@ -35,7 +35,7 @@ class GlobalAgentContextManager {
   }
 
   private set context(value: LobeGlobalAgentContext) {
-    if (typeof window === 'undefined') return;
+    if (typeof globalThis.window === 'undefined') return;
     window[CONTEXT_KEY] = value;
   }
 
@@ -74,7 +74,7 @@ class GlobalAgentContextManager {
     if (!template) return '';
 
     // Updated to use replaceAll for potentially multiple occurrences
-    return template.replaceAll(/{{([^}]+)}}/g, (match, key) => {
+    return template.replaceAll(/\{\{([^}]+)\}\}/g, (match, key) => {
       const trimmedKey = key.trim() as keyof LobeGlobalAgentContext;
       return ctx[trimmedKey] !== undefined ? String(ctx[trimmedKey]) : '[N/A]';
     });

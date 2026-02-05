@@ -8,11 +8,11 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { UserMemoryModel } from '@/database/models/userMemory/model';
-import { getServerDB } from '@/database/server';
 import { userMemories } from '@/database/schemas';
+import { getServerDB } from '@/database/server';
+import { selectNonVectorColumns } from '@/database/utils/columns';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { LayersEnum } from '@/types/userMemory';
-import { selectNonVectorColumns } from '@/database/utils/columns';
 
 const bodySchema = z.object({
   layer: z.nativeEnum(LayersEnum).optional(),
@@ -45,7 +45,8 @@ export const POST = async (req: Request) => {
     const parsed = bodySchema.parse(json);
 
     console.log('[locomo-dev-search] parsed body', parsed);
-    const userId = parsed.userId || (parsed.sampleId ? `locomo-user-${parsed.sampleId}` : undefined);
+    const userId =
+      parsed.userId || (parsed.sampleId ? `locomo-user-${parsed.sampleId}` : undefined);
     if (!userId) {
       return NextResponse.json({ error: 'userId or sampleId is required' }, { status: 400 });
     }
@@ -65,11 +66,11 @@ export const POST = async (req: Request) => {
     );
 
     const [embedding] =
-    (await runtime.embeddings({
-      dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
-      input: parsed.query,
-      model: config.embedding.model,
-    })) || [];
+      (await runtime.embeddings({
+        dimensions: DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
+        input: parsed.query,
+        model: config.embedding.model,
+      })) || [];
 
     if (!embedding) {
       return NextResponse.json(
@@ -95,7 +96,9 @@ export const POST = async (req: Request) => {
 
     const memoryIds = [
       ...searchResult.contexts
-        .map((context) => Array.isArray(context.userMemoryIds) ? (context.userMemoryIds as string[])[0] : undefined)
+        .map((context) =>
+          Array.isArray(context.userMemoryIds) ? (context.userMemoryIds as string[])[0] : undefined,
+        )
         .filter((id): id is string => !!id),
       ...searchResult.experiences
         .map((experience) => experience.userMemoryId)
@@ -106,9 +109,7 @@ export const POST = async (req: Request) => {
       ...searchResult.activities
         .map((activity) => activity.userMemoryId)
         .filter((id): id is string => !!id),
-      ...identities
-        .map((identity) => identity.userMemoryId)
-        .filter((id): id is string => !!id),
+      ...identities.map((identity) => identity.userMemoryId).filter((id): id is string => !!id),
     ];
 
     const uniqueMemoryIds = Array.from(new Set(memoryIds));
@@ -117,9 +118,9 @@ export const POST = async (req: Request) => {
       uniqueMemoryIds.length === 0
         ? []
         : await db
-          .select(selectNonVectorColumns(userMemories))
-          .from(userMemories)
-          .where(and(eq(userMemories.userId, userId), inArray(userMemories.id, uniqueMemoryIds)));
+            .select(selectNonVectorColumns(userMemories))
+            .from(userMemories)
+            .where(and(eq(userMemories.userId, userId), inArray(userMemories.id, uniqueMemoryIds)));
     console.log('[locomo-dev-search] fetched memories');
 
     const memoryMap = new Map(memories.map((memory) => [memory.id, memory]));

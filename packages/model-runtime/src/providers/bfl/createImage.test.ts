@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CreateImagePayload } from '../../types/image';
+import type { CreateImagePayload } from '../../types/image';
 import { createBflImage } from './createImage';
 import { BflStatusResponse } from './types';
 
@@ -19,7 +19,7 @@ vi.mock('../../utils/asyncifyPolling', () => ({
 }));
 
 // Mock fetch
-global.fetch = vi.fn();
+globalThis.fetch = vi.fn();
 const mockFetch = vi.mocked(fetch);
 
 // Mock the console.error to avoid polluting test output
@@ -65,7 +65,7 @@ describe('createBflImage', () => {
           aspectRatio: '16:9',
           cfg: 7.5,
           steps: 20,
-          seed: 12345,
+          seed: 12_345,
         },
       };
 
@@ -88,7 +88,7 @@ describe('createBflImage', () => {
             aspect_ratio: '16:9',
             guidance: 7.5,
             steps: 20,
-            seed: 12345,
+            seed: 12_345,
           }),
         }),
       );
@@ -159,7 +159,7 @@ describe('createBflImage', () => {
         params: {
           prompt: 'Test image',
           cfg: undefined,
-          seed: 12345,
+          seed: 12_345,
           steps: undefined,
         } as any,
       };
@@ -175,7 +175,7 @@ describe('createBflImage', () => {
         output_format: 'png',
         safety_tolerance: 6,
         prompt: 'Test image',
-        seed: 12345,
+        seed: 12_345,
       });
 
       expect(requestBody).not.toHaveProperty('guidance');

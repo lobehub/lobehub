@@ -5,8 +5,8 @@ import { getServerDB } from '@/database/server';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { MemoryExtractionWorkflowService } from '@/server/services/memory/userMemory/extract';
 import {
-  UserPersonaService,
   buildUserPersonaJobInput,
+  UserPersonaService,
 } from '@/server/services/memory/userMemory/persona/service';
 
 const userPersonaWebhookSchema = z.object({

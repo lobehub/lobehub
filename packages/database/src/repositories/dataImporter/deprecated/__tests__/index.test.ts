@@ -1,9 +1,8 @@
 // @vitest-environment node
 import type { ImporterEntryData } from '@lobechat/types';
 import { eq, inArray } from 'drizzle-orm';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-import { getTestDB } from '../../../../core/getTestDB';
 import {
   agents,
   agentsToSessions,
@@ -14,6 +13,7 @@ import {
   users,
 } from '@/database/schemas';
 
+import { getTestDB } from '../../../../core/getTestDB';
 import { DeprecatedDataImporterRepos as DataImporterRepos } from '../index';
 import mockImportData from './fixtures/messages.json';
 
@@ -41,8 +41,18 @@ describe('DataImporter', () => {
       const data: ImporterEntryData = {
         version: CURRENT_CONFIG_VERSION,
         sessionGroups: [
-          { id: 'group1', name: 'Group 1', createdAt: 1715186011586, updatedAt: 1715186015053 },
-          { id: 'group2', name: 'Group 2', createdAt: 1715186011586, updatedAt: 1715186015053 },
+          {
+            id: 'group1',
+            name: 'Group 1',
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
+          },
+          {
+            id: 'group2',
+            name: 'Group 2',
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
+          },
         ],
       };
 
@@ -66,8 +76,18 @@ describe('DataImporter', () => {
       const data: ImporterEntryData = {
         version: CURRENT_CONFIG_VERSION,
         sessionGroups: [
-          { id: 'group1', name: 'Group 1', createdAt: 1715186011586, updatedAt: 1715186015053 },
-          { id: 'group2', name: 'Group 2', createdAt: 1715186011586, updatedAt: 1715186015053 },
+          {
+            id: 'group1',
+            name: 'Group 1',
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
+          },
+          {
+            id: 'group2',
+            name: 'Group 2',
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
+          },
         ],
       };
 
@@ -196,8 +216,18 @@ describe('DataImporter', () => {
       const data: ImporterEntryData = {
         version: CURRENT_CONFIG_VERSION,
         sessionGroups: [
-          { id: 'group1', name: 'Group 1', createdAt: 1715186011586, updatedAt: 1715186015053 },
-          { id: 'group2', name: 'Group 2', createdAt: 1715186011586, updatedAt: 1715186015053 },
+          {
+            id: 'group1',
+            name: 'Group 1',
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
+          },
+          {
+            id: 'group2',
+            name: 'Group 2',
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
+          },
         ],
         sessions: [
           {
@@ -427,15 +457,15 @@ describe('DataImporter', () => {
           {
             id: 'topic1',
             title: 'Topic 1',
-            createdAt: 1715186011586,
-            updatedAt: 1715186015053,
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
             sessionId: 'session1',
           },
           {
             id: 'topic2',
             title: 'Topic 2',
-            createdAt: 1715186011586,
-            updatedAt: 1715186015053,
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
             sessionId: 'session2',
           },
         ],
@@ -496,8 +526,18 @@ describe('DataImporter', () => {
       const data: ImporterEntryData = {
         version: CURRENT_CONFIG_VERSION,
         topics: [
-          { id: 'topic1', title: 'Topic 1', createdAt: 1715186011586, updatedAt: 1715186015053 },
-          { id: 'topic2', title: 'Topic 2', createdAt: 1715186011586, updatedAt: 1715186015053 },
+          {
+            id: 'topic1',
+            title: 'Topic 1',
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
+          },
+          {
+            id: 'topic2',
+            title: 'Topic 2',
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
+          },
         ],
       };
 
@@ -533,11 +573,16 @@ describe('DataImporter', () => {
           {
             id: 'topic1',
             title: 'Topic 1',
-            createdAt: 1715186011586,
-            updatedAt: 1715186015053,
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
             sessionId: 'session1',
           },
-          { id: 'topic2', title: 'Topic 2', createdAt: 1715186011586, updatedAt: 1715186015053 },
+          {
+            id: 'topic2',
+            title: 'Topic 2',
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
+          },
         ],
       };
 
@@ -570,8 +615,8 @@ describe('DataImporter', () => {
             id: 'msg1',
             content: 'Message 1',
             role: 'user',
-            createdAt: 1715186011586,
-            updatedAt: 1715186015053,
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
             sessionId: 'session1',
             topicId: 'topic1',
           },
@@ -579,8 +624,8 @@ describe('DataImporter', () => {
             id: 'msg2',
             content: 'Message 2',
             role: 'assistant',
-            createdAt: 1715186011586,
-            updatedAt: 1715186015053,
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
             sessionId: 'session1',
             topicId: 'topic1',
             parentId: 'msg1',
@@ -609,8 +654,8 @@ describe('DataImporter', () => {
           {
             id: 'topic1',
             title: 'Topic 1',
-            createdAt: 1715186011586,
-            updatedAt: 1715186015053,
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
             sessionId: 'session1',
           },
         ],
@@ -643,15 +688,15 @@ describe('DataImporter', () => {
             id: 'msg1',
             content: 'Message 1',
             role: 'user',
-            createdAt: 1715186011586,
-            updatedAt: 1715186015053,
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
           },
           {
             id: 'msg2',
             content: 'Message 2',
             role: 'assistant',
-            createdAt: 1715186011586,
-            updatedAt: 1715186015053,
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
           },
         ],
       };
@@ -689,8 +734,8 @@ describe('DataImporter', () => {
           {
             id: 'topic1',
             title: 'Topic 1',
-            createdAt: 1715186011586,
-            updatedAt: 1715186015053,
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
             sessionId: 'session1',
           },
         ],
@@ -699,8 +744,8 @@ describe('DataImporter', () => {
             id: 'msg1',
             content: 'Message 1',
             role: 'user',
-            createdAt: 1715186011586,
-            updatedAt: 1715186015053,
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
             sessionId: 'session1',
             topicId: 'topic1',
           },
@@ -708,8 +753,8 @@ describe('DataImporter', () => {
             id: 'msg2',
             content: 'Message 2',
             role: 'assistant',
-            createdAt: 1715186011586,
-            updatedAt: 1715186015053,
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
             sessionId: 'session1',
             topicId: 'topic1',
             parentId: 'msg1',
@@ -718,8 +763,8 @@ describe('DataImporter', () => {
             id: 'msg3',
             content: 'Message 3',
             role: 'user',
-            createdAt: 1715186011586,
-            updatedAt: 1715186015053,
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
           },
         ],
       };
@@ -760,15 +805,15 @@ describe('DataImporter', () => {
             id: 'msg1',
             content: 'Message 1',
             role: 'user',
-            createdAt: 1715186011586,
-            updatedAt: 1715186015053,
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
           },
           {
             id: 'msg2',
             content: 'Message 2',
             role: 'assistant',
-            createdAt: 1715186011586,
-            updatedAt: 1715186015053,
+            createdAt: 1_715_186_011_586,
+            updatedAt: 1_715_186_015_053,
             parentId: 'msg1',
           },
         ],
@@ -799,9 +844,9 @@ describe('DataImporter', () => {
               files: [],
               sessionId: 'inbox',
               topicId: '2wcF8yaS',
-              createdAt: 1714236590340,
+              createdAt: 1_714_236_590_340,
               id: 'DCG1G1EH',
-              updatedAt: 1714236590340,
+              updatedAt: 1_714_236_590_340,
               extra: {},
             },
             {
@@ -810,9 +855,9 @@ describe('DataImporter', () => {
               parentId: 'DCG1G1EH',
               sessionId: 'inbox',
               topicId: '2wcF8yaS',
-              createdAt: 1714236590441,
+              createdAt: 1_714_236_590_441,
               id: 'gY41w5vQ',
-              updatedAt: 1714236590518,
+              updatedAt: 1_714_236_590_518,
               error: {
                 body: {
                   error: {
@@ -834,9 +879,9 @@ describe('DataImporter', () => {
               files: [],
               sessionId: 'a5fefc88-f6c1-44fb-9e98-3d366b1ed589',
               topicId: 'v38snJ0A',
-              createdAt: 1717080410895,
+              createdAt: 1_717_080_410_895,
               id: 'qOIxEGEB',
-              updatedAt: 1717080410895,
+              updatedAt: 1_717_080_410_895,
               extra: {},
             },
             {
@@ -845,9 +890,9 @@ describe('DataImporter', () => {
               parentId: 'qOIxEGEB',
               sessionId: 'a5fefc88-f6c1-44fb-9e98-3d366b1ed589',
               topicId: 'v38snJ0A',
-              createdAt: 1717080410970,
+              createdAt: 1_717_080_410_970,
               id: 'w28FcqY5',
-              updatedAt: 1717080411485,
+              updatedAt: 1_717_080_411_485,
               error: {
                 body: { error: { errorType: 'NoOpenAIAPIKey' }, provider: 'openai' },
                 message: 'OpenAI API Key is empty, please add a custom OpenAI API Key',
@@ -860,9 +905,9 @@ describe('DataImporter', () => {
             {
               name: 'Writter',
               sort: 0,
-              createdAt: 1706114744425,
+              createdAt: 1_706_114_744_425,
               id: 'XlUbvOvL',
-              updatedAt: 1706114747468,
+              updatedAt: 1_706_114_747_468,
             },
           ],
           sessions: [
@@ -917,16 +962,16 @@ describe('DataImporter', () => {
             {
               title: 'Default Topic',
               sessionId: 'inbox',
-              createdAt: 1714236590531,
+              createdAt: 1_714_236_590_531,
               id: '2wcF8yaS',
-              updatedAt: 1714236590531,
+              updatedAt: 1_714_236_590_531,
             },
             {
               title: 'Default Topic',
               sessionId: 'a5fefc88-f6c1-44fb-9e98-3d366b1ed589',
-              createdAt: 1717080410825,
+              createdAt: 1_717_080_410_825,
               id: 'v38snJ0A',
-              updatedAt: 1717080410825,
+              updatedAt: 1_717_080_410_825,
             },
           ],
           version: mockImportData.version,
@@ -954,6 +999,6 @@ describe('DataImporter', () => {
         });
       });
     },
-    { timeout: 15000 },
+    { timeout: 15_000 },
   );
 });

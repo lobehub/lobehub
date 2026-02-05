@@ -24,19 +24,19 @@ const GroupForkConfirmModal = memo<GroupForkConfirmModalProps>(
 
     return (
       <Modal
-        cancelText={t('cancel', { ns: 'common' })}
         centered
         closable
+        cancelText={t('cancel', { ns: 'common' })}
         confirmLoading={loading}
         okText={t('marketPublish.forkConfirm.confirmGroup')}
-        onCancel={onCancel}
-        onOk={onConfirm}
         open={open}
         title={t('marketPublish.forkConfirm.titleGroup')}
         width={480}
+        onCancel={onCancel}
+        onOk={onConfirm}
       >
         <Flexbox gap={16} style={{ marginTop: 16 }}>
-          <Flexbox align="center" gap={12} horizontal>
+          <Flexbox horizontal align="center" gap={12}>
             <Avatar avatar={originalGroup.avatar} size={48} style={{ flex: 'none' }} />
             <Flexbox gap={4}>
               <div style={{ fontWeight: 500 }}>{originalGroup.name}</div>

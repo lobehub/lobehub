@@ -14,7 +14,7 @@ describe('getImageDimensions', () => {
   // Mock base generation object
   const baseGeneration: Generation = {
     id: 'test-gen-id',
-    seed: 12345,
+    seed: 12_345,
     createdAt: new Date(),
     asyncTaskId: null,
     task: {
@@ -376,7 +376,7 @@ describe('getImageDimensions', () => {
 describe('getAspectRatio (isolated unit testing)', () => {
   const mockGeneration: Generation = {
     id: 'test-gen-id',
-    seed: 12345,
+    seed: 12_345,
     createdAt: new Date(),
     asyncTaskId: null,
     task: {
@@ -439,7 +439,7 @@ describe('getAspectRatio (isolated unit testing)', () => {
 describe('getThumbnailMaxWidth (isolated unit testing)', () => {
   const mockGeneration: Generation = {
     id: 'test-gen-id',
-    seed: 12345,
+    seed: 12_345,
     createdAt: new Date(),
     asyncTaskId: null,
     task: {
@@ -457,11 +457,11 @@ describe('getThumbnailMaxWidth (isolated unit testing)', () => {
   };
 
   // Mock window.innerHeight for tests
-  const originalWindow = global.window;
+  const originalWindow = globalThis.window;
 
   beforeEach(() => {
     vi.clearAllMocks();
-    Object.defineProperty(global, 'window', {
+    Object.defineProperty(globalThis, 'window', {
       writable: true,
       value: {
         innerHeight: 800,
@@ -470,7 +470,7 @@ describe('getThumbnailMaxWidth (isolated unit testing)', () => {
   });
 
   afterEach(() => {
-    global.window = originalWindow;
+    globalThis.window = originalWindow;
   });
 
   it('should return DEFAULT_MAX_ITEM_WIDTH when no dimensions available', () => {
@@ -554,7 +554,7 @@ describe('getThumbnailMaxWidth (isolated unit testing)', () => {
   });
 
   it('should handle different window.innerHeight values', () => {
-    Object.defineProperty(global, 'window', {
+    Object.defineProperty(globalThis, 'window', {
       writable: true,
       value: {
         innerHeight: 600,

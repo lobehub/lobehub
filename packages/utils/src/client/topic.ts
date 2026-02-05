@@ -1,4 +1,4 @@
-import { ChatTopic, GroupedTopic, TimeGroupId } from '@lobechat/types';
+import type { ChatTopic, GroupedTopic, TimeGroupId } from '@lobechat/types';
 import dayjs from 'dayjs';
 import isToday from 'dayjs/plugin/isToday';
 import isYesterday from 'dayjs/plugin/isYesterday';
@@ -42,13 +42,14 @@ const getTopicGroupId = (timestamp: number): TimeGroupId => {
 
 // Ensure group sorting
 const sortGroups = (groups: GroupedTopic[]): GroupedTopic[] => {
-  const orderMap = new Map<string, number>();
+  const orderMap = new Map<string, number>([
+    ['today', 0],
+    ['yesterday', 1],
+    ['week', 2],
+    ['month', 3],
+  ]);
 
   // Set the order of fixed groups
-  orderMap.set('today', 0);
-  orderMap.set('yesterday', 1);
-  orderMap.set('week', 2);
-  orderMap.set('month', 3);
 
   return groups.sort((a, b) => {
     const orderA = orderMap.get(a.id) ?? Number.MAX_SAFE_INTEGER;

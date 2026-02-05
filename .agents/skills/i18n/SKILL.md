@@ -31,11 +31,13 @@ export default {
 **Patterns:** `{feature}.{context}.{action|status}`
 
 **Parameters:** Use `{{variableName}}` syntax
+
 ```typescript
 'alert.cloud.desc': '我们提供 {{credit}} 额度积分',
 ```
 
 **Avoid key conflicts:**
+
 ```typescript
 // ❌ Conflict
 'clientDB.solve': '自助解决',
@@ -60,12 +62,12 @@ import { useTranslation } from 'react-i18next';
 
 const { t } = useTranslation('common');
 
-t('newFeature.title')
-t('alert.cloud.desc', { credit: '1000' })
+t('newFeature.title');
+t('alert.cloud.desc', { credit: '1000' });
 
 // Multiple namespaces
 const { t } = useTranslation(['common', 'chat']);
-t('common:save')
+t('common:save');
 ```
 
 ## Common Namespaces

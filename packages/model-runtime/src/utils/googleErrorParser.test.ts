@@ -125,7 +125,7 @@ describe('googleErrorParser', () => {
 
     it('should not be vulnerable to ReDoS attacks', () => {
       // Test with a potentially malicious input that could cause catastrophic backtracking
-      const maliciousInput = 'Error ' + 'a'.repeat(10000) + ' [not matching]';
+      const maliciousInput = 'Error ' + 'a'.repeat(10_000) + ' [not matching]';
       const startTime = Date.now();
       const result = extractStatusCodeFromError(maliciousInput);
       const endTime = Date.now();
@@ -137,7 +137,7 @@ describe('googleErrorParser', () => {
 
     it('should not be vulnerable to ReDoS with many spaces', () => {
       // Test the specific case mentioned in the security warning: '[9 ' + many spaces
-      const maliciousInput = '[9 ' + ' '.repeat(10000) + ']';
+      const maliciousInput = '[9 ' + ' '.repeat(10_000) + ']';
       const startTime = Date.now();
       const result = extractStatusCodeFromError(maliciousInput);
       const endTime = Date.now();
@@ -148,7 +148,7 @@ describe('googleErrorParser', () => {
     });
 
     it('should handle very long error messages efficiently', () => {
-      const longMessage = 'a'.repeat(50000);
+      const longMessage = 'a'.repeat(50_000);
       const input = `Prefix [400 Bad Request] ${longMessage}`;
       const startTime = Date.now();
       const result = extractStatusCodeFromError(input);
@@ -225,7 +225,7 @@ describe('googleErrorParser', () => {
 
     it('should not be vulnerable to ReDoS in status JSON parsing', () => {
       // Test with malicious input that could cause catastrophic backtracking
-      const maliciousInput = 'got status: UNAVAILABLE. ' + 'a'.repeat(10000);
+      const maliciousInput = 'got status: UNAVAILABLE. ' + 'a'.repeat(10_000);
       const startTime = Date.now();
       const result = parseGoogleErrorMessage(maliciousInput);
       const endTime = Date.now();

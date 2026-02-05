@@ -20,16 +20,16 @@ const HeaderAvatar = memo(() => {
       clickable
       flex={'none'}
       height={32}
+      padding={2}
+      variant={'borderless'}
+      width={32}
+      style={{
+        overflow: 'hidden',
+      }}
       onClick={(e) => {
         e.stopPropagation();
         openChatSettings();
       }}
-      padding={2}
-      style={{
-        overflow: 'hidden',
-      }}
-      variant={'borderless'}
-      width={32}
     >
       <Avatar avatar={avatar} background={backgroundColor} size={28} />
     </Block>

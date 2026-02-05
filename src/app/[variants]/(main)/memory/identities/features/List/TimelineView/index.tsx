@@ -20,19 +20,19 @@ const TimelineView = memo<TimelineViewProps>(({ identities, isLoading, onClick }
   return (
     <GenericTimelineView
       data={identities}
-      getDateForGrouping={(identity) =>
-        identity.episodicDate || identity.capturedAt || identity.createdAt
-      }
       groupBy="month"
       hasMore={identitiesHasMore}
       isLoading={isLoading}
-      onLoadMore={loadMoreIdentities}
       renderHeader={(periodKey) => <PeriodHeader groupBy="month" periodKey={periodKey} />}
+      getDateForGrouping={(identity) =>
+        identity.episodicDate || identity.capturedAt || identity.createdAt
+      }
       renderItem={(identity) => (
         <TimelineItemWrapper>
           <IdentityCard identity={identity} onClick={() => onClick?.(identity)} />
         </TimelineItemWrapper>
       )}
+      onLoadMore={loadMoreIdentities}
     />
   );
 });

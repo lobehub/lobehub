@@ -31,7 +31,7 @@ const Overview = memo(() => {
       {openingMessage && (
         <>
           <Title>{t('assistants.details.systemRole.openingMessage')}</Title>
-          <Block align={'flex-start'} gap={12} horizontal padding={16} variant={'outlined'}>
+          <Block horizontal align={'flex-start'} gap={12} padding={16} variant={'outlined'}>
             <Icon
               color={cssVar.colorError}
               icon={MessageCircleHeartIcon}
@@ -51,7 +51,7 @@ const Overview = memo(() => {
           </Title>
           <Flexbox gap={8}>
             {openingQuestions?.map((item, key) => (
-              <Block gap={12} horizontal key={key} padding={16} variant={'outlined'}>
+              <Block horizontal gap={12} key={key} padding={16} variant={'outlined'}>
                 <Icon color={cssVar.colorWarning} icon={MessageCircleQuestionIcon} size={20} />
                 <MarkdownRender>{item}</MarkdownRender>
               </Block>

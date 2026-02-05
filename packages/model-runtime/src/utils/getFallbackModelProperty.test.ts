@@ -37,7 +37,7 @@ vi.mock('model-bank', () => ({
       providerId: 'anthropic',
       type: 'chat',
       displayName: 'Claude 3',
-      contextWindowTokens: 200000,
+      contextWindowTokens: 200_000,
       enabled: false,
     },
     {
@@ -177,7 +177,7 @@ describe('getModelPropertyWithFallback', () => {
     it('should distinguish between undefined and null values', async () => {
       // Testing that we check for undefined specifically, not just falsy values
       const result = await getModelPropertyWithFallback('claude-3', 'contextWindowTokens');
-      expect(result).toBe(200000); // Should find the defined value
+      expect(result).toBe(200_000); // Should find the defined value
     });
   });
 

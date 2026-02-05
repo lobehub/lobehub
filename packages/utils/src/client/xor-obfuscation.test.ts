@@ -199,7 +199,7 @@ describe('xor-obfuscation', () => {
     });
 
     it('应该处理很长的字符串', () => {
-      const payload = 'a'.repeat(10000);
+      const payload = 'a'.repeat(10_000);
       const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证返回值是字符串
@@ -228,7 +228,7 @@ describe('xor-obfuscation', () => {
       const result = obfuscatePayloadWithXOR(payload, SECRET_XOR_KEY);
 
       // 验证Base64格式的正则表达式
-      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+      const base64Regex = /^[A-Z0-9+/]*={0,2}$/i;
       expect(base64Regex.test(result)).toBe(true);
     });
 
@@ -335,8 +335,8 @@ describe('xor-obfuscation', () => {
       // 使用相同的密钥进行逆向 XOR 操作
       const keyBytes = new TextEncoder().encode(SECRET_XOR_KEY);
       const decodedBytes = new Uint8Array(xoredBytes.length);
-      for (let i = 0; i < xoredBytes.length; i++) {
-        decodedBytes[i] = xoredBytes[i] ^ keyBytes[i % keyBytes.length];
+      for (const [i, xoredByte] of xoredBytes.entries()) {
+        decodedBytes[i] = xoredByte ^ keyBytes[i % keyBytes.length];
       }
 
       // 将结果转换回字符串

@@ -1,8 +1,9 @@
 import { imageUrlToBase64 } from '@lobechat/utils';
-import OpenAI, { toFile } from 'openai';
+import type OpenAI from 'openai';
+import { toFile } from 'openai';
 
 import { disableStreamModels, systemToUserModels } from '../../const/models';
-import { ChatStreamPayload, OpenAIChatMessage } from '../../types';
+import type { ChatStreamPayload, OpenAIChatMessage } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 
 export const convertMessageContent = async (
@@ -60,7 +61,7 @@ export const convertOpenAIMessages = async (messages: OpenAI.ChatCompletionMessa
 };
 
 export const convertOpenAIResponseInputs = async (messages: OpenAIChatMessage[]) => {
-  let input: OpenAI.Responses.ResponseInputItem[] = [];
+  const input: OpenAI.Responses.ResponseInputItem[] = [];
   await Promise.all(
     messages.map(async (message) => {
       // if message has reasoning, add it as a separate reasoning item

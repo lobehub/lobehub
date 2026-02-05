@@ -3,8 +3,6 @@ import { BRANDING_LOGO_URL } from '@lobechat/business-const';
 import qs from 'query-string';
 import { describe, expect, it, vi } from 'vitest';
 
-import { getCanonicalUrl } from '@/server/utils/url';
-
 import { Manifest, manifestModule } from './manifest';
 
 // Mock external dependencies
@@ -79,7 +77,7 @@ describe('Manifest', () => {
       expect(result).toEqual({
         cache_busting_mode: 'query',
         immutable: 'true',
-        max_age: 31536000,
+        max_age: 31_536_000,
         src: qs.stringifyUrl({ query: { v: version }, url: BRANDING_LOGO_URL || url }),
       });
     });
@@ -148,7 +146,7 @@ describe('Manifest', () => {
         cache_busting_mode: 'query',
         form_factor: 'narrow',
         immutable: 'true',
-        max_age: 31536000,
+        max_age: 31_536_000,
         sizes: '1280x676',
         src: 'https://example.com/screenshot.png?v=1',
         type: 'image/png',

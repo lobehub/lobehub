@@ -1,4 +1,4 @@
-import { type BuiltinInspector } from '@lobechat/types';
+import type { BuiltinInspector } from '@lobechat/types';
 
 import { AgentBuilderApiName } from '../../types';
 import { GetAvailableModelsInspector } from './GetAvailableModels';

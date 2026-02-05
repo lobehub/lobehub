@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { GenerateContentResponse } from '@google/genai';
+import type { GenerateContentResponse } from '@google/genai';
 import OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -172,7 +172,7 @@ describe('LobeGoogleAI', () => {
                       text: '*   **Worldwide:** $1.66 billion',
                     },
                     groundingChunkIndices: [0],
-                    confidenceScores: [0.95218265],
+                    confidenceScores: [0.952_182_65],
                   },
                   {
                     segment: {
@@ -181,7 +181,7 @@ describe('LobeGoogleAI', () => {
                       text: '*   **US & Canada:** $24,744,753',
                     },
                     groundingChunkIndices: [1],
-                    confidenceScores: [0.7182074],
+                    confidenceScores: [0.718_207_4],
                   },
                 ],
                 retrievalMetadata: {},

@@ -29,19 +29,19 @@ const Schema = memo(() => {
   return (
     <DetailProvider config={{ tools, toolsCount }}>
       <Flexbox gap={8}>
-        <Flexbox align="center" gap={12} horizontal justify="space-between">
+        <Flexbox horizontal align="center" gap={12} justify="space-between">
           <Title level={3} tag={<Tag>{toolsCount}</Tag>}>
             {t('mcp.details.schema.tools.title')}
           </Title>
           <Segmented
-            onChange={(v) => setMode(v as ModeType)}
+            shape="round"
+            value={mode}
+            variant="outlined"
             options={[
               { label: t('mcp.details.schema.mode.docs'), value: ModeType.Docs },
               { label: 'JSON', value: ModeType.JSON },
             ]}
-            shape="round"
-            value={mode}
-            variant="outlined"
+            onChange={(v) => setMode(v as ModeType)}
           />
         </Flexbox>
         <p style={{ marginBottom: 24 }}>{t('mcp.details.schema.tools.desc')}</p>

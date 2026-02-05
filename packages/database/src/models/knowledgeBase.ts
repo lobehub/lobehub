@@ -1,8 +1,9 @@
-import { KnowledgeBaseItem } from '@lobechat/types';
+import type { KnowledgeBaseItem } from '@lobechat/types';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 
-import { NewKnowledgeBase, documents, knowledgeBaseFiles, knowledgeBases } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { NewKnowledgeBase } from '../schemas';
+import { documents, knowledgeBaseFiles, knowledgeBases } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 export class KnowledgeBaseModel {
   private userId: string;

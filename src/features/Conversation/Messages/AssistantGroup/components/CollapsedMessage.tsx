@@ -24,11 +24,11 @@ export const CollapsedMessage = memo<CollapsedMessageProps>(({ id, content }) =>
         <Button
           block
           color={'default'}
+          size={'small'}
+          variant={'filled'}
           onClick={() => {
             toggleMessageCollapsed(id, false);
           }}
-          size={'small'}
-          variant={'filled'}
         >
           {t('chatList.expandMessage')}
         </Button>

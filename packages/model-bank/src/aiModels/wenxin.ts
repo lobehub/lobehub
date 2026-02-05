@@ -1,4 +1,4 @@
-import { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 
 // https://cloud.baidu.com/doc/qianfan/s/rmh4stp0j
 

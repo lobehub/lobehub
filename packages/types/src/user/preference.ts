@@ -1,10 +1,10 @@
 import type { PartialDeep } from 'type-fest';
 import { z } from 'zod';
 
-import { Plans } from '../subscription';
+import type { Plans } from '../subscription';
 import { TopicDisplayMode } from '../topic';
-import { UserOnboarding } from './onboarding';
-import { UserSettings } from './settings';
+import type { UserOnboarding } from './onboarding';
+import type { UserSettings } from './settings';
 
 export interface LobeUser {
   avatar?: string;

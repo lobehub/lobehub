@@ -11,7 +11,7 @@ describe('SparkAIStream', () => {
       {
         id: 'test-id',
         object: 'chat.completion.chunk',
-        created: 1734395014,
+        created: 1_734_395_014,
         model: 'x1',
         choices: [
           {
@@ -27,7 +27,7 @@ describe('SparkAIStream', () => {
       {
         id: 'test-id',
         object: 'chat.completion.chunk',
-        created: 1734395014,
+        created: 1_734_395_014,
         model: 'x1',
         choices: [
           {
@@ -76,7 +76,7 @@ describe('SparkAIStream', () => {
     const mockResponse = {
       id: 'cha000ceba6@dx193d200b580b8f3532',
       object: 'chat.completion',
-      created: 1734395014,
+      created: 1_734_395_014,
       model: 'max-32k',
       choices: [
         {
@@ -135,7 +135,7 @@ describe('SparkAIStream', () => {
         controller.enqueue({
           id: 'cha000b0bf9@dx193d1ffa61cb894532',
           object: 'chat.completion.chunk',
-          created: 1734395014,
+          created: 1_734_395_014,
           model: 'max-32k',
           choices: [
             {
@@ -190,7 +190,7 @@ describe('SparkAIStream', () => {
         controller.enqueue({
           id: 'test-id',
           object: 'chat.completion.chunk',
-          created: 1734395014,
+          created: 1_734_395_014,
           model: 'max-32k',
           choices: [
             {
@@ -205,7 +205,7 @@ describe('SparkAIStream', () => {
         controller.enqueue({
           id: 'test-id',
           object: 'chat.completion.chunk',
-          created: 1734395014,
+          created: 1_734_395_014,
           model: 'max-32k',
           choices: [
             {

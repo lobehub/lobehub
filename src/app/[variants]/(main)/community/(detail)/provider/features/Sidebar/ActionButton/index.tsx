@@ -16,14 +16,14 @@ const ActionButton = memo(() => {
   const { models = [], identifier, name } = useDetailContext();
   const { t } = useTranslation('providers');
   return (
-    <Flexbox align={'center'} gap={8} horizontal width={'100%'}>
+    <Flexbox horizontal align={'center'} gap={8} width={'100%'}>
       <ProviderConfig />
       <ShareButton
         meta={{
           avatar: <ProviderIcon provider={identifier} size={64} type={'avatar'} />,
           desc: t(`${identifier}.description`),
           tags: (
-            <Flexbox align={'center'} gap={4} horizontal justify={'center'} wrap={'wrap'}>
+            <Flexbox horizontal align={'center'} gap={4} justify={'center'} wrap={'wrap'}>
               {models
                 .slice(0, 4)
                 .filter(Boolean)

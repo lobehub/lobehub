@@ -1,11 +1,11 @@
 import type { TracePayload } from '@lobechat/types';
-import { ClientOptions } from 'openai';
+import type { ClientOptions } from 'openai';
 
-import { LobeBedrockAIParams } from '../providers/bedrock';
-import { LobeCloudflareParams } from '../providers/cloudflare';
+import type { LobeBedrockAIParams } from '../providers/bedrock';
+import type { LobeCloudflareParams } from '../providers/cloudflare';
 import { LobeOpenAI } from '../providers/openai';
 import { providerRuntimeMap } from '../runtimeMap';
-import {
+import type {
   ChatMethodOptions,
   ChatStreamPayload,
   EmbeddingsOptions,
@@ -16,9 +16,9 @@ import {
   TextToSpeechPayload,
 } from '../types';
 import { AgentRuntimeErrorType } from '../types/error';
-import { AuthenticatedImageRuntime, CreateImagePayload } from '../types/image';
+import type { AuthenticatedImageRuntime, CreateImagePayload } from '../types/image';
 import { AgentRuntimeError } from '../utils/createError';
-import { LobeRuntimeAI } from './BaseAI';
+import type { LobeRuntimeAI } from './BaseAI';
 
 export interface AgentChatOptions {
   enableTrace?: boolean;

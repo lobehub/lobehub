@@ -62,8 +62,8 @@ describe('createAuthSlice', () => {
 
   describe('openLogin', () => {
     it('should redirect to signin page', async () => {
-      const originalLocation = window.location;
-      Object.defineProperty(window, 'location', {
+      const originalLocation = globalThis.location;
+      Object.defineProperty(globalThis, 'location', {
         configurable: true,
         value: {
           ...originalLocation,
@@ -80,10 +80,10 @@ describe('createAuthSlice', () => {
         await result.current.openLogin();
       });
 
-      expect(window.location.href).toContain('/signin');
-      expect(window.location.href).toContain('callbackUrl');
+      expect(globalThis.location.href).toContain('/signin');
+      expect(globalThis.location.href).toContain('callbackUrl');
 
-      Object.defineProperty(window, 'location', {
+      Object.defineProperty(globalThis, 'location', {
         configurable: true,
         value: originalLocation,
         writable: true,
@@ -91,8 +91,8 @@ describe('createAuthSlice', () => {
     });
 
     it('should not redirect when already on signin page', async () => {
-      const originalLocation = window.location;
-      Object.defineProperty(window, 'location', {
+      const originalLocation = globalThis.location;
+      Object.defineProperty(globalThis, 'location', {
         configurable: true,
         value: {
           ...originalLocation,
@@ -109,9 +109,9 @@ describe('createAuthSlice', () => {
         await result.current.openLogin();
       });
 
-      expect(window.location.href).toBe('');
+      expect(globalThis.location.href).toBe('');
 
-      Object.defineProperty(window, 'location', {
+      Object.defineProperty(globalThis, 'location', {
         configurable: true,
         value: originalLocation,
         writable: true,

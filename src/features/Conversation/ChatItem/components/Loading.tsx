@@ -15,7 +15,7 @@ const Loading = memo<LoadingProps>(({ loading }) => {
 
   return (
     <Flexbox align={'center'} className={styles.loading} justify={'center'}>
-      <Icon icon={Loader2} size={{ size: 12, strokeWidth: 3 }} spin />
+      <Icon spin icon={Loader2} size={{ size: 12, strokeWidth: 3 }} />
     </Flexbox>
   );
 });

@@ -66,10 +66,10 @@ const WorkingDirectory = memo(() => {
 
   const content = hasWorkingDirectory ? (
     <Flexbox
+      horizontal
       align="center"
       className={cx(styles.base, styles.filled)}
       gap={6}
-      horizontal
       style={{ cursor: 'pointer', height: 32, padding: '0 12px' }}
     >
       <Icon icon={LaptopIcon} size={18} />
@@ -77,10 +77,10 @@ const WorkingDirectory = memo(() => {
     </Flexbox>
   ) : (
     <Flexbox
+      horizontal
       align="center"
       className={styles.base}
       gap={6}
-      horizontal
       style={{ cursor: 'pointer', height: 32, padding: '0 12px' }}
     >
       <Icon icon={SquircleDashed} size={16} />
@@ -90,10 +90,10 @@ const WorkingDirectory = memo(() => {
   return (
     <Popover
       content={<WorkingDirectoryContent agentId={agentId} onClose={() => setOpen(false)} />}
-      onOpenChange={setOpen}
       open={open}
       placement="bottomRight"
       trigger="click"
+      onOpenChange={setOpen}
     >
       <div>
         {open ? (

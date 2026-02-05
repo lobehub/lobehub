@@ -26,12 +26,10 @@ export const asyncTasks = pgTable(
     index('async_tasks_user_id_idx').on(t.userId),
     index('async_tasks_parent_id_idx').on(t.parentId),
     index('async_tasks_type_status_idx').on(t.type, t.status),
-    index('async_tasks_metadata_idx').using(
-      'gin',
-      t.metadata,
-    )
+    index('async_tasks_metadata_idx').using('gin', t.metadata),
   ],
 );
 
 export type NewAsyncTaskItem = typeof asyncTasks.$inferInsert;
-export type AsyncTaskSelectItem = Omit<typeof asyncTasks.$inferSelect, 'metadata' | 'parentId'> & Partial<Pick<typeof asyncTasks.$inferSelect, 'metadata' | 'parentId'>>;
+export type AsyncTaskSelectItem = Omit<typeof asyncTasks.$inferSelect, 'metadata' | 'parentId'> &
+  Partial<Pick<typeof asyncTasks.$inferSelect, 'metadata' | 'parentId'>>;

@@ -1,4 +1,4 @@
-import { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 
 // https://www.volcengine.com/docs/82379/1330310
 

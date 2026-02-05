@@ -14,8 +14,9 @@ const AgentSettings = memo(() => {
     <Modal
       centered
       footer={null}
-      onCancel={() => useAgentStore.setState({ showAgentSetting: false })}
       open={showAgentSetting}
+      title={null}
+      width={960}
       styles={{
         body: {
           height: '60vh',
@@ -24,8 +25,7 @@ const AgentSettings = memo(() => {
           position: 'relative',
         },
       }}
-      title={null}
-      width={960}
+      onCancel={() => useAgentStore.setState({ showAgentSetting: false })}
     >
       <Content />
     </Modal>

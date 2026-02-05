@@ -1,4 +1,4 @@
-import { LobeSessions } from './agentSession';
+import type { LobeSessions } from './agentSession';
 
 export type SessionGroupId = string;
 

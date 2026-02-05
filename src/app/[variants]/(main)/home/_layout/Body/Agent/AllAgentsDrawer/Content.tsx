@@ -53,7 +53,7 @@ const Content = memo<ContentProps>(({ searchKeyword }) => {
 
   return (
     <VList
-      bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
+      bufferSize={typeof globalThis.window !== 'undefined' ? window.innerHeight : 0}
       style={{ height: '100%' }}
     >
       {displayItems.map((item) => (

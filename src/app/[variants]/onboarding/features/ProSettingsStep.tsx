@@ -68,11 +68,11 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
       <Flexbox gap={16}>
         <Text color={cssVar.colorTextSecondary}>{t('proSettings.model.title')}</Text>
         <ModelSelect
-          onChange={handleModelChange}
           showAbility={false}
           size="large"
           style={{ width: '100%' }}
           value={defaultAgentConfig}
+          onChange={handleModelChange}
         />
       </Flexbox>
 
@@ -84,23 +84,23 @@ const ProSettingsStep = memo<ProSettingsStepProps>(({ onBack }) => {
         </Flexbox>
       )}
 
-      <Flexbox align={'center'} horizontal justify={'space-between'} style={{ marginTop: 16 }}>
+      <Flexbox horizontal align={'center'} justify={'space-between'} style={{ marginTop: 16 }}>
         <Button
           disabled={isNavigating}
           icon={Undo2Icon}
-          onClick={handleBack}
+          type={'text'}
           style={{
             color: cssVar.colorTextDescription,
           }}
-          type={'text'}
+          onClick={handleBack}
         >
           {t('back')}
         </Button>
         <Button
           disabled={isNavigating}
-          onClick={handleFinish}
           style={{ minWidth: 120 }}
           type="primary"
+          onClick={handleFinish}
         >
           {t('finish')}
         </Button>

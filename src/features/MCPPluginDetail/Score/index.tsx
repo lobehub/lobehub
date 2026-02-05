@@ -55,13 +55,13 @@ const Score = memo(() => {
       {/* 总分显示 */}
       <TotalScore
         isValidated={isValidated}
+        scoreResult={scoreResult}
         scoreItems={scoreListItems.map((item) => ({
           check: item.check,
           required: item.required,
           title: item.title,
           weight: item.weight,
         }))}
-        scoreResult={scoreResult}
       />
 
       {/* 评分明细 */}

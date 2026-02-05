@@ -8,11 +8,11 @@ const Empty = memo(() => {
 
   return (
     <EmptyComponent
+      icon={BlocksIcon}
+      style={{ paddingBlock: 40 }}
       description={t('tools.installed.empty', {
         defaultValue: 'No skills enabled',
       })}
-      icon={BlocksIcon}
-      style={{ paddingBlock: 40 }}
     />
   );
 });

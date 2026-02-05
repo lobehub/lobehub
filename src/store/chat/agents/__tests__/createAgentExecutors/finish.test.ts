@@ -1,5 +1,5 @@
 import type { AgentEventDone } from '@lobechat/agent-runtime';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { createFinishInstruction } from './fixtures';
 import { createMockStore } from './fixtures/mockStore';
@@ -410,7 +410,7 @@ describe('finish executor', () => {
       // Given
       const mockStore = createMockStore();
       const context = createTestContext();
-      const longDetail = 'A'.repeat(10000);
+      const longDetail = 'A'.repeat(10_000);
       const instruction = createFinishInstruction('completed', longDetail);
       const state = createInitialState();
 
@@ -426,7 +426,7 @@ describe('finish executor', () => {
       // Then
       const doneEvent = result.events[0] as AgentEventDone;
       expect(doneEvent.reasonDetail).toBe(longDetail);
-      expect(doneEvent.reasonDetail?.length).toBe(10000);
+      expect(doneEvent.reasonDetail?.length).toBe(10_000);
     });
 
     it('should handle state with empty messages array', async () => {

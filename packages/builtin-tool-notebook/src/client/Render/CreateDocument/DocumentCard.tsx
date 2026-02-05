@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/slices/portal/selectors';
 
-import { NotebookDocument } from '../../../types';
+import type { NotebookDocument } from '../../../types';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -80,13 +80,13 @@ const DocumentCard = memo<DocumentCardProps>(({ document }) => {
   return (
     <Flexbox className={styles.container}>
       {/* Header */}
-      <Flexbox align={'center'} className={styles.header} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
         <NotebookText className={styles.icon} size={16} />
         <Flexbox flex={1}>
           <div className={styles.title}>{document.title}</div>
         </Flexbox>
         <TooltipGroup>
-          <Flexbox gap={4} horizontal>
+          <Flexbox horizontal gap={4}>
             <CopyButton
               content={document.content}
               size={'small'}
@@ -94,9 +94,9 @@ const DocumentCard = memo<DocumentCardProps>(({ document }) => {
             />
             <ActionIcon
               icon={PencilLine}
-              onClick={handleToggle}
               size={'small'}
               title={t('builtins.lobe-notebook.actions.edit')}
+              onClick={handleToggle}
             />
           </Flexbox>
         </TooltipGroup>
@@ -113,9 +113,9 @@ const DocumentCard = memo<DocumentCardProps>(({ document }) => {
         className={styles.expandButton}
         color={'default'}
         icon={isExpanded ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-        onClick={handleToggle}
         shape={'round'}
         variant={'outlined'}
+        onClick={handleToggle}
       >
         {isExpanded
           ? t('builtins.lobe-notebook.actions.collapse')

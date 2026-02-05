@@ -1,7 +1,7 @@
 'use client';
 
-import { type GlobFilesParams } from '@lobechat/electron-client-ipc';
-import { type BuiltinInspectorProps } from '@lobechat/types';
+import type { GlobFilesParams } from '@lobechat/electron-client-ipc';
+import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Check, X } from 'lucide-react';
@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import { type GlobFilesState } from '../../..';
+import type { GlobFilesState } from '../../..';
 
 const styles = createStaticStyles(({ css }) => ({
   statusIcon: css`

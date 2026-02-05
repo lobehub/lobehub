@@ -36,11 +36,11 @@ const FeaturedPluginsList = memo(() => {
   return mcpList.items.map((item, index) => (
     <Link
       key={index}
+      to={urlJoin('/community/mcp', item.identifier)}
       style={{
         color: 'inherit',
         textDecoration: 'none',
       }}
-      to={urlJoin('/community/mcp', item.identifier)}
     >
       <FeaturedPluginItem {...item} />
     </Link>

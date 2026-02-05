@@ -57,10 +57,10 @@ const InboxWelcome = memo(() => {
       <Flexbox flex={1} />
       <Flexbox
         gap={12}
+        width={'100%'}
         style={{
           paddingBottom: 'max(10vh, 32px)',
         }}
-        width={'100%'}
       >
         <SupervisorAvatar size={78} />
         <Text fontSize={32} weight={'bold'}>

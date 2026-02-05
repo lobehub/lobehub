@@ -26,7 +26,7 @@ const TruncatedFileName = memo<TruncatedFileNameProps>(({ name, className }) => 
       measureSpan.style.visibility = 'hidden';
       measureSpan.style.position = 'absolute';
       measureSpan.style.whiteSpace = 'nowrap';
-      measureSpan.style.font = window.getComputedStyle(container).font;
+      measureSpan.style.font = globalThis.getComputedStyle(container).font;
       document.body.append(measureSpan);
 
       // Measure full name

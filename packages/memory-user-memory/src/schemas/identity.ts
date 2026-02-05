@@ -48,7 +48,9 @@ export const AddIdentityActionSchema = z
     tags: z.array(z.string()).describe('Model generated tags that summarize the identity facets'),
     title: z
       .string()
-      .describe('Honorific-style, concise descriptor (strength + domain/milestone), avoid bare job titles; e.g., "Trusted open-source maintainer", "Specializes in low-latency infra", "Former Aliyun engineer", "Cares for rescue cats"'),
+      .describe(
+        'Honorific-style, concise descriptor (strength + domain/milestone), avoid bare job titles; e.g., "Trusted open-source maintainer", "Specializes in low-latency infra", "Former Aliyun engineer", "Cares for rescue cats"',
+      ),
     withIdentity: z
       .object({
         description: z.string(),
@@ -57,7 +59,9 @@ export const AddIdentityActionSchema = z
         relationship: RelationshipEnum,
         role: z
           .string()
-          .describe('Role explicitly mentioned for this identity entry (e.g., "platform engineer", "caregiver"); keep neutral and only use when evidence exists'),
+          .describe(
+            'Role explicitly mentioned for this identity entry (e.g., "platform engineer", "caregiver"); keep neutral and only use when evidence exists',
+          ),
         scoreConfidence: z.number(),
         sourceEvidence: z.union([z.string(), z.null()]),
         type: IdentityTypeEnum,
@@ -93,7 +97,9 @@ export const UpdateIdentityActionSchema = z
       title: z
         .string()
         .nullable()
-        .describe('Honorific-style, concise descriptor (strength + domain/milestone), avoid bare job titles; e.g., "Trusted open-source maintainer", "Specializes in low-latency infra", "Former Aliyun engineer", "Cares for rescue cats"; use null for omitting the field'),
+        .describe(
+          'Honorific-style, concise descriptor (strength + domain/milestone), avoid bare job titles; e.g., "Trusted open-source maintainer", "Specializes in low-latency infra", "Former Aliyun engineer", "Cares for rescue cats"; use null for omitting the field',
+        ),
       withIdentity: z
         .object({
           description: z.string().nullable(),
@@ -106,7 +112,9 @@ export const UpdateIdentityActionSchema = z
             .nullable(),
           role: z
             .string()
-            .describe('Role explicitly mentioned for this identity entry (e.g., "platform engineer", "caregiver"); keep existing when not updated; use null for omitting the field')
+            .describe(
+              'Role explicitly mentioned for this identity entry (e.g., "platform engineer", "caregiver"); keep existing when not updated; use null for omitting the field',
+            )
             .nullable(),
           scoreConfidence: z.number().nullable(),
           sourceEvidence: z.string().nullable(),

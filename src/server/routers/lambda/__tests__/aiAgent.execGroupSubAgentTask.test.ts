@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { LobeChatDatabase } from '@lobechat/database';
+import type { LobeChatDatabase } from '@lobechat/database';
 import { agents, chatGroups, sessions, topics } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { TRPCError } from '@trpc/server';
@@ -167,13 +167,13 @@ describe('aiAgentRouter.execSubAgentTask', () => {
         groupId: testGroupId,
         instruction: 'Test instruction',
         parentMessageId: 'parent-msg-1',
-        timeout: 60000,
+        timeout: 60_000,
         topicId: testTopicId,
       });
 
       expect(mockExecGroupSubAgentTask).toHaveBeenCalledWith(
         expect.objectContaining({
-          timeout: 60000,
+          timeout: 60_000,
         }),
       );
     });

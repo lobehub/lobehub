@@ -1,8 +1,5 @@
-import {
-  type GroupContextMemberInfo,
-  formatGroupMembers,
-  groupContextTemplate,
-} from '@lobechat/prompts';
+import type { GroupContextMemberInfo } from '@lobechat/prompts';
+import { formatGroupMembers, groupContextTemplate } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';

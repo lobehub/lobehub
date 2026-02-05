@@ -39,10 +39,11 @@ const Header = memo(() => {
 
   // If no libraryId, show category name or "Resource" for All
   const leftContent = isMultiSelected ? (
-    <Flexbox align={'center'} gap={8} horizontal style={{ marginLeft: 0 }}>
+    <Flexbox horizontal align={'center'} gap={8} style={{ marginLeft: 0 }}>
       {libraryId ? (
         <ActionIcon
           icon={BookMinusIcon}
+          title={t('FileManager.actions.removeFromLibrary')}
           onClick={() => {
             modal.confirm({
               okButtonProps: {
@@ -57,20 +58,20 @@ const Header = memo(() => {
               }),
             });
           }}
-          title={t('FileManager.actions.removeFromLibrary')}
         />
       ) : null}
 
       <ActionIcon
         icon={FileBoxIcon}
+        title={t('FileManager.actions.batchChunking')}
         onClick={async () => {
           await onActionClick('batchChunking');
         }}
-        title={t('FileManager.actions.batchChunking')}
       />
 
       <ActionIcon
         icon={Trash2Icon}
+        title={t('delete', { ns: 'common' })}
         onClick={() => {
           modal.confirm({
             okButtonProps: {
@@ -83,7 +84,6 @@ const Header = memo(() => {
             title: t('FileManager.actions.confirmDeleteMultiFiles', { count: selectCount }),
           });
         }}
-        title={t('delete', { ns: 'common' })}
       />
     </Flexbox>
   ) : !libraryId ? (
@@ -105,7 +105,7 @@ const Header = memo(() => {
         <>
           <ActionIcon icon={SearchIcon} onClick={() => toggleCommandMenu(true)} />
           <SortDropdown />
-          <BatchActionsDropdown onActionClick={onActionClick} selectCount={selectCount} />
+          <BatchActionsDropdown selectCount={selectCount} onActionClick={onActionClick} />
           <ViewSwitcher />
           <Flexbox style={{ marginLeft: 8 }}>
             <AddButton />

@@ -685,7 +685,7 @@ describe('Operation Actions', () => {
               ...result.current.operations[op1!],
               metadata: {
                 ...result.current.operations[op1!].metadata,
-                endTime: Date.now() - 120000, // 2 minutes ago
+                endTime: Date.now() - 120_000, // 2 minutes ago
               },
             },
           },
@@ -693,7 +693,7 @@ describe('Operation Actions', () => {
       });
 
       act(() => {
-        result.current.cleanupCompletedOperations(60000); // 1 minute threshold
+        result.current.cleanupCompletedOperations(60_000); // 1 minute threshold
       });
 
       expect(result.current.operations[op1!]).toBeUndefined(); // Cleaned up

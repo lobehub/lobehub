@@ -12,4 +12,6 @@ export const WebBrowsingRenders = {
   [WebBrowsingApiName.search]: Search,
 };
 
-export { CrawlMultiPages, CrawlSinglePage, Search };
+export { default as CrawlMultiPages } from './CrawlMultiPages';
+export { default as CrawlSinglePage } from './CrawlSinglePage';
+export { default as Search } from './Search';

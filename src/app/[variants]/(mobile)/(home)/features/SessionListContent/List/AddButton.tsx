@@ -21,11 +21,11 @@ const AddButton = memo<{ groupId?: string }>(({ groupId }) => {
         block
         icon={Plus}
         loading={isValidating}
-        onClick={() => mutate()}
+        variant={'filled'}
         style={{
           marginTop: 8,
         }}
-        variant={'filled'}
+        onClick={() => mutate()}
       >
         {t('newAgent')}
       </Button>

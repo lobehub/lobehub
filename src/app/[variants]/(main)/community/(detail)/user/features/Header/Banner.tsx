@@ -1,7 +1,7 @@
 'use client';
 
 import { Center } from '@lobehub/ui';
-import { createStaticStyles , responsive } from 'antd-style';
+import { createStaticStyles, responsive } from 'antd-style';
 import { memo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -23,7 +23,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       margin-inline: -16px;
     }
 
-    @media (max-width: 1720px) {
+    @media (width <= 1720px) {
       height: 144px;
       padding: 0;
     }
@@ -42,7 +42,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
     background: ${cssVar.colorFillTertiary};
 
-    @media (max-width: 1720px) {
+    @media (width <= 1720px) {
       border-radius: 0;
     }
   `,

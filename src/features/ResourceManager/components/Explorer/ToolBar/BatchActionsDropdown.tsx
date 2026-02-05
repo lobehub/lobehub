@@ -1,4 +1,5 @@
-import { type DropdownItem, DropdownMenu, Icon } from '@lobehub/ui';
+import type { DropdownItem } from '@lobehub/ui';
+import { DropdownMenu, Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import {
   BookMinusIcon,

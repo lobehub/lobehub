@@ -14,10 +14,10 @@ import {
   sessionGroups,
   sessions,
   topics,
-  userSettings,
   users,
+  userSettings,
 } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { DATA_EXPORT_CONFIG, DataExporterRepos } from './index';
 
 let db: LobeChatDatabase;
@@ -41,7 +41,7 @@ describe('DataExporterRepos', () => {
 
   beforeAll(async () => {
     db = await getTestDB();
-  }, 30000);
+  }, 30_000);
 
   const setupTestData = async () => {
     await db.transaction(async (trx) => {
@@ -159,7 +159,7 @@ describe('DataExporterRepos', () => {
     await db.delete(users);
     await db.delete(globalFiles);
     await setupTestData();
-  }, 30000);
+  }, 30_000);
 
   afterEach(async () => {
     await db.delete(users);

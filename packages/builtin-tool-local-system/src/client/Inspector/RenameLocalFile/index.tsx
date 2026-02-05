@@ -1,7 +1,7 @@
 'use client';
 
-import { type RenameLocalFileParams } from '@lobechat/electron-client-ipc';
-import { type BuiltinInspectorProps } from '@lobechat/types';
+import type { RenameLocalFileParams } from '@lobechat/electron-client-ipc';
+import type { BuiltinInspectorProps } from '@lobechat/types';
 import { MaterialFileTypeIcon } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import path from 'path-browserify-esm';
@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import { type LocalRenameFileState } from '../../..';
+import type { LocalRenameFileState } from '../../..';
 
 const styles = createStaticStyles(({ css }) => ({
   icon: css`

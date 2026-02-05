@@ -17,8 +17,6 @@ export const GTDStreamings: Record<string, BuiltinStreaming> = {
   [GTDApiName.execTasks]: ExecTasksStreaming as BuiltinStreaming,
 };
 
-
-
-export {CreatePlanStreaming} from './CreatePlan';
-export {ExecTaskStreaming} from './ExecTask';
-export {ExecTasksStreaming} from './ExecTasks';
+export { CreatePlanStreaming } from './CreatePlan';
+export { ExecTaskStreaming } from './ExecTask';
+export { ExecTasksStreaming } from './ExecTasks';

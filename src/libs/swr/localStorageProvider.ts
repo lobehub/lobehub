@@ -22,10 +22,10 @@ interface CacheEntry<T = unknown> {
 }
 
 export interface LocalStorageCacheOptions {
-  /** localStorage key name, defaults to 'lobechat-swr-cache' */
-  cacheKey?: string;
   /** Allowed SWR key patterns (whitelist) */
   cacheablePatterns?: string[];
+  /** localStorage key name, defaults to 'lobechat-swr-cache' */
+  cacheKey?: string;
   /** Maximum cache entries, defaults to 50 */
   maxEntries?: number;
   /** Error callback */
@@ -48,7 +48,7 @@ const DEFAULT_CACHEABLE_PATTERNS: string[] = [
  * Check if localStorage is available
  */
 const isLocalStorageAvailable = (): boolean => {
-  if (typeof window === 'undefined') return false;
+  if (typeof globalThis.window === 'undefined') return false;
 
   try {
     const testKey = '__swr_cache_test__';
@@ -183,7 +183,7 @@ export function createLocalStorageProvider(options: LocalStorageCacheOptions = {
     });
 
     // Multi-tab sync
-    window.addEventListener('storage', (event) => {
+    globalThis.addEventListener('storage', (event) => {
       if (event.key === cacheKey && event.newValue && cacheMapInstance) {
         try {
           const parsedEntries: [string, CacheEntry][] = JSON.parse(event.newValue);
@@ -252,7 +252,7 @@ export function createLocalStorageProvider(options: LocalStorageCacheOptions = {
  * Can be used for manual cleanup or when app version changes
  */
 export function clearSWRCache(cacheKey = 'lobechat-swr-cache'): void {
-  if (typeof window === 'undefined') return;
+  if (typeof globalThis.window === 'undefined') return;
 
   try {
     localStorage.removeItem(cacheKey);

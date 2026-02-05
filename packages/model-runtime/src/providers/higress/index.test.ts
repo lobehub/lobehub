@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
 import { LobeHigressAI, params } from './index';
@@ -49,7 +49,7 @@ describe('LobeHigressAI - params', () => {
                 id: 'claude-3-opus',
                 name: 'Claude 3 Opus',
                 description: 'Claude 3 Opus supports multimodal and reasoning',
-                context_length: 200000,
+                context_length: 200_000,
                 top_provider: {
                   max_completion_tokens: 4096,
                 },

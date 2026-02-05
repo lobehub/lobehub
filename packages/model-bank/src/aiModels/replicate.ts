@@ -1,4 +1,4 @@
-import { AIImageModelCard } from '../types';
+import type { AIImageModelCard } from '../types';
 
 // Replicate image models
 // https://replicate.com/black-forest-labs

@@ -258,7 +258,7 @@ export class ContextTreeBuilder {
     });
 
     return {
-      activeBranchIndex: activeBranchIndex >= 0 ? activeBranchIndex : 0,
+      activeBranchIndex: Math.max(activeBranchIndex, 0),
       branches,
       id: this.generateNodeId('branch', message.id),
       parentMessageId: message.id,

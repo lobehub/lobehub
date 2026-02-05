@@ -1,3 +1,4 @@
+import type { UserMemoryExtractionMetadata } from '@lobechat/types';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,
@@ -6,28 +7,27 @@ import {
   CreateUserMemoryIdentitySchema,
   MemorySourceType,
   UpdateUserMemoryIdentitySchema,
-  UserMemoryExtractionMetadata,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { AsyncTaskModel, initUserMemoryExtractionMetadata } from '@/database/models/asyncTask';
 import { TopicModel } from '@/database/models/topic';
-import { UserMemoryModel } from '@/database/models/userMemory';
 import {
   UserMemoryActivityModel,
   UserMemoryContextModel,
   UserMemoryExperienceModel,
   UserMemoryIdentityModel,
+  UserMemoryModel,
   UserMemoryPreferenceModel,
-} from '@/database/models/userMemory/index';
+} from '@/database/models/userMemory';
+import { appEnv } from '@/envs/app';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { appEnv } from '@/envs/app';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import {
-  MemoryExtractionWorkflowService,
   buildWorkflowPayloadInput,
+  MemoryExtractionWorkflowService,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 
@@ -77,7 +77,6 @@ export const userMemoryRouter = router({
       });
     }),
 
-
   // ============ Activity CRUD ============
   deleteActivity: userMemoryProcedure
     .input(z.object({ id: z.string() }))
@@ -99,13 +98,11 @@ export const userMemoryRouter = router({
       return ctx.experienceModel.delete(input.id);
     }),
 
-
   deleteIdentity: userMemoryProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.userMemoryModel.removeIdentityEntry(input.id);
     }),
-
 
   // ============ Preference CRUD ============
   deletePreference: userMemoryProcedure
@@ -113,7 +110,6 @@ export const userMemoryRouter = router({
     .mutation(async ({ ctx, input }) => {
       return ctx.preferenceModel.delete(input.id);
     }),
-
 
   getActivities: userMemoryProcedure.query(async ({ ctx }) => {
     return ctx.userMemoryModel.searchActivities({});
@@ -145,16 +141,17 @@ export const userMemoryRouter = router({
       return {
         error: task.error,
         id: task.id,
-        metadata: initUserMemoryExtractionMetadata(task.metadata as UserMemoryExtractionMetadata | undefined),
+        metadata: initUserMemoryExtractionMetadata(
+          task.metadata as UserMemoryExtractionMetadata | undefined,
+        ),
         status: task.status as AsyncTaskStatus,
       };
     }),
 
   // ============ Persona ============
-getPersona: userMemoryProcedure.query(async () => {
+  getPersona: userMemoryProcedure.query(async () => {
     return { content: '', summary: '' };
   }),
-
 
   getPreferences: userMemoryProcedure.query(async ({ ctx }) => {
     return ctx.userMemoryModel.searchPreferences({});
@@ -199,8 +196,7 @@ getPersona: userMemoryProcedure.query(async () => {
         source: 'chat_topic',
       });
 
-      const initialStatus =
-        totalTopics === 0 ? AsyncTaskStatus.Success : AsyncTaskStatus.Pending;
+      const initialStatus = totalTopics === 0 ? AsyncTaskStatus.Success : AsyncTaskStatus.Pending;
       const taskId = await ctx.asyncTaskModel.create({
         metadata,
         status: initialStatus,

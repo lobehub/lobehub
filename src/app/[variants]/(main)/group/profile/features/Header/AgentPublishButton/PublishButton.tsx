@@ -63,7 +63,7 @@ const PublishButton = memo<MarketPublishButtonProps>(
           if (marketIdentifier && accountId !== null) {
             let accessToken = session?.accessToken;
 
-            if (!accessToken && typeof window !== 'undefined') {
+            if (!accessToken && typeof globalThis.window !== 'undefined') {
               const storedSession = sessionStorage.getItem('market_auth_session');
               if (storedSession) {
                 try {
@@ -131,9 +131,9 @@ const PublishButton = memo<MarketPublishButtonProps>(
       <ActionIcon
         icon={ShapesUploadIcon}
         loading={loading}
-        onClick={handleButtonClick}
         size={HEADER_ICON_SIZE(mobile)}
         title={buttonTitle}
+        onClick={handleButtonClick}
       />
     );
   },

@@ -1,1 +1,1 @@
-export * from './locomo'
+export * from './locomo';

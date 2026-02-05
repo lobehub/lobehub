@@ -1,11 +1,13 @@
-import { renderPlaceholderTemplate } from '@lobechat/context-engine';
-import { MemorySourceType } from '@lobechat/types';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, join } from 'node:path';
 
+import { renderPlaceholderTemplate } from '@lobechat/context-engine';
+import { MemorySourceType } from '@lobechat/types';
+
 import type { IngestPayload } from '../../../../src/converters/locomo';
 import { activityPrompt } from '../../../../src/prompts';
-import { BenchmarkLocomoContextProvider, BenchmarkLocomoPart } from '../../../../src/providers';
+import type { BenchmarkLocomoPart } from '../../../../src/providers';
+import { BenchmarkLocomoContextProvider } from '../../../../src/providers';
 import type { ExtractorTemplateProps, MemoryExtractionJob } from '../../../../src/types';
 
 export interface PromptVars extends ExtractorTemplateProps {

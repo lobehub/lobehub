@@ -163,19 +163,19 @@ const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
       <Block gap={12} padding={4} style={{ width: '100%' }} variant={'outlined'}>
         {permissions.map((permission) => (
           <Block
+            horizontal
             align={'center'}
             clickable={!permission.granted}
             gap={16}
-            horizontal
             key={permission.id}
-            onClick={() => !permission.granted && handlePermissionRequest(permission.id)}
             paddingBlock={8}
             paddingInline={'12px 12px'}
+            variant={'borderless'}
             style={{
               background: permission.granted ? cssVar.colorFillSecondary : undefined,
               borderColor: permission.granted ? cssVar.colorSuccess : undefined,
             }}
-            variant={'borderless'}
+            onClick={() => !permission.granted && handlePermissionRequest(permission.id)}
           >
             <Block align={'center'} height={40} justify={'center'} variant={'outlined'} width={40}>
               <Icon color={cssVar.colorTextDescription} icon={permission.icon} size={20} />
@@ -192,15 +192,15 @@ const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
               <Button
                 icon={SquareArrowOutUpRight}
                 iconPosition={'end'}
+                size={'small'}
+                type={'text'}
+                style={{
+                  color: cssVar.colorTextSecondary,
+                }}
                 onClick={(e) => {
                   e.stopPropagation();
                   handlePermissionRequest(permission.id);
                 }}
-                size={'small'}
-                style={{
-                  color: cssVar.colorTextSecondary,
-                }}
-                type={'text'}
               >
                 {t(permission.buttonKey)}
               </Button>
@@ -212,15 +212,15 @@ const PermissionsStep = memo<PermissionsStepProps>(({ onBack, onNext }) => {
         left={
           <Button
             icon={Undo2Icon}
-            onClick={onBack}
             style={{ color: cssVar.colorTextDescription }}
             type={'text'}
+            onClick={onBack}
           >
             {t('back')}
           </Button>
         }
         right={
-          <Button onClick={onNext} type={'primary'}>
+          <Button type={'primary'} onClick={onNext}>
             {t('next')}
           </Button>
         }

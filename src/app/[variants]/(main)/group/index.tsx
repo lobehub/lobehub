@@ -15,8 +15,8 @@ const ChatPage = memo(() => {
     <>
       <PageTitle />
       <Flexbox
-        height={'100%'}
         horizontal
+        height={'100%'}
         style={{ overflow: 'hidden', position: 'relative' }}
         width={'100%'}
       >

@@ -50,7 +50,7 @@ const Footer = memo(() => {
       flex={'none'}
       gap={4}
     >
-      <Text align={'center'} as={'h2'} fontSize={22} strong>
+      <Text strong align={'center'} as={'h2'} fontSize={22}>
         {t('footer.title')}
       </Text>
       <Text align={'center'} fontSize={16} type={'secondary'}>
@@ -58,11 +58,11 @@ const Footer = memo(() => {
       </Text>
       <Button
         loading={loading}
-        onClick={handleSignIn}
+        type={'primary'}
         style={{
           marginTop: 16,
         }}
-        type={'primary'}
+        onClick={handleSignIn}
       >
         {t('user.login')}
       </Button>

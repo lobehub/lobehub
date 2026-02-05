@@ -8,7 +8,6 @@ import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
-import { serverDB } from '@/database/server';
 import { AgentService } from '@/server/services/agent';
 import { KnowledgeType } from '@/types/knowledgeBase';
 

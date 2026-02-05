@@ -1,12 +1,13 @@
 import type { ChatModelCard } from '@lobechat/types';
 import { imageUrlToBase64 } from '@lobechat/utils';
 import { ModelProvider } from 'model-bank';
-import { Ollama, Tool } from 'ollama/browser';
-import { ClientOptions } from 'openai';
+import type { Tool } from 'ollama/browser';
+import { Ollama } from 'ollama/browser';
+import type { ClientOptions } from 'openai';
 
-import { LobeRuntimeAI } from '../../core/BaseAI';
-import { OllamaStream, convertIterableToStream, createModelPullStream } from '../../core/streams';
-import {
+import type { LobeRuntimeAI } from '../../core/BaseAI';
+import { convertIterableToStream, createModelPullStream, OllamaStream } from '../../core/streams';
+import type {
   ChatMethodOptions,
   ChatStreamPayload,
   Embeddings,
@@ -21,7 +22,7 @@ import { debugStream } from '../../utils/debugStream';
 import { createErrorResponse } from '../../utils/errorResponse';
 import { StreamingResponse } from '../../utils/response';
 import { parseDataUri } from '../../utils/uriParser';
-import { OllamaMessage } from './type';
+import type { OllamaMessage } from './type';
 
 export interface OllamaModelCard {
   name: string;
@@ -280,11 +281,11 @@ export class LobeOllamaAI implements LobeRuntimeAI {
 
       // 检查是否是取消操作
       if ((error as Error).name === 'AbortError') {
-        return new Response(
-          JSON.stringify({
+        return Response.json(
+          {
             model,
             status: 'cancelled',
-          }),
+          },
           {
             headers: { 'Content-Type': 'application/json' },
             status: 499,
@@ -294,12 +295,12 @@ export class LobeOllamaAI implements LobeRuntimeAI {
 
       // 返回错误响应
       const errorMessage = error instanceof Error ? error.message : String(error);
-      return new Response(
-        JSON.stringify({
+      return Response.json(
+        {
           error: errorMessage,
           model,
           status: 'error',
-        }),
+        },
         {
           headers: { 'Content-Type': 'application/json' },
           status: 500,

@@ -1,12 +1,10 @@
 import { isDesktop } from '@lobechat/const';
+import type { UserInitializationState, UserPreference, UserSettings } from '@lobechat/types';
 import {
   Plans,
   UserGuideSchema,
-  type UserInitializationState,
   UserOnboardingSchema,
-  type UserPreference,
   UserPreferenceSchema,
-  type UserSettings,
   UserSettingsSchema,
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
@@ -91,7 +89,7 @@ export const userRouter = router({
 
     const hasMoreThan4Messages = messageCount > 4;
     const hasAnyMessages = messageCount > 0;
-    /* eslint-disable sort-keys-fix/sort-keys-fix */
+
     return {
       avatar: state.avatar,
       canEnablePWAGuide: hasMoreThan4Messages,
@@ -120,7 +118,6 @@ export const userRouter = router({
       isInviteCodeRequired,
       isFreePlan: !subscriptionPlan || subscriptionPlan === Plans.Free,
     } satisfies UserInitializationState;
-    /* eslint-enable sort-keys-fix/sort-keys-fix */
   }),
 
   makeUserOnboarded: userProcedure.mutation(async ({ ctx }) => {

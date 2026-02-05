@@ -7,7 +7,6 @@ import { GTDApiName } from './types';
 export const GTDIdentifier = 'lobe-gtd';
 
 export const GTDManifest: BuiltinToolManifest = {
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   api: [
     // ==================== Planning ====================
     {

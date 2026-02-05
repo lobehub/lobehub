@@ -273,13 +273,13 @@ describe('mergeArrayById', () => {
           config: {
             deploymentName: 'o1',
           },
-          contextWindowTokens: 200000,
+          contextWindowTokens: 200_000,
           description:
             'o1是OpenAI新的推理模型，支持图文输入并输出文本，适用于需要广泛通用知识的复杂任务。该模型具有200K上下文和2023年10月的知识截止日期。',
           displayName: 'OpenAI o1',
           enabled: true,
           id: 'o1',
-          maxOutput: 100000,
+          maxOutput: 100_000,
           pricing: {
             input: 15,
             output: 60,
@@ -297,13 +297,13 @@ describe('mergeArrayById', () => {
           config: {
             deploymentName: 'ddd',
           },
-          contextWindowTokens: 200000,
+          contextWindowTokens: 200_000,
           description:
             'o1是OpenAI新的推理模型，支持图文输入并输出文本，适用于需要广泛通用知识的复杂任务。该模型具有200K上下文和2023年10月的知识截止日期。',
           displayName: 'OpenAI o1',
           enabled: true,
           id: 'o1',
-          maxOutput: 100000,
+          maxOutput: 100_000,
           releasedAt: '2024-12-17',
           type: 'chat',
         },
@@ -319,7 +319,7 @@ describe('mergeArrayById', () => {
         config: {
           deploymentName: 'ddd',
         },
-        contextWindowTokens: 200000,
+        contextWindowTokens: 200_000,
         description:
           'o1是OpenAI新的推理模型，支持图文输入并输出文本，适用于需要广泛通用知识的复杂任务。该模型具有200K上下文和2023年10月的知识截止日期。',
         displayName: 'OpenAI o1',
@@ -330,7 +330,7 @@ describe('mergeArrayById', () => {
           output: 60,
         },
         source: 'builtin',
-        maxOutput: 100000,
+        maxOutput: 100_000,
         releasedAt: '2024-12-17',
         type: 'chat',
       },

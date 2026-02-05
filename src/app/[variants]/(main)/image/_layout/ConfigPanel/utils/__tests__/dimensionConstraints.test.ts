@@ -182,7 +182,7 @@ describe('dimensionConstraints', () => {
     });
 
     it('should handle very large dimensions', () => {
-      const result = constrainDimensions(10000, 10000, defaultConstraints);
+      const result = constrainDimensions(10_000, 10_000, defaultConstraints);
 
       // Should scale down to fit within constraints
       expect(result).toEqual({ width: 1024, height: 1024 });

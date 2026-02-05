@@ -1,6 +1,6 @@
 import type { AgentEvent } from './event';
-import { AgentInstruction, AgentRuntimeContext } from './instruction';
-import { AgentState } from './state';
+import type { AgentInstruction, AgentRuntimeContext } from './instruction';
+import type { AgentState } from './state';
 
 export type InstructionExecutor = (
   instruction: AgentInstruction,

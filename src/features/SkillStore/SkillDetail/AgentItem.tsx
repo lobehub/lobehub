@@ -27,11 +27,11 @@ const AgentItem = memo<AgentItemProps>(
         target="_blank"
       >
         <Block
+          clickable
+          horizontal
           align={'center'}
           className={styles.container}
-          clickable
           gap={12}
-          horizontal
           paddingBlock={12}
           paddingInline={12}
           style={{ cursor: 'pointer', height: '100%' }}

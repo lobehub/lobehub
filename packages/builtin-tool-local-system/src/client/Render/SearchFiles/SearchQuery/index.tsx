@@ -1,5 +1,5 @@
 import type { LocalFileSearchState } from '@lobechat/builtin-tool-local-system';
-import { type LocalSearchFilesParams } from '@lobechat/electron-client-ipc';
+import type { LocalSearchFilesParams } from '@lobechat/electron-client-ipc';
 import { memo } from 'react';
 
 import { useChatStore } from '@/store/chat';

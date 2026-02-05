@@ -23,15 +23,15 @@ const AuthContainer: FC<PropsWithChildren> = ({ children }) => {
         width={'100%'}
       >
         <Flexbox
+          horizontal
           align={'center'}
           gap={8}
-          horizontal
           justify={'space-between'}
           padding={16}
           width={'100%'}
         >
           <ProductLogo size={40} />
-          <Flexbox align={'center'} horizontal>
+          <Flexbox horizontal align={'center'}>
             <LangButton placement={'bottomRight'} size={18} />
             <Divider className={styles.divider} orientation={'vertical'} />
             <ThemeButton placement={'bottomRight'} size={18} />

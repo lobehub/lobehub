@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { PipelineContext } from '../../types';
+import type { PipelineContext } from '../../types';
 import { AgentCouncilFlattenProcessor } from '../AgentCouncilFlatten';
 
 describe('AgentCouncilFlattenProcessor', () => {
@@ -18,7 +18,7 @@ describe('AgentCouncilFlattenProcessor', () => {
       const input: any[] = [
         {
           content: '',
-          createdAt: 1704067205000,
+          createdAt: 1_704_067_205_000,
           extra: {
             parentMessageId: 'msg-broadcast-tool-1',
           },
@@ -32,8 +32,8 @@ describe('AgentCouncilFlattenProcessor', () => {
               parentId: 'msg-broadcast-tool-1',
               model: 'gpt-4',
               provider: 'openai',
-              createdAt: 1704067205000,
-              updatedAt: 1704067205000,
+              createdAt: 1_704_067_205_000,
+              updatedAt: 1_704_067_205_000,
               meta: {
                 avatar: 'backend-dev',
                 title: 'Backend Developer',
@@ -47,8 +47,8 @@ describe('AgentCouncilFlattenProcessor', () => {
               parentId: 'msg-broadcast-tool-1',
               model: 'claude-3-5-sonnet-20241022',
               provider: 'anthropic',
-              createdAt: 1704067205500,
-              updatedAt: 1704067205500,
+              createdAt: 1_704_067_205_500,
+              updatedAt: 1_704_067_205_500,
               meta: {
                 avatar: 'devops',
                 title: 'DevOps Engineer',
@@ -56,7 +56,7 @@ describe('AgentCouncilFlattenProcessor', () => {
             },
           ],
           role: 'agentCouncil',
-          updatedAt: 1704067206000,
+          updatedAt: 1_704_067_206_000,
         },
       ];
 
@@ -97,7 +97,7 @@ describe('AgentCouncilFlattenProcessor', () => {
       const input: any[] = [
         {
           content: '',
-          createdAt: 1704067205000,
+          createdAt: 1_704_067_205_000,
           extra: {
             parentMessageId: 'msg-broadcast-tool-1',
           },
@@ -109,8 +109,8 @@ describe('AgentCouncilFlattenProcessor', () => {
               agentId: 'agent-1',
               content: 'Let me search for that',
               parentId: 'msg-broadcast-tool-1',
-              createdAt: 1704067205000,
-              updatedAt: 1704067205000,
+              createdAt: 1_704_067_205_000,
+              updatedAt: 1_704_067_205_000,
               tools: [
                 {
                   id: 'tool-1',
@@ -129,7 +129,7 @@ describe('AgentCouncilFlattenProcessor', () => {
             },
           ],
           role: 'agentCouncil',
-          updatedAt: 1704067206000,
+          updatedAt: 1_704_067_206_000,
         },
       ];
 
@@ -164,7 +164,7 @@ describe('AgentCouncilFlattenProcessor', () => {
       const input: any[] = [
         {
           content: '',
-          createdAt: 1704067205000,
+          createdAt: 1_704_067_205_000,
           extra: {
             parentMessageId: 'msg-broadcast-tool-1',
           },
@@ -177,8 +177,8 @@ describe('AgentCouncilFlattenProcessor', () => {
               agentId: 'agent-with-tools',
               content: '',
               parentId: 'msg-broadcast-tool-1',
-              createdAt: 1704067205000,
-              updatedAt: 1704067205000,
+              createdAt: 1_704_067_205_000,
+              updatedAt: 1_704_067_205_000,
               meta: { title: 'Agent with Tools' },
               children: [
                 {
@@ -204,7 +204,7 @@ describe('AgentCouncilFlattenProcessor', () => {
             },
           ],
           role: 'agentCouncil',
-          updatedAt: 1704067206000,
+          updatedAt: 1_704_067_206_000,
         },
       ];
 
@@ -238,7 +238,7 @@ describe('AgentCouncilFlattenProcessor', () => {
         },
         {
           content: '',
-          createdAt: 1704067205000,
+          createdAt: 1_704_067_205_000,
           extra: {
             parentMessageId: 'msg-broadcast-tool-1',
           },
@@ -256,7 +256,7 @@ describe('AgentCouncilFlattenProcessor', () => {
             },
           ],
           role: 'agentCouncil',
-          updatedAt: 1704067206000,
+          updatedAt: 1_704_067_206_000,
         },
         {
           id: 'msg-user-2',
@@ -484,7 +484,7 @@ describe('AgentCouncilFlattenProcessor', () => {
       const input: any[] = [
         {
           content: '',
-          createdAt: 1704067205000,
+          createdAt: 1_704_067_205_000,
           extra: {
             parentMessageId: 'msg-broadcast-tool-1',
           },
@@ -499,8 +499,8 @@ describe('AgentCouncilFlattenProcessor', () => {
               parentId: 'msg-broadcast-tool-1',
               model: 'gpt-4',
               provider: 'openai',
-              createdAt: 1704067205000,
-              updatedAt: 1704067205000,
+              createdAt: 1_704_067_205_000,
+              updatedAt: 1_704_067_205_000,
               meta: {
                 avatar: 'backend-dev',
                 title: 'Backend Developer',
@@ -524,8 +524,8 @@ describe('AgentCouncilFlattenProcessor', () => {
               parentId: 'msg-broadcast-tool-1',
               model: 'claude-3-5-sonnet-20241022',
               provider: 'anthropic',
-              createdAt: 1704067205500,
-              updatedAt: 1704067205500,
+              createdAt: 1_704_067_205_500,
+              updatedAt: 1_704_067_205_500,
               meta: {
                 avatar: 'devops',
                 title: 'DevOps Engineer',
@@ -549,8 +549,8 @@ describe('AgentCouncilFlattenProcessor', () => {
               parentId: 'msg-broadcast-tool-1',
               model: 'gpt-4',
               provider: 'openai',
-              createdAt: 1704067206000,
-              updatedAt: 1704067206000,
+              createdAt: 1_704_067_206_000,
+              updatedAt: 1_704_067_206_000,
               meta: {
                 avatar: 'architect',
                 title: 'Software Architect',
@@ -567,7 +567,7 @@ describe('AgentCouncilFlattenProcessor', () => {
             },
           ],
           role: 'agentCouncil',
-          updatedAt: 1704067206000,
+          updatedAt: 1_704_067_206_000,
         },
       ];
 

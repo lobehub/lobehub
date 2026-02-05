@@ -1,7 +1,8 @@
 'use client';
 
 import { App } from 'antd';
-import { type ReactNode, createContext, useCallback, useContext, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import { createContext, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { mutate as globalMutate } from 'swr';
 
@@ -12,16 +13,16 @@ import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors/settings';
 
-import MarketAuthConfirmModal from './MarketAuthConfirmModal';
-import ProfileSetupModal from './ProfileSetupModal';
 import { MarketAuthError } from './errors';
+import MarketAuthConfirmModal from './MarketAuthConfirmModal';
 import { MarketOIDC } from './oidc';
-import {
-  type MarketAuthContextType,
-  type MarketAuthSession,
-  type MarketUserInfo,
-  type MarketUserProfile,
-  type OIDCConfig,
+import ProfileSetupModal from './ProfileSetupModal';
+import type {
+  MarketAuthContextType,
+  MarketAuthSession,
+  MarketUserInfo,
+  MarketUserProfile,
+  OIDCConfig,
 } from './types';
 import { useMarketUserProfile } from './useMarketUserProfile';
 
@@ -164,14 +165,14 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
 
   // 初始化 OIDC 客户端（仅在客户端）
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof globalThis.window !== 'undefined') {
       const baseUrl = process.env.NEXT_PUBLIC_MARKET_BASE_URL || 'https://market.lobehub.com';
       const desktopRedirectUri = new URL(MARKET_OIDC_ENDPOINTS.desktopCallback, baseUrl).toString();
 
       // 桌面端使用 Market 手动维护的 Web 回调，Web 端使用当前域名
       const redirectUri = isDesktop
         ? desktopRedirectUri
-        : `${window.location.origin}/market-auth-callback`;
+        : `${globalThis.location.origin}/market-auth-callback`;
 
       const oidcConfig: OIDCConfig = {
         baseUrl,
@@ -496,23 +497,23 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
   );
 
   return (
-    <MarketAuthContext.Provider value={contextValue}>
+    <MarketAuthContext value={contextValue}>
       {children}
       <MarketAuthConfirmModal
+        open={showConfirmModal}
         onCancel={handleCancelAuth}
         onConfirm={handleConfirmAuth}
-        open={showConfirmModal}
       />
       <ProfileSetupModal
         accessToken={session?.accessToken ?? null}
         defaultDisplayName={userProfile?.displayName || ''}
         isFirstTimeSetup={isFirstTimeSetup}
-        onClose={handleCloseProfileSetup}
-        onSuccess={handleProfileSuccess}
         open={showProfileSetupModal}
         userProfile={userProfile}
+        onClose={handleCloseProfileSetup}
+        onSuccess={handleProfileSuccess}
       />
-    </MarketAuthContext.Provider>
+    </MarketAuthContext>
   );
 };
 
@@ -520,7 +521,7 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
  * 使用 Market 授权的 Hook
  */
 export const useMarketAuth = (): MarketAuthContextType => {
-  const context = useContext(MarketAuthContext);
+  const context = use(MarketAuthContext);
   if (!context) {
     throw new Error('useMarketAuth must be used within a MarketAuthProvider');
   }

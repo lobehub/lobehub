@@ -42,12 +42,14 @@ const LoginConfirmClient = memo<LoginConfirmProps>(({ uid, clientMetadata }) => 
         logoUrl={clientMetadata.logo}
       />
       <AuthCard
+        subtitle={descriptionText}
+        title={titleText}
         footer={
           <form
             action="/oidc/consent"
             method="post"
-            onSubmit={() => setIsLoading(true)}
             style={{ width: '100%' }}
+            onSubmit={() => setIsLoading(true)}
           >
             {/* Adjust action URL */}
             <input name="uid" type="hidden" value={uid} />
@@ -67,19 +69,17 @@ const LoginConfirmClient = memo<LoginConfirmProps>(({ uid, clientMetadata }) => 
             </Button>
           </form>
         }
-        subtitle={descriptionText}
-        title={titleText}
       >
         <Block padding={16} variant={'outlined'}>
           {isUserStateInit ? (
-            <Flexbox align={'center'} gap={16} horizontal>
+            <Flexbox horizontal align={'center'} gap={16}>
               <Avatar alt={nickName || ''} avatar={avatar} shape={'square'} size={40} />
               <Text fontSize={18} weight={500}>
                 {nickName}
               </Text>
             </Flexbox>
           ) : (
-            <Flexbox gap={16} horizontal>
+            <Flexbox horizontal gap={16}>
               <Skeleton.Avatar active shape={'square'} size={40} />
               <Skeleton.Button active />
             </Flexbox>

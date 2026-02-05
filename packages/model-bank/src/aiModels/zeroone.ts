@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 const zerooneChatModels: AIChatModelCard[] = [
   {
@@ -21,7 +21,8 @@ const zerooneChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 16_384,
-    description: 'A vision model for complex tasks with strong multi-image understanding and analysis.',
+    description:
+      'A vision model for complex tasks with strong multi-image understanding and analysis.',
     displayName: 'Yi Vision V2',
     enabled: true,
     id: 'yi-vision-v2',
@@ -50,7 +51,8 @@ const zerooneChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: 'A tuned mid-size model with balanced capability and value, optimized for instruction following.',
+    description:
+      'A tuned mid-size model with balanced capability and value, optimized for instruction following.',
     displayName: 'Yi Medium',
     id: 'yi-medium',
     pricing: {
@@ -78,7 +80,8 @@ const zerooneChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 16_384,
-    description: 'Exceptional value and performance, tuned for a strong balance of quality, speed, and cost.',
+    description:
+      'Exceptional value and performance, tuned for a strong balance of quality, speed, and cost.',
     displayName: 'Yi Large Turbo',
     id: 'yi-large-turbo',
     pricing: {

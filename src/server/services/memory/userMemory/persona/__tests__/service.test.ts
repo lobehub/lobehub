@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { LobeChatDatabase } from '@lobechat/database';
+import type { LobeChatDatabase } from '@lobechat/database';
 import { users } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,7 +9,7 @@ import { UserPersonaModel } from '@/database/models/userMemory/persona';
 import { UserPersonaService } from '../service';
 
 // Use var to avoid TDZ with vi.mock hoisting
-var aiInfraMocks:
+let aiInfraMocks:
   | undefined
   | {
       getAiProviderRuntimeState: ReturnType<typeof vi.fn>;

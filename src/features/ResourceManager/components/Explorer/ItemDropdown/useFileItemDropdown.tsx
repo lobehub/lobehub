@@ -1,6 +1,6 @@
-import { Icon, copyToClipboard, createRawModal } from '@lobehub/ui';
+import { copyToClipboard, createRawModal, Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import { type ItemType } from 'antd/es/menu/interface';
+import type { ItemType } from 'antd/es/menu/interface';
 import {
   BookMinusIcon,
   BookPlusIcon,
@@ -27,8 +27,8 @@ import MoveToFolderModal from '../MoveToFolderModal';
 
 interface UseFileItemDropdownParams {
   enabled?: boolean;
-  fileType: string;
   filename: string;
+  fileType: string;
   id: string;
   libraryId?: string;
   onRenameStart?: () => void;

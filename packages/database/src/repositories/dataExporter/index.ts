@@ -2,7 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import pMap from 'p-map';
 
 import * as EXPORT_TABLES from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 
 interface BaseTableConfig {
   table: keyof typeof EXPORT_TABLES;
@@ -91,7 +91,6 @@ export class DataExporterRepos {
 
   private removeUserId(data: any[]) {
     return data.map((item) => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { userId: _, ...rest } = item;
       return rest;
     });

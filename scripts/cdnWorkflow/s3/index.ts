@@ -1,10 +1,5 @@
-import {
-  GetObjectCommand,
-  PutObjectCommand,
-  PutObjectCommandOutput,
-  S3Client,
-  S3ClientConfig,
-} from '@aws-sdk/client-s3';
+import type { PutObjectCommandOutput, S3ClientConfig } from '@aws-sdk/client-s3';
+import { GetObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 import type { ImgInfo, S3UserConfig, UploadResult } from './types';

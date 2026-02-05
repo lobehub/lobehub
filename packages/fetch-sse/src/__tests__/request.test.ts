@@ -79,7 +79,7 @@ describe('getRequestBody', () => {
 
     it('should handle very long string', async () => {
       // Arrange
-      const body = 'a'.repeat(10000);
+      const body = 'a'.repeat(10_000);
 
       // Act
       const result = await getRequestBody(body);
@@ -180,8 +180,8 @@ describe('getRequestBody', () => {
       // Arrange
       const buffer = new ArrayBuffer(64);
       const int32View = new Int32Array(buffer, 16, 8); // offset: 16 bytes, length: 8 elements
-      int32View[0] = -12345;
-      int32View[7] = 67890;
+      int32View[0] = -12_345;
+      int32View[7] = 67_890;
 
       // Act
       const result = await getRequestBody(int32View);
@@ -193,16 +193,16 @@ describe('getRequestBody', () => {
 
       // Verify data
       const resultView = new Int32Array(result as ArrayBuffer);
-      expect(resultView[0]).toBe(-12345);
-      expect(resultView[7]).toBe(67890);
+      expect(resultView[0]).toBe(-12_345);
+      expect(resultView[7]).toBe(67_890);
     });
 
     it('should convert Float32Array to sliced ArrayBuffer', async () => {
       // Arrange
       const buffer = new ArrayBuffer(40);
       const float32View = new Float32Array(buffer, 4, 5);
-      float32View[0] = 3.14159;
-      float32View[4] = 2.71828;
+      float32View[0] = 3.141_59;
+      float32View[4] = 2.718_28;
 
       // Act
       const result = await getRequestBody(float32View);
@@ -212,8 +212,8 @@ describe('getRequestBody', () => {
       expect((result as ArrayBuffer).byteLength).toBe(20); // 5 elements * 4 bytes
 
       const resultView = new Float32Array(result as ArrayBuffer);
-      expect(resultView[0]).toBeCloseTo(3.14159);
-      expect(resultView[4]).toBeCloseTo(2.71828);
+      expect(resultView[0]).toBeCloseTo(3.141_59);
+      expect(resultView[4]).toBeCloseTo(2.718_28);
     });
 
     it('should convert DataView to sliced ArrayBuffer', async () => {
@@ -345,7 +345,7 @@ describe('getRequestBody', () => {
 
     it('should handle large Blob', async () => {
       // Arrange
-      const largeData = 'x'.repeat(100000);
+      const largeData = 'x'.repeat(100_000);
       const blob = new Blob([largeData], { type: 'text/plain' });
 
       // Act
@@ -353,7 +353,7 @@ describe('getRequestBody', () => {
 
       // Assert
       expect(result).toBeInstanceOf(ArrayBuffer);
-      expect((result as ArrayBuffer).byteLength).toBe(100000);
+      expect((result as ArrayBuffer).byteLength).toBe(100_000);
     });
   });
 
@@ -498,9 +498,9 @@ describe('getRequestBody', () => {
       const buffer = new ArrayBuffer(8);
       const view = new Uint8Array(buffer);
       // Set specific binary pattern
-      view[0] = 0xff;
+      view[0] = 0xFF;
       view[1] = 0x00;
-      view[2] = 0xaa;
+      view[2] = 0xAA;
       view[3] = 0x55;
       view[4] = 0x12;
       view[5] = 0x34;
@@ -512,9 +512,9 @@ describe('getRequestBody', () => {
 
       // Assert
       const resultView = new Uint8Array(result as ArrayBuffer);
-      expect(resultView[0]).toBe(0xff);
+      expect(resultView[0]).toBe(0xFF);
       expect(resultView[1]).toBe(0x00);
-      expect(resultView[2]).toBe(0xaa);
+      expect(resultView[2]).toBe(0xAA);
       expect(resultView[3]).toBe(0x55);
       expect(resultView[4]).toBe(0x12);
       expect(resultView[5]).toBe(0x34);
@@ -561,12 +561,12 @@ describe('getRequestBody', () => {
       const imageData = new Uint8Array([
         0x89,
         0x50,
-        0x4e,
+        0x4E,
         0x47,
-        0x0d,
-        0x0a,
-        0x1a,
-        0x0a, // PNG header
+        0x0D,
+        0x0A,
+        0x1A,
+        0x0A, // PNG header
       ]);
       const imageBlob = new Blob([imageData], { type: 'image/png' });
 
@@ -578,14 +578,14 @@ describe('getRequestBody', () => {
       const resultView = new Uint8Array(result as ArrayBuffer);
       expect(resultView[0]).toBe(0x89);
       expect(resultView[1]).toBe(0x50);
-      expect(resultView[2]).toBe(0x4e);
+      expect(resultView[2]).toBe(0x4E);
       expect(resultView[3]).toBe(0x47);
     });
 
     it('should handle binary protocol buffer data', async () => {
       // Arrange
       const protobufData = new Uint8Array([
-        0x08, 0x96, 0x01, 0x12, 0x05, 0x48, 0x65, 0x6c, 0x6c, 0x6f,
+        0x08, 0x96, 0x01, 0x12, 0x05, 0x48, 0x65, 0x6C, 0x6C, 0x6F,
       ]);
       const buffer = protobufData.buffer;
 

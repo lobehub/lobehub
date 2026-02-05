@@ -2,7 +2,7 @@
 import { ModelProvider } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
 import { LobeCohereAI, params } from './index';
 
@@ -217,11 +217,11 @@ describe('LobeCohereAI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'command-r7b',
-        temperature: 1.0,
+        temperature: 1,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
-        expect.objectContaining({ temperature: 1.0 }),
+        expect.objectContaining({ temperature: 1 }),
         expect.anything(),
       );
     });
@@ -264,9 +264,9 @@ describe('LobeCohereAI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'command-r7b',
-        frequency_penalty: 2.0,
-        presence_penalty: 2.0,
-        top_p: 2.0,
+        frequency_penalty: 2,
+        presence_penalty: 2,
+        top_p: 2,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
@@ -283,9 +283,9 @@ describe('LobeCohereAI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'command-r7b',
-        frequency_penalty: -1.0,
-        presence_penalty: -1.0,
-        top_p: -1.0,
+        frequency_penalty: -1,
+        presence_penalty: -1,
+        top_p: -1,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
@@ -327,13 +327,13 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus',
-              context_length: 128000,
+              context_length: 128_000,
               features: ['tools', 'chat'],
               supports_vision: false,
             },
             {
               name: 'command-r',
-              context_length: 128000,
+              context_length: 128_000,
               features: ['tools', 'chat'],
               supports_vision: false,
             },
@@ -346,13 +346,13 @@ describe('LobeCohereAI - custom features', () => {
       expect(models).toHaveLength(2);
       expect(models[0]).toMatchObject({
         id: 'command-r-plus',
-        contextWindowTokens: 128000,
+        contextWindowTokens: 128_000,
         functionCall: true, // Has tools in features
         vision: false,
       });
       expect(models[1]).toMatchObject({
         id: 'command-r',
-        contextWindowTokens: 128000,
+        contextWindowTokens: 128_000,
         functionCall: true, // Has tools in features
         vision: false,
       });
@@ -364,7 +364,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus-08-2024',
-              context_length: 128000,
+              context_length: 128_000,
               features: ['tools', 'chat'],
               supports_vision: true,
             },
@@ -436,7 +436,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus',
-              context_length: 128000,
+              context_length: 128_000,
               features: ['tools', 'chat'],
               supports_vision: false,
             },
@@ -485,7 +485,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'COMMAND-R-PLUS',
-              context_length: 128000,
+              context_length: 128_000,
               features: ['tools'],
               supports_vision: false,
             },
@@ -507,7 +507,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus',
-              context_length: 128000,
+              context_length: 128_000,
               features: ['tools', 'chat'],
               supports_vision: false,
             },
@@ -556,7 +556,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus-vision',
-              context_length: 128000,
+              context_length: 128_000,
               features: ['tools', 'chat', 'vision'],
               supports_vision: true,
             },
@@ -569,7 +569,7 @@ describe('LobeCohereAI - custom features', () => {
       expect(models).toHaveLength(1);
       expect(models[0]).toMatchObject({
         id: 'command-r-plus-vision',
-        contextWindowTokens: 128000,
+        contextWindowTokens: 128_000,
         functionCall: true,
         vision: true,
       });
@@ -581,7 +581,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus',
-              context_length: 128000,
+              context_length: 128_000,
               features: null,
               supports_vision: false,
             },
@@ -608,13 +608,13 @@ describe('LobeCohereAI - custom features', () => {
             },
             {
               name: 'command-r',
-              context_length: 128000,
+              context_length: 128_000,
               features: ['tools', 'chat'],
               supports_vision: false,
             },
             {
               name: 'command-r-plus',
-              context_length: 256000,
+              context_length: 256_000,
               features: ['tools', 'chat'],
               supports_vision: false,
             },
@@ -626,8 +626,8 @@ describe('LobeCohereAI - custom features', () => {
 
       expect(models).toHaveLength(3);
       expect(models[0].contextWindowTokens).toBe(4096);
-      expect(models[1].contextWindowTokens).toBe(128000);
-      expect(models[2].contextWindowTokens).toBe(256000);
+      expect(models[1].contextWindowTokens).toBe(128_000);
+      expect(models[2].contextWindowTokens).toBe(256_000);
     });
 
     it('should handle complex features array', async () => {
@@ -636,7 +636,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus',
-              context_length: 128000,
+              context_length: 128_000,
               features: ['tools', 'chat', 'embeddings', 'rerank'],
               supports_vision: false,
             },
@@ -724,7 +724,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus-extended',
-              context_length: 1000000,
+              context_length: 1_000_000,
               features: ['tools'],
               supports_vision: false,
             },
@@ -735,7 +735,7 @@ describe('LobeCohereAI - custom features', () => {
       const models = await params.models({ client: mockClient as any });
 
       expect(models).toHaveLength(1);
-      expect(models[0].contextWindowTokens).toBe(1000000);
+      expect(models[0].contextWindowTokens).toBe(1_000_000);
     });
 
     it('should handle models with zero context length', async () => {
@@ -764,7 +764,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus-08-2024',
-              context_length: 128000,
+              context_length: 128_000,
               features: ['tools', 'chat'],
               supports_vision: true,
             },
@@ -785,13 +785,13 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus',
-              context_length: 128000,
+              context_length: 128_000,
               features: ['tools', 'chat'],
               supports_vision: true,
             },
             {
               name: 'command-r',
-              context_length: 128000,
+              context_length: 128_000,
               features: ['tools'],
               supports_vision: false,
             },
@@ -899,16 +899,16 @@ describe('LobeCohereAI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'command-r7b',
-        frequency_penalty: 1.0,
-        presence_penalty: 0.0,
-        top_p: 1.0,
+        frequency_penalty: 1,
+        presence_penalty: 0,
+        top_p: 1,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          frequency_penalty: 1.0,
-          presence_penalty: 0.0,
-          top_p: 1.0,
+          frequency_penalty: 1,
+          presence_penalty: 0,
+          top_p: 1,
         }),
         expect.anything(),
       );
@@ -1044,9 +1044,9 @@ describe('LobeCohereAI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'command-r7b',
-        frequency_penalty: 10.0,
-        presence_penalty: -5.0,
-        top_p: 100.0,
+        frequency_penalty: 10,
+        presence_penalty: -5,
+        top_p: 100,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(

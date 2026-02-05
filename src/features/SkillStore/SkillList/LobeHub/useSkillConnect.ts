@@ -81,7 +81,7 @@ export const useSkillConnect = ({ identifier, serverName, type }: UseSkillConnec
     if (type !== 'lobehub') return;
 
     const handleMessage = async (event: MessageEvent) => {
-      if (event.origin !== window.location.origin) return;
+      if (event.origin !== globalThis.location.origin) return;
 
       if (
         event.data?.type === 'LOBEHUB_SKILL_AUTH_SUCCESS' &&
@@ -178,7 +178,7 @@ export const useSkillConnect = ({ identifier, serverName, type }: UseSkillConnec
       const provider = getLobehubSkillProviderById(identifier);
       if (!provider) return;
 
-      const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(identifier)}`;
+      const redirectUri = `${globalThis.location.origin}/oauth/callback/success?provider=${encodeURIComponent(identifier)}`;
       const { authorizeUrl } = await getAuthorizeUrl(identifier, { redirectUri });
       openOAuthWindow(authorizeUrl, identifier);
     } catch (error) {

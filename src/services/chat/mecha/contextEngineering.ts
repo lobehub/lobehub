@@ -1,22 +1,22 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { GroupAgentBuilderIdentifier } from '@lobechat/builtin-tool-group-agent-builder';
 import { GTDIdentifier } from '@lobechat/builtin-tool-gtd';
-import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS, isDesktop } from '@lobechat/const';
-import {
-  type AgentBuilderContext,
-  type AgentGroupConfig,
-  type GTDConfig,
-  type GroupAgentBuilderContext,
-  type GroupOfficialToolItem,
-  type LobeToolManifest,
-  MessagesEngine,
+import { isDesktop,KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
+import type {
+  AgentBuilderContext,
+  AgentGroupConfig,
+  GroupAgentBuilderContext,
+  GroupOfficialToolItem,
+  GTDConfig,
+  LobeToolManifest,
 } from '@lobechat/context-engine';
+import { MessagesEngine } from '@lobechat/context-engine';
 import { historySummaryPrompt } from '@lobechat/prompts';
-import {
-  type OpenAIChatMessage,
-  type RuntimeInitialContext,
-  type RuntimeStepContext,
-  type UIChatMessage,
+import type {
+  OpenAIChatMessage,
+  RuntimeInitialContext,
+  RuntimeStepContext,
+  UIChatMessage,
 } from '@lobechat/types';
 import debug from 'debug';
 
@@ -202,8 +202,8 @@ export const contextEngineering = async ({
 
         // Get Klavis tools (if enabled)
         const isKlavisEnabled =
-          typeof window !== 'undefined' &&
-          window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
+          typeof globalThis.window !== 'undefined' &&
+          globalThis.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
 
         if (isKlavisEnabled) {
           const allKlavisServers = klavisStoreSelectors.getServers(toolState);
@@ -224,8 +224,8 @@ export const contextEngineering = async ({
 
         // Get LobehubSkill providers (if enabled)
         const isLobehubSkillEnabled =
-          typeof window !== 'undefined' &&
-          window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill;
+          typeof globalThis.window !== 'undefined' &&
+          globalThis.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill;
 
         if (isLobehubSkillEnabled) {
           const allLobehubSkillServers = lobehubSkillStoreSelectors.getServers(toolState);
@@ -332,7 +332,7 @@ export const contextEngineering = async ({
   }
 
   // Create MessagesEngine with injected dependencies
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
+
   const engine = new MessagesEngine({
     // Agent configuration
     enableHistoryCount,

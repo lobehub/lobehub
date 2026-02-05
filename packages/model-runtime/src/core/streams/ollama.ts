@@ -1,10 +1,9 @@
-import { ChatResponse } from 'ollama/browser';
+import type { ChatResponse } from 'ollama/browser';
 
-import { ChatStreamCallbacks } from '../../types';
+import type { ChatStreamCallbacks } from '../../types';
 import { nanoid } from '../../utils/uuid';
+import type { StreamContext, StreamProtocolChunk } from './protocol';
 import {
-  StreamContext,
-  StreamProtocolChunk,
   createCallbacksTransformer,
   createSSEProtocolTransformer,
   generateToolCallId,

@@ -101,17 +101,17 @@ const PublishButton = memo<GroupPublishButtonProps>(({ action, onPublishSuccess 
       <Button
         icon={ShapesUploadIcon}
         loading={loading}
-        onClick={handleButtonClick}
         title={buttonTitle}
+        onClick={handleButtonClick}
       >
         {t('publishToCommunity')}
       </Button>
       <GroupForkConfirmModal
         loading={isPublishing}
-        onCancel={handleForkCancel}
-        onConfirm={handleForkConfirm}
         open={showForkModal}
         originalGroup={originalGroupInfo}
+        onCancel={handleForkCancel}
+        onConfirm={handleForkConfirm}
       />
     </>
   );

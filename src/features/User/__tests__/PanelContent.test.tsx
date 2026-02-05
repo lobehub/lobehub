@@ -24,7 +24,7 @@ vi.mock('@/components/Menu', () => ({
     <div>
       Mocked Menu
       {items.map((item: any) => (
-        <button key={item.key} onClick={onClick} type={'button'}>
+        <button key={item.key} type={'button'} onClick={onClick}>
           {item.label}
         </button>
       ))}
@@ -34,7 +34,7 @@ vi.mock('@/components/Menu', () => ({
 
 vi.mock('../UserInfo', () => ({
   default: vi.fn(({ onClick }) => (
-    <button onClick={onClick} type={'button'}>
+    <button type={'button'} onClick={onClick}>
       Mocked UserInfo
     </button>
   )),
@@ -52,7 +52,7 @@ vi.mock('../UserPanel/useMenu', () => ({
 
 vi.mock('../UserLoginOrSignup', () => ({
   default: vi.fn(({ onClick }) => (
-    <button onClick={onClick} type={'button'}>
+    <button type={'button'} onClick={onClick}>
       Mocked SignInBlock
     </button>
   )),

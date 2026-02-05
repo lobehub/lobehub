@@ -17,8 +17,8 @@ const ExperienceCard = memo<ExperienceCardProps>(({ experience, onClick }) => {
       capturedAt={experience.capturedAt || experience.updatedAt || experience.createdAt}
       cate={experience.type}
       hashTags={experience.tags}
-      onClick={() => onClick(experience)}
       title={experience.title}
+      onClick={() => onClick(experience)}
     >
       {experience.keyLearning || experience.situation}
     </TimeLineCard>

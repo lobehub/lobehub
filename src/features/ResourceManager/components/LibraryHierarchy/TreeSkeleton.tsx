@@ -23,7 +23,7 @@ interface TreeSkeletonItemProps {
 
 const TreeSkeletonItem = memo<TreeSkeletonItemProps>(({ opacity = 1 }) => {
   return (
-    <Flexbox className={styles.container} horizontal style={{ opacity }}>
+    <Flexbox horizontal className={styles.container} style={{ opacity }}>
       <Skeleton.Button
         active
         size={'small'}

@@ -3,15 +3,15 @@ import { Type as SchemaType } from '@google/genai';
 import * as imageToBase64Module from '@lobechat/utils';
 import { describe, expect, it, vi } from 'vitest';
 
-import { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 import {
-  GEMINI_MAGIC_THOUGHT_SIGNATURE,
   buildGoogleMessage,
   buildGoogleMessages,
   buildGooglePart,
   buildGoogleTool,
   buildGoogleTools,
+  GEMINI_MAGIC_THOUGHT_SIGNATURE,
 } from './google';
 
 // Mock the utils
@@ -718,8 +718,7 @@ describe('google contextBuilders', () => {
     });
 
     it('should correctly convert tool response message', async () => {
-      const toolCallNameMap = new Map<string, string>();
-      toolCallNameMap.set('call_1', 'get_current_weather');
+      const toolCallNameMap = new Map<string, string>([['call_1', 'get_current_weather']]);
 
       const message: OpenAIChatMessage = {
         content: '{"success":true,"data":{"temperature":"14°C"}}',

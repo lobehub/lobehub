@@ -1,6 +1,8 @@
-import { ChatErrorType, ErrorResponse, ErrorType } from '@lobechat/types';
+import type { ErrorResponse, ErrorType } from '@lobechat/types';
+import { ChatErrorType } from '@lobechat/types';
 
-import { AgentRuntimeErrorType, ILobeAgentRuntimeErrorType } from '../types';
+import type { ILobeAgentRuntimeErrorType } from '../types';
+import { AgentRuntimeErrorType } from '../types';
 
 const getStatus = (errorType: ILobeAgentRuntimeErrorType | ErrorType) => {
   // InvalidAccessCode / InvalidAzureAPIKey / InvalidOpenAIAPIKey / InvalidZhipuAPIKey ....
@@ -60,5 +62,5 @@ export const createErrorResponse = (errorType: ILobeAgentRuntimeErrorType, body?
     );
   }
 
-  return new Response(JSON.stringify(data), { status: statusCode });
+  return Response.json(data, { status: statusCode });
 };

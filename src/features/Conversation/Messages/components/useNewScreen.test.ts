@@ -199,7 +199,7 @@ describe('useNewScreen', () => {
       vi.mocked(mockGetViewportSize).mockReturnValue(undefined as unknown as number);
 
       // Mock window.innerHeight
-      Object.defineProperty(window, 'innerHeight', { value: 768, writable: true });
+      Object.defineProperty(globalThis, 'innerHeight', { value: 768, writable: true });
 
       // Setup DOM mocks - no previous element (fallback case)
       const mockCurrentWrapper = {

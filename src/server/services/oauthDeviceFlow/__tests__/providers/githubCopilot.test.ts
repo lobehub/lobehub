@@ -2,11 +2,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OAuthDeviceFlowService } from '../../index';
-import { GithubCopilotOAuthService, getOAuthService } from '../../providers/githubCopilot';
+import { getOAuthService, GithubCopilotOAuthService } from '../../providers/githubCopilot';
 
 // Mock fetch
 const mockFetch = vi.fn();
-global.fetch = mockFetch;
+globalThis.fetch = mockFetch;
 
 describe('GithubCopilotOAuthService', () => {
   let service: GithubCopilotOAuthService;
@@ -32,7 +32,7 @@ describe('GithubCopilotOAuthService', () => {
   describe('exchangeForCopilotToken', () => {
     it('should successfully exchange OAuth token for Copilot token', async () => {
       const mockResponse = {
-        expires_at: 1700000000,
+        expires_at: 1_700_000_000,
         token: 'copilot-bearer-token-123',
       };
 
@@ -57,7 +57,7 @@ describe('GithubCopilotOAuthService', () => {
       );
 
       expect(result).toEqual({
-        expiresAt: 1700000000 * 1000,
+        expiresAt: 1_700_000_000 * 1000,
         token: 'copilot-bearer-token-123',
       });
     });
@@ -137,7 +137,7 @@ describe('GithubCopilotOAuthService', () => {
       mockFetch.mockResolvedValueOnce({
         json: () =>
           Promise.resolve({
-            expires_at: 1700000000,
+            expires_at: 1_700_000_000,
             token: 'copilot-bearer-token-123',
           }),
         ok: true,
@@ -159,7 +159,7 @@ describe('GithubCopilotOAuthService', () => {
 
       expect(result).toEqual({
         bearerToken: 'copilot-bearer-token-123',
-        bearerTokenExpiresAt: 1700000000 * 1000,
+        bearerTokenExpiresAt: 1_700_000_000 * 1000,
         oauthAccessToken: 'oauth-access-token-123',
         userInfo: {
           avatarUrl: 'https://avatars.githubusercontent.com/u/123',
@@ -205,7 +205,7 @@ describe('GithubCopilotOAuthService', () => {
   describe('refreshCopilotToken', () => {
     it('should refresh Copilot token using existing OAuth token', async () => {
       const mockResponse = {
-        expires_at: 1700000000,
+        expires_at: 1_700_000_000,
         token: 'new-copilot-bearer-token',
       };
 
@@ -218,7 +218,7 @@ describe('GithubCopilotOAuthService', () => {
       const result = await service.refreshCopilotToken('oauth-token-123');
 
       expect(result).toEqual({
-        expiresAt: 1700000000 * 1000,
+        expiresAt: 1_700_000_000 * 1000,
         token: 'new-copilot-bearer-token',
       });
     });

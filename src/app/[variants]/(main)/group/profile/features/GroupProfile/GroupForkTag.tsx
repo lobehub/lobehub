@@ -35,8 +35,7 @@ const GroupForkTag = memo(() => {
         setLoading(true);
 
         // Get fork source info from market using the marketIdentifier
-        const forkSourceResponse =
-          await marketApiService.getAgentGroupForkSource(marketIdentifier);
+        const forkSourceResponse = await marketApiService.getAgentGroupForkSource(marketIdentifier);
 
         setForkSource(forkSourceResponse.source);
       } catch (error) {
@@ -63,12 +62,12 @@ const GroupForkTag = memo(() => {
       bordered={false}
       color="default"
       icon={<Icon icon={GitFork} />}
-      onClick={handleClick}
       style={{ cursor: 'pointer' }}
       title={t('marketPublish.forkFrom.tooltip', {
         agent: forkSource.name,
         defaultValue: `Forked from ${forkSource.name}`,
       })}
+      onClick={handleClick}
     >
       {t('marketPublish.forkFrom.label', { defaultValue: 'Forked from' })} {forkSource.name}
     </Tag>

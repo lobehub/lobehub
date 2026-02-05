@@ -28,7 +28,7 @@ const styles = createStaticStyles(({ css }) => {
 const Follow = memo(() => {
   const { t } = useTranslation('common');
   return (
-    <Flexbox gap={8} horizontal>
+    <Flexbox horizontal gap={8}>
       <a href={GITHUB} rel="noreferrer" target="_blank">
         <ActionIcon
           className={styles.icon}

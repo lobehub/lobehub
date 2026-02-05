@@ -12,8 +12,9 @@ import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
 import { merge } from '@/utils/merge';
 
-import { AiProviderSelectItem, aiModels, aiProviders } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { AiProviderSelectItem } from '../schemas';
+import { aiModels, aiProviders } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 type DecryptUserKeyVaults = (encryptKeyVaultsStr: string | null) => Promise<any>;
 
@@ -265,7 +266,7 @@ export class AiProviderModel {
       .where(and(eq(aiProviders.userId, this.userId)));
 
     const decrypt = decryptor ?? JSON.parse;
-    let runtimeConfig: Record<string, AiProviderRuntimeConfig> = {};
+    const runtimeConfig: Record<string, AiProviderRuntimeConfig> = {};
 
     for (const item of result) {
       const builtin = DEFAULT_MODEL_PROVIDER_LIST.find((provider) => provider.id === item.id);

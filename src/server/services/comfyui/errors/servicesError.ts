@@ -15,7 +15,7 @@ export class ServicesError extends ComfyUIInternalError {
     super(message, reason, details);
     this.name = 'ServicesError';
   }
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
+
   static readonly Reasons = {
     // Client errors
     INVALID_ARGS: 'INVALID_ARGS',
@@ -38,5 +38,4 @@ export class ServicesError extends ComfyUIInternalError {
     // Workflow builder errors
     WORKFLOW_BUILD_FAILED: 'WORKFLOW_BUILD_FAILED',
   } as const;
-  /* eslint-enable sort-keys-fix/sort-keys-fix */
 }

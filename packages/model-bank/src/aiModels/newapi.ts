@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 // NewAPI Router Provider - Aggregates multiple AI services
 // Models are fetched dynamically, not predefined

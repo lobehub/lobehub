@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import {
-  FIRST_CHUNK_ERROR_KEY,
   convertIterableToStream,
   createCallbacksTransformer,
   createFirstErrorHandleTransformer,
   createSSEDataExtractor,
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
+  FIRST_CHUNK_ERROR_KEY,
 } from './protocol';
 
 describe('createSSEDataExtractor', () => {
@@ -99,7 +99,7 @@ describe('createSSEDataExtractor', () => {
 
   it('should process large chunks of data correctly', async () => {
     const transformer = createSSEDataExtractor();
-    const messages = Array(100)
+    const messages = Array.from({ length: 100 })
       .fill(null)
       .map((_, i) => `data: {"message": "message${i}"}\n`)
       .join('');
@@ -116,9 +116,9 @@ describe('createSSEDataExtractor', () => {
     it('should convert azure ai data', async () => {
       const chunks = [
         `data: {"choices":[{"delta":{"content":"","reasoning_content":null,"role":"assistant","tool_calls":null},"finish_reason":null,"index":0,"logprobs":null,"matched_stop":null}],"created":1739714651,"id":"1392a93d52c3483ea872d0ab2aaff7d7","model":"DeepSeek-R1","object":"chat.completion.chunk","usage":null}\n`,
-        `data: {"choices":[{"delta":{"content":"\u003cthink\u003e","reasoning_content":null,"role":null,"tool_calls":null},"finish_reason":null,"index":0,"logprobs":null,"matched_stop":null}],"created":1739714651,"id":"1392a93d52c3483ea872d0ab2aaff7d7","model":"DeepSeek-R1","object":"chat.completion.chunk","usage":null}\n`,
+        `data: {"choices":[{"delta":{"content":"\u003Cthink\u003E","reasoning_content":null,"role":null,"tool_calls":null},"finish_reason":null,"index":0,"logprobs":null,"matched_stop":null}],"created":1739714651,"id":"1392a93d52c3483ea872d0ab2aaff7d7","model":"DeepSeek-R1","object":"chat.completion.chunk","usage":null}\n`,
         `data: {"choices":[{"delta":{"content":"\n\n","reasoning_content":null,"role":null,"tool_calls":null},"finish_reason":null,"index":0,"logprobs":null,"matched_stop":null}],"created":1739714651,"id":"1392a93d52c3483ea872d0ab2aaff7d7","model":"DeepSeek-R1","object":"chat.completion.chunk","usage":null}\n`,
-        `data: {"choices":[{"delta":{"content":"\u003c/think\u003e","reasoning_content":null,"role":null,"tool_calls":null},"finish_reason":null,"index":0,"logprobs":null,"matched_stop":null}],"created":1739714651,"id":"1392a93d52c3483ea872d0ab2aaff7d7","model":"DeepSeek-R1","object":"chat.completion.chunk","usage":null}\n`,
+        `data: {"choices":[{"delta":{"content":"\u003C/think\u003E","reasoning_content":null,"role":null,"tool_calls":null},"finish_reason":null,"index":0,"logprobs":null,"matched_stop":null}],"created":1739714651,"id":"1392a93d52c3483ea872d0ab2aaff7d7","model":"DeepSeek-R1","object":"chat.completion.chunk","usage":null}\n`,
         `data: {"choices":[{"delta":{"content":"\n\n","reasoning_content":null,"role":null,"tool_calls":null},"finish_reason":null,"index":0,"logprobs":null,"matched_stop":null}],"created":1739714651,"id":"1392a93d52c3483ea872d0ab2aaff7d7","model":"DeepSeek-R1","object":"chat.completion.chunk","usage":null}\n`,
         `data: {"choices":[{"delta":{"content":"Hello","reasoning_content":null,"role":null,"tool_calls":null},"finish_reason":null,"index":0,"logprobs":null,"matched_stop":null}],"created":1739714651,"id":"1392a93d52c3483ea872d0ab2aaff7d7","model":"DeepSeek-R1","object":"chat.completion.chunk","usage":null}\n`,
         `data: {"choices":[{"delta":{"content":"!","reasoning_content":null,"role":null,"tool_calls":null},"finish_reason":null,"index":0,"logprobs":null,"matched_stop":null}],"created":1739714652,"id":"1392a93d52c3483ea872d0ab2aaff7d7","model":"DeepSeek-R1","object":"chat.completion.chunk","usage":null}\n`,
@@ -190,7 +190,7 @@ describe('createTokenSpeedCalculator', async () => {
     const transformer = createTokenSpeedCalculator((v) => v, { inputStartAt });
     const results = await processChunk(transformer, chunks);
     expect(results).toHaveLength(chunks.length + 1);
-    const speedChunk = results.slice(-1)[0];
+    const speedChunk = results.at(-1);
     expect(speedChunk.id).toBe('output_speed');
     expect(speedChunk.type).toBe('speed');
     expect(speedChunk.data.tps).not.toBeNaN();
@@ -233,7 +233,7 @@ describe('createTokenSpeedCalculator', async () => {
 
     // should push an extra speed chunk
     expect(results).toHaveLength(chunks.length + 1);
-    const speedChunk = results.slice(-1)[0];
+    const speedChunk = results.at(-1);
     expect(speedChunk.id).toBe('output_speed');
     expect(speedChunk.type).toBe('speed');
     // tps and ttft should be numeric (avoid flakiness if interval is 0ms)

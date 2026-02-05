@@ -232,37 +232,37 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
       return (
         <Flexbox gap={2}>
           <Block
+            clickable
+            draggable
+            horizontal
             align={'center'}
+            data-drop-target-id={item.id}
+            data-is-folder={String(item.isFolder)}
+            gap={8}
+            height={36}
+            paddingInline={4}
+            variant={isActive ? 'filled' : 'borderless'}
             className={cx(
               styles.treeItem,
               isOver && styles.fileItemDragOver,
               isDragging && styles.dragging,
             )}
-            clickable
-            data-drop-target-id={item.id}
-            data-is-folder={String(item.isFolder)}
-            draggable
-            gap={8}
-            height={36}
-            horizontal
-            onClick={() => handleFolderClick(item.id, item.slug)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              showContextMenu(menuItems());
+            style={{
+              paddingInlineStart: level * 12 + 4,
             }}
+            onClick={() => handleFolderClick(item.id, item.slug)}
             onDragEnd={handleDragEnd}
             onDragLeave={handleDragLeave}
             onDragOver={handleDragOver}
             onDragStart={handleDragStart}
             onDrop={handleDrop}
-            paddingInline={4}
-            style={{
-              paddingInlineStart: level * 12 + 4,
+            onContextMenu={(e) => {
+              e.preventDefault();
+              showContextMenu(menuItems());
             }}
-            variant={isActive ? 'filled' : 'borderless'}
           >
             {isLoading ? (
-              <ActionIcon icon={LoadingOutlined as any} size={'small'} spin style={{ width: 20 }} />
+              <ActionIcon spin icon={LoadingOutlined as any} size={'small'} style={{ width: 20 }} />
             ) : (
               <motion.div
                 animate={{ rotate: isExpanded ? 0 : -90 }}
@@ -271,28 +271,33 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
               >
                 <ActionIcon
                   icon={CaretDownFilled as any}
+                  size={'small'}
+                  style={{ width: 20 }}
                   onClick={(e) => {
                     e.stopPropagation();
                     handleToggle();
                   }}
-                  size={'small'}
-                  style={{ width: 20 }}
                 />
               </motion.div>
             )}
             <Flexbox
+              horizontal
               align={'center'}
               flex={1}
               gap={8}
-              horizontal
               style={{ minHeight: 28, minWidth: 0, overflow: 'hidden' }}
             >
               <Icon icon={isExpanded ? FolderOpenIcon : FolderIcon} size={18} />
               {isRenaming ? (
                 <Input
+                  ref={inputRef}
+                  size="small"
+                  style={{ flex: 1 }}
+                  value={renamingValue}
                   onBlur={handleRenameConfirm}
                   onChange={(e) => setRenamingValue(e.target.value)}
                   onClick={(e) => e.stopPropagation()}
+                  onPointerDown={(e) => e.stopPropagation()}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
@@ -302,11 +307,6 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
                       handleRenameCancel();
                     }
                   }}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  ref={inputRef}
-                  size="small"
-                  style={{ flex: 1 }}
-                  value={renamingValue}
                 />
               ) : (
                 <span
@@ -331,34 +331,34 @@ export const HierarchyNode = memo<HierarchyNodeProps>(
     return (
       <Flexbox gap={2}>
         <Block
+          clickable
+          draggable
+          horizontal
           align={'center'}
           className={cx(styles.treeItem, isDragging && styles.dragging)}
-          clickable
           data-drop-target-id={item.id}
           data-is-folder={false}
-          draggable
           gap={8}
           height={36}
-          horizontal
+          paddingInline={4}
+          variant={isActive ? 'filled' : 'borderless'}
+          style={{
+            paddingInlineStart: level * 12 + 4,
+          }}
           onClick={handleItemClick}
+          onDragEnd={handleDragEnd}
+          onDragStart={handleDragStart}
           onContextMenu={(e) => {
             e.preventDefault();
             showContextMenu(menuItems());
           }}
-          onDragEnd={handleDragEnd}
-          onDragStart={handleDragStart}
-          paddingInline={4}
-          style={{
-            paddingInlineStart: level * 12 + 4,
-          }}
-          variant={isActive ? 'filled' : 'borderless'}
         >
           <div style={{ width: 20 }} />
           <Flexbox
+            horizontal
             align={'center'}
             flex={1}
             gap={8}
-            horizontal
             style={{ minHeight: 28, minWidth: 0, overflow: 'hidden' }}
           >
             {isPage ? (

@@ -41,10 +41,10 @@ const TopicListContent = memo(() => {
     <>
       {topicLength === 0 && activeGroupId && (
         <EmptyNavItem
+          title={t('actions.addNewTopic')}
           onClick={() => {
             router.push(urlJoin('/group', activeGroupId));
           }}
-          title={t('actions.addNewTopic')}
         />
       )}
       {topicDisplayMode === TopicDisplayMode.ByTime ? <ByTimeMode /> : <FlatMode />}

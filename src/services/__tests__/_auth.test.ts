@@ -3,11 +3,6 @@ import { ModelProvider } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
 import { useUserStore } from '@/store/user';
-import {
-  GlobalLLMProviderKey,
-  UserKeyVaults,
-  UserModelProviderConfig,
-} from '@/types/user/settings';
 
 import { getProviderAuthPayload } from '../_auth';
 

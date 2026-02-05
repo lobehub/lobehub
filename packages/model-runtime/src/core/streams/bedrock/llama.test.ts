@@ -1,4 +1,4 @@
-import { InvokeModelWithResponseStreamResponse } from '@aws-sdk/client-bedrock-runtime';
+import type { InvokeModelWithResponseStreamResponse } from '@aws-sdk/client-bedrock-runtime';
 import { describe, expect, it, vi } from 'vitest';
 
 import * as uuidModule from '../../../utils/uuid';

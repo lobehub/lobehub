@@ -1,8 +1,8 @@
 // @ts-nocheck
 import OpenAI from 'openai';
 
-import { AgentRuntime } from '../src';
 import type { Agent, AgentRuntimeContext, AgentState } from '../src';
+import { AgentRuntime } from '../src';
 
 // OpenAI 模型运行时
 async function* openaiRuntime(payload: any) {
@@ -20,7 +20,7 @@ async function* openaiRuntime(payload: any) {
   });
 
   let content = '';
-  let toolCalls: any[] = [];
+  const toolCalls: any[] = [];
 
   for await (const chunk of stream) {
     const delta = chunk.choices[0]?.delta;

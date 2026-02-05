@@ -1,8 +1,8 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
 import { imageUrlToBase64 } from '@lobechat/utils';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 
-import { OpenAIChatMessage, UserMessageContentPart } from '../../types';
+import type { OpenAIChatMessage, UserMessageContentPart } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 
 const ANTHROPIC_SUPPORTED_IMAGE_TYPES = new Set([

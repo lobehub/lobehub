@@ -1,18 +1,9 @@
 import { createHmac } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
 
 interface UserDataUpdatedEvent {
-  event: string;
   createdAt: string;
-  userAgent: string;
-  ip: string;
-  path: string;
-  method: string;
-  status: number;
-  params: {
-    userId: string;
-  };
-  matchedRoute: string;
   data: {
     id: string;
     username: string;
@@ -29,7 +20,17 @@ interface UserDataUpdatedEvent {
     applicationId: string;
     isSuspended: boolean;
   };
+  event: string;
   hookId: string;
+  ip: string;
+  matchedRoute: string;
+  method: string;
+  params: {
+    userId: string;
+  };
+  path: string;
+  status: number;
+  userAgent: string;
 }
 
 const userDataUpdatedEvent: UserDataUpdatedEvent = {
@@ -54,9 +55,9 @@ const userDataUpdatedEvent: UserDataUpdatedEvent = {
     avatar: null,
     customData: {},
     identities: {},
-    lastSignInAt: 1725446291545,
-    createdAt: 1725440405556,
-    updatedAt: 1725697749337,
+    lastSignInAt: 1_725_446_291_545,
+    createdAt: 1_725_440_405_556,
+    updatedAt: 1_725_697_749_337,
     profile: {},
     applicationId: 'appid',
     isSuspended: false,

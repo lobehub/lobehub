@@ -15,25 +15,28 @@ const OllamaDesktopSetupGuide = memo<{ id?: string }>(({ id }) => {
 
   return (
     <BaseErrorForm
+      avatar={<Ollama.Avatar shape={'square'} size={40} />}
+      title={t('OllamaSetupGuide.install.title')}
       action={
         <Button
+          type={'primary'}
           onClick={() => {
             if (id) delAndRegenerateMessage(id);
           }}
-          type={'primary'}
         >
           {t('OllamaSetupGuide.action.start')}
         </Button>
       }
-      avatar={<Ollama.Avatar shape={'square'} size={40} />}
       desc={
         <Trans
-          components={[<span key="0" />, <a href={'https://ollama.com/download'} key="1" rel="noreferrer" target="_blank" />]}
           i18nKey={'OllamaSetupGuide.install.description'}
           ns={'components'}
+          components={[
+            <span key="0" />,
+            <a href={'https://ollama.com/download'} key="1" rel="noreferrer" target="_blank" />,
+          ]}
         />
       }
-      title={t('OllamaSetupGuide.install.title')}
     />
   );
 });

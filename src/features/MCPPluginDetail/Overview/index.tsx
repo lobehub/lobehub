@@ -20,6 +20,7 @@ const Overview = memo<{ inModal?: boolean }>(({ inModal }) => {
       <Collapse
         defaultActiveKey={['summary']}
         expandIconPlacement={'end'}
+        variant={'outlined'}
         items={[
           {
             children: !!summary ? <Markdown>{summary}</Markdown> : summary,
@@ -27,7 +28,6 @@ const Overview = memo<{ inModal?: boolean }>(({ inModal }) => {
             label: t('mcp.details.summary.title'),
           },
         ]}
-        variant={'outlined'}
       />
       <Flexbox gap={16}>
         {overview?.readme && <MarkdownRender>{overview.readme.trimEnd()}</MarkdownRender>}

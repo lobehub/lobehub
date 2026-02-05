@@ -4,11 +4,11 @@ import { serve } from '@upstash/workflow/nextjs';
 
 import type { ListTopicsForMemoryExtractorCursor } from '@/database/models/topic';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import type { MemoryExtractionPayloadInput } from '@/server/services/memory/userMemory/extract';
 import {
-  MemoryExtractionExecutor,
-  type MemoryExtractionPayloadInput,
-  MemoryExtractionWorkflowService,
   buildWorkflowPayloadInput,
+  MemoryExtractionExecutor,
+  MemoryExtractionWorkflowService,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 import { forEachBatchSequential } from '@/server/services/memory/userMemory/topicBatching';

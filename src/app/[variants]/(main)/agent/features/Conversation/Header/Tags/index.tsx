@@ -37,7 +37,7 @@ const TitleTags = memo(() => {
 
   if (isGroupSession) {
     return (
-      <Flexbox align={'center'} gap={12} horizontal>
+      <Flexbox horizontal align={'center'} gap={12}>
         <MemberCountTag />
       </Flexbox>
     );
@@ -46,7 +46,7 @@ const TitleTags = memo(() => {
   return isLoading && isLogin ? (
     <Skeleton.Button active size={'small'} style={{ height: 20 }} />
   ) : (
-    <Flexbox align={'center'} gap={4} horizontal>
+    <Flexbox horizontal align={'center'} gap={4}>
       <ModelSwitchPanel>
         <ModelTag model={model} />
       </ModelSwitchPanel>

@@ -3,7 +3,8 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import { LobeVLLMAI, VLLMModelCard } from './index';
+import type { VLLMModelCard } from './index';
+import { LobeVLLMAI } from './index';
 
 testProvider({
   Runtime: LobeVLLMAI,

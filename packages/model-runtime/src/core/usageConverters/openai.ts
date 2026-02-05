@@ -1,9 +1,9 @@
-import { ModelTokensUsage, ModelUsage } from '@lobechat/types';
+import type { ModelTokensUsage, ModelUsage } from '@lobechat/types';
 import debug from 'debug';
-import { Pricing } from 'model-bank';
-import OpenAI from 'openai';
+import type { Pricing } from 'model-bank';
+import type OpenAI from 'openai';
 
-import { ChatPayloadForTransformStream } from '../streams/protocol';
+import type { ChatPayloadForTransformStream } from '../streams/protocol';
 import { withUsageCost } from './utils/withUsageCost';
 
 const log = debug('lobe-cost:convertOpenAIUsage');

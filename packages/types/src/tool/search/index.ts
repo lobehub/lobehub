@@ -1,6 +1,6 @@
-import { CrawlUniformResult } from '@lobechat/web-crawler';
+import type { CrawlUniformResult } from '@lobechat/web-crawler';
 
-import { CrawlMultiPagesQuery } from '../crawler';
+import type { CrawlMultiPagesQuery } from '../crawler';
 
 export interface SearchParams {
   searchCategories?: string[];
@@ -48,12 +48,12 @@ export interface UniformSearchResponse {
 }
 
 export interface SearchServiceImpl {
-  crawlPages(
+  crawlPages: (
     params: CrawlMultiPagesQuery,
     options?: { signal?: AbortSignal },
-  ): Promise<{ results: CrawlUniformResult[] }>;
-  webSearch(
+  ) => Promise<{ results: CrawlUniformResult[] }>;
+  webSearch: (
     params: SearchQuery,
     options?: { signal?: AbortSignal },
-  ): Promise<UniformSearchResponse>;
+  ) => Promise<UniformSearchResponse>;
 }

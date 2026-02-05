@@ -1,4 +1,4 @@
-import { AiModelForSelect, EnabledAiModel, ModelSearchImplementType } from 'model-bank';
+import type { AiModelForSelect, EnabledAiModel, ModelSearchImplementType } from 'model-bank';
 import { z } from 'zod';
 
 export type ResponseAnimationStyle = 'smooth' | 'fadeIn' | 'none';

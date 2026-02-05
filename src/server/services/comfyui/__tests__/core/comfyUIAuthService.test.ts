@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { ComfyUIAuthService } from '@/server/services/comfyui/core/comfyUIAuthService';
 import { ServicesError } from '@/server/services/comfyui/errors';

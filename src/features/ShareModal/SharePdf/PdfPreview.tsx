@@ -47,7 +47,7 @@ const styles = createStaticStyles(({ css }) => ({
     position: absolute;
     z-index: 10;
     inset-block-end: 0;
-    inset-inline: 0 0;
+    inset-inline: 0;
 
     padding: 12px;
     border-block-start: 1px solid color-mix(in srgb, black 10%, transparent);
@@ -209,7 +209,7 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
         style={{ padding: 12 }}
       >
         <div className={localStyles.emptyState}>
-          <Button icon={<FileText size={20} />} onClick={onGeneratePdf} size="large" type="primary">
+          <Button icon={<FileText size={20} />} size="large" type="primary" onClick={onGeneratePdf}>
             {t('shareModal.generatePdf')}
           </Button>
         </div>
@@ -227,9 +227,9 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
           <Button
             className={localStyles.expandButton}
             icon={<Expand size={16} />}
-            onClick={handleFullscreen}
             size="small"
             type="text"
+            onClick={handleFullscreen}
           />
         )}
 
@@ -262,35 +262,35 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
         {/* 页脚导航 */}
         {pdfData && numPages > 1 && (
           <div className={localStyles.footerNavigation}>
-            <Flexbox align="center" gap={8} horizontal justify="center">
+            <Flexbox horizontal align="center" gap={8} justify="center">
               <Button
                 disabled={pageNumber <= 1}
                 icon={<ChevronLeft size={16} />}
-                onClick={goToPrevPage}
                 size="small"
                 type="text"
+                onClick={goToPrevPage}
               />
-              <Flexbox align="center" gap={4} horizontal>
+              <Flexbox horizontal align="center" gap={4}>
                 <Input
                   className={localStyles.pageInput}
                   max={numPages}
                   min={1}
+                  size="small"
+                  type="number"
+                  value={pageNumber}
                   onChange={(e) => {
                     const value = parseInt(e.target.value);
                     if (!isNaN(value)) goToPage(value);
                   }}
-                  size="small"
-                  type="number"
-                  value={pageNumber}
                 />
                 <span className={localStyles.pageNumberText}>/ {numPages}</span>
               </Flexbox>
               <Button
                 disabled={pageNumber >= numPages}
                 icon={<ChevronRight size={16} />}
-                onClick={goToNextPage}
                 size="small"
                 type="text"
+                onClick={goToNextPage}
               />
             </Flexbox>
           </div>
@@ -301,12 +301,12 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
       <Modal
         centered
         footer={null}
-        onCancel={() => setFullscreenOpen(false)}
         open={fullscreenOpen}
+        width="95vw"
         styles={{
           body: { padding: 0 },
         }}
-        width="95vw"
+        onCancel={() => setFullscreenOpen(false)}
       >
         <div className={localStyles.fullscreenModal}>
           <div className={localStyles.fullscreenContent}>
@@ -323,27 +323,27 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
           {/* 全屏模式下的导航 */}
           {numPages > 1 && (
             <div className={localStyles.fullscreenNavigation}>
-              <Flexbox align="center" gap={12} horizontal>
+              <Flexbox horizontal align="center" gap={12}>
                 <Button
                   className={localStyles.fullscreenButton}
                   disabled={fullscreenPageNumber <= 1}
                   icon={<ChevronLeft size={16} />}
-                  onClick={goToFullscreenPrevPage}
                   size="small"
                   type="text"
+                  onClick={goToFullscreenPrevPage}
                 />
-                <Flexbox align="center" gap={8} horizontal>
+                <Flexbox horizontal align="center" gap={8}>
                   <Input
                     className={localStyles.fullscreenPageInput}
                     max={numPages}
                     min={1}
+                    size="small"
+                    type="number"
+                    value={fullscreenPageNumber}
                     onChange={(e) => {
                       const value = parseInt(e.target.value);
                       if (!isNaN(value)) goToFullscreenPage(value);
                     }}
-                    size="small"
-                    type="number"
-                    value={fullscreenPageNumber}
                   />
                   <span className={localStyles.fullscreenPageText}>/ {numPages}</span>
                 </Flexbox>
@@ -351,9 +351,9 @@ const PdfPreview = memo<PdfPreviewProps>(({ loading, pdfData, onGeneratePdf }) =
                   className={localStyles.fullscreenButton}
                   disabled={fullscreenPageNumber >= numPages}
                   icon={<ChevronRight size={16} />}
-                  onClick={goToFullscreenNextPage}
                   size="small"
                   type="text"
+                  onClick={goToFullscreenNextPage}
                 />
               </Flexbox>
             </div>

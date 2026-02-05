@@ -74,7 +74,7 @@ describe('createErrorResponse', () => {
     const consoleSpy = vi.spyOn(console, 'error');
     try {
       createErrorResponse(errorType as any);
-    } catch (e) {}
+    } catch {}
     expect(consoleSpy).toHaveBeenCalled();
     consoleSpy.mockRestore();
   });

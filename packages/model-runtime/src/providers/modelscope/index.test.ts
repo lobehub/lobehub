@@ -3,7 +3,8 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import { LobeModelScopeAI, ModelScopeModelCard, params } from './index';
+import type { ModelScopeModelCard } from './index';
+import { LobeModelScopeAI, params } from './index';
 
 const provider = ModelProvider.ModelScope;
 const defaultBaseURL = 'https://api-inference.modelscope.cn/v1';
@@ -70,13 +71,13 @@ describe('LobeModelScopeAI - custom features', () => {
         {
           id: 'qwen2-7b-instruct',
           object: 'model',
-          created: 1234567890,
+          created: 1_234_567_890,
           owned_by: 'qwen',
         },
         {
           id: 'qwen2.5-72b-instruct',
           object: 'model',
-          created: 1234567891,
+          created: 1_234_567_891,
           owned_by: 'qwen',
         },
       ];
@@ -164,13 +165,13 @@ describe('LobeModelScopeAI - custom features', () => {
         {
           id: 'qwen-plus',
           object: 'model',
-          created: 1234567890,
+          created: 1_234_567_890,
           owned_by: 'qwen',
         },
         {
           id: 'qwen-turbo',
           object: 'model',
-          created: 1234567891,
+          created: 1_234_567_891,
           owned_by: 'qwen',
         },
       ];
@@ -192,13 +193,13 @@ describe('LobeModelScopeAI - custom features', () => {
         {
           id: 'model-1',
           object: 'model',
-          created: 1234567890,
+          created: 1_234_567_890,
           owned_by: 'provider-1',
         },
         {
           id: 'model-2',
           object: 'model',
-          created: 1234567891,
+          created: 1_234_567_891,
           owned_by: 'provider-2',
         },
       ];
@@ -219,13 +220,13 @@ describe('LobeModelScopeAI - custom features', () => {
       const mockCard: ModelScopeModelCard = {
         id: 'test-model',
         object: 'model',
-        created: 1234567890,
+        created: 1_234_567_890,
         owned_by: 'test-provider',
       };
 
       expect(mockCard.id).toBe('test-model');
       expect(mockCard.object).toBe('model');
-      expect(mockCard.created).toBe(1234567890);
+      expect(mockCard.created).toBe(1_234_567_890);
       expect(mockCard.owned_by).toBe('test-provider');
     });
   });

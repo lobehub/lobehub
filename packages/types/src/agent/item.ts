@@ -1,10 +1,10 @@
-import { LLMParams } from 'model-bank';
+import type { LLMParams } from 'model-bank';
 
-import { FileItem } from '../files';
-import { KnowledgeBaseItem } from '../knowledgeBase';
-import { FewShots } from '../llm';
-import { LobeAgentChatConfig } from './chatConfig';
-import { LobeAgentTTSConfig } from './tts';
+import type { FileItem } from '../files';
+import type { KnowledgeBaseItem } from '../knowledgeBase';
+import type { FewShots } from '../llm';
+import type { LobeAgentChatConfig } from './chatConfig';
+import type { LobeAgentTTSConfig } from './tts';
 
 export interface LobeAgentConfig {
   avatar?: string;

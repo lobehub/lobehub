@@ -1,6 +1,5 @@
 import type { ChatModelCard } from '@lobechat/types';
-import { AIBaseModelCard } from 'model-bank';
-import type { AiModelSettings, ExtendParamsType } from 'model-bank';
+import type { AIBaseModelCard, AiModelSettings, ExtendParamsType } from 'model-bank';
 
 import type { ModelProviderKey } from '../types';
 

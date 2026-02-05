@@ -16,15 +16,15 @@ const ImportSettings = memo(() => {
 
   useEffect(() => {
     // Read from URL on mount
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
+    if (typeof globalThis.window !== 'undefined') {
+      const params = new URLSearchParams(globalThis.location.search);
       const param = params.get(LOBE_URL_IMPORT_NAME);
       if (param) {
         setSearchParam(param);
         // Clear the param from URL after reading
         params.delete(LOBE_URL_IMPORT_NAME);
-        const newUrl = `${window.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${window.location.hash}`;
-        window.history.replaceState({}, '', newUrl);
+        const newUrl = `${globalThis.location.pathname}${params.toString() ? `?${params.toString()}` : ''}${globalThis.location.hash}`;
+        globalThis.history.replaceState({}, '', newUrl);
       }
     }
   }, []);

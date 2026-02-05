@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { App } from 'antd';
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useModelSupportVision } from '@/hooks/useModelSupportVision';
 import { useAgentStore } from '@/store/agent';
@@ -67,7 +68,7 @@ describe('useDragUpload', () => {
     const { result } = renderHook(() => useDragUpload(mockOnUploadFiles));
 
     act(() => {
-      window.dispatchEvent(new Event('dragenter'));
+      globalThis.dispatchEvent(new Event('dragenter'));
     });
 
     expect(result.current).toBe(false);
@@ -80,7 +81,7 @@ describe('useDragUpload', () => {
           types: ['Files'],
         },
       });
-      window.dispatchEvent(dragEnterEvent);
+      globalThis.dispatchEvent(dragEnterEvent);
     });
 
     expect(result.current).toBe(true);
@@ -93,7 +94,7 @@ describe('useDragUpload', () => {
           types: ['Files'],
         },
       });
-      window.dispatchEvent(dragLeaveEvent);
+      globalThis.dispatchEvent(dragLeaveEvent);
     });
 
     expect(result.current).toBe(false);
@@ -121,7 +122,7 @@ describe('useDragUpload', () => {
     });
 
     await act(async () => {
-      window.dispatchEvent(dropEvent);
+      globalThis.dispatchEvent(dropEvent);
     });
 
     expect(mockOnUploadFiles).toHaveBeenCalledWith([mockFile]);
@@ -145,7 +146,7 @@ describe('useDragUpload', () => {
     });
 
     await act(async () => {
-      window.dispatchEvent(pasteEvent);
+      globalThis.dispatchEvent(pasteEvent);
     });
 
     expect(mockOnUploadFiles).toHaveBeenCalledWith([mockFile]);
@@ -173,7 +174,7 @@ describe('useDragUpload', () => {
     });
 
     await act(async () => {
-      window.dispatchEvent(dropEvent);
+      globalThis.dispatchEvent(dropEvent);
     });
 
     expect(mockOnUploadFiles).not.toHaveBeenCalled();
@@ -197,7 +198,7 @@ describe('useDragUpload', () => {
     });
 
     await act(async () => {
-      window.dispatchEvent(pasteEvent);
+      globalThis.dispatchEvent(pasteEvent);
     });
 
     expect(mockOnUploadFiles).not.toHaveBeenCalled();
@@ -227,7 +228,7 @@ describe('useDragUpload', () => {
     });
 
     await act(async () => {
-      window.dispatchEvent(dropEvent);
+      globalThis.dispatchEvent(dropEvent);
     });
 
     expect(mockOnUploadFiles).toHaveBeenCalledWith([mockImageFile]);
@@ -239,7 +240,7 @@ describe('getContainer', () => {
   it('should return the dragging root element', () => {
     const rootElement = document.createElement('div');
     rootElement.id = 'dragging-root';
-    document.body.appendChild(rootElement);
+    document.body.append(rootElement);
 
     const container = getContainer();
     expect(container).not.toBeNull();

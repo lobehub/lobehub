@@ -1,7 +1,8 @@
-import { ChatToolPayload, UIChatMessage } from '@lobechat/types';
+import type { ChatToolPayload, UIChatMessage } from '@lobechat/types';
 import i18n from 'i18next';
 
-import { MessageDispatch, messagesReducer } from './reducer';
+import type { MessageDispatch } from './reducer';
+import { messagesReducer } from './reducer';
 
 describe('messagesReducer', () => {
   let initialState: UIChatMessage[];
@@ -11,15 +12,15 @@ describe('messagesReducer', () => {
       {
         id: 'message1',
         content: 'Hello World',
-        createdAt: 1629264000000,
-        updatedAt: 1629264000000,
+        createdAt: 1_629_264_000_000,
+        updatedAt: 1_629_264_000_000,
         role: 'user',
       },
       {
         id: 'message2',
         content: 'How are you?',
-        createdAt: 1629264000000,
-        updatedAt: 1629264000000,
+        createdAt: 1_629_264_000_000,
+        updatedAt: 1_629_264_000_000,
         role: 'assistant',
         tools: [
           { identifier: 'tool1', apiName: 'calculator', id: 'abc', type: 'default', arguments: '' },
@@ -97,8 +98,8 @@ describe('messagesReducer', () => {
           {
             id: 'data',
             content: 'Hello World',
-            createdAt: 1629264000000,
-            updatedAt: 1629264000000,
+            createdAt: 1_629_264_000_000,
+            updatedAt: 1_629_264_000_000,
             role: 'user',
             extra: { abc: '1' },
           } as UIChatMessage,
@@ -227,8 +228,8 @@ describe('messagesReducer', () => {
         id: 'toolMessage',
         role: 'tool',
         content: 'Tool content',
-        createdAt: 1629264000000,
-        updatedAt: 1629264000000,
+        createdAt: 1_629_264_000_000,
+        updatedAt: 1_629_264_000_000,
         plugin: {
           identifier: 'tool1',
           apiName: 'calculator',

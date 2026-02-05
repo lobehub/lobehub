@@ -1,8 +1,8 @@
 import { imageUrlToBase64 } from '@lobechat/utils';
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { OpenAIChatMessage } from '../../types';
+import type { OpenAIChatMessage } from '../../types';
 import { parseDataUri } from '../../utils/uriParser';
 import {
   convertImageUrlToFile,

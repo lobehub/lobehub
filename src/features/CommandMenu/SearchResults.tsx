@@ -203,7 +203,6 @@ const SearchResults = memo<SearchResultsProps>(
       return result.description;
     };
 
-    // eslint-disable-next-line unicorn/consistent-function-scoping
     const getSubtitle = (result: SearchResult) => {
       const description = getDescription(result);
 
@@ -274,10 +273,10 @@ const SearchResults = memo<SearchResultsProps>(
           description={subtitle}
           icon={getIcon(result.type)}
           key={result.id}
-          onSelect={() => handleNavigate(result)}
           title={titleWithPrefix}
           value={getItemValue(result)}
           variant="detailed"
+          onSelect={() => handleNavigate(result)}
         />
       );
     };
@@ -298,8 +297,8 @@ const SearchResults = memo<SearchResultsProps>(
           forceMount
           key={`search-more-${type}`}
           keywords={[`zzz-action-${type}`]}
-          onSelect={() => handleSearchMore(type)}
           value={`zzz-action-${type}-search-more`}
+          onSelect={() => handleSearchMore(type)}
         >
           <div className={styles.itemContent}>
             <div className={styles.itemIcon}>{getIcon(type)}</div>

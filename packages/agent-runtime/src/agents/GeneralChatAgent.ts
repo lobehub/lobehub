@@ -1,17 +1,17 @@
 import type { ChatToolPayload, HumanInterventionConfig } from '@lobechat/types';
 
 import { DEFAULT_SECURITY_BLACKLIST, InterventionChecker } from '../core';
-import {
+import type {
   Agent,
   AgentInstruction,
   AgentInstructionCompressContext,
   AgentRuntimeContext,
   AgentState,
+  GeneralAgentCallingToolInstructionPayload,
   GeneralAgentCallLLMInstructionPayload,
   GeneralAgentCallLLMResultPayload,
   GeneralAgentCallToolResultPayload,
   GeneralAgentCallToolsBatchInstructionPayload,
-  GeneralAgentCallingToolInstructionPayload,
   GeneralAgentCompressionResultPayload,
   GeneralAgentConfig,
   HumanAbortPayload,

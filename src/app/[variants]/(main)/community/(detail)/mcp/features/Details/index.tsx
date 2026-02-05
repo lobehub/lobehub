@@ -31,9 +31,9 @@ const Details = memo<DetailsProps>(({ mobile: isMobile }) => {
   return (
     <Flexbox gap={24}>
       <Nav
+        noSettings
         activeTab={activeTab as McpNavKey}
         mobile={mobile}
-        noSettings
         setActiveTab={setActiveTab}
       />
       <Flexbox
@@ -43,10 +43,10 @@ const Details = memo<DetailsProps>(({ mobile: isMobile }) => {
       >
         <Flexbox
           flex={1}
+          width={'100%'}
           style={{
             overflow: 'hidden',
           }}
-          width={'100%'}
         >
           {activeTab === McpNavKey.Overview && <Overview />}
           {activeTab === McpNavKey.Deployment && <Deployment mobile={mobile} />}

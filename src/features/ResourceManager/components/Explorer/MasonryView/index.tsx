@@ -3,14 +3,15 @@
 import { Center } from '@lobehub/ui';
 import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
 import { cssVar } from 'antd-style';
-import { type UIEvent, memo, useCallback, useMemo, useState } from 'react';
+import type { UIEvent } from 'react';
+import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
 import { sortFileList } from '@/app/[variants]/(main)/resource/features/store/selectors';
 import { useFileStore } from '@/store/file';
 import { useFetchResources } from '@/store/file/slices/resource/hooks';
-import { type FileListItem } from '@/types/files';
+import type { FileListItem } from '@/types/files';
 
 import { useMasonryColumnCount } from '../useMasonryColumnCount';
 import MasonryItemWrapper from './MasonryItem/MasonryItemWrapper';
@@ -156,7 +157,6 @@ const MasonryView = memo(function MasonryView() {
     <MasonryViewSkeleton columnCount={columnCount} />
   ) : (
     <div
-      onScroll={handleScroll}
       style={{
         flex: 1,
         height: '100%',
@@ -164,6 +164,7 @@ const MasonryView = memo(function MasonryView() {
         overflowY: 'auto',
         transition: 'opacity 0.2s ease-in-out',
       }}
+      onScroll={handleScroll}
     >
       <div style={{ paddingBlockEnd: 24, paddingBlockStart: 12, paddingInline: 24 }}>
         <VirtuosoMasonry

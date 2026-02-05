@@ -147,15 +147,15 @@ const AddAgent = memo<{ mobile?: boolean }>(({ mobile }) => {
   ];
 
   return (
-    <Flexbox className={styles.buttonGroup} gap={0} horizontal>
+    <Flexbox horizontal className={styles.buttonGroup} gap={0}>
       <Button
         block
         className={styles.primaryButton}
         loading={isLoading}
-        onClick={handleAddAgentAndConverse}
         size={'large'}
         style={{ flex: 1, width: 'unset' }}
         type={'primary'}
+        onClick={handleAddAgentAndConverse}
       >
         {t('assistants.addAgentAndConverse')}
       </Button>

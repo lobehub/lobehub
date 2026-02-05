@@ -1,15 +1,17 @@
 'use client';
 
 import isEqual from 'fast-deep-equal';
-import { type ReactElement, type ReactNode, memo, useCallback, useEffect, useRef } from 'react';
-import { VList, type VListHandle } from 'virtua';
+import type { ReactElement, ReactNode } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
+import type { VListHandle } from 'virtua';
+import { VList } from 'virtua';
 
 import WideScreenContainer from '../../../WideScreenContainer';
 import { dataSelectors, useConversationStore, virtuaListSelectors } from '../../store';
 import { useScrollToUserMessage } from '../hooks/useScrollToUserMessage';
 import AutoScroll from './AutoScroll';
-import DebugInspector, { OPEN_DEV_INSPECTOR } from './AutoScroll/DebugInspector';
 import { AT_BOTTOM_THRESHOLD } from './AutoScroll/const';
+import DebugInspector, { OPEN_DEV_INSPECTOR } from './AutoScroll/DebugInspector';
 import BackBottom from './BackBottom';
 
 interface VirtualizedListProps {
@@ -140,12 +142,12 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
       {/* Debug Inspector - 放在 VList 外面，不会被虚拟列表回收 */}
       {OPEN_DEV_INSPECTOR && <DebugInspector />}
       <VList
-        bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
+        bufferSize={typeof globalThis.window !== 'undefined' ? window.innerHeight : 0}
         data={dataSource}
-        onScroll={handleScroll}
-        onScrollEnd={handleScrollEnd}
         ref={virtuaRef}
         style={{ height: '100%', overflowAnchor: 'none', paddingBottom: 24 }}
+        onScroll={handleScroll}
+        onScrollEnd={handleScrollEnd}
       >
         {(messageId, index): ReactElement => {
           const isAgentCouncil = messageId.includes('agentCouncil');
@@ -175,8 +177,8 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
       {/* BackBottom 放在 VList 外面，这样无论滚动到哪里都能看到 */}
       <BackBottom
         atBottom={atBottom}
-        onScrollToBottom={() => scrollToBottom(true)}
         visible={!atBottom}
+        onScrollToBottom={() => scrollToBottom(true)}
       />
     </div>
   );

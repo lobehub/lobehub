@@ -1,5 +1,6 @@
-import { OpenAIPluginManifest } from '@lobechat/types';
-import { LobeChatPluginManifest, pluginManifestSchema } from '@lobehub/chat-plugin-sdk';
+import type { OpenAIPluginManifest } from '@lobechat/types';
+import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { pluginManifestSchema } from '@lobehub/chat-plugin-sdk';
 
 import { API_ENDPOINTS } from '@/services/_url';
 
@@ -106,7 +107,7 @@ export const getToolManifest = async (
     const openapiJson = await fetchJSON(parser.data.openapi, useProxy);
 
     // avoid https://github.com/lobehub/lobe-chat/issues/9059
-    if (typeof window !== 'undefined') {
+    if (typeof globalThis.window !== 'undefined') {
       try {
         const { OpenAPIConvertor } = await import('@lobehub/chat-plugin-sdk/openapi');
 

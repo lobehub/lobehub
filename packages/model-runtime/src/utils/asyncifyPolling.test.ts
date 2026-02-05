@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { type TaskResult, asyncifyPolling } from './asyncifyPolling';
+import type { TaskResult } from './asyncifyPolling';
+import { asyncifyPolling } from './asyncifyPolling';
 
 describe('asyncifyPolling', () => {
   describe('basic functionality', () => {
@@ -114,9 +115,9 @@ describe('asyncifyPolling', () => {
 
     it('should respect maxInterval limit', async () => {
       const intervals: number[] = [];
-      const originalSetTimeout = global.setTimeout;
+      const originalSetTimeout = globalThis.setTimeout;
 
-      global.setTimeout = vi.fn((callback, delay) => {
+      globalThis.setTimeout = vi.fn((callback, delay) => {
         intervals.push(delay as number);
         return originalSetTimeout(callback, 1); // fast execution
       }) as any;
@@ -146,7 +147,7 @@ describe('asyncifyPolling', () => {
       // Intervals should be: 100, 200 (capped), 200 (capped)
       expect(intervals).toEqual([100, 200, 200]);
 
-      global.setTimeout = originalSetTimeout;
+      globalThis.setTimeout = originalSetTimeout;
     });
 
     it('should stop after maxRetries', async () => {
@@ -238,9 +239,9 @@ describe('asyncifyPolling', () => {
   describe('configuration', () => {
     it('should use custom intervals and multipliers', async () => {
       const intervals: number[] = [];
-      const originalSetTimeout = global.setTimeout;
+      const originalSetTimeout = globalThis.setTimeout;
 
-      global.setTimeout = vi.fn((callback, delay) => {
+      globalThis.setTimeout = vi.fn((callback, delay) => {
         intervals.push(delay as number);
         return originalSetTimeout(callback, 1);
       }) as any;
@@ -264,7 +265,7 @@ describe('asyncifyPolling', () => {
 
       expect(intervals[0]).toBe(200);
 
-      global.setTimeout = originalSetTimeout;
+      globalThis.setTimeout = originalSetTimeout;
     });
 
     it('should accept custom logger function', async () => {

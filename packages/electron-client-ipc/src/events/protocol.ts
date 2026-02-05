@@ -1,4 +1,4 @@
-import { McpInstallSchema } from '../types';
+import type { McpInstallSchema } from '../types';
 
 /**
  * 协议安装相关的 Broadcast 事件（主进程 -> 渲染进程）

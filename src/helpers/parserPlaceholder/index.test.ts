@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  VARIABLE_GENERATORS,
   parsePlaceholderVariables,
   parsePlaceholderVariablesMessages,
+  VARIABLE_GENERATORS,
 } from './index';
 
 // Mock dependencies
@@ -642,10 +642,10 @@ describe('VARIABLE_GENERATORS', () => {
   });
 
   describe('platform variables', () => {
-    const originalNavigator = global.navigator;
+    const originalNavigator = globalThis.navigator;
 
     beforeEach(() => {
-      Object.defineProperty(global, 'navigator', {
+      Object.defineProperty(globalThis, 'navigator', {
         writable: true,
         configurable: true,
         value: {
@@ -658,7 +658,7 @@ describe('VARIABLE_GENERATORS', () => {
     });
 
     afterEach(() => {
-      Object.defineProperty(global, 'navigator', {
+      Object.defineProperty(globalThis, 'navigator', {
         writable: true,
         configurable: true,
         value: originalNavigator,
@@ -680,7 +680,7 @@ describe('VARIABLE_GENERATORS', () => {
     });
 
     it('should return empty string when navigator is undefined', () => {
-      Object.defineProperty(global, 'navigator', {
+      Object.defineProperty(globalThis, 'navigator', {
         writable: true,
         configurable: true,
         value: undefined,

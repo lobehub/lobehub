@@ -31,7 +31,7 @@ describe('crawlResultsPrompt', () => {
         title: 'MCP-AgentBench: Evaluating Real-World Language Agent Performance',
         contentType: 'text' as const,
         description: 'Abstract page for arXiv paper 2509.09734v1',
-        length: 10187,
+        length: 10_187,
         content: 'Full paper content...',
       },
     ];
@@ -157,7 +157,7 @@ describe('crawlResultsPrompt', () => {
         title: 'LiveMCPBench: Can Agents Navigate an Ocean of MCP Tools?',
         contentType: 'text' as const,
         description: 'Abstract page for arXiv paper 2508.01780v1',
-        length: 10512,
+        length: 10_512,
         content:
           'With the rapid development of Model Context Protocol (MCP), the number of MCP servers has surpassed 10,000...',
       },

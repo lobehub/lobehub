@@ -11,16 +11,18 @@ const Footer = memo(() => {
   const { t } = useTranslation('setting');
   return (
     <Center
+      width={'100%'}
       style={{
         background: cssVar.colorFillQuaternary,
         border: `1px dashed ${cssVar.colorFillSecondary}`,
         borderRadius: cssVar.borderRadiusLG,
         padding: 12,
       }}
-      width={'100%'}
     >
       <div style={{ color: cssVar.colorTextSecondary, fontSize: 12, textAlign: 'center' }}>
         <Trans
+          i18nKey="llm.waitingForMore"
+          ns={'setting'}
           components={[
             <span key="0" />,
             <a
@@ -31,8 +33,6 @@ const Footer = memo(() => {
               target="_blank"
             />,
           ]}
-          i18nKey="llm.waitingForMore"
-          ns={'setting'}
         />
       </div>
     </Center>

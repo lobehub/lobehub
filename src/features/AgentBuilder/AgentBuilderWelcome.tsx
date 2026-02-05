@@ -24,10 +24,10 @@ const AgentBuilderWelcome = memo<AgentBuilderWelcomeProps>(({ mode = 'agent' }) 
       <Flexbox flex={1} />
       <Flexbox
         gap={12}
+        width={'100%'}
         style={{
           paddingBottom: 16,
         }}
-        width={'100%'}
       >
         <Avatar avatar={agent.avatar || DEFAULT_INBOX_AVATAR} shape={'square'} size={78} />
         <Text fontSize={24} weight={'bold'}>

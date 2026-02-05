@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ElectronIpcClient } from './ipcClient';
@@ -53,8 +54,8 @@ describe('ElectronIpcClient', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
     // Mock timers
-    vi.spyOn(global, 'setTimeout');
-    vi.spyOn(global, 'clearTimeout');
+    vi.spyOn(globalThis, 'setTimeout');
+    vi.spyOn(globalThis, 'clearTimeout');
   });
 
   afterEach(() => {
@@ -439,7 +440,7 @@ describe('ElectronIpcClient', () => {
       await vi.runAllTimersAsync();
       // Request should timeout
       await expectReject;
-    }, 10000);
+    }, 10_000);
 
     it('should handle socket close event', async () => {
       let connectionCallback: Function | undefined;
@@ -528,7 +529,7 @@ describe('ElectronIpcClient', () => {
       vi.advanceTimersByTime(5000);
       await vi.runAllTimersAsync();
       await expectReject;
-    }, 10000);
+    }, 10_000);
 
     it('should handle response for unknown request ID', async () => {
       let connectionCallback: Function | undefined;
@@ -579,7 +580,7 @@ describe('ElectronIpcClient', () => {
       vi.advanceTimersByTime(5000);
       await vi.runAllTimersAsync();
       await expectReject;
-    }, 10000);
+    }, 10_000);
 
     it('should skip empty messages', async () => {
       let connectionCallback: Function | undefined;
@@ -665,7 +666,7 @@ describe('ElectronIpcClient', () => {
       await vi.runAllTimersAsync();
       await expect(request1Promise).rejects.toThrow('Request timed out');
       await expect(request2Promise).rejects.toThrow('Request timed out');
-    }, 10000);
+    }, 10_000);
   });
 
   describe('reconnection logic', () => {
@@ -902,7 +903,7 @@ describe('ElectronIpcClient', () => {
         'Failed to write request to socket: %o',
         expect.any(Error),
       );
-    }, 10000);
+    }, 10_000);
   });
 
   describe('close method', () => {
@@ -988,6 +989,6 @@ describe('ElectronIpcClient', () => {
 
       // Should clear timeout
       expect(vi.mocked(clearTimeout)).toHaveBeenCalled();
-    }, 10000);
+    }, 10_000);
   });
 });

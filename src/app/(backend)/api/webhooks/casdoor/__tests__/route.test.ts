@@ -1,21 +1,21 @@
 import { describe, expect, it } from 'vitest';
 
 interface User {
-  name: string;
-  id: string;
-  type: 'normal-user' | 'admin' | 'super-admin';
-  displayName: string;
-  firstName: string;
-  lastName: string;
   avatar: string;
+  displayName: string;
   email: string;
   emailVerified: boolean;
+  firstName: string;
+  id: string;
+  lastName: string;
+  name: string;
+  type: 'normal-user' | 'admin' | 'super-admin';
 }
 
 interface UserDataUpdatedEvent {
-  user: string; // 用户名
   action: 'update-user';
   extendedUser: User; // 扩展用户信息
+  user: string; // 用户名
 }
 
 const userDataUpdatedEvent: UserDataUpdatedEvent = {

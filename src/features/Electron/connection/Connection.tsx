@@ -43,14 +43,14 @@ const Connection = () => {
       />
       <Drawer
         classNames={{ header: styles.modal }}
-        onClose={handleClose}
         open={isOpen}
         placement={'top'}
         size={'100vh'}
+        styles={{ body: { padding: 0 }, header: { padding: 0 } }}
         style={{
           background: cssVar.colorBgLayout,
         }}
-        styles={{ body: { padding: 0 }, header: { padding: 0 } }}
+        onClose={handleClose}
       >
         <Suspense
           fallback={

@@ -9,15 +9,15 @@ const PromptTitle = () => {
   const { t } = useTranslation('image');
 
   return (
-    <Center gap={16} horizontal style={{ width: '100%' }}>
+    <Center horizontal gap={16} style={{ width: '100%' }}>
       <Center
         flex={'none'}
         height={54}
+        width={54}
         style={{
           backgroundColor: cssVar.colorText,
           borderRadius: 16,
         }}
-        width={54}
       >
         <Icon color={cssVar.colorBgLayout} icon={Palette} size={32} />
       </Center>

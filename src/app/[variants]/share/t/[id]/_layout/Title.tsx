@@ -84,7 +84,7 @@ const Title = memo(() => {
     data?.title && (
       <>
         <PageTitle title={data.title} />
-        <Text align={'center'} ellipsis fontSize={16} strong style={{ textAlign: 'center' }}>
+        <Text ellipsis strong align={'center'} fontSize={16} style={{ textAlign: 'center' }}>
           {data.title}
         </Text>
       </>

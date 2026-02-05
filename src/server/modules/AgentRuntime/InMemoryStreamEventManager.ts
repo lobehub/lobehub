@@ -146,7 +146,7 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
       const cbs = this.subscribers.get(operationId);
       if (cbs) {
         const index = cbs.indexOf(callback);
-        if (index > -1) {
+        if (index !== -1) {
           cbs.splice(index, 1);
         }
       }
@@ -180,7 +180,6 @@ export class InMemoryStreamEventManager implements IStreamEventManager {
   ): Promise<StreamEvent> {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        // eslint-disable-next-line @typescript-eslint/no-use-before-define
         unsubscribe();
         reject(new Error(`Timeout waiting for event ${eventType}`));
       }, timeout);

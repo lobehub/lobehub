@@ -63,7 +63,7 @@ const Header = memo<HeaderProps>(({ type }) => {
 
     if (isConnecting) {
       return (
-        <Button disabled icon={<Icon icon={Loader2} spin />} type="default">
+        <Button disabled icon={<Icon spin icon={Loader2} />} type="default">
           {t('tools.klavis.connect', { defaultValue: 'Connect' })}
         </Button>
       );
@@ -72,8 +72,8 @@ const Header = memo<HeaderProps>(({ type }) => {
     return (
       <Button
         icon={<Icon icon={SquareArrowOutUpRight} />}
-        onClick={handleConnectWithTracking}
         type="primary"
+        onClick={handleConnectWithTracking}
       >
         {t('tools.klavis.connect', { defaultValue: 'Connect' })}
       </Button>
@@ -82,13 +82,13 @@ const Header = memo<HeaderProps>(({ type }) => {
 
   return (
     <Flexbox
+      horizontal
       align="center"
       className={styles.header}
-      horizontal
       justify="space-between"
       style={{ flexWrap: 'nowrap' }}
     >
-      <Flexbox align="center" gap={16} horizontal>
+      <Flexbox horizontal align="center" gap={16}>
         <div className={styles.icon}>{renderIcon()}</div>
         <Flexbox gap={4}>
           <span className={styles.title}>{label}</span>

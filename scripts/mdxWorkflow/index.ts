@@ -1,8 +1,9 @@
+import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { consola } from 'consola';
 import { globSync } from 'glob';
 import matter from 'gray-matter';
-import { readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 const fixWinPath = (path: string) => path.replaceAll('\\', '/');
 
@@ -32,7 +33,7 @@ const run = () => {
         .replaceAll('}> width', '} width')
         .replaceAll("'[https", "'https")
         .replaceAll('"[https', '"https')
-        .replaceAll(/]\(http(.*)\/>\)/g, '')
+        .replaceAll(/\]\(http(.*)\/>\)/g, '')
         .replaceAll(`\\*\\* `, '** ')
         .replaceAll(` \\*\\*`, ' **')
         .replaceAll(/\n{2,}/g, '\n\n');

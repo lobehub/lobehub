@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef } from 'react';
 
-import { MainBroadcastEventKey, MainBroadcastParams } from './events';
+import type { MainBroadcastEventKey, MainBroadcastParams } from './events';
 
 interface ElectronAPI {
   ipcRenderer: {
@@ -28,16 +28,16 @@ export const useWatchBroadcast = <T extends MainBroadcastEventKey>(
   }, [handler]);
 
   useEffect(() => {
-    if (!window.electron) return;
+    if (!globalThis.electron) return;
 
     const listener = (_e: any, data: MainBroadcastParams<T>) => {
       handlerRef.current(data);
     };
 
-    window.electron.ipcRenderer.on(event, listener);
+    globalThis.electron.ipcRenderer.on(event, listener);
 
     return () => {
-      window.electron.ipcRenderer.removeListener(event, listener);
+      globalThis.electron.ipcRenderer.removeListener(event, listener);
     };
   }, [event]);
 };

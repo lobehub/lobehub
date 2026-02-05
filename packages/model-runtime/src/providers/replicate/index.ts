@@ -1,7 +1,7 @@
 import Replicate from 'replicate';
 
-import { LobeRuntimeAI } from '../../core/BaseAI';
-import {
+import type { LobeRuntimeAI } from '../../core/BaseAI';
+import type {
   type ChatCompletionErrorPayload,
   ChatMethodOptions,
   ChatStreamPayload,
@@ -416,7 +416,6 @@ export class LobeReplicateAI implements LobeRuntimeAI {
 
     if (!isReplicateDebug) return;
 
-    // eslint-disable-next-line no-console
     console.log(...args);
   }
 }

@@ -25,7 +25,7 @@ describe('useOnPluginFetchMessage', () => {
       data: testData,
     });
 
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(mockOnRequest).toHaveBeenCalledWith(testData);
   });
@@ -38,7 +38,7 @@ describe('useOnPluginFetchMessage', () => {
       data: { type: 'otherMessageType' },
     });
 
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(mockOnRequest).not.toHaveBeenCalled();
   });
@@ -54,7 +54,7 @@ describe('useOnPluginFetchPluginState', () => {
       data: { type: PluginChannel.fetchPluginState, key: testKey },
     });
 
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(mockOnRequest).toHaveBeenCalledWith(testKey);
   });
@@ -70,7 +70,7 @@ describe('useOnPluginFillContent', () => {
       data: { type: PluginChannel.fillStandalonePluginContent, content: testContent },
     });
 
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(mockCallback).toHaveBeenCalledWith(testContent, undefined);
   });
@@ -84,7 +84,7 @@ describe('useOnPluginFillContent', () => {
       data: { type: PluginChannel.fillStandalonePluginContent, content: testContent },
     });
 
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(mockCallback).toHaveBeenCalledWith(JSON.stringify(testContent), undefined);
   });
@@ -99,7 +99,7 @@ describe('useOnPluginFetchPluginSettings', () => {
       data: { type: PluginChannel.fetchPluginSettings },
     });
 
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(mockOnRequest).toHaveBeenCalled();
   });
@@ -115,7 +115,7 @@ describe('useOnPluginTriggerAIMessage', () => {
       data: { type: PluginChannel.triggerAIMessage, id: testId },
     });
 
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(mockCallback).toHaveBeenCalledWith(testId);
   });
@@ -128,7 +128,7 @@ describe('useOnPluginTriggerAIMessage', () => {
       data: { type: 'otherMessageType', id: 'testId' },
     });
 
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(mockCallback).not.toHaveBeenCalled();
   });
@@ -144,7 +144,7 @@ describe('useOnPluginCreateAssistantMessage', () => {
       data: { type: PluginChannel.createAssistantMessage, content: testContent },
     });
 
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(mockCallback).toHaveBeenCalledWith(testContent);
   });
@@ -157,7 +157,7 @@ describe('useOnPluginCreateAssistantMessage', () => {
       data: { type: 'otherMessageType', content: 'testContent' },
     });
 
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(mockCallback).not.toHaveBeenCalled();
   });

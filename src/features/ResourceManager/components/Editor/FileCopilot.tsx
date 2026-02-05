@@ -45,8 +45,8 @@ const FileCopilot = memo(() => {
   return (
     <RightPanel>
       <DragUploadZone
-        onUploadFiles={handleUploadFiles}
         style={{ flex: 1, height: '100%', minWidth: 300 }}
+        onUploadFiles={handleUploadFiles}
       >
         <Flexbox flex={1} height={'100%'}>
           <Flexbox flex={1} style={{ overflow: 'hidden' }}>

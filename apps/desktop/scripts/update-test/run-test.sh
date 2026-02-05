@@ -25,24 +25,24 @@ echo ""
 
 # 检查 macOS Gatekeeper 状态
 check_gatekeeper() {
-    if command -v spctl &> /dev/null; then
-        STATUS=$(spctl --status 2>&1 || true)
-        if [[ "$STATUS" == *"enabled"* ]]; then
-            echo "⚠️  警告: macOS Gatekeeper 已启用"
-            echo ""
-            echo "   未签名的应用可能无法安装。你可以:"
-            echo "   1. 临时禁用: sudo spctl --master-disable"
-            echo "   2. 或者在安装后手动允许应用"
-            echo ""
-            read -p "是否继续？[y/N] " -n 1 -r
-            echo ""
-            if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-                exit 1
-            fi
-        else
-            echo "✅ Gatekeeper 已禁用，可以安装未签名应用"
-        fi
+  if command -v spctl &> /dev/null; then
+    STATUS=$(spctl --status 2>&1 || true)
+    if [[ "$STATUS" == *"enabled"* ]]; then
+      echo "⚠️  警告: macOS Gatekeeper 已启用"
+      echo ""
+      echo "   未签名的应用可能无法安装。你可以:"
+      echo "   1. 临时禁用: sudo spctl --master-disable"
+      echo "   2. 或者在安装后手动允许应用"
+      echo ""
+      read -p "是否继续？[y/N] " -n 1 -r
+      echo ""
+      if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        exit 1
+      fi
+    else
+      echo "✅ Gatekeeper 已禁用，可以安装未签名应用"
     fi
+  fi
 }
 
 # 步骤 1: 设置
@@ -54,14 +54,14 @@ mkdir -p server
 # 步骤 2: 检查 release 目录
 echo ""
 echo "📂 步骤 2/5: 检查构建产物..."
-if [ ! -d "$DESKTOP_DIR/release" ] || [ -z "$(ls -A "$DESKTOP_DIR/release"/*.dmg 2>/dev/null)" ]; then
-    echo "❌ 未找到构建产物"
-    echo ""
-    echo "请先构建应用:"
-    echo "  cd $DESKTOP_DIR"
-    echo "  npm run build-local"
-    echo ""
-    exit 1
+if [ ! -d "$DESKTOP_DIR/release" ] || [ -z "$(ls -A "$DESKTOP_DIR/release"/*.dmg 2> /dev/null)" ]; then
+  echo "❌ 未找到构建产物"
+  echo ""
+  echo "请先构建应用:"
+  echo "  cd $DESKTOP_DIR"
+  echo "  npm run build-local"
+  echo ""
+  exit 1
 fi
 
 # 步骤 3: 生成 manifest
@@ -98,8 +98,8 @@ echo "或者直接运行:"
 read -p "是否现在启动应用？[Y/n] " -n 1 -r
 echo ""
 if [[ ! $REPLY =~ ^[Nn]$ ]]; then
-    echo ""
-    echo "🚀 启动应用..."
-    cd "$DESKTOP_DIR"
-    npm run dev
+  echo ""
+  echo "🚀 启动应用..."
+  cd "$DESKTOP_DIR"
+  npm run dev
 fi

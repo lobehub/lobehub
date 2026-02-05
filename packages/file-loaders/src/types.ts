@@ -16,14 +16,14 @@ export interface FileDocument {
   createdTime: Date;
 
   /**
-   * File type or extension.
-   */
-  fileType: string;
-
-  /**
    * Original filename.
    */
   filename: string;
+
+  /**
+   * File type or extension.
+   */
+  fileType: string;
 
   /**
    * File-level metadata.
@@ -161,13 +161,13 @@ export interface FileMetadata {
    */
   createdTime?: Date;
   /**
-   * File type or extension.
-   */
-  fileType?: string;
-  /**
    * Filename.
    */
   filename?: string;
+  /**
+   * File type or extension.
+   */
+  fileType?: string;
   /**
    * File last modified timestamp.
    */
@@ -187,14 +187,14 @@ export interface FileLoaderInterface {
    * @param pages Array of DocumentPage objects.
    * @returns Promise that returns the aggregated text content.
    */
-  aggregateContent(pages: DocumentPage[]): Promise<string>;
+  aggregateContent: (pages: DocumentPage[]) => Promise<string>;
 
-  attachDocumentMetadata?(filePath: string): Promise<Record<string, any>>;
+  attachDocumentMetadata?: (filePath: string) => Promise<Record<string, any>>;
 
   /**
    * Loads file content based on the file path and splits it into logical pages/chunks.
    * @param filePath Full path of the file.
    * @returns Promise that returns an array containing DocumentPage objects.
    */
-  loadPages(filePath: string): Promise<DocumentPage[]>;
+  loadPages: (filePath: string) => Promise<DocumentPage[]>;
 }

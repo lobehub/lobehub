@@ -1,6 +1,6 @@
-import { LLMRoleType } from '../llm';
-import { MessageToolCall } from '../message';
-import { OpenAIFunctionCall } from './functionCall';
+import type { LLMRoleType } from '../llm';
+import type { MessageToolCall } from '../message';
+import type { OpenAIFunctionCall } from './functionCall';
 
 export type ChatResponseFormat =
   | { type: 'json_object' }
@@ -95,8 +95,8 @@ export interface ChatStreamPayload {
    * @default openai
    */
   provider?: string;
-  responseMode?: 'stream' | 'json';
   response_format?: ChatResponseFormat;
+  responseMode?: 'stream' | 'json';
   /**
    * @title Whether to enable streaming requests
    * @default true

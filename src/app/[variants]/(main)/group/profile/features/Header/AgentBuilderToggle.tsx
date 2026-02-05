@@ -14,9 +14,9 @@ const AgentBuilderToggle = memo(() => {
       active={chatPanelExpanded}
       aria-label="Agent Builder"
       icon={BotMessageSquareIcon}
-      onClick={() => setChatPanelExpanded((prev) => !prev)}
       size={DESKTOP_HEADER_ICON_SIZE}
       title="Agent Builder"
+      onClick={() => setChatPanelExpanded((prev) => !prev)}
     />
   );
 });

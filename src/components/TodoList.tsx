@@ -49,7 +49,7 @@ const TodoList = memo<TodoListProps>(({ todos, resolveAssigneeName }) => {
 
   // Create the header with progress indicator
   const headerContent = (
-    <Flexbox align="center" gap={8} horizontal style={{ maxWidth: '100%', overflow: 'hidden' }}>
+    <Flexbox horizontal align="center" gap={8} style={{ maxWidth: '100%', overflow: 'hidden' }}>
       <Icon color={cssVar.colorTextTertiary} icon={ListCheck} size={16} style={{ flexShrink: 0 }} />
       <Text
         color={cssVar.colorTextTertiary}
@@ -65,7 +65,7 @@ const TodoList = memo<TodoListProps>(({ todos, resolveAssigneeName }) => {
   // Create todo items content
   const todoItems =
     todos.length === 0 ? (
-      <Flexbox align="center" gap={8} horizontal padding="8px 0">
+      <Flexbox horizontal align="center" gap={8} padding="8px 0">
         <CheckCircle color={cssVar.colorSuccess} size={16} />
         <span
           style={{
@@ -80,9 +80,9 @@ const TodoList = memo<TodoListProps>(({ todos, resolveAssigneeName }) => {
       <Flexbox gap={0}>
         {todos.map((todo, index) => (
           <Flexbox
+            horizontal
             align="center"
             gap={8}
-            horizontal
             key={index}
             style={{
               borderBottom:
@@ -128,6 +128,8 @@ const TodoList = memo<TodoListProps>(({ todos, resolveAssigneeName }) => {
     <Collapse
       className={styles.collapse}
       expandIconPlacement="end"
+      size="small"
+      variant="borderless"
       items={[
         {
           children: todoItems,
@@ -135,13 +137,11 @@ const TodoList = memo<TodoListProps>(({ todos, resolveAssigneeName }) => {
           label: headerContent,
         },
       ]}
-      size="small"
       styles={{
         header: {
           fontSize: cssVar.fontSize,
         },
       }}
-      variant="borderless"
     />
   );
 });

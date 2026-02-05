@@ -1,5 +1,5 @@
-import { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createAgentToolsEngine, createToolsEngine, getEnabledTools } from './index';
 

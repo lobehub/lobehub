@@ -273,9 +273,9 @@ describe('folderStructure', () => {
     });
 
     it('should replace control characters with underscores', () => {
-      expect(sanitizeFolderName('folder\x00name')).toBe('folder_name');
-      expect(sanitizeFolderName('folder\x01name')).toBe('folder_name');
-      expect(sanitizeFolderName('folder\x1Fname')).toBe('folder_name');
+      expect(sanitizeFolderName('folder\u0000name')).toBe('folder_name');
+      expect(sanitizeFolderName('folder\u0001name')).toBe('folder_name');
+      expect(sanitizeFolderName('folder\u001Fname')).toBe('folder_name');
     });
 
     it('should trim whitespace from start and end', () => {

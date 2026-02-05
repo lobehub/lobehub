@@ -69,7 +69,7 @@ describe('ToolArgumentsRepairer', () => {
       expect(result).toHaveProperty('description');
       expect(result).toHaveProperty('instruction');
       expect(result).toHaveProperty('runInClient', true);
-      expect(result).toHaveProperty('timeout', 120000);
+      expect(result).toHaveProperty('timeout', 120_000);
       expect(result.description).toBe(
         'Synthesize all 10 batch analyses into 10 most important themes for product builders',
       );
@@ -136,7 +136,7 @@ describe('ToolArgumentsRepairer', () => {
       expect(result).toHaveProperty('description', 'Test task');
       expect(result).toHaveProperty('instruction', 'Do something important');
       expect(result).toHaveProperty('runInClient', true);
-      expect(result).toHaveProperty('timeout', 60000);
+      expect(result).toHaveProperty('timeout', 60_000);
     });
 
     it('should handle normal arguments without repair needed', () => {

@@ -2,13 +2,16 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { NewAgent, agents } from '../../schemas/agent';
-import { NewFile, files } from '../../schemas/file';
-import { messages } from '../../schemas/message';
-import { NewTopic, topics } from '../../schemas/topic';
-import { users } from '../../schemas/user';
 import { documents } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { NewAgent } from '../../schemas/agent';
+import { agents } from '../../schemas/agent';
+import type { NewFile } from '../../schemas/file';
+import { files } from '../../schemas/file';
+import { messages } from '../../schemas/message';
+import type { NewTopic } from '../../schemas/topic';
+import { topics } from '../../schemas/topic';
+import { users } from '../../schemas/user';
+import type { LobeChatDatabase } from '../../type';
 import { SearchRepo } from './index';
 
 const userId = 'search-test-user';

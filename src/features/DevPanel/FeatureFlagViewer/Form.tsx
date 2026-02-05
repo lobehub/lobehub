@@ -44,6 +44,7 @@ const FeatureFlagForm = memo<{ flags: any }>(({ flags }) => {
   return (
     <>
       <Header
+        title={'Feature Flag Env'}
         actions={[
           {
             icon: ListRestartIcon,
@@ -54,7 +55,6 @@ const FeatureFlagForm = memo<{ flags: any }>(({ flags }) => {
             title: 'Reset',
           },
         ]}
-        title={'Feature Flag Env'}
       />
       <Flexbox
         className={styles.container}
@@ -67,6 +67,8 @@ const FeatureFlagForm = memo<{ flags: any }>(({ flags }) => {
           form={form}
           initialValues={flags}
           itemMinWidth={'max(75%,240px)'}
+          itemsType={'flat'}
+          variant={'borderless'}
           items={Object.keys(flags).map((key) => {
             return {
               children: <Switch size={'small'} />,
@@ -76,15 +78,13 @@ const FeatureFlagForm = memo<{ flags: any }>(({ flags }) => {
               valuePropName: 'checked',
             };
           })}
-          itemsType={'flat'}
           onValuesChange={(_, v) => setData(v)}
-          variant={'borderless'}
         />
       </Flexbox>
       <Highlighter
+        wrap
         language={'env'}
         style={{ flex: 'none', fontSize: 12 }}
-        wrap
       >{`FEATURE_FLAGS="${output.filter(Boolean).join(',')}"`}</Highlighter>
     </>
   );

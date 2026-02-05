@@ -1,11 +1,12 @@
 // @vitest-environment node
-import { ClientSecretPayload } from '@lobechat/types';
+import type { ClientSecretPayload } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ChatStreamCallbacks, ChatStreamPayload, LobeOpenAI, ModelRuntime } from '../index';
+import type { ChatStreamCallbacks, ChatStreamPayload } from '../index';
+import { LobeOpenAI, ModelRuntime } from '../index';
 import { providerRuntimeMap } from '../runtimeMap';
-import { CreateImagePayload } from '../types/image';
+import type { CreateImagePayload } from '../types/image';
 
 /**
  * Mock createTraceOptions for testing purposes.
@@ -81,11 +82,12 @@ beforeEach(async () => {
 describe('ModelRuntime', () => {
   describe('should initialize with various providers', () => {
     const providers = Object.values(ModelProvider).filter((i) => i !== 'lobehub');
-    const specialProviderIds = [ModelProvider.VertexAI, ...specialProviders.map((p) => p.id)];
+    const specialProviderIds = new Set([
+      ModelProvider.VertexAI,
+      ...specialProviders.map((p) => p.id),
+    ]);
 
-    const generalTestProviders = providers.filter(
-      (provider) => !specialProviderIds.includes(provider),
-    );
+    const generalTestProviders = providers.filter((provider) => !specialProviderIds.has(provider));
 
     generalTestProviders.forEach((provider) => {
       testRuntime(provider);

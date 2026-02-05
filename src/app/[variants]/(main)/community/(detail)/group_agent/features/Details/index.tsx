@@ -19,21 +19,17 @@ const Details = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
 
   return (
     <Flexbox gap={24}>
-      <Nav
-        activeTab={activeTab as GroupAgentNavKey}
-        mobile={mobile}
-        setActiveTab={setActiveTab}
-      />
+      <Nav activeTab={activeTab as GroupAgentNavKey} mobile={mobile} setActiveTab={setActiveTab} />
       <Flexbox
         gap={48}
         horizontal={!mobile}
         style={mobile ? { flexDirection: 'column-reverse' } : undefined}
       >
         <Flexbox
+          width={'100%'}
           style={{
             overflow: 'hidden',
           }}
-          width={'100%'}
         >
           {activeTab === GroupAgentNavKey.Overview && <Overview />}
           {activeTab === GroupAgentNavKey.SystemRole && <SystemRole />}

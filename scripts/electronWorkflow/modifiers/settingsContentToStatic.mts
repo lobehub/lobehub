@@ -22,7 +22,8 @@ const isBusinessFeaturesEnabled = () => {
 const extractDynamicImportsFromMap = (code: string): DynamicImportInfo[] => {
   const results: DynamicImportInfo[] = [];
 
-  const regex = /\[SettingsTabs\.(\w+)]:\s*dynamic\(\s*\(\)\s*=>\s*import\(\s*["']([^"']+)["']\s*\)/g;
+  const regex =
+    /\[SettingsTabs\.(\w+)]:\s*dynamic\(\s*\(\)\s*=>\s*import\(\s*["']([^"']+)["']\s*\)/g;
 
   let match;
   while ((match = regex.exec(code)) !== null) {
@@ -99,10 +100,7 @@ export const convertSettingsContentToStatic = async (TEMP_DIR: string) => {
 
       let result = code;
 
-      result = result.replace(
-        /import dynamic from ["']@\/libs\/next\/dynamic["'];\n?/,
-        '',
-      );
+      result = result.replace(/import dynamic from ["']@\/libs\/next\/dynamic["'];\n?/, '');
 
       result = result.replace(
         /import Loading from ["']@\/components\/Loading\/BrandTextLoading["'];\n?/,
@@ -112,11 +110,13 @@ export const convertSettingsContentToStatic = async (TEMP_DIR: string) => {
       const ast = parse(Lang.Tsx, result);
       const root = ast.root();
 
-      const lastImport = root.findAll({
-        rule: {
-          kind: 'import_statement',
-        },
-      }).at(-1);
+      const lastImport = root
+        .findAll({
+          rule: {
+            kind: 'import_statement',
+          },
+        })
+        .at(-1);
 
       invariant(
         lastImport,
@@ -124,7 +124,11 @@ export const convertSettingsContentToStatic = async (TEMP_DIR: string) => {
       );
 
       const insertPos = lastImport!.range().end.index;
-      result = result.slice(0, insertPos) + '\nimport type React from \'react\';\n' + staticImports + result.slice(insertPos);
+      result =
+        result.slice(0, insertPos) +
+        "\nimport type React from 'react';\n" +
+        staticImports +
+        result.slice(insertPos);
 
       const componentMapRegex = /const componentMap = {[\S\s]*?\n};/;
       invariant(

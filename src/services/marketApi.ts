@@ -1,8 +1,4 @@
-import {
-  type AgentCreateResponse,
-  type AgentItemDetail,
-  type AgentListResponse,
-} from '@lobehub/market-sdk';
+import type { AgentCreateResponse, AgentItemDetail, AgentListResponse } from '@lobehub/market-sdk';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import type {
@@ -26,7 +22,7 @@ export class MarketApiService {
    * @deprecated This method is no longer needed as authentication is now handled
    * automatically through tRPC middleware. Keeping for backward compatibility.
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   setAccessToken(_token: string) {
     // No-op: Authentication is now handled through tRPC authedProcedure middleware
   }
@@ -45,7 +41,9 @@ export class MarketApiService {
   }
 
   // Get agent detail by identifier
-  async getAgentDetail(identifier: string): Promise<AgentItemDetail & { forkedFromAgentId?: string }> {
+  async getAgentDetail(
+    identifier: string,
+  ): Promise<AgentItemDetail & { forkedFromAgentId?: string }> {
     return lambdaClient.market.agent.getAgentDetail.query({
       identifier,
     }) as Promise<AgentItemDetail>;

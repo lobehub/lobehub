@@ -14,7 +14,7 @@ export const toggleBooleanList = (ids: string[], id: string, loading: boolean) =
     } else {
       const index = draft.indexOf(id);
 
-      if (index >= 0) draft.splice(index, 1);
+      if (index !== -1) draft.splice(index, 1);
     }
   });
 };

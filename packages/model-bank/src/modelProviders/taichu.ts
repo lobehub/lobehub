@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 // ref :https://ai-maas.wair.ac.cn/#/doc
 const Taichu: ModelProviderCard = {

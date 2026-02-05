@@ -1,11 +1,13 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
-import { Mock, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { responsesAPIModels } from '../../const/models';
-import { ChatStreamPayload } from '../../types/chat';
+import type { ChatStreamPayload } from '../../types/chat';
 import * as modelParseModule from '../../utils/modelParse';
-import { LobeNewAPIAI, NewAPIModelCard, NewAPIPricing, params } from './index';
+import type { NewAPIModelCard, NewAPIPricing } from './index';
+import { LobeNewAPIAI, params } from './index';
 
 // Mock external dependencies
 vi.mock('../../utils/modelParse');
@@ -16,8 +18,8 @@ vi.spyOn(console, 'debug').mockImplementation(() => {});
 
 // Type definitions for test data
 interface MockPricingResponse {
-  success?: boolean;
   data?: NewAPIPricing[];
+  success?: boolean;
 }
 
 describe('NewAPI Runtime - 100% Branch Coverage', () => {
@@ -29,7 +31,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
   beforeEach(() => {
     // Setup fetch mock
     mockFetch = vi.fn();
-    global.fetch = mockFetch;
+    globalThis.fetch = mockFetch;
 
     // Setup utility function mocks
     mockProcessMultiProviderModelList = vi.mocked(modelParseModule.processMultiProviderModelList);
@@ -359,10 +361,12 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
         const model = { supported_endpoint_types: ['anthropic'] };
         let detectedProvider = 'openai';
 
-        if (model.supported_endpoint_types && model.supported_endpoint_types.length > 0) {
-          if (model.supported_endpoint_types.includes('anthropic')) {
-            detectedProvider = 'anthropic';
-          }
+        if (
+          model.supported_endpoint_types &&
+          model.supported_endpoint_types.length > 0 &&
+          model.supported_endpoint_types.includes('anthropic')
+        ) {
+          detectedProvider = 'anthropic';
         }
 
         expect(detectedProvider).toBe('anthropic');
@@ -372,10 +376,12 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
         const model = { supported_endpoint_types: ['gemini'] };
         let detectedProvider = 'openai';
 
-        if (model.supported_endpoint_types && model.supported_endpoint_types.length > 0) {
-          if (model.supported_endpoint_types.includes('gemini')) {
-            detectedProvider = 'google';
-          }
+        if (
+          model.supported_endpoint_types &&
+          model.supported_endpoint_types.length > 0 &&
+          model.supported_endpoint_types.includes('gemini')
+        ) {
+          detectedProvider = 'google';
         }
 
         expect(detectedProvider).toBe('google');
@@ -385,10 +391,12 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
         const model = { supported_endpoint_types: ['xai'] };
         let detectedProvider = 'openai';
 
-        if (model.supported_endpoint_types && model.supported_endpoint_types.length > 0) {
-          if (model.supported_endpoint_types.includes('xai')) {
-            detectedProvider = 'xai';
-          }
+        if (
+          model.supported_endpoint_types &&
+          model.supported_endpoint_types.length > 0 &&
+          model.supported_endpoint_types.includes('xai')
+        ) {
+          detectedProvider = 'xai';
         }
 
         expect(detectedProvider).toBe('xai');
@@ -501,7 +509,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       const mockModel: NewAPIModelCard = {
         id: 'test-model',
         object: 'model',
-        created: 1234567890,
+        created: 1_234_567_890,
         owned_by: 'openai',
         supported_endpoint_types: ['openai'],
       };
@@ -548,7 +556,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       const pricingMap = new Map(pricingData.map((p) => [p.model_name, p]));
 
       const enrichedModels = models.map((model) => {
-        let enhancedModel: any = { ...model };
+        const enhancedModel: any = { ...model };
 
         // Test pricing logic
         const pricing = pricingMap.get(model.id);

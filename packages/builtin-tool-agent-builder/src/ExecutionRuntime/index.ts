@@ -1,6 +1,6 @@
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import { marketToolsResultsPrompt, modelsResultsPrompt } from '@lobechat/prompts';
-import { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import { discoverService } from '@/services/discover';
 import { getAgentStoreState } from '@/store/agent';
@@ -392,7 +392,7 @@ export class AgentBuilderExecutionRuntime {
       // Listen for OAuth success message from popup window
       messageHandler = async (event: MessageEvent) => {
         // Verify origin for security
-        if (event.origin !== window.location.origin) return;
+        if (event.origin !== globalThis.location.origin) return;
 
         if (
           event.data?.type === 'LOBEHUB_SKILL_AUTH_SUCCESS' &&
@@ -603,7 +603,6 @@ export class AgentBuilderExecutionRuntime {
 
       // Small delay for typewriter effect
       if (i + chunkSize < prompt.length) {
-        // eslint-disable-next-line no-promise-executor-return
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
@@ -631,8 +630,8 @@ export class AgentBuilderExecutionRuntime {
       if (source === 'official') {
         // Check if it's a Klavis tool
         const isKlavisEnabled =
-          typeof window !== 'undefined' &&
-          window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
+          typeof globalThis.window !== 'undefined' &&
+          globalThis.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
 
         if (isKlavisEnabled) {
           // Check if this is a Klavis tool
@@ -868,8 +867,8 @@ export class AgentBuilderExecutionRuntime {
 
         // Check if it's a LobehubSkill provider
         const isLobehubSkillEnabled =
-          typeof window !== 'undefined' &&
-          window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill;
+          typeof globalThis.window !== 'undefined' &&
+          globalThis.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill;
 
         if (isLobehubSkillEnabled) {
           // Check if this is a LobehubSkill provider
@@ -913,8 +912,8 @@ export class AgentBuilderExecutionRuntime {
                 try {
                   // Get OAuth authorization URL with correct redirectUri
                   const redirectUri =
-                    typeof window !== 'undefined'
-                      ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(identifier)}`
+                    typeof globalThis.window !== 'undefined'
+                      ? `${globalThis.location.origin}/oauth/callback/success?provider=${encodeURIComponent(identifier)}`
                       : undefined;
                   const authInfo = await getToolStoreState().getLobehubSkillAuthorizeUrl(
                     identifier,
@@ -1006,8 +1005,8 @@ export class AgentBuilderExecutionRuntime {
               try {
                 // Get OAuth authorization URL with correct redirectUri
                 const redirectUri =
-                  typeof window !== 'undefined'
-                    ? `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(identifier)}`
+                  typeof globalThis.window !== 'undefined'
+                    ? `${globalThis.location.origin}/oauth/callback/success?provider=${encodeURIComponent(identifier)}`
                     : undefined;
                 const authInfo = await getToolStoreState().getLobehubSkillAuthorizeUrl(identifier, {
                   redirectUri,

@@ -9,7 +9,7 @@ receivers:
         - job_name: otel-collector-metrics
           scrape_interval: 10s
           static_configs:
-            - targets: ["127.0.0.1:8888"]
+            - targets: ['127.0.0.1:8888']
 
   otlp:
     protocols:

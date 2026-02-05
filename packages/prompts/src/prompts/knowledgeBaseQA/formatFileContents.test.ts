@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { promptFileContents } from './formatFileContents';
 import type { FileContent } from './formatFileContents';
+import { promptFileContents } from './formatFileContents';
 
 describe('promptFileContents', () => {
   it('should format single file content', () => {

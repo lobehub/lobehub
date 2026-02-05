@@ -1,5 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
-import { GroundingSearch, ModelReasoning, ToolIntervention } from '@lobechat/types';
+import type { GroundingSearch, ModelReasoning, ToolIntervention } from '@lobechat/types';
 import {
   boolean,
   index,
@@ -49,7 +49,7 @@ export const messageGroups = pgTable(
     }),
 
     // Associated user message
-    // eslint-disable-next-line @typescript-eslint/no-use-before-define
+
     parentMessageId: text('parent_message_id').references(() => messages.id, {
       onDelete: 'cascade',
     }),

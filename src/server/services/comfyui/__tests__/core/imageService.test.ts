@@ -1,7 +1,7 @@
+import type { CreateImagePayload } from '@lobechat/model-runtime';
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CreateImagePayload } from '@lobechat/model-runtime';
 import { ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
 import { ErrorHandlerService } from '@/server/services/comfyui/core/errorHandlerService';
 import { ImageService } from '@/server/services/comfyui/core/imageService';
@@ -58,7 +58,7 @@ describe('ImageService', () => {
 
     // Mock global fetch
     mockFetch = vi.fn();
-    global.fetch = mockFetch;
+    globalThis.fetch = mockFetch;
 
     // Setup mocks for constructor
     vi.mocked(ComfyUIClientService, true).mockImplementation(() => mockClientService as any);

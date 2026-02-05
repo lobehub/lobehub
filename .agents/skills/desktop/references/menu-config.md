@@ -30,7 +30,13 @@ export const createAppMenu = (win: BrowserWindow) => {
     {
       label: 'File',
       submenu: [
-        { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => { /* ... */ } },
+        {
+          label: 'New',
+          accelerator: 'CmdOrCtrl+N',
+          click: () => {
+            /* ... */
+          },
+        },
         { type: 'separator' },
         { role: 'quit' },
       ],
@@ -82,9 +88,7 @@ import { i18n } from '../locales';
 const template = [
   {
     label: i18n.t('menu.file'),
-    submenu: [
-      { label: i18n.t('menu.new'), click: createNew },
-    ],
+    submenu: [{ label: i18n.t('menu.new'), click: createNew }],
   },
 ];
 ```

@@ -1,10 +1,10 @@
 // @vitest-environment node
-import { LobeRuntimeAI, ModelRuntime } from '@lobechat/model-runtime';
+import type { LobeRuntimeAI } from '@lobechat/model-runtime';
+import { ModelRuntime } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { getXorPayload } from '@lobechat/utils/server';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { checkAuthMethod } from '@/app/(backend)/middleware/auth/utils';
 import { LOBE_CHAT_AUTH_HEADER, OAUTH_AUTHORIZED } from '@/envs/auth';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
@@ -68,9 +68,12 @@ describe('POST handler', () => {
       });
 
       // chat mock 需要返回一个 Response 对象，否则中间件访问 res.headers 会报错
-      const mockChatResponse = new Response(JSON.stringify({ success: true }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const mockChatResponse = Response.json(
+        { success: true },
+        {
+          headers: { 'Content-Type': 'application/json' },
+        },
+      );
       const mockRuntime: LobeRuntimeAI = {
         baseURL: 'abc',
         chat: vi.fn().mockResolvedValue(mockChatResponse),

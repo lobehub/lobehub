@@ -61,8 +61,8 @@ describe('imageUrlToBase64', () => {
   const mockArrayBuffer = new ArrayBuffer(8);
 
   beforeEach(() => {
-    global.fetch = mockFetch;
-    global.btoa = vi.fn().mockReturnValue('mockBase64String');
+    globalThis.fetch = mockFetch;
+    globalThis.btoa = vi.fn().mockReturnValue('mockBase64String');
   });
 
   afterEach(() => {
@@ -78,7 +78,7 @@ describe('imageUrlToBase64', () => {
     const result = await imageUrlToBase64('https://example.com/image.jpg');
 
     expect(mockFetch).toHaveBeenCalledWith('https://example.com/image.jpg');
-    expect(global.btoa).toHaveBeenCalled();
+    expect(globalThis.btoa).toHaveBeenCalled();
     expect(result).toEqual({ base64: 'mockBase64String', mimeType: 'image/jpg' });
   });
 

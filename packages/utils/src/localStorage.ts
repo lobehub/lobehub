@@ -11,7 +11,7 @@ export class AsyncLocalStorage<State> {
     this.storageKey = storageKey;
 
     // skip server side rendering
-    if (typeof window === 'undefined') return;
+    if (typeof globalThis.window === 'undefined') return;
 
     // migrate old data
     if (localStorage.getItem(PREV_KEY)) {

@@ -5,7 +5,7 @@ import { firecrawl } from '../firecrawl';
 
 // Mock dependencies
 vi.mock('../../utils/withTimeout', () => ({
-  DEFAULT_TIMEOUT: 30000,
+  DEFAULT_TIMEOUT: 30_000,
   withTimeout: vi.fn(),
 }));
 
@@ -55,7 +55,7 @@ describe('firecrawl crawler', () => {
       url: 'https://example.com',
     });
 
-    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30000);
+    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30_000);
   });
 
   it('should handle missing API key', async () => {
@@ -83,7 +83,7 @@ describe('firecrawl crawler', () => {
 
     await firecrawl('https://example.com', { filterOptions: {} });
 
-    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30000);
+    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30_000);
   });
 
   it('should return undefined for short content', async () => {

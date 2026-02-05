@@ -30,7 +30,6 @@ export async function buildFluxDevWorkflow(
   // Process prompt splitting early in workflow construction
   const { t5xxlPrompt, clipLPrompt } = splitPromptForDualCLIP(params.prompt);
 
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
   const workflow = {
     '1': {
       _meta: {
@@ -183,8 +182,6 @@ export async function buildFluxDevWorkflow(
       },
     },
   };
-
-  /* eslint-enable sort-keys-fix/sort-keys-fix */
 
   workflow['5'].inputs.clip_l = clipLPrompt;
   workflow['5'].inputs.t5xxl = t5xxlPrompt;

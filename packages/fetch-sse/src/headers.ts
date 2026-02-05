@@ -3,7 +3,7 @@
  * @param headersInit - Headers initialization object
  * @returns The converted record object
  */
-// eslint-disable-next-line no-undef
+
 export const headersToRecord = (headersInit?: HeadersInit): Record<string, string> => {
   const record: Record<string, string> = {};
   if (!headersInit) {

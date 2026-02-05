@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { lambdaClient } from '@/libs/trpc/client';
 import { agentRuntimeClient } from '@/services/agentRuntime';
 import { useChatStore } from '@/store/chat/store';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 // Keep zustand mock as it's needed globally
 vi.mock('zustand/traditional');

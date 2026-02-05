@@ -20,7 +20,7 @@ describe('useOnPluginSettingsUpdate', () => {
       data: { type: PluginChannel.updatePluginSettings, value: testSettings },
     });
 
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(mockCallback).toHaveBeenCalledWith(testSettings);
   });
@@ -32,7 +32,7 @@ describe('useOnPluginSettingsUpdate', () => {
       data: { type: 'nonPluginSettingsUpdate', value: { irrelevant: true } },
     });
 
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(mockCallback).not.toHaveBeenCalled();
   });
@@ -46,7 +46,7 @@ describe('useOnPluginSettingsUpdate', () => {
       data: { type: PluginChannel.updatePluginSettings, value: {} },
     });
 
-    window.dispatchEvent(event);
+    globalThis.dispatchEvent(event);
 
     expect(mockCallback).not.toHaveBeenCalled();
   });

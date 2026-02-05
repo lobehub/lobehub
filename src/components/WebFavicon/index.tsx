@@ -13,11 +13,11 @@ const WebFavicon = ({ url, title, alt, size = 14 }: WebFaviconProps) => {
 
   return (
     <Image
+      unoptimized
       alt={alt || title || url}
       height={size}
       src={`https://icons.duckduckgo.com/ip3/${host}.ico`}
       style={{ borderRadius: 4 }}
-      unoptimized
       width={size}
     />
   );

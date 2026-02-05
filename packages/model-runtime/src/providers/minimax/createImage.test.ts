@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CreateImageOptions } from '../../core/openaiCompatibleFactory';
-import { CreateImagePayload } from '../../types/image';
+import type { CreateImageOptions } from '../../core/openaiCompatibleFactory';
+import type { CreateImagePayload } from '../../types/image';
 import { createMiniMaxImage } from './createImage';
 
 // Mock the console.error to avoid polluting test output
@@ -28,7 +28,7 @@ describe('createMiniMaxImage', () => {
     it('should successfully generate image with basic prompt', async () => {
       const mockImageUrl = 'https://minimax-cdn.com/images/generated/test-image.jpg';
 
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           base_resp: {
@@ -77,7 +77,7 @@ describe('createMiniMaxImage', () => {
     it('should handle custom aspect ratio', async () => {
       const mockImageUrl = 'https://minimax-cdn.com/images/generated/custom-ratio.jpg';
 
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           base_resp: {
@@ -125,7 +125,7 @@ describe('createMiniMaxImage', () => {
     it('should handle seed value correctly', async () => {
       const mockImageUrl = 'https://minimax-cdn.com/images/generated/seeded-image.jpg';
 
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           base_resp: {
@@ -174,7 +174,7 @@ describe('createMiniMaxImage', () => {
     it('should handle seed value of 0 correctly', async () => {
       const mockImageUrl = 'https://minimax-cdn.com/images/generated/zero-seed.jpg';
 
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           base_resp: {
@@ -223,7 +223,7 @@ describe('createMiniMaxImage', () => {
         'https://minimax-cdn.com/images/generated/image-2.jpg',
       ];
 
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           base_resp: {
@@ -258,7 +258,7 @@ describe('createMiniMaxImage', () => {
     it('should handle partial failures gracefully', async () => {
       const mockImageUrl = 'https://minimax-cdn.com/images/generated/partial-success.jpg';
 
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           base_resp: {
@@ -293,7 +293,7 @@ describe('createMiniMaxImage', () => {
 
   describe('Error scenarios', () => {
     it('should handle HTTP error responses', async () => {
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: false,
         status: 400,
         statusText: 'Bad Request',
@@ -321,7 +321,7 @@ describe('createMiniMaxImage', () => {
     });
 
     it('should handle non-JSON error responses', async () => {
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
@@ -346,7 +346,7 @@ describe('createMiniMaxImage', () => {
     });
 
     it('should handle API error status codes', async () => {
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           base_resp: {
@@ -380,7 +380,7 @@ describe('createMiniMaxImage', () => {
     });
 
     it('should handle empty image URLs array', async () => {
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           base_resp: {
@@ -414,7 +414,7 @@ describe('createMiniMaxImage', () => {
     });
 
     it('should handle missing data field', async () => {
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           base_resp: {
@@ -445,7 +445,7 @@ describe('createMiniMaxImage', () => {
     });
 
     it('should handle null/empty image URL', async () => {
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           base_resp: {
@@ -479,7 +479,7 @@ describe('createMiniMaxImage', () => {
     });
 
     it('should handle network errors', async () => {
-      global.fetch = vi.fn().mockRejectedValueOnce(new Error('Network connection failed'));
+      globalThis.fetch = vi.fn().mockRejectedValueOnce(new Error('Network connection failed'));
 
       const payload: CreateImagePayload = {
         model: 'image-01',
@@ -497,7 +497,7 @@ describe('createMiniMaxImage', () => {
     });
 
     it('should handle unauthorized access', async () => {
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: false,
         status: 401,
         statusText: 'Unauthorized',
@@ -525,7 +525,7 @@ describe('createMiniMaxImage', () => {
     });
 
     it('should handle malformed JSON response', async () => {
-      global.fetch = vi.fn().mockResolvedValueOnce({
+      globalThis.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => {
           throw new Error('Unexpected token in JSON');

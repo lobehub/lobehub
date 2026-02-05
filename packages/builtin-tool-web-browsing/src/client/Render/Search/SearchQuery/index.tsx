@@ -1,4 +1,4 @@
-import { type SearchQuery, type UniformSearchResponse } from '@lobechat/types';
+import type { SearchQuery, UniformSearchResponse } from '@lobechat/types';
 import { ActionIcon } from '@lobehub/ui';
 import { uniq } from 'es-toolkit/compat';
 import { XIcon } from 'lucide-react';
@@ -34,23 +34,23 @@ const SearchQueryView = memo<SearchQueryViewProps>(
         defaultEngines={defaultEngines}
         defaultQuery={args?.query}
         messageId={messageId}
-        onSearch={() => setEditing(false)}
         searchAddon={
           <ActionIcon
             icon={XIcon}
-            onClick={() => setEditing(false)}
             title={t('cancel')}
             variant={'outlined'}
+            onClick={() => setEditing(false)}
           />
         }
+        onSearch={() => setEditing(false)}
       />
     ) : (
       <SearchView
         defaultEngines={defaultEngines}
         defaultQuery={args?.query}
-        onEditingChange={setEditing}
         resultsNumber={searchResults.length}
         searching={loading || !pluginState}
+        onEditingChange={setEditing}
       />
     );
   },

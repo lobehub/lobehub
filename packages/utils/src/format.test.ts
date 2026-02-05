@@ -24,21 +24,21 @@ describe('format', () => {
     });
 
     it('should format bytes to MB correctly', () => {
-      expect(formatSize(1048576)).toBe('1.0 MB');
-      expect(formatSize(2097152)).toBe('2.0 MB');
-      expect(formatSize(1572864)).toBe('1.5 MB');
+      expect(formatSize(1_048_576)).toBe('1.0 MB');
+      expect(formatSize(2_097_152)).toBe('2.0 MB');
+      expect(formatSize(1_572_864)).toBe('1.5 MB');
     });
 
     it('should format bytes to GB correctly', () => {
-      expect(formatSize(1073741824)).toBe('1.0 GB');
-      expect(formatSize(2147483648)).toBe('2.0 GB');
-      expect(formatSize(1610612736)).toBe('1.5 GB');
+      expect(formatSize(1_073_741_824)).toBe('1.0 GB');
+      expect(formatSize(2_147_483_648)).toBe('2.0 GB');
+      expect(formatSize(1_610_612_736)).toBe('1.5 GB');
     });
 
     it('should handle edge cases', () => {
       expect(formatSize(0)).toBe('0.0 KB');
       expect(formatSize(1023)).toBe('1.0 KB');
-      expect(formatSize(1073741823)).toBe('1024.0 MB');
+      expect(formatSize(1_073_741_823)).toBe('1024.0 MB');
     });
 
     it('should handle undefined input', () => {
@@ -47,7 +47,7 @@ describe('format', () => {
 
     it('should use custom fraction digits', () => {
       expect(formatSize(1536, 2)).toBe('1.50 KB');
-      expect(formatSize(1572864, 3)).toBe('1.500 MB');
+      expect(formatSize(1_572_864, 3)).toBe('1.500 MB');
     });
   });
 
@@ -59,12 +59,12 @@ describe('format', () => {
 
     it('should format speed in MB/s correctly', () => {
       expect(formatSpeed(1024 * 1024)).toBe('1.00 MB/s');
-      expect(formatSpeed(10240 * 1024)).toBe('10.00 MB/s');
+      expect(formatSpeed(10_240 * 1024)).toBe('10.00 MB/s');
     });
 
     it('should format speed in GB/s correctly', () => {
-      expect(formatSpeed(1048576 * 1024)).toBe('1.00 GB/s');
-      expect(formatSpeed(10485760 * 1024)).toBe('10.00 GB/s');
+      expect(formatSpeed(1_048_576 * 1024)).toBe('1.00 GB/s');
+      expect(formatSpeed(10_485_760 * 1024)).toBe('10.00 GB/s');
     });
 
     it('should handle edge cases', () => {
@@ -127,26 +127,26 @@ describe('format', () => {
     });
 
     it('should format numbers between 10,000 and 999,999 correctly', () => {
-      expect(formatShortenNumber(10000)).toBe('10.0K');
-      expect(formatShortenNumber(123456)).toBe('123.5K');
-      expect(formatShortenNumber(998000)).toBe('998.0K');
-      expect(formatShortenNumber(999999)).toBe('1000.0K');
-      expect(formatShortenNumber(1000000)).toBe('1.0M');
-      expect(formatShortenNumber(9999999)).toBe('10.0M');
+      expect(formatShortenNumber(10_000)).toBe('10.0K');
+      expect(formatShortenNumber(123_456)).toBe('123.5K');
+      expect(formatShortenNumber(998_000)).toBe('998.0K');
+      expect(formatShortenNumber(999_999)).toBe('1000.0K');
+      expect(formatShortenNumber(1_000_000)).toBe('1.0M');
+      expect(formatShortenNumber(9_999_999)).toBe('10.0M');
     });
 
     it('should format numbers 10,000,000 and above correctly', () => {
-      expect(formatShortenNumber(10000000)).toBe('10.0M');
-      expect(formatShortenNumber(123456789)).toBe('123.5M');
-      expect(formatShortenNumber(9876543210)).toBe('9876.5M');
+      expect(formatShortenNumber(10_000_000)).toBe('10.0M');
+      expect(formatShortenNumber(123_456_789)).toBe('123.5M');
+      expect(formatShortenNumber(9_876_543_210)).toBe('9876.5M');
     });
   });
 
   describe('formatNumber', () => {
     it('should format numbers with commas correctly', () => {
       expect(formatNumber(1000)).toBe('1,000');
-      expect(formatNumber(1000000)).toBe('1,000,000');
-      expect(formatNumber(1234567.89)).toBe('1,234,567.89');
+      expect(formatNumber(1_000_000)).toBe('1,000,000');
+      expect(formatNumber(1_234_567.89)).toBe('1,234,567.89');
     });
 
     it('should handle non-number inputs', () => {
@@ -176,14 +176,14 @@ describe('format', () => {
       expect(formatPrice(1000)).toBe('1,000.00');
       expect(formatPrice(1234.56)).toBe('1,234.56');
       expect(formatPrice(0.99)).toBe('0.99');
-      expect(formatPrice(1000000.01)).toBe('1,000,000.01');
+      expect(formatPrice(1_000_000.01)).toBe('1,000,000.01');
     });
 
     it('should format prices with digits correctly', () => {
       expect(formatPrice(1000, 1)).toBe('1,000.0');
       expect(formatPrice(1234.56)).toBe('1,234.56');
       expect(formatPrice(0.99)).toBe('0.99');
-      expect(formatPrice(1000000.01, 0)).toBe('1,000,000');
+      expect(formatPrice(1_000_000.01, 0)).toBe('1,000,000');
     });
   });
 
@@ -212,32 +212,32 @@ describe('format', () => {
       expect(formatTokenNumber(2048)).toBe('2K');
       expect(formatTokenNumber(4000)).toBe('4K');
       expect(formatTokenNumber(4096)).toBe('4K');
-      expect(formatTokenNumber(32000)).toBe('32K');
-      expect(formatTokenNumber(65536)).toBe('64K');
+      expect(formatTokenNumber(32_000)).toBe('32K');
+      expect(formatTokenNumber(65_536)).toBe('64K');
     });
 
     it('should format numbers between 41,984 and 127,999 correctly', () => {
-      expect(formatTokenNumber(41984)).toBe('41K');
-      expect(formatTokenNumber(100000)).toBe('97K');
-      expect(formatTokenNumber(127999)).toBe('124K');
+      expect(formatTokenNumber(41_984)).toBe('41K');
+      expect(formatTokenNumber(100_000)).toBe('97K');
+      expect(formatTokenNumber(127_999)).toBe('124K');
     });
 
     it('should return "128K" for 131,072', () => {
-      expect(formatTokenNumber(131072)).toBe('128K'); // Qwen
+      expect(formatTokenNumber(131_072)).toBe('128K'); // Qwen
     });
 
     it('should format numbers between 128,000 and 999,999 correctly', () => {
-      expect(formatTokenNumber(128000)).toBe('128K');
-      expect(formatTokenNumber(200000)).toBe('200K'); // Claude
-      expect(formatTokenNumber(999999)).toBe('999K');
+      expect(formatTokenNumber(128_000)).toBe('128K');
+      expect(formatTokenNumber(200_000)).toBe('200K'); // Claude
+      expect(formatTokenNumber(999_999)).toBe('999K');
     });
 
     it('should format numbers 1,000,000 and above correctly', () => {
-      expect(formatTokenNumber(1000000)).toBe('1M');
-      expect(formatTokenNumber(1024000)).toBe('1M');
-      expect(formatTokenNumber(1048576)).toBe('1M'); // Gemini Flash
-      expect(formatTokenNumber(2000000)).toBe('2M');
-      expect(formatTokenNumber(2097152)).toBe('2M'); // Gemini Pro
+      expect(formatTokenNumber(1_000_000)).toBe('1M');
+      expect(formatTokenNumber(1_024_000)).toBe('1M');
+      expect(formatTokenNumber(1_048_576)).toBe('1M'); // Gemini Flash
+      expect(formatTokenNumber(2_000_000)).toBe('2M');
+      expect(formatTokenNumber(2_097_152)).toBe('2M'); // Gemini Pro
     });
   });
 

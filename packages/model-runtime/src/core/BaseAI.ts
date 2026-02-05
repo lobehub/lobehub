@@ -1,7 +1,7 @@
-import { AIBaseModelCard } from 'model-bank';
-import OpenAI from 'openai';
+import type { AIBaseModelCard } from 'model-bank';
+import type OpenAI from 'openai';
 
-import {
+import type {
   ChatMethodOptions,
   ChatStreamPayload,
   CreateImagePayload,
@@ -20,22 +20,25 @@ import {
 /* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
 export interface LobeRuntimeAI {
   baseURL?: string;
-  chat?(payload: ChatStreamPayload, options?: ChatMethodOptions): Promise<Response>;
-  generateObject?(payload: GenerateObjectPayload, options?: GenerateObjectOptions): Promise<any>;
-
-  embeddings?(payload: EmbeddingsPayload, options?: EmbeddingsOptions): Promise<Embeddings[]>;
-
-  models?(): Promise<any>;
-
+  chat?: (payload: ChatStreamPayload, options?: ChatMethodOptions) => Promise<Response>;
   createImage?: (payload: CreateImagePayload) => Promise<CreateImageResponse>;
+
+  embeddings?: (payload: EmbeddingsPayload, options?: EmbeddingsOptions) => Promise<Embeddings[]>;
+
+  generateObject?: (
+    payload: GenerateObjectPayload,
+    options?: GenerateObjectOptions,
+  ) => Promise<any>;
+
+  models?: () => Promise<any>;
+
+  // Model management related interface
+  pullModel?: (params: PullModelParams, options?: ModelRequestOptions) => Promise<Response>;
 
   textToSpeech?: (
     payload: TextToSpeechPayload,
     options?: TextToSpeechOptions,
   ) => Promise<ArrayBuffer>;
-
-  // Model management related interface
-  pullModel?(params: PullModelParams, options?: ModelRequestOptions): Promise<Response>;
 }
 /* eslint-enabled */
 

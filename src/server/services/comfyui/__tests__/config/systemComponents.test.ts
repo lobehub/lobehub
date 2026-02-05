@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  SYSTEM_COMPONENTS,
   getAllComponentsWithNames,
   getOptimalComponent,
+  SYSTEM_COMPONENTS,
 } from '@/server/services/comfyui/config/systemComponents';
 
 describe('SystemComponents', () => {

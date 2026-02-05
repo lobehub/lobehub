@@ -2,9 +2,9 @@ import type { ChatModelCard } from '@lobechat/types';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  detectModelProvider,
   MODEL_LIST_CONFIGS,
   MODEL_OWNER_DETECTION_CONFIG,
-  detectModelProvider,
   processModelList,
   processMultiProviderModelList,
 } from './modelParse';
@@ -629,7 +629,7 @@ describe('modelParse', () => {
         const tempModelEntry = {
           id: 'special-model-with-overlap',
           displayName: 'Known Special Model',
-          contextWindowTokens: 10000,
+          contextWindowTokens: 10_000,
           maxOutput: 2000,
           enabled: true,
         };

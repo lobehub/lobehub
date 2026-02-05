@@ -154,7 +154,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
 
   return (
     <Flexbox gap={12}>
-      <Flexbox align={'flex-start'} gap={16} horizontal width={'100%'}>
+      <Flexbox horizontal align={'flex-start'} gap={16} width={'100%'}>
         <Avatar avatar={displayAvatar} shape={'square'} size={mobile ? 48 : 64} />
         <Flexbox
           flex={1}
@@ -164,9 +164,9 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
           }}
         >
           <Flexbox
+            horizontal
             align={'center'}
             gap={8}
-            horizontal
             justify={'space-between'}
             style={{
               overflow: 'hidden',
@@ -174,18 +174,18 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
             }}
           >
             <Flexbox
+              horizontal
               align={'center'}
               flex={1}
               gap={12}
-              horizontal
               style={{
                 overflow: 'hidden',
                 position: 'relative',
               }}
             >
               <Text
-                as={'h1'}
                 ellipsis
+                as={'h1'}
                 style={{ fontSize: mobile ? 18 : 24, margin: 0 }}
                 title={identifier}
               >
@@ -196,20 +196,20 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               <ActionIcon
                 icon={HeartIcon}
                 loading={likeLoading}
-                onClick={handleLikeClick}
                 style={isLiked ? { color: '#ff4d4f' } : undefined}
+                onClick={handleLikeClick}
               />
             </Tooltip>
             <Tooltip title={isFavorited ? t('assistant.unfavorite') : t('assistant.favorite')}>
               <ActionIcon
                 icon={isFavorited ? BookmarkCheckIcon : BookmarkIcon}
                 loading={favoriteLoading}
-                onClick={handleFavoriteClick}
                 variant={isFavorited ? 'outlined' : undefined}
+                onClick={handleFavoriteClick}
               />
             </Tooltip>
           </Flexbox>
-          <Flexbox align={'center'} gap={8} horizontal wrap={'wrap'}>
+          <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
             {(() => {
               // API returns author as object {avatar, name, userName}, but type definition says string
               const authorObj =
@@ -241,9 +241,9 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
       </Flexbox>
       <TooltipGroup>
         <Flexbox
+          horizontal
           align={'center'}
           gap={mobile ? 12 : 24}
-          horizontal
           style={{
             color: cssVar.colorTextSecondary,
           }}
@@ -254,7 +254,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
               styles={{ root: { pointerEvents: 'none' } }}
               title={t('groupAgents.memberCount', { defaultValue: 'Members' })}
             >
-              <Flexbox align={'center'} gap={6} horizontal>
+              <Flexbox horizontal align={'center'} gap={6}>
                 <Icon icon={UsersIcon} />
                 {memberCount}
               </Flexbox>

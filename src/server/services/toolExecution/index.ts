@@ -1,8 +1,8 @@
-import { type ChatToolPayload } from '@lobechat/types';
+import type { ChatToolPayload } from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
-import { type CloudMCPParams, type ToolCallContent } from '@/libs/mcp';
+import type { CloudMCPParams, ToolCallContent } from '@/libs/mcp';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
 import {
   DEFAULT_TOOL_RESULT_MAX_LENGTH,
@@ -10,13 +10,13 @@ import {
 } from '@/server/utils/truncateToolResult';
 
 import { DiscoverService } from '../discover';
-import { type MCPService } from '../mcp';
-import { type PluginGatewayService } from '../pluginGateway';
-import { type BuiltinToolsExecutor } from './builtin';
-import {
-  type ToolExecutionContext,
-  type ToolExecutionResult,
-  type ToolExecutionResultResponse,
+import type { MCPService } from '../mcp';
+import type { PluginGatewayService } from '../pluginGateway';
+import type { BuiltinToolsExecutor } from './builtin';
+import type {
+  ToolExecutionContext,
+  ToolExecutionResult,
+  ToolExecutionResultResponse,
 } from './types';
 
 const log = debug('lobe-server:tool-execution-service');
@@ -193,7 +193,7 @@ export class ToolExecutionService {
   private async executeCloudMCPTool(
     payload: ChatToolPayload,
     context: ToolExecutionContext,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     _mcpParams: CloudMCPParams,
   ): Promise<ToolExecutionResult> {
     const { identifier, apiName, arguments: args } = payload;

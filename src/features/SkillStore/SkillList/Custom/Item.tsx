@@ -79,9 +79,9 @@ const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
     <>
       <Flexbox className={itemStyles.container} gap={0}>
         <Block
+          horizontal
           align={'center'}
           gap={12}
-          horizontal
           paddingBlock={12}
           paddingInline={12}
           variant={'outlined'}
@@ -96,10 +96,12 @@ const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
           <Flexbox horizontal>
             <ActionIcon
               icon={PackageSearch}
-              onClick={() => setConfigOpen(true)}
               title={t('store.actions.manifest')}
+              onClick={() => setConfigOpen(true)}
             />
             <DropdownMenu
+              nativeButton={false}
+              placement="bottomRight"
               items={[
                 {
                   danger: true,
@@ -109,8 +111,6 @@ const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
                   onClick: handleDelete,
                 },
               ]}
-              nativeButton={false}
-              placement="bottomRight"
             >
               <ActionIcon icon={MoreVerticalIcon} />
             </DropdownMenu>
@@ -120,26 +120,26 @@ const Item = memo<ItemProps>(({ identifier, title, description, avatar }) => {
       {customPlugin && (
         <DevModal
           mode="edit"
+          open={configOpen}
+          value={customPlugin}
+          onOpenChange={setConfigOpen}
           onDelete={async () => {
             if (isPluginEnabledInAgent) {
               await togglePlugin(identifier, false);
             }
             await uninstallPlugin(identifier);
           }}
-          onOpenChange={setConfigOpen}
           onSave={async (value) => {
             await updateCustomPlugin(identifier, value);
           }}
-          open={configOpen}
-          value={customPlugin}
         />
       )}
       <PluginDetailModal
         id={identifier}
-        onClose={() => setDetailOpen(false)}
         open={detailOpen}
         schema={pluginManifest?.settings}
         tab="info"
+        onClose={() => setDetailOpen(false)}
       />
     </>
   );

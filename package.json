@@ -79,7 +79,7 @@
     "lint:mdx": "npm run workflow:mdx && remark \"docs/**/*.mdx\" -r ./.remarkrc.mdx.mjs --silent --output && eslint \"docs/**/*.mdx\" --quiet --fix",
     "lint:style": "stylelint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --fix",
     "lint:ts": "eslint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --fix --concurrency=auto",
-    "lint:ts:prune": "eslint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --prune-suppressions --concurrency=auto",
+    "lint:ts:prune": "eslint \"{src,tests,packages}/**/*.{js,jsx,ts,tsx}\" --prune-suppressions --concurrency=auto",
     "lint:ts:suppress": "eslint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --suppress-all --fix --concurrency=auto",
     "lint:unused": "knip --include files,exports,types,enumMembers,duplicates",
     "prepare": "husky",

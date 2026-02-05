@@ -1,6 +1,5 @@
-import dynamic from '@/libs/next/dynamic';
-
 import Loading from '@/components/Loading/BrandTextLoading';
+import dynamic from '@/libs/next/dynamic';
 
 const NewAPI = dynamic(() => import('./newapi'), {
   loading: () => <Loading debugId="Provider > NewAPI" />,

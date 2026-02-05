@@ -15,156 +15,156 @@ tests:
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select a positive, celebratory emoji appropriate for work success (e.g., 🎉, 🎊, ⭐, 💼, 🚀)"
+        value: 'Should select a positive, celebratory emoji appropriate for work success (e.g., 🎉, 🎊, ⭐, 💼, 🚀)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   - vars:
       content: "My dog passed away yesterday. I'm really sad."
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select a sympathetic, sad emoji appropriate for loss and grief (e.g., 😢, 😭, 💔, 😔)"
+        value: 'Should select a sympathetic, sad emoji appropriate for loss and grief (e.g., 😢, 😭, 💔, 😔)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   - vars:
-      content: "Can you help me with this math problem?"
+      content: 'Can you help me with this math problem?'
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select an emoji related to learning, thinking, or mathematics (e.g., 🤔, 📚, ✏️, 🧮, 🔢)"
+        value: 'Should select an emoji related to learning, thinking, or mathematics (e.g., 🤔, 📚, ✏️, 🧮, 🔢)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   - vars:
       content: "I'm going on vacation to Hawaii next week!"
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select an emoji related to vacation, travel, or tropical themes (e.g., 🌺, 🏖️, ✈️, 🌴, ☀️)"
+        value: 'Should select an emoji related to vacation, travel, or tropical themes (e.g., 🌺, 🏖️, ✈️, 🌴, ☀️)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   - vars:
       content: "I'm learning to cook Italian food"
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select an emoji related to cooking or Italian food (e.g., 🍝, 🍕, 👨‍🍳, 🍽️)"
+        value: 'Should select an emoji related to cooking or Italian food (e.g., 🍝, 🍕, 👨‍🍳, 🍽️)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   - vars:
-      content: "Technical documentation about API endpoints"
+      content: 'Technical documentation about API endpoints'
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select an emoji related to technology, development, or documentation (e.g., 💻, 📖, ⚙️, 🔧, 📝)"
+        value: 'Should select an emoji related to technology, development, or documentation (e.g., 💻, 📖, ⚙️, 🔧, 📝)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   # Chinese language tests
   - vars:
-      content: "我刚刚升职了！太激动了！"
+      content: '我刚刚升职了！太激动了！'
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select a positive, celebratory emoji appropriate for work success (e.g., 🎉, 🎊, ⭐, 💼, 🚀)"
+        value: 'Should select a positive, celebratory emoji appropriate for work success (e.g., 🎉, 🎊, ⭐, 💼, 🚀)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   - vars:
-      content: "我的猫咪昨天去世了，我很难过"
+      content: '我的猫咪昨天去世了，我很难过'
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select a sympathetic, sad emoji appropriate for loss and grief (e.g., 😢, 😭, 💔, 😔)"
+        value: 'Should select a sympathetic, sad emoji appropriate for loss and grief (e.g., 😢, 😭, 💔, 😔)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   - vars:
-      content: "我正在学习做日本料理"
+      content: '我正在学习做日本料理'
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select an emoji related to cooking or Japanese food (e.g., 🍱, 🍣, 🍜, 👨‍🍳)"
+        value: 'Should select an emoji related to cooking or Japanese food (e.g., 🍱, 🍣, 🍜, 👨‍🍳)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   # Spanish language tests
   - vars:
-      content: "¡Me voy de vacaciones a la playa la próxima semana!"
+      content: '¡Me voy de vacaciones a la playa la próxima semana!'
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select an emoji related to vacation, beach, or tropical themes (e.g., 🏖️, ☀️, 🌊, 🏝️)"
+        value: 'Should select an emoji related to vacation, beach, or tropical themes (e.g., 🏖️, ☀️, 🌊, 🏝️)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   - vars:
-      content: "Estoy estudiando para mi examen de matemáticas"
+      content: 'Estoy estudiando para mi examen de matemáticas'
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select an emoji related to studying, learning, or mathematics (e.g., 📚, 🤓, 🧮, ✏️, 📊, 📐, 📏)"
+        value: 'Should select an emoji related to studying, learning, or mathematics (e.g., 📚, 🤓, 🧮, ✏️, 📊, 📐, 📏)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   # French language tests
   - vars:
-      content: "Je viens de terminer mon marathon! Je suis épuisé mais heureux"
+      content: 'Je viens de terminer mon marathon! Je suis épuisé mais heureux'
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select an emoji related to running, sports, or achievement (e.g., 🏃, 🏅, 💪, 🎯)"
+        value: 'Should select an emoji related to running, sports, or achievement (e.g., 🏃, 🏅, 💪, 🎯)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   - vars:
       content: "J'apprends à jouer de la guitare"
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select an emoji related to music or guitar (e.g., 🎸, 🎵, 🎶, 🎼)"
+        value: 'Should select an emoji related to music or guitar (e.g., 🎸, 🎵, 🎶, 🎼)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   # Japanese language tests
   - vars:
-      content: "新しいプロジェクトが始まりました！頑張ります"
+      content: '新しいプロジェクトが始まりました！頑張ります'
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select an emoji related to new beginning, work, or motivation (e.g., 🚀, 💼, 💪, ✨)"
+        value: 'Should select an emoji related to new beginning, work, or motivation (e.g., 🚀, 💼, 💪, ✨)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   - vars:
-      content: "桜が咲いて本当に綺麗です"
+      content: '桜が咲いて本当に綺麗です'
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select an emoji related to cherry blossoms, flowers, or beauty (e.g., 🌸, 🌺, 🌼, 🌷)"
+        value: 'Should select an emoji related to cherry blossoms, flowers, or beauty (e.g., 🌸, 🌺, 🌼, 🌷)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   # German language tests
   - vars:
-      content: "Ich habe gerade ein neues Auto gekauft!"
+      content: 'Ich habe gerade ein neues Auto gekauft!'
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select an emoji related to cars or excitement (e.g., 🚗, 🎉, 🚙)"
+        value: 'Should select an emoji related to cars or excitement (e.g., 🚗, 🎉, 🚙)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'
 
   # Russian language tests
   - vars:
-      content: "Я люблю читать книги по вечерам"
+      content: 'Я люблю читать книги по вечерам'
     assert:
       - type: llm-rubric
         provider: openai:gpt-5-mini
-        value: "Should select an emoji related to reading or books (e.g., 📚, 📖, 📕, 🤓)"
+        value: 'Should select an emoji related to reading or books (e.g., 📚, 📖, 📕, 🤓)'
       - type: not-contains
-        value: "explanation"
+        value: 'explanation'

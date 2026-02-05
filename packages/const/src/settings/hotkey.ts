@@ -1,4 +1,4 @@
-import { UserHotkeyConfig } from '@lobechat/types';
+import type { UserHotkeyConfig } from '@lobechat/types';
 
 import { HOTKEYS_REGISTRATION } from '../hotkeys';
 

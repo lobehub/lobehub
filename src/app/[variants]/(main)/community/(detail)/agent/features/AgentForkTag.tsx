@@ -5,8 +5,8 @@ import { GitFork } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import urlJoin from 'url-join';
 import useSWR from 'swr';
+import urlJoin from 'url-join';
 
 import { marketApiService } from '@/services/marketApi';
 
@@ -43,11 +43,11 @@ const AgentForkTag = memo(() => {
       bordered={false}
       color="default"
       icon={<Icon icon={GitFork} />}
-      onClick={handleClick}
       style={{ cursor: 'pointer' }}
       title={t('fork.forkedFrom', {
         defaultValue: `Forked from ${forkSource.source.name}`,
       })}
+      onClick={handleClick}
     >
       {t('fork.forkedFrom')}: {forkSource.source.name}
     </Tag>

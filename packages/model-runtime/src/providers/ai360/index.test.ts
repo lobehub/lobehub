@@ -239,7 +239,7 @@ describe('LobeAi360AI - custom features', () => {
               {
                 id: '360gpt2-o1',
                 max_tokens: 8192,
-                total_tokens: 16384,
+                total_tokens: 16_384,
               },
             ],
           }),
@@ -304,7 +304,7 @@ describe('LobeAi360AI - custom features', () => {
               {
                 id: '360gpt2-o1',
                 max_tokens: 8192,
-                total_tokens: 16384,
+                total_tokens: 16_384,
               },
             ],
           }),
@@ -325,7 +325,7 @@ describe('LobeAi360AI - custom features', () => {
               {
                 id: '360zhinao2-o1-preview',
                 max_tokens: 8192,
-                total_tokens: 16384,
+                total_tokens: 16_384,
               },
             ],
           }),
@@ -346,7 +346,7 @@ describe('LobeAi360AI - custom features', () => {
               {
                 id: '360GPT2-O1',
                 max_tokens: 8192,
-                total_tokens: 16384,
+                total_tokens: 16_384,
               },
             ],
           }),
@@ -642,22 +642,22 @@ describe('LobeAi360AI - custom features', () => {
               {
                 id: '360gpt2-o1',
                 max_tokens: 8192,
-                total_tokens: 16384,
+                total_tokens: 16_384,
               },
               {
                 id: '360gpt2-o1-preview',
                 max_tokens: 8192,
-                total_tokens: 16384,
+                total_tokens: 16_384,
               },
               {
                 id: '360zhinao2-o1',
                 max_tokens: 8192,
-                total_tokens: 16384,
+                total_tokens: 16_384,
               },
               {
                 id: '360zhinao2-o1-mini',
                 max_tokens: 8192,
-                total_tokens: 16384,
+                total_tokens: 16_384,
               },
             ],
           }),
@@ -699,8 +699,8 @@ describe('LobeAi360AI - custom features', () => {
             data: [
               {
                 id: 'large-context-model',
-                max_tokens: 128000,
-                total_tokens: 1000000,
+                max_tokens: 128_000,
+                total_tokens: 1_000_000,
               },
             ],
           }),
@@ -710,8 +710,8 @@ describe('LobeAi360AI - custom features', () => {
       const models = await params.models!({ client: mockClient as any });
       const model = models[0];
 
-      expect(model.contextWindowTokens).toBe(1000000);
-      expect(model.maxOutput).toBe(128000);
+      expect(model.contextWindowTokens).toBe(1_000_000);
+      expect(model.maxOutput).toBe(128_000);
     });
 
     it('should handle models with special characters in ID', async () => {
@@ -765,7 +765,7 @@ describe('LobeAi360AI - custom features', () => {
               {
                 id: '360gpt2-o1-custom',
                 max_tokens: 8192,
-                total_tokens: 16384,
+                total_tokens: 16_384,
               },
             ],
           }),
@@ -808,7 +808,7 @@ describe('LobeAi360AI - custom features', () => {
               {
                 id: '360gpt2-o1',
                 max_tokens: 8192,
-                total_tokens: 16384,
+                total_tokens: 16_384,
               },
             ],
           }),
@@ -1068,11 +1068,11 @@ describe('LobeAi360AI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: '360gpt-pro',
-        temperature: 2.0,
+        temperature: 2,
       });
 
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.temperature).toBe(2.0);
+      expect(calledPayload.temperature).toBe(2);
     });
 
     it('should handle top_p of 0', async () => {
@@ -1112,11 +1112,11 @@ describe('LobeAi360AI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: '360gpt-pro',
-        max_tokens: 100000,
+        max_tokens: 100_000,
       });
 
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.max_tokens).toBe(100000);
+      expect(calledPayload.max_tokens).toBe(100_000);
     });
 
     it('should handle complex message history with multiple roles', async () => {

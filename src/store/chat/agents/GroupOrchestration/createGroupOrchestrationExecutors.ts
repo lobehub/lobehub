@@ -88,8 +88,6 @@ export const createGroupOrchestrationExecutors = (
    */
   const getMessages = () => dbMessageSelectors.getDbMessagesByKey(chatKey)(get());
 
-  /* eslint-disable sort-keys-fix/sort-keys-fix */
-
   return {
     /**
      * call_supervisor Executor

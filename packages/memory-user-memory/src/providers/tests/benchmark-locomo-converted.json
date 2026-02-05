@@ -40,9 +40,7 @@
             "createdAt": "2023-05-08T13:56:00.000Z",
             "diaId": "D1:5",
             "imageCaption": "a photo of a dog walking past a wall with a painting of a woman",
-            "imageUrls": [
-              "https://i.redd.it/l7hozpetnhlb1.jpg"
-            ],
+            "imageUrls": ["https://i.redd.it/l7hozpetnhlb1.jpg"],
             "role": "user",
             "speaker": "Caroline",
             "text": "The transgender stories were so inspiring! I was so happy and thankful for all the support.\n[Image: a photo of a dog walking past a wall with a painting of a woman]"
@@ -215,9 +213,7 @@
             "createdAt": "2023-05-25T13:14:00.000Z",
             "diaId": "D2:10",
             "imageCaption": "a photography of a sign for a new arrival and an information and domestic building",
-            "imageUrls": [
-              "https://live.staticflickr.com/3437/3935231341_b2955b00dd_b.jpg"
-            ],
+            "imageUrls": ["https://live.staticflickr.com/3437/3935231341_b2955b00dd_b.jpg"],
             "role": "user",
             "speaker": "Caroline",
             "text": "Thanks, Mel! My goal is to give kids a loving home. I'm truly grateful for all the support I've got from friends and mentors. Now the hard work starts to turn my dream into a reality. And here's one of the adoption agencies I'm looking into. It's a lot to take in, but I'm feeling hopeful and optimistic.\n[Image: a photography of a sign for a new arrival and an information and domestic building]"

@@ -19,14 +19,14 @@ export const EngineAvatar = memo<EngineAvatarProps>(({ engine }) => (
 export const EngineAvatarGroup = memo<EngineAvatarGroupProps>(({ engines }) => {
   return (
     <Avatar.Group
+      shape={'circle'}
+      size={14}
       items={engines.map((engine) => ({
         avatar: ENGINE_ICON_MAP[engine],
         background: cssVar.colorBgLayout,
         key: engine,
         title: engine,
       }))}
-      shape={'circle'}
-      size={14}
     />
   );
 });

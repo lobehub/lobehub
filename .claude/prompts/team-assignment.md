@@ -83,13 +83,13 @@ Quick reference for assigning issues based on labels.
 
 ### Issue Type Labels
 
-| Label              | Owner                | Notes                        |
-| ------------------ | -------------------- | ---------------------------- |
-| 💄 Design          | @canisminor1990      | Design and styling           |
+| Label              | Owner                     | Notes                        |
+| ------------------ | ------------------------- | ---------------------------- |
+| 💄 Design          | @canisminor1990           | Design and styling           |
 | 📝 Documentation   | @canisminor1990 / @tjx666 | Official docs website issues |
-| ⚡️ Performance     | @ONLY-yours          | Performance optimization     |
-| 🐛 Bug             | (depends on feature) | Assign based on other labels |
-| 🌠 Feature Request | (depends on feature) | Assign based on other labels |
+| ⚡️ Performance     | @ONLY-yours               | Performance optimization     |
+| 🐛 Bug             | (depends on feature)      | Assign based on other labels |
+| 🌠 Feature Request | (depends on feature)      | Assign based on other labels |
 
 ## Assignment Rules
 

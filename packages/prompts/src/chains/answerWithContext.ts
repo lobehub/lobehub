@@ -1,4 +1,4 @@
-import { ChatStreamPayload } from '@lobechat/types';
+import type { ChatStreamPayload } from '@lobechat/types';
 
 interface AnswerWithContext {
   context: string[];

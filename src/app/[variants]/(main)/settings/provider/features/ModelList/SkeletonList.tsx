@@ -39,8 +39,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 export const Placeholder = memo(() => {
   return (
-    <Flexbox className={styles.container} horizontal>
-      <Flexbox className={styles.leftContent} horizontal>
+    <Flexbox horizontal className={styles.container}>
+      <Flexbox horizontal className={styles.leftContent}>
         <Skeleton.Avatar active shape="square" size={32} style={{ flex: 'none' }} />
         <Flexbox className={styles.textContent}>
           <Skeleton.Button
@@ -51,7 +51,7 @@ export const Placeholder = memo(() => {
               width: 160,
             }}
           />
-          <Flexbox gap={4} horizontal>
+          <Flexbox horizontal gap={4}>
             <Skeleton.Button
               active
               size={'small'}
@@ -71,7 +71,7 @@ export const Placeholder = memo(() => {
           </Flexbox>
         </Flexbox>
       </Flexbox>
-      <Flexbox className={styles.rightContent} horizontal>
+      <Flexbox horizontal className={styles.rightContent}>
         <Skeleton.Button
           active
           size={'small'}

@@ -1,8 +1,9 @@
 import { Readability } from '@mozilla/readability';
 import { Window } from 'happy-dom';
-import { NodeHtmlMarkdown, type TranslatorConfigObject } from 'node-html-markdown';
+import type { TranslatorConfigObject } from 'node-html-markdown';
+import { NodeHtmlMarkdown } from 'node-html-markdown';
 
-import { FilterOptions } from '../type';
+import type { FilterOptions } from '../type';
 
 const cleanObj = <T extends object>(
   obj: T,
