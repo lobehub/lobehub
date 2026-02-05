@@ -2,23 +2,23 @@ component_management:
   individual_components:
     # App architecture layers
     - component_id: app_store
-      name: "Store"
+      name: 'Store'
       paths:
         - src/store/**
     - component_id: app_services
-      name: "Services"
+      name: 'Services'
       paths:
         - src/services/**
     - component_id: app_server
-      name: "Server"
+      name: 'Server'
       paths:
         - src/server/**
     - component_id: app_libs
-      name: "Libs"
+      name: 'Libs'
       paths:
         - src/libs/**
     - component_id: app_utils
-      name: "Utils"
+      name: 'Utils'
       paths:
         - src/utils/**
 
@@ -35,6 +35,5 @@ coverage:
       threshold: 0.5
     patch: off
 
-
 comment:
-  layout: "header, diff, flags, components"  # show component info in the PR comment
+  layout: 'header, diff, flags, components' # show component info in the PR comment

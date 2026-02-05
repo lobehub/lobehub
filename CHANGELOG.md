@@ -233,7 +233,7 @@
 
 #### 🐛 Bug Fixes
 
-- **model-runtime**: Include tool_calls in speed metrics & add getActiveTraceId.
+- **model-runtime**: Include tool\_calls in speed metrics & add getActiveTraceId.
 
 <br/>
 
@@ -242,7 +242,7 @@
 
 #### What's fixed
 
-- **model-runtime**: Include tool_calls in speed metrics & add getActiveTraceId, closes [#11927](https://github.com/lobehub/lobe-chat/issues/11927) ([b24da44](https://github.com/lobehub/lobe-chat/commit/b24da44))
+- **model-runtime**: Include tool\_calls in speed metrics & add getActiveTraceId, closes [#11927](https://github.com/lobehub/lobe-chat/issues/11927) ([b24da44](https://github.com/lobehub/lobe-chat/commit/b24da44))
 
 </details>
 

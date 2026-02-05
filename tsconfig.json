@@ -2,12 +2,7 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
     "target": "ESNext",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext",
-      "webworker"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext", "webworker"],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -20,33 +15,14 @@
     "isolatedModules": true,
     "jsx": "react-jsx",
     "incremental": true,
-    "types": [
-      "vitest/globals",
-      "@serwist/next/typings"
-    ],
+    "types": ["vitest/globals", "@serwist/next/typings"],
     "paths": {
-      "@/database/*": [
-        "./packages/database/src/*",
-        "./src/database/*"
-      ],
-      "@/const/*": [
-        "./packages/const/src/*",
-        "./src/const/*"
-      ],
-      "@/utils/*": [
-        "./packages/utils/src/*",
-        "./src/utils/*"
-      ],
-      "@/types/*": [
-        "./packages/types/src/*",
-        "./src/types/*"
-      ],
-      "@/*": [
-        "./src/*"
-      ],
-      "~test-utils": [
-        "./tests/utils.tsx"
-      ]
+      "@/database/*": ["./packages/database/src/*", "./src/database/*"],
+      "@/const/*": ["./packages/const/src/*", "./src/const/*"],
+      "@/utils/*": ["./packages/utils/src/*", "./src/utils/*"],
+      "@/types/*": ["./packages/types/src/*", "./src/types/*"],
+      "@/*": ["./src/*"],
+      "~test-utils": ["./tests/utils.tsx"]
     },
     "plugins": [
       {

@@ -70,7 +70,7 @@ cd packages/[package-name] && bunx vitest run --silent='passed-only' '[file-path
 **Important Notes**:
 
 - Wrap file paths in single quotes to avoid shell expansion
-- Never run `bun run test` - this runs all tests and takes ~10 minutes
+- Never run `bun run test` - this runs all tests and takes \~10 minutes
 
 ### Type Checking
 
@@ -90,15 +90,15 @@ Follow [Linear rules in CLAUDE.md](CLAUDE.md#linear-issue-management-ignore-if-n
 
 All AI development skills are available in `.agents/skills/` directory:
 
-| Category | Skills |
-|----------|--------|
-| Frontend | `react`, `typescript`, `i18n`, `microcopy` |
-| State | `zustand` |
-| Backend | `drizzle` |
-| Desktop | `desktop` |
-| Testing | `testing` |
-| UI | `modal`, `hotkey`, `recent-data` |
-| Config | `add-provider-doc`, `add-setting-env` |
-| Workflow | `linear`, `debug` |
-| Performance | `vercel-react-best-practices` |
-| Overview | `project-overview` |
+| Category    | Skills                                     |
+| ----------- | ------------------------------------------ |
+| Frontend    | `react`, `typescript`, `i18n`, `microcopy` |
+| State       | `zustand`                                  |
+| Backend     | `drizzle`                                  |
+| Desktop     | `desktop`                                  |
+| Testing     | `testing`                                  |
+| UI          | `modal`, `hotkey`, `recent-data`           |
+| Config      | `add-provider-doc`, `add-setting-env`      |
+| Workflow    | `linear`, `debug`                          |
+| Performance | `vercel-react-best-practices`              |
+| Overview    | `project-overview`                         |
