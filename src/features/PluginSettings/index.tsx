@@ -1,4 +1,4 @@
-import type { PluginSchema } from '@lobehub/chat-plugin-sdk';
+import type {PluginSchema} from '@lobehub/chat-plugin-sdk';
 import { Form, Markdown } from '@lobehub/ui';
 import { Form as AForm } from 'antd';
 import { createStaticStyles } from 'antd-style';

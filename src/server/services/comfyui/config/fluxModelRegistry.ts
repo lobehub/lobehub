@@ -4,6 +4,7 @@
  */
 import type { ModelConfig } from './modelRegistry';
 
+/* eslint-disable sort-keys-fix/sort-keys-fix */
 export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
   // === Priority 1: Official Models (4 models) ===
   'flux1-dev.safetensors': {
@@ -839,3 +840,4 @@ export const FLUX_MODEL_REGISTRY: Record<string, ModelConfig> = {
     recommendedDtype: 'default',
   },
 };
+/* eslint-enable sort-keys-fix/sort-keys-fix */

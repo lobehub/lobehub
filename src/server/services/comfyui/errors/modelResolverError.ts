@@ -22,9 +22,12 @@ export class ModelResolverError extends Error {
     this.reason = reason;
     this.details = details;
 
-    if (Error.captureStackTrace) {}
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, ModelResolverError);
+    }
   }
 
+  /* eslint-disable sort-keys-fix/sort-keys-fix */
   static readonly Reasons = {
     COMPONENT_NOT_FOUND: 'COMPONENT_NOT_FOUND',
     CONNECTION_ERROR: 'CONNECTION_ERROR',
@@ -35,4 +38,5 @@ export class ModelResolverError extends Error {
     PERMISSION_DENIED: 'PERMISSION_DENIED',
     SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
   } as const;
+  /* eslint-enable sort-keys-fix/sort-keys-fix */
 }

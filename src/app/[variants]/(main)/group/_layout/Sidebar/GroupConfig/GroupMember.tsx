@@ -58,10 +58,7 @@ const GroupMember = memo<GroupMemberProps>(({ addModalOpen, onAddModalOpenChange
 
   const groupMembers = useAgentGroupStore(agentGroupSelectors.getGroupMembers(groupId || ''));
 
-  const activeTab = useMemo(
-    () => new URLSearchParams(location.search).get('tab'),
-    [location.search],
-  );
+  const activeTab = useMemo(() => new URLSearchParams(location.search).get('tab'), [location.search]);
   const isProfileRoute = useMemo(() => {
     if (!groupId) return false;
     return location.pathname === `/group/${groupId}/profile`;

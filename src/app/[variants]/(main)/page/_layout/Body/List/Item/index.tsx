@@ -1,7 +1,7 @@
 import { Avatar, Icon } from '@lobehub/ui';
 import { FileTextIcon } from 'lucide-react';
-import type { MouseEvent } from 'react';
-import { memo, useCallback, useMemo } from 'react';
+import type {MouseEvent} from 'react';
+import { memo,  useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';

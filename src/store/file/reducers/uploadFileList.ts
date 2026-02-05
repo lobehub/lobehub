@@ -1,6 +1,6 @@
 import { produce } from 'immer';
 
-import type { FileUploadState, FileUploadStatus, UploadFileItem } from '@/types/files/upload';
+import type {FileUploadState, FileUploadStatus, UploadFileItem} from '@/types/files/upload';
 
 interface AddFile {
   atStart?: boolean;

@@ -1,7 +1,7 @@
 'use client';
 
 import { StyleProvider } from 'antd-style';
-import type { PropsWithChildren } from 'react';
+import type {PropsWithChildren} from 'react';
 
 import { isDesktop } from '@/const/version';
 import { useServerInsertedHTML } from '@/libs/next/navigation';

@@ -13,7 +13,7 @@ describe('OpenAIResponsesStream', () => {
         response: {
           id: 'resp_683e7b8ca3308190b6837f20d2c015cd0cf93af363cdcf58',
           object: 'response',
-          created_at: 1_748_925_324,
+          created_at: 1748925324,
           status: 'in_progress',
           error: null,
           incomplete_details: null,
@@ -126,7 +126,7 @@ describe('OpenAIResponsesStream', () => {
         response: {
           id: 'resp_683e7b8ca3308190b6837f20d2c015cd0cf93af363cdcf58',
           object: 'response',
-          created_at: 1_748_925_324,
+          created_at: 1748925324,
           status: 'in_progress',
           error: null,
           incomplete_details: null,
@@ -347,7 +347,7 @@ describe('OpenAIResponsesStream', () => {
           id: 'resp_test_123',
           status: 'in_progress',
           object: 'response',
-          created_at: 1_234_567_890,
+          created_at: 1234567890,
         },
       },
     ]);
@@ -848,7 +848,7 @@ describe('OpenAIResponsesStream', () => {
           response: {
             id: 'resp_684313b89200819087f27686e0c822260b502bf083132d0d',
             object: 'response',
-            created_at: 1_749_226_424,
+            created_at: 1749226424,
             status: 'in_progress',
             error: null,
             incomplete_details: null,
@@ -963,7 +963,7 @@ describe('OpenAIResponsesStream', () => {
           response: {
             id: 'resp_684313b89200819087f27686e0c822260b502bf083132d0d',
             object: 'response',
-            created_at: 1_749_226_424,
+            created_at: 1749226424,
             status: 'in_progress',
             error: null,
             incomplete_details: null,
@@ -1217,7 +1217,7 @@ describe('OpenAIResponsesStream', () => {
           response: {
             id: 'resp_684313b89200819087f27686e0c822260b502bf083132d0d',
             object: 'response',
-            created_at: 1_749_226_424,
+            created_at: 1749226424,
             status: 'completed',
             error: null,
             incomplete_details: null,

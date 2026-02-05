@@ -86,7 +86,7 @@ const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }
         clientInfo: {
           language: navigator.language,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          url: globalThis.location.href,
+          url: window.location.href,
           userAgent: navigator.userAgent,
         },
         email: userEmail,

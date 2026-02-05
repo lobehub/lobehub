@@ -542,7 +542,7 @@ content in Table html is below:
       const chunkResult = await serverDB
         .insert(chunks)
         .values(
-          Array.from({ length: 24 })
+          Array.from({length: 24})
             .fill(0)
             .map((_, i) => ({ text: `Test Chunk ${i}`, userId })),
         )

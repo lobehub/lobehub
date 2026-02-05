@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
 import type { XAIModelCard } from './index';
-import { isGrokReasoningModel, LobeXAI } from './index';
+import { isGrokReasoningModel,LobeXAI } from './index';
 
 testProvider({
   Runtime: LobeXAI,

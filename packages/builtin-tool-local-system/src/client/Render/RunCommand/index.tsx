@@ -1,5 +1,5 @@
-import type { RunCommandParams, RunCommandResult } from '@lobechat/electron-client-ipc';
-import type { BuiltinRenderProps } from '@lobechat/types';
+import type {RunCommandParams, RunCommandResult} from '@lobechat/electron-client-ipc';
+import type {BuiltinRenderProps} from '@lobechat/types';
 import { Block, Flexbox, Highlighter } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';

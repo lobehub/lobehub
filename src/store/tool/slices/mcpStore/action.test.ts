@@ -7,7 +7,7 @@ import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
 import { globalHelpers } from '@/store/global/helpers';
-import type { CheckMcpInstallResult } from '@/types/plugins';
+import type { CheckMcpInstallResult} from '@/types/plugins';
 import { MCPInstallStep } from '@/types/plugins';
 
 import { useToolStore } from '../../store';

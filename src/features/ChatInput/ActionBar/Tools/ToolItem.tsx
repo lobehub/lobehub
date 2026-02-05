@@ -1,12 +1,12 @@
 import { Flexbox } from '@lobehub/ui';
-import { memo, Suspense } from 'react';
+import { memo,Suspense } from 'react';
 
 import DebugNode from '@/components/DebugNode';
 import PluginTag from '@/components/Plugins/PluginTag';
 import { useToolStore } from '@/store/tool';
 import { customPluginSelectors } from '@/store/tool/selectors';
 
-import type { CheckboxItemProps } from '../components/CheckboxWithLoading';
+import type {CheckboxItemProps} from '../components/CheckboxWithLoading';
 import CheckboxItem from '../components/CheckboxWithLoading';
 
 const ToolItem = memo<CheckboxItemProps>(({ id, onUpdate, label, checked }) => {

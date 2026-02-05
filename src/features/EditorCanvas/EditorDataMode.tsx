@@ -1,6 +1,6 @@
 'use client';
 
-import type { IEditor } from '@lobehub/editor';
+import type {IEditor} from '@lobehub/editor';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 

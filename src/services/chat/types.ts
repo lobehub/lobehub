@@ -1,5 +1,5 @@
-import type { FetchSSEOptions } from '@lobechat/fetch-sse';
-import type { RuntimeInitialContext, RuntimeStepContext, TracePayload } from '@lobechat/types';
+import type {FetchSSEOptions} from '@lobechat/fetch-sse';
+import type {RuntimeInitialContext, RuntimeStepContext, TracePayload} from '@lobechat/types';
 
 export interface FetchOptions extends FetchSSEOptions {
   agentId?: string;

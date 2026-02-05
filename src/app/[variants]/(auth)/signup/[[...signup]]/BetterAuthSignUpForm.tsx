@@ -10,8 +10,8 @@ import Link from '@/libs/next/Link';
 import { useSearchParams } from '@/libs/next/navigation';
 
 import { AuthCard } from '../../../../../features/AuthCard';
-import type { SignUpFormValues } from './useSignUp';
-import { useSignUp } from './useSignUp';
+import type {SignUpFormValues} from './useSignUp';
+import {  useSignUp } from './useSignUp';
 
 const BetterAuthSignUpForm = () => {
   const [form] = Form.useForm<SignUpFormValues>();
@@ -69,7 +69,7 @@ const BetterAuthSignUpForm = () => {
               message: t('betterAuth.errors.passwordFormat'),
               validator: (_, value) => {
                 if (!value) return Promise.resolve();
-                const hasLetter = /[A-Z]/i.test(value);
+                const hasLetter = /[a-z]/i.test(value);
                 const hasNumber = /\d/.test(value);
                 return hasLetter && hasNumber ? Promise.resolve() : Promise.reject();
               },

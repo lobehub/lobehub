@@ -3,8 +3,8 @@ import urlJoin from 'url-join';
 
 import { DEFAULT_LANG, isLocaleNotSupport } from '@/const/locale';
 import { appEnv } from '@/envs/app';
-import type { Locales } from '@/locales/resources';
-import { normalizeLocale } from '@/locales/resources';
+import type {Locales} from '@/locales/resources';
+import {  normalizeLocale } from '@/locales/resources';
 import { CacheRevalidate, CacheTag } from '@/types/discover';
 
 export class AssistantStore {

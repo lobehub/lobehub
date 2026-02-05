@@ -1,21 +1,19 @@
-import type { CheckMcpInstallResult, CustomPluginMetadata } from '@lobechat/types';
+import type {CheckMcpInstallResult, CustomPluginMetadata} from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
-import type {
-  LobeChatPluginApi,
-  LobeChatPluginManifest,
-  PluginSchema,
-} from '@lobehub/chat-plugin-sdk';
-import type { DeploymentOption } from '@lobehub/market-sdk';
+import type { LobeChatPluginApi, LobeChatPluginManifest, PluginSchema } from '@lobehub/chat-plugin-sdk';
+import type {DeploymentOption} from '@lobehub/market-sdk';
 import { McpError } from '@modelcontextprotocol/sdk/types.js';
 import { TRPCError } from '@trpc/server';
 import retry from 'async-retry';
 import debug from 'debug';
 
-import type { MCPClientParams, McpPrompt, McpResource, McpTool, StdioMCPParams } from '@/libs/mcp';
-import { MCPClient } from '@/libs/mcp';
+import type {MCPClientParams, McpPrompt, McpResource, McpTool, StdioMCPParams} from '@/libs/mcp';
+import {
+  MCPClient
+} from '@/libs/mcp';
 
-import type { ProcessContentBlocksFn } from './contentProcessor';
-import { contentBlocksToString } from './contentProcessor';
+import type {ProcessContentBlocksFn} from './contentProcessor';
+import {  contentBlocksToString } from './contentProcessor';
 import { mcpSystemDepsCheckService } from './deps';
 
 const log = debug('lobe-mcp:service');
@@ -76,7 +74,7 @@ export class MCPService {
 
   private sanitizeForLogging = <T extends Record<string, any>>(obj: T): Omit<T, 'env'> => {
     if (!obj) return obj;
-
+     
     const { env: _, ...rest } = obj;
     return rest as Omit<T, 'env'>;
   };

@@ -124,7 +124,7 @@ describe('createSSEWriter', () => {
     it('should write connection event with required fields', () => {
       const mockController = { enqueue: vi.fn() };
       const writer = createSSEWriter(mockController as any);
-      const timestamp = 1_234_567_890;
+      const timestamp = 1234567890;
 
       writer.writeConnection('op-123', 'last-event-456', timestamp);
 
@@ -154,7 +154,7 @@ describe('createSSEWriter', () => {
       const writer = createSSEWriter(mockController as any);
       const error = new Error('Something went wrong');
       error.stack = 'Error: Something went wrong\n  at test.ts:10';
-      const timestamp = 1_234_567_890;
+      const timestamp = 1234567890;
 
       writer.writeError(error, 'op-999', 'processing', timestamp);
 
@@ -175,7 +175,7 @@ describe('createSSEWriter', () => {
       const writer = createSSEWriter(mockController as any);
       const error = new Error('No stack');
       delete error.stack;
-      const timestamp = 1_234_567_890;
+      const timestamp = 1234567890;
 
       writer.writeError(error, 'op-111', 'init', timestamp);
 
@@ -189,7 +189,7 @@ describe('createSSEWriter', () => {
       const mockController = { enqueue: vi.fn() };
       const writer = createSSEWriter(mockController as any);
       const error = new Error('Test error');
-      const timestamp = 1_234_567_890;
+      const timestamp = 1234567890;
 
       writer.writeError(error, 'op-222', undefined, timestamp);
 
@@ -201,7 +201,7 @@ describe('createSSEWriter', () => {
     it('should handle string error', () => {
       const mockController = { enqueue: vi.fn() };
       const writer = createSSEWriter(mockController as any);
-      const timestamp = 1_234_567_890;
+      const timestamp = 1234567890;
 
       writer.writeError('Simple error string', 'op-333', 'validation', timestamp);
 
@@ -245,7 +245,7 @@ describe('createSSEWriter', () => {
 
       writer.writeEvent({
         data: 'test',
-        retry: 10_000,
+        retry: 10000,
       });
 
       expect(mockController.enqueue).toHaveBeenCalledWith('retry: 10000\ndata: test\n\n');
@@ -256,7 +256,7 @@ describe('createSSEWriter', () => {
     it('should write heartbeat event with timestamp', () => {
       const mockController = { enqueue: vi.fn() };
       const writer = createSSEWriter(mockController as any);
-      const timestamp = 1_234_567_890;
+      const timestamp = 1234567890;
 
       writer.writeHeartbeat(timestamp);
 

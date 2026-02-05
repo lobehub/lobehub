@@ -18,7 +18,7 @@ const ImageViewer = memo<ImageViewerProps>(({ url }) => {
   return (
     <Center height={'100%'} width={'100%'}>
       {!isLoaded && <NeuralNetworkLoading size={36} />}
-      {}
+      { }
       <img
         alt="Image preview"
         src={url}

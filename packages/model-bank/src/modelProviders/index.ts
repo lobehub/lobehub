@@ -1,6 +1,6 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 
-import type { ChatModelCard, ModelProviderCard } from '@/types/llm';
+import type {ChatModelCard, ModelProviderCard} from '@/types/llm';
 
 import Ai21Provider from './ai21';
 import Ai302Provider from './ai302';

@@ -903,6 +903,7 @@ export const nanoBananaProParameters: ModelParamsSchema = {
   },
 };
 
+/* eslint-disable sort-keys-fix/sort-keys-fix */
 const googleImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana Pro',
@@ -1004,6 +1005,7 @@ const googleImageModels: AIImageModelCard[] = [
     },
   },
 ];
+/* eslint-enable sort-keys-fix/sort-keys-fix */
 
 export const allModels = [...googleChatModels, ...googleImageModels];
 

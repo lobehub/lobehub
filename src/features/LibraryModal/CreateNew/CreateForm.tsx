@@ -3,7 +3,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useKnowledgeBaseStore } from '@/store/library';
-import type { CreateKnowledgeBaseParams } from '@/types/knowledgeBase';
+import type {CreateKnowledgeBaseParams} from '@/types/knowledgeBase';
 
 interface CreateFormProps {
   onClose?: () => void;
@@ -27,7 +27,7 @@ const CreateForm = memo<CreateFormProps>(({ onClose, onSuccess }) => {
         onSuccess(id);
         onClose?.();
       } else {
-        globalThis.location.href = `/resource/library/${id}`;
+        window.location.href = `/resource/library/${id}`;
       }
     } catch (e) {
       console.error(e);

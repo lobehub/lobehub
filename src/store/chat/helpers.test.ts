@@ -1,4 +1,4 @@
-import type { LobeAgentChatConfig, OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
+import type { LobeAgentChatConfig , OpenAIChatMessage,UIChatMessage  } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import * as tokenizerObj from '@/utils/tokenizer';

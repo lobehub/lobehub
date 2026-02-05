@@ -5,7 +5,7 @@ import { memo } from 'react';
 
 import FileIcon from '@/components/FileIcon';
 import UploadDetail from '@/features/ChatInput/components/UploadDetail';
-import type { UploadFileItem } from '@/types/files';
+import type {UploadFileItem} from '@/types/files';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`

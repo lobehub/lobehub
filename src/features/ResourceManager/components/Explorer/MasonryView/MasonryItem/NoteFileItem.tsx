@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { fileManagerSelectors, useFileStore } from '@/store/file';
-import type { AsyncTaskStatus, IAsyncTaskError } from '@/types/asyncTask';
+import type {AsyncTaskStatus, IAsyncTaskError} from '@/types/asyncTask';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 import markdownToTxt from '@/utils/markdownToTxt';
 

@@ -1,7 +1,12 @@
 import { and, desc, eq } from 'drizzle-orm';
 
-import type { NewUserMemoryPreference, UserMemoryPreference } from '../../schemas';
-import { userMemories, userMemoriesPreferences } from '../../schemas';
+import type {
+  NewUserMemoryPreference,
+  UserMemoryPreference} from '../../schemas';
+import {
+  userMemories,
+  userMemoriesPreferences
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 
 export class UserMemoryPreferenceModel {

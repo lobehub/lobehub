@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Message } from './index';
+import type {Message } from './index';
 import { conversationToText } from './index';
 
 describe('conversationToText', () => {

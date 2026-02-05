@@ -1,31 +1,4 @@
-import type {
-  EditLocalFileParams,
-  EditLocalFileResult,
-  GetCommandOutputParams,
-  GetCommandOutputResult,
-  GlobFilesParams,
-  GlobFilesResult,
-  GrepContentParams,
-  GrepContentResult,
-  KillCommandParams,
-  KillCommandResult,
-  ListLocalFileParams,
-  LocalFileItem,
-  LocalMoveFilesResultItem,
-  LocalReadFileParams,
-  LocalReadFileResult,
-  LocalReadFilesParams,
-  LocalSearchFilesParams,
-  MoveLocalFilesParams,
-  OpenLocalFileParams,
-  OpenLocalFolderParams,
-  RenameLocalFileParams,
-  RunCommandParams,
-  RunCommandResult,
-  ShowSaveDialogParams,
-  ShowSaveDialogResult,
-  WriteLocalFileParams,
-} from '@lobechat/electron-client-ipc';
+import type {EditLocalFileParams, EditLocalFileResult, GetCommandOutputParams, GetCommandOutputResult, GlobFilesParams, GlobFilesResult, GrepContentParams, GrepContentResult, KillCommandParams, KillCommandResult, ListLocalFileParams, LocalFileItem, LocalMoveFilesResultItem, LocalReadFileParams, LocalReadFileResult, LocalReadFilesParams, LocalSearchFilesParams, MoveLocalFilesParams, OpenLocalFileParams, OpenLocalFolderParams, RenameLocalFileParams, RunCommandParams, RunCommandResult, ShowSaveDialogParams, ShowSaveDialogResult, WriteLocalFileParams} from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 

@@ -1,13 +1,13 @@
 'use client';
 
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 
-import type { IFeatureFlags } from '@/config/featureFlags';
-import { mapFeatureFlagsEnvToState } from '@/config/featureFlags';
-import type { GlobalServerConfig } from '@/types/serverConfig';
+import type {IFeatureFlags} from '@/config/featureFlags';
+import {  mapFeatureFlagsEnvToState } from '@/config/featureFlags';
+import type {GlobalServerConfig} from '@/types/serverConfig';
 
-import { createServerConfigStore, Provider } from './store';
+import { createServerConfigStore,Provider } from './store';
 
 interface GlobalStoreProviderProps {
   children: ReactNode;

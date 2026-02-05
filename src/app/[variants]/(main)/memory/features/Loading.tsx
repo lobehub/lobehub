@@ -2,7 +2,7 @@ import { Flexbox, Grid, Skeleton } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-import type { ViewMode } from './ViewModeSwitcher';
+import type {ViewMode} from './ViewModeSwitcher';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   card: css`

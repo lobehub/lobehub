@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
-import type { Mock } from 'vitest';
+import type { Mock} from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as modelParseModule from '../../utils/modelParse';
@@ -21,7 +21,7 @@ describe('ZenMux Runtime', () => {
   beforeEach(() => {
     // Setup fetch mock
     mockFetch = vi.fn();
-    globalThis.fetch = mockFetch;
+    global.fetch = mockFetch;
 
     // Setup utility function mocks
     mockProcessMultiProviderModelList = vi.mocked(modelParseModule.processMultiProviderModelList);
@@ -261,13 +261,13 @@ describe('ZenMux Runtime', () => {
                 {
                   id: 'openai/gpt-4o-mini',
                   object: 'model',
-                  created: 1_755_177_025,
+                  created: 1755177025,
                   owned_by: 'openai',
                 },
                 {
                   id: 'anthropic/claude-3-5-sonnet-20241022',
                   object: 'model',
-                  created: 1_755_177_025,
+                  created: 1755177025,
                   owned_by: 'anthropic',
                 },
               ],

@@ -43,7 +43,7 @@ describe('computeChatPricing', () => {
 
       // Verify totals match the actual billing log
       expect(totalCredits).toBe(104); // 16 + 88 = 104
-      expect(totalCost).toBeCloseTo(0.000_104, 6); // 104 credits = $0.000104
+      expect(totalCost).toBeCloseTo(0.000104, 6); // 104 credits = $0.000104
     });
 
     it('handles request with cache read for gpt-4.1', () => {
@@ -86,7 +86,7 @@ describe('computeChatPricing', () => {
 
       // Verify totals match the actual billing log
       expect(totalCredits).toBe(1274); // 290 + 472 + 512 = 1274
-      expect(totalCost).toBeCloseTo(0.001_274, 6); // 1274 credits = $0.001274
+      expect(totalCost).toBeCloseTo(0.001274, 6); // 1274 credits = $0.001274
     });
 
     it('handles reasoning tokens in output pricing for o3 model', () => {
@@ -124,7 +124,7 @@ describe('computeChatPricing', () => {
 
       // Verify totals match the actual billing log
       expect(totalCredits).toBe(13_132); // 116 + 13016 = 13132
-      expect(totalCost).toBeCloseTo(0.013_132, 6); // 13132 credits = $0.013132
+      expect(totalCost).toBeCloseTo(0.013132, 6); // 13132 credits = $0.013132
     });
   });
 
@@ -137,12 +137,12 @@ describe('computeChatPricing', () => {
 
       const usage: ModelTokensUsage = {
         inputCachedTokens: 253_891,
-        inputCacheMissTokens: 4275, // totalInputTokens - inputCachedTokens = 258_166 - 253_891
+        inputCacheMissTokens: 4_275, // totalInputTokens - inputCachedTokens = 258_166 - 253_891
         inputTextTokens: 258_166,
-        outputReasoningTokens: 1601,
-        outputTextTokens: 1462,
+        outputReasoningTokens: 1_601,
+        outputTextTokens: 1_462,
         totalInputTokens: 258_166,
-        totalOutputTokens: 3063,
+        totalOutputTokens: 3_063,
         totalTokens: 261_229,
       };
 
@@ -161,19 +161,19 @@ describe('computeChatPricing', () => {
 
       // Verify input cache miss tokens (calculated as totalInputTokens - inputCachedTokens = 4275)
       const input = breakdown.find((item) => item.unit.name === 'textInput');
-      expect(input?.quantity).toBe(4275); // 258_166 - 253_891 = 4_275 (cache miss)
-      expect(input?.credits).toBe(5344); // ceil(5343.75) = 5344
-      expect(input?.segments).toEqual([{ quantity: 4275, rate: 1.25, credits: 5343.75 }]);
+      expect(input?.quantity).toBe(4_275); // 258_166 - 253_891 = 4_275 (cache miss)
+      expect(input?.credits).toBe(5_344); // ceil(5343.75) = 5344
+      expect(input?.segments).toEqual([{ quantity: 4_275, rate: 1.25, credits: 5_343.75 }]);
 
       // Verify output tokens include reasoning tokens (under 200k threshold, use lower tier rate)
       const output = breakdown.find((item) => item.unit.name === 'textOutput');
-      expect(output?.quantity).toBe(3063); // 1462 + 1601 = 3063 (reasoning tokens included)
+      expect(output?.quantity).toBe(3_063); // 1462 + 1601 = 3063 (reasoning tokens included)
       expect(output?.credits).toBe(30_630); // 3063 * 10 = 30630
-      expect(output?.segments).toEqual([{ quantity: 3063, rate: 10, credits: 30_630 }]);
+      expect(output?.segments).toEqual([{ quantity: 3_063, rate: 10, credits: 30_630 }]);
 
       // Verify corrected totals (no double counting of cached tokens)
       expect(totalCredits).toBe(194_656); // 158682 + 5344 + 30630 = 194656
-      expect(totalCost).toBeCloseTo(0.194_656, 6); // 194656 credits = $0.194656
+      expect(totalCost).toBeCloseTo(0.194656, 6); // 194656 credits = $0.194656
     });
 
     it('supports multi-modal fixed units for Gemini 2.5 Flash Image Preview', () => {
@@ -184,7 +184,7 @@ describe('computeChatPricing', () => {
 
       const usage: ModelTokensUsage = {
         inputCacheMissTokens: 10_000,
-        outputTextTokens: 5000,
+        outputTextTokens: 5_000,
         outputImageTokens: 400,
       };
 
@@ -195,7 +195,7 @@ describe('computeChatPricing', () => {
       expect(result?.totalCost).toBeCloseTo(0.0275, 10);
 
       const input = result?.breakdown.find((item) => item.unit.name === 'textInput');
-      expect(input?.credits).toBe(3000);
+      expect(input?.credits).toBe(3_000);
 
       const outputText = result?.breakdown.find((item) => item.unit.name === 'textOutput');
       expect(outputText?.credits).toBe(12_500);
@@ -224,7 +224,7 @@ describe('computeChatPricing', () => {
       expect(result).toBeDefined();
       expect(result?.issues).toHaveLength(0);
       expect(result?.totalCredits).toBe(40_266);
-      expect(result?.totalCost).toBeCloseTo(0.040_266, 6);
+      expect(result?.totalCost).toBeCloseTo(0.040266, 6);
 
       const { breakdown } = result!;
       expect(breakdown).toHaveLength(4); // Text input, image input, text output, image output
@@ -235,7 +235,7 @@ describe('computeChatPricing', () => {
 
       const imageInput = result?.breakdown.find((item) => item.unit.name === 'imageInput');
       expect(imageInput?.quantity).toBe(5160);
-      expect(imageInput?.credits).toBe(1548); // 5160 * 0.3 = 1548
+      expect(imageInput?.credits).toBe(1_548); // 5160 * 0.3 = 1548
 
       const textOutput = result?.breakdown.find((item) => item.unit.name === 'textOutput');
       expect(textOutput?.quantity).toBe(0);
@@ -254,11 +254,11 @@ describe('computeChatPricing', () => {
 
       const usage: ModelTokensUsage = {
         inputCachedTokens: 257_955,
-        inputCacheMissTokens: 5005,
+        inputCacheMissTokens: 5_005,
         inputTextTokens: 262_960,
-        outputTextTokens: 1744,
+        outputTextTokens: 1_744,
         totalInputTokens: 262_960,
-        totalOutputTokens: 1744,
+        totalOutputTokens: 1_744,
         totalTokens: 264_704,
       };
 
@@ -278,19 +278,19 @@ describe('computeChatPricing', () => {
 
       // Verify input cache miss tokens (under 200k tier, use lower rate)
       const input = breakdown.find((item) => item.unit.name === 'textInput');
-      expect(input?.quantity).toBe(5005);
-      expect(input?.credits).toBe(6257); // ceil(6256.25) = 6257
-      expect(input?.segments).toEqual([{ quantity: 5005, rate: 1.25, credits: 6256.25 }]);
+      expect(input?.quantity).toBe(5_005);
+      expect(input?.credits).toBe(6_257); // ceil(6256.25) = 6257
+      expect(input?.segments).toEqual([{ quantity: 5_005, rate: 1.25, credits: 6_256.25 }]);
 
       // Verify output tokens (under 200k threshold, use lower tier rate)
       const output = breakdown.find((item) => item.unit.name === 'textOutput');
-      expect(output?.quantity).toBe(1744);
+      expect(output?.quantity).toBe(1_744);
       expect(output?.credits).toBe(17_440); // 1744 * 10 = 17440
-      expect(output?.segments).toEqual([{ quantity: 1744, rate: 10, credits: 17_440 }]);
+      expect(output?.segments).toEqual([{ quantity: 1_744, rate: 10, credits: 17_440 }]);
 
       // Verify totals match actual billing log
       expect(totalCredits).toBe(184_919); // 161222 + 6257 + 17440 = 184919
-      expect(totalCost).toBeCloseTo(0.184_919, 6); // 184919 credits = $0.184919
+      expect(totalCost).toBeCloseTo(0.184919, 6); // 184919 credits = $0.184919
     });
   });
 
@@ -302,7 +302,7 @@ describe('computeChatPricing', () => {
       expect(pricing).toBeDefined();
 
       const usage: ModelTokensUsage = {
-        inputCacheMissTokens: 1000,
+        inputCacheMissTokens: 1_000,
         inputCachedTokens: 200,
         inputWriteCacheTokens: 300,
         outputTextTokens: 500,
@@ -312,13 +312,13 @@ describe('computeChatPricing', () => {
       expect(result).toBeDefined();
       expect(result?.issues).toHaveLength(0);
       expect(result?.totalCredits).toBe(58_425);
-      expect(result?.totalCost).toBeCloseTo(0.058_425, 10);
+      expect(result?.totalCost).toBeCloseTo(0.058425, 10);
 
       const cacheWrite = result?.breakdown.find(
         (item) => item.unit.name === 'textInput_cacheWrite',
       );
       expect(cacheWrite?.lookupKey).toBe('5m');
-      expect(cacheWrite?.credits).toBe(5625);
+      expect(cacheWrite?.credits).toBe(5_625);
     });
 
     it('handles lookup pricing with missing key and adds issue', () => {
@@ -328,7 +328,7 @@ describe('computeChatPricing', () => {
       expect(pricing).toBeDefined();
 
       const usage: ModelTokensUsage = {
-        inputCacheMissTokens: 1000,
+        inputCacheMissTokens: 1_000,
         inputWriteCacheTokens: 300,
         outputTextTokens: 500,
       };
@@ -354,7 +354,7 @@ describe('computeChatPricing', () => {
       expect(pricing).toBeDefined();
 
       const usage: ModelTokensUsage = {
-        inputCacheMissTokens: 1000,
+        inputCacheMissTokens: 1_000,
         inputWriteCacheTokens: 300,
         outputTextTokens: 500,
       };
@@ -379,7 +379,7 @@ describe('computeChatPricing', () => {
       expect(pricing).toBeDefined();
 
       const usage: ModelTokensUsage = {
-        inputCacheMissTokens: 1000,
+        inputCacheMissTokens: 1_000,
         inputWriteCacheTokens: 300,
         outputTextTokens: 500,
       };
@@ -429,7 +429,7 @@ describe('computeChatPricing', () => {
 
       // Verify totals match the actual billing log
       expect(totalCredits).toBe(384); // 24 + 360 = 384
-      expect(totalCost).toBeCloseTo(0.000_384, 6); // 384 credits = $0.000384
+      expect(totalCost).toBeCloseTo(0.000384, 6); // 384 credits = $0.000384
     });
 
     it('handles request with cache read and write for Claude Sonnet 4', () => {
@@ -462,7 +462,7 @@ describe('computeChatPricing', () => {
       // Verify output tokens
       const output = breakdown.find((item) => item.unit.name === 'textOutput');
       expect(output?.quantity).toBe(522);
-      expect(output?.credits).toBe(7830); // 522 * 15 = 7830
+      expect(output?.credits).toBe(7_830); // 522 * 15 = 7830
 
       // Verify cached tokens (discounted rate)
       const cached = breakdown.find((item) => item.unit.name === 'textInput_cacheRead');
@@ -473,11 +473,11 @@ describe('computeChatPricing', () => {
       const cacheWrite = breakdown.find((item) => item.unit.name === 'textInput_cacheWrite');
       expect(cacheWrite?.quantity).toBe(458);
       expect(cacheWrite?.lookupKey).toBe('5m');
-      expect(cacheWrite?.credits).toBe(1718); // 1717.5 rounded = 1718
+      expect(cacheWrite?.credits).toBe(1_718); // 1717.5 rounded = 1718
 
       // Verify totals match the actual billing log
-      expect(totalCredits).toBe(9915); // 12 + 7830 + 355 + 1718 = 9915
-      expect(totalCost).toBeCloseTo(0.009_915, 6); // 9915 credits = $0.009915
+      expect(totalCredits).toBe(9_915); // 12 + 7830 + 355 + 1718 = 9915
+      expect(totalCost).toBeCloseTo(0.009915, 6); // 9915 credits = $0.009915
     });
 
     it('handles complex scenario with all cache types for Claude Sonnet 4 Latest', () => {
@@ -520,11 +520,11 @@ describe('computeChatPricing', () => {
       // Verify cache write tokens (fixed strategy in lobehub model)
       const cacheWrite = breakdown.find((item) => item.unit.name === 'textInput_cacheWrite');
       expect(cacheWrite?.quantity).toBe(1697);
-      expect(cacheWrite?.credits).toBe(6364); // ceil(6363.75) = 6364
+      expect(cacheWrite?.credits).toBe(6_364); // ceil(6363.75) = 6364
 
       // Verify totals match the actual billing log
       expect(totalCredits).toBe(49_916); // 30 + 42615 + 907 + 6364 = 49916
-      expect(totalCost).toBeCloseTo(0.049_916, 6); // 49916 credits = $0.049916
+      expect(totalCost).toBeCloseTo(0.049916, 6); // 49916 credits = $0.049916
     });
   });
 
@@ -662,7 +662,7 @@ describe('computeChatPricing', () => {
 
       const output = result?.breakdown.find((item) => item.unit.name === 'textOutput');
       expect(output?.quantity).toBe(500); // Only reasoning tokens
-      expect(output?.credits).toBe(4000); // 500 * 8
+      expect(output?.credits).toBe(4_000); // 500 * 8
     });
 
     it('handles empty usage with no tokens', () => {
@@ -787,7 +787,7 @@ describe('computeChatPricing', () => {
         expect(totalCredits).toBe(472);
 
         // totalCost = 472 / 1_000_000 = 0.000472 USD
-        expect(totalCost).toBe(0.000_472);
+        expect(totalCost).toBe(0.000472);
       });
 
       it('converts CNY to USD for large token usage', () => {

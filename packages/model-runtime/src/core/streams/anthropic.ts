@@ -9,13 +9,12 @@ import type {
   StreamContext,
   StreamProtocolChunk,
   StreamProtocolToolCallChunk,
-  StreamToolCallChunkData,
-} from './protocol';
+  StreamToolCallChunkData} from './protocol';
 import {
   convertIterableToStream,
   createCallbacksTransformer,
   createSSEProtocolTransformer,
-  createTokenSpeedCalculator,
+  createTokenSpeedCalculator
 } from './protocol';
 
 export const transformAnthropicStream = (

@@ -7,11 +7,11 @@ import { useTranslation } from 'react-i18next';
 
 import StatisticCard from '@/components/StatisticCard';
 import TitleWithPercentage from '@/components/StatisticCard/TitleWithPercentage';
-import type { UsageLog } from '@/types/usage/usageRecord';
+import type {UsageLog} from '@/types/usage/usageRecord';
 import { formatNumber } from '@/utils/format';
 
-import type { UsageChartProps } from '../../../../types';
-import { GroupBy } from '../../../../types';
+import type {UsageChartProps} from '../../../../types';
+import { GroupBy  } from '../../../../types';
 import ModelTable from './ModelTable';
 
 const computeList = (data: UsageLog[], groupBy: GroupBy): string[] => {

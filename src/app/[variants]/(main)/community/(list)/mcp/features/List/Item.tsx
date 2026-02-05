@@ -15,7 +15,7 @@ import OfficialIcon from '@/components/OfficialIcon';
 import PublishedTime from '@/components/PublishedTime';
 import Scores from '@/features/MCP/Scores';
 import { discoverService } from '@/services/discover';
-import type { DiscoverMcpItem } from '@/types/discover';
+import type {DiscoverMcpItem} from '@/types/discover';
 
 import ConnectionTypeTag from './ConnectionTypeTag';
 import MetaInfo from './MetaInfo';
@@ -80,13 +80,11 @@ const McpItem = memo<DiscoverMcpItem>(
     const link = urlJoin('/community/mcp', identifier);
 
     const handleClick = useCallback(() => {
-      discoverService
-        .reportMcpEvent({
-          event: 'click',
-          identifier,
-          source: location.pathname,
-        })
-        .catch(() => {});
+      discoverService.reportMcpEvent({
+        event: 'click',
+        identifier,
+        source: location.pathname,
+      }).catch(() => {});
 
       navigate(link);
     }, [identifier, link, navigate]);

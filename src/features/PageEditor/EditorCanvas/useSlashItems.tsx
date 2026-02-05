@@ -1,4 +1,4 @@
-import type { IEditor, SlashOptions } from '@lobehub/editor';
+import type {IEditor, SlashOptions} from '@lobehub/editor';
 import {
   INSERT_CHECK_LIST_COMMAND,
   INSERT_CODEMIRROR_COMMAND,
@@ -8,7 +8,7 @@ import {
   INSERT_MATH_COMMAND,
   INSERT_ORDERED_LIST_COMMAND,
   INSERT_TABLE_COMMAND,
-  INSERT_UNORDERED_LIST_COMMAND,
+  INSERT_UNORDERED_LIST_COMMAND
 } from '@lobehub/editor';
 import { Text } from '@lobehub/ui';
 import {

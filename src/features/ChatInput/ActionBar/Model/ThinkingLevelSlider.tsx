@@ -1,5 +1,5 @@
-import type { CreatedLevelSliderProps } from './createLevelSlider';
-import { createLevelSliderComponent } from './createLevelSlider';
+import type {CreatedLevelSliderProps} from './createLevelSlider';
+import {  createLevelSliderComponent } from './createLevelSlider';
 
 const THINKING_LEVELS = ['minimal', 'low', 'medium', 'high'] as const;
 type ThinkingLevel = (typeof THINKING_LEVELS)[number];

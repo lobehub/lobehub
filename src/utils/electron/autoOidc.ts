@@ -6,10 +6,10 @@ export const DESKTOP_AUTO_OIDC_FIRST_OPEN_STORAGE_KEY = 'lobechat:desktop:auto-o
  * - If localStorage is unavailable, treat it as handled to avoid repeated prompts.
  */
 export const getDesktopAutoOidcFirstOpenHandled = () => {
-  if (typeof globalThis.window === 'undefined') return true;
+  if (typeof window === 'undefined') return true;
 
   try {
-    return globalThis.localStorage.getItem(DESKTOP_AUTO_OIDC_FIRST_OPEN_STORAGE_KEY) === '1';
+    return window.localStorage.getItem(DESKTOP_AUTO_OIDC_FIRST_OPEN_STORAGE_KEY) === '1';
   } catch {
     return true;
   }
@@ -21,12 +21,14 @@ export const getDesktopAutoOidcFirstOpenHandled = () => {
  * - Returns false if localStorage is unavailable.
  */
 export const setDesktopAutoOidcFirstOpenHandled = () => {
-  if (typeof globalThis.window === 'undefined') return false;
+  if (typeof window === 'undefined') return false;
 
   try {
-    globalThis.localStorage.setItem(DESKTOP_AUTO_OIDC_FIRST_OPEN_STORAGE_KEY, '1');
+    window.localStorage.setItem(DESKTOP_AUTO_OIDC_FIRST_OPEN_STORAGE_KEY, '1');
     return true;
   } catch {
     return false;
   }
 };
+
+

@@ -15,7 +15,7 @@ export class ElectronIpcClient {
   private socket: net.Socket | null = null;
   // eslint-disable-next-line @typescript-eslint/ban-types
   private requestQueue: Map<string, { reject: Function; resolve: Function }> = new Map();
-
+   
   private reconnectTimeout: NodeJS.Timeout | null = null;
   private connectionAttempts: number = 0;
   private maxConnectionAttempts: number = 5;
@@ -196,6 +196,7 @@ export class ElectronIpcClient {
       const request = { id, method, params };
       log('Created request with ID: %s', id);
 
+       
       let requestTimeoutId: NodeJS.Timeout;
 
       const cleanupAndResolve = (value: T) => {

@@ -12,8 +12,8 @@ describe('generateFullExport', () => {
       content: 'Hello',
       role: 'user',
       parentId: null,
-      createdAt: 1_700_000_000_000,
-      updatedAt: 1_700_000_000_000,
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000,
       model: null,
       provider: null,
     },
@@ -22,8 +22,8 @@ describe('generateFullExport', () => {
       content: 'Hi there!',
       role: 'assistant',
       parentId: 'msg-1',
-      createdAt: 1_700_000_001_000,
-      updatedAt: 1_700_000_001_000,
+      createdAt: 1700000001000,
+      updatedAt: 1700000001000,
       model: 'gpt-4',
       provider: 'openai',
     },
@@ -32,8 +32,8 @@ describe('generateFullExport', () => {
       content: LOADING_FLAT,
       role: 'assistant',
       parentId: 'msg-2',
-      createdAt: 1_700_000_002_000,
-      updatedAt: 1_700_000_002_000,
+      createdAt: 1700000002000,
+      updatedAt: 1700000002000,
     },
   ] as UIChatMessage[];
 
@@ -41,8 +41,8 @@ describe('generateFullExport', () => {
     id: 'topic-1',
     title: 'Test Topic',
     favorite: true,
-    createdAt: 1_700_000_000_000,
-    updatedAt: 1_700_000_003_000,
+    createdAt: 1700000000000,
+    updatedAt: 1700000003000,
   };
 
   beforeEach(() => {

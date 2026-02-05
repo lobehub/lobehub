@@ -1,8 +1,8 @@
-import type { ModalProps } from '@lobehub/ui';
-import { Flexbox, Input, Modal } from '@lobehub/ui';
+import type {ModalProps} from '@lobehub/ui';
+import { Flexbox,Input, Modal   } from '@lobehub/ui';
 import { App } from 'antd';
-import type { MouseEvent } from 'react';
-import { memo, useState } from 'react';
+import type {MouseEvent} from 'react';
+import { memo,  useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useGlobalStore } from '@/store/global';

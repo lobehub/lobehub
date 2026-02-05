@@ -12,7 +12,7 @@ import { useGlobalStore } from '@/store/global';
 import { SidebarTabKey } from '@/store/global/initialState';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
-import type { NavItemProps } from '../../../../../../../features/NavPanel/components/NavItem';
+import type {NavItemProps} from '../../../../../../../features/NavPanel/components/NavItem';
 import NavItem from '../../../../../../../features/NavPanel/components/NavItem';
 
 interface Item {

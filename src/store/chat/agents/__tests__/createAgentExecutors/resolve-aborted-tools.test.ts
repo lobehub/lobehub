@@ -7,7 +7,11 @@ import {
   createMockStore,
   createResolveAbortedToolsInstruction,
 } from './fixtures';
-import { createInitialState, createTestContext, executeWithMockContext } from './helpers';
+import {
+  createInitialState,
+  createTestContext,
+  executeWithMockContext,
+} from './helpers';
 
 describe('resolve_aborted_tools executor', () => {
   describe('Basic Behavior', () => {

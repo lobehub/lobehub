@@ -54,8 +54,9 @@ function formatGTDTodos(todos: GTDTodoList): string | null {
   const totalCount = items.length;
   lines.push(
     `<progress completed="${completedCount}" processing="${processingCount}" total="${totalCount}" />`,
-    '</gtd_todos>',
   );
+
+  lines.push('</gtd_todos>');
 
   return lines.join('\n');
 }

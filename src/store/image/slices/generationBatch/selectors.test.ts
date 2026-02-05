@@ -14,7 +14,7 @@ const initialStore = initialState as ImageStore;
 const mockGenerations: Generation[] = [
   {
     id: 'gen-1',
-    seed: 12_345,
+    seed: 12345,
     createdAt: new Date('2024-01-01'),
     asyncTaskId: null,
     asset: {
@@ -30,7 +30,7 @@ const mockGenerations: Generation[] = [
   },
   {
     id: 'gen-2',
-    seed: 12_346,
+    seed: 12346,
     createdAt: new Date('2024-01-01'),
     asyncTaskId: null,
     asset: {
@@ -46,7 +46,7 @@ const mockGenerations: Generation[] = [
   },
   {
     id: 'gen-3',
-    seed: 12_347,
+    seed: 12347,
     createdAt: new Date('2024-01-02'),
     asyncTaskId: null,
     asset: {

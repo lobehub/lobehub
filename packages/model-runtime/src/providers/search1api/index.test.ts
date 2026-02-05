@@ -616,12 +616,12 @@ describe('LobeSearch1API - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'gpt-4o-mini',
-        seed: 12_345,
+        seed: 12345,
       } as any);
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          seed: 12_345,
+          seed: 12345,
         }),
         expect.anything(),
       );

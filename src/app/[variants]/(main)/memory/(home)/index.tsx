@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 // import { PencilLineIcon } from 'lucide-react';
-import type { FC } from 'react';
+import type {FC} from 'react';
 
 import MemoryAnalysis from '@/app/[variants]/(main)/memory/features/MemoryAnalysis';
 import MemoryEmpty from '@/app/[variants]/(main)/memory/features/MemoryEmpty';

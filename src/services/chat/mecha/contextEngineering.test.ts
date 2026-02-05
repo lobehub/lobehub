@@ -58,7 +58,7 @@ describe('contextEngineering', () => {
           fileList: [
             {
               fileType: 'plain/txt',
-              size: 100_000,
+              size: 100000,
               id: 'file1',
               url: 'http://abc.com/abc.txt',
               name: 'abc.png',
@@ -67,7 +67,7 @@ describe('contextEngineering', () => {
               id: 'file_oKMve9qySLMI',
               name: '2402.16667v1.pdf',
               type: 'application/pdf',
-              size: 11_256_078,
+              size: 11256078,
               url: 'https://xxx.com/ppp/480497/5826c2b8-fde0-4de1-a54b-a224d5e3d898.pdf',
             },
           ],

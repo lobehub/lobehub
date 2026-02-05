@@ -1,8 +1,8 @@
 'use client';
 
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import type { ItemType } from '@lobehub/ui';
-import { Avatar, Button, Flexbox, Icon } from '@lobehub/ui';
+import type {ItemType} from '@lobehub/ui';
+import { Avatar, Button, Flexbox, Icon  } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { PlusIcon, ToyBrick } from 'lucide-react';
@@ -31,7 +31,7 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
-import type { LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
+import type {LobeToolMetaWithAvailability} from '@/store/tool/slices/builtin/selectors';
 
 import PluginTag from './PluginTag';
 import PopoverContent from './PopoverContent';

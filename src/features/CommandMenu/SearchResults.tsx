@@ -185,7 +185,7 @@ const SearchResults = memo<SearchResultsProps>(
       }
     };
 
-    // eslint-disable-next-line unicorn/consistent-function-scoping
+     
     const getItemValue = (result: SearchResult) => {
       const meta = [result.title, result.description].filter(Boolean).join(' ');
       // Prefix with "search-result" to ensure these items rank after built-in commands
@@ -193,7 +193,7 @@ const SearchResults = memo<SearchResultsProps>(
       return `search-result ${result.type} ${result.id} ${meta}`.trim();
     };
 
-    // eslint-disable-next-line unicorn/consistent-function-scoping
+     
     const getDescription = (result: SearchResult) => {
       if (!result.description) return null;
       // Sanitize markdown content for message search results
@@ -203,6 +203,7 @@ const SearchResults = memo<SearchResultsProps>(
       return result.description;
     };
 
+     
     const getSubtitle = (result: SearchResult) => {
       const description = getDescription(result);
 

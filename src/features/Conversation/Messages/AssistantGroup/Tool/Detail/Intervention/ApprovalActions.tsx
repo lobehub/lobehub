@@ -8,7 +8,7 @@ import { useUserStore } from '@/store/user';
 
 import { useConversationStore } from '../../../../../store';
 import { useMessageAggregationContext } from '../../../../Contexts/MessageAggregationContext';
-import type { ApprovalMode } from './index';
+import type {ApprovalMode} from './index';
 
 interface ApprovalActionsProps {
   apiName: string;

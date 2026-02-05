@@ -155,7 +155,7 @@ const DesktopOnboardingPage = memo(() => {
           .catch(console.error)
           .finally(() => {
             // Use hard reload instead of SPA navigation to ensure the app boots with the new desktop state.
-            globalThis.location.replace('/');
+            window.location.replace('/');
           });
 
         return prev;

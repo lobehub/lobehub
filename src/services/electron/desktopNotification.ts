@@ -1,7 +1,4 @@
-import type {
-  DesktopNotificationResult,
-  ShowDesktopNotificationParams,
-} from '@lobechat/electron-client-ipc';
+import type {DesktopNotificationResult, ShowDesktopNotificationParams} from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 

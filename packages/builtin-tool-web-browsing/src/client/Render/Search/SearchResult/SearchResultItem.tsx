@@ -1,8 +1,8 @@
-import type { UniformSearchResult } from '@lobechat/types';
+import type {UniformSearchResult} from '@lobechat/types';
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import Link from 'next/link';
-import type { CSSProperties } from 'react';
+import type { CSSProperties} from 'react';
 import { memo } from 'react';
 
 import WebFavicon from '@/components/WebFavicon';

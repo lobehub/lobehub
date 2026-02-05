@@ -19,7 +19,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     box-shadow: ${cssVar.boxShadowTertiary};
 
     &::-webkit-media-controls-panel {
-      background: linear-gradient(to bottom, transparent 0%, rgb(0 0 0 / 30%) 100%);
+      background: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 30%) 100%);
     }
 
     &:focus {

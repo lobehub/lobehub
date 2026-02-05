@@ -1,4 +1,4 @@
-import type { ChatPluginPayload } from '@lobechat/types';
+import type {ChatPluginPayload} from '@lobechat/types';
 import { Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';

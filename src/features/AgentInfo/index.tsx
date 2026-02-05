@@ -2,10 +2,10 @@ import { Avatar, Center, Markdown, Tag } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
-import type { CSSProperties } from 'react';
-import { memo } from 'react';
+import type {CSSProperties} from 'react';
+import {  memo } from 'react';
 
-import type { MetaData } from '@/types/meta';
+import type {MetaData} from '@/types/meta';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   avatar: css`

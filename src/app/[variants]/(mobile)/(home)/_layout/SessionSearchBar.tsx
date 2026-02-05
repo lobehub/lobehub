@@ -1,8 +1,8 @@
 'use client';
 
 import { SearchBar } from '@lobehub/ui';
-import type { ChangeEvent } from 'react';
-import { memo, useCallback } from 'react';
+import type {ChangeEvent} from 'react';
+import {  memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSessionStore } from '@/store/session';

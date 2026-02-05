@@ -11,8 +11,7 @@ import type {
   StreamContext,
   StreamProtocolChunk,
   StreamProtocolToolCallChunk,
-  StreamToolCallChunkData,
-} from '../protocol';
+  StreamToolCallChunkData} from '../protocol';
 import {
   convertIterableToStream,
   createCallbacksTransformer,
@@ -20,7 +19,7 @@ import {
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
   FIRST_CHUNK_ERROR_KEY,
-  generateToolCallId,
+  generateToolCallId
 } from '../protocol';
 
 /**
@@ -45,7 +44,7 @@ const processMarkdownBase64Images = (text: string): { cleanedText: string; urls:
   if (!text) return { cleanedText: text, urls: [] };
 
   const urls: string[] = [];
-  const mdRegex = /!\[[^\]]*\]\(\s*(data:image\/[\d+.A-Za-z-]+;base64,[^\s)]+)\s*\)/g;
+  const mdRegex = /!\[[^\]]*]\(\s*(data:image\/[\d+.A-Za-z-]+;base64,[^\s)]+)\s*\)/g;
   let cleanedText = text;
   let m: RegExpExecArray | null;
 
@@ -553,6 +552,7 @@ const transformOpenAIStream = (
 
     const err = e as Error;
 
+    /* eslint-disable sort-keys-fix/sort-keys-fix */
     const errorData = {
       body: {
         message:
@@ -561,6 +561,7 @@ const transformOpenAIStream = (
       },
       type: errorName,
     } as ChatMessageError;
+     
 
     return { data: errorData, id: chunk.id, type: 'error' };
   }

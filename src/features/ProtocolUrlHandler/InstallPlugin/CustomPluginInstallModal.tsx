@@ -10,12 +10,12 @@ import PluginTag from '@/components/Plugins/PluginTag';
 import { useAgentStore } from '@/store/agent';
 import { useToolStore } from '@/store/tool';
 import { mcpStoreSelectors } from '@/store/tool/selectors';
-import type { McpConnectionParams } from '@/types/plugins';
-import type { LobeToolCustomPlugin } from '@/types/tool/plugin';
+import type {McpConnectionParams} from '@/types/plugins';
+import type {LobeToolCustomPlugin} from '@/types/tool/plugin';
 
 import ConfigDisplay from './ConfigDisplay';
-import type { McpInstallRequest, TrustedMarketplaceId } from './types';
-import { TRUSTED_MARKETPLACES } from './types';
+import type {McpInstallRequest, TrustedMarketplaceId} from './types';
+import {  TRUSTED_MARKETPLACES  } from './types';
 
 interface CustomPluginInstallModalProps {
   installRequest: McpInstallRequest | null;

@@ -4,7 +4,7 @@ import { Modal } from '@lobehub/ui';
 import { memo } from 'react';
 
 import FileViewer from '@/features/FileViewer';
-import type { UploadFileItem } from '@/types/files/upload';
+import type {UploadFileItem} from '@/types/files/upload';
 
 interface FilePreviewModalProps {
   file: UploadFileItem;

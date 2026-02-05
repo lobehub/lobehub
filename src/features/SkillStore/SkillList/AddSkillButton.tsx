@@ -1,13 +1,15 @@
-import { Button } from '@lobehub/ui';
+import type {ButtonProps} from '@lobehub/ui';
+import { Button  } from '@lobehub/ui';
 import { Grid2x2Plus } from 'lucide-react';
-import { useState } from 'react';
+import type {Ref} from 'react';
+import {  useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DevModal from '@/features/PluginDevModal';
 import { useAgentStore } from '@/store/agent';
 import { useToolStore } from '@/store/tool';
 
-const AddSkillButton = ({ ref, ...props }) => {
+const AddSkillButton = ({ ref, ...props }: ButtonProps & { ref?: Ref<HTMLButtonElement> }) => {
   const { t } = useTranslation('setting');
   const [showModal, setModal] = useState(false);
 

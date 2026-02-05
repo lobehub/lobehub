@@ -1,5 +1,5 @@
 import { Flexbox, Tag } from '@lobehub/ui';
-import type { PropsWithChildren } from 'react';
+import type {PropsWithChildren} from 'react';
 import { memo } from 'react';
 
 const UpgradeBadge = memo(({ children, showBadge }: PropsWithChildren<{ showBadge?: boolean }>) => {

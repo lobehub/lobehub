@@ -3,20 +3,20 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo, Suspense, useCallback, useMemo } from 'react';
 
-import type { ConversationContext, ConversationHooks } from '@/features/Conversation';
+import type {ConversationContext, ConversationHooks} from '@/features/Conversation';
 import {
   ChatInput,
   ChatList,
   ConversationProvider,
   conversationSelectors,
   MessageItem,
-  useConversationStore,
+  useConversationStore
 } from '@/features/Conversation';
 import SkeletonList from '@/features/Conversation/components/SkeletonList';
 import { useOperationState } from '@/hooks/useOperationState';
 import { useChatStore } from '@/store/chat';
 import { threadSelectors } from '@/store/chat/selectors';
-import type { MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
+import type {MessageMapKeyInput} from '@/store/chat/utils/messageMapKey';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import ThreadDivider from './ThreadDivider';

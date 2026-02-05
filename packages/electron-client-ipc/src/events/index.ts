@@ -7,7 +7,7 @@ import type { AutoUpdateBroadcastEvents } from './update';
 /**
  * main -> render broadcast events
  */
-
+ 
 export interface MainBroadcastEvents
   extends
     AutoUpdateBroadcastEvents,

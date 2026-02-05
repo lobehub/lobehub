@@ -6,8 +6,8 @@ import { MessageSquare, Timer, Wrench } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { TaskDetail } from '@/types/index';
-import { ThreadStatus } from '@/types/index';
+import type {TaskDetail} from '@/types/index';
+import {  ThreadStatus } from '@/types/index';
 
 import { MetricItem } from './CompletedState';
 import { formatCost, formatDuration } from './utils';

@@ -1,7 +1,10 @@
 import { ModelProvider } from 'model-bank';
 
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type {
+  OpenAICompatibleFactoryOptions} from '../../core/openaiCompatibleFactory';
+import {
+  createOpenAICompatibleRuntime
+} from '../../core/openaiCompatibleFactory';
 import { processMultiProviderModelList } from '../../utils/modelParse';
 import type { OpenRouterModelCard, OpenRouterReasoning } from './type';
 
@@ -14,16 +17,12 @@ export const params = {
   baseURL: 'https://openrouter.ai/api/v1',
   chatCompletion: {
     handlePayload: (payload) => {
+       
       const { reasoning_effort, thinking, reasoning: _reasoning, thinkingLevel, ...rest } = payload;
 
       let reasoning: OpenRouterReasoning | undefined;
 
-      if (
-        thinking?.type ||
-        thinking?.budget_tokens !== undefined ||
-        reasoning_effort ||
-        thinkingLevel
-      ) {
+      if (thinking?.type || thinking?.budget_tokens !== undefined || reasoning_effort || thinkingLevel) {
         if (thinking?.type === 'disabled') {
           reasoning = { enabled: false };
         } else if (thinking?.budget_tokens !== undefined) {
@@ -32,7 +31,8 @@ export const params = {
           };
         } else if (reasoning_effort) {
           reasoning = { effort: reasoning_effort };
-        } else if (thinkingLevel) {
+        }
+        else if (thinkingLevel) {
           reasoning = { effort: thinkingLevel };
         }
       }

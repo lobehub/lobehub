@@ -1,5 +1,5 @@
 import { CLASSNAMES } from '@lobehub/ui';
-import type { Theme } from 'antd-style';
+import type {Theme} from 'antd-style';
 import { css } from 'antd-style';
 
 // fix ios input keyboard
@@ -17,7 +17,7 @@ export default ({ token }: { prefixCls: string; token: Theme }) => css`
     min-height: 100dvh;
     max-height: 100dvh;
 
-    @media (device-width >= 576px) {
+    @media (min-device-width: 576px) {
       overflow: hidden;
     }
   }

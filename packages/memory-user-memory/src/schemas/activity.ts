@@ -1,7 +1,7 @@
 import type { GenerateObjectSchema } from '@lobechat/model-runtime';
-import type { LayersEnum } from '@lobechat/types';
+import type { LayersEnum} from '@lobechat/types';
 import { ActivityTypeEnum, TypesEnum } from '@lobechat/types';
-import type { JSONSchema7 } from 'json-schema';
+import type {JSONSchema7} from 'json-schema';
 import { z } from 'zod';
 
 import { MemoryTypeSchema } from './common';

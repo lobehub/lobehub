@@ -167,13 +167,13 @@ describe('aiAgentRouter.execSubAgentTask', () => {
         groupId: testGroupId,
         instruction: 'Test instruction',
         parentMessageId: 'parent-msg-1',
-        timeout: 60_000,
+        timeout: 60000,
         topicId: testTopicId,
       });
 
       expect(mockExecGroupSubAgentTask).toHaveBeenCalledWith(
         expect.objectContaining({
-          timeout: 60_000,
+          timeout: 60000,
         }),
       );
     });

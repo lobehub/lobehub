@@ -1,7 +1,7 @@
 import { renderPlaceholderTemplate } from '@lobechat/context-engine';
 
 import { identityPrompt } from '../prompts';
-import type { IdentityActions } from '../schemas';
+import type { IdentityActions} from '../schemas';
 import { IdentityActionsSchema } from '../schemas';
 import type { ExtractorOptions, ExtractorTemplateProps } from '../types';
 import { buildGenerateObjectSchema } from '../utils/zod';

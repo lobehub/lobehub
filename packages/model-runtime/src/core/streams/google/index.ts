@@ -9,13 +9,12 @@ import type {
   StreamContext,
   StreamPartChunkData,
   StreamProtocolChunk,
-  StreamToolCallChunkData,
-} from '../protocol';
+  StreamToolCallChunkData} from '../protocol';
 import {
   createCallbacksTransformer,
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
-  generateToolCallId,
+  generateToolCallId
 } from '../protocol';
 import { GOOGLE_AI_BLOCK_REASON } from './const';
 

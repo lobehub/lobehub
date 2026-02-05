@@ -3,7 +3,7 @@ import { cssVar } from 'antd-style';
 import { Link2 } from 'lucide-react';
 import { memo } from 'react';
 
-import type { MemorySource } from '@/database/repositories/userMemory';
+import type {MemorySource} from '@/database/repositories/userMemory';
 import Link from '@/libs/router/Link';
 
 const SourceLink = memo<{ source?: MemorySource | null }>(({ source }) => {

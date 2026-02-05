@@ -1,6 +1,6 @@
-import type { DeploymentOption } from '@lobehub/market-types';
+import type {DeploymentOption} from '@lobehub/market-types';
 
-import type { DiscoverMcpDetail } from '@/types/discover';
+import type {DiscoverMcpDetail} from '@/types/discover';
 
 export interface ScoreItem {
   check: boolean;
@@ -80,18 +80,19 @@ export const DEFAULT_WEIGHTS = {
 };
 
 // 评分计算输入数据类型
-export interface ScoreCalculationInput extends Partial<
-  Pick<
-    DiscoverMcpDetail,
-    | 'deploymentOptions'
-    | 'github'
-    | 'isValidated'
-    | 'overview'
-    | 'promptsCount'
-    | 'resourcesCount'
-    | 'toolsCount'
-  >
-> {
+export interface ScoreCalculationInput
+  extends Partial<
+    Pick<
+      DiscoverMcpDetail,
+      | 'deploymentOptions'
+      | 'github'
+      | 'isValidated'
+      | 'overview'
+      | 'promptsCount'
+      | 'resourcesCount'
+      | 'toolsCount'
+    >
+  > {
   installationMethods?: string; // 列表页使用
   isClaimed?: boolean; // 添加 isClaimed 属性
 }
@@ -128,7 +129,7 @@ export function calculateScoreFlags(data: ScoreCalculationInput): ScoreFlags {
   );
   const hasDeployMoreThanManual = Boolean(
     hasDeployment &&
-    effectiveDeploymentOptions?.find((item) => item.installationMethod !== 'manual'),
+      effectiveDeploymentOptions?.find((item) => item.installationMethod !== 'manual'),
   );
 
   const hasTools = Boolean(toolsCount && toolsCount > 0);

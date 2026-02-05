@@ -1,5 +1,5 @@
-import type { StorageMode } from '@lobechat/electron-client-ipc';
-import { StorageModeEnum } from '@lobechat/electron-client-ipc';
+import type {StorageMode} from '@lobechat/electron-client-ipc';
+import {  StorageModeEnum } from '@lobechat/electron-client-ipc';
 import { Button, Center, Flexbox, Input } from '@lobehub/ui';
 import { LobeHub } from '@lobehub/ui/brand';
 import { createStaticStyles } from 'antd-style';

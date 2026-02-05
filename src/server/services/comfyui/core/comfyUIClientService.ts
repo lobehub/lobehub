@@ -6,8 +6,8 @@
  * Uses modular services for authentication, connection, and caching
  */
 import type { ComfyUIKeyVault } from '@lobechat/types';
-import type { PromptBuilder } from '@saintno/comfyui-sdk';
-import { CallWrapper, ComfyApi } from '@saintno/comfyui-sdk';
+import type {PromptBuilder} from '@saintno/comfyui-sdk';
+import { CallWrapper, ComfyApi  } from '@saintno/comfyui-sdk';
 import debug from 'debug';
 
 import { COMFYUI_DEFAULTS } from '@/server/services/comfyui/config/constants';

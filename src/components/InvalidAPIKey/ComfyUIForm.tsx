@@ -11,7 +11,7 @@ import { FormInput, FormPassword } from '@/components/FormInput';
 import KeyValueEditor from '@/components/KeyValueEditor';
 import { FormAction } from '@/features/Conversation/Error/style';
 import { useAiInfraStore } from '@/store/aiInfra';
-import type { ComfyUIKeyVault } from '@/types/user/settings';
+import type {ComfyUIKeyVault} from '@/types/user/settings';
 
 import { LoadingContext } from './LoadingContext';
 

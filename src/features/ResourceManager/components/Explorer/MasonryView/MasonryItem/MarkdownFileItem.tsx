@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
-import type { AsyncTaskStatus, IAsyncTaskError } from '@/types/asyncTask';
+import type {AsyncTaskStatus, IAsyncTaskError} from '@/types/asyncTask';
 import { formatSize } from '@/utils/format';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 

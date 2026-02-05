@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useUserStore } from '@/store/user';
-import type { UserGuide } from '@/types/user';
+import type { UserGuide} from '@/types/user';
 
 beforeEach(() => {
   vi.clearAllMocks();

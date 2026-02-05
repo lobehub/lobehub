@@ -35,7 +35,7 @@ describe('LobeWenxinAI', () => {
         {
           id: 'as-bhrxwy5fq1',
           object: 'chat.completion.chunk',
-          created: 1_741_000_028,
+          created: 1741000028,
           model: 'ernie-4.0-8k-latest',
           choices: [
             {
@@ -61,7 +61,7 @@ describe('LobeWenxinAI', () => {
         {
           id: 'as-bhrxwy5fq1',
           object: 'chat.completion.chunk',
-          created: 1_741_000_028,
+          created: 1741000028,
           model: 'ernie-4.0-8k-latest',
           choices: [
             {

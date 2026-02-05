@@ -1,8 +1,8 @@
 'use client';
 
 import { CopyButton, Flexbox } from '@lobehub/ui';
-import type { BreadcrumbProps } from 'antd';
-import { Breadcrumb as AntdBreadcrumb } from 'antd';
+import type {BreadcrumbProps} from 'antd';
+import { Breadcrumb as AntdBreadcrumb  } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

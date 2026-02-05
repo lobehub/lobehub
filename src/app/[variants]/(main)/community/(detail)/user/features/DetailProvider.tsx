@@ -1,14 +1,10 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { createContext, memo, use } from 'react';
+import type {ReactNode} from 'react';
+import { createContext, memo,  use } from 'react';
 
-import type { MarketUserProfile } from '@/layout/AuthProvider/MarketAuth/types';
-import type {
-  DiscoverAssistantItem,
-  DiscoverGroupAgentItem,
-  DiscoverUserInfo,
-} from '@/types/discover';
+import type {MarketUserProfile} from '@/layout/AuthProvider/MarketAuth/types';
+import type {DiscoverAssistantItem, DiscoverGroupAgentItem, DiscoverUserInfo} from '@/types/discover';
 
 export interface UserDetailContextConfig {
   agentCount: number;

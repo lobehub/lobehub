@@ -1,7 +1,7 @@
 'use client';
 
 import { createStaticStyles, keyframes } from 'antd-style';
-import type { CSSProperties } from 'react';
+import type { CSSProperties} from 'react';
 import { memo } from 'react';
 
 const pulseAnim = keyframes`

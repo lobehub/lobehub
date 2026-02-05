@@ -1,11 +1,11 @@
 'use client';
 
-import type { DraggablePanelProps } from '@lobehub/ui';
-import { DraggablePanel, DraggablePanelContainer } from '@lobehub/ui';
+import type {DraggablePanelProps} from '@lobehub/ui';
+import { DraggablePanel, DraggablePanelContainer  } from '@lobehub/ui';
 import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import type { PropsWithChildren } from 'react';
-import { memo, useEffect, useState } from 'react';
+import type {PropsWithChildren} from 'react';
+import { memo,  useEffect, useState } from 'react';
 
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';

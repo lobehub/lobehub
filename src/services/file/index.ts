@@ -1,12 +1,5 @@
 import { lambdaClient } from '@/libs/trpc/client';
-import type {
-  CheckFileHashResult,
-  FileItem,
-  FileListItem,
-  QueryFileListParams,
-  QueryFileListSchemaType,
-  UploadFileParams,
-} from '@/types/files';
+import type {CheckFileHashResult, FileItem, FileListItem, QueryFileListParams, QueryFileListSchemaType, UploadFileParams} from '@/types/files';
 
 interface CreateFileParams extends Omit<UploadFileParams, 'url'> {
   knowledgeBaseId?: string;
@@ -66,7 +59,7 @@ export class FileService {
       // Document (including folders) - use document endpoint
       const doc = await lambdaClient.document.getDocumentById.query({ id });
       if (!doc) return null;
-
+      
       // Convert document to FileListItem format
       return {
         chunkCount: null,

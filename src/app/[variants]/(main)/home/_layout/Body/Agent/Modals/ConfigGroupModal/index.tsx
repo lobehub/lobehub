@@ -1,5 +1,5 @@
-import type { ModalProps } from '@lobehub/ui';
-import { Button, Flexbox, Modal, SortableList } from '@lobehub/ui';
+import type {ModalProps} from '@lobehub/ui';
+import { Button, Flexbox,Modal,  SortableList  } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Plus } from 'lucide-react';
@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
-import type { SessionGroupItem } from '@/types/session';
+import type {SessionGroupItem} from '@/types/session';
 
 import GroupItem from './GroupItem';
 

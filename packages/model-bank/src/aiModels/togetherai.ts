@@ -104,8 +104,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description:
-      'Llama 3 8B Instruct Turbo is a high-performance LLM for a wide range of use cases.',
+    description: 'Llama 3 8B Instruct Turbo is a high-performance LLM for a wide range of use cases.',
     displayName: 'Llama 3 8B Instruct Turbo',
     id: 'meta-llama/Meta-Llama-3-8B-Instruct-Turbo',
     type: 'chat',
@@ -120,8 +119,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description:
-      'Llama 3 8B Instruct Lite balances performance for resource-constrained environments.',
+    description: 'Llama 3 8B Instruct Lite balances performance for resource-constrained environments.',
     displayName: 'Llama 3 8B Instruct Lite',
     id: 'meta-llama/Meta-Llama-3-8B-Instruct-Lite',
     type: 'chat',
@@ -135,8 +133,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description:
-      'Llama 3 8B Instruct Reference offers multilingual support and broad domain knowledge.',
+    description: 'Llama 3 8B Instruct Reference offers multilingual support and broad domain knowledge.',
     displayName: 'Llama 3 8B Instruct Reference',
     id: 'meta-llama/Llama-3-8b-chat-hf',
     type: 'chat',
@@ -150,8 +147,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 4096,
-    description:
-      'LLaMA-2 Chat (13B) provides strong language handling and a solid chat experience.',
+    description: 'LLaMA-2 Chat (13B) provides strong language handling and a solid chat experience.',
     displayName: 'LLaMA-2 Chat (13B)',
     id: 'meta-llama/Llama-2-13b-chat-hf',
     type: 'chat',
@@ -173,8 +169,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description:
-      'Gemma 2 9B, developed by Google, offers efficient instruction following and solid overall capability.',
+    description: 'Gemma 2 9B, developed by Google, offers efficient instruction following and solid overall capability.',
     displayName: 'Gemma 2 9B',
     enabled: true,
     id: 'google/gemma-2-9b-it',
@@ -182,8 +177,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description:
-      'Gemma 2 27B is a general-purpose LLM with strong performance across many scenarios.',
+    description: 'Gemma 2 27B is a general-purpose LLM with strong performance across many scenarios.',
     displayName: 'Gemma 2 27B',
     enabled: true,
     id: 'google/gemma-2-27b-it',
@@ -191,8 +185,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 8192,
-    description:
-      'Gemma Instruct (2B) provides basic instruction handling for lightweight applications.',
+    description: 'Gemma Instruct (2B) provides basic instruction handling for lightweight applications.',
     displayName: 'Gemma Instruct (2B)',
     id: 'google/gemma-2b-it',
     type: 'chat',
@@ -366,8 +359,7 @@ const togetheraiChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description:
-      'Qwen 2 Instruct (72B) delivers precise instruction following for enterprise workloads.',
+    description: 'Qwen 2 Instruct (72B) delivers precise instruction following for enterprise workloads.',
     displayName: 'Qwen 2 Instruct (72B)',
     id: 'Qwen/Qwen2-72B-Instruct',
     type: 'chat',

@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from 'react';
+import type {PropsWithChildren} from 'react';
 import { memo } from 'react';
 
 import { useModelHasContextWindowToken } from '@/hooks/useModelHasContextWindowToken';

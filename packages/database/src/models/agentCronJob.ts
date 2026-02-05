@@ -1,12 +1,9 @@
 import { and, desc, eq, gt, inArray, isNull, or, sql } from 'drizzle-orm';
 
-import type {
-  AgentCronJob,
-  CreateAgentCronJobData,
-  NewAgentCronJob,
-  UpdateAgentCronJobData,
+import type {AgentCronJob, CreateAgentCronJobData, NewAgentCronJob, UpdateAgentCronJobData} from '../schemas/agentCronJob';
+import {
+  agentCronJobs
 } from '../schemas/agentCronJob';
-import { agentCronJobs } from '../schemas/agentCronJob';
 import type { LobeChatDatabase } from '../type';
 
 export class AgentCronJobModel {
@@ -85,11 +82,10 @@ export class AgentCronJobModel {
 
     if (data?.cronPattern !== undefined || data?.timezone !== undefined) {
       const existing = await this.findById(id);
-      if (
-        existing &&
-        ((data?.cronPattern !== undefined && data?.cronPattern !== existing.cronPattern) ||
-          (data?.timezone !== undefined && data?.timezone !== existing.timezone))
-      ) {
+      if (existing && (
+        (data?.cronPattern !== undefined && data?.cronPattern !== existing.cronPattern) ||
+        (data?.timezone !== undefined && data?.timezone !== existing.timezone)
+      )) {
         shouldResetLastExecuted = true;
       }
     }

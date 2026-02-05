@@ -1,6 +1,6 @@
 // @vitest-environment node
 import OpenAI from 'openai';
-import type { Mock } from 'vitest';
+import type { Mock} from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as debugStreamModule from '../../utils/debugStream';
@@ -12,7 +12,7 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 
 // Mock fetch for most tests, but will be restored for real network tests
 const mockFetch = vi.fn();
-globalThis.fetch = mockFetch;
+global.fetch = mockFetch;
 
 describe('LobeOpenAI', () => {
   let instance: InstanceType<typeof LobeOpenAI>;

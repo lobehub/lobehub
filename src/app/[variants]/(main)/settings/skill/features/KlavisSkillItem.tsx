@@ -1,7 +1,7 @@
 'use client';
 
-import type { KlavisServerType } from '@lobechat/const';
-import { Avatar, Button as LobeButton, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import type {KlavisServerType} from '@lobechat/const';
+import { Avatar, Button as LobeButton,DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { App, Button } from 'antd';
 import { cssVar } from 'antd-style';
 import { Loader2, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
@@ -10,8 +10,8 @@ import { useTranslation } from 'react-i18next';
 
 import { createKlavisSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { useToolStore } from '@/store/tool';
-import type { KlavisServer } from '@/store/tool/slices/klavisStore';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import type {KlavisServer} from '@/store/tool/slices/klavisStore';
+import {  KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 

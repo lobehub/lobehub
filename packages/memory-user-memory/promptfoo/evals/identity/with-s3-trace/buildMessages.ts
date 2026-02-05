@@ -38,10 +38,7 @@ export const buildIdentityDedupeMessages = async (vars: PromptVars) => {
   const traceRaw = await readFile(vars.tracePath, 'utf8');
   const trace = JSON.parse(traceRaw) as TracePayload;
 
-  const promptTemplate = await readFile(
-    join(process.cwd(), 'src/prompts/layers/identity.md'),
-    'utf8',
-  );
+  const promptTemplate = await readFile(join(process.cwd(), 'src/prompts/layers/identity.md'), 'utf8');
 
   const retrievedContexts = trace.contexts?.trimmed?.retrievedContexts ?? [];
   const existingIdentitiesContext = trace.contexts?.trimmed?.retrievedIdentitiesContext ?? '';
@@ -67,3 +64,4 @@ export const buildIdentityDedupeMessages = async (vars: PromptVars) => {
     { content: rendered, role: 'user' },
   ];
 };
+

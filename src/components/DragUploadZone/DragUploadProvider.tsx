@@ -1,7 +1,15 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { createContext, memo, useCallback, useEffect, useRef, useState } from 'react';
+import type {ReactNode} from 'react';
+import {
+  createContext,
+  memo,
+  use,
+  useCallback,
+  useEffect,
+  useRef,
+  useState
+} from 'react';
 
 interface DragUploadContextValue {
   /**
@@ -67,20 +75,24 @@ export const DragUploadProvider = memo<DragUploadProviderProps>(({ children }) =
   }, []);
 
   useEffect(() => {
-    globalThis.addEventListener('dragenter', handleDragEnter);
-    globalThis.addEventListener('dragover', handleDragOver);
-    globalThis.addEventListener('dragleave', handleDragLeave);
-    globalThis.addEventListener('drop', handleDrop);
+    window.addEventListener('dragenter', handleDragEnter);
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('drop', handleDrop);
 
     return () => {
-      globalThis.removeEventListener('dragenter', handleDragEnter);
-      globalThis.removeEventListener('dragover', handleDragOver);
-      globalThis.removeEventListener('dragleave', handleDragLeave);
-      globalThis.removeEventListener('drop', handleDrop);
+      window.removeEventListener('dragenter', handleDragEnter);
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('drop', handleDrop);
     };
   }, [handleDragEnter, handleDragOver, handleDragLeave, handleDrop]);
 
-  return <DragUploadContext value={{ isDraggingGlobally }}>{children}</DragUploadContext>;
+  return (
+    <DragUploadContext value={{ isDraggingGlobally }}>
+      {children}
+    </DragUploadContext>
+  );
 });
 
 DragUploadProvider.displayName = 'DragUploadProvider';

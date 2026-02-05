@@ -14,7 +14,7 @@ describe('createValidator', () => {
     const schema = z.object({ type: z.enum(['a', 'b']) });
 
     const handler = validate(schema)(async (_req: Request, _ctx: unknown, data: any) => {
-      return Response.json({ ok: true, data }, { status: 200 });
+      return new Response(JSON.stringify({ ok: true, data }), { status: 200 });
     });
 
     const res = await handler(new NextRequest('https://example.com/api?type=a'));
@@ -51,7 +51,7 @@ describe('createValidator', () => {
     const schema = z.object({ type: z.enum(['a', 'b']) });
 
     const handler = validate(schema)(async (_req: Request, _ctx: unknown, data: any) => {
-      return Response.json(data, { status: 200 });
+      return new Response(JSON.stringify(data), { status: 200 });
     });
 
     const res = await handler(new NextRequest('https://example.com/api?type=a&extra=1'));

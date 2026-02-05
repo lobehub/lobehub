@@ -1,7 +1,7 @@
 'use client';
 
 import { AccordionItem, ContextMenuTrigger, Text } from '@lobehub/ui';
-import React, { memo, Suspense } from 'react';
+import React, { memo,Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';

@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 
-import type { NewEvaluationRecordsItem } from '../../../schemas';
+import type {NewEvaluationRecordsItem } from '../../../schemas';
 import { evaluationRecords } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 

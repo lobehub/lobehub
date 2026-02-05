@@ -1,6 +1,6 @@
 'use client';
 
-import type { McpInstallSchema } from '@lobechat/electron-client-ipc';
+import type {McpInstallSchema} from '@lobechat/electron-client-ipc';
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { LinkIcon, Settings2Icon } from 'lucide-react';

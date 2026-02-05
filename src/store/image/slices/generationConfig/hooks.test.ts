@@ -1,10 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
-import type {
-  AIImageModelCard,
-  fluxSchnellParamsSchema,
-  ModelParamsSchema,
-  RuntimeImageGenParams,
-} from 'model-bank';
+import type {AIImageModelCard, ModelParamsSchema, RuntimeImageGenParams} from 'model-bank';
+import {  fluxSchnellParamsSchema  } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
 import { useImageStore } from '@/store/image';
@@ -38,7 +34,7 @@ const testModelSchema: ModelParamsSchema = {
   width: { default: 1024, min: 512, max: 2048, step: 64, description: 'Image width' },
   height: { default: 768, min: 256, max: 1536, step: 32, description: 'Image height' },
   steps: { default: 20, min: 1, max: 50, description: 'Number of inference steps' },
-  seed: { default: null, min: 0, max: 2_147_483_647, description: 'Random seed' },
+  seed: { default: null, min: 0, max: 2147483647, description: 'Random seed' },
   cfg: { default: 7.5, min: 1, max: 20, step: 0.5, description: 'CFG scale' },
   aspectRatio: {
     default: '16:9',
@@ -52,7 +48,7 @@ const testParameters: RuntimeImageGenParams = {
   width: 1024,
   height: 768,
   steps: 25,
-  seed: 12_345,
+  seed: 12345,
   cfg: 8,
   aspectRatio: '16:9',
 };
@@ -166,7 +162,7 @@ describe('useGenerationConfigParam', () => {
       const { result } = renderHook(() => useGenerationConfigParam('seed'));
 
       expect(result.current.min).toBe(0);
-      expect(result.current.max).toBe(2_147_483_647);
+      expect(result.current.max).toBe(2147483647);
       expect(result.current.step).toBeUndefined();
       expect(result.current.description).toBe('Random seed');
     });

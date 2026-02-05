@@ -62,9 +62,9 @@ const NavigationBar = memo(() => {
       }
     };
 
-    globalThis.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown);
     return () => {
-      globalThis.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown);
     };
   }, [toggleHistoryOpen]);
 

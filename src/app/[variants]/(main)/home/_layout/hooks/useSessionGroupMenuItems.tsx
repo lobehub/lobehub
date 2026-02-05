@@ -1,6 +1,6 @@
 import { Icon } from '@lobehub/ui';
 import { App } from 'antd';
-import type { ItemType } from 'antd/es/menu/interface';
+import type {ItemType} from 'antd/es/menu/interface';
 import { createStaticStyles } from 'antd-style';
 import { FolderCogIcon, FolderPenIcon, Trash } from 'lucide-react';
 import { useCallback, useState } from 'react';
@@ -106,6 +106,7 @@ export const useSessionGroupMenuItems = () => {
    * Create agent in group menu item
    */
   const createAgentInGroupMenuItem = useCallback(
+     
     (groupId: string, _isPinned?: boolean): ItemType => {
       const iconElement = <Icon icon={FolderPenIcon} />;
       return {

@@ -1,5 +1,5 @@
-import type { UpdateInfo } from '@lobechat/electron-client-ipc';
-import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
+import type {UpdateInfo} from '@lobechat/electron-client-ipc';
+import {  useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Button, Flexbox, Icon } from '@lobehub/ui';
 import { Modal } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';

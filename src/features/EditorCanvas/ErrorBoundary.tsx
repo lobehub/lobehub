@@ -1,8 +1,8 @@
 'use client';
 
 import { Alert } from '@lobehub/ui';
-import type { ErrorInfo, ReactNode } from 'react';
-import { Component } from 'react';
+import type {ErrorInfo, ReactNode} from 'react';
+import { Component   } from 'react';
 
 interface EditorErrorBoundaryState {
   error: Error | null;

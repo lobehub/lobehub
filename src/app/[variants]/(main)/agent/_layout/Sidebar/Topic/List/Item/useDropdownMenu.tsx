@@ -1,5 +1,5 @@
-import type { MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
+import type {MenuProps} from '@lobehub/ui';
+import { Icon  } from '@lobehub/ui';
 import { App } from 'antd';
 import { ExternalLink, LucideCopy, PencilLine, Trash, Wand2 } from 'lucide-react';
 import { useCallback } from 'react';

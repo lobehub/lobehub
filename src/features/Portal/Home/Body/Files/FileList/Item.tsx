@@ -1,4 +1,4 @@
-import type { ChatFileItem } from '@lobechat/types';
+import type {ChatFileItem} from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';

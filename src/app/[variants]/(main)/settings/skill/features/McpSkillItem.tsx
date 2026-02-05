@@ -11,7 +11,7 @@ import McpDetailLoading from '@/features/MCP/MCPDetail/Loading';
 import PluginDetailModal from '@/features/PluginDetailModal';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
-import type { LobeToolType } from '@/types/tool/tool';
+import type {LobeToolType} from '@/types/tool/tool';
 
 import Actions from './Actions';
 import { styles } from './style';

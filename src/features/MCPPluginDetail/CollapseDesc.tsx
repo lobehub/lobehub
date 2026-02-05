@@ -1,6 +1,6 @@
 import { Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import type { PropsWithChildren } from 'react';
+import type {PropsWithChildren} from 'react';
 import { memo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => {

@@ -1,5 +1,10 @@
-import type { DropdownMenuCheckboxItem, DropdownMenuProps } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
+import type {DropdownMenuCheckboxItem, DropdownMenuProps} from '@lobehub/ui';
+import {
+  ActionIcon,
+  DropdownMenu,
+  Flexbox,
+  Text
+} from '@lobehub/ui';
 import { Languages } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

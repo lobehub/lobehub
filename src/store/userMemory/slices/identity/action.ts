@@ -1,19 +1,15 @@
-import type {
-  IdentityListResult,
-  NewUserMemoryIdentity,
-  UpdateUserMemoryIdentity,
-} from '@lobechat/types';
+import type {IdentityListResult, NewUserMemoryIdentity, UpdateUserMemoryIdentity} from '@lobechat/types';
 import { uniqBy } from 'es-toolkit/compat';
 import { produce } from 'immer';
-import type { SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
 import useSWR from 'swr';
 
-import type { AddIdentityEntryResult } from '@/database/models/userMemory';
+import type {AddIdentityEntryResult} from '@/database/models/userMemory';
 import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
-import type { StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import type { UserMemoryStore } from '../../store';
+import type {UserMemoryStore} from '../../store';
 
 const n = setNamespace('userMemory/identity');
 

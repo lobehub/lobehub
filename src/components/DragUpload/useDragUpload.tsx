@@ -1,3 +1,4 @@
+ 
 import { App } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -165,18 +166,18 @@ export const useDragUpload = (onUploadFiles: (files: File[]) => Promise<void>) =
   }, []);
 
   useEffect(() => {
-    globalThis.addEventListener('dragenter', handleDragEnter);
-    globalThis.addEventListener('dragover', handleDragOver);
-    globalThis.addEventListener('dragleave', handleDragLeave);
-    globalThis.addEventListener('drop', handleDrop);
-    globalThis.addEventListener('paste', handlePaste);
+    window.addEventListener('dragenter', handleDragEnter);
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('drop', handleDrop);
+    window.addEventListener('paste', handlePaste);
 
     return () => {
-      globalThis.removeEventListener('dragenter', handleDragEnter);
-      globalThis.removeEventListener('dragover', handleDragOver);
-      globalThis.removeEventListener('dragleave', handleDragLeave);
-      globalThis.removeEventListener('drop', handleDrop);
-      globalThis.removeEventListener('paste', handlePaste);
+      window.removeEventListener('dragenter', handleDragEnter);
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('drop', handleDrop);
+      window.removeEventListener('paste', handlePaste);
     };
   }, [handleDragEnter, handleDragOver, handleDragLeave, handleDrop, handlePaste]);
 

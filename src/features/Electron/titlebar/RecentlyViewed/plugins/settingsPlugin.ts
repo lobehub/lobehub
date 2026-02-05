@@ -1,10 +1,11 @@
+ 
 import { Settings } from 'lucide-react';
 
 import { getRouteById } from '@/config/routes';
 
-import type { PageReference, ResolvedPageData, SettingsParams } from '../types';
-import type { PluginContext, RecentlyViewedPlugin } from './types';
-import { createPageReference } from './types';
+import type {PageReference, ResolvedPageData, SettingsParams} from '../types';
+import type {PluginContext, RecentlyViewedPlugin} from './types';
+import { createPageReference  } from './types';
 
 const settingsIcon = getRouteById('settings')?.icon || Settings;
 

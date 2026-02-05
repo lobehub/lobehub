@@ -1,10 +1,10 @@
-import type { SearchParams, UniformSearchResponse, UniformSearchResult } from '@lobechat/types';
+import type {SearchParams, UniformSearchResponse, UniformSearchResult} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
-import type { SearchServiceImpl } from '../type';
-import type { TavilyResponse, TavilySearchParameters } from './type';
+import type {SearchServiceImpl} from '../type';
+import type {TavilyResponse, TavilySearchParameters} from './type';
 
 const log = debug('lobe-search:Tavily');
 
@@ -42,8 +42,8 @@ export class TavilyImpl implements SearchServiceImpl {
         params?.searchTimeRange && params.searchTimeRange !== 'anytime'
           ? params.searchTimeRange
           : undefined,
-      // Tavily only supports news and general types
-      topic: params?.searchCategories?.find((cat) => ['news', 'general'].includes(cat)),
+      topic: // Tavily only supports news and general types
+      params?.searchCategories?.find((cat) => ['news', 'general'].includes(cat)),
     };
 
     log('Constructed request body: %o', body);

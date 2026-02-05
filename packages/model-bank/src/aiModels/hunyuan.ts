@@ -484,8 +484,7 @@ const hunyuanChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 8000,
-    description:
-      'Latest multimodal model with multilingual responses and balanced Chinese/English ability.',
+    description: 'Latest multimodal model with multilingual responses and balanced Chinese/English ability.',
     displayName: 'Hunyuan Standard Vision',
     id: 'hunyuan-standard-vision',
     maxOutput: 2000,

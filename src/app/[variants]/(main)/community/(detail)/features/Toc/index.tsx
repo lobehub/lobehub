@@ -1,7 +1,7 @@
 'use client';
 
-import type { AnchorProps } from 'antd';
-import { Anchor } from 'antd';
+import type {AnchorProps} from 'antd';
+import { Anchor  } from 'antd';
 import { createStaticStyles, cx, responsive } from 'antd-style';
 import { memo, useMemo } from 'react';
 

@@ -1,5 +1,5 @@
-import type { ItemType } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
+import type {ItemType} from '@lobehub/ui';
+import { Icon  } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ArrowRight, LibraryBig } from 'lucide-react';
 import { useTranslation } from 'react-i18next';

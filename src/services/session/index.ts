@@ -1,17 +1,10 @@
+ 
 import type { PartialDeep } from 'type-fest';
 
 import { lambdaClient } from '@/libs/trpc/client';
-import type { LobeAgentChatConfig, LobeAgentConfig } from '@/types/agent';
-import type { MetaData } from '@/types/meta';
-import type {
-  ChatSessionList,
-  LobeAgentSession,
-  LobeSessions,
-  LobeSessionType,
-  SessionGroupItem,
-  SessionRankItem,
-  UpdateSessionParams,
-} from '@/types/session';
+import type {LobeAgentChatConfig, LobeAgentConfig} from '@/types/agent';
+import type {MetaData} from '@/types/meta';
+import type {ChatSessionList, LobeAgentSession, LobeSessions, LobeSessionType, SessionGroupItem, SessionRankItem, UpdateSessionParams} from '@/types/session';
 
 export class SessionService {
   hasSessions = async (): Promise<boolean> => {

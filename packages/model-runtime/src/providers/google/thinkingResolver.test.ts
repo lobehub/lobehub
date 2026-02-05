@@ -157,7 +157,7 @@ describe('thinkingResolver', () => {
       });
 
       it('should clamp to max (32768)', () => {
-        expect(resolveGoogleThinkingBudget(model, 50_000)).toBe(32_768);
+        expect(resolveGoogleThinkingBudget(model, 50000)).toBe(32_768);
       });
 
       it('should return value within range', () => {
@@ -181,7 +181,7 @@ describe('thinkingResolver', () => {
       });
 
       it('should clamp to max (24576)', () => {
-        expect(resolveGoogleThinkingBudget(model, 30_000)).toBe(24_576);
+        expect(resolveGoogleThinkingBudget(model, 30000)).toBe(24_576);
       });
     });
 
@@ -205,7 +205,7 @@ describe('thinkingResolver', () => {
       });
 
       it('should clamp to max (24576)', () => {
-        expect(resolveGoogleThinkingBudget(model, 30_000)).toBe(24_576);
+        expect(resolveGoogleThinkingBudget(model, 30000)).toBe(24_576);
       });
     });
 
@@ -229,7 +229,7 @@ describe('thinkingResolver', () => {
       });
 
       it('should clamp to flash max (24576) if provided', () => {
-        expect(resolveGoogleThinkingBudget(model, 30_000)).toBe(24_576);
+        expect(resolveGoogleThinkingBudget(model, 30000)).toBe(24_576);
       });
     });
   });
@@ -328,11 +328,11 @@ describe('thinkingResolver', () => {
       });
 
       it('should enable includeThoughts with thinkingBudget', () => {
-        const result = resolveGoogleThinkingConfig(model, { thinkingBudget: 10_000 });
+        const result = resolveGoogleThinkingConfig(model, { thinkingBudget: 10000 });
 
         expect(result).toEqual({
           includeThoughts: true,
-          thinkingBudget: 10_000,
+          thinkingBudget: 10000,
         });
       });
 
@@ -483,7 +483,7 @@ describe('thinkingBudget and thinkingLevel mutual exclusivity', () => {
 
     it.each(models)('%s: should prioritize thinkingLevel when both are provided', (model) => {
       const result = resolveGoogleThinkingConfig(model, {
-        thinkingBudget: 10_000,
+        thinkingBudget: 10000,
         thinkingLevel: 'low',
       });
 
@@ -526,11 +526,11 @@ describe('thinkingBudget and thinkingLevel mutual exclusivity', () => {
       '%s: should use thinkingBudget when both are provided (thinkingLevel not supported)',
       (model) => {
         const result = resolveGoogleThinkingConfig(model, {
-          thinkingBudget: 12_000,
+          thinkingBudget: 12000,
           thinkingLevel: 'low',
         });
 
-        expect(result.thinkingBudget).toBe(12_000);
+        expect(result.thinkingBudget).toBe(12000);
         expect(result.thinkingLevel).toBeUndefined();
       },
     );

@@ -1,4 +1,4 @@
-import type { merge as _merge } from 'es-toolkit/compat';
+import type { merge as _merge} from 'es-toolkit/compat';
 import { isEmpty, mergeWith } from 'es-toolkit/compat';
 
 /**

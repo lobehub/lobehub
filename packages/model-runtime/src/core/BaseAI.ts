@@ -25,10 +25,7 @@ export interface LobeRuntimeAI {
 
   embeddings?: (payload: EmbeddingsPayload, options?: EmbeddingsOptions) => Promise<Embeddings[]>;
 
-  generateObject?: (
-    payload: GenerateObjectPayload,
-    options?: GenerateObjectOptions,
-  ) => Promise<any>;
+  generateObject?: (payload: GenerateObjectPayload, options?: GenerateObjectOptions) => Promise<any>;
 
   models?: () => Promise<any>;
 

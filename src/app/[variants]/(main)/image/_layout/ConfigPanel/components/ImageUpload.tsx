@@ -4,8 +4,8 @@ import { Center } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Image as ImageIcon, X } from 'lucide-react';
-import type { FC } from 'react';
-import React, { memo, useEffect, useRef, useState } from 'react';
+import type {FC} from 'react';
+import React, {  memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDragAndDrop } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/hooks/useDragAndDrop';
@@ -13,7 +13,7 @@ import { useUploadFilesValidation } from '@/app/[variants]/(main)/image/_layout/
 import { configPanelStyles } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/style';
 import Image from '@/libs/next/Image';
 import { useFileStore } from '@/store/file';
-import type { FileUploadStatus } from '@/types/files/upload';
+import type {FileUploadStatus} from '@/types/files/upload';
 
 // ======== Business Types ======== //
 

@@ -1,13 +1,13 @@
 import { BRANDING_LOGO_URL, BRANDING_NAME } from '@lobechat/business-const';
 import type { IconType } from '@lobehub/icons';
-import type { FlexboxProps } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import type {FlexboxProps} from '@lobehub/ui';
+import { Flexbox  } from '@lobehub/ui';
 import type { LobeChatProps } from '@lobehub/ui/brand';
 import { createStaticStyles, cssVar } from 'antd-style';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 
-import type { ImageProps } from '@/libs/next/Image';
+import type {ImageProps} from '@/libs/next/Image';
 import Image from '@/libs/next/Image';
 
 const styles = createStaticStyles(({ css }) => {
@@ -51,7 +51,7 @@ const CustomImageLogo = memo<Omit<ImageProps, 'alt' | 'src'> & { size: number }>
   },
 );
 
-const Divider: IconType = ({ ref, size = '1em', style, ...rest }) => (
+const Divider: IconType = (({ ref, size = '1em', style, ...rest }) => (
   <svg
     fill="none"
     height={size}
@@ -67,7 +67,7 @@ const Divider: IconType = ({ ref, size = '1em', style, ...rest }) => (
   >
     <path d="M16.88 3.549L7.12 20.451" />
   </svg>
-);
+)) as IconType;
 
 const CustomLogo = memo<LobeChatProps>(({ extra, size = 32, className, style, type, ...rest }) => {
   let logoComponent: ReactNode;

@@ -232,7 +232,7 @@ describe('QueueService', () => {
         priority: 'normal',
         stepIndex: 15,
       });
-      expect(delay15).toBe(11_000); // 1000 base + 10000 (max)
+      expect(delay15).toBe(11000); // 1000 base + 10000 (max)
     });
 
     it('should combine tool calls and error delays', async () => {

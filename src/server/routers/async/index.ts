@@ -1,4 +1,4 @@
-import { asyncRouter as router, publicProcedure } from '@/libs/trpc/async';
+import { asyncRouter as router,publicProcedure } from '@/libs/trpc/async';
 
 import { fileRouter } from './file';
 import { imageRouter } from './image';

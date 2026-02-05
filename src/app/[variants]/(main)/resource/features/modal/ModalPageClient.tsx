@@ -14,9 +14,9 @@ interface ModalPageClientProps {
 const ModalPageClient = ({ id }: ModalPageClientProps) => {
   const navigate = useNavigate();
   const handleClose = useCallback(() => {
-    if (typeof globalThis.window === 'undefined') return;
+    if (typeof window === 'undefined') return;
 
-    const { pathname, search } = globalThis.location;
+    const { pathname, search } = window.location;
     const basePath = pathname.replace(/\/modal\/?$/, '');
 
     navigate(`${basePath || '/'}${search}`, { replace: true });

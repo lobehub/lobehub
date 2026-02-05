@@ -3,8 +3,8 @@ import { FilesTabs } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import type { NewDocument, NewFile } from '../../schemas/file';
-import { documents, files } from '../../schemas/file';
+import type {NewDocument,NewFile  } from '../../schemas/file';
+import { documents, files  } from '../../schemas/file';
 import { users } from '../../schemas/user';
 import type { LobeChatDatabase } from '../../type';
 import { KnowledgeRepo } from './index';

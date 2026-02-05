@@ -2,7 +2,7 @@ import Replicate from 'replicate';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import type {
-  type ChatCompletionErrorPayload,
+  ChatCompletionErrorPayload,
   ChatMethodOptions,
   ChatStreamPayload,
   CreateImagePayload,
@@ -416,6 +416,7 @@ export class LobeReplicateAI implements LobeRuntimeAI {
 
     if (!isReplicateDebug) return;
 
+     
     console.log(...args);
   }
 }

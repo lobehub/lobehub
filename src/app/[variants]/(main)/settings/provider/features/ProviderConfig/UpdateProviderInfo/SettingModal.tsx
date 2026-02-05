@@ -1,6 +1,6 @@
 import { ProviderIcon } from '@lobehub/icons';
-import type { FormItemProps } from '@lobehub/ui';
-import { Button, Flexbox, FormModal, Icon, Input, Select, TextArea } from '@lobehub/ui';
+import type {FormItemProps} from '@lobehub/ui';
+import { Button,  Flexbox,FormModal, Icon, Input, Select, TextArea  } from '@lobehub/ui';
 import { App } from 'antd';
 import { BrainIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { useAiInfraStore } from '@/store/aiInfra/store';
-import type { AiProviderDetailItem, UpdateAiProviderParams } from '@/types/aiProvider';
+import type {AiProviderDetailItem, UpdateAiProviderParams} from '@/types/aiProvider';
 
 import { CUSTOM_PROVIDER_SDK_OPTIONS } from '../../customProviderSdkOptions';
 

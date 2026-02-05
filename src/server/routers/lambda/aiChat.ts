@@ -1,5 +1,8 @@
-import type { SendMessageServerResponse } from '@lobechat/types';
-import { AiSendMessageServerSchema, StructureOutputSchema } from '@lobechat/types';
+import type {SendMessageServerResponse} from '@lobechat/types';
+import {
+  AiSendMessageServerSchema,
+  StructureOutputSchema
+} from '@lobechat/types';
 import debug from 'debug';
 
 import { LOADING_FLAT } from '@/const/message';

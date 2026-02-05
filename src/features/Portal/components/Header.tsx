@@ -3,7 +3,7 @@
 import { DESKTOP_HEADER_ICON_SIZE } from '@lobechat/const';
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { ArrowLeft, PanelRightCloseIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 
 import NavHeader from '@/features/NavHeader';

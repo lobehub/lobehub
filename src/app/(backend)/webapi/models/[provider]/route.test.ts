@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { LobeRuntimeAI } from '@lobechat/model-runtime';
+import type { LobeRuntimeAI} from '@lobechat/model-runtime';
 import { ModelRuntime } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { getXorPayload } from '@lobechat/utils/server';

@@ -12,8 +12,8 @@ import urlJoin from 'url-join';
 
 import PublishedTime from '@/components/PublishedTime';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
-import type { FavoriteAgentItem } from '@/services/social';
-import { socialService } from '@/services/social';
+import type {FavoriteAgentItem} from '@/services/social';
+import {  socialService } from '@/services/social';
 import { useDiscoverStore } from '@/store/discover';
 import { formatIntergerNumber } from '@/utils/format';
 

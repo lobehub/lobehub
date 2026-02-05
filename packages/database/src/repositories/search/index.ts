@@ -325,12 +325,10 @@ export class SearchRepo {
             ilike(agents.title, searchTerm),
             ilike(sql`COALESCE(${agents.description}, '')`, searchTerm),
             ilike(sql`COALESCE(${agents.slug}, '')`, searchTerm),
-            sql`
-              ${agents.tags} IS NOT NULL AND EXISTS (
-                            SELECT 1 FROM jsonb_array_elements_text(${agents.tags}) AS tag
-                            WHERE tag ILIKE ${searchTerm}
-                          )
-            `,
+            sql`${agents.tags} IS NOT NULL AND EXISTS (
+              SELECT 1 FROM jsonb_array_elements_text(${agents.tags}) AS tag
+              WHERE tag ILIKE ${searchTerm}
+            )`,
           ),
         ),
       )

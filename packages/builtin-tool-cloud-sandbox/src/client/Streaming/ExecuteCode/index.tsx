@@ -1,6 +1,6 @@
 'use client';
 
-import type { BuiltinStreamingProps } from '@lobechat/types';
+import type {BuiltinStreamingProps} from '@lobechat/types';
 import { Highlighter } from '@lobehub/ui';
 import { memo } from 'react';
 

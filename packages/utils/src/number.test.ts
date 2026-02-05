@@ -6,7 +6,7 @@ import { calculateThumbnailDimensions, generateUniqueSeeds } from './number';
 describe('number utilities', () => {
   describe('MAX_SEED constant', () => {
     it('should be 2^31 - 1', () => {
-      expect(MAX_SEED).toBe(2_147_483_647);
+      expect(MAX_SEED).toBe(2147483647);
       expect(MAX_SEED).toBe(2 ** 31 - 1);
     });
   });
@@ -88,7 +88,7 @@ describe('number utilities', () => {
     });
 
     it('should use current timestamp as initial seed', () => {
-      const mockTimestamp = 1_234_567_890_123;
+      const mockTimestamp = 1234567890123;
       vi.useFakeTimers();
       vi.setSystemTime(mockTimestamp);
 

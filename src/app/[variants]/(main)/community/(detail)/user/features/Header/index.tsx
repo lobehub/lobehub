@@ -24,7 +24,7 @@ const UserHeader = memo(() => {
     if (!user.avatarUrl) return undefined;
     // If it's a relative path (starts with /), prepend the origin
     if (user.avatarUrl.startsWith('/')) {
-      return `${globalThis.location.origin}${user.avatarUrl}`;
+      return `${window.location.origin}${user.avatarUrl}`;
     }
     return user.avatarUrl;
   }, [user.avatarUrl]);
@@ -33,7 +33,7 @@ const UserHeader = memo(() => {
     if (!user.bannerUrl) return null;
     // If it's a relative path (starts with /), prepend the origin
     if (user.bannerUrl.startsWith('/')) {
-      return `${globalThis.location.origin}${user.bannerUrl}`;
+      return `${window.location.origin}${user.bannerUrl}`;
     }
     return user.bannerUrl;
   }, [user.bannerUrl]);

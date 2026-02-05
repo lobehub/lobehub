@@ -15,7 +15,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 
 import AgentBuilderToggle from './AgentBuilderToggle';
-import type { ChromeTabItem } from './ChromeTabs';
+import type {ChromeTabItem} from './ChromeTabs';
 import ChromeTabs from './ChromeTabs';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

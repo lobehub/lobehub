@@ -7,8 +7,8 @@ describe('PageEditor beforeunload handler', () => {
   let removeEventListenerSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    addEventListenerSpy = vi.spyOn(globalThis, 'addEventListener');
-    removeEventListenerSpy = vi.spyOn(globalThis, 'removeEventListener');
+    addEventListenerSpy = vi.spyOn(window, 'addEventListener');
+    removeEventListenerSpy = vi.spyOn(window, 'removeEventListener');
   });
 
   afterEach(() => {
@@ -28,7 +28,7 @@ describe('PageEditor beforeunload handler', () => {
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     const event = new Event('beforeunload') as BeforeUnloadEvent;
-    globalThis.dispatchEvent(event);
+    window.dispatchEvent(event);
 
     expect(handleBeforeUnload).toHaveBeenCalled();
     expect(preventDefaultMock).toHaveBeenCalled();
@@ -49,7 +49,7 @@ describe('PageEditor beforeunload handler', () => {
     window.addEventListener('beforeunload', handleBeforeUnload);
 
     const event = new Event('beforeunload') as BeforeUnloadEvent;
-    globalThis.dispatchEvent(event);
+    window.dispatchEvent(event);
 
     expect(handleBeforeUnload).toHaveBeenCalled();
     expect(preventDefaultMock).not.toHaveBeenCalled();

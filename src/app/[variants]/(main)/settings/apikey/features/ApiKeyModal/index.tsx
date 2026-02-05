@@ -1,9 +1,9 @@
 import { FormModal, Input } from '@lobehub/ui';
-import type { Dayjs } from 'dayjs';
-import type { FC } from 'react';
+import type {Dayjs} from 'dayjs';
+import type {FC} from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { CreateApiKeyParams } from '@/types/apiKey';
+import type {CreateApiKeyParams} from '@/types/apiKey';
 
 import ApiKeyDatePicker from '../ApiKeyDatePicker';
 

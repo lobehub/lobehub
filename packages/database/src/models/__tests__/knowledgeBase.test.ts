@@ -5,7 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { sleep } from '@/utils/sleep';
 
 import { getTestDB } from '../../core/getTestDB';
-import type { NewKnowledgeBase } from '../../schemas';
+import type {
+  NewKnowledgeBase} from '../../schemas';
 import {
   documents,
   files,

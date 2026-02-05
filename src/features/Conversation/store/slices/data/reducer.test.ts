@@ -1,7 +1,7 @@
 import type { ChatToolPayload, UIChatMessage } from '@lobechat/types';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import type { MessageDispatch } from './reducer';
+import type { MessageDispatch} from './reducer';
 import { messagesReducer } from './reducer';
 
 describe('messagesReducer', () => {
@@ -12,15 +12,15 @@ describe('messagesReducer', () => {
       {
         id: 'message1',
         content: 'Hello World',
-        createdAt: 1_629_264_000_000,
-        updatedAt: 1_629_264_000_000,
+        createdAt: 1629264000000,
+        updatedAt: 1629264000000,
         role: 'user',
       },
       {
         id: 'message2',
         content: 'How are you?',
-        createdAt: 1_629_264_001_000,
-        updatedAt: 1_629_264_001_000,
+        createdAt: 1629264001000,
+        updatedAt: 1629264001000,
         role: 'assistant',
         tools: [
           { identifier: 'tool1', apiName: 'calculator', id: 'abc', type: 'default', arguments: '' },
@@ -89,8 +89,8 @@ describe('messagesReducer', () => {
         {
           id: 'data',
           content: 'Hello World',
-          createdAt: 1_629_264_000_000,
-          updatedAt: 1_629_264_000_000,
+          createdAt: 1629264000000,
+          updatedAt: 1629264000000,
           role: 'user',
           extra: { abc: '1' },
         } as UIChatMessage,
@@ -107,7 +107,7 @@ describe('messagesReducer', () => {
 
       const dataMsg = newState.find((m) => m.id === 'data');
       expect(dataMsg?.extra).toEqual({ abc: '2' });
-      expect(dataMsg?.updatedAt).toBeGreaterThan(1_629_264_000_000);
+      expect(dataMsg?.updatedAt).toBeGreaterThan(1629264000000);
     });
 
     it('should not modify state if message is not found', () => {
@@ -226,8 +226,8 @@ describe('messagesReducer', () => {
           id: 'toolMessage',
           role: 'tool',
           content: 'Tool content',
-          createdAt: 1_629_264_000_000,
-          updatedAt: 1_629_264_000_000,
+          createdAt: 1629264000000,
+          updatedAt: 1629264000000,
           plugin: {
             identifier: 'tool1',
             apiName: 'calculator',
@@ -253,7 +253,7 @@ describe('messagesReducer', () => {
         identifier: 'newPlugin',
         type: 'default',
       });
-      expect(toolMsg?.updatedAt).toBeGreaterThan(1_629_264_000_000);
+      expect(toolMsg?.updatedAt).toBeGreaterThan(1629264000000);
     });
 
     it('should not modify state if message is not found or not a tool message', () => {
@@ -322,8 +322,8 @@ describe('messagesReducer', () => {
           id: 'assistant1',
           role: 'assistant',
           content: '',
-          createdAt: 1_629_264_000_000,
-          updatedAt: 1_629_264_000_000,
+          createdAt: 1629264000000,
+          updatedAt: 1629264000000,
         } as UIChatMessage,
       ];
 
@@ -346,7 +346,7 @@ describe('messagesReducer', () => {
       const assistant1 = newState.find((m) => m.id === 'assistant1');
       expect(assistant1?.tools).toHaveLength(1);
       expect(assistant1?.tools?.[0]).toEqual(toolPayload);
-      expect(assistant1?.updatedAt).toBeGreaterThan(1_629_264_000_000);
+      expect(assistant1?.updatedAt).toBeGreaterThan(1629264000000);
     });
 
     it('should add a tool to the specified assistant message', () => {

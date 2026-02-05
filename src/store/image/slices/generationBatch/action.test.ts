@@ -112,7 +112,7 @@ describe('GenerationBatchAction', () => {
           generations: [
             {
               id: generationId,
-              seed: 12_345,
+              seed: 12345,
               createdAt: new Date(),
               asyncTaskId: null,
               task: {
@@ -159,7 +159,7 @@ describe('GenerationBatchAction', () => {
           generations: [
             {
               id: 'gen_1',
-              seed: 12_345,
+              seed: 12345,
               createdAt: new Date(),
               asyncTaskId: null,
               task: {
@@ -169,7 +169,7 @@ describe('GenerationBatchAction', () => {
             },
             {
               id: 'gen_2',
-              seed: 54_321,
+              seed: 54321,
               createdAt: new Date(),
               asyncTaskId: null,
               task: {
@@ -228,7 +228,7 @@ describe('GenerationBatchAction', () => {
           generations: [
             {
               id: generationId,
-              seed: 12_345,
+              seed: 12345,
               createdAt: new Date(),
               asyncTaskId: null,
               task: {

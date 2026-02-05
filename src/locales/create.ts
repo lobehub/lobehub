@@ -33,7 +33,7 @@ export const createI18nNext = (lang?: string) => {
     );
   // Dynamically set HTML direction on language change
   instance.on('languageChanged', (lng) => {
-    if (typeof globalThis.window !== 'undefined') {
+    if (typeof window !== 'undefined') {
       const direction = isRtlLang(lng) ? 'rtl' : 'ltr';
       document.documentElement.dir = direction;
     }

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '../../../../store';
 import { messageMapKey } from '../../../../utils/messageMapKey';
-import { createMockMessage, createMockResolvedAgentConfig, TEST_IDS } from './fixtures';
+import { createMockMessage, createMockResolvedAgentConfig,TEST_IDS } from './fixtures';
 import { resetTestEnvironment } from './helpers';
 
 // Keep zustand mock as it's needed globally

@@ -3,7 +3,12 @@ import { useCallback, useMemo } from 'react';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors/systemStatus';
 
-import { FOOTER_HEIGHT, ITEM_HEIGHT, MAX_PANEL_HEIGHT, TOOLBAR_HEIGHT } from '../const';
+import {
+  FOOTER_HEIGHT,
+  ITEM_HEIGHT,
+  MAX_PANEL_HEIGHT,
+  TOOLBAR_HEIGHT,
+} from '../const';
 
 export const usePanelSize = (enabledListLength: number) => {
   const panelWidth = useGlobalStore(systemStatusSelectors.modelSwitchPanelWidth);

@@ -1,6 +1,6 @@
 import { and, count, eq } from 'drizzle-orm';
 
-import type { NewEmbeddingsItem } from '../schemas';
+import type {NewEmbeddingsItem } from '../schemas';
 import { embeddings } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 

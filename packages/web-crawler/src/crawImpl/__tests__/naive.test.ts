@@ -9,7 +9,7 @@ vi.mock('../../utils/htmlToMarkdown', () => ({
 }));
 
 vi.mock('../../utils/withTimeout', () => ({
-  DEFAULT_TIMEOUT: 30_000,
+  DEFAULT_TIMEOUT: 30000,
   withTimeout: vi.fn(),
 }));
 

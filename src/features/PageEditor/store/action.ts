@@ -1,12 +1,12 @@
 import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
 import debug from 'debug';
 import { debounce } from 'es-toolkit/compat';
-import type { StateCreator } from 'zustand';
+import type {StateCreator} from 'zustand';
 
 import { useDocumentStore } from '@/store/document';
 import { useFileStore } from '@/store/file';
 
-import type { State } from './initialState';
+import type {State} from './initialState';
 import { initialState } from './initialState';
 
 const log = debug('page:editor');
@@ -63,7 +63,7 @@ export const store: (initState?: Partial<State>) => StateCreator<Store> =
       handleCopyLink: (t, message) => {
         const { documentId } = get();
         if (documentId) {
-          const url = `${globalThis.location.origin}${globalThis.location.pathname}`;
+          const url = `${window.location.origin}${window.location.pathname}`;
           navigator.clipboard.writeText(url);
           message.success(t('pageEditor.linkCopied'));
         }

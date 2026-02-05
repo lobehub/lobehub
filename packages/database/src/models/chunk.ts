@@ -2,8 +2,16 @@ import type { ChunkMetadata, FileChunk } from '@lobechat/types';
 import { and, asc, cosineDistance, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { chunk } from 'es-toolkit/compat';
 
-import type { NewChunkItem, NewUnstructuredChunkItem } from '../schemas';
-import { chunks, embeddings, fileChunks, files, unstructuredChunks } from '../schemas';
+import type {
+  NewChunkItem,
+  NewUnstructuredChunkItem} from '../schemas';
+import {
+  chunks,
+  embeddings,
+  fileChunks,
+  files,
+  unstructuredChunks,
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
 export class ChunkModel {

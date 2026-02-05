@@ -1,10 +1,10 @@
 'use client';
 
-import type { BuiltinRenderProps } from '@lobechat/types';
+import type {BuiltinRenderProps} from '@lobechat/types';
 import { Block, Highlighter } from '@lobehub/ui';
 import { memo } from 'react';
 
-import type { WriteLocalFileState } from '../../../types';
+import type {WriteLocalFileState} from '../../../types';
 
 interface WriteLocalFileParams {
   content: string;

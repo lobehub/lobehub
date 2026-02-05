@@ -1,4 +1,4 @@
-import type { GenerateContentResponseUsageMetadata } from '@google/genai';
+import type { GenerateContentResponseUsageMetadata} from '@google/genai';
 import { MediaModality } from '@google/genai';
 import type { Pricing } from 'model-bank';
 import { describe, expect, it } from 'vitest';

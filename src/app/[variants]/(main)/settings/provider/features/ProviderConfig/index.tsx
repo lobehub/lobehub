@@ -3,14 +3,19 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { AES_GCM_URL, BASE_PROVIDER_DOC_URL, FORM_STYLE, isDesktop } from '@lobechat/const';
 import { ProviderCombine } from '@lobehub/icons';
-import type { FormGroupItemType, FormItemProps } from '@lobehub/ui';
-import { Avatar, Center, Flexbox, Form, Icon, Skeleton, Tooltip } from '@lobehub/ui';
+import type {FormGroupItemType, FormItemProps} from '@lobehub/ui';
+import {
+  Avatar,
+Center, Flexbox,   Form,
+  Icon,
+Skeleton, 
+  Tooltip} from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
 import { Form as AntdForm, Switch } from 'antd';
 import { createStaticStyles, cssVar, cx, responsive } from 'antd-style';
 import { Loader2Icon, LockIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { memo, useCallback, useLayoutEffect, useRef } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useCallback, useLayoutEffect, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 import { z } from 'zod';
@@ -19,11 +24,13 @@ import { FormInput, FormPassword } from '@/components/FormInput';
 import { SkeletonInput, SkeletonSwitch } from '@/components/Skeleton';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
-import type { AiProviderDetailItem, AiProviderSourceType } from '@/types/aiProvider';
-import { AiProviderSourceEnum } from '@/types/aiProvider';
+import type {AiProviderDetailItem, AiProviderSourceType} from '@/types/aiProvider';
+import {
+  AiProviderSourceEnum
+} from '@/types/aiProvider';
 
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey, LLMProviderBaseUrlKey } from '../../const';
-import type { CheckErrorRender } from './Checker';
+import type {CheckErrorRender} from './Checker';
 import Checker from './Checker';
 import EnableSwitch from './EnableSwitch';
 import OAuthDeviceFlowAuth from './OAuthDeviceFlowAuth';

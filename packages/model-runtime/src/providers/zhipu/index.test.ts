@@ -177,7 +177,7 @@ describe('LobeZhipuAI - custom features', () => {
 
       it('should limit max_tokens to 15300 for glm-zero-preview model', async () => {
         await instance.chat({
-          max_tokens: 20_000,
+          max_tokens: 20000,
           messages: [{ content: 'Hello', role: 'user' }],
           model: 'glm-zero-preview',
           temperature: 0.5,
@@ -463,7 +463,7 @@ describe('LobeZhipuAI - custom features', () => {
                   index: 0,
                 },
               ],
-              created: 1_234_567_890,
+              created: 1234567890,
               id: 'chatcmpl-123',
               model: 'glm-4.5',
               object: 'chat.completion.chunk',
@@ -514,7 +514,7 @@ describe('LobeZhipuAI - custom features', () => {
                   index: 0,
                 },
               ],
-              created: 1_234_567_890,
+              created: 1234567890,
               id: 'chatcmpl-123',
               model: 'glm-4',
               object: 'chat.completion.chunk',
@@ -557,7 +557,7 @@ describe('LobeZhipuAI - custom features', () => {
                   index: 0,
                 },
               ],
-              created: 1_234_567_890,
+              created: 1234567890,
               id: 'chatcmpl-123',
               model: 'glm-4',
               object: 'chat.completion.chunk',
@@ -581,7 +581,7 @@ describe('LobeZhipuAI - custom features', () => {
         const mockStream = new ReadableStream({
           start(controller) {
             controller.enqueue({
-              created: 1_234_567_890,
+              created: 1234567890,
               id: 'chatcmpl-123',
               model: 'glm-4',
               object: 'chat.completion.chunk',
@@ -614,7 +614,7 @@ describe('LobeZhipuAI - custom features', () => {
                   index: 0,
                 },
               ],
-              created: 1_234_567_890,
+              created: 1234567890,
               id: 'chatcmpl-123',
               model: 'glm-4',
               object: 'chat.completion.chunk',
@@ -651,7 +651,7 @@ describe('LobeZhipuAI - custom features', () => {
                   index: 0,
                 },
               ],
-              created: 1_234_567_890,
+              created: 1234567890,
               id: 'chatcmpl-123',
               model: 'glm-4.5',
               object: 'chat.completion.chunk',
@@ -695,7 +695,7 @@ describe('LobeZhipuAI - custom features', () => {
                   index: 0,
                 },
               ],
-              created: 1_234_567_890,
+              created: 1234567890,
               id: 'chatcmpl-123',
               model: 'glm-4.5',
               object: 'chat.completion.chunk',
@@ -711,7 +711,7 @@ describe('LobeZhipuAI - custom features', () => {
                   index: 0,
                 },
               ],
-              created: 1_234_567_890,
+              created: 1234567890,
               id: 'chatcmpl-123',
               model: 'glm-4.5',
               object: 'chat.completion.chunk',
@@ -776,15 +776,15 @@ describe('LobeZhipuAI - custom features', () => {
 
   describe('models', () => {
     const mockFetch = vi.fn();
-    const originalFetch = globalThis.fetch;
+    const originalFetch = global.fetch;
 
     beforeEach(() => {
-      globalThis.fetch = mockFetch;
+      global.fetch = mockFetch;
       vi.clearAllMocks();
     });
 
     afterEach(() => {
-      globalThis.fetch = originalFetch;
+      global.fetch = originalFetch;
     });
 
     it('should fetch and process models with correct headers', async () => {

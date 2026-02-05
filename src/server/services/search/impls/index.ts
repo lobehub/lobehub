@@ -9,7 +9,7 @@ import { KagiImpl } from './kagi';
 import { Search1APIImpl } from './search1api';
 import { SearXNGImpl } from './searxng';
 import { TavilyImpl } from './tavily';
-import type { SearchServiceImpl } from './type';
+import type {SearchServiceImpl} from './type';
 
 /**
  * Available search service implementations

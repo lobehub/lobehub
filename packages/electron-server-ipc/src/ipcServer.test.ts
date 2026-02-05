@@ -362,7 +362,7 @@ describe('ElectronIPCServer', () => {
       try {
         const pendingHandlerPromise = mockEventHandler.testMethod.mock.results[0].value;
         await pendingHandlerPromise;
-      } catch {
+      } catch (error) {
         // 错误预期会被捕获
       }
 

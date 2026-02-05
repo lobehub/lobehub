@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { BrandingProviderCard } from '@/business/client/features/BrandingProviderCard';
 import { useIsDark } from '@/hooks/useIsDark';
-import type { AiProviderListItem } from '@/types/aiProvider';
+import type {AiProviderListItem} from '@/types/aiProvider';
 
 import EnableSwitch from './EnableSwitch';
 import { styles } from './style';

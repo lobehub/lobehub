@@ -9,9 +9,10 @@ import type {
   ModelReasoning,
   ModelUsage,
   ResponseAnimation,
-  ResponseAnimationStyle,
+  ResponseAnimationStyle} from '@lobechat/types';
+import {
+  ChatErrorType
 } from '@lobechat/types';
-import { ChatErrorType } from '@lobechat/types';
 import { fetchEventSource } from '@lobechat/utils/client/fetchEventSource/index';
 import { nanoid } from '@lobechat/utils/uuid';
 
@@ -228,7 +229,7 @@ export const standardizeAnimationStyle = (
 /**
  * Fetch data using stream method
  */
-
+ 
 export const fetchSSE = async (url: string, options: RequestInit & FetchSSEOptions = {}) => {
   let toolCalls: undefined | MessageToolCall[];
   let triggerOnMessageHandler = false;

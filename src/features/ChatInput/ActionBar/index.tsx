@@ -1,5 +1,5 @@
-import type { ChatInputActionsProps } from '@lobehub/editor/react';
-import { ChatInputActions } from '@lobehub/editor/react';
+import type {ChatInputActionsProps} from '@lobehub/editor/react';
+import { ChatInputActions  } from '@lobehub/editor/react';
 import { memo, useMemo } from 'react';
 
 import { useGlobalStore } from '@/store/global';
@@ -7,11 +7,11 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/slices/preference/selectors';
 
-import type { ActionKeys } from '../ActionBar/config';
-import { actionMap } from '../ActionBar/config';
+import type {ActionKeys} from '../ActionBar/config';
+import {  actionMap } from '../ActionBar/config';
 import { useChatInputStore } from '../store';
-import type { DropdownPlacement } from './context';
-import { ActionBarContext } from './context';
+import type {DropdownPlacement} from './context';
+import { ActionBarContext  } from './context';
 
 const mapActionsToItems = (keys: ActionKeys[]): ChatInputActionsProps['items'] =>
   keys.map((actionKey, index) => {

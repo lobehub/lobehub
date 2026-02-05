@@ -1,6 +1,6 @@
 import { produce } from 'immer';
 
-import type { EditorContentState } from './initialState';
+import type {EditorContentState} from './initialState';
 import { createInitialEditorContentState } from './initialState';
 
 // ============ Action Types ============

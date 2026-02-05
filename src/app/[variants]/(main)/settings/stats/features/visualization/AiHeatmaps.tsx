@@ -1,5 +1,5 @@
-import type { HeatmapsProps } from '@lobehub/charts';
-import { Heatmaps } from '@lobehub/charts';
+import type {HeatmapsProps} from '@lobehub/charts';
+import { Heatmaps  } from '@lobehub/charts';
 import { Flexbox, Icon, Tag } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { FlameIcon } from 'lucide-react';

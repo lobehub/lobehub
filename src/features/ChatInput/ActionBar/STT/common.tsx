@@ -1,4 +1,4 @@
-import type { ChatMessageError } from '@lobechat/types';
+import type {ChatMessageError} from '@lobechat/types';
 import { Alert, Button, Flexbox, Highlighter } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Mic, MicOff } from 'lucide-react';

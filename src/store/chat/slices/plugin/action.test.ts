@@ -1,9 +1,12 @@
-import { PLUGIN_SCHEMA_API_MD5_PREFIX, PLUGIN_SCHEMA_SEPARATOR } from '@lobechat/const';
+import {
+  PLUGIN_SCHEMA_API_MD5_PREFIX,
+  PLUGIN_SCHEMA_SEPARATOR,
+} from '@lobechat/const';
 import { ToolNameResolver } from '@lobechat/context-engine';
 import type { ChatToolPayload, MessageToolCall, UIChatMessage } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
 import i18n from 'i18next';
-import type { Mock } from 'vitest';
+import type { Mock} from 'vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { chatService } from '@/services/chat';
@@ -1120,7 +1123,7 @@ describe('ChatPluginAction', () => {
       expect(repairedArgs).toHaveProperty('description');
       expect(repairedArgs).toHaveProperty('instruction');
       expect(repairedArgs).toHaveProperty('runInClient', true);
-      expect(repairedArgs).toHaveProperty('timeout', 120_000);
+      expect(repairedArgs).toHaveProperty('timeout', 120000);
 
       // Verify description is the correct short value, not the entire malformed string
       expect(repairedArgs.description).toBe(

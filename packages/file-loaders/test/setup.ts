@@ -1,17 +1,17 @@
 // Polyfill DOMMatrix for pdfjs-dist in Node.js environment
 import { DOMMatrix } from '@napi-rs/canvas';
 
-if (typeof globalThis.DOMMatrix === 'undefined') {
+if (typeof global.DOMMatrix === 'undefined') {
   // @ts-ignore
-  globalThis.DOMMatrix = DOMMatrix;
+  global.DOMMatrix = DOMMatrix;
 }
 
 // Polyfill URL.createObjectURL and URL.revokeObjectURL for pdfjs-dist
-if (typeof globalThis.URL.createObjectURL === 'undefined') {
-  globalThis.URL.createObjectURL = () => 'blob:http://localhost/fake-blob-url';
+if (typeof global.URL.createObjectURL === 'undefined') {
+  global.URL.createObjectURL = () => 'blob:http://localhost/fake-blob-url';
 }
-if (typeof globalThis.URL.revokeObjectURL === 'undefined') {
-  globalThis.URL.revokeObjectURL = () => {
+if (typeof global.URL.revokeObjectURL === 'undefined') {
+  global.URL.revokeObjectURL = () => {
     /* no-op */
   };
 }

@@ -1,14 +1,14 @@
 'use client';
 
-import type { SlashOptions } from '@lobehub/editor';
+import type {SlashOptions} from '@lobehub/editor';
 import { Alert, Avatar, Flexbox } from '@lobehub/ui';
 import { isEqual } from 'es-toolkit/compat';
 import { memo, Suspense, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
-import type { ActionKeys } from '@/features/ChatInput';
-import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import type {ActionKeys} from '@/features/ChatInput';
+import {  ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import GroupAvatar from '@/features/GroupAvatar';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useAgentGroupStore } from '@/store/agentGroup';

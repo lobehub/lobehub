@@ -5,7 +5,7 @@ import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import type { PluginEnableChecker } from '@lobechat/context-engine';
 import { ToolsEngine } from '@lobechat/context-engine';
-import type { ChatCompletionTool, WorkingModel } from '@lobechat/types';
+import type {ChatCompletionTool, WorkingModel} from '@lobechat/types';
 import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 
 import { getAgentStoreState } from '@/store/agent';

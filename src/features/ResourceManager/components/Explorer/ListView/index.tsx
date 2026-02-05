@@ -3,11 +3,11 @@
 import { Center, Checkbox, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import debug from 'debug';
-import type { DragEvent } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type {DragEvent} from 'react';
+import {  memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { VirtuosoHandle } from 'react-virtuoso';
-import { Virtuoso } from 'react-virtuoso';
+import type {VirtuosoHandle} from 'react-virtuoso';
+import { Virtuoso  } from 'react-virtuoso';
 
 import { useDragActive } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
 import { useFolderPath } from '@/app/[variants]/(main)/resource/features/hooks/useFolderPath';
@@ -20,8 +20,8 @@ import { useFileStore } from '@/store/file';
 import { useFetchResources } from '@/store/file/slices/resource/hooks';
 import { useGlobalStore } from '@/store/global';
 import { INITIAL_STATUS } from '@/store/global/initialState';
-import type { AsyncTaskStatus } from '@/types/asyncTask';
-import type { FileListItem as FileListItemType } from '@/types/files';
+import type {AsyncTaskStatus} from '@/types/asyncTask';
+import type {FileListItem as FileListItemType} from '@/types/files';
 
 import ColumnResizeHandle from './ColumnResizeHandle';
 import FileListItem from './ListItem';
@@ -332,7 +332,8 @@ const ListView = memo(function ListView() {
 
     // Leave some padding at the end when there are no more pages,
     // so users can clearly feel they've reached the end of the list.
-    if (hasMore === false && dataLength > 0) return <div aria-hidden style={{ height: 96 }} />;
+    if (hasMore === false && dataLength > 0)
+      return <div aria-hidden style={{ height: 96 }} />;
 
     return null;
   }, [columnWidths, dataLength, hasMore, isLoadingMore]);

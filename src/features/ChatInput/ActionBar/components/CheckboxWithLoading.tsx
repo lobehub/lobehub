@@ -1,7 +1,7 @@
 import { Center, Checkbox, Flexbox, Icon } from '@lobehub/ui';
 import { Loader2 } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { memo, useState } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useState } from 'react';
 
 export interface CheckboxItemProps {
   checked?: boolean;

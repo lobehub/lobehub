@@ -1,4 +1,4 @@
-import type { BuiltinRenderProps, SearchQuery, UniformSearchResponse } from '@lobechat/types';
+import type {BuiltinRenderProps, SearchQuery, UniformSearchResponse} from '@lobechat/types';
 import { Alert, Flexbox, Highlighter } from '@lobehub/ui';
 import { memo, useState } from 'react';
 

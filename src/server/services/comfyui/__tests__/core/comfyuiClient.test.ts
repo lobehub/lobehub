@@ -432,7 +432,7 @@ describe('ComfyUIClientService', () => {
       const expectedStatus = {
         isValidated: true,
         lastValidationTime: Date.now(),
-        timeUntilExpiry: 300_000,
+        timeUntilExpiry: 300000,
       };
       mockConnectionService.getStatus.mockReturnValue(expectedStatus);
 

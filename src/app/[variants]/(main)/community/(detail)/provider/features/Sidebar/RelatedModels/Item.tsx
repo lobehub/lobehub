@@ -4,7 +4,7 @@ import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { DiscoverProviderDetailModelItem } from '@/types/discover';
+import type {DiscoverProviderDetailModelItem} from '@/types/discover';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {

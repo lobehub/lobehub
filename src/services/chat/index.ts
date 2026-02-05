@@ -1,19 +1,23 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import type { OfficialToolItem } from '@lobechat/context-engine';
-import type { FetchSSEOptions } from '@lobechat/fetch-sse';
-import { fetchSSE, getMessageError, standardizeAnimationStyle } from '@lobechat/fetch-sse';
-import type { ChatCompletionErrorPayload } from '@lobechat/model-runtime';
-import { AgentRuntimeError } from '@lobechat/model-runtime';
-import type {
-  RuntimeInitialContext,
-  RuntimeStepContext,
-  TracePayload,
-  UIChatMessage,
+import type {FetchSSEOptions} from '@lobechat/fetch-sse';
+import {
+  fetchSSE,
+  getMessageError,
+  standardizeAnimationStyle
+} from '@lobechat/fetch-sse';
+import type {ChatCompletionErrorPayload} from '@lobechat/model-runtime';
+import { AgentRuntimeError  } from '@lobechat/model-runtime';
+import type {RuntimeInitialContext, RuntimeStepContext, TracePayload, UIChatMessage} from '@lobechat/types';
+import {
+  ChatErrorType,
+  TraceTagMap
 } from '@lobechat/types';
-import { ChatErrorType, TraceTagMap } from '@lobechat/types';
-import type { PluginRequestPayload } from '@lobehub/chat-plugin-sdk';
-import { createHeadersWithPluginSettings } from '@lobehub/chat-plugin-sdk';
+import type {PluginRequestPayload} from '@lobehub/chat-plugin-sdk';
+import {
+  createHeadersWithPluginSettings
+} from '@lobehub/chat-plugin-sdk';
 import { merge } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
 
@@ -48,14 +52,14 @@ import { createTraceHeader, getTraceId } from '@/utils/trace';
 import { createHeaderWithAuth } from '../_auth';
 import { API_ENDPOINTS } from '../_url';
 import { findDeploymentName, isEnableFetchOnClient, resolveRuntimeProvider } from './helper';
-import type { ResolvedAgentConfig } from './mecha';
+import type {ResolvedAgentConfig} from './mecha';
 import {
   contextEngineering,
   getTargetAgentId,
   initializeWithClientStore,
-  resolveModelExtendParams,
+  resolveModelExtendParams
 } from './mecha';
-import type { FetchOptions } from './types';
+import type {FetchOptions} from './types';
 
 interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
   agentId?: string;
@@ -183,8 +187,8 @@ class ChatService {
 
       // Get Klavis tools (if enabled)
       const isKlavisEnabled =
-        typeof globalThis.window !== 'undefined' &&
-        globalThis.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
+        typeof window !== 'undefined' &&
+        window.global_serverConfigStore?.getState()?.serverConfig?.enableKlavis;
 
       if (isKlavisEnabled) {
         const allKlavisServers = klavisStoreSelectors.getServers(toolState);
@@ -205,8 +209,8 @@ class ChatService {
 
       // Get LobehubSkill providers (if enabled)
       const isLobehubSkillEnabled =
-        typeof globalThis.window !== 'undefined' &&
-        globalThis.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill;
+        typeof window !== 'undefined' &&
+        window.global_serverConfigStore?.getState()?.serverConfig?.enableLobehubSkill;
 
       if (isLobehubSkillEnabled) {
         const allLobehubSkillServers = lobehubSkillStoreSelectors.getServers(toolState);

@@ -53,7 +53,10 @@
               "properties": {
                 "extra": {
                   "description": "Additional metadata about the object, should always be a valid JSON string if present",
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "name": {
                   "description": "Name of the associated object",
@@ -61,11 +64,22 @@
                 },
                 "type": {
                   "description": "Type/category of the associated object",
-                  "enum": ["application", "item", "knowledge", "other", "person", "place"],
+                  "enum": [
+                    "application",
+                    "item",
+                    "knowledge",
+                    "other",
+                    "person",
+                    "place"
+                  ],
                   "type": "string"
                 }
               },
-              "required": ["extra", "name", "type"],
+              "required": [
+                "extra",
+                "name",
+                "type"
+              ],
               "type": "object"
             },
             "type": "array"
@@ -77,7 +91,10 @@
               "properties": {
                 "extra": {
                   "description": "Additional metadata about the subject, should always be a valid JSON string if present",
-                  "type": ["string", "null"]
+                  "type": [
+                    "string",
+                    "null"
+                  ]
                 },
                 "name": {
                   "description": "Name of the associated subject",
@@ -85,18 +102,34 @@
                 },
                 "type": {
                   "description": "Type/category of the associated subject",
-                  "enum": ["item", "other", "person", "pet"],
+                  "enum": [
+                    "item",
+                    "other",
+                    "person",
+                    "pet"
+                  ],
                   "type": "string"
                 }
               },
-              "required": ["extra", "name", "type"],
+              "required": [
+                "extra",
+                "name",
+                "type"
+              ],
               "type": "object"
             },
             "type": "array"
           },
           "currentStatus": {
             "description": "High level status markers (must be one of 'planned', 'ongoing', 'completed', 'aborted', 'on_hold', 'cancelled')",
-            "enum": ["aborted", "cancelled", "completed", "on_hold", "ongoing", "planned"],
+            "enum": [
+              "aborted",
+              "cancelled",
+              "completed",
+              "on_hold",
+              "ongoing",
+              "planned"
+            ],
             "type": "string"
           },
           "description": {

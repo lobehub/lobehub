@@ -1,14 +1,14 @@
 'use client';
 
 import { Collapse, Flexbox, Icon, Tag } from '@lobehub/ui';
-import type { LucideIcon } from 'lucide-react';
+import type {LucideIcon} from 'lucide-react';
 import {
   ChartColumnBig,
   Delete,
   FileMinus,
   MessageSquareText,
   Pickaxe,
-  Thermometer,
+  Thermometer
 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

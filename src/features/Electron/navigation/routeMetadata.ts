@@ -2,8 +2,15 @@
  * Route metadata mapping for navigation history
  * Provides title and icon information based on route path
  */
-import type { LucideIcon } from 'lucide-react';
-import { Circle, Home, MessageSquare, Rocket, ShapesIcon, Users } from 'lucide-react';
+import type {LucideIcon} from 'lucide-react';
+import {
+  Circle,
+  Home,
+  MessageSquare,
+  Rocket,
+  ShapesIcon,
+  Users
+} from 'lucide-react';
 
 import { getRouteById } from '@/config/routes';
 

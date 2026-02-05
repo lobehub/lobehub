@@ -6,28 +6,28 @@ describe('base64 utilities', () => {
   describe('encodeToBase64', () => {
     it('should encode string to base64 in browser environment', () => {
       // Mock browser environment
-      globalThis.btoa = vi
+      global.btoa = vi
         .fn()
         .mockImplementation((input) => Buffer.from(input, 'utf8').toString('base64'));
 
       const result = encodeToBase64('test');
 
-      expect(globalThis.btoa).toHaveBeenCalledWith('test');
+      expect(global.btoa).toHaveBeenCalledWith('test');
       expect(result).toBe('dGVzdA==');
     });
 
     it('should encode string to base64 in Node.js environment', () => {
       // Mock Node.js environment by removing btoa
-      const originalBtoa = globalThis.btoa;
+      const originalBtoa = global.btoa;
       // @ts-ignore
-      delete globalThis.btoa;
+      delete global.btoa;
 
       const result = encodeToBase64('test');
 
       expect(result).toBe('dGVzdA==');
 
       // Restore btoa
-      globalThis.btoa = originalBtoa;
+      global.btoa = originalBtoa;
     });
 
     it('should handle special characters', () => {
@@ -42,28 +42,28 @@ describe('base64 utilities', () => {
   describe('decodeFromBase64', () => {
     it('should decode base64 string in browser environment', () => {
       // Mock browser environment
-      globalThis.atob = vi
+      global.atob = vi
         .fn()
         .mockImplementation((input) => Buffer.from(input, 'base64').toString('utf8'));
 
       const result = decodeFromBase64('dGVzdA==');
 
-      expect(globalThis.atob).toHaveBeenCalledWith('dGVzdA==');
+      expect(global.atob).toHaveBeenCalledWith('dGVzdA==');
       expect(result).toBe('test');
     });
 
     it('should decode base64 string in Node.js environment', () => {
       // Mock Node.js environment by removing atob
-      const originalAtob = globalThis.atob;
+      const originalAtob = global.atob;
       // @ts-ignore
-      delete globalThis.atob;
+      delete global.atob;
 
       const result = decodeFromBase64('dGVzdA==');
 
       expect(result).toBe('test');
 
       // Restore atob
-      globalThis.atob = originalAtob;
+      global.atob = originalAtob;
     });
   });
 

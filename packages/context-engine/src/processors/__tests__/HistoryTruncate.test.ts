@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { getSlicedMessages, HistoryTruncateProcessor } from '../HistoryTruncate';
+import { getSlicedMessages,HistoryTruncateProcessor } from '../HistoryTruncate';
 
 describe('HistoryTruncateProcessor', () => {
   describe('getSlicedMessages', () => {

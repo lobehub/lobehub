@@ -1,10 +1,8 @@
-import type {
-  ActionIconGroupEvent,
-  ActionIconGroupItemType,
-  DropdownItem,
-  GenericItemType,
+import type {ActionIconGroupEvent, ActionIconGroupItemType, DropdownItem, GenericItemType} from '@lobehub/ui';
+import {
+  createRawModal,
+  showContextMenu
 } from '@lobehub/ui';
-import { createRawModal, showContextMenu } from '@lobehub/ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import type { MouseEvent, ReactNode } from 'react';
@@ -17,7 +15,7 @@ import { sessionSelectors } from '@/store/session/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
-import type { ShareModalProps } from '../components/ShareMessageModal';
+import type {ShareModalProps} from '../components/ShareMessageModal';
 import ShareMessageModal from '../components/ShareMessageModal';
 import {
   createStore,
@@ -363,7 +361,7 @@ export const useChatItemContextMenu = ({
         return;
       }
 
-      const selection = globalThis.getSelection();
+      const selection = window.getSelection();
       const selectedText = selection?.toString().trim() || '';
       selectedTextRef.current = selectedText;
 

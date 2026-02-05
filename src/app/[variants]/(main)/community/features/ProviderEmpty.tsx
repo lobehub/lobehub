@@ -1,5 +1,5 @@
-import type { EmptyProps } from '@lobehub/ui';
-import { Center, Empty } from '@lobehub/ui';
+import type {EmptyProps} from '@lobehub/ui';
+import { Center, Empty  } from '@lobehub/ui';
 import { Cloud } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

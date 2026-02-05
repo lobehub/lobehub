@@ -102,10 +102,7 @@ describe('userMemoryRouter.requestMemoryFromChatTopic', () => {
     expect(mockCreate).toHaveBeenCalledWith({
       metadata: {
         progress: { completedTopics: 0, totalTopics: 2 },
-        range: {
-          from: new Date('2024-01-01').toISOString(),
-          to: new Date('2024-02-01').toISOString(),
-        },
+        range: { from: new Date('2024-01-01').toISOString(), to: new Date('2024-02-01').toISOString() },
         source: 'chat_topic',
       },
       status: AsyncTaskStatus.Pending,

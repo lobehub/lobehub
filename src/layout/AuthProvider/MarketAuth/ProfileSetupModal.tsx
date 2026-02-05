@@ -2,8 +2,8 @@
 
 import { SiGithub, SiX } from '@icons-pack/react-simple-icons';
 import { Center, Flexbox, Icon, Input, Modal, Text, TextArea, Tooltip } from '@lobehub/ui';
-import type { UploadProps } from 'antd';
-import { App, Form, Upload } from 'antd';
+import type {UploadProps} from 'antd';
+import { App, Form, Upload  } from 'antd';
 import { cssVar } from 'antd-style';
 import { CircleHelp, Globe, ImagePlus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -19,7 +19,7 @@ import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
-import type { MarketUserProfile } from './types';
+import type {MarketUserProfile} from './types';
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB limit
 

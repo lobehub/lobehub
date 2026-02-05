@@ -7,7 +7,7 @@ import { memo } from 'react';
 
 import Time from '@/app/[variants]/(main)/home/features/components/Time';
 import { RECENT_BLOCK_SIZE } from '@/app/[variants]/(main)/home/features/const';
-import type { FileListItem } from '@/types/files';
+import type {FileListItem} from '@/types/files';
 import markdownToTxt from '@/utils/markdownToTxt';
 
 // Helper to extract title from markdown content

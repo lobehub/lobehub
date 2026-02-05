@@ -1,6 +1,6 @@
 'use client';
 
-import type { IEditor } from '@lobehub/editor';
+import type {IEditor} from '@lobehub/editor';
 import {
   ReactCodemirrorPlugin,
   ReactCodePlugin,
@@ -11,7 +11,7 @@ import {
   ReactLiteXmlPlugin,
   ReactMathPlugin,
   ReactTablePlugin,
-  ReactToolbarPlugin,
+  ReactToolbarPlugin
 } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
 import { memo, useEffect, useMemo, useRef } from 'react';
@@ -95,10 +95,10 @@ const InternalEditor = memo<InternalEditorProps>(
 
     useEffect(() => {
       // for easier debug, mount editor instance to window
-      if (editor) globalThis.__editor = editor;
+      if (editor) window.__editor = editor;
 
       return () => {
-        globalThis.__editor = undefined;
+        window.__editor = undefined;
       };
     }, [editor]);
 

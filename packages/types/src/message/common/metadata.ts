@@ -1,7 +1,7 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
 import { z } from 'zod';
 
-import type { PageSelection } from './pageSelection';
+import type { PageSelection} from './pageSelection';
 import { PageSelectionSchema } from './pageSelection';
 
 export interface ModelTokensUsage {

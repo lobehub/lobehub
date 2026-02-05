@@ -1,9 +1,9 @@
 'use client';
 
-import type { LobeAgentChatConfig } from '@lobechat/types';
-import type { SliderSingleProps } from 'antd/es/slider';
-import type { CSSProperties } from 'react';
-import { memo } from 'react';
+import type {LobeAgentChatConfig} from '@lobechat/types';
+import type {SliderSingleProps} from 'antd/es/slider';
+import type {CSSProperties} from 'react';
+import {  memo } from 'react';
 
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';

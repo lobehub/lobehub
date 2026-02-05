@@ -3,7 +3,7 @@
 import { Flexbox, Icon, SearchBar } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { SearchIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

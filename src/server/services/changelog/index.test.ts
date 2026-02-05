@@ -53,7 +53,7 @@ describe('ChangelogService', () => {
   beforeEach(() => {
     service = new ChangelogService();
     // Mock fetch globally
-    globalThis.fetch = vi.fn();
+    global.fetch = vi.fn();
   });
 
   describe('getLatestChangelogId', () => {
@@ -82,7 +82,7 @@ describe('ChangelogService', () => {
           community: [{ id: 'community1', date: '2023-01-02', versionRange: ['1.1.0'] }],
         }),
       };
-      (globalThis.fetch as any).mockResolvedValue(mockResponse);
+      (global.fetch as any).mockResolvedValue(mockResponse);
 
       const result = await service.getChangelogIndex();
       expect(result).toHaveLength(2);
@@ -91,7 +91,7 @@ describe('ChangelogService', () => {
     });
 
     it('should handle fetch errors', async () => {
-      (globalThis.fetch as any).mockRejectedValue(
+      (global.fetch as any).mockRejectedValue(
         new Error('Fetch failed', { cause: { code: 'Timeout' } }),
       );
 
@@ -108,7 +108,7 @@ describe('ChangelogService', () => {
           community: [{ id: 'community1', date: '2023-01-02', versionRange: ['1.1.0'] }],
         }),
       };
-      (globalThis.fetch as any).mockResolvedValue(mockResponse);
+      (global.fetch as any).mockResolvedValue(mockResponse);
 
       const result = await service.getChangelogIndex();
       expect(result).toHaveLength(1);
@@ -147,7 +147,7 @@ describe('ChangelogService', () => {
       const mockResponse = {
         text: vi.fn().mockResolvedValue('# Post Title\nPost content'),
       };
-      (globalThis.fetch as any).mockResolvedValue(mockResponse);
+      (global.fetch as any).mockResolvedValue(mockResponse);
 
       const result = await service.getPostById('post1');
       expect(result).toMatchObject({
@@ -166,7 +166,7 @@ describe('ChangelogService', () => {
 
     it('should handle fetch errors', async () => {
       vi.spyOn(service, 'getIndexItemById').mockResolvedValue({} as ChangelogIndexItem);
-      (globalThis.fetch as any).mockRejectedValue(new Error('Fetch failed'));
+      (global.fetch as any).mockRejectedValue(new Error('Fetch failed'));
 
       const result = await service.getPostById('error');
       expect(result).toBe(false);
@@ -182,7 +182,7 @@ describe('ChangelogService', () => {
       const mockResponse = {
         text: vi.fn().mockResolvedValue('# Chinese Title\n中文内容'),
       };
-      (globalThis.fetch as any).mockResolvedValue(mockResponse);
+      (global.fetch as any).mockResolvedValue(mockResponse);
 
       const result = await service.getPostById('post1', { locale: 'zh-CN' });
       expect(result).toEqual({
@@ -268,7 +268,7 @@ describe('ChangelogService', () => {
         const mockResponse = {
           json: vi.fn().mockResolvedValue(mockData),
         };
-        globalThis.fetch = vi.fn().mockResolvedValue(mockResponse);
+        global.fetch = vi.fn().mockResolvedValue(mockResponse);
 
         // @ts-ignore - accessing private method for testing
         await service.cdnInit();

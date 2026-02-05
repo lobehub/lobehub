@@ -3,8 +3,8 @@
 import { Modal } from '@lobehub/ui';
 import { ConfigProvider } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
-import type { ReactNode } from 'react';
-import { useCallback, useState } from 'react';
+import type {ReactNode} from 'react';
+import {  useCallback, useState } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`
@@ -19,7 +19,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   extra: css`
     position: fixed;
     z-index: ${cssVar.zIndexPopupBase + 10};
-    inset-block: 0;
+    inset-block: 0 0;
     inset-inline-end: 0;
 
     width: 0;

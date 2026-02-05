@@ -9,7 +9,7 @@ import { useUserStore } from '@/store/user';
 import { imageToBase64 } from '@/utils/imageToBase64';
 import { createUploadImageHandler } from '@/utils/uploadFIle';
 
-import type { UserAvatarProps } from '../User/UserAvatar';
+import type {UserAvatarProps} from '../User/UserAvatar';
 import UserAvatar from '../User/UserAvatar';
 
 interface AvatarWithUploadProps extends UserAvatarProps {
@@ -58,7 +58,7 @@ const AvatarWithUpload = memo<AvatarWithUploadProps>(
     return (
       <Spin indicator={<LoadingOutlined spin />} spinning={uploading}>
         <Upload beforeUpload={handleUploadAvatar} itemRender={() => void 0} maxCount={1}>
-          <UserAvatar clickable size={size} {...rest} />
+          <UserAvatar clickable size={size} {...(rest as any)} />
         </Upload>
       </Spin>
     );

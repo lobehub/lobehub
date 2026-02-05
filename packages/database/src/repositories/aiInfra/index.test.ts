@@ -24,7 +24,7 @@ let repo: AiInfraRepos;
 
 beforeAll(async () => {
   serverDB = await getTestDB();
-}, 30_000);
+}, 30000);
 
 beforeEach(() => {
   vi.clearAllMocks();

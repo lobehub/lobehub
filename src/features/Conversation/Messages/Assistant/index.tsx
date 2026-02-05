@@ -2,8 +2,8 @@
 
 import { LOADING_FLAT } from '@lobechat/const';
 import isEqual from 'fast-deep-equal';
-import type { MouseEventHandler } from 'react';
-import { memo, useCallback } from 'react';
+import type {MouseEventHandler} from 'react';
+import { memo,  useCallback } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';

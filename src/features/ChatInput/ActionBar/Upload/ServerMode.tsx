@@ -1,6 +1,6 @@
 import { validateVideoFileSize } from '@lobechat/utils/client';
-import type { ItemType } from '@lobehub/ui';
-import { Icon, Tooltip } from '@lobehub/ui';
+import type {ItemType} from '@lobehub/ui';
+import { Icon,  Tooltip } from '@lobehub/ui';
 import { Upload } from 'antd';
 import { css, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';

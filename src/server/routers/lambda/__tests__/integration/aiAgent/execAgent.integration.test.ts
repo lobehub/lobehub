@@ -40,6 +40,7 @@ vi.mock('@/server/services/file', () => ({
   })),
 }));
 
+ 
 let mockResponsesCreate: any;
 
 let serverDB: LobeChatDatabase;
@@ -94,9 +95,7 @@ describe('execAgent', () => {
 
       expect(result.success).toBe(true);
       expect(result.operationId).toBeDefined();
-      expect(result.operationId).toMatch(
-        /^op_\d+_agt_.+_tpc_.(?:[^\n\r_\u2028\u2029]*_[^\w\n\r\u2028\u2029])*[^\n\r_\u2028\u2029]*_\w+(?:[^\w\n\r\u2028\u2029](?:[^\n\r_\u2028\u2029]*_[^\w\n\r\u2028\u2029])*[^\n\r_\u2028\u2029]*_\w+)*$/,
-      );
+      expect(result.operationId).toMatch(/^op_\d+_agt_.+_tpc_.(?:[^\n\r_\u2028\u2029]*_[^\w\n\r\u2028\u2029])*[^\n\r_\u2028\u2029]*_\w+(?:[^\w\n\r\u2028\u2029](?:[^\n\r_\u2028\u2029]*_[^\w\n\r\u2028\u2029])*[^\n\r_\u2028\u2029]*_\w+)*$/);
 
       // Verify topic was created
       const createdTopics = await serverDB

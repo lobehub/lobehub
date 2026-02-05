@@ -1,4 +1,4 @@
-import type { ModelParamsSchema } from '../standard-parameters';
+import type { ModelParamsSchema} from '../standard-parameters';
 import { PRESET_ASPECT_RATIOS } from '../standard-parameters';
 import type { AIImageModelCard } from '../types';
 

@@ -4,8 +4,8 @@ import { isDesktop } from '@lobechat/const';
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import type { MouseEvent, ReactNode } from 'react';
-import { memo, Suspense, useCallback } from 'react';
+import type {MouseEvent, ReactNode} from 'react';
+import { memo,   Suspense, useCallback } from 'react';
 
 import BubblesLoading from '@/components/BubblesLoading';
 
@@ -88,7 +88,7 @@ const MessageItem = memo<MessageItemProps>(
           const { electronSystemService } = await import('@/services/electron/system');
 
           // Get selected text for context menu features like Look Up and Search
-          const selection = globalThis.getSelection();
+          const selection = window.getSelection();
           const selectionText = selection?.toString() || '';
 
           electronSystemService.showContextMenu('chat', {

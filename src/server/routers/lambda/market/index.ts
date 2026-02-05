@@ -53,6 +53,7 @@ export const marketRouter = router({
   // ============================== Agent Group Management (authenticated) ==============================
   agentGroup: agentGroupRouter,
 
+  
   getAgentsByPlugin: marketProcedure
     .input(
       z.object({
@@ -77,7 +78,7 @@ export const marketRouter = router({
     }),
 
   // ============================== Assistant Market ==============================
-  getAssistantCategories: marketProcedure
+getAssistantCategories: marketProcedure
     .input(
       z
         .object({

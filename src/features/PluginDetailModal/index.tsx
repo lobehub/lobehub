@@ -1,5 +1,5 @@
-import type { SegmentedProps } from '@lobehub/ui';
-import { Modal, Segmented } from '@lobehub/ui';
+import type {SegmentedProps} from '@lobehub/ui';
+import { Modal, Segmented  } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import useMergeState from 'use-merge-value';

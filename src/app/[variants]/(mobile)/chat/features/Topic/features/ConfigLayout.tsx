@@ -3,8 +3,8 @@
 import { ActionIcon, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
-import type { CSSProperties, ReactNode } from 'react';
-import { memo } from 'react';
+import type {CSSProperties, ReactNode} from 'react';
+import {  memo } from 'react';
 
 import SidebarHeader from '@/components/SidebarHeader';
 import { useGlobalStore } from '@/store/global';

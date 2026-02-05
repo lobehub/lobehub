@@ -36,7 +36,7 @@ import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
 import { useAgentStore } from '@/store/agent';
 import { useHomeStore } from '@/store/home';
-import type { AgentStatus, DiscoverAssistantItem } from '@/types/discover';
+import type {AgentStatus, DiscoverAssistantItem} from '@/types/discover';
 import { formatIntergerNumber } from '@/utils/format';
 
 import { useUserDetailContext } from './DetailProvider';

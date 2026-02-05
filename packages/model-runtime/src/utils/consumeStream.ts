@@ -24,6 +24,7 @@ export async function consumeStreamUntilDone(response: Response): Promise<void> 
 
   const reader = response.body.getReader();
   try {
+     
     while (true) {
       const { done } = await reader.read();
       if (done) break;

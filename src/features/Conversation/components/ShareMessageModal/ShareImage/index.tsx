@@ -1,6 +1,6 @@
-import type { UIChatMessage } from '@lobechat/types';
-import type { FormItemProps } from '@lobehub/ui';
-import { Button, Flexbox, Form, Segmented } from '@lobehub/ui';
+import type {UIChatMessage} from '@lobechat/types';
+import type {FormItemProps} from '@lobehub/ui';
+import { Button, Flexbox,Form,  Segmented  } from '@lobehub/ui';
 import { Switch } from 'antd';
 import { CopyIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -15,7 +15,7 @@ import { agentSelectors } from '@/store/agent/selectors';
 
 import { styles } from '../style';
 import Preview from './Preview';
-import type { FieldType } from './type';
+import type {FieldType} from './type';
 
 const DEFAULT_FIELD_VALUE: FieldType = {
   imageType: ImageType.JPG,

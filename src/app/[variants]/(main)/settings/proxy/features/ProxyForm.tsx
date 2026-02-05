@@ -1,8 +1,8 @@
 'use client';
 
-import type { NetworkProxySettings } from '@lobechat/electron-client-ipc';
-import type { FormGroupItemType } from '@lobehub/ui';
-import { Alert, Flexbox, Form, Icon, Skeleton } from '@lobehub/ui';
+import type {NetworkProxySettings} from '@lobechat/electron-client-ipc';
+import type {FormGroupItemType} from '@lobehub/ui';
+import { Alert, Flexbox, Form,  Icon, Skeleton } from '@lobehub/ui';
 import { Button, Form as AntdForm, Input, Radio, Space, Switch } from 'antd';
 import { Loader2Icon } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';

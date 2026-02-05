@@ -48,7 +48,7 @@ const DEFAULT_CACHEABLE_PATTERNS: string[] = [
  * Check if localStorage is available
  */
 const isLocalStorageAvailable = (): boolean => {
-  if (typeof globalThis.window === 'undefined') return false;
+  if (typeof window === 'undefined') return false;
 
   try {
     const testKey = '__swr_cache_test__';
@@ -183,7 +183,7 @@ export function createLocalStorageProvider(options: LocalStorageCacheOptions = {
     });
 
     // Multi-tab sync
-    globalThis.addEventListener('storage', (event) => {
+    window.addEventListener('storage', (event) => {
       if (event.key === cacheKey && event.newValue && cacheMapInstance) {
         try {
           const parsedEntries: [string, CacheEntry][] = JSON.parse(event.newValue);
@@ -252,7 +252,7 @@ export function createLocalStorageProvider(options: LocalStorageCacheOptions = {
  * Can be used for manual cleanup or when app version changes
  */
 export function clearSWRCache(cacheKey = 'lobechat-swr-cache'): void {
-  if (typeof globalThis.window === 'undefined') return;
+  if (typeof window === 'undefined') return;
 
   try {
     localStorage.removeItem(cacheKey);

@@ -12,7 +12,7 @@ import {
 import { resolveParameters } from '../../core/parameterResolver';
 import { AnthropicStream } from '../../core/streams';
 import type {
-  type ChatCompletionErrorPayload,
+  ChatCompletionErrorPayload,
   ChatMethodOptions,
   ChatStreamPayload,
   GenerateObjectOptions,

@@ -1,20 +1,20 @@
 'use client';
 
-import type { ErrorShape, ImportFileUploadState } from '@lobechat/types';
-import { ImportStage } from '@lobechat/types';
+import type {ErrorShape, ImportFileUploadState} from '@lobechat/types';
+import {   ImportStage } from '@lobechat/types';
 import { Center } from '@lobehub/ui';
 import { Upload } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { ImportIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
-import React, { memo, useMemo, useState } from 'react';
+import type {ReactNode} from 'react';
+import React, { memo,  useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DataStyleModal from '@/components/DataStyleModal';
 import { importService } from '@/services/import';
 import { useChatStore } from '@/store/chat';
 import { useHomeStore } from '@/store/home';
-import type { ImportPgDataStructure } from '@/types/export';
+import type {ImportPgDataStructure} from '@/types/export';
 
 import { parseConfigFile } from './config';
 import ImportError from './Error';

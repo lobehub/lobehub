@@ -12,7 +12,7 @@ import { agentListStyles as styles } from '@/features/SkillStore/SkillDetail/sty
 import VirtuosoLoading from '@/features/SkillStore/SkillList/VirtuosoLoading';
 import { useClientDataSWR } from '@/libs/swr';
 import { discoverService } from '@/services/discover';
-import type { DiscoverAssistantItem } from '@/types/discover';
+import type {DiscoverAssistantItem} from '@/types/discover';
 
 import { useDetailContext } from './DetailProvider';
 
@@ -107,7 +107,7 @@ const Agents = memo<AgentsProps>(({ inModal }) => {
     <VirtuosoGrid
       data={items}
       endReached={loadMore}
-      increaseViewportBy={typeof globalThis.window !== 'undefined' ? window.innerHeight : 0}
+      increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
       itemClassName={styles.item}
       itemContent={(_, item) => <AgentItem key={item.identifier} {...item} />}
       listClassName={styles.list}

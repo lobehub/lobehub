@@ -327,13 +327,13 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus',
-              context_length: 128_000,
+              context_length: 128000,
               features: ['tools', 'chat'],
               supports_vision: false,
             },
             {
               name: 'command-r',
-              context_length: 128_000,
+              context_length: 128000,
               features: ['tools', 'chat'],
               supports_vision: false,
             },
@@ -346,13 +346,13 @@ describe('LobeCohereAI - custom features', () => {
       expect(models).toHaveLength(2);
       expect(models[0]).toMatchObject({
         id: 'command-r-plus',
-        contextWindowTokens: 128_000,
+        contextWindowTokens: 128000,
         functionCall: true, // Has tools in features
         vision: false,
       });
       expect(models[1]).toMatchObject({
         id: 'command-r',
-        contextWindowTokens: 128_000,
+        contextWindowTokens: 128000,
         functionCall: true, // Has tools in features
         vision: false,
       });
@@ -364,7 +364,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus-08-2024',
-              context_length: 128_000,
+              context_length: 128000,
               features: ['tools', 'chat'],
               supports_vision: true,
             },
@@ -436,7 +436,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus',
-              context_length: 128_000,
+              context_length: 128000,
               features: ['tools', 'chat'],
               supports_vision: false,
             },
@@ -485,7 +485,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'COMMAND-R-PLUS',
-              context_length: 128_000,
+              context_length: 128000,
               features: ['tools'],
               supports_vision: false,
             },
@@ -507,7 +507,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus',
-              context_length: 128_000,
+              context_length: 128000,
               features: ['tools', 'chat'],
               supports_vision: false,
             },
@@ -556,7 +556,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus-vision',
-              context_length: 128_000,
+              context_length: 128000,
               features: ['tools', 'chat', 'vision'],
               supports_vision: true,
             },
@@ -569,7 +569,7 @@ describe('LobeCohereAI - custom features', () => {
       expect(models).toHaveLength(1);
       expect(models[0]).toMatchObject({
         id: 'command-r-plus-vision',
-        contextWindowTokens: 128_000,
+        contextWindowTokens: 128000,
         functionCall: true,
         vision: true,
       });
@@ -581,7 +581,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus',
-              context_length: 128_000,
+              context_length: 128000,
               features: null,
               supports_vision: false,
             },
@@ -608,13 +608,13 @@ describe('LobeCohereAI - custom features', () => {
             },
             {
               name: 'command-r',
-              context_length: 128_000,
+              context_length: 128000,
               features: ['tools', 'chat'],
               supports_vision: false,
             },
             {
               name: 'command-r-plus',
-              context_length: 256_000,
+              context_length: 256000,
               features: ['tools', 'chat'],
               supports_vision: false,
             },
@@ -626,8 +626,8 @@ describe('LobeCohereAI - custom features', () => {
 
       expect(models).toHaveLength(3);
       expect(models[0].contextWindowTokens).toBe(4096);
-      expect(models[1].contextWindowTokens).toBe(128_000);
-      expect(models[2].contextWindowTokens).toBe(256_000);
+      expect(models[1].contextWindowTokens).toBe(128000);
+      expect(models[2].contextWindowTokens).toBe(256000);
     });
 
     it('should handle complex features array', async () => {
@@ -636,7 +636,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus',
-              context_length: 128_000,
+              context_length: 128000,
               features: ['tools', 'chat', 'embeddings', 'rerank'],
               supports_vision: false,
             },
@@ -724,7 +724,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus-extended',
-              context_length: 1_000_000,
+              context_length: 1000000,
               features: ['tools'],
               supports_vision: false,
             },
@@ -735,7 +735,7 @@ describe('LobeCohereAI - custom features', () => {
       const models = await params.models({ client: mockClient as any });
 
       expect(models).toHaveLength(1);
-      expect(models[0].contextWindowTokens).toBe(1_000_000);
+      expect(models[0].contextWindowTokens).toBe(1000000);
     });
 
     it('should handle models with zero context length', async () => {
@@ -764,7 +764,7 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus-08-2024',
-              context_length: 128_000,
+              context_length: 128000,
               features: ['tools', 'chat'],
               supports_vision: true,
             },
@@ -785,13 +785,13 @@ describe('LobeCohereAI - custom features', () => {
           models: [
             {
               name: 'command-r-plus',
-              context_length: 128_000,
+              context_length: 128000,
               features: ['tools', 'chat'],
               supports_vision: true,
             },
             {
               name: 'command-r',
-              context_length: 128_000,
+              context_length: 128000,
               features: ['tools'],
               supports_vision: false,
             },

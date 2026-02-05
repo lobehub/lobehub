@@ -3,7 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { Switch } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import type { PropsWithChildren } from 'react';
+import type {PropsWithChildren} from 'react';
 import { memo } from 'react';
 
 import { SkeletonSwitch } from '@/components/Skeleton';

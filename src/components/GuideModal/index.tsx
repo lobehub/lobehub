@@ -1,11 +1,11 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import type { ModalProps } from 'antd';
-import { ConfigProvider, Modal } from 'antd';
+import type {ModalProps} from 'antd';
+import { ConfigProvider, Modal  } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import type { ReactNode } from 'react';
-import { memo, useMemo } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useMemo } from 'react';
 
 const prefixCls = 'ant';
 

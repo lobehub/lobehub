@@ -3,7 +3,7 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import type { JinaModelCard } from './index';
+import type { JinaModelCard} from './index';
 import { LobeJinaAI, params } from './index';
 
 const provider = ModelProvider.Jina;

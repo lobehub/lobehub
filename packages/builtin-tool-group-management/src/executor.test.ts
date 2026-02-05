@@ -319,7 +319,7 @@ describe('GroupManagementExecutor', () => {
       );
 
       await groupManagementExecutor.executeAgentTask(
-        { agentId: 'agent-1', instruction: 'Do something', timeout: 30_000, title: 'Test Task' },
+        { agentId: 'agent-1', instruction: 'Do something', timeout: 30000, title: 'Test Task' },
         ctx,
       );
 
@@ -335,7 +335,7 @@ describe('GroupManagementExecutor', () => {
         agentId: 'agent-1',
         instruction: 'Do something',
         supervisorAgentId: 'supervisor-agent',
-        timeout: 30_000,
+        timeout: 30000,
         toolMessageId: 'test-message-id',
       });
     });
@@ -356,7 +356,7 @@ describe('GroupManagementExecutor', () => {
       const ctx = createMockContext();
 
       const result = await groupManagementExecutor.executeAgentTask(
-        { agentId: 'agent-1', instruction: 'Do something', timeout: 60_000, title: 'Test Task' },
+        { agentId: 'agent-1', instruction: 'Do something', timeout: 60000, title: 'Test Task' },
         ctx,
       );
 
@@ -364,7 +364,7 @@ describe('GroupManagementExecutor', () => {
       expect(result.state).toEqual({
         agentId: 'agent-1',
         instruction: 'Do something',
-        timeout: 60_000,
+        timeout: 60000,
         type: 'executeAgentTask',
       });
     });

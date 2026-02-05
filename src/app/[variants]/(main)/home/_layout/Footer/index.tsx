@@ -2,8 +2,8 @@
 
 import { BRANDING_EMAIL, SOCIAL_URL } from '@lobechat/business-const';
 import { useAnalytics } from '@lobehub/analytics/react';
-import type { MenuProps } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import type {MenuProps} from '@lobehub/ui';
+import { ActionIcon, DropdownMenu, Flexbox,Icon   } from '@lobehub/ui';
 import { DiscordIcon } from '@lobehub/ui/icons';
 import {
   Book,

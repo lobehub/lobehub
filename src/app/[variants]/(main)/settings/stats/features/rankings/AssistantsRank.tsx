@@ -11,7 +11,7 @@ import { INBOX_SESSION_ID } from '@/const/session';
 import Link from '@/libs/router/Link';
 import { useClientDataSWR } from '@/libs/swr';
 import { sessionService } from '@/services/session';
-import type { SessionRankItem } from '@/types/session';
+import type {SessionRankItem} from '@/types/session';
 
 import StatsFormGroup from '../components/StatsFormGroup';
 

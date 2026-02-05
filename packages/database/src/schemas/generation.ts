@@ -5,7 +5,7 @@ import { createInsertSchema } from 'drizzle-zod';
 
 import { idGenerator } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
-import type { AsyncTaskSelectItem } from './asyncTask';
+import type {AsyncTaskSelectItem } from './asyncTask';
 import { asyncTasks } from './asyncTask';
 import { files } from './file';
 import { users } from './user';

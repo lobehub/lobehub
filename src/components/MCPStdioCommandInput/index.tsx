@@ -6,10 +6,10 @@ import {
   SiPnpm,
   SiPython,
 } from '@icons-pack/react-simple-icons';
-import type { AutoCompleteProps } from '@lobehub/ui';
-import { AutoComplete, Flexbox } from '@lobehub/ui';
-import type { FC } from 'react';
-import { memo } from 'react';
+import type {AutoCompleteProps} from '@lobehub/ui';
+import { AutoComplete, Flexbox   } from '@lobehub/ui';
+import type {FC} from 'react';
+import {  memo } from 'react';
 
 // 定义预设的命令选项
 const STDIO_COMMAND_OPTIONS: {

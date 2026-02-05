@@ -3,8 +3,8 @@
 import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { FileImage, FileText, FileUpIcon } from 'lucide-react';
-import type { CSSProperties, ReactNode } from 'react';
-import { memo } from 'react';
+import type {CSSProperties, ReactNode} from 'react';
+import {  memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDragUploadContext } from './DragUploadProvider';

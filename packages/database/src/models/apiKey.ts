@@ -2,7 +2,7 @@ import { and, desc, eq } from 'drizzle-orm';
 
 import { generateApiKey, isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
 
-import type { ApiKeyItem, NewApiKeyItem } from '../schemas';
+import type { ApiKeyItem,NewApiKeyItem } from '../schemas';
 import { apiKeys } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 

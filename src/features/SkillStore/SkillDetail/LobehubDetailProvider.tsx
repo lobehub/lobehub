@@ -9,8 +9,8 @@ import { useToolStore } from '@/store/tool';
 import { lobehubSkillStoreSelectors } from '@/store/tool/selectors';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 
-import type { DetailContextValue } from './DetailContext';
-import { DetailContext } from './DetailContext';
+import type {DetailContextValue} from './DetailContext';
+import { DetailContext  } from './DetailContext';
 
 interface LobehubDetailProviderProps {
   children: ReactNode;

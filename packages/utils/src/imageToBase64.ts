@@ -44,7 +44,7 @@ export const imageUrlToBase64 = async (
   imageUrl: string,
 ): Promise<{ base64: string; mimeType: string }> => {
   try {
-    const isServer = typeof globalThis.window === 'undefined';
+    const isServer = typeof window === 'undefined';
 
     // Use SSRF-safe fetch on server-side to prevent SSRF attacks
     const res = isServer

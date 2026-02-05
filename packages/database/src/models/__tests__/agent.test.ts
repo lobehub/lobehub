@@ -4,7 +4,8 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import type { NewAgent } from '../../schemas';
+import type {
+  NewAgent} from '../../schemas';
 import {
   agents,
   agentsFiles,

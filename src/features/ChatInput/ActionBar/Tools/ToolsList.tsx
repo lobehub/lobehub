@@ -1,5 +1,5 @@
-import type { ItemType } from '@lobehub/ui';
-import { Flexbox, Icon, Text } from '@lobehub/ui';
+import type {ItemType} from '@lobehub/ui';
+import { Flexbox, Icon,  Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { ReactNode } from 'react';

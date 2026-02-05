@@ -1,9 +1,12 @@
-import type { QueryFileListParams } from '@lobechat/types';
+import type { QueryFileListParams} from '@lobechat/types';
 import { FilesTabs, SortType } from '@lobechat/types';
 import { and, asc, count, desc, eq, ilike, inArray, like, notExists, or, sum } from 'drizzle-orm';
 import type { PgTransaction } from 'drizzle-orm/pg-core';
 
-import type { FileItem, NewFile, NewGlobalFile } from '../schemas';
+import type {
+  FileItem,
+  NewFile,
+  NewGlobalFile} from '../schemas';
 import {
   chunks,
   documentChunks,

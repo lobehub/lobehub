@@ -413,7 +413,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           ) as any;
         } else {
           // Remove internal apiMode parameter before sending to API
-
+           
           const { apiMode: _, ...cleanedPayload } = postPayload as any;
           const finalPayload = {
             ...cleanedPayload,

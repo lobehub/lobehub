@@ -6,6 +6,5 @@ type OptionalField<T, P extends keyof T, K extends keyof T> = T[P] extends Primi
 
 export type Optional<T, K extends keyof T> = T extends null | undefined
   ? T
-  : Partial<Pick<T, K | OptionalKeys<T>>> & {
-      [P in Exclude<keyof T, K | OptionalKeys<T>>]: OptionalField<T, P, K>;
-    };
+  : Partial<Pick<T, K | OptionalKeys<T>>> &
+      { [P in Exclude<keyof T, K | OptionalKeys<T>>]: OptionalField<T, P, K> };

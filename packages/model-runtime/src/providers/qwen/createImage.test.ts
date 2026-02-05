@@ -29,7 +29,7 @@ describe('createQwenImage', () => {
       const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/test-image.jpg';
 
       // Mock fetch for task creation and immediate success
-      globalThis.fetch = vi
+      global.fetch = vi
         .fn()
         .mockResolvedValueOnce({
           ok: true,
@@ -101,7 +101,7 @@ describe('createQwenImage', () => {
       const mockTaskId = 'task-polling';
       const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/test-image-3.jpg';
 
-      globalThis.fetch = vi
+      global.fetch = vi
         .fn()
         .mockResolvedValueOnce({
           ok: true,
@@ -154,7 +154,7 @@ describe('createQwenImage', () => {
       const mockTaskId = 'task-custom-size';
       const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/custom-size.jpg';
 
-      globalThis.fetch = vi
+      global.fetch = vi
         .fn()
         .mockResolvedValueOnce({
           ok: true,
@@ -236,7 +236,7 @@ describe('createQwenImage', () => {
         }
       });
 
-      globalThis.fetch = vi
+      global.fetch = vi
         .fn()
         .mockResolvedValueOnce({
           ok: true,
@@ -255,7 +255,7 @@ describe('createQwenImage', () => {
       };
 
       // Mock setTimeout to make test run faster but still allow controlled execution
-      vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback: any) => {
+      vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
         // Use setImmediate to avoid recursion issues
         setImmediate(callback);
         return 1 as any;
@@ -275,7 +275,7 @@ describe('createQwenImage', () => {
       const mockTaskId = 'task-with-zero-seed';
       const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/seed-zero.jpg';
 
-      globalThis.fetch = vi
+      global.fetch = vi
         .fn()
         .mockResolvedValueOnce({
           ok: true,
@@ -328,7 +328,7 @@ describe('createQwenImage', () => {
 
   describe('Error scenarios', () => {
     it('should handle task creation failure', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      global.fetch = vi.fn().mockResolvedValueOnce({
         ok: false,
         statusText: 'Bad Request',
         json: async () => ({
@@ -352,7 +352,7 @@ describe('createQwenImage', () => {
     });
 
     it('should handle non-JSON error responses', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      global.fetch = vi.fn().mockResolvedValueOnce({
         ok: false,
         status: 500,
         statusText: 'Internal Server Error',
@@ -379,7 +379,7 @@ describe('createQwenImage', () => {
     it('should handle task failure status', async () => {
       const mockTaskId = 'task-failed';
 
-      globalThis.fetch = vi
+      global.fetch = vi
         .fn()
         .mockResolvedValueOnce({
           ok: true,
@@ -418,7 +418,7 @@ describe('createQwenImage', () => {
     it('should handle task succeeded but no results', async () => {
       const mockTaskId = 'task-no-results';
 
-      globalThis.fetch = vi
+      global.fetch = vi
         .fn()
         .mockResolvedValueOnce({
           ok: true,
@@ -457,7 +457,7 @@ describe('createQwenImage', () => {
     it('should handle status query failure', async () => {
       const mockTaskId = 'task-query-fail';
 
-      globalThis.fetch = vi
+      global.fetch = vi
         .fn()
         .mockResolvedValueOnce({
           ok: true,
@@ -515,7 +515,7 @@ describe('createQwenImage', () => {
         }
       });
 
-      globalThis.fetch = vi
+      global.fetch = vi
         .fn()
         .mockResolvedValueOnce({
           ok: true,
@@ -534,7 +534,7 @@ describe('createQwenImage', () => {
       };
 
       // Mock setTimeout to make test run faster
-      vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback: any) => {
+      vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
         setImmediate(callback);
         return 1 as any;
       });
@@ -555,7 +555,7 @@ describe('createQwenImage', () => {
     it('should fail after consecutive query failures', async () => {
       const mockTaskId = 'task-consecutive-failures';
 
-      globalThis.fetch = vi
+      global.fetch = vi
         .fn()
         .mockResolvedValueOnce({
           ok: true,
@@ -575,7 +575,7 @@ describe('createQwenImage', () => {
       };
 
       // Mock setTimeout to make test run faster
-      vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback: any) => {
+      vi.spyOn(global, 'setTimeout').mockImplementation((callback: any) => {
         setImmediate(callback);
         return 1 as any;
       });
@@ -598,7 +598,7 @@ describe('createQwenImage', () => {
         'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/test-generated-image.jpg';
 
       // Mock fetch for multimodal-generation API
-      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      global.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           output: {
@@ -676,7 +676,7 @@ describe('createQwenImage', () => {
     });
 
     it('should handle qwen-image-edit API errors', async () => {
-      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      global.fetch = vi.fn().mockResolvedValueOnce({
         ok: false,
         status: 400,
         statusText: 'Bad Request',
@@ -705,7 +705,7 @@ describe('createQwenImage', () => {
       const mockImageUrl =
         'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/imageUrls-converted.jpg';
 
-      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      global.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           output: {
@@ -750,7 +750,7 @@ describe('createQwenImage', () => {
     it('should use first imageUrl when imageUrls has multiple elements', async () => {
       const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/first-element.jpg';
 
-      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      global.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           output: {
@@ -807,7 +807,7 @@ describe('createQwenImage', () => {
     it('should prioritize imageUrl over imageUrls when both are provided', async () => {
       const mockImageUrl = 'https://dashscope.oss-cn-beijing.aliyuncs.com/aigc/priority-test.jpg';
 
-      globalThis.fetch = vi.fn().mockResolvedValueOnce({
+      global.fetch = vi.fn().mockResolvedValueOnce({
         ok: true,
         json: async () => ({
           output: {

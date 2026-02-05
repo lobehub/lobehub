@@ -1,6 +1,6 @@
 'use client';
 
-import type { BuiltinInspectorProps } from '@lobechat/types';
+import type {BuiltinInspectorProps} from '@lobechat/types';
 import { Text } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import type { ListLocalFilesState } from '../../../types';
+import type {ListLocalFilesState} from '../../../types';
 import { FilePathDisplay } from '../../components/FilePathDisplay';
 
 interface ListLocalFilesParams {

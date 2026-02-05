@@ -1,5 +1,5 @@
-import type { ItemType } from '@lobehub/ui';
-import { Flexbox, Icon, Segmented } from '@lobehub/ui';
+import type {ItemType} from '@lobehub/ui';
+import { Flexbox, Icon,  Segmented } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRight, ExternalLink, Settings, Store } from 'lucide-react';
 import { memo } from 'react';

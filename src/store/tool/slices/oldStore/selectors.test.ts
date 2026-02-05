@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ToolStoreState } from '../../initialState';
+import type {ToolStoreState } from '../../initialState';
 import { initialState } from '../../initialState';
 import { pluginStoreSelectors } from './selectors';
 

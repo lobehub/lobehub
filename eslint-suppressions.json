@@ -1,20 +1,7 @@
 {
-  "packages/agent-runtime/src/agents/__tests__/GeneralChatAgent.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 2
-    }
-  },
   "packages/agent-runtime/src/core/__tests__/runtime.test.ts": {
     "require-yield": {
       "count": 1
-    },
-    "unicorn/consistent-function-scoping": {
-      "count": 2
-    }
-  },
-  "packages/agent-runtime/src/core/runtime.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 6
     }
   },
   "packages/agent-runtime/src/types/event.ts": {
@@ -33,14 +20,44 @@
       "count": 1
     }
   },
-  "packages/builtin-tool-group-management/src/executor.test.ts": {
-    "unicorn/consistent-function-scoping": {
+  "packages/builtin-tool-cloud-sandbox/src/manifest.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "packages/builtin-tool-group-agent-builder/src/manifest.ts": {
+    "sort-keys-fix/sort-keys-fix": {
       "count": 2
     }
   },
-  "packages/builtin-tool-gtd/src/executor/index.test.ts": {
-    "unicorn/consistent-function-scoping": {
+  "packages/builtin-tool-group-management/src/manifest.ts": {
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
+    }
+  },
+  "packages/builtin-tool-group-management/src/types.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "packages/builtin-tool-gtd/src/client/components/SortableTodoList/store/actions.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "packages/builtin-tool-gtd/src/manifest.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "packages/builtin-tool-page-agent/src/manifest.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "packages/builtin-tool-page-agent/src/types.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
     }
   },
   "packages/business/config/src/server/edge-config.ts": {
@@ -48,43 +65,18 @@
       "count": 1
     }
   },
-  "packages/const/src/utils/merge.test.ts": {
-    "unicorn/prefer-structured-clone": {
-      "count": 4
-    }
-  },
-  "packages/context-engine/src/__tests__/pipeline.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 4
-    }
-  },
-  "packages/context-engine/src/base/__tests__/BaseEveryUserContentProvider.test.ts": {
-    "unicorn/consistent-function-scoping": {
+  "packages/business/const/src/bedrock-model-mapping.ts": {
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
-  "packages/context-engine/src/base/__tests__/BaseFirstUserContentProvider.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
+  "packages/const/src/plugin.ts": {
+    "regexp/match-any": {
+      "count": 5
     }
   },
-  "packages/context-engine/src/base/__tests__/BaseLastUserContentProvider.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/context-engine/src/base/__tests__/BaseProcessor.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/context-engine/src/base/__tests__/BaseProvider.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/context-engine/src/engine/messages/__tests__/MessagesEngine.test.ts": {
-    "unicorn/consistent-function-scoping": {
+  "packages/context-engine/src/engine/messages/MessagesEngine.ts": {
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
@@ -98,100 +90,17 @@
       "count": 2
     }
   },
-  "packages/context-engine/src/processors/__tests__/AgentCouncilFlatten.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
+  "packages/context-engine/src/processors/InputTemplate.ts": {
+    "regexp/strict": {
+      "count": 4
     }
   },
-  "packages/context-engine/src/processors/__tests__/GroupMessageFlatten.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/context-engine/src/processors/__tests__/GroupOrchestrationFilter.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/context-engine/src/processors/__tests__/GroupRoleTransform.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/context-engine/src/processors/__tests__/MessageCleanup.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/context-engine/src/processors/__tests__/SupervisorRoleRestore.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/context-engine/src/processors/__tests__/TaskMessage.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/context-engine/src/processors/__tests__/ToolCall.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/context-engine/src/providers/__tests__/GroupAgentBuilderContextInjector.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/context-engine/src/providers/__tests__/GroupContextInjector.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/context-engine/src/providers/__tests__/HistorySummaryProvider.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/context-engine/src/providers/__tests__/KnowledgeInjector.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/context-engine/src/providers/__tests__/PageEditorContextInjector.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 2
-    }
-  },
-  "packages/context-engine/src/providers/__tests__/PageSelectionsInjector.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 2
-    }
-  },
-  "packages/context-engine/src/providers/__tests__/ToolSystemRoleProvider.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 7
-    }
-  },
-  "packages/context-engine/src/providers/__tests__/UserMemoryInjector.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/conversation-flow/src/transformation/__tests__/ContextTreeBuilder.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/conversation-flow/src/transformation/__tests__/FlatListBuilder.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
+  "packages/context-engine/src/processors/PlaceholderVariables.ts": {
+    "regexp/strict": {
+      "count": 8
     }
   },
   "packages/database/src/models/__tests__/userMemories.test.ts": {
-    "unicorn/no-await-expression-member": {
-      "count": 1
-    },
     "unicorn/no-new-array": {
       "count": 1
     }
@@ -204,24 +113,9 @@
       "count": 2
     }
   },
-  "packages/database/src/models/userMemory/sources/__tests__/benchmarkLoCoMo.test.ts": {
-    "unicorn/no-await-expression-member": {
-      "count": 2
-    }
-  },
-  "packages/database/src/repositories/aiInfra/index.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
   "packages/database/src/repositories/dataImporter/deprecated/__tests__/index.test.ts": {
     "@typescript-eslint/no-non-null-asserted-optional-chain": {
       "count": 2
-    }
-  },
-  "packages/database/src/repositories/topicImporter/__tests__/importTopic.test.ts": {
-    "unicorn/text-encoding-identifier-case": {
-      "count": 5
     }
   },
   "packages/database/src/schemas/agent.ts": {
@@ -319,11 +213,6 @@
       "count": 1
     }
   },
-  "packages/database/src/utils/genWhere.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 6
-    }
-  },
   "packages/edge-config/src/types.ts": {
     "sort-keys-fix/sort-keys-fix": {
       "count": 1
@@ -348,9 +237,6 @@
   "packages/electron-server-ipc/src/ipcClient.test.ts": {
     "@typescript-eslint/no-unsafe-function-type": {
       "count": 62
-    },
-    "unicorn/consistent-function-scoping": {
-      "count": 1
     }
   },
   "packages/electron-server-ipc/src/ipcClient.ts": {
@@ -374,13 +260,13 @@
       "count": 14
     }
   },
-  "packages/file-loaders/test/loaders.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
+  "packages/model-bank/src/aiModels/google.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
     }
   },
-  "packages/model-bank/src/exports.test.ts": {
-    "unicorn/text-encoding-identifier-case": {
+  "packages/model-bank/src/aiModels/vertexai.ts": {
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
@@ -400,14 +286,17 @@
       "count": 1
     }
   },
-  "packages/model-runtime/src/core/RouterRuntime/createRuntime.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
+  "packages/model-runtime/src/core/openaiCompatibleFactory/index.test.ts": {
+    "regexp/strict": {
+      "count": 4
     }
   },
   "packages/model-runtime/src/core/streams/cloudflare.ts": {
     "prefer-const": {
       "count": 4
+    },
+    "regexp/strict": {
+      "count": 1
     }
   },
   "packages/model-runtime/src/core/streams/google/google-ai.test.ts": {
@@ -415,19 +304,27 @@
       "count": 31
     }
   },
-  "packages/model-runtime/src/core/streams/model.test.ts": {
-    "unicorn/consistent-function-scoping": {
+  "packages/model-runtime/src/core/streams/openai/openai.ts": {
+    "regexp/strict": {
+      "count": 1
+    },
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
-  "packages/model-runtime/src/core/streams/protocol.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 9
+  "packages/model-runtime/src/core/streams/openai/responsesStream.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
     }
   },
   "packages/model-runtime/src/core/streams/spark.test.ts": {
     "no-useless-escape": {
       "count": 24
+    }
+  },
+  "packages/model-runtime/src/core/usageConverters/utils/computeChatCost.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
     }
   },
   "packages/model-runtime/src/helpers/mergeChatMethodOptions.ts": {
@@ -447,9 +344,6 @@
     "require-yield": {
       "count": 1
     },
-    "unicorn/no-await-expression-member": {
-      "count": 3
-    },
     "unicorn/no-immediate-mutation": {
       "count": 3
     }
@@ -459,28 +353,8 @@
       "count": 1
     }
   },
-  "packages/model-runtime/src/providers/hunyuan/index.test.ts": {
-    "unicorn/no-await-expression-member": {
-      "count": 1
-    }
-  },
-  "packages/model-runtime/src/providers/newapi/index.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/model-runtime/src/providers/perplexity/index.test.ts": {
-    "unicorn/no-await-expression-member": {
-      "count": 1
-    }
-  },
   "packages/model-runtime/src/providers/replicate/index.ts": {
     "regexp/no-unused-capturing-group": {
-      "count": 1
-    }
-  },
-  "packages/model-runtime/src/providers/sensenova/index.test.ts": {
-    "unicorn/consistent-function-scoping": {
       "count": 1
     }
   },
@@ -494,8 +368,8 @@
       "count": 1
     }
   },
-  "packages/model-runtime/src/providers/wenxin/index.test.ts": {
-    "unicorn/no-await-expression-member": {
+  "packages/model-runtime/src/types/error.ts": {
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
@@ -527,16 +401,6 @@
       "count": 3
     }
   },
-  "packages/python-interpreter/src/__tests__/worker.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/ssrf-safe-fetch/index.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
   "packages/types/src/agent/chatConfig.ts": {
     "sort-keys-fix/sort-keys-fix": {
       "count": 1
@@ -553,6 +417,11 @@
       "count": 9
     }
   },
+  "packages/types/src/agentRuntime.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
   "packages/types/src/asyncTask.ts": {
     "typescript-sort-keys/string-enum": {
       "count": 1
@@ -565,6 +434,11 @@
   },
   "packages/types/src/conversation.ts": {
     "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "packages/types/src/fetch.ts": {
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
@@ -600,11 +474,21 @@
       "count": 1
     }
   },
+  "packages/types/src/message/db/params.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
   "packages/types/src/message/ui/params.ts": {
     "sort-keys-fix/sort-keys-fix": {
       "count": 1
     },
     "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "packages/types/src/plugins/mcp.ts": {
+    "typescript-sort-keys/string-enum": {
       "count": 1
     }
   },
@@ -616,8 +500,8 @@
       "count": 1
     }
   },
-  "packages/utils/src/chunkers/trimBatchProbe/trimBatchProbe.test.ts": {
-    "unicorn/consistent-function-scoping": {
+  "packages/types/src/topic/topic.ts": {
+    "typescript-sort-keys/string-enum": {
       "count": 1
     }
   },
@@ -626,19 +510,12 @@
       "count": 1
     }
   },
-  "packages/utils/src/client/topic.test.ts": {
-    "unicorn/consistent-function-scoping": {
+  "packages/utils/src/promptTemplate.ts": {
+    "regexp/match-any": {
       "count": 1
-    }
-  },
-  "packages/utils/src/clientIP.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "packages/utils/src/merge.test.ts": {
-    "unicorn/prefer-structured-clone": {
-      "count": 2
+    },
+    "regexp/strict": {
+      "count": 4
     }
   },
   "packages/web-crawler/src/crawImpl/__tests__/browserless.test.ts": {
@@ -704,11 +581,6 @@
       "count": 1
     }
   },
-  "src/app/[variants]/(main)/image/_layout/ConfigPanel/utils/__tests__/imageValidation.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 2
-    }
-  },
   "src/app/[variants]/(main)/memory/features/GridView/index.tsx": {
     "@eslint-react/no-nested-component-definitions": {
       "count": 1
@@ -750,8 +622,8 @@
       "count": 1
     }
   },
-  "src/components/InvalidAPIKey/__tests__/ComfyUIForm.test.tsx": {
-    "unicorn/consistent-function-scoping": {
+  "src/components/HtmlPreview/PreviewDrawer.tsx": {
+    "regexp/match-any": {
       "count": 1
     }
   },
@@ -765,11 +637,31 @@
       "count": 1
     }
   },
+  "src/config/featureFlags/schema.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/envs/analytics.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/envs/app.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
   "src/envs/auth.ts": {
     "sort-keys-fix/sort-keys-fix": {
       "count": 1
     },
     "typescript-sort-keys/interface": {
+      "count": 1
+    }
+  },
+  "src/envs/email.ts": {
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
@@ -789,7 +681,7 @@
       "count": 1
     }
   },
-  "src/features/ChatInput/ActionBar/Model/ThinkingBudgetSlider.tsx": {
+  "src/envs/redis.ts": {
     "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
@@ -802,39 +694,9 @@
       "count": 1
     }
   },
-  "src/features/Conversation/Markdown/plugins/LobeArtifact/rehypePlugin.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "src/features/Conversation/Markdown/plugins/remarkPlugins/createRemarkCustomTagPlugin.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "src/features/Conversation/Markdown/plugins/remarkPlugins/createRemarkCustomTagWithAttributesPlugin.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "src/features/Conversation/Markdown/plugins/remarkPlugins/createRemarkSelfClosingTagPlugin.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "src/features/Conversation/store.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 4
-    }
-  },
-  "src/features/Conversation/store/selectors.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "src/features/Conversation/store/slices/tool/action.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 3
+  "src/features/Conversation/components/ShareMessageModal/ShareText/template.ts": {
+    "regexp/strict": {
+      "count": 2
     }
   },
   "src/features/Conversation/types/hooks.ts": {
@@ -850,11 +712,6 @@
   "src/features/DevPanel/CacheViewer/index.tsx": {
     "react-hooks/rules-of-hooks": {
       "count": 1
-    }
-  },
-  "src/features/EditorCanvas/InternalEditor.test.tsx": {
-    "unicorn/consistent-function-scoping": {
-      "count": 2
     }
   },
   "src/features/NavPanel/SideBarHeaderLayout.tsx": {
@@ -892,13 +749,26 @@
       "count": 1
     }
   },
-  "src/hooks/useAutoScroll.test.ts": {
-    "unicorn/consistent-function-scoping": {
+  "src/features/ShareModal/ShareJSON/generateFullExport.ts": {
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
-  "src/hooks/useHotkeys/useHotkeyById.test.ts": {
-    "unicorn/consistent-function-scoping": {
+  "src/features/ShareModal/ShareText/template.ts": {
+    "regexp/strict": {
+      "count": 2
+    }
+  },
+  "src/helpers/GlobalAgentContextManager.ts": {
+    "regexp/strict": {
+      "count": 4
+    }
+  },
+  "src/helpers/parserPlaceholder/index.ts": {
+    "regexp/strict": {
+      "count": 4
+    },
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
@@ -928,21 +798,8 @@
       "count": 1
     }
   },
-  "src/libs/redis/redis.test.ts": {
-    "unicorn/no-await-expression-member": {
-      "count": 1
-    }
-  },
-  "src/libs/trpc/client/lambda.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
   "src/libs/trpc/middleware/openTelemetry.test.ts": {
     "import/first": {
-      "count": 1
-    },
-    "unicorn/consistent-function-scoping": {
       "count": 1
     }
   },
@@ -954,13 +811,8 @@
       "count": 1
     }
   },
-  "src/server/modules/AgentRuntime/__tests__/RuntimeExecutors.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 6
-    }
-  },
-  "src/server/modules/Mecha/ContextEngineering/__tests__/serverMessagesEngine.test.ts": {
-    "unicorn/consistent-function-scoping": {
+  "src/server/modules/Mecha/ContextEngineering/index.ts": {
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
@@ -979,16 +831,6 @@
       "count": 2
     }
   },
-  "src/server/routers/lambda/__tests__/integration/aiAgent/execAgent.integration.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 2
-    }
-  },
-  "src/server/routers/lambda/_helpers/resolveContext.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 2
-    }
-  },
   "src/server/routers/lambda/aiChat.ts": {
     "prefer-const": {
       "count": 1
@@ -999,14 +841,59 @@
       "count": 1
     }
   },
-  "src/server/routers/lambda/image/index.test.ts": {
-    "unicorn/consistent-function-scoping": {
+  "src/server/routers/lambda/index.ts": {
+    "sort-keys-fix/sort-keys-fix": {
       "count": 2
     }
   },
   "src/server/routers/lambda/ragEval.ts": {
     "sort-keys-fix/sort-keys-fix": {
       "count": 1
+    }
+  },
+  "src/server/routers/lambda/user.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/routers/tools/mcp.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/server/services/changelog/index.ts": {
+    "regexp/strict": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/config/fluxModelRegistry.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/config/modelRegistry.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/config/promptToolConst.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/config/sdModelRegistry.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/config/systemComponents.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/config/workflowRegistry.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
     }
   },
   "src/server/services/comfyui/core/errorHandlerService.ts": {
@@ -1017,18 +904,63 @@
       "count": 1
     }
   },
-  "src/server/services/email/index.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
+  "src/server/services/comfyui/errors/configError.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
     }
   },
-  "src/server/services/message/index.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
+  "src/server/services/comfyui/errors/modelResolverError.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
     }
   },
-  "src/server/services/search/index.test.ts": {
-    "unicorn/consistent-function-scoping": {
+  "src/server/services/comfyui/errors/servicesError.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/errors/utilsError.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/errors/workflowError.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/utils/workflowUtils.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/workflows/flux-dev.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/workflows/flux-kontext.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/workflows/flux-schnell.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/workflows/sd35.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/comfyui/workflows/simple-sd.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 2
+    }
+  },
+  "src/server/services/document/index.ts": {
+    "regexp/match-any": {
       "count": 1
     }
   },
@@ -1037,9 +969,14 @@
       "count": 7
     }
   },
-  "src/services/__tests__/models.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 2
+  "src/services/_url.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
+    }
+  },
+  "src/services/chat/mecha/contextEngineering.ts": {
+    "sort-keys-fix/sort-keys-fix": {
+      "count": 1
     }
   },
   "src/store/agent/slices/cron/action.ts": {
@@ -1057,33 +994,16 @@
       "count": 1
     }
   },
-  "src/store/chat/agents/__tests__/createAgentExecutors/call-llm.test.ts": {
-    "unicorn/prefer-structured-clone": {
-      "count": 1
-    }
-  },
-  "src/store/chat/agents/__tests__/createAgentExecutors/call-tool.test.ts": {
-    "unicorn/prefer-structured-clone": {
-      "count": 1
-    }
-  },
-  "src/store/chat/agents/__tests__/createAgentExecutors/finish.test.ts": {
-    "unicorn/prefer-structured-clone": {
-      "count": 1
-    }
-  },
-  "src/store/chat/agents/__tests__/createAgentExecutors/request-human-approve.test.ts": {
-    "unicorn/prefer-structured-clone": {
-      "count": 1
-    }
-  },
-  "src/store/chat/agents/__tests__/createAgentExecutors/resolve-aborted-tools.test.ts": {
-    "unicorn/prefer-structured-clone": {
+  "src/store/chat/agents/GroupOrchestration/createGroupOrchestrationExecutors.ts": {
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
   "src/store/chat/agents/createAgentExecutors.ts": {
     "prefer-const": {
+      "count": 1
+    },
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
@@ -1141,11 +1061,6 @@
       "count": 1
     }
   },
-  "src/store/chat/slices/builtinTool/actions/__tests__/search.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 7
-    }
-  },
   "src/store/chat/slices/message/actions/optimisticUpdate.ts": {
     "no-unused-private-class-members": {
       "count": 1
@@ -1159,8 +1074,8 @@
       "count": 1
     }
   },
-  "src/store/chat/slices/message/selectors/dbMessage.test.ts": {
-    "unicorn/consistent-function-scoping": {
+  "src/store/chat/slices/operation/actions.ts": {
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
@@ -1227,12 +1142,10 @@
       "count": 1
     }
   },
-  "src/store/chat/slices/portal/selectors.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
   "src/store/chat/slices/portal/selectors.ts": {
+    "regexp/match-any": {
+      "count": 1
+    },
     "sort-keys-fix/sort-keys-fix": {
       "count": 1
     },
@@ -1306,23 +1219,13 @@
       "count": 2
     }
   },
-  "src/store/document/slices/editor/selectors.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "src/store/file/slices/chat/action.test.ts": {
-    "unicorn/prefer-blob-reading-methods": {
+  "src/store/document/slices/editor/selectors.ts": {
+    "sort-keys-fix/sort-keys-fix": {
       "count": 1
     }
   },
   "src/store/file/slices/chunk/action.ts": {
     "no-unused-private-class-members": {
-      "count": 1
-    }
-  },
-  "src/store/file/slices/tts/action.test.ts": {
-    "unicorn/prefer-blob-reading-methods": {
       "count": 1
     }
   },
@@ -1341,6 +1244,11 @@
       "count": 1
     }
   },
+  "src/store/global/initialState.ts": {
+    "typescript-sort-keys/string-enum": {
+      "count": 2
+    }
+  },
   "src/store/home/slices/group/action.ts": {
     "no-unused-private-class-members": {
       "count": 1
@@ -1352,11 +1260,6 @@
     },
     "typescript-sort-keys/interface": {
       "count": 1
-    }
-  },
-  "src/store/image/slices/generationConfig/action.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 2
     }
   },
   "src/store/image/slices/generationConfig/initialState.ts": {
@@ -1395,19 +1298,9 @@
       "count": 1
     }
   },
-  "src/store/tool/slices/builtin/executors/__tests__/BaseExecutor.test.ts": {
-    "unicorn/consistent-function-scoping": {
+  "src/store/tool/slices/oldStore/initialState.ts": {
+    "typescript-sort-keys/string-enum": {
       "count": 1
-    }
-  },
-  "src/store/tool/slices/builtin/executors/__tests__/lobe-web-browsing.test.ts": {
-    "unicorn/consistent-function-scoping": {
-      "count": 1
-    }
-  },
-  "src/store/tool/slices/mcpStore/action.test.ts": {
-    "unicorn/no-await-expression-member": {
-      "count": 2
     }
   },
   "src/store/userMemory/slices/home/action.ts": {
@@ -1422,11 +1315,6 @@
   },
   "src/styles/global.ts": {
     "unicorn/no-anonymous-default-export": {
-      "count": 1
-    }
-  },
-  "src/utils/locale.test.ts": {
-    "unicorn/consistent-function-scoping": {
       "count": 1
     }
   },

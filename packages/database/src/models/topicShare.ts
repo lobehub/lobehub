@@ -2,7 +2,7 @@ import type { ShareVisibility } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { and, asc, eq, sql } from 'drizzle-orm';
 
-import { agents, chatGroups, chatGroupsAgents, topics, topicShares } from '../schemas';
+import { agents, chatGroups, chatGroupsAgents, topics,topicShares } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
 export type TopicShareData = NonNullable<
@@ -130,12 +130,7 @@ export class TopicShareModel {
 
     // Fetch group members if this is a group topic
     let groupMembers:
-      | {
-          avatar: string | null;
-          backgroundColor: string | null;
-          id: string;
-          title: string | null;
-        }[]
+      | { avatar: string | null; backgroundColor: string | null; id: string; title: string | null }[]
       | undefined;
     if (share.groupId) {
       const members = await db

@@ -1,8 +1,8 @@
 'use client';
 
 import { App } from 'antd';
-import type { ReactNode } from 'react';
-import { createContext, useCallback, useEffect, useState } from 'react';
+import type {ReactNode} from 'react';
+import { createContext,  use, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { mutate as globalMutate } from 'swr';
 
@@ -17,13 +17,7 @@ import { MarketAuthError } from './errors';
 import MarketAuthConfirmModal from './MarketAuthConfirmModal';
 import { MarketOIDC } from './oidc';
 import ProfileSetupModal from './ProfileSetupModal';
-import type {
-  MarketAuthContextType,
-  MarketAuthSession,
-  MarketUserInfo,
-  MarketUserProfile,
-  OIDCConfig,
-} from './types';
+import type {MarketAuthContextType, MarketAuthSession, MarketUserInfo, MarketUserProfile, OIDCConfig} from './types';
 import { useMarketUserProfile } from './useMarketUserProfile';
 
 const MarketAuthContext = createContext<MarketAuthContextType | null>(null);
@@ -165,14 +159,14 @@ export const MarketAuthProvider = ({ children, isDesktop }: MarketAuthProviderPr
 
   // 初始化 OIDC 客户端（仅在客户端）
   useEffect(() => {
-    if (typeof globalThis.window !== 'undefined') {
+    if (typeof window !== 'undefined') {
       const baseUrl = process.env.NEXT_PUBLIC_MARKET_BASE_URL || 'https://market.lobehub.com';
       const desktopRedirectUri = new URL(MARKET_OIDC_ENDPOINTS.desktopCallback, baseUrl).toString();
 
       // 桌面端使用 Market 手动维护的 Web 回调，Web 端使用当前域名
       const redirectUri = isDesktop
         ? desktopRedirectUri
-        : `${globalThis.location.origin}/market-auth-callback`;
+        : `${window.location.origin}/market-auth-callback`;
 
       const oidcConfig: OIDCConfig = {
         baseUrl,

@@ -1,6 +1,6 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import type { ButtonProps } from '@lobehub/ui';
-import { Button, Center, Tooltip } from '@lobehub/ui';
+import type {ButtonProps} from '@lobehub/ui';
+import { Button,  Center, Tooltip } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { BotIcon, PenLineIcon } from 'lucide-react';
@@ -8,8 +8,8 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useInitBuiltinAgent } from '@/hooks/useInitBuiltinAgent';
-import type { StarterMode } from '@/store/home';
-import { useHomeStore } from '@/store/home';
+import type {StarterMode} from '@/store/home';
+import {  useHomeStore } from '@/store/home';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   active: css`

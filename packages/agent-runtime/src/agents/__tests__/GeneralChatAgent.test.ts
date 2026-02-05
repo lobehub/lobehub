@@ -384,7 +384,7 @@ describe('GeneralChatAgent', () => {
             state: {
               type: 'execTask',
               parentMessageId: 'exec-parent-msg',
-              task: { instruction: 'Do something async', timeout: 30_000 },
+              task: { instruction: 'Do something async', timeout: 30000 },
             },
           },
         });
@@ -395,7 +395,7 @@ describe('GeneralChatAgent', () => {
           type: 'exec_task',
           payload: {
             parentMessageId: 'exec-parent-msg',
-            task: { instruction: 'Do something async', timeout: 30_000 },
+            task: { instruction: 'Do something async', timeout: 30000 },
           },
         });
       });
@@ -409,8 +409,8 @@ describe('GeneralChatAgent', () => {
 
         const state = createMockState();
         const tasks = [
-          { instruction: 'Task 1', timeout: 30_000 },
-          { instruction: 'Task 2', timeout: 30_000 },
+          { instruction: 'Task 1', timeout: 30000 },
+          { instruction: 'Task 2', timeout: 30000 },
         ];
         const context = createMockContext('tool_result', {
           parentMessageId: 'tool-msg-1',

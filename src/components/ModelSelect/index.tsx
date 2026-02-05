@@ -1,7 +1,7 @@
-import type { ChatModelCard } from '@lobechat/types';
-import type { IconAvatarProps } from '@lobehub/icons';
-import { LobeHub, ModelIcon, ProviderIcon } from '@lobehub/icons';
-import type { FlexboxProps } from '@lobehub/ui';
+import type {ChatModelCard} from '@lobechat/types';
+import type {IconAvatarProps} from '@lobehub/icons';
+import {  LobeHub, ModelIcon, ProviderIcon } from '@lobehub/icons';
+import type { FlexboxProps} from '@lobehub/ui';
 import { Avatar, Flexbox, Icon, Tag, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, useResponsive } from 'antd-style';
 import {
@@ -14,13 +14,13 @@ import {
   ToyBrick,
   Video,
 } from 'lucide-react';
-import type { ModelAbilities } from 'model-bank';
+import type {ModelAbilities} from 'model-bank';
 import numeral from 'numeral';
-import type { CSSProperties, FC } from 'react';
-import { memo } from 'react';
+import type { CSSProperties,FC} from 'react';
+import {  memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { AiProviderSourceType } from '@/types/aiProvider';
+import type {AiProviderSourceType} from '@/types/aiProvider';
 import { formatTokenNumber } from '@/utils/format';
 
 import NewModelBadgeI18n, { NewModelBadge as NewModelBadgeCore } from './NewModelBadge';

@@ -1,10 +1,10 @@
 'use client';
 
 import isEqual from 'fast-deep-equal';
-import type { ReactElement, ReactNode } from 'react';
-import { memo, useCallback, useEffect, useRef } from 'react';
-import type { VListHandle } from 'virtua';
-import { VList } from 'virtua';
+import type {ReactElement, ReactNode} from 'react';
+import { memo,   useCallback, useEffect, useRef } from 'react';
+import type {VListHandle} from 'virtua';
+import { VList  } from 'virtua';
 
 import WideScreenContainer from '../../../WideScreenContainer';
 import { dataSelectors, useConversationStore, virtuaListSelectors } from '../../store';
@@ -142,7 +142,7 @@ const VirtualizedList = memo<VirtualizedListProps>(({ dataSource, itemContent })
       {/* Debug Inspector - 放在 VList 外面，不会被虚拟列表回收 */}
       {OPEN_DEV_INSPECTOR && <DebugInspector />}
       <VList
-        bufferSize={typeof globalThis.window !== 'undefined' ? window.innerHeight : 0}
+        bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
         data={dataSource}
         ref={virtuaRef}
         style={{ height: '100%', overflowAnchor: 'none', paddingBottom: 24 }}

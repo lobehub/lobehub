@@ -10,7 +10,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     width: 40px;
     height: 40px;
 
-    @media (width <= 768px) {
+    @media (max-width: 768px) {
       width: 32px;
       height: 32px;
     }
@@ -20,7 +20,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     height: 1px;
     background-color: ${cssVar.colorBorderSecondary};
 
-    @media (width <= 768px) {
+    @media (max-width: 768px) {
       width: 24px;
     }
   `,

@@ -119,7 +119,7 @@ const isToolApiNameShining =
  * Check if a message has a thread by source message ID
  * This is a bridge selector that reads from global ChatStore
  */
-
+ 
 const hasThreadBySourceMsgId = (id: string) => (_s: State) => {
   const chatState = useChatStore.getState();
   return threadSelectors.hasThreadBySourceMsgId(id)(chatState);
@@ -129,7 +129,7 @@ const hasThreadBySourceMsgId = (id: string) => (_s: State) => {
  * Check if we are in thread mode (has active thread ID)
  * This is a bridge selector that reads from global ChatStore
  */
-
+ 
 const isThreadMode = (_s: State) => {
   const chatState = useChatStore.getState();
   return !!chatState.activeThreadId;

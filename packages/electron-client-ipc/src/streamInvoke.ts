@@ -2,9 +2,10 @@ import type { ProxyTRPCStreamRequestParams } from './types';
 import { headersToRecord } from './utils/headers';
 import { getRequestBody } from './utils/request';
 
+ 
 export const streamInvoke = async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = input.toString();
-  const parsedUrl = new URL(url, globalThis.location.origin);
+  const parsedUrl = new URL(url, window.location.origin);
   const urlPath = parsedUrl.pathname + parsedUrl.search;
   const method = init?.method?.toUpperCase() || 'GET';
   const headers = headersToRecord(init?.headers);
@@ -30,7 +31,7 @@ export const streamInvoke = async (input: RequestInfo | URL, init?: RequestInit)
       cancel() {
         // This will be called if the consumer of the stream calls .cancel()
         // We should clean up the IPC listeners
-
+         
         cleanup?.();
       },
       start(controller) {
@@ -38,7 +39,7 @@ export const streamInvoke = async (input: RequestInfo | URL, init?: RequestInit)
       },
     });
 
-    const electronAPI = globalThis.electronAPI;
+    const electronAPI = window.electronAPI;
     if (!electronAPI || !electronAPI.onStreamInvoke) {
       reject(new Error('[streamInvoke] window.electronAPI.onStreamInvoke is not available'));
       return;

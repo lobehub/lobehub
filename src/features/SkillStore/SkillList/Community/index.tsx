@@ -86,7 +86,7 @@ export const CommunityList = memo(() => {
       <VirtuosoGrid
         data={allItems}
         endReached={loadMoreMCPPlugins}
-        increaseViewportBy={typeof globalThis.window !== 'undefined' ? window.innerHeight : 0}
+        increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
         itemClassName={virtuosoGridStyles.item}
         itemContent={(_, item) => <Item {...item} />}
         listClassName={virtuosoGridStyles.list}

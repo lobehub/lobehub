@@ -1,3 +1,4 @@
+/* eslint-disable sort-keys-fix/sort-keys-fix */
 import { createEnv } from '@t3-oss/env-nextjs';
 import { z } from 'zod';
 

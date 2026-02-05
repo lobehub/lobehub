@@ -17,8 +17,8 @@ import { Switch } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { omit } from 'es-toolkit/compat';
 import { Users } from 'lucide-react';
-import type { ChangeEvent } from 'react';
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type {ChangeEvent} from 'react';
+import {  memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
@@ -26,11 +26,11 @@ import GroupAvatar from '@/features/GroupAvatar';
 import ModelSelect from '@/features/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useSessionStore } from '@/store/session';
-import type { LobeAgentSession } from '@/types/session';
-import { LobeSessionType } from '@/types/session';
+import type {LobeAgentSession} from '@/types/session';
+import {  LobeSessionType } from '@/types/session';
 
-import type { GroupTemplate } from './templates';
-import { useGroupTemplates } from './templates';
+import type {GroupTemplate} from './templates';
+import {  useGroupTemplates } from './templates';
 
 const TemplateItem = memo<{
   cx: (..._args: any[]) => string;
@@ -475,7 +475,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
               title,
             };
           })
-          // eslint-disable-next-line unicorn/prefer-native-coercion-functions
+           
           .filter((item): item is NonNullable<typeof item> => Boolean(item))
       );
     }, [selectedAgents, agentSessions, t, handleRemoveAgent, memberDescriptionClass]);

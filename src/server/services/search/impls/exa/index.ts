@@ -1,10 +1,10 @@
-import type { SearchParams, UniformSearchResponse, UniformSearchResult } from '@lobechat/types';
+import type {SearchParams, UniformSearchResponse, UniformSearchResult} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
-import type { SearchServiceImpl } from '../type';
-import type { ExaResponse, ExaSearchParameters } from './type';
+import type {SearchServiceImpl} from '../type';
+import type {ExaResponse, ExaSearchParameters} from './type';
 
 const log = debug('lobe-search:Exa');
 
@@ -47,8 +47,8 @@ export class ExaImpl implements SearchServiceImpl {
             };
           })()
         : {}),
-      // Exa only supports news type
-      category: params?.searchCategories?.find((cat) => ['news'].includes(cat)),
+      category: // Exa only supports news type
+      params?.searchCategories?.find((cat) => ['news'].includes(cat)),
     };
 
     log('Constructed request body: %o', body);

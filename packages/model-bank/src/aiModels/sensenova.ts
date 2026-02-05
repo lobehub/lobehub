@@ -267,7 +267,8 @@ const sensenovaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 131_072,
-    description: 'Base V4 with 128K context, strong in long-text understanding and generation.',
+    description:
+      'Base V4 with 128K context, strong in long-text understanding and generation.',
     displayName: 'SenseChat 4.0 128K',
     id: 'SenseChat-128K',
     maxOutput: 131_072,

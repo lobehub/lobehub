@@ -10,7 +10,10 @@
               "type": "object",
               "properties": {
                 "details": {
-                  "type": ["string", "null"],
+                  "type": [
+                    "string",
+                    "null"
+                  ],
                   "description": "Optional detailed information"
                 },
                 "memoryCategory": {
@@ -60,7 +63,10 @@
                       "type": "string"
                     },
                     "episodicDate": {
-                      "type": ["string", "null"]
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "extractedLabels": {
                       "type": "array",
@@ -111,11 +117,18 @@
                       "type": "number"
                     },
                     "sourceEvidence": {
-                      "type": ["string", "null"]
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "type": {
                       "type": "string",
-                      "enum": ["professional", "personal", "demographic"]
+                      "enum": [
+                        "professional",
+                        "personal",
+                        "demographic"
+                      ]
                     }
                   },
                   "required": [
@@ -164,7 +177,10 @@
                   "type": "string"
                 }
               },
-              "required": ["id", "reason"],
+              "required": [
+                "id",
+                "reason"
+              ],
               "additionalProperties": false
             }
           },
@@ -186,17 +202,26 @@
                 },
                 "mergeStrategy": {
                   "type": "string",
-                  "enum": ["merge", "replace"]
+                  "enum": [
+                    "merge",
+                    "replace"
+                  ]
                 },
                 "set": {
                   "type": "object",
                   "properties": {
                     "details": {
-                      "type": ["string", "null"],
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Optional detailed information, use null for omitting the field"
                     },
                     "memoryCategory": {
-                      "type": ["string", "null"],
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Memory category, use null for omitting the field"
                     },
                     "memoryType": {
@@ -216,7 +241,10 @@
                       "description": "Memory type, use null for omitting the field"
                     },
                     "summary": {
-                      "type": ["string", "null"],
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Concise overview of this specific memory, use null for omitting the field"
                     },
                     "tags": {
@@ -234,17 +262,26 @@
                       "description": "Model generated tags that summarize the identity facets, use null for omitting the field"
                     },
                     "title": {
-                      "type": ["string", "null"],
+                      "type": [
+                        "string",
+                        "null"
+                      ],
                       "description": "Honorific-style, concise descriptor (strength + domain/milestone), avoid bare job titles; e.g., \"Trusted open-source maintainer\", \"Specializes in low-latency infra\", \"Former Aliyun engineer\", \"Cares for rescue cats\"; use null for omitting the field"
                     },
                     "withIdentity": {
                       "type": "object",
                       "properties": {
                         "description": {
-                          "type": ["string", "null"]
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "episodicDate": {
-                          "type": ["string", "null"]
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "extractedLabels": {
                           "anyOf": [
@@ -260,21 +297,36 @@
                           ]
                         },
                         "relationship": {
-                          "type": ["string", "null"],
+                          "type": [
+                            "string",
+                            "null"
+                          ],
                           "description": "Possible values: self | father | mother | son | daughter | brother | sister | sibling | husband | wife | spouse | partner | couple | friend | colleague | coworker | classmate | mentor | mentee | manager | teammate | grandfather | grandmother | grandson | granddaughter | uncle | aunt | nephew | niece | other"
                         },
                         "role": {
-                          "type": ["string", "null"],
+                          "type": [
+                            "string",
+                            "null"
+                          ],
                           "description": "Role explicitly mentioned for this identity entry (e.g., \"platform engineer\", \"caregiver\"); keep existing when not updated; use null for omitting the field"
                         },
                         "scoreConfidence": {
-                          "type": ["number", "null"]
+                          "type": [
+                            "number",
+                            "null"
+                          ]
                         },
                         "sourceEvidence": {
-                          "type": ["string", "null"]
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "type": {
-                          "type": ["string", "null"],
+                          "type": [
+                            "string",
+                            "null"
+                          ],
                           "description": "Possible values: professional | personal | demographic"
                         }
                       },
@@ -303,7 +355,11 @@
                   "additionalProperties": false
                 }
               },
-              "required": ["id", "mergeStrategy", "set"],
+              "required": [
+                "id",
+                "mergeStrategy",
+                "set"
+              ],
               "additionalProperties": false
             }
           },
@@ -314,7 +370,11 @@
         "description": "Identity entries to update; use an empty array when nothing to update"
       }
     },
-    "required": ["add", "remove", "update"],
+    "required": [
+      "add",
+      "remove",
+      "update"
+    ],
     "additionalProperties": false
   },
   "type": "json_schema"

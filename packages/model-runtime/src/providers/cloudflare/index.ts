@@ -44,7 +44,7 @@ export class LobeCloudflareAI implements LobeRuntimeAI {
         ? baseURLOrAccountID
         : baseURLOrAccountID + '/';
       // Try get accountID from baseURL
-      this.accountID = baseURLOrAccountID.replaceAll(/^.*\/([\dA-F]{32})\/.*$/gi, '$1');
+      this.accountID = baseURLOrAccountID.replaceAll(/^.*\/([\da-f]{32})\/.*$/gi, '$1');
     } else {
       if (!apiKey) {
         throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey);
@@ -58,7 +58,7 @@ export class LobeCloudflareAI implements LobeRuntimeAI {
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions): Promise<Response> {
     try {
       // Remove internal apiMode parameter to prevent sending to Cloudflare API
-
+       
       const { model, tools, apiMode: _, ...restPayload } = payload;
       const functions = tools?.map((tool) => tool.function);
       const headers = options?.headers || {};

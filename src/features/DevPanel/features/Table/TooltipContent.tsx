@@ -1,5 +1,5 @@
 import { Flexbox, Highlighter } from '@lobehub/ui';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 
 import Image from '@/libs/next/Image';

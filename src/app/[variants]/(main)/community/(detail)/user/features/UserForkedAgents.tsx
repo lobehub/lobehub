@@ -6,7 +6,7 @@ import { GitForkIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { DiscoverAssistantItem } from '@/types/discover';
+import type {DiscoverAssistantItem} from '@/types/discover';
 
 import UserAgentCard from './UserAgentCard';
 

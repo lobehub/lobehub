@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { Tool } from './tools';
+import type { Tool} from './tools';
 import { apiPrompt, toolPrompt, toolsPrompts } from './tools';
 
 describe('Prompt Generation Utils', () => {

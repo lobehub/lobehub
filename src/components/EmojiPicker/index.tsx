@@ -1,4 +1,4 @@
-import type { EmojiPickerProps } from '@lobehub/ui';
+import type {EmojiPickerProps} from '@lobehub/ui';
 import { EmojiPicker as LobeEmojiPicker } from '@lobehub/ui';
 import { memo } from 'react';
 

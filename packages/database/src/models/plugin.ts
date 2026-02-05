@@ -1,7 +1,7 @@
 import type { LobeTool } from '@lobechat/types';
 import { and, desc, eq } from 'drizzle-orm';
 
-import type { InstalledPluginItem, NewInstalledPlugin } from '../schemas';
+import type { InstalledPluginItem, NewInstalledPlugin} from '../schemas';
 import { userInstalledPlugins } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 

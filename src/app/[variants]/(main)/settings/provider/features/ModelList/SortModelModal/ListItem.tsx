@@ -1,6 +1,6 @@
 import { ModelIcon } from '@lobehub/icons';
 import { Flexbox, SortableList } from '@lobehub/ui';
-import type { AiProviderModelListItem } from 'model-bank';
+import type {AiProviderModelListItem} from 'model-bank';
 import { memo } from 'react';
 
 const ListItem = memo<AiProviderModelListItem>(({ id, displayName }) => {

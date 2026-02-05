@@ -4,7 +4,7 @@ import { ActionIcon, Checkbox, Flexbox, Input } from '@lobehub/ui';
 import type { InputRef } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { Plus } from 'lucide-react';
-import type { ChangeEvent, KeyboardEvent } from 'react';
+import type { ChangeEvent, KeyboardEvent} from 'react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 

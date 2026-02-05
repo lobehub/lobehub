@@ -1,7 +1,7 @@
 import { Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import type { MouseEventHandler } from 'react';
-import { memo, useCallback, useMemo } from 'react';
+import type {MouseEventHandler} from 'react';
+import { memo,  useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChatItem } from '@/features/Conversation/ChatItem';

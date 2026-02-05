@@ -1,4 +1,4 @@
-import type { ModelPerformance, ModelUsage } from '@lobechat/types';
+import type {ModelPerformance, ModelUsage} from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
 import { Center, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';

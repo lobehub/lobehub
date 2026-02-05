@@ -251,7 +251,7 @@ describe('LobeFalAI', () => {
           prompt: 'Custom test',
           width: 768,
           height: 768,
-          seed: 12_345,
+          seed: 12345,
         } as any, // Use any to allow custom parameters
       };
 
@@ -268,7 +268,7 @@ describe('LobeFalAI', () => {
             width: 768,
             height: 768,
           },
-          seed: 12_345,
+          seed: 12345,
         },
       });
     });

@@ -1,7 +1,7 @@
 // only inject in the dom environment
 if (
   // not node runtime
-  typeof globalThis.window !== 'undefined' &&
+  typeof window !== 'undefined' &&
   // not edge runtime
   typeof (globalThis as any).EdgeRuntime !== 'string'
 ) {

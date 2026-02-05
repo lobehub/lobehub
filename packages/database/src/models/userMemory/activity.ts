@@ -1,9 +1,14 @@
 import type { ActivityListParams, ActivityListResult } from '@lobechat/types';
-import type { SQL } from 'drizzle-orm';
-import { and, asc, desc, eq, ilike, inArray, or, sql } from 'drizzle-orm';
+import type {SQL} from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, or,  sql } from 'drizzle-orm';
 
-import type { NewUserMemoryActivity, UserMemoryActivity } from '../../schemas';
-import { userMemories, userMemoriesActivities } from '../../schemas';
+import type {
+  NewUserMemoryActivity,
+  UserMemoryActivity} from '../../schemas';
+import {
+  userMemories,
+  userMemoriesActivities
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 
 export class UserMemoryActivityModel {
@@ -27,10 +32,7 @@ export class UserMemoryActivityModel {
   delete = async (id: string) => {
     return this.db.transaction(async (tx) => {
       const activity = await tx.query.userMemoriesActivities.findFirst({
-        where: and(
-          eq(userMemoriesActivities.id, id),
-          eq(userMemoriesActivities.userId, this.userId),
-        ),
+        where: and(eq(userMemoriesActivities.id, id), eq(userMemoriesActivities.userId, this.userId)),
       });
 
       if (!activity || !activity.userMemoryId) {
@@ -39,9 +41,7 @@ export class UserMemoryActivityModel {
 
       await tx
         .delete(userMemories)
-        .where(
-          and(eq(userMemories.id, activity.userMemoryId), eq(userMemories.userId, this.userId)),
-        );
+        .where(and(eq(userMemories.id, activity.userMemoryId), eq(userMemories.userId, this.userId)));
 
       return { success: true };
     });
@@ -160,8 +160,6 @@ export class UserMemoryActivityModel {
     return this.db
       .update(userMemoriesActivities)
       .set({ ...value, updatedAt: new Date() })
-      .where(
-        and(eq(userMemoriesActivities.id, id), eq(userMemoriesActivities.userId, this.userId)),
-      );
+      .where(and(eq(userMemoriesActivities.id, id), eq(userMemoriesActivities.userId, this.userId)));
   };
 }

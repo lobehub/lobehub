@@ -405,6 +405,7 @@ const vertexaiChatModels: AIChatModelCard[] = [
   },
 ];
 
+/* eslint-disable sort-keys-fix/sort-keys-fix */
 const vertexaiImageModels: AIImageModelCard[] = [
   {
     displayName: 'Nano Banana',

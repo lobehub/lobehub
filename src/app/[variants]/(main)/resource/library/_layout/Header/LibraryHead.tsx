@@ -1,11 +1,18 @@
 'use client';
 
-import type { DropdownItem } from '@lobehub/ui';
-import { ActionIcon, Block, Center, DropdownMenu, Skeleton, Text } from '@lobehub/ui';
+import type {DropdownItem} from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Center,
+  DropdownMenu,
+  Skeleton,
+  Text
+} from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronsUpDownIcon } from 'lucide-react';
-import type { DragEvent } from 'react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import type {DragEvent} from 'react';
+import {  memo, useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useDragActive } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';

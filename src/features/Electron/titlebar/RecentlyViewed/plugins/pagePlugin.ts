@@ -1,10 +1,11 @@
+ 
 import { FileText } from 'lucide-react';
 
 import { getRouteById } from '@/config/routes';
 
-import type { PageParams, PageReference, ResolvedPageData } from '../types';
-import type { PluginContext, RecentlyViewedPlugin } from './types';
-import { createPageReference } from './types';
+import type {PageParams, PageReference, ResolvedPageData} from '../types';
+import type {PluginContext, RecentlyViewedPlugin} from './types';
+import { createPageReference  } from './types';
 
 const PAGE_PATH_REGEX = /^\/page\/([^/?]+)$/;
 

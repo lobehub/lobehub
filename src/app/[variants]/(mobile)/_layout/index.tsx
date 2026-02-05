@@ -1,7 +1,7 @@
 'use client';
 
-import type { FC } from 'react';
-import { Suspense } from 'react';
+import type {FC} from 'react';
+import {  Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';

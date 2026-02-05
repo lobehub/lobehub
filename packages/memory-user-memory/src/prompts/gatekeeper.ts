@@ -9,7 +9,7 @@ export const gatekeeperPrompt = [
   '',
   'Evaluate the conversation for these memory layers:',
   '',
-  '**Activity Layer** - Episodic events with clear timelines and participants:',
+'**Activity Layer** - Episodic events with clear timelines and participants:',
   '',
   '- Meetings, calls, errands, and appointments with start/end times',
   '- Locations (physical or virtual) and timezones when provided (omit if absent)',

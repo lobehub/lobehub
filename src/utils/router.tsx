@@ -1,7 +1,14 @@
 'use client';
 
-import type { ComponentType, ReactElement } from 'react';
-import { createElement, lazy, memo, Suspense, useCallback, useEffect } from 'react';
+import type {ComponentType, ReactElement} from 'react';
+import {
+  createElement,
+  lazy,
+  memo,
+  Suspense,
+  useCallback,
+  useEffect
+} from 'react';
 import { Navigate, Route, useNavigate, useRouteError } from 'react-router-dom';
 
 import Loading from '@/components/Loading/BrandTextLoading';

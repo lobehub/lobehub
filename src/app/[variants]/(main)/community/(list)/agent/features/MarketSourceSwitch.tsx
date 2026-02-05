@@ -1,14 +1,18 @@
 'use client';
 
-import type { DropdownItem, DropdownMenuCheckboxItem } from '@lobehub/ui';
-import { Button, DropdownMenu, Icon } from '@lobehub/ui';
+import type {DropdownItem, DropdownMenuCheckboxItem} from '@lobehub/ui';
+import {
+  Button,
+  DropdownMenu,
+  Icon
+} from '@lobehub/ui';
 import { ChevronDown, Store } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useQuery } from '@/hooks/useQuery';
 import { useQueryRoute } from '@/hooks/useQueryRoute';
-import type { AssistantMarketSource } from '@/types/discover';
+import type {AssistantMarketSource} from '@/types/discover';
 
 const MarketSourceSwitch = memo(() => {
   const { t } = useTranslation('discover');

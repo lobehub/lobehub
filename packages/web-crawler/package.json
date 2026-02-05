@@ -9,11 +9,11 @@
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
-    "@lobechat/ssrf-safe-fetch": "workspace:*",
     "@mozilla/readability": "^0.6.0",
     "happy-dom": "^20.0.11",
     "node-html-markdown": "^1.3.0",
     "query-string": "^9.3.1",
+    "@lobechat/ssrf-safe-fetch": "workspace:*",
     "url-join": "^5"
   }
 }

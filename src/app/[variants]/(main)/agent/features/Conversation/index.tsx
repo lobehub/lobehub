@@ -1,5 +1,5 @@
 import { Flexbox, TooltipGroup } from '@lobehub/ui';
-import React, { memo, Suspense } from 'react';
+import React, { memo,Suspense } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
 import Loading from '@/components/Loading/BrandTextLoading';

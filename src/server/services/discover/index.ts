@@ -6,31 +6,7 @@ import {
   isDesktop,
   KLAVIS_SERVER_TYPES,
 } from '@lobechat/const';
-import type {
-  AgentStatus,
-  AssistantListResponse,
-  AssistantMarketSource,
-  AssistantQueryParams,
-  DiscoverAssistantDetail,
-  DiscoverAssistantItem,
-  DiscoverMcpDetail,
-  DiscoverModelDetail,
-  DiscoverModelItem,
-  DiscoverPluginDetail,
-  DiscoverPluginItem,
-  DiscoverProviderDetail,
-  DiscoverProviderItem,
-  DiscoverUserProfile,
-  IdentifiersResponse,
-  McpListResponse,
-  McpQueryParams,
-  ModelListResponse,
-  ModelQueryParams,
-  PluginListResponse,
-  PluginQueryParams,
-  ProviderListResponse,
-  ProviderQueryParams,
-} from '@lobechat/types';
+import type {AgentStatus, AssistantListResponse, AssistantMarketSource, AssistantQueryParams, DiscoverAssistantDetail, DiscoverAssistantItem, DiscoverMcpDetail, DiscoverModelDetail, DiscoverModelItem, DiscoverPluginDetail, DiscoverPluginItem, DiscoverProviderDetail, DiscoverProviderItem, DiscoverUserProfile, IdentifiersResponse, McpListResponse, McpQueryParams, ModelListResponse, ModelQueryParams, PluginListResponse, PluginQueryParams, ProviderListResponse, ProviderQueryParams} from '@lobechat/types';
 import {
   AssistantCategory,
   AssistantSorts,
@@ -40,7 +16,7 @@ import {
   McpSorts,
   ModelSorts,
   PluginSorts,
-  ProviderSorts,
+  ProviderSorts
 } from '@lobechat/types';
 import {
   getAudioInputUnitRate,
@@ -48,16 +24,16 @@ import {
   getTextOutputUnitRate,
 } from '@lobechat/utils';
 import type {
-  type CategoryItem,
-  type CategoryListQuery,
+  CategoryItem,
+  CategoryListQuery,
   MarketSDK,
-  type UserInfoResponse,
+  UserInfoResponse,
 } from '@lobehub/market-sdk';
 import type {
   AgentEventRequest,
-  type CallReportRequest,
-  type InstallReportRequest,
-  type PluginEventRequest,
+  CallReportRequest,
+  InstallReportRequest,
+  PluginEventRequest,
 } from '@lobehub/market-types';
 import dayjs from 'dayjs';
 import debug from 'debug';
@@ -65,7 +41,7 @@ import { cloneDeep, countBy, isString, merge, uniq, uniqBy } from 'es-toolkit/co
 import matter from 'gray-matter';
 import urlJoin from 'url-join';
 
-import type { TrustedClientUserInfo } from '@/libs/trusted-client';
+import type {TrustedClientUserInfo} from '@/libs/trusted-client';
 import { normalizeLocale } from '@/locales/resources';
 import { AssistantStore } from '@/server/modules/AssistantStore';
 import { PluginStore } from '@/server/modules/PluginStore';

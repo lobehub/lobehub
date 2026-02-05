@@ -4,8 +4,8 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileParsingStatus from '@/components/FileParsingStatus';
-import type { FileParsingTask } from '@/types/asyncTask';
-import type { FileUploadState, FileUploadStatus } from '@/types/files';
+import type {FileParsingTask} from '@/types/asyncTask';
+import type {FileUploadState, FileUploadStatus} from '@/types/files';
 
 import UploadStatus from './UploadStatus';
 

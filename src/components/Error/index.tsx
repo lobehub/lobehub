@@ -38,7 +38,7 @@ const ErrorCapture = memo<ErrorCaptureProps>(({ reset }) => {
       <p style={{ marginBottom: '2em' }}>{t('error.desc')}</p>
       <Flexbox horizontal gap={12} style={{ marginBottom: '1em' }}>
         <Button onClick={() => reset()}>{t('error.retry')}</Button>
-        <Button type={'primary'} onClick={() => (globalThis.location.href = '/')}>
+        <Button type={'primary'} onClick={() => (window.location.href = '/')}>
           {t('error.backHome')}
         </Button>
       </Flexbox>

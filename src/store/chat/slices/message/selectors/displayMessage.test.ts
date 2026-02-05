@@ -1,4 +1,4 @@
-import type { UIChatMessage } from '@lobechat/types';
+import type {UIChatMessage  } from '@lobechat/types';
 import { act } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 

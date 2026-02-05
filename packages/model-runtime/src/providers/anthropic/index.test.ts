@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { Mock } from 'vitest';
+import type { Mock} from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as anthropicHelpers from '../../core/contextBuilders/anthropic';
@@ -130,7 +130,7 @@ describe('LobeAnthropicAI', () => {
       // Assert
       expect(instance['client'].messages.create).toHaveBeenCalledWith(
         {
-          max_tokens: 64_000,
+          max_tokens: 64000,
           messages: [
             {
               content: [{ cache_control: { type: 'ephemeral' }, text: 'Hello', type: 'text' }],
@@ -756,17 +756,17 @@ describe('LobeAnthropicAI', () => {
 
       it('should cap max_tokens at 64000 in thinking mode', async () => {
         const payload: ChatStreamPayload = {
-          max_tokens: 10_000,
+          max_tokens: 10000,
           messages: [{ content: 'Solve this problem', role: 'user' }],
           model: 'claude-3-haiku-20240307',
           temperature: 0.6,
-          thinking: { type: 'enabled', budget_tokens: 60_000 },
+          thinking: { type: 'enabled', budget_tokens: 60000 },
         };
 
         const result = await instance['buildAnthropicPayload'](payload);
 
         expect(result).toEqual({
-          max_tokens: 10_000,
+          max_tokens: 10000,
           messages: [
             {
               content: [

@@ -1,7 +1,7 @@
 import { Flexbox, Popover } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import type { PropsWithChildren } from 'react';
-import { memo, Suspense, useMemo } from 'react';
+import type {PropsWithChildren} from 'react';
+import { memo,  Suspense, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import List from '@/app/[variants]/(main)/home/_layout/Body/Agent/List';

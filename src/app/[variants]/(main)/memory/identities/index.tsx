@@ -1,7 +1,7 @@
 import { Flexbox, Icon, Tag } from '@lobehub/ui';
 import { BrainCircuitIcon } from 'lucide-react';
-import type { FC } from 'react';
-import { memo, useCallback, useEffect, useState } from 'react';
+import type {FC} from 'react';
+import {  memo, useCallback, useEffect, useState } from 'react';
 
 import CommonFilterBar from '@/app/[variants]/(main)/memory/features/FilterBar';
 import MemoryAnalysis from '@/app/[variants]/(main)/memory/features/MemoryAnalysis';
@@ -10,15 +10,15 @@ import WideScreenContainer from '@/features/WideScreenContainer';
 import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
 import { useQueryState } from '@/hooks/useQueryParam';
 import { useUserMemoryStore } from '@/store/userMemory';
-import type { TypesEnum } from '@/types/userMemory';
+import type {TypesEnum} from '@/types/userMemory';
 
 import EditableModal from '../features/EditableModal';
 import Loading from '../features/Loading';
 import { SCROLL_PARENT_ID } from '../features/TimeLineView/useScrollParent';
-import type { ViewMode } from '../features/ViewModeSwitcher';
+import type {ViewMode} from '../features/ViewModeSwitcher';
 import ViewModeSwitcher from '../features/ViewModeSwitcher';
 import IdentityRightPanel from './features/IdentityRightPanel';
-import type { IdentityType } from './features/List';
+import type {IdentityType} from './features/List';
 import List from './features/List';
 import SegmentedBar from './features/SegmentedBar';
 

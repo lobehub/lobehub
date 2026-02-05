@@ -33,7 +33,8 @@ const PWAInstall = memo(() => {
   }, []);
 
   const pwaInstall =
-    typeof globalThis.window === 'undefined' ? undefined : document.getElementById(PWA_INSTALL_ID);
+     
+    typeof window === 'undefined' ? undefined : document.getElementById(PWA_INSTALL_ID);
 
   // add an event listener to control the user close installer action
   useEffect(() => {
@@ -61,8 +62,8 @@ const PWAInstall = memo(() => {
     // trigger the pwa installer and register the service worker
     if (isShowPWAGuide) {
       install();
-      if ('serviceWorker' in navigator && globalThis.serwist !== undefined) {
-        globalThis.serwist.register();
+      if ('serviceWorker' in navigator && window.serwist !== undefined) {
+        window.serwist.register();
       }
     }
   }, [canInstall, hidePWAInstaller, isShowPWAGuide]);

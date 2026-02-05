@@ -2,8 +2,8 @@
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { PropsWithChildren } from 'react';
-import React, { useEffect, useState } from 'react';
+import type {PropsWithChildren} from 'react';
+import React, {  useEffect, useState } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';
 
 import { setScopedMutate } from '@/libs/swr';
@@ -30,6 +30,7 @@ const SWRMutateInitializer = ({ children }: PropsWithChildren) => {
     }
   });
 
+   
   return <>{children}</>;
 };
 

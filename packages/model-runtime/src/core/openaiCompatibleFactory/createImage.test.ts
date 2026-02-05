@@ -13,7 +13,7 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 // Polyfill File for Node environment
 if (typeof File === 'undefined') {
   // @ts-ignore
-  globalThis.File = class MockFile {
+  global.File = class MockFile {
     constructor(
       public parts: any[],
       public name: string,
@@ -568,7 +568,7 @@ describe('createOpenAICompatibleImage', () => {
 
       // Mock fetch for image download
       const mockArrayBuffer = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0]).buffer;
-      globalThis.fetch = vi.fn().mockResolvedValue({
+      global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         arrayBuffer: async () => mockArrayBuffer,
         headers: {

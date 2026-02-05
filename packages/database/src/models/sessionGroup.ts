@@ -1,6 +1,6 @@
 import { and, asc, desc, eq } from 'drizzle-orm';
 
-import type { SessionGroupItem } from '../schemas';
+import type { SessionGroupItem} from '../schemas';
 import { sessionGroups } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 import { idGenerator } from '../utils/idGenerator';

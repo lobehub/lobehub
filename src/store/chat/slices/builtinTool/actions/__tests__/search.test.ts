@@ -1,7 +1,7 @@
 import { WebBrowsingApiName, WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import type { SearchQuery, UIChatMessage } from '@lobechat/types';
+import type { SearchQuery, UIChatMessage  } from '@lobechat/types';
 import { act, renderHook } from '@testing-library/react';
-import type { Mock } from 'vitest';
+import type { Mock} from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Import after mocks

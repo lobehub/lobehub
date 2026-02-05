@@ -11,12 +11,14 @@ export type TimeGroupId =
   | `${number}-${string}`
   | `${number}`;
 
+/* eslint-disable typescript-sort-keys/string-enum */
 export enum TopicDisplayMode {
   ByTime = 'byTime',
   Flat = 'flat',
   // AscMessages = 'ascMessages',
   // DescMessages = 'descMessages',
 }
+ 
 
 export interface GroupedTopic {
   children: ChatTopic[];
@@ -154,12 +156,7 @@ export interface SharedTopicData {
     avatar?: string | null;
     backgroundColor?: string | null;
     createdAt?: Date | null;
-    members?: {
-      avatar: string | null;
-      backgroundColor: string | null;
-      id: string;
-      title: string | null;
-    }[];
+    members?: { avatar: string | null; backgroundColor: string | null; id: string; title: string | null }[];
     title?: string | null;
     updatedAt?: Date | null;
     userId?: string | null;

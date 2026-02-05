@@ -7,7 +7,7 @@ import { BoltIcon, DownloadIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { FileListItem } from '@/types/files';
+import type {FileListItem} from '@/types/files';
 import { downloadFile } from '@/utils/client/downloadFile';
 import { formatSize } from '@/utils/format';
 

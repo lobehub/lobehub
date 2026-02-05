@@ -54,8 +54,8 @@ describe('ElectronIpcClient', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
 
     // Mock timers
-    vi.spyOn(globalThis, 'setTimeout');
-    vi.spyOn(globalThis, 'clearTimeout');
+    vi.spyOn(global, 'setTimeout');
+    vi.spyOn(global, 'clearTimeout');
   });
 
   afterEach(() => {
@@ -440,7 +440,7 @@ describe('ElectronIpcClient', () => {
       await vi.runAllTimersAsync();
       // Request should timeout
       await expectReject;
-    }, 10_000);
+    }, 10000);
 
     it('should handle socket close event', async () => {
       let connectionCallback: Function | undefined;
@@ -529,7 +529,7 @@ describe('ElectronIpcClient', () => {
       vi.advanceTimersByTime(5000);
       await vi.runAllTimersAsync();
       await expectReject;
-    }, 10_000);
+    }, 10000);
 
     it('should handle response for unknown request ID', async () => {
       let connectionCallback: Function | undefined;
@@ -580,7 +580,7 @@ describe('ElectronIpcClient', () => {
       vi.advanceTimersByTime(5000);
       await vi.runAllTimersAsync();
       await expectReject;
-    }, 10_000);
+    }, 10000);
 
     it('should skip empty messages', async () => {
       let connectionCallback: Function | undefined;
@@ -666,7 +666,7 @@ describe('ElectronIpcClient', () => {
       await vi.runAllTimersAsync();
       await expect(request1Promise).rejects.toThrow('Request timed out');
       await expect(request2Promise).rejects.toThrow('Request timed out');
-    }, 10_000);
+    }, 10000);
   });
 
   describe('reconnection logic', () => {
@@ -903,7 +903,7 @@ describe('ElectronIpcClient', () => {
         'Failed to write request to socket: %o',
         expect.any(Error),
       );
-    }, 10_000);
+    }, 10000);
   });
 
   describe('close method', () => {
@@ -989,6 +989,6 @@ describe('ElectronIpcClient', () => {
 
       // Should clear timeout
       expect(vi.mocked(clearTimeout)).toHaveBeenCalled();
-    }, 10_000);
+    }, 10000);
   });
 });

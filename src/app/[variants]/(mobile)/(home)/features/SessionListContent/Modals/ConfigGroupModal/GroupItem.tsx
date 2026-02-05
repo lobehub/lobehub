@@ -6,7 +6,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useSessionStore } from '@/store/session';
-import type { SessionGroupItem } from '@/types/session';
+import type {SessionGroupItem} from '@/types/session';
 
 const styles = createStaticStyles(({ css }) => ({
   content: css`

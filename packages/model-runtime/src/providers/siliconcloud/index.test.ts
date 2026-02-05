@@ -36,11 +36,11 @@ describe('LobeSiliconCloudAI - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'Qwen/Qwen2.5-7B-Instruct',
-        max_tokens: 20_000,
+        max_tokens: 20000,
       });
 
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.max_tokens).toBe(16_384);
+      expect(calledPayload.max_tokens).toBe(16384);
     });
 
     it('should ensure max_tokens is at least 1', async () => {
@@ -105,12 +105,12 @@ describe('LobeSiliconCloudAI - custom features', () => {
         model: 'THUDM/GLM-4.5',
         thinking: {
           type: 'enabled',
-          budget_tokens: 50_000,
+          budget_tokens: 50000,
         },
       });
 
       const calledPayload = (instance['client'].chat.completions.create as any).mock.calls[0][0];
-      expect(calledPayload.thinking_budget).toBe(32_768);
+      expect(calledPayload.thinking_budget).toBe(32768);
     });
 
     it('should set thinking_budget to 1 when budget_tokens is 0', async () => {

@@ -3,11 +3,11 @@ import debug from 'debug';
 import { documentService } from '@/services/document';
 import { fileService } from '@/services/file';
 import { resourceService } from '@/services/resource';
-import type { StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import type { CreateResourceParams, ResourceItem, UpdateResourceParams } from '@/types/resource';
 
 import type { FileStore } from '../../store';
-import type { ResourceState } from './initialState';
+import type {ResourceState} from './initialState';
 import { initialResourceState } from './initialState';
 import { ResourceSyncEngine } from './syncEngine';
 
@@ -367,7 +367,7 @@ export class ResourceActionImpl {
       const { resourceList } = this.#get();
       const listIndex = resourceList.findIndex((item) => item.id === resourceId);
       const newList = [...resourceList];
-      if (listIndex !== -1) {
+      if (listIndex >= 0) {
         newList[listIndex] = updated;
       }
 
@@ -419,7 +419,7 @@ export class ResourceActionImpl {
 
     const listIndex = resourceList.findIndex((item) => item.id === id);
     const newList = [...resourceList];
-    if (listIndex !== -1) {
+    if (listIndex >= 0) {
       newList[listIndex] = updated;
     }
 

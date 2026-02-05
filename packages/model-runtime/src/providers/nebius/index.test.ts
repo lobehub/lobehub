@@ -148,7 +148,7 @@ describe('LobeNebiusAI - custom features', () => {
   describe('models function', () => {
     beforeEach(() => {
       vi.clearAllMocks();
-      globalThis.fetch = vi.fn();
+      global.fetch = vi.fn();
     });
 
     it('should fetch and process models successfully', async () => {
@@ -166,7 +166,7 @@ describe('LobeNebiusAI - custom features', () => {
         ],
       };
 
-      (globalThis.fetch as any).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         json: async () => mockModelsResponse,
         ok: true,
       });
@@ -174,7 +174,7 @@ describe('LobeNebiusAI - custom features', () => {
       const client = { apiKey: 'test-key', baseURL: 'https://api.studio.nebius.com/v1' };
       const models = await params.models!({ client: client as any });
 
-      expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect(global.fetch).toHaveBeenCalledWith(
         'https://api.studio.nebius.com/v1/models?verbose=true',
         {
           headers: {
@@ -188,7 +188,7 @@ describe('LobeNebiusAI - custom features', () => {
     });
 
     it('should handle fetch errors', async () => {
-      (globalThis.fetch as any).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         ok: false,
         status: 401,
         statusText: 'Unauthorized',
@@ -204,7 +204,7 @@ describe('LobeNebiusAI - custom features', () => {
     it('should handle empty data', async () => {
       const mockModelsResponse = { data: [] };
 
-      (globalThis.fetch as any).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         json: async () => mockModelsResponse,
         ok: true,
       });
@@ -218,7 +218,7 @@ describe('LobeNebiusAI - custom features', () => {
     it('should handle missing data field', async () => {
       const mockModelsResponse = {};
 
-      (globalThis.fetch as any).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         json: async () => mockModelsResponse,
         ok: true,
       });
@@ -230,7 +230,7 @@ describe('LobeNebiusAI - custom features', () => {
     });
 
     it('should strip trailing slashes from baseURL', async () => {
-      (globalThis.fetch as any).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         json: async () => ({ data: [] }),
         ok: true,
       });
@@ -238,7 +238,7 @@ describe('LobeNebiusAI - custom features', () => {
       const client = { apiKey: 'test-key', baseURL: 'https://api.studio.nebius.com/v1///' };
       await params.models!({ client: client as any });
 
-      expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect(global.fetch).toHaveBeenCalledWith(
         'https://api.studio.nebius.com/v1/models?verbose=true',
         expect.any(Object),
       );
@@ -255,7 +255,7 @@ describe('LobeNebiusAI - custom features', () => {
         ],
       };
 
-      (globalThis.fetch as any).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         json: async () => mockModelsResponse,
         ok: true,
       });
@@ -263,7 +263,7 @@ describe('LobeNebiusAI - custom features', () => {
       const client = { apiKey: 'test-key', baseURL: 'https://api.studio.nebius.com/v1' };
       await params.models!({ client: client as any });
 
-      expect(globalThis.fetch).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalled();
     });
 
     it('should infer embedding type from modality', async () => {
@@ -277,7 +277,7 @@ describe('LobeNebiusAI - custom features', () => {
         ],
       };
 
-      (globalThis.fetch as any).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         json: async () => mockModelsResponse,
         ok: true,
       });
@@ -285,7 +285,7 @@ describe('LobeNebiusAI - custom features', () => {
       const client = { apiKey: 'test-key', baseURL: 'https://api.studio.nebius.com/v1' };
       await params.models!({ client: client as any });
 
-      expect(globalThis.fetch).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalled();
     });
 
     it('should handle modality without arrow', async () => {
@@ -299,7 +299,7 @@ describe('LobeNebiusAI - custom features', () => {
         ],
       };
 
-      (globalThis.fetch as any).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         json: async () => mockModelsResponse,
         ok: true,
       });
@@ -307,7 +307,7 @@ describe('LobeNebiusAI - custom features', () => {
       const client = { apiKey: 'test-key', baseURL: 'https://api.studio.nebius.com/v1' };
       await params.models!({ client: client as any });
 
-      expect(globalThis.fetch).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalled();
     });
 
     it('should handle non-string modality', async () => {
@@ -321,7 +321,7 @@ describe('LobeNebiusAI - custom features', () => {
         ],
       };
 
-      (globalThis.fetch as any).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         json: async () => mockModelsResponse,
         ok: true,
       });
@@ -329,11 +329,11 @@ describe('LobeNebiusAI - custom features', () => {
       const client = { apiKey: 'test-key', baseURL: 'https://api.studio.nebius.com/v1' };
       await params.models!({ client: client as any });
 
-      expect(globalThis.fetch).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalled();
     });
 
     it('should use default baseURL when client.baseURL is undefined', async () => {
-      (globalThis.fetch as any).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         json: async () => ({ data: [] }),
         ok: true,
       });
@@ -341,7 +341,7 @@ describe('LobeNebiusAI - custom features', () => {
       const client = { apiKey: 'test-key' };
       await params.models!({ client: client as any });
 
-      expect(globalThis.fetch).toHaveBeenCalledWith(
+      expect(global.fetch).toHaveBeenCalledWith(
         'https://api.studio.nebius.com/v1/models?verbose=true',
         expect.any(Object),
       );
@@ -362,7 +362,7 @@ describe('LobeNebiusAI - custom features', () => {
         ],
       };
 
-      (globalThis.fetch as any).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         json: async () => mockModelsResponse,
         ok: true,
       });
@@ -370,7 +370,7 @@ describe('LobeNebiusAI - custom features', () => {
       const client = { apiKey: 'test-key', baseURL: 'https://api.studio.nebius.com/v1' };
       await params.models!({ client: client as any });
 
-      expect(globalThis.fetch).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalled();
     });
 
     it('should handle missing optional fields', async () => {
@@ -383,7 +383,7 @@ describe('LobeNebiusAI - custom features', () => {
         ],
       };
 
-      (globalThis.fetch as any).mockResolvedValue({
+      (global.fetch as any).mockResolvedValue({
         json: async () => mockModelsResponse,
         ok: true,
       });
@@ -391,7 +391,7 @@ describe('LobeNebiusAI - custom features', () => {
       const client = { apiKey: 'test-key', baseURL: 'https://api.studio.nebius.com/v1' };
       await params.models!({ client: client as any });
 
-      expect(globalThis.fetch).toHaveBeenCalled();
+      expect(global.fetch).toHaveBeenCalled();
     });
   });
 });

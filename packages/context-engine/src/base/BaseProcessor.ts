@@ -9,7 +9,7 @@ export abstract class BaseProcessor implements ContextProcessor {
   abstract readonly name: string;
 
   // Keep parameters for compatibility with existing subclass constructor signatures, but do no processing
-
+   
   constructor(_options: ProcessorOptions = {}) {}
 
   /**

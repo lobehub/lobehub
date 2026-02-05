@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
-import type { AIImageModelCard, ModelParamsSchema, RuntimeImageGenParams } from 'model-bank';
-import { extractDefaultValues, fluxSchnellParamsSchema } from 'model-bank';
+import type {AIImageModelCard,ModelParamsSchema, RuntimeImageGenParams  } from 'model-bank';
+import { extractDefaultValues, fluxSchnellParamsSchema  } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useImageStore } from '@/store/image';
@@ -216,7 +216,7 @@ describe('GenerationConfigAction', () => {
       const customSettings: Partial<RuntimeImageGenParams> = {
         prompt: 'custom prompt',
         steps: 8,
-        seed: 54_321,
+        seed: 54321,
       };
 
       act(() => {
@@ -254,14 +254,14 @@ describe('GenerationConfigAction', () => {
 
       act(() => {
         result.current.setParamOnInput('prompt', 'test prompt');
-        result.current.reuseSeed(98_765);
+        result.current.reuseSeed(98765);
       });
 
       expect(result.current.parameters).toMatchObject({
         prompt: 'test prompt',
         width: 512,
         height: 512,
-        seed: 98_765,
+        seed: 98765,
       });
     });
 
@@ -274,7 +274,7 @@ describe('GenerationConfigAction', () => {
 
       expect(result.current.parameters?.seed).toBe(0);
 
-      const largeSeed = 2_147_483_647;
+      const largeSeed = 2147483647;
       act(() => {
         result.current.reuseSeed(largeSeed);
       });

@@ -3,13 +3,16 @@ import type { GroundingSearch } from '@lobechat/types';
 
 import { nanoid } from '../../utils/uuid';
 import { convertGoogleAIUsage } from '../usageConverters/google-ai';
-import type { GoogleAIStreamOptions } from './google';
-import type { ChatPayloadForTransformStream, StreamContext, StreamProtocolChunk } from './protocol';
+import type {GoogleAIStreamOptions} from './google';
+import type {
+  ChatPayloadForTransformStream,
+  StreamContext,
+  StreamProtocolChunk} from './protocol';
 import {
   createCallbacksTransformer,
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
-  generateToolCallId,
+  generateToolCallId
 } from './protocol';
 
 const transformVertexAIStream = (

@@ -1,6 +1,6 @@
 import { Alert, Button, Flexbox, FormItem, Input, InputPassword } from '@lobehub/ui';
-import type { FormInstance } from 'antd';
-import { Divider, Form, Radio } from 'antd';
+import type {FormInstance} from 'antd';
+import { Divider, Form,  Radio } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +10,7 @@ import MCPStdioCommandInput from '@/components/MCPStdioCommandInput';
 import ErrorDetails from '@/features/MCP/MCPInstallProgress/InstallError/ErrorDetails';
 import { useToolStore } from '@/store/tool';
 import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
-import type { MCPErrorInfoMetadata } from '@/types/plugins';
+import type {MCPErrorInfoMetadata} from '@/types/plugins';
 
 import ArgsInput from './ArgsInput';
 import CollapsibleSection from './CollapsibleSection';

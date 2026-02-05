@@ -1,10 +1,10 @@
 import type {
   Content,
   FunctionDeclaration,
-  Part,
-  Tool as GoogleFunctionCallTool,
+  Part,  Tool as GoogleFunctionCallTool} from '@google/genai';
+import {
+  Type as SchemaType,
 } from '@google/genai';
-import { Type as SchemaType } from '@google/genai';
 import { imageUrlToBase64 } from '@lobechat/utils';
 
 import type { ChatCompletionTool, OpenAIChatMessage, UserMessageContentPart } from '../../types';

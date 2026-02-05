@@ -1,14 +1,14 @@
 'use client';
 
 import { CheckCircleFilled } from '@ant-design/icons';
-import type { ChatMessageError } from '@lobechat/types';
-import { TraceNameMap } from '@lobechat/types';
+import type {ChatMessageError} from '@lobechat/types';
+import {  TraceNameMap } from '@lobechat/types';
 import { ModelIcon } from '@lobehub/icons';
 import { Alert, Button, Flexbox, Highlighter, Icon, LobeSelect as Select } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useProviderName } from '@/hooks/useProviderName';

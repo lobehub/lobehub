@@ -7,7 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useToolStore } from '@/store/tool';
-import type { SystemDependencyCheckResult } from '@/types/plugins';
+import type {SystemDependencyCheckResult} from '@/types/plugins';
 
 interface MCPDependenciesGuideProps {
   identifier: string;

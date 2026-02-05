@@ -1,8 +1,8 @@
-import type { UIChatMessage } from '@lobechat/types';
+import type {UIChatMessage} from '@lobechat/types';
 import { template } from 'es-toolkit/compat';
 
 import { LOADING_FLAT } from '@/const/message';
-import type { FieldType } from '@/features/ShareModal/ShareText/type';
+import type {FieldType} from '@/features/ShareModal/ShareText/type';
 
 const markdownTemplate = template(
   `# {{title}}
@@ -48,7 +48,7 @@ const markdownTemplate = template(
 `,
   {
     evaluate: /<%([\s\S]+?)%>/g,
-    interpolate: /\{\{([\s\S]+?)\}\}/g,
+    interpolate: /\{{([\s\S]+?)\}}/g,
   },
 );
 

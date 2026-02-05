@@ -66,8 +66,8 @@ export const exa: CrawlImpl = async (url) => {
     const data = (await res.json()) as ExaResponse;
 
     if (!data.results || data.results.length === 0) {
-      console.warn('Exa API returned no results for URL:', url);
-      return;
+      console.warn( 'Exa API returned no results for URL:', url )
+      return
     }
 
     const firstResult = data.results[0];

@@ -2,8 +2,8 @@
 
 import type { AssistantContentBlock } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import type { MouseEventHandler } from 'react';
-import { memo, Suspense, useCallback, useMemo } from 'react';
+import type {MouseEventHandler} from 'react';
+import { memo,  Suspense, useCallback, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';

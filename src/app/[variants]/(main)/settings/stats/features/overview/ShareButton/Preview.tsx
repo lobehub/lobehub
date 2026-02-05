@@ -1,4 +1,4 @@
-import { imageUrl, OFFICIAL_URL } from '@lobechat/const';
+import { imageUrl,OFFICIAL_URL } from '@lobechat/const';
 import { Center, Flexbox, Grid, lobeStaticStylish } from '@lobehub/ui';
 import { createStaticStyles, cx, responsive } from 'antd-style';
 import { memo } from 'react';

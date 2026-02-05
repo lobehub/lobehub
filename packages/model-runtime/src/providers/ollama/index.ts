@@ -6,7 +6,7 @@ import { Ollama } from 'ollama/browser';
 import type { ClientOptions } from 'openai';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
-import { convertIterableToStream, createModelPullStream, OllamaStream } from '../../core/streams';
+import { convertIterableToStream, createModelPullStream,OllamaStream } from '../../core/streams';
 import type {
   ChatMethodOptions,
   ChatStreamPayload,
@@ -233,7 +233,7 @@ export class LobeOllamaAI implements LobeRuntimeAI {
     const { model, insecure } = params;
     const signal = options?.signal; // 获取传入的 AbortSignal
 
-    // eslint-disable-next-line unicorn/consistent-function-scoping
+     
     const abortOllama = () => {
       // 假设 this.client.abort() 是幂等的或者可以安全地多次调用
       this.client.abort();
@@ -281,11 +281,11 @@ export class LobeOllamaAI implements LobeRuntimeAI {
 
       // 检查是否是取消操作
       if ((error as Error).name === 'AbortError') {
-        return Response.json(
-          {
+        return new Response(
+          JSON.stringify({
             model,
             status: 'cancelled',
-          },
+          }),
           {
             headers: { 'Content-Type': 'application/json' },
             status: 499,
@@ -295,12 +295,12 @@ export class LobeOllamaAI implements LobeRuntimeAI {
 
       // 返回错误响应
       const errorMessage = error instanceof Error ? error.message : String(error);
-      return Response.json(
-        {
+      return new Response(
+        JSON.stringify({
           error: errorMessage,
           model,
           status: 'error',
-        },
+        }),
         {
           headers: { 'Content-Type': 'application/json' },
           status: 500,

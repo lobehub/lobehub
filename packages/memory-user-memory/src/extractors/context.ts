@@ -1,7 +1,7 @@
 import { renderPlaceholderTemplate } from '@lobechat/context-engine';
 
 import { contextPrompt } from '../prompts';
-import type { ContextMemory } from '../schemas';
+import type { ContextMemory} from '../schemas';
 import { ContextMemorySchema } from '../schemas';
 import type { ExtractorTemplateProps } from '../types';
 import { buildGenerateObjectSchema } from '../utils/zod';

@@ -1,7 +1,7 @@
 'use client';
 
-import type { FormGroupItemType, FormItemProps } from '@lobehub/ui';
-import { Button, Form, Tooltip } from '@lobehub/ui';
+import type {FormGroupItemType, FormItemProps} from '@lobehub/ui';
+import { Button, Form,   Tooltip } from '@lobehub/ui';
 import { useUpdateEffect } from 'ahooks';
 import isEqual from 'fast-deep-equal';
 import { Wand2 } from 'lucide-react';

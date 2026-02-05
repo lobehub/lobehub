@@ -16,7 +16,7 @@ import { MessageDetail } from './MessageDetail';
 import { Notebook } from './Notebook';
 import { Plugins } from './Plugins';
 import { Thread } from './Thread';
-import type { PortalImpl } from './type';
+import type {PortalImpl} from './type';
 
 // View type to component mapping
 const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {

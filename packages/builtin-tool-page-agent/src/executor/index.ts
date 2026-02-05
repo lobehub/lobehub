@@ -6,8 +6,8 @@ import type {
   ModifyNodesArgs,
   ReplaceTextArgs,
 } from '@lobechat/editor-runtime';
-import type { BuiltinToolResult } from '@lobechat/types';
-import { BaseExecutor } from '@lobechat/types';
+import type {BuiltinToolResult} from '@lobechat/types';
+import { BaseExecutor  } from '@lobechat/types';
 
 import type {
   EditTitleState,

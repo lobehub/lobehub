@@ -5,7 +5,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAiInfraStore } from '@/store/aiInfra';
-import type { AiProviderListItem } from '@/types/aiProvider';
+import type {AiProviderListItem} from '@/types/aiProvider';
 
 import GroupItem from './GroupItem';
 

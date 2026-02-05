@@ -4,6 +4,7 @@
  * @returns Converted request body data
  */
 export const getRequestBody = async (
+   
   body?: BodyInit | null,
 ): Promise<string | ArrayBuffer | undefined> => {
   if (!body) {

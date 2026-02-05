@@ -642,10 +642,10 @@ describe('VARIABLE_GENERATORS', () => {
   });
 
   describe('platform variables', () => {
-    const originalNavigator = globalThis.navigator;
+    const originalNavigator = global.navigator;
 
     beforeEach(() => {
-      Object.defineProperty(globalThis, 'navigator', {
+      Object.defineProperty(global, 'navigator', {
         writable: true,
         configurable: true,
         value: {
@@ -658,7 +658,7 @@ describe('VARIABLE_GENERATORS', () => {
     });
 
     afterEach(() => {
-      Object.defineProperty(globalThis, 'navigator', {
+      Object.defineProperty(global, 'navigator', {
         writable: true,
         configurable: true,
         value: originalNavigator,
@@ -680,7 +680,7 @@ describe('VARIABLE_GENERATORS', () => {
     });
 
     it('should return empty string when navigator is undefined', () => {
-      Object.defineProperty(globalThis, 'navigator', {
+      Object.defineProperty(global, 'navigator', {
         writable: true,
         configurable: true,
         value: undefined,

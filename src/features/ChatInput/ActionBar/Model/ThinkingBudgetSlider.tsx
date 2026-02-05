@@ -101,7 +101,6 @@ const ThinkingBudgetSlider = memo<ThinkingBudgetSliderProps>(
         7: '8K',
         8: '16K',
         9: '24K',
-        // eslint-disable-next-line sort-keys-fix/sort-keys-fix
         10: '32K',
       };
     }, []);

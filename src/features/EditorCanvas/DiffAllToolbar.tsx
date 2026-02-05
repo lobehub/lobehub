@@ -1,6 +1,6 @@
 'use client';
 
-import type { IEditor } from '@lobehub/editor';
+import type { IEditor} from '@lobehub/editor';
 import { DiffAction, LITEXML_DIFFNODE_ALL_COMMAND } from '@lobehub/editor';
 import { Block, Icon } from '@lobehub/ui';
 import { Button, Space } from 'antd';

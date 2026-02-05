@@ -1,6 +1,6 @@
-import type { EditLocalFileState } from '@lobechat/builtin-tool-local-system';
-import type { EditLocalFileParams } from '@lobechat/electron-client-ipc';
-import type { BuiltinRenderProps } from '@lobechat/types';
+import type {EditLocalFileState} from '@lobechat/builtin-tool-local-system';
+import type {EditLocalFileParams} from '@lobechat/electron-client-ipc';
+import type {BuiltinRenderProps} from '@lobechat/types';
 import { Alert, Flexbox, PatchDiff, Skeleton } from '@lobehub/ui';
 import React, { memo } from 'react';
 

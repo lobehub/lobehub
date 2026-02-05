@@ -238,7 +238,7 @@ export class ResourceSyncEngine {
 
     // Replace in list
     const listIndex = resourceList.findIndex((r) => r.id === tempId);
-    if (listIndex !== -1) {
+    if (listIndex >= 0) {
       resourceList[listIndex] = realResource;
     }
 
@@ -257,7 +257,7 @@ export class ResourceSyncEngine {
     resourceMap.set(resource.id, resource);
 
     const listIndex = resourceList.findIndex((r) => r.id === resource.id);
-    if (listIndex !== -1) {
+    if (listIndex >= 0) {
       resourceList[listIndex] = resource;
     }
 
@@ -281,7 +281,7 @@ export class ResourceSyncEngine {
       resourceMap.set(resourceId, updated);
 
       const listIndex = resourceList.findIndex((r) => r.id === resourceId);
-      if (listIndex !== -1) {
+      if (listIndex >= 0) {
         resourceList[listIndex] = updated;
       }
 
@@ -313,7 +313,7 @@ export class ResourceSyncEngine {
       resourceMap.set(resourceId, updated);
 
       const listIndex = resourceList.findIndex((r) => r.id === resourceId);
-      if (listIndex !== -1) {
+      if (listIndex >= 0) {
         resourceList[listIndex] = updated;
       }
 

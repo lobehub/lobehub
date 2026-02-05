@@ -1,8 +1,8 @@
-import type { IconSize } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
+import type {IconSize} from '@lobehub/ui';
+import { Icon  } from '@lobehub/ui';
 import { Loader2 } from 'lucide-react';
-import type { CSSProperties } from 'react';
-import { memo } from 'react';
+import type {CSSProperties} from 'react';
+import {  memo } from 'react';
 
 interface UpdateLoadingProps {
   size?: IconSize;

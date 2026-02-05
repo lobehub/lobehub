@@ -15,7 +15,7 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
 }));
 
 describe('/api/agent/stream route', () => {
-  const MOCK_TIMESTAMP = 1_758_203_237_000;
+  const MOCK_TIMESTAMP = 1758203237000;
 
   beforeEach(() => {
     vi.resetAllMocks();
@@ -93,7 +93,7 @@ describe('/api/agent/stream route', () => {
             readCount++;
           }
         }
-      } catch {
+      } catch (error) {
         // Timeout or error
       } finally {
         reader.releaseLock();
@@ -164,7 +164,7 @@ describe('/api/agent/stream route', () => {
             readCount++;
           }
         }
-      } catch {
+      } catch (error) {
         // Timeout or error
       } finally {
         reader.releaseLock();
@@ -246,7 +246,7 @@ describe('/api/agent/stream route', () => {
             readCount++;
           }
         }
-      } catch {
+      } catch (error) {
         // Timeout or error
       } finally {
         reader.releaseLock();
@@ -316,7 +316,7 @@ data: {"type":"stream_end","timestamp":300,"operationId":"test-operation","data"
             readCount++;
           }
         }
-      } catch {
+      } catch (error) {
         // Timeout or error
       } finally {
         reader.releaseLock();
@@ -425,7 +425,7 @@ data: {"type":"stream_end","timestamp":300,"operationId":"test-operation","data"
             readCount++;
           }
         }
-      } catch {
+      } catch (error) {
         // Timeout or error
       } finally {
         reader.releaseLock();

@@ -5,7 +5,7 @@ import { tavily } from '../tavily';
 
 // Mock dependencies
 vi.mock('../../utils/withTimeout', () => ({
-  DEFAULT_TIMEOUT: 30_000,
+  DEFAULT_TIMEOUT: 30000,
   withTimeout: vi.fn(),
 }));
 
@@ -50,7 +50,7 @@ describe('tavily crawler', () => {
       url: 'https://example.com',
     });
 
-    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30_000);
+    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30000);
   });
 
   it('should use custom extract depth when provided', async () => {
@@ -76,7 +76,7 @@ describe('tavily crawler', () => {
 
     await tavily('https://example.com', { filterOptions: {} });
 
-    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30_000);
+    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30000);
   });
 
   it('should handle missing API key', async () => {
@@ -99,7 +99,7 @@ describe('tavily crawler', () => {
 
     await tavily('https://example.com', { filterOptions: {} });
 
-    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30_000);
+    expect(withTimeout).toHaveBeenCalledWith(expect.any(Promise), 30000);
   });
 
   it('should return undefined when no results are returned', async () => {

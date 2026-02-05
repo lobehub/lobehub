@@ -1,4 +1,4 @@
-import type { ChatPluginPayload } from '@lobechat/types';
+import type {ChatPluginPayload} from '@lobechat/types';
 import { Avatar, Button, Center, Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';

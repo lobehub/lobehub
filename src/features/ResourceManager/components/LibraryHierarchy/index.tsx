@@ -265,7 +265,7 @@ const LibraryHierarchy = memo(() => {
 
   // Listen for external tree refresh events (triggered when cache is cleared)
   useEffect(() => {
-    if (typeof globalThis.window === 'undefined') return;
+    if (typeof window === 'undefined') return;
 
     const handleTreeRefresh = (event: Event) => {
       const detail = (event as CustomEvent<{ knowledgeBaseId?: string }>).detail;
@@ -273,9 +273,9 @@ const LibraryHierarchy = memo(() => {
       forceUpdate();
     };
 
-    globalThis.addEventListener(TREE_REFRESH_EVENT, handleTreeRefresh);
+    window.addEventListener(TREE_REFRESH_EVENT, handleTreeRefresh);
     return () => {
-      globalThis.removeEventListener(TREE_REFRESH_EVENT, handleTreeRefresh);
+      window.removeEventListener(TREE_REFRESH_EVENT, handleTreeRefresh);
     };
   }, [libraryId, forceUpdate]);
 
@@ -370,7 +370,7 @@ const LibraryHierarchy = memo(() => {
   return (
     <Flexbox paddingInline={4} style={{ height: '100%' }}>
       <VList
-        bufferSize={typeof globalThis.window !== 'undefined' ? window.innerHeight : 0}
+        bufferSize={typeof window !== 'undefined' ? window.innerHeight : 0}
         style={{ height: '100%' }}
       >
         {visibleNodes.map(({ item, key, level }) => (

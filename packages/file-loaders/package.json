@@ -25,7 +25,6 @@
     "test:coverage": "vitest --coverage --silent='passed-only'"
   },
   "dependencies": {
-    "@napi-rs/canvas": "^0.1.70",
     "@xmldom/xmldom": "^0.9.8",
     "concat-stream": "^2.0.0",
     "debug": "^4.4.3",
@@ -34,7 +33,8 @@
     "pdfjs-dist": "5.4.530",
     "word-extractor": "^1.0.4",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
-    "yauzl": "^3.2.0"
+    "yauzl": "^3.2.0",
+    "@napi-rs/canvas": "^0.1.70"
   },
   "devDependencies": {
     "@types/concat-stream": "^2.0.3",

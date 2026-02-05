@@ -2,8 +2,13 @@ import type { InvokeModelWithResponseStreamResponse } from '@aws-sdk/client-bedr
 
 import type { ChatStreamCallbacks } from '../../../types';
 import { nanoid } from '../../../utils/uuid';
-import type { StreamContext, StreamProtocolChunk } from '../protocol';
-import { createCallbacksTransformer, createSSEProtocolTransformer } from '../protocol';
+import type {
+  StreamContext,
+  StreamProtocolChunk} from '../protocol';
+import {
+  createCallbacksTransformer,
+  createSSEProtocolTransformer
+} from '../protocol';
 import { createBedrockStream } from './common';
 
 interface AmazonBedrockInvocationMetrics {

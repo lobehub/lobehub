@@ -1,7 +1,7 @@
 'use client';
 
 import { EditorProvider } from '@lobehub/editor/react';
-import type { PropsWithChildren } from 'react';
+import type {PropsWithChildren} from 'react';
 import { memo } from 'react';
 
 import { useChatStore } from '@/store/chat';

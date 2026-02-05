@@ -1,7 +1,7 @@
 import { renderPlaceholderTemplate } from '@lobechat/context-engine';
 
 import { experiencePrompt } from '../prompts';
-import type { ExperienceMemory } from '../schemas';
+import type { ExperienceMemory} from '../schemas';
 import { ExperienceMemorySchema } from '../schemas';
 import type { ExtractorTemplateProps } from '../types';
 import { buildGenerateObjectSchema } from '../utils/zod';

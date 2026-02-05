@@ -108,13 +108,13 @@ describe('isSonomaOrLaterSafari', () => {
 
   describe('isArc', () => {
     // 保存原始的 window 对象
-    const originalWindow = { ...globalThis };
+    const originalWindow = { ...window };
 
     beforeEach(() => {
       // 重置 window 对象
       vi.stubGlobal('window', { ...originalWindow });
       // 模拟 matchMedia
-      globalThis.matchMedia = vi.fn().mockReturnValue({ matches: false });
+      window.matchMedia = vi.fn().mockReturnValue({ matches: false });
     });
 
     afterEach(() => {
@@ -136,22 +136,22 @@ describe('isSonomaOrLaterSafari', () => {
     });
 
     it('should return true when CSS custom property matches', () => {
-      globalThis.matchMedia = vi.fn().mockReturnValue({ matches: true });
+      window.matchMedia = vi.fn().mockReturnValue({ matches: true });
       expect(isArc()).toBe(true);
     });
 
     it('should return true when "arc" is in window', () => {
-      (globalThis as any).arc = {};
+      (window as any).arc = {};
       expect(isArc()).toBe(true);
     });
 
     it('should return true when "ArcControl" is in window', () => {
-      (globalThis as any).ArcControl = {};
+      (window as any).ArcControl = {};
       expect(isArc()).toBe(true);
     });
 
     it('should return true when "ARCControl" is in window', () => {
-      (globalThis as any).ARCControl = {};
+      (window as any).ARCControl = {};
       expect(isArc()).toBe(true);
     });
 

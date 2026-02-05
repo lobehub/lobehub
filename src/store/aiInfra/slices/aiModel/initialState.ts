@@ -1,4 +1,4 @@
-import type { AiProviderModelListItem, LobeDefaultAiModelListItem } from 'model-bank';
+import type {AiProviderModelListItem, LobeDefaultAiModelListItem} from 'model-bank';
 
 export interface AIModelsState {
   aiModelLoadingIds: string[];

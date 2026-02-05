@@ -1,6 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm';
 
-import type { NewSessionGroup, SessionGroupItem } from '../schemas';
+import type { NewSessionGroup, SessionGroupItem} from '../schemas';
 import { sessionGroups } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 

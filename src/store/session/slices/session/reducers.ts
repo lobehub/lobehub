@@ -1,6 +1,6 @@
 import { produce } from 'immer';
 
-import type { LobeSession, LobeSessions } from '@/types/session';
+import type {LobeSession, LobeSessions} from '@/types/session';
 
 interface AddSession {
   session: LobeSession;

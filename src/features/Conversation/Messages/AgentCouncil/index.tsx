@@ -1,6 +1,6 @@
 'use client';
 
-import type { UIChatMessage } from '@lobechat/types';
+import type {UIChatMessage} from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Segmented } from 'antd';
 import isEqual from 'fast-deep-equal';

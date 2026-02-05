@@ -3,8 +3,8 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
-import type { FC } from 'react';
-import { lazy, Suspense } from 'react';
+import type {FC} from 'react';
+import {  lazy,Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Outlet } from 'react-router-dom';
 

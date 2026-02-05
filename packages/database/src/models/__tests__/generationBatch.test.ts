@@ -5,8 +5,14 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import type { NewGenerationBatch } from '../../schemas';
-import { generationBatches, generations, generationTopics, users } from '../../schemas';
+import type {
+  NewGenerationBatch} from '../../schemas';
+import {
+  generationBatches,
+  generations,
+  generationTopics,
+  users,
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { GenerationBatchModel } from '../generationBatch';
 
@@ -61,7 +67,7 @@ const testGeneration = {
   generationBatchId: 'test-batch-id',
   asyncTaskId: null, // Use null instead of invalid foreign key
   fileId: null, // Use null instead of invalid foreign key
-  seed: 12_345,
+  seed: 12345,
   asset: {
     type: 'image',
     url: 'asset-url.jpg',

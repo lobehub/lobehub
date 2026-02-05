@@ -537,12 +537,12 @@ describe('GoogleGenerativeAIStream', () => {
       const data = {
         candidates: [{ content: { role: 'model' }, finishReason: 'STOP', index: 0 }],
         usageMetadata: {
-          promptTokenCount: 15_725,
+          promptTokenCount: 15725,
           candidatesTokenCount: 1053,
-          totalTokenCount: 16_778,
-          cachedContentTokenCount: 14_286,
-          promptTokensDetails: [{ modality: 'TEXT', tokenCount: 15_725 }],
-          cacheTokensDetails: [{ modality: 'TEXT', tokenCount: 14_286 }],
+          totalTokenCount: 16778,
+          cachedContentTokenCount: 14286,
+          promptTokensDetails: [{ modality: 'TEXT', tokenCount: 15725 }],
+          cacheTokensDetails: [{ modality: 'TEXT', tokenCount: 14286 }],
         },
         modelVersion: 'gemini-2.0-flash-exp',
       };
@@ -1103,7 +1103,7 @@ describe('GoogleGenerativeAIStream', () => {
               content: {
                 parts: [
                   {
-                    text: "**Planning the Solution**\n\nI'm solidifying my plan...",
+                    text: '**Planning the Solution**\n\nI\'m solidifying my plan...',
                     thought: true,
                   },
                 ],
@@ -1115,9 +1115,9 @@ describe('GoogleGenerativeAIStream', () => {
           modelVersion: 'gemini-3-pro-preview',
           responseId: 'JMxUadDKN8KMjMcPk-LP4Qw',
           usageMetadata: {
-            promptTokenCount: 10_250,
-            totalTokenCount: 10_250,
-            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10_250 }],
+            promptTokenCount: 10250,
+            totalTokenCount: 10250,
+            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10250 }],
           },
         },
         // Chunk 4: First tool call (createPlan)
@@ -1146,10 +1146,10 @@ describe('GoogleGenerativeAIStream', () => {
           modelVersion: 'gemini-3-pro-preview',
           responseId: 'JMxUadDKN8KMjMcPk-LP4Qw',
           usageMetadata: {
-            promptTokenCount: 10_250,
+            promptTokenCount: 10250,
             candidatesTokenCount: 131,
-            totalTokenCount: 11_111,
-            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10_250 }],
+            totalTokenCount: 11111,
+            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10250 }],
             thoughtsTokenCount: 730,
           },
         },
@@ -1180,10 +1180,10 @@ describe('GoogleGenerativeAIStream', () => {
           modelVersion: 'gemini-3-pro-preview',
           responseId: 'JMxUadDKN8KMjMcPk-LP4Qw',
           usageMetadata: {
-            promptTokenCount: 10_250,
+            promptTokenCount: 10250,
             candidatesTokenCount: 213,
-            totalTokenCount: 11_193,
-            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10_250 }],
+            totalTokenCount: 11193,
+            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10250 }],
             thoughtsTokenCount: 730,
           },
         },
@@ -1202,10 +1202,10 @@ describe('GoogleGenerativeAIStream', () => {
           modelVersion: 'gemini-3-pro-preview',
           responseId: 'JMxUadDKN8KMjMcPk-LP4Qw',
           usageMetadata: {
-            promptTokenCount: 10_250,
+            promptTokenCount: 10250,
             candidatesTokenCount: 213,
-            totalTokenCount: 11_193,
-            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10_250 }],
+            totalTokenCount: 11193,
+            promptTokensDetails: [{ modality: 'TEXT', tokenCount: 10250 }],
             thoughtsTokenCount: 730,
           },
         },

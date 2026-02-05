@@ -3,8 +3,8 @@
 import { memo } from 'react';
 
 import { useChatStore } from '@/store/chat';
-import type { TaskDetail } from '@/types/index';
-import { ThreadStatus } from '@/types/index';
+import type {TaskDetail} from '@/types/index';
+import {  ThreadStatus } from '@/types/index';
 
 import {
   ErrorState,

@@ -82,7 +82,7 @@ describe('LobeTaichuAI', () => {
             }),
             expect.objectContaining({}),
           );
-        } catch {}
+        } catch (e) {}
       }
     });
   });

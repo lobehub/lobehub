@@ -59,9 +59,7 @@ export const InviteAgentInspector = memo<
       <span className={styles.title}>
         {t('builtins.lobe-group-agent-builder.apiName.inviteAgent')}:
       </span>
-      {avatar && (
-        <Avatar avatar={avatar} shape={'square'} size={20} title={displayName || undefined} />
-      )}
+      {avatar && <Avatar avatar={avatar} shape={'square'} size={20} title={displayName || undefined} />}
       {displayName && <span>{displayName}</span>}
       {!isLoading && isSuccess && (
         <Check className={styles.statusIcon} color={cssVar.colorSuccess} size={14} />

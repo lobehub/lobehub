@@ -1,8 +1,8 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import type { FC } from 'react';
-import { memo, Suspense } from 'react';
+import type {FC} from 'react';
+import {  memo,Suspense } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import AgentBuilder from '@/features/AgentBuilder';

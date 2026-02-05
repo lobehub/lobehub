@@ -1,5 +1,5 @@
 import { isOnServerSide } from '@lobechat/utils';
-import type { ParsedQuery } from 'query-string';
+import type {ParsedQuery} from 'query-string';
 import qs from 'query-string';
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -36,11 +36,11 @@ export const useQueryRoute = () => {
   return useMemo(
     () => ({
       push: (url: string, options: QueryRouteOptions = {}) => {
-        const prevQuery = qs.parse(globalThis.location.search);
+        const prevQuery = qs.parse(window.location.search);
         return navigate(genHref({ prevQuery, url, ...options }));
       },
       replace: (url: string, options: QueryRouteOptions = {}) => {
-        const prevQuery = qs.parse(globalThis.location.search);
+        const prevQuery = qs.parse(window.location.search);
         return navigate(genHref({ prevQuery, url, ...options }), { replace: true });
       },
     }),

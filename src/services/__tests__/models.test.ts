@@ -1,4 +1,4 @@
-import type { Mock } from 'vitest';
+import type { Mock} from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { aiProviderSelectors } from '@/store/aiInfra';
@@ -63,7 +63,9 @@ describe('ModelsService', () => {
 
   describe('getModels', () => {
     it('should call the endpoint for runtime provider when server fetching', async () => {
-      (fetch as Mock).mockResolvedValueOnce(Response.json({ models: [] }, { status: 200 }));
+      (fetch as Mock).mockResolvedValueOnce(
+        new Response(JSON.stringify({ models: [] }), { status: 200 }),
+      );
 
       await modelsService.getModels('openai');
 
@@ -74,7 +76,9 @@ describe('ModelsService', () => {
 
     it('should map custom provider to runtime provider endpoint', async () => {
       mockedResolveRuntimeProvider.mockImplementation(() => 'openai');
-      (fetch as Mock).mockResolvedValueOnce(Response.json({ models: [] }, { status: 200 }));
+      (fetch as Mock).mockResolvedValueOnce(
+        new Response(JSON.stringify({ models: [] }), { status: 200 }),
+      );
 
       await modelsService.getModels('custom-provider');
 

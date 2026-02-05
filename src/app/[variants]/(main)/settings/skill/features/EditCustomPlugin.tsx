@@ -1,5 +1,5 @@
 import isEqual from 'fast-deep-equal';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 
 import DevModal from '@/features/PluginDevModal';

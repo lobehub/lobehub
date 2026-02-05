@@ -1,7 +1,7 @@
-import type { ChatToolResult, ToolIntervention } from '@lobechat/types';
+import type {ChatToolResult, ToolIntervention} from '@lobechat/types';
 import { safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
-import { memo, Suspense } from 'react';
+import { memo,Suspense } from 'react';
 
 import { getBuiltinStreaming } from '@/tools/streamings';
 

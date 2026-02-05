@@ -29,6 +29,7 @@ export class KnowledgeInjector extends BaseFirstUserContentProvider {
     super(options);
   }
 
+   
   protected buildContent(_context: PipelineContext): string | null {
     const fileContents = this.config.fileContents || [];
     const knowledgeBases = this.config.knowledgeBases || [];

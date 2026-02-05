@@ -1,19 +1,15 @@
 import { formatSearchResults, promptFileContents, promptNoSearchResults } from '@lobechat/prompts';
-import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
-import { BaseExecutor } from '@lobechat/types';
+import type {BuiltinToolContext, BuiltinToolResult} from '@lobechat/types';
+import { BaseExecutor   } from '@lobechat/types';
 
 import { ragService } from '@/services/rag';
 import { agentSelectors } from '@/store/agent/selectors';
 import { getAgentStoreState } from '@/store/agent/store';
 
-import type {
-  FileContentDetail,
-  ReadKnowledgeArgs,
-  ReadKnowledgeState,
-  SearchKnowledgeBaseArgs,
-  SearchKnowledgeBaseState,
+import type {FileContentDetail, ReadKnowledgeArgs, ReadKnowledgeState, SearchKnowledgeBaseArgs, SearchKnowledgeBaseState} from '../types';
+import {
+  KnowledgeBaseIdentifier
 } from '../types';
-import { KnowledgeBaseIdentifier } from '../types';
 
 /**
  * Knowledge Base Tool Executor

@@ -1,7 +1,7 @@
 import { Icon } from '@lobehub/ui';
-import type { CollapseProps } from 'antd';
-import { Collapse } from 'antd';
-import { createStaticStyles, responsive } from 'antd-style';
+import type {CollapseProps} from 'antd';
+import { Collapse  } from 'antd';
+import { createStaticStyles , responsive } from 'antd-style';
 import { ChevronDown } from 'lucide-react';
 import { memo } from 'react';
 

@@ -10,7 +10,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useElectronStore } from '@/store/electron';
 
 import { useStyles } from './styles';
-import type { ResolvedPageData } from './types';
+import type {ResolvedPageData} from './types';
 
 interface PageItemProps {
   isPinned: boolean;

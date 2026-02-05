@@ -9,8 +9,7 @@ const benchmarkLoCoMoFile = process.env.MEMORY_USER_MEMORY_BENCHMARKS_LOCOMO_DAT
 const webhookExtraHeaders = process.env.MEMORY_USER_MEMORY_WEBHOOK_HEADERS;
 
 const post = async (path: string, body: unknown) => {
-  const webhookHeaders = webhookExtraHeaders
-    ?.split(',')
+  const webhookHeaders = webhookExtraHeaders?.split(',')
     .filter(Boolean)
     .reduce<Record<string, string>>((acc, pair) => {
       const [key, value] = pair.split('=').map((s) => s.trim());
@@ -72,19 +71,12 @@ async function main() {
       userId,
     };
     try {
-      console.log(
-        `[@lobechat/memory-user-memory/benchmarks/locomo] ingesting sample ${payload.sampleId} (${payload.sessions.length} sessions) for user ${userId}`,
-      );
+      console.log(`[@lobechat/memory-user-memory/benchmarks/locomo] ingesting sample ${payload.sampleId} (${payload.sessions.length} sessions) for user ${userId}`);
 
       const res = await post('/api/webhooks/memory-extraction/benchmark-locomo', body);
-      console.log(
-        `[@lobechat/memory-user-memory/benchmarks/locomo] ingested sample ${payload.sampleId} -> insertedParts=${res.insertedParts ?? 'n/a'} memories=${res.extraction?.memoryIds?.length ?? 0} traceId=${res.extraction?.traceId ?? 'n/a'}`,
-      );
+      console.log(`[@lobechat/memory-user-memory/benchmarks/locomo] ingested sample ${payload.sampleId} -> insertedParts=${res.insertedParts ?? 'n/a'} memories=${res.extraction?.memoryIds?.length ?? 0} traceId=${res.extraction?.traceId ?? 'n/a'}`);
     } catch (err) {
-      console.error(
-        `[@lobechat/memory-user-memory/benchmarks/locomo] failed sample ${payload.sampleId}`,
-        err,
-      );
+      console.error(`[@lobechat/memory-user-memory/benchmarks/locomo] failed sample ${payload.sampleId}`, err);
       break;
     }
   }
@@ -96,7 +88,7 @@ async function main() {
   );
 }
 
-// eslint-disable-next-line unicorn/prefer-top-level-await
+ 
 main().catch((e) => {
   console.error(e);
   exit(1);

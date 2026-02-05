@@ -12,7 +12,7 @@ export default {
   'analysis.action.button': 'Request memory analysis',
   'analysis.modal.cancel': 'Cancel',
   'analysis.modal.helper':
-    "By default Lobe AI will analyze all unprocessed chats. It's optional to select a date range to analyze.",
+    'By default Lobe AI will analyze all unprocessed chats. It\'s optional to select a date range to analyze.',
   'analysis.modal.rangePlaceholder': 'No range selected; all conversations will be analyzed.',
   'analysis.modal.rangeSelected': 'Analyzing chats from {{start}} to {{end}}',
   'analysis.modal.submit': 'Request memory analysis',

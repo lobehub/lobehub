@@ -1,4 +1,4 @@
-import type { ButtonProps } from '@lobehub/ui';
+import type {ButtonProps} from '@lobehub/ui';
 import {
   ActionIcon,
   Avatar,
@@ -10,13 +10,13 @@ import {
   Modal,
   Skeleton,
   Tag,
-  Text,
+  Text
 } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
 import { LinkIcon, Share2Icon } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { memo, useState } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useShare } from '@/hooks/useShare';

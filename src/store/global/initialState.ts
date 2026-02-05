@@ -1,8 +1,8 @@
 import type { NavigateFunction } from 'react-router-dom';
 
-import type { MigrationSQL, MigrationTableItem } from '@/types/clientDB';
-import { DatabaseLoadingState } from '@/types/clientDB';
-import type { LocaleMode } from '@/types/locale';
+import type {MigrationSQL, MigrationTableItem} from '@/types/clientDB';
+import { DatabaseLoadingState   } from '@/types/clientDB';
+import type {LocaleMode} from '@/types/locale';
 import { SessionDefaultGroup } from '@/types/session';
 import { AsyncLocalStorage } from '@/utils/localStorage';
 
@@ -56,11 +56,13 @@ export enum SettingsTabs {
   Security = 'security',
   Skill = 'skill',
 
+  /* eslint-disable typescript-sort-keys/string-enum */
   Stats = 'stats',
   Storage = 'storage',
   SystemTools = 'system-tools',
   TTS = 'tts',
   Usage = 'usage',
+  /* eslint-enable typescript-sort-keys/string-enum */
 }
 
 /**

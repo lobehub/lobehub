@@ -6,7 +6,7 @@ import type { Cost, Usage } from '../types/usage';
  * UsageCounter - Pure accumulator for usage and cost tracking
  * Focuses only on usage/cost calculations without managing state
  */
-
+ 
 export class UsageCounter {
   /**
    * Create default usage statistics

@@ -2,13 +2,14 @@
  * file copy from https://github.com/Azure/fetch-event-source/blob/45ac3cfffd30b05b79fbf95c21e67d4ef59aa56a/src/fetch.ts
  * and remove some code
  */
-import type { EventSourceMessage } from './parse';
+import type { EventSourceMessage} from './parse';
 import { getBytes, getLines, getMessages } from './parse';
 
 export const EventStreamContentType = 'text/event-stream';
 
 const LastEventId = 'last-event-id';
 
+ 
 export interface FetchEventSourceInit extends RequestInit {
   /** The Fetch function to use. Defaults to window.fetch */
   fetch?: typeof fetch;
@@ -51,6 +52,7 @@ export interface FetchEventSourceInit extends RequestInit {
 }
 
 export function fetchEventSource(
+   
   input: RequestInfo,
   {
     signal: inputSignal,
@@ -70,7 +72,7 @@ export function fetchEventSource(
       headers.accept = EventStreamContentType;
     }
 
-    const fetch = inputFetch ?? globalThis.fetch;
+    const fetch = inputFetch ?? window.fetch;
     async function create() {
       try {
         const response = await fetch(input, {

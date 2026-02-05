@@ -1,9 +1,7 @@
 import { MESSAGE_CANCEL_FLAT } from '@lobechat/const';
 import type { ChatMessageError } from '@lobechat/types';
-import type {
-  fetchEventSource,
-  FetchEventSourceInit,
-} from '@lobechat/utils/client/fetchEventSource/index';
+import type {FetchEventSourceInit} from '@lobechat/utils/client/fetchEventSource/index';
+import { fetchEventSource } from '@lobechat/utils/client/fetchEventSource/index';
 import { sleep } from '@lobechat/utils/sleep';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -595,7 +593,7 @@ describe('fetchSSE', () => {
 
       try {
         await fetchSSE('/', { onErrorHandle: mockOnErrorHandle });
-      } catch {}
+      } catch (e) {}
 
       expect(mockOnErrorHandle).toHaveBeenCalledWith(mockError);
     });
@@ -612,7 +610,7 @@ describe('fetchSSE', () => {
 
       try {
         await fetchSSE('/', { onErrorHandle: mockOnErrorHandle });
-      } catch {}
+      } catch (e) {}
 
       expect(mockOnErrorHandle).toHaveBeenCalledWith({
         type: 'UnknownChatFetchError',
@@ -630,23 +628,20 @@ describe('fetchSSE', () => {
 
       (fetchEventSource as any).mockImplementationOnce(
         async (url: string, options: FetchEventSourceInit) => {
-          const res = Response.json(
-            { errorType: 'SomeError' },
-            {
-              status: 400,
-              statusText: 'Error',
-            },
-          );
+          const res = new Response(JSON.stringify({ errorType: 'SomeError' }), {
+            status: 400,
+            statusText: 'Error',
+          });
 
           try {
             await options.onopen!(res as any);
-          } catch {}
+          } catch (e) {}
         },
       );
 
       try {
         await fetchSSE('/', { onErrorHandle: mockOnErrorHandle });
-      } catch {
+      } catch (e) {
         expect(mockOnErrorHandle).toHaveBeenCalledWith({
           body: undefined,
           message: 'translated_response.SomeError',
@@ -674,7 +669,7 @@ describe('fetchSSE', () => {
 
       try {
         await fetchSSE('/', { onErrorHandle: mockOnErrorHandle });
-      } catch {}
+      } catch (e) {}
 
       expect(mockOnErrorHandle).toHaveBeenCalledWith(mockError);
     });
@@ -691,7 +686,7 @@ describe('fetchSSE', () => {
 
       try {
         await fetchSSE('/', { onErrorHandle: mockOnErrorHandle });
-      } catch {}
+      } catch (e) {}
 
       expect(mockOnErrorHandle).toHaveBeenCalledWith({
         body: {

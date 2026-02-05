@@ -619,7 +619,7 @@ describe('GroupMessageFlattenProcessor', () => {
                   '**Checking Hangzhou weather**\n\nIt seems the user is asking to check the weather in Hangzhou...',
               },
               performance: {
-                tps: 29.336_734_693_877_553,
+                tps: 29.336734693877553,
                 ttft: 3844,
                 duration: 3920,
                 latency: 7764,
@@ -647,13 +647,13 @@ describe('GroupMessageFlattenProcessor', () => {
               usage: {
                 inputCacheMissTokens: 2404,
                 totalTokens: 2519,
-                cost: 0.000_831,
+                cost: 0.000831,
               },
             },
           ],
           usage: {
             totalTokens: 2519,
-            cost: 0.000_831,
+            cost: 0.000831,
           },
         },
       ];

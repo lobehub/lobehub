@@ -1,7 +1,7 @@
 'use client';
 
 import type { ComponentProps } from 'react';
-import type { Page as PdfPage } from 'react-pdf';
+import type { Page as PdfPage} from 'react-pdf';
 import { Document as PdfDocument, pdfjs } from 'react-pdf';
 
 const workerSrc = `https://registry.npmmirror.com/pdfjs-dist/${pdfjs.version}/files/build/pdf.worker.min.mjs`;
@@ -20,4 +20,7 @@ export const Document = (props: DocumentProps) => {
   return <PdfDocument {...props} />;
 };
 
-export { Page, pdfjs } from 'react-pdf';
+
+
+
+export {Page, pdfjs} from 'react-pdf';

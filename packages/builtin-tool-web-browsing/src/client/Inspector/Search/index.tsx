@@ -1,6 +1,6 @@
 'use client';
 
-import type { BuiltinInspectorProps, SearchQuery, UniformSearchResponse } from '@lobechat/types';
+import type {BuiltinInspectorProps, SearchQuery, UniformSearchResponse} from '@lobechat/types';
 import { Text } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';

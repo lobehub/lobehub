@@ -1,18 +1,12 @@
-import type { SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
 import useSWR, { mutate } from 'swr';
 
-import type {
-  FavoriteAgentItem,
-  FavoritePluginItem,
-  FollowCounts,
-  FollowStatus,
-  FollowUserItem,
-  PaginatedResponse,
-  SocialTargetType,
+import type {FavoriteAgentItem, FavoritePluginItem, FollowCounts, FollowStatus, FollowUserItem, PaginatedResponse, SocialTargetType} from '@/services/social';
+import {
+  socialService
 } from '@/services/social';
-import { socialService } from '@/services/social';
-import type { DiscoverStore } from '@/store/discover';
-import type { StoreSetter } from '@/store/types';
+import type {DiscoverStore} from '@/store/discover';
+import type {StoreSetter} from '@/store/types';
 
 type Setter = StoreSetter<DiscoverStore>;
 export const createSocialSlice = (set: Setter, get: () => DiscoverStore, _api?: unknown) =>

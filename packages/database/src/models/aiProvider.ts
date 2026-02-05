@@ -12,7 +12,7 @@ import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 
 import { merge } from '@/utils/merge';
 
-import type { AiProviderSelectItem } from '../schemas';
+import type {AiProviderSelectItem } from '../schemas';
 import { aiModels, aiProviders } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
@@ -33,7 +33,7 @@ export class AiProviderModel {
     { keyVaults: userKey, ...params }: CreateAiProviderParams,
     encryptor?: EncryptUserKeyVaults,
   ) => {
-    // eslint-disable-next-line unicorn/consistent-function-scoping
+     
     const defaultSerialize = (s: string) => s;
     const encrypt = encryptor ?? defaultSerialize;
     const keyVaults = await encrypt(JSON.stringify(userKey));
@@ -114,7 +114,7 @@ export class AiProviderModel {
     encryptor?: EncryptUserKeyVaults,
     decryptor?: DecryptUserKeyVaults,
   ) => {
-    // eslint-disable-next-line unicorn/consistent-function-scoping
+     
     const defaultSerialize = (s: string) => s;
     const encrypt = encryptor ?? defaultSerialize;
     const decrypt = decryptor ?? JSON.parse;

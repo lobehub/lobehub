@@ -44,7 +44,7 @@ export function extractStatusCodeFromError(message: string): {
   // We need to find a bracket that contains a status code (3-digit number followed by space and text)
 
   let searchStart = 0;
-
+   
   while (true) {
     const openBracketIndex = message.indexOf('[', searchStart);
     if (openBracketIndex === -1) {

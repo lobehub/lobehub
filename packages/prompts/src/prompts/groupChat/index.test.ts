@@ -6,7 +6,7 @@ import { buildGroupChatSystemPrompt } from './index';
 
 describe('buildGroupChatSystemPrompt', () => {
   const baseSystemRole = 'You are an expert collaborator.';
-  const mockTimestamp = 1_634_567_890_000;
+  const mockTimestamp = 1634567890000;
 
   beforeEach(() => {
     vi.spyOn(Date, 'now').mockReturnValue(mockTimestamp);
@@ -94,7 +94,7 @@ describe('buildGroupChatSystemPrompt', () => {
 });
 
 describe('filterMessagesForAgent', () => {
-  const mockTimestamp = 1_634_567_890_000;
+  const mockTimestamp = 1634567890000;
   const agentId = 'agent-1';
 
   beforeEach(() => {

@@ -3,7 +3,7 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import type { TogetherAIModel } from './index';
+import type {TogetherAIModel } from './index';
 import { LobeTogetherAI, params } from './index';
 
 const provider = ModelProvider.TogetherAI;
@@ -77,7 +77,7 @@ describe('LobeTogetherAI - custom features', () => {
           id: 'deepseek-r1',
         },
         {
-          context_length: 128_000,
+          context_length: 128000,
           description: 'A vision model for image understanding',
           display_name: 'QvQ 32B',
           id: 'qvq-32b-preview',
@@ -103,9 +103,9 @@ describe('LobeTogetherAI - custom features', () => {
         description: 'A vision model for image understanding',
         displayName: 'QvQ 32B',
         id: 'qvq-32b-preview',
-        maxOutput: 128_000,
+        maxOutput: 128000,
         reasoning: false,
-        tokens: 128_000,
+        tokens: 128000,
         vision: true, // Contains 'vision' in description and 'qvq' in id
       });
     });
@@ -130,7 +130,7 @@ describe('LobeTogetherAI - custom features', () => {
     it('should detect reasoning models by qwq keyword', async () => {
       const mockModels: Partial<TogetherAIModel>[] = [
         {
-          context_length: 32_768,
+          context_length: 32768,
           description: 'QwQ reasoning model',
           display_name: 'QwQ 32B',
           id: 'qwq-32b-preview',
@@ -181,7 +181,7 @@ describe('LobeTogetherAI - custom features', () => {
     it('should detect vision from qvq keyword in id', async () => {
       const mockModels: Partial<TogetherAIModel>[] = [
         {
-          context_length: 32_768,
+          context_length: 32768,
           description: 'QvQ model',
           display_name: 'QvQ',
           id: 'qvq-72b-preview',
@@ -221,7 +221,7 @@ describe('LobeTogetherAI - custom features', () => {
           id: 'DEEPSEEK-R1-UPPER',
         },
         {
-          context_length: 32_768,
+          context_length: 32768,
           description: 'QVQ model',
           display_name: 'QVQ',
           id: 'QVQ-UPPER',
@@ -313,7 +313,7 @@ describe('LobeTogetherAI - custom features', () => {
           id: 'function-only',
         },
         {
-          context_length: 32_768,
+          context_length: 32768,
           description: 'Model with vision',
           display_name: 'Vision Model',
           id: 'vision-only',
@@ -350,7 +350,7 @@ describe('LobeTogetherAI - custom features', () => {
     it('should set context tokens correctly', async () => {
       const mockModels: Partial<TogetherAIModel>[] = [
         {
-          context_length: 200_000,
+          context_length: 200000,
           description: 'Large context model',
           display_name: 'Large Context',
           id: 'large-context',
@@ -361,7 +361,7 @@ describe('LobeTogetherAI - custom features', () => {
 
       const result = await params.models!({ client: mockClient });
 
-      expect(result[0].maxOutput).toBe(200_000);
+      expect(result[0].maxOutput).toBe(200000);
     });
   });
 });

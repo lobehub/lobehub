@@ -1,7 +1,11 @@
 'use client';
 
-import type { AuthorizationPhase, AuthorizationProgress } from '@lobechat/electron-client-ipc';
-import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
+import type {
+  AuthorizationPhase,
+  AuthorizationProgress} from '@lobechat/electron-client-ipc';
+import {
+  useWatchBroadcast,
+} from '@lobechat/electron-client-ipc';
 import { Alert, Button, Center, Flexbox, Icon, Input, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';

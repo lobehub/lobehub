@@ -414,7 +414,7 @@ describe('AnthropicStream', () => {
           usage: {
             input_tokens: 6,
             cache_creation_input_tokens: 457,
-            cache_read_input_tokens: 17_918,
+            cache_read_input_tokens: 17918,
             output_tokens: 2,
           },
         },

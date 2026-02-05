@@ -1,4 +1,4 @@
-import type { SearchQuery } from '@lobechat/types';
+import type {SearchQuery} from '@lobechat/types';
 import {
   Block,
   Checkbox,
@@ -10,8 +10,8 @@ import {
   Tooltip,
 } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import type { ReactNode } from 'react';
-import { memo, useState } from 'react';
+import type {ReactNode} from 'react';
+import {  memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';

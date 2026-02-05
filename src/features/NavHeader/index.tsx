@@ -1,7 +1,7 @@
-import type { FlexboxProps } from '@lobehub/ui';
-import { Flexbox, TooltipGroup } from '@lobehub/ui';
-import type { CSSProperties, ReactNode } from 'react';
-import { memo } from 'react';
+import type {FlexboxProps} from '@lobehub/ui';
+import { Flexbox,  TooltipGroup } from '@lobehub/ui';
+import type {CSSProperties, ReactNode} from 'react';
+import {  memo } from 'react';
 
 import ToggleLeftPanelButton from '@/features/NavPanel/ToggleLeftPanelButton';
 import { useGlobalStore } from '@/store/global';

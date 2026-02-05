@@ -4,6 +4,7 @@
  */
 import type { ModelConfig } from './modelRegistry';
 
+/* eslint-disable sort-keys-fix/sort-keys-fix */
 export const SD_MODEL_REGISTRY: Record<string, ModelConfig> = {
   // ===================================================================
   // SD3.5 Model Family Registry
@@ -504,3 +505,4 @@ export const SD_MODEL_REGISTRY: Record<string, ModelConfig> = {
     modelFamily: 'SDXL',
   },
 };
+/* eslint-enable sort-keys-fix/sort-keys-fix */

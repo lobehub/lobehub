@@ -1,4 +1,4 @@
-import type { ChatMessageError } from '@lobechat/types';
+import type {ChatMessageError} from '@lobechat/types';
 
 export default function useRenderBusinessChatErrorMessageExtra(
   // eslint-disable-next-line unused-imports/no-unused-vars

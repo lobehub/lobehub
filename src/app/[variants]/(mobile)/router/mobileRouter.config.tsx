@@ -12,7 +12,7 @@ import {
   BusinessMobileRoutesWithMainLayout,
   BusinessMobileRoutesWithoutMainLayout,
 } from '@/business/client/BusinessMobileRoutes';
-import type { RouteConfig } from '@/utils/router';
+import type {RouteConfig} from '@/utils/router';
 import { dynamicElement, ErrorBoundary, redirectElement } from '@/utils/router';
 
 import MobileSettingsLayout from '../settings/_layout';

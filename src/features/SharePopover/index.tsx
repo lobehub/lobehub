@@ -13,8 +13,8 @@ import {
 } from '@lobehub/ui';
 import { App, Divider } from 'antd';
 import { ExternalLinkIcon, LinkIcon, LockIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 

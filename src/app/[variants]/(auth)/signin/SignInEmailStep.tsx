@@ -67,7 +67,7 @@ export const SignInEmailStep = ({
     const normalized = provider
       .toLowerCase()
       .replaceAll(/(^|[_-])([a-z])/g, (_, __, c) => c.toUpperCase());
-    const normalizedKey = normalized.replaceAll(/[^\dA-Z]/gi, '');
+    const normalizedKey = normalized.replaceAll(/[^\da-z]/gi, '');
     const key = `betterAuth.signin.continueWith${normalizedKey}`;
     return t(key, { defaultValue: `Continue with ${normalized}` });
   };

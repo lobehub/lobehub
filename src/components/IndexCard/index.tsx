@@ -1,8 +1,8 @@
-import type { FlexboxProps } from '@lobehub/ui';
-import { ActionIcon, Center, Flexbox } from '@lobehub/ui';
-import { createStaticStyles, responsive } from 'antd-style';
+import type {FlexboxProps} from '@lobehub/ui';
+import { ActionIcon, Center, Flexbox  } from '@lobehub/ui';
+import { createStaticStyles , responsive } from 'antd-style';
 import { ChevronDown, ChevronRight } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

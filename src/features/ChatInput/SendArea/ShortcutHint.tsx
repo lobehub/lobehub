@@ -1,4 +1,4 @@
-import { combineKeys, Flexbox, Hotkey, Text } from '@lobehub/ui';
+import { combineKeys,Flexbox, Hotkey, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

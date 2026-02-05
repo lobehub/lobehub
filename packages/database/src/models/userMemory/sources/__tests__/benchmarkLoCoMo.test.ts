@@ -1,7 +1,7 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach,beforeEach, describe, expect, it } from 'vitest';
 
-import type { BenchmarkLoCoMoPart } from '../benchmarkLoCoMo';
-import { UserMemorySourceBenchmarkLoCoMoModel } from '../benchmarkLoCoMo';
+import type { BenchmarkLoCoMoPart} from '../benchmarkLoCoMo';
+import {UserMemorySourceBenchmarkLoCoMoModel } from '../benchmarkLoCoMo';
 
 describe('UserMemorySourceBenchmarkLoCoMoModel', () => {
   const userId = 'test-user-1';
@@ -117,7 +117,9 @@ describe('UserMemorySourceBenchmarkLoCoMoModel', () => {
 
       model.replaceParts(sourceId, initialParts);
 
-      const newParts: BenchmarkLoCoMoPart[] = [{ content: 'New Part 1', partIndex: 0 }];
+      const newParts: BenchmarkLoCoMoPart[] = [
+        { content: 'New Part 1', partIndex: 0 },
+      ];
 
       model.replaceParts(sourceId, newParts);
 
@@ -129,7 +131,9 @@ describe('UserMemorySourceBenchmarkLoCoMoModel', () => {
     it('should delete parts when replacing with empty array', async () => {
       const sourceId = 'source-delete-parts';
 
-      const parts: BenchmarkLoCoMoPart[] = [{ content: 'Part to delete', partIndex: 0 }];
+      const parts: BenchmarkLoCoMoPart[] = [
+        { content: 'Part to delete', partIndex: 0 },
+      ];
 
       model.replaceParts(sourceId, parts);
       expect((await model.listParts(sourceId)).length).toBe(1);
@@ -142,7 +146,9 @@ describe('UserMemorySourceBenchmarkLoCoMoModel', () => {
       const sourceId = 'source-normalize';
       const beforeCreate = new Date();
 
-      const parts: BenchmarkLoCoMoPart[] = [{ content: 'Part without date', partIndex: 0 }];
+      const parts: BenchmarkLoCoMoPart[] = [
+        { content: 'Part without date', partIndex: 0 },
+      ];
 
       model.replaceParts(sourceId, parts);
 

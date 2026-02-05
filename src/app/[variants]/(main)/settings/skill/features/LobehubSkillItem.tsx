@@ -1,7 +1,7 @@
 'use client';
 
-import type { LobehubSkillProviderType } from '@lobechat/const';
-import { Avatar, Button as LobeButton, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import type {LobehubSkillProviderType} from '@lobechat/const';
+import { Avatar, Button as LobeButton,DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { App, Button } from 'antd';
 import { cssVar } from 'antd-style';
 import { Loader2, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
@@ -10,8 +10,10 @@ import { useTranslation } from 'react-i18next';
 
 import { createLobehubSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { useToolStore } from '@/store/tool';
-import type { LobehubSkillServer } from '@/store/tool/slices/lobehubSkillStore/types';
-import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
+import type {LobehubSkillServer} from '@/store/tool/slices/lobehubSkillStore/types';
+import {
+  LobehubSkillStatus
+} from '@/store/tool/slices/lobehubSkillStore/types';
 
 import { styles } from './style';
 
@@ -131,7 +133,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
 
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
-      if (event.origin !== globalThis.location.origin) return;
+      if (event.origin !== window.location.origin) return;
 
       if (
         event.data?.type === 'LOBEHUB_SKILL_AUTH_SUCCESS' &&
@@ -151,7 +153,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
 
     setIsConnecting(true);
     try {
-      const redirectUri = `${globalThis.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider.id)}`;
+      const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider.id)}`;
       const { authorizeUrl } = await getAuthorizeUrl(provider.id, { redirectUri });
       openOAuthWindow(authorizeUrl);
     } catch (error) {

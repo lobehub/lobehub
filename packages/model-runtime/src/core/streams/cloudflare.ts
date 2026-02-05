@@ -22,7 +22,7 @@ class CloudflareStreamTransformer {
     }
     const splits = textChunk.split('\n\n');
     for (let i = 0; i < splits.length - 1; i++) {
-      if (/\[DONE\]/.test(splits[i].trim())) {
+      if (/\[DONE]/.test(splits[i].trim())) {
         return;
       }
       this.parseChunk(splits[i], controller);
@@ -41,7 +41,7 @@ function fillUrl(accountID: string): string {
 }
 
 function desensitizeAccountId(path: string): string {
-  return path.replace(/\/[\dA-F]{32}\//i, '/****/');
+  return path.replace(/\/[\da-f]{32}\//i, '/****/');
 }
 
 function desensitizeCloudflareUrl(url: string): string {

@@ -515,8 +515,8 @@ describe('AgentRuntimeService', () => {
 
     const mockMetadata = {
       userId: 'user-123',
-      createdAt: new Date(Date.now() - 3_600_000).toISOString(), // 1 hour ago
-      lastActiveAt: new Date(Date.now() - 1_800_000).toISOString(), // 30 minutes ago
+      createdAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+      lastActiveAt: new Date(Date.now() - 1800000).toISOString(), // 30 minutes ago
     };
 
     beforeEach(() => {

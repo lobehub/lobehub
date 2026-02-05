@@ -3,8 +3,8 @@ import { AnimatePresence, m as motion } from 'motion/react';
 import { useMemo } from 'react';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
-import type { ActionKeys } from '@/features/ChatInput';
-import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import type {ActionKeys} from '@/features/ChatInput';
+import {  ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';

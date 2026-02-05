@@ -7,7 +7,7 @@ import { useAiInfraStore } from '@/store/aiInfra';
 import { useServerConfigStore } from '@/store/serverConfig';
 
 import ModelList from '../../features/ModelList';
-import type { ProviderConfigProps } from '../../features/ProviderConfig';
+import type {ProviderConfigProps} from '../../features/ProviderConfig';
 import ProviderConfig from '../../features/ProviderConfig';
 
 interface ProviderDetailProps extends ProviderConfigProps {

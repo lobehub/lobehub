@@ -19,7 +19,11 @@ const Details = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
 
   return (
     <Flexbox gap={24}>
-      <Nav activeTab={activeTab as GroupAgentNavKey} mobile={mobile} setActiveTab={setActiveTab} />
+      <Nav
+        activeTab={activeTab as GroupAgentNavKey}
+        mobile={mobile}
+        setActiveTab={setActiveTab}
+      />
       <Flexbox
         gap={48}
         horizontal={!mobile}

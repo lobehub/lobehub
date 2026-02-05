@@ -1,11 +1,11 @@
 'use client';
 
-import type { FlexboxProps } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import type {FlexboxProps} from '@lobehub/ui';
+import { Flexbox  } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import type { CSSProperties } from 'react';
-import { memo, useEffect } from 'react';
+import type {CSSProperties} from 'react';
+import {  memo, useEffect } from 'react';
 
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import { useGlobalStore } from '@/store/global';

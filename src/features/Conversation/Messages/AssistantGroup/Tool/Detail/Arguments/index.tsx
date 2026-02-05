@@ -2,11 +2,11 @@ import { Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar, cx } from 'antd-style';
 import { parse } from 'partial-json';
-import type { ReactNode } from 'react';
-import { memo, useMemo } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { DescriptionItem } from '@/components/Descriptions';
+import type {DescriptionItem} from '@/components/Descriptions';
 import Descriptions from '@/components/Descriptions';
 import { useYamlArguments } from '@/hooks/useYamlArguments';
 import { shinyTextStyles } from '@/styles';

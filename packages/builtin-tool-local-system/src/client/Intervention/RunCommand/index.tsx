@@ -1,5 +1,5 @@
-import type { RunCommandParams } from '@lobechat/electron-client-ipc';
-import type { BuiltinInterventionProps } from '@lobechat/types';
+import type {RunCommandParams} from '@lobechat/electron-client-ipc';
+import type {BuiltinInterventionProps} from '@lobechat/types';
 import { Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { memo } from 'react';
 

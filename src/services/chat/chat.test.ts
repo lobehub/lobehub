@@ -1,5 +1,6 @@
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import type { ChatErrorType, ChatStreamPayload, LobeTool, UIChatMessage } from '@lobechat/types';
+import type {ChatStreamPayload, LobeTool, UIChatMessage} from '@lobechat/types';
+import { ChatErrorType   } from '@lobechat/types';
 import { act } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -53,7 +54,7 @@ vi.mock('i18next', () => ({
 
 vi.stubGlobal(
   'fetch',
-  vi.fn(() => Promise.resolve(Response.json({ some: 'data' }))),
+  vi.fn(() => Promise.resolve(new Response(JSON.stringify({ some: 'data' })))),
 );
 
 // Mock image processing utilities
@@ -673,9 +674,9 @@ describe('ChatService', () => {
             role: 'user',
             content: 'https://vercel.com/ 请分析 chatGPT 关键词\n\n',
             sessionId: 'inbox',
-            createdAt: 1_702_723_964_330,
+            createdAt: 1702723964330,
             id: 'vyQvEw6V',
-            updatedAt: 1_702_723_964_330,
+            updatedAt: 1702723964330,
             extra: {},
           },
         ] as UIChatMessage[];
@@ -1281,11 +1282,11 @@ describe('ChatService', () => {
       const options = {};
       const mockResponse = new Response('Plugin Result', { status: 200 });
 
-      globalThis.fetch = vi.fn(() => Promise.resolve(mockResponse));
+      global.fetch = vi.fn(() => Promise.resolve(mockResponse));
 
       const result = await chatService.runPluginApi(params, options);
 
-      expect(globalThis.fetch).toHaveBeenCalledWith(expect.any(String), expect.any(Object));
+      expect(global.fetch).toHaveBeenCalledWith(expect.any(String), expect.any(Object));
       expect(result.text).toBe('Plugin Result');
     });
 

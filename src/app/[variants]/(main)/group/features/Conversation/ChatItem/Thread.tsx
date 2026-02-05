@@ -1,8 +1,8 @@
 import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import type { CSSProperties } from 'react';
-import { memo } from 'react';
+import type {CSSProperties} from 'react';
+import {  memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsDark } from '@/hooks/useIsDark';

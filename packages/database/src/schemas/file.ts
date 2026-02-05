@@ -1,6 +1,7 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
 import { isNotNull } from 'drizzle-orm';
-import type { AnyPgColumn } from 'drizzle-orm/pg-core';
+import type {
+  AnyPgColumn} from 'drizzle-orm/pg-core';
 import {
   boolean,
   index,
@@ -78,9 +79,9 @@ export const documents = pgTable(
 
     // Associated file (optional)
     // forward reference needs AnyPgColumn to avoid circular type inference
-
+     
     fileId: text('file_id').references((): AnyPgColumn => files.id, { onDelete: 'set null' }),
-
+     
     knowledgeBaseId: text('knowledge_base_id').references(() => knowledgeBases.id, {
       onDelete: 'set null',
     }),

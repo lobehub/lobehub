@@ -1,10 +1,10 @@
 import { Avatar, Center, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
-import type { CSSProperties } from 'react';
-import { memo } from 'react';
+import type {CSSProperties} from 'react';
+import {  memo } from 'react';
 
-import type { MetaData } from '@/types/meta';
+import type {MetaData} from '@/types/meta';
 
 const styles = createStaticStyles(({ css }) => ({
   avatar: css`

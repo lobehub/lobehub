@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import type { FileListItem } from '@/types/files';
+import type {FileListItem} from '@/types/files';
 
 import MasonryFileItem from '.';
 

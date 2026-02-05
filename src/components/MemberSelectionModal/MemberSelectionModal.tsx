@@ -16,8 +16,8 @@ import { useHover } from 'ahooks';
 import { List as AntdList, Switch } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { X } from 'lucide-react';
-import type { ChangeEvent } from 'react';
-import { memo, useCallback, useMemo, useRef, useState } from 'react';
+import type {ChangeEvent} from 'react';
+import {  memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
@@ -25,8 +25,8 @@ import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 import ModelSelect from '@/features/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useSessionStore } from '@/store/session';
-import type { LobeAgentSession } from '@/types/session';
-import { LobeSessionType } from '@/types/session';
+import type {LobeAgentSession} from '@/types/session';
+import {  LobeSessionType } from '@/types/session';
 
 const AvailableAgentItem = memo<{
   agent: LobeAgentSession;

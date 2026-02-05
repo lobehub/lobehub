@@ -4,11 +4,7 @@ export interface PromptVars {
 
 export const buildActivityMessages = (vars: PromptVars) => {
   const messages = [
-    {
-      content:
-        'You are a memory assistant, help the user to organize their preferences with memory related tools',
-      role: 'system' as const,
-    },
+    { content: 'You are a memory assistant, help the user to organize their preferences with memory related tools', role: 'system' as const },
     { content: 'I love to drink Hong Kong Milk Tea', role: 'user' as const },
   ];
 

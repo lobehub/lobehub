@@ -1,7 +1,7 @@
 import { emailEnv } from '@/envs/email';
 
-import type { EmailPayload, EmailResponse, EmailServiceImpl } from './impls';
-import { createEmailServiceImpl, EmailImplType } from './impls';
+import type {EmailPayload, EmailResponse, EmailServiceImpl} from './impls';
+import { createEmailServiceImpl , EmailImplType    } from './impls';
 
 /**
  * Email service class
@@ -13,7 +13,7 @@ export class EmailService {
   constructor(implType?: EmailImplType) {
     // Avoid client-side access to server env when executed in browser-like test environments
     const envImplType =
-      typeof globalThis.window === 'undefined'
+      typeof window === 'undefined'
         ? (emailEnv.EMAIL_SERVICE_PROVIDER as EmailImplType | undefined)
         : undefined;
     const resolvedImplType = implType ?? envImplType ?? EmailImplType.Nodemailer;

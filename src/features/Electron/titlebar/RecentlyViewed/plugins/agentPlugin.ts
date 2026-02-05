@@ -1,8 +1,9 @@
+ 
 import { MessageSquare } from 'lucide-react';
 
-import type { AgentParams, PageReference, ResolvedPageData } from '../types';
-import type { PluginContext, RecentlyViewedPlugin } from './types';
-import { createPageReference } from './types';
+import type {AgentParams, PageReference, ResolvedPageData} from '../types';
+import type {PluginContext, RecentlyViewedPlugin} from './types';
+import { createPageReference  } from './types';
 
 const AGENT_PATH_REGEX = /^\/agent\/([^/?]+)$/;
 

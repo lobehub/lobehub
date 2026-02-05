@@ -30,11 +30,11 @@ export const isMacOS = () => getPlatform() === 'Mac OS';
  * @returns Darwin major version (e.g., 25, 26) or 0 if not available
  */
 export const getDarwinMajorVersion = (): number => {
-  if (isOnServerSide || typeof globalThis.window === 'undefined') return 0;
+  if (isOnServerSide || typeof window === 'undefined') return 0;
 
   // In Electron environment, use window.lobeEnv.darwinMajorVersion if available
-  if (typeof (globalThis as any)?.lobeEnv?.darwinMajorVersion === 'number') {
-    return (globalThis as any).lobeEnv.darwinMajorVersion;
+  if (typeof (window as any)?.lobeEnv?.darwinMajorVersion === 'number') {
+    return (window as any).lobeEnv.darwinMajorVersion;
   }
 
   // In web environment, try to parse from userAgent
@@ -58,7 +58,7 @@ export const isMacOSWithLargeWindowBorders = () => {
 
   // Check if we're in Electron environment
   const isElectron =
-    /Electron\//.test(navigator.userAgent) || Boolean((globalThis as any)?.process?.type);
+    /Electron\//.test(navigator.userAgent) || Boolean((window as any)?.process?.type);
 
   // In Electron environment, check darwinMajorVersion from window.lobeEnv
   if (isElectron) {
@@ -82,8 +82,8 @@ export const isMacOSWithLargeWindowBorders = () => {
 export const isArc = () => {
   if (isOnServerSide) return false;
   return (
-    globalThis.matchMedia('(--arc-palette-focus: var(--arc-background-simple-color))').matches ||
-    Boolean('arc' in globalThis || 'ArcControl' in globalThis || 'ARCControl' in globalThis) ||
+    window.matchMedia('(--arc-palette-focus: var(--arc-background-simple-color))').matches ||
+    Boolean('arc' in window || 'ArcControl' in window || 'ARCControl' in window) ||
     Boolean(getComputedStyle(document.documentElement).getPropertyValue('--arc-palette-title'))
   );
 };
@@ -91,7 +91,7 @@ export const isArc = () => {
 export const isInStandaloneMode = () => {
   if (isOnServerSide) return false;
   return (
-    globalThis.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: standalone)').matches ||
     ('standalone' in navigator && (navigator as any).standalone === true)
   );
 };

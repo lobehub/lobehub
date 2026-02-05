@@ -15,7 +15,11 @@
                 "memoryCategory": "work",
                 "memoryType": "activity",
                 "summary": "Client Q2 renewal meeting with Alice (ACME)",
-                "tags": ["meeting", "client", "renewal"],
+                "tags": [
+                  "meeting",
+                  "client",
+                  "renewal"
+                ],
                 "title": "ACME Q2 renewal meeting",
                 "withActivity": {
                   "type": "meeting",
@@ -45,7 +49,10 @@
                 "memoryCategory": "health",
                 "memoryType": "activity",
                 "summary": "Doctor appointment with Dr. Kim about migraines",
-                "tags": ["appointment", "health"],
+                "tags": [
+                  "appointment",
+                  "health"
+                ],
                 "title": "Neurology follow-up",
                 "withActivity": {
                   "type": "appointment",
@@ -129,11 +136,17 @@
                       "properties": {
                         "address": {
                           "description": "Free-form address or directions if provided.",
-                          "type": ["string", "null"]
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "extra": {
                           "description": "Optional key-value metadata related to the location.",
-                          "type": ["string", "null"]
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "name": {
                           "description": "Place name or venue label.",
@@ -144,14 +157,23 @@
                           "items": {
                             "type": "string"
                           },
-                          "type": ["array", "null"]
+                          "type": [
+                            "array",
+                            "null"
+                          ]
                         },
                         "type": {
                           "description": "Place type or category (office, clinic, restaurant, virtual).",
                           "type": "string"
                         }
                       },
-                      "required": ["type", "name", "address", "tags", "extra"],
+                      "required": [
+                        "type",
+                        "name",
+                        "address",
+                        "tags",
+                        "extra"
+                      ],
                       "type": "object"
                     },
                     "type": "array"
@@ -163,7 +185,10 @@
                       "properties": {
                         "extra": {
                           "description": "Optional key-value metadata related to the object.",
-                          "type": ["string", "null"]
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "name": {
                           "description": "Name or label of the object (e.g., “MacBook”, “flight UA123”).",
@@ -171,11 +196,22 @@
                         },
                         "type": {
                           "description": "Object category (e.g., transportation, device, document).",
-                          "enum": ["application", "item", "knowledge", "other", "person", "place"],
+                          "enum": [
+                            "application",
+                            "item",
+                            "knowledge",
+                            "other",
+                            "person",
+                            "place"
+                          ],
                           "type": "string"
                         }
                       },
-                      "required": ["type", "name", "extra"],
+                      "required": [
+                        "type",
+                        "name",
+                        "extra"
+                      ],
                       "type": "object"
                     },
                     "type": "array"
@@ -187,7 +223,10 @@
                       "properties": {
                         "extra": {
                           "description": "Optional key-value metadata related to the subject.",
-                          "type": ["string", "null"]
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "name": {
                           "description": "Name or short label of the subject.",
@@ -195,11 +234,20 @@
                         },
                         "type": {
                           "description": "Subject category (e.g., person, pet, group).",
-                          "enum": ["person", "pet", "group", "other"],
+                          "enum": [
+                            "person",
+                            "pet",
+                            "group",
+                            "other"
+                          ],
                           "type": "string"
                         }
                       },
-                      "required": ["type", "name", "extra"],
+                      "required": [
+                        "type",
+                        "name",
+                        "extra"
+                      ],
                       "type": "object"
                     },
                     "type": "array"
@@ -207,16 +255,25 @@
                   "endsAt": {
                     "description": "ISO 8601 end time for the activity when specified. Omit if not explicitly provided.",
                     "format": "date-time",
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "feedback": {
                     "description": "Subjective feelings or evaluation of how the activity went (mood, satisfaction, effort).",
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "metadata": {
                     "additionalProperties": false,
                     "description": "Additional structured metadata to keep raw hints (JSON object). Use sparingly.",
-                    "type": ["object", "null"]
+                    "type": [
+                      "object",
+                      "null"
+                    ]
                   },
                   "narrative": {
                     "description": "Factual story of what happened (chronology, participants, outcomes). Required for recall.",
@@ -224,28 +281,50 @@
                   },
                   "notes": {
                     "description": "Short annotations such as agenda, preparation, or quick bullets distinct from narrative.",
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "startsAt": {
                     "description": "ISO 8601 start time for the activity when specified. Omit if not explicitly provided.",
                     "format": "date-time",
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "status": {
                     "description": "Lifecycle status when mentioned. Use planned/completed/cancelled/ongoing/on_hold/pending. Omit if unclear.",
-                    "enum": ["planned", "completed", "cancelled", "ongoing", "on_hold", "pending"],
-                    "type": ["string", "null"]
+                    "enum": [
+                      "planned",
+                      "completed",
+                      "cancelled",
+                      "ongoing",
+                      "on_hold",
+                      "pending"
+                    ],
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "tags": {
                     "description": "Optional activity-specific tags or facets.",
                     "items": {
                       "type": "string"
                     },
-                    "type": ["array", "null"]
+                    "type": [
+                      "array",
+                      "null"
+                    ]
                   },
                   "timezone": {
                     "description": "IANA timezone string for the start/end times when provided (e.g., \"America/New_York\").",
-                    "type": ["string", "null"]
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
                 "required": [
@@ -280,7 +359,9 @@
           "type": "array"
         }
       },
-      "required": ["memories"],
+      "required": [
+        "memories"
+      ],
       "type": "object"
     },
     "strict": true

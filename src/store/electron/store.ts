@@ -1,21 +1,23 @@
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
-import type { StateCreator } from 'zustand/vanilla';
+import type {StateCreator} from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
 import { flattenActions } from '../utils/flattenActions';
-import type { ElectronAppAction } from './actions/app';
+import type {ElectronAppAction} from './actions/app';
 import { createElectronAppSlice } from './actions/app';
-import type { NavigationHistoryAction } from './actions/navigationHistory';
-import { createNavigationHistorySlice } from './actions/navigationHistory';
-import type { RecentPagesAction } from './actions/recentPages';
+import type {NavigationHistoryAction} from './actions/navigationHistory';
+import {
+  createNavigationHistorySlice
+} from './actions/navigationHistory';
+import type {RecentPagesAction} from './actions/recentPages';
 import { createRecentPagesSlice } from './actions/recentPages';
-import type { ElectronSettingsAction } from './actions/settings';
-import { settingsSlice } from './actions/settings';
-import type { ElectronRemoteServerAction } from './actions/sync';
-import { remoteSyncSlice } from './actions/sync';
-import type { ElectronState } from './initialState';
-import { initialState } from './initialState';
+import type {ElectronSettingsAction} from './actions/settings';
+import {  settingsSlice } from './actions/settings';
+import type {ElectronRemoteServerAction} from './actions/sync';
+import {  remoteSyncSlice } from './actions/sync';
+import type {ElectronState} from './initialState';
+import {  initialState } from './initialState';
 
 //  ===============  Aggregate createStoreFn ============ //
 

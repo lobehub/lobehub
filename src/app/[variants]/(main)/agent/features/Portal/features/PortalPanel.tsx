@@ -1,4 +1,4 @@
-import { memo, Suspense } from 'react';
+import { memo,Suspense } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 

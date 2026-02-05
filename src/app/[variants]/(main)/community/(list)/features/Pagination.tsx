@@ -7,7 +7,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { SCROLL_PARENT_ID } from '@/app/[variants]/(main)/community/features/const';
 import { useQuery } from '@/hooks/useQuery';
-import type { DiscoverTab } from '@/types/discover';
+import type {DiscoverTab} from '@/types/discover';
 
 const SCROLL_CONTAINER_ID = 'lobe-mobile-scroll-container';
 

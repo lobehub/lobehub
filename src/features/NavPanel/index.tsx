@@ -1,7 +1,11 @@
 'use client';
 
-import type { PropsWithChildren, ReactNode } from 'react';
-import { memo, useLayoutEffect, useSyncExternalStore } from 'react';
+import type {PropsWithChildren, ReactNode} from 'react';
+import {
+  memo,
+  useLayoutEffect,
+  useSyncExternalStore
+} from 'react';
 
 import Sidebar from '../../app/[variants]/(main)/home/_layout/Sidebar';
 import { NavPanelDraggable } from './components/NavPanelDraggable';

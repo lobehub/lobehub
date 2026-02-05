@@ -62,15 +62,21 @@ import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemo
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { getServerDB } from '@/database/server';
 import { getServerGlobalConfig } from '@/server/globalConfig';
-import type { MemoryAgentConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
-import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import type {MemoryAgentConfig} from '@/server/globalConfig/parseMemoryExtractionConfig';
+import {
+  parseMemoryExtractionConfig
+} from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { S3 } from '@/server/modules/S3';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import type { GlobalMemoryLayer } from '@/types/serverConfig';
 import type { ProviderConfig } from '@/types/user/settings';
-import type { MergeStrategyEnum } from '@/types/userMemory';
-import { LayersEnum, MemorySourceType, TypesEnum } from '@/types/userMemory';
+import type {MergeStrategyEnum} from '@/types/userMemory';
+import {
+  LayersEnum,
+  MemorySourceType,
+  TypesEnum
+} from '@/types/userMemory';
 import { trimBasedOnBatchProbe } from '@/utils/chunkers';
 import { encodeAsync } from '@/utils/tokenizer';
 
@@ -1358,7 +1364,7 @@ export class MemoryExtractionExecutor {
             contextProvider: topicContextProvider,
             gatekeeperLanguage: this.privateConfig.agentGateKeeper.language || 'English',
             language: language,
-            resultRecorder: resultRecorder,
+            resultRecorder: resultRecorder as any,
             retrievedContexts: trimmedRetrievedContexts,
             retrievedIdentitiesContext: trimmedRetrievedIdentitiesContext,
 

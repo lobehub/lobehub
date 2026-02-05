@@ -1,5 +1,5 @@
-import type { API, Tool } from '@lobechat/prompts';
-import { pluginPrompts } from '@lobechat/prompts';
+import type {API, Tool} from '@lobechat/prompts';
+import {  pluginPrompts } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { BaseProvider } from '../base/BaseProvider';

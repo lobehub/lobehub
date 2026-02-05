@@ -3,11 +3,7 @@ import { createBasicAuthCredentials } from '@lobechat/utils';
 import debug from 'debug';
 
 import type { LobeRuntimeAI } from '../../core/BaseAI';
-import type {
-  AuthenticatedImageRuntime,
-  CreateImagePayload,
-  CreateImageResponse,
-} from '../../types';
+import type { AuthenticatedImageRuntime, CreateImagePayload, CreateImageResponse } from '../../types';
 import { parseComfyUIErrorMessage } from '../../utils/comfyuiErrorParser';
 import { AgentRuntimeError } from '../../utils/createError';
 

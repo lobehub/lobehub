@@ -1,4 +1,4 @@
-import type { ChatSemanticSearchChunk, KnowledgeItem } from '@lobechat/types';
+import type { ChatSemanticSearchChunk, KnowledgeItem} from '@lobechat/types';
 import { KnowledgeType } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 

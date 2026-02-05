@@ -70,10 +70,7 @@ export const searchRouter = router({
       const searchPromises: Promise<any>[] = [];
 
       // Database searches (agent, topic, file, folder, message, page, memory)
-      if (
-        !type ||
-        ['agent', 'topic', 'file', 'folder', 'message', 'page', 'memory'].includes(type)
-      ) {
+      if (!type || ['agent', 'topic', 'file', 'folder', 'message', 'page', 'memory'].includes(type)) {
         searchPromises.push(ctx.searchRepo.search(input));
       }
 

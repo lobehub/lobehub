@@ -26,6 +26,7 @@ export class UserMemoryInjector extends BaseFirstUserContentProvider {
     super(options);
   }
 
+   
   protected buildContent(_context: PipelineContext): string | null {
     const { memories } = this.config;
     if (!memories) return null;

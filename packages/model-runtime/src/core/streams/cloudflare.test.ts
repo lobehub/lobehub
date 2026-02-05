@@ -109,7 +109,7 @@ describe('cloudflareHelpers', () => {
         await transformer.transform(chunk, undefined!);
 
         // Assert
-        expect(chunks.join(',')).toBe('');
+        expect(chunks.join()).toBe('');
       });
 
       it('should split and concat delayed chunks', async () => {

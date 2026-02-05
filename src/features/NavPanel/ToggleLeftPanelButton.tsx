@@ -1,9 +1,9 @@
 'use client';
 
-import type { ActionIconProps } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui';
+import type {ActionIconProps} from '@lobehub/ui';
+import { ActionIcon  } from '@lobehub/ui';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

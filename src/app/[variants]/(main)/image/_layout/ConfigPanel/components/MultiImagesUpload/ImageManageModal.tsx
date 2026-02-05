@@ -3,8 +3,8 @@
 import { Button, Modal } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { Upload, X } from 'lucide-react';
-import type { FC } from 'react';
-import React, { memo, useEffect, useRef, useState } from 'react';
+import type {FC} from 'react';
+import React, {  memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useUploadFilesValidation } from '@/app/[variants]/(main)/image/_layout/ConfigPanel/hooks/useUploadFilesValidation';

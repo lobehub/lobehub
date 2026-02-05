@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { useProviderName } from '@/hooks/useProviderName';
-import type { GlobalLLMProviderKey } from '@/types/user/settings/modelProvider';
+import type {GlobalLLMProviderKey} from '@/types/user/settings/modelProvider';
 
 import { useConversationStore } from '../store';
 import BaseErrorForm from './BaseErrorForm';

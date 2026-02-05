@@ -3,7 +3,7 @@
 import { Avatar, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { Plus } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type { ReactNode} from 'react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -33,7 +33,7 @@ export const useRouter = () => {
       push: (href: string) => navigate(href),
       replace: (href: string) => navigate(href, { replace: true }),
     }),
-    [navigate],
+    [navigate]
   );
 };
 
@@ -56,9 +56,7 @@ export const useSearchParams = () => {
 /**
  * Hook to get route params.
  */
-export const useParams = <
-  T extends Record<string, string | undefined> = Record<string, string | undefined>,
->() => {
+export const useParams = <T extends Record<string, string | undefined> = Record<string, string | undefined>>() => {
   return useReactRouterParams<T>();
 };
 

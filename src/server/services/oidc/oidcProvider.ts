@@ -1,6 +1,6 @@
 import { getDBInstance } from '@/database/core/web-server';
 import { authEnv } from '@/envs/auth';
-import type { OIDCProvider } from '@/libs/oidc-provider/provider';
+import type {OIDCProvider} from '@/libs/oidc-provider/provider';
 import { createOIDCProvider } from '@/libs/oidc-provider/provider';
 
 /**

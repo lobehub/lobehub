@@ -9,7 +9,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { omit } from 'es-toolkit/compat';
 import { CopyIcon, RotateCcwSquareIcon, Trash2 } from 'lucide-react';
-import type { RuntimeImageGenParams } from 'model-bank';
+import type {RuntimeImageGenParams} from 'model-bank';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,7 +17,7 @@ import useRenderBusinessBatchItem from '@/business/client/hooks/useRenderBusines
 import APIKeyForm from '@/components/InvalidAPIKey';
 import { useImageStore } from '@/store/image';
 import { AsyncTaskErrorType } from '@/types/asyncTask';
-import type { GenerationBatch } from '@/types/generation';
+import type {GenerationBatch} from '@/types/generation';
 
 import { GenerationItem } from './GenerationItem';
 import { DEFAULT_MAX_ITEM_WIDTH } from './GenerationItem/utils';

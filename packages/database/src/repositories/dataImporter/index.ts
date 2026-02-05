@@ -1,4 +1,4 @@
-import type { ImporterEntryData, ImportPgDataStructure, ImportResultData } from '@lobechat/types';
+import type { ImporterEntryData,ImportPgDataStructure, ImportResultData } from '@lobechat/types';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { uuid } from '@/utils/uuid';
@@ -350,7 +350,7 @@ export class DataImporterRepos {
     trx: any,
     config: TableImportConfig,
     tableData: any[],
-
+     
     _userConflictStrategy: ConflictStrategy,
   ): Promise<ImportResult> {
     const {
@@ -458,7 +458,7 @@ export class DataImporterRepos {
         // Decide how to process based on whether it's composite key and whether to preserve ID
         if (isCompositeKey) {
           // For composite key tables, don't include id field
-
+           
           const { id: _, ...rest } = item;
           newRecord = {
             ...rest,

@@ -69,8 +69,8 @@ describe('GenerationTopicModel', () => {
     it('should return all topics for the user ordered by updatedAt desc', async () => {
       // Create test data with different timestamps
       const now = new Date();
-      const earlier = new Date(now.getTime() - 60_000); // 1 minute earlier
-      const earliest = new Date(now.getTime() - 120_000); // 2 minutes earlier
+      const earlier = new Date(now.getTime() - 60000); // 1 minute earlier
+      const earliest = new Date(now.getTime() - 120000); // 2 minutes earlier
 
       await serverDB.insert(generationTopics).values([
         {
@@ -310,7 +310,7 @@ describe('GenerationTopicModel', () => {
           generationBatchId: batch.id,
           asyncTaskId: null,
           fileId: null,
-          seed: 12_345,
+          seed: 12345,
           asset: {
             type: 'image',
             thumbnailUrl: 'thumbnail1.jpg',
@@ -324,7 +324,7 @@ describe('GenerationTopicModel', () => {
           generationBatchId: batch.id,
           asyncTaskId: null,
           fileId: null,
-          seed: 12_346,
+          seed: 12346,
           asset: {
             type: 'image',
             thumbnailUrl: 'thumbnail2.jpg',

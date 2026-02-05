@@ -6,15 +6,10 @@ import {
   DEFAULT_MODEL,
   DEFAUTT_AGENT_TTS_CONFIG,
 } from '@lobechat/const';
-import type {
-  AgentMode,
-  KnowledgeItem,
-  LobeAgentConfig,
-  LobeAgentTTSConfig,
-  LocalSystemConfig,
-  MetaData,
+import type {AgentMode, KnowledgeItem, LobeAgentConfig, LobeAgentTTSConfig, LocalSystemConfig, MetaData} from '@lobechat/types';
+import {
+  KnowledgeType
 } from '@lobechat/types';
-import { KnowledgeType } from '@lobechat/types';
 import { VoiceList } from '@lobehub/tts';
 
 import { DEFAULT_OPENING_QUESTIONS } from '@/features/AgentSetting/store/selectors';

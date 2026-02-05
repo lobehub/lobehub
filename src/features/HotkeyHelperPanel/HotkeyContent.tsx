@@ -8,7 +8,7 @@ import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 import hotkeyMeta from '@/locales/default/hotkey';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors';
-import type { HotkeyGroupId } from '@/types/hotkey';
+import type {HotkeyGroupId} from '@/types/hotkey';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   desc: css`

@@ -232,7 +232,7 @@ function needsQuotes(key: string): boolean {
   // - Contains special characters (-, ., spaces, etc.)
   // - Starts with a number
   // - Is a reserved keyword
-  return !/^[$A-Z_][\w$]*$/i.test(key);
+  return !/^[$_a-z][\w$]*$/i.test(key);
 }
 
 /**

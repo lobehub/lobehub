@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from 'react';
+import type {PropsWithChildren} from 'react';
 
 import MobileContentLayout from '@/components/server/MobileNavLayout';
 

@@ -1,6 +1,8 @@
 import { DEFAULT_FILE_EMBEDDING_MODEL_ITEM } from '@lobechat/const';
-import type { ChatSemanticSearchChunk, FileSearchResult } from '@lobechat/types';
-import { SemanticSearchSchema } from '@lobechat/types';
+import type {ChatSemanticSearchChunk, FileSearchResult} from '@lobechat/types';
+import {
+  SemanticSearchSchema
+} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { inArray } from 'drizzle-orm';
 import pMap from 'p-map';

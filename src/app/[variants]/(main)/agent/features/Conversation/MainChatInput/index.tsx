@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 
-import type { ActionKeys } from '@/features/ChatInput';
+import type {ActionKeys} from '@/features/ChatInput';
 import { ChatInput } from '@/features/Conversation';
 import { useChatStore } from '@/store/chat';
 

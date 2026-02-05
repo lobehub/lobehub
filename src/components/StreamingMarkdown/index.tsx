@@ -2,8 +2,8 @@
 
 import { Markdown, ScrollShadow } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import type { RefObject } from 'react';
-import { memo, useEffect } from 'react';
+import type {RefObject} from 'react';
+import { memo,  useEffect } from 'react';
 
 import { useAutoScroll } from '@/hooks/useAutoScroll';
 

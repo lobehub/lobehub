@@ -2,11 +2,13 @@ import type { ChatResponse } from 'ollama/browser';
 
 import type { ChatStreamCallbacks } from '../../types';
 import { nanoid } from '../../utils/uuid';
-import type { StreamContext, StreamProtocolChunk } from './protocol';
+import type {
+  StreamContext,
+  StreamProtocolChunk} from './protocol';
 import {
   createCallbacksTransformer,
   createSSEProtocolTransformer,
-  generateToolCallId,
+  generateToolCallId
 } from './protocol';
 
 const transformOllamaStream = (chunk: ChatResponse, stack: StreamContext): StreamProtocolChunk => {

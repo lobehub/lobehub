@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
-import type { DiscoverGroupAgentItem } from '@/types/discover';
+import type {DiscoverGroupAgentItem} from '@/types/discover';
 
 import Title from '../../../../../features/Title';
 import { useDetailContext } from '../../DetailProvider';

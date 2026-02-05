@@ -1,4 +1,4 @@
-import type { DiscoverPluginItem } from '@/types/discover';
+import type {DiscoverPluginItem} from '@/types/discover';
 
 export type PluginInstallLoadingMap = Record<string, boolean | undefined>;
 
@@ -8,12 +8,14 @@ export enum PluginStoreTabs {
   Plugin = 'old',
 }
 
+/* eslint-disable typescript-sort-keys/string-enum */
 export enum PluginInstallStep {
   COMPLETED = 'COMPLETED',
   ERROR = 'ERROR',
   FETCHING_MANIFEST = 'FETCHING_MANIFEST',
   INSTALLING_PLUGIN = 'INSTALLING_PLUGIN',
 }
+ 
 
 export interface PluginInstallProgress {
   // Error message

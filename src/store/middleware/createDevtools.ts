@@ -1,4 +1,4 @@
-import type { devtools as _devtools } from 'zustand/middleware';
+import type {devtools as _devtools} from 'zustand/middleware';
 import { optionalDevtools } from 'zustand-utils';
 
 import { isDev } from '@/utils/env';
@@ -9,8 +9,8 @@ export const createDevtools =
     let showDevtools = false;
 
     // check url to show devtools
-    if (typeof globalThis.window !== 'undefined') {
-      const url = new URL(globalThis.location.href);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
       const debug = url.searchParams.get('debug');
       if (debug?.includes(name)) {
         showDevtools = true;

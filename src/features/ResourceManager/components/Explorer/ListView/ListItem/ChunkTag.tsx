@@ -2,7 +2,7 @@ import { memo } from 'react';
 
 import FileParsingStatusTag from '@/components/FileParsingStatus';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
-import type { FileParsingTask } from '@/types/asyncTask';
+import type {FileParsingTask} from '@/types/asyncTask';
 
 interface ChunkTagProps extends FileParsingTask {
   id: string;

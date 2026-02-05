@@ -14,8 +14,15 @@ import type { PartialDeep } from 'type-fest';
 import { merge } from '@/utils/merge';
 import { today } from '@/utils/time';
 
-import type { NewUser, UserItem, UserSettingsItem } from '../schemas';
-import { nextauthAccounts, users, userSettings } from '../schemas';
+import type {
+  NewUser,
+  UserItem,
+  UserSettingsItem} from '../schemas';
+import {
+  nextauthAccounts,
+  users,
+  userSettings
+} from '../schemas';
 import type { LobeChatDatabase } from '../type';
 
 type DecryptUserKeyVaults = (

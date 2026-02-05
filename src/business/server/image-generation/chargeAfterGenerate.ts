@@ -1,4 +1,4 @@
-import type { ModelUsage } from '@/types/index';
+import type {ModelUsage} from '@/types/index';
 
 interface ChargeParams {
   metadata: {

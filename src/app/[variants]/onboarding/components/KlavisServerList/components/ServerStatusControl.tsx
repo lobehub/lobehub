@@ -4,8 +4,8 @@ import { CheckIcon, CircleX, Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { KlavisServer } from '@/store/tool/slices/klavisStore';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import type {KlavisServer} from '@/store/tool/slices/klavisStore';
+import {  KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 
 interface ServerStatusControlProps {
   isConnecting: boolean;

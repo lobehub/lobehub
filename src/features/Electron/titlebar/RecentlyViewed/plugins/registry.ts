@@ -1,5 +1,6 @@
-import type { PageReference, PageType, ResolvedPageData } from '../types';
-import type { BaseRecentlyViewedPlugin, PluginContext, RecentlyViewedPlugin } from './types';
+ 
+import type {PageReference, PageType, ResolvedPageData} from '../types';
+import type {BaseRecentlyViewedPlugin, PluginContext, RecentlyViewedPlugin} from './types';
 
 /**
  * Plugin registry for RecentlyViewed system

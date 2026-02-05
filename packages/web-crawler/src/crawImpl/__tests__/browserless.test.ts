@@ -18,7 +18,7 @@ describe('browserless', () => {
 
   it('should return undefined on fetch error', async () => {
     process.env.BROWSERLESS_TOKEN = 'test-token';
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error('Fetch error'));
+    global.fetch = vi.fn().mockRejectedValue(new Error('Fetch error'));
 
     const result = await browserless('https://example.com', { filterOptions: {} });
     expect(result).toBeUndefined();
@@ -26,7 +26,7 @@ describe('browserless', () => {
 
   it('should return undefined when content is empty', async () => {
     process.env.BROWSERLESS_TOKEN = 'test-token';
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    global.fetch = vi.fn().mockResolvedValue({
       text: vi.fn().mockResolvedValue('<html></html>'),
     } as any);
 
@@ -36,7 +36,7 @@ describe('browserless', () => {
 
   it('should return undefined when title is "Just a moment..."', async () => {
     process.env.BROWSERLESS_TOKEN = 'test-token';
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    global.fetch = vi.fn().mockResolvedValue({
       text: vi.fn().mockResolvedValue('<html><title>Just a moment...</title></html>'),
     } as any);
 
@@ -46,7 +46,7 @@ describe('browserless', () => {
 
   it('should return crawl result on successful fetch', async () => {
     process.env.BROWSERLESS_TOKEN = 'test-token';
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    global.fetch = vi.fn().mockResolvedValue({
       text: vi.fn().mockResolvedValue(`
         <html>
           <head>
@@ -78,7 +78,7 @@ describe('browserless', () => {
     const fetchMock = vi.fn().mockResolvedValue({
       text: vi.fn().mockResolvedValue('<html><title>Test</title></html>'),
     });
-    globalThis.fetch = fetchMock;
+    global.fetch = fetchMock;
 
     await browserless('https://example.com', { filterOptions: {} });
 
@@ -119,7 +119,7 @@ describe('browserless', () => {
     const originalEnv = { ...process.env };
     process.env.BROWSERLESS_TOKEN = 'test-token';
     process.env.BROWSERLESS_URL = customUrl;
-    globalThis.fetch = vi.fn().mockImplementation((url) => {
+    global.fetch = vi.fn().mockImplementation((url) => {
       expect(url).toContain(customUrl);
       return Promise.resolve({
         text: () => Promise.resolve('<html><title>Test</title></html>'),
@@ -128,7 +128,7 @@ describe('browserless', () => {
 
     await browserless('https://example.com', { filterOptions: {} });
 
-    expect(globalThis.fetch).toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalled();
 
     process.env = originalEnv;
   });

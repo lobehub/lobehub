@@ -72,19 +72,7 @@ export const useFileItemClick = ({
       // Call onOpen if provided for backwards compatibility
       onOpen?.(id);
     }
-  }, [
-    isFolder,
-    slug,
-    id,
-    libraryId,
-    isPage,
-    navigate,
-    searchParams,
-    setSearchParams,
-    setMode,
-    setCurrentViewItemId,
-    onOpen,
-  ]);
+  }, [isFolder, slug, id, libraryId, isPage, navigate, searchParams, setSearchParams, setMode, setCurrentViewItemId, onOpen]);
 
   return handleClick;
 };

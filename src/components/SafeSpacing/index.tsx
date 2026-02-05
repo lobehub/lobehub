@@ -1,5 +1,5 @@
-import type { SafeAreaProps } from '@lobehub/ui/mobile';
-import { SafeArea } from '@lobehub/ui/mobile';
+import type {SafeAreaProps} from '@lobehub/ui/mobile';
+import { SafeArea  } from '@lobehub/ui/mobile';
 import { memo } from 'react';
 
 import { HEADER_HEIGHT, MOBILE_NABBAR_HEIGHT, MOBILE_TABBAR_HEIGHT } from '@/const/layoutTokens';

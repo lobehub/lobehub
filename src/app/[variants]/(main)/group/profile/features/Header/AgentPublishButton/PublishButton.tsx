@@ -63,7 +63,7 @@ const PublishButton = memo<MarketPublishButtonProps>(
           if (marketIdentifier && accountId !== null) {
             let accessToken = session?.accessToken;
 
-            if (!accessToken && typeof globalThis.window !== 'undefined') {
+            if (!accessToken && typeof window !== 'undefined') {
               const storedSession = sessionStorage.getItem('market_auth_session');
               if (storedSession) {
                 try {

@@ -1,6 +1,6 @@
-import type { UIChatMessage } from '@lobechat/types';
-import type { FormItemProps } from '@lobehub/ui';
-import { Button, Flexbox, Form } from '@lobehub/ui';
+import type {UIChatMessage} from '@lobechat/types';
+import type {FormItemProps} from '@lobehub/ui';
+import { Button, Flexbox,Form   } from '@lobehub/ui';
 import { App, Switch } from 'antd';
 import { cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -16,7 +16,7 @@ import { useChatStore } from '@/store/chat';
 import { chatSelectors, topicSelectors } from '@/store/chat/selectors';
 
 import { generateMarkdown } from '../ShareText/template';
-import type { FieldType } from '../ShareText/type';
+import type {FieldType} from '../ShareText/type';
 import { containerStyles, styles } from '../style';
 import PdfPreview from './PdfPreview';
 import { usePdfGeneration } from './usePdfGeneration';

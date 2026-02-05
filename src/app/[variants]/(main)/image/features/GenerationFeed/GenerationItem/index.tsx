@@ -14,7 +14,7 @@ import { inferFileExtensionFromImageUrl } from '@/utils/url';
 import { ErrorState } from './ErrorState';
 import { LoadingState } from './LoadingState';
 import { SuccessState } from './SuccessState';
-import type { GenerationItemProps } from './types';
+import type {GenerationItemProps} from './types';
 import { getAspectRatio } from './utils';
 
 const isSupportedParamSelector = imageGenerationConfigSelectors.isSupportedParam;

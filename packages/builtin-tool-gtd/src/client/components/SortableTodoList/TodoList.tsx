@@ -5,7 +5,7 @@ import { memo, useCallback } from 'react';
 
 import AddItemRow from './AddItemRow';
 import SortableItem from './SortableItem';
-import type { TodoListItem } from './store';
+import type { TodoListItem} from './store';
 import { useTodoListStore } from './store';
 
 interface TodoListProps {

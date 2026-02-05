@@ -134,7 +134,9 @@
         "description": "Array of extracted experience memory items, could be empty if decided no relevant experience to extract"
       }
     },
-    "required": ["memories"],
+    "required": [
+      "memories"
+    ],
     "additionalProperties": false
   },
   "type": "json_schema"

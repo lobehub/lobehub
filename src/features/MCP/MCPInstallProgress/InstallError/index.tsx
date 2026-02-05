@@ -3,7 +3,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useToolStore } from '@/store/tool';
-import type { MCPErrorInfo } from '@/types/plugins';
+import type {MCPErrorInfo} from '@/types/plugins';
 
 import ErrorDetails from './ErrorDetails';
 

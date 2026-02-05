@@ -31,6 +31,7 @@ const ContextList = memo(() => {
   const showSelectionList = useFileStore(fileChatSelectors.chatContextSelectionHasItem);
   const clearChatContextSelections = useFileStore((s) => s.clearChatContextSelections);
 
+
   // Clear selections only when agentId changes (not on initial mount)
   useEffect(() => {
     if (prevAgentIdRef.current !== undefined && prevAgentIdRef.current !== agentId) {

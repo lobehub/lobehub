@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import type { Theme } from 'antd-style';
+import type {Theme} from 'antd-style';
 import { css } from 'antd-style';
 import { rgba } from 'polished';
 

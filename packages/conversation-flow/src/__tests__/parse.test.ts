@@ -284,7 +284,7 @@ describe('parse', () => {
     it('should parse 10000 items within 100ms', () => {
       // Generate 10000 messages as flat siblings (no deep nesting to avoid stack overflow)
       // This simulates a more realistic scenario where messages are not deeply nested
-      const largeInput = Array.from({ length: 10_000 }, (_, i) => ({
+      const largeInput = Array.from({ length: 10000 }, (_, i) => ({
         id: `msg-${i}`,
         role: i % 2 === 0 ? ('user' as const) : ('assistant' as const),
         content: `Message ${i}`,

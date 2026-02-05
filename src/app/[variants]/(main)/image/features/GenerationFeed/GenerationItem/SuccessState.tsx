@@ -7,7 +7,7 @@ import ImageItem from '@/components/ImageItem';
 
 import { ActionButtons } from './ActionButtons';
 import { styles } from './styles';
-import type { SuccessStateProps } from './types';
+import type {SuccessStateProps} from './types';
 import { getThumbnailMaxWidth } from './utils';
 
 // 成功状态组件

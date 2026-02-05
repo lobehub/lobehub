@@ -9,7 +9,7 @@ describe('trace utilities', () => {
       const payload = {
         traceId: '123-456-789',
         sessionId: 'session-abc',
-        timestamp: 1_234_567_890,
+        timestamp: 1234567890,
       };
 
       const encoded = Buffer.from(JSON.stringify(payload)).toString('base64');
@@ -112,7 +112,7 @@ describe('trace utilities', () => {
         traceId: 'trace-123',
         count: 42,
         isActive: true,
-        ratio: 3.141_59,
+        ratio: 3.14159,
         isDisabled: false,
       };
 
@@ -195,7 +195,7 @@ describe('trace utilities', () => {
       const payload = {
         traceId: 'trace-123',
         sessionId: 'session-456',
-        timestamp: 1_234_567_890,
+        timestamp: 1234567890,
       };
 
       const result = createTraceHeader(payload);
@@ -324,7 +324,7 @@ describe('trace utilities', () => {
         traceId: 'complex-trace',
         metadata: {
           user: { id: 'usr-123', roles: ['admin', 'user'] },
-          timestamps: { created: 1_234_567_890, updated: 1_234_567_900 },
+          timestamps: { created: 1234567890, updated: 1234567900 },
         },
         tags: ['production', 'critical'],
         metrics: { duration: 123.45, count: 10 },

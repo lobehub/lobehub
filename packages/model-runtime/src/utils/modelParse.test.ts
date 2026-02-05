@@ -629,7 +629,7 @@ describe('modelParse', () => {
         const tempModelEntry = {
           id: 'special-model-with-overlap',
           displayName: 'Known Special Model',
-          contextWindowTokens: 10_000,
+          contextWindowTokens: 10000,
           maxOutput: 2000,
           enabled: true,
         };

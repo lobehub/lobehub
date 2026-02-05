@@ -3,7 +3,7 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import type { TencentCloudModelCard } from './index';
+import type {TencentCloudModelCard } from './index';
 import { LobeTencentCloudAI, params } from './index';
 
 const provider = ModelProvider.TencentCloud;

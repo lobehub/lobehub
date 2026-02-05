@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand/vanilla';
 
 import type { ConversationContext, ConversationHooks } from '../types';
-import type { State } from './initialState';
+import type {State} from './initialState';
 import { initialState } from './initialState';
 import type { DataAction } from './slices/data/action';
 import { dataSlice } from './slices/data/action';

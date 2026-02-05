@@ -6,11 +6,12 @@ import { BaseProcessor } from './BaseProcessor';
  */
 export abstract class BaseProvider extends BaseProcessor {
   // Subclasses can optionally implement; by default no additional context is built
-
+   
   protected async buildContext(_context: PipelineContext): Promise<string | null> {
     return null;
   }
 
+   
   protected shouldInject(_context: PipelineContext): boolean {
     return true;
   }

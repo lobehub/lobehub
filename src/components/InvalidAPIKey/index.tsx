@@ -4,7 +4,7 @@ import { ModelProvider } from 'model-bank';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { GlobalLLMProviderKey } from '@/types/user/settings';
+import type {GlobalLLMProviderKey} from '@/types/user/settings';
 
 import BedrockForm from './Bedrock';
 import ComfyUIForm from './ComfyUIForm';

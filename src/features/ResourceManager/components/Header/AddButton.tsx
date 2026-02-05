@@ -2,12 +2,12 @@
 
 import { FILE_URL } from '@lobechat/business-const';
 import { Notion } from '@lobehub/icons';
-import type { MenuProps } from '@lobehub/ui';
-import { Button, DropdownMenu, Icon } from '@lobehub/ui';
+import type {MenuProps} from '@lobehub/ui';
+import { Button, DropdownMenu, Icon  } from '@lobehub/ui';
 import { Upload } from 'antd';
 import { FilePenLine, FileUp, FolderIcon, FolderUp, Link, Plus } from 'lucide-react';
-import type { ChangeEvent } from 'react';
-import { useCallback, useMemo, useState } from 'react';
+import type {ChangeEvent} from 'react';
+import {  useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
@@ -89,16 +89,7 @@ const AddButton = () => {
     // Switch to page view mode with real ID
     setCurrentViewItemId(realId);
     setMode('page');
-  }, [
-    category,
-    createResourceAndSync,
-    currentFolderId,
-    libraryId,
-    setCategory,
-    setCurrentViewItemId,
-    setMode,
-    t,
-  ]);
+  }, [category, createResourceAndSync, currentFolderId, libraryId, setCategory, setCurrentViewItemId, setMode, t]);
 
   const handleCreateFolder = useCallback(async () => {
     // Navigate to "All" category first if not already there
@@ -146,15 +137,7 @@ const AddButton = () => {
       message.error(t('header.actions.createFolderError'));
       console.error('Failed to create folder:', error);
     }
-  }, [
-    category,
-    createResourceAndSync,
-    currentFolderId,
-    libraryId,
-    setCategory,
-    setPendingRenameItemId,
-    t,
-  ]);
+  }, [category, createResourceAndSync, currentFolderId, libraryId, setCategory, setPendingRenameItemId, t]);
 
   const {
     handleCloseNotionGuide,

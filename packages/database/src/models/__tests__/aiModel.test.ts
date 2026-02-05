@@ -4,7 +4,7 @@ import type { AiProviderModelListItem } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import type { NewAiModelItem } from '../../schemas';
+import type { NewAiModelItem} from '../../schemas';
 import { aiModels, users } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AiModelModel } from '../aiModel';

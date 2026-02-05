@@ -188,12 +188,12 @@ describe('OllamaStream', () => {
             message: { role: 'assistant', content: '' },
             done_reason: 'stop',
             done: true,
-            total_duration: 1_122_415_333,
-            load_duration: 26_178_333,
+            total_duration: 1122415333,
+            load_duration: 26178333,
             prompt_eval_count: 221,
-            prompt_eval_duration: 507_000_000,
+            prompt_eval_duration: 507000000,
             eval_count: 26,
-            eval_duration: 583_000_000,
+            eval_duration: 583000000,
           } as unknown as ChatResponse);
 
           controller.close();
@@ -258,12 +258,12 @@ describe('OllamaStream', () => {
             },
             done_reason: 'stop',
             done: true,
-            total_duration: 1_122_415_333,
-            load_duration: 26_178_333,
+            total_duration: 1122415333,
+            load_duration: 26178333,
             prompt_eval_count: 221,
-            prompt_eval_duration: 507_000_000,
+            prompt_eval_duration: 507000000,
             eval_count: 26,
-            eval_duration: 583_000_000,
+            eval_duration: 583000000,
           } as unknown as ChatResponse);
 
           controller.close();

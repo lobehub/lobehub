@@ -1,4 +1,4 @@
-import type { BuiltinPlaceholderProps, SearchQuery } from '@lobechat/types';
+import type {BuiltinPlaceholderProps, SearchQuery} from '@lobechat/types';
 import { Flexbox, Icon, Skeleton } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { SearchIcon } from 'lucide-react';

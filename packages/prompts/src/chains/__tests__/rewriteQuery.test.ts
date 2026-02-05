@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 // Mock DEFAULT_REWRITE_QUERY
-import { chainRewriteQuery, DEFAULT_REWRITE_QUERY } from '../rewriteQuery';
+import { chainRewriteQuery,DEFAULT_REWRITE_QUERY } from '../rewriteQuery';
 
 describe('chainRewriteQuery', () => {
   it('should generate correct chat payload with default instruction', () => {

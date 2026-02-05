@@ -1,7 +1,7 @@
 'use client';
 
-import type { FormGroupItemType, FormItemProps } from '@lobehub/ui';
-import { Button, Flexbox, Form, Icon, Skeleton } from '@lobehub/ui';
+import type {FormGroupItemType, FormItemProps} from '@lobehub/ui';
+import { Button, Flexbox, Form,   Icon, Skeleton  } from '@lobehub/ui';
 import { Form as AntForm, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon, PencilIcon } from 'lucide-react';
@@ -13,7 +13,7 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import ModelSelect from '@/features/ModelSelect';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
-import type { UserSystemAgentConfigKey } from '@/types/user/settings';
+import type {UserSystemAgentConfigKey} from '@/types/user/settings';
 
 interface SystemAgentFormProps {
   allowCustomPrompt?: boolean;

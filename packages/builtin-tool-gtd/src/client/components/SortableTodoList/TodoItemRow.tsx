@@ -5,7 +5,7 @@ import type { InputRef } from 'antd';
 import { Input } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CircleArrowRight, Trash2 } from 'lucide-react';
-import type { ChangeEvent, KeyboardEvent } from 'react';
+import type { ChangeEvent, KeyboardEvent} from 'react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -1,5 +1,5 @@
-import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
-import type { LobeToolManifest } from '@lobechat/context-engine';
+import type {AgentRuntimeContext, AgentState} from '@lobechat/agent-runtime';
+import type {LobeToolManifest} from '@lobechat/context-engine';
 import type { UserInterventionConfig } from '@lobechat/types';
 
 // ==================== Step Lifecycle Callbacks ====================

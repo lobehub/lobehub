@@ -5,8 +5,8 @@ import { ActionIcon, Flexbox, FluentEmoji, Icon, SideNav } from '@lobehub/ui';
 import { FloatButton } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { BugIcon, BugOff, XIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { memo, useEffect, useState } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useEffect, useState } from 'react';
 import { Rnd } from 'react-rnd';
 
 import { isDesktop } from '@/const/version';

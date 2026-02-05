@@ -1,6 +1,6 @@
 import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import type { Mock } from 'vitest';
+import type { Mock} from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { notification } from '@/components/AntdStaticMethods';
@@ -123,7 +123,7 @@ describe('useToolStore:pluginStore', () => {
         await act(async () => {
           pluginList = await useToolStore.getState().loadPluginStore();
         });
-      } catch {
+      } catch (e) {
         errorOccurred = true;
       }
 

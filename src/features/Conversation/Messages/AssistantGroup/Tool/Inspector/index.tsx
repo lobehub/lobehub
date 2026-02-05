@@ -1,4 +1,4 @@
-import type { ToolIntervention } from '@lobechat/types';
+import type {ToolIntervention} from '@lobechat/types';
 import { safeParseJSON, safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';

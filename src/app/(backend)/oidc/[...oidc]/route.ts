@@ -1,8 +1,8 @@
 import { URL } from 'node:url';
 
 import debug from 'debug';
-import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
+import type {NextRequest} from 'next/server';
+import {  NextResponse } from 'next/server';
 
 import { authEnv } from '@/envs/auth';
 import { createNodeRequest, createNodeResponse } from '@/libs/oidc-provider/http-adapter';
@@ -81,6 +81,7 @@ const handler = async (req: NextRequest) => {
     log('Final Response Headers: %O', finalHeaders);
 
     return new NextResponse(finalBody, {
+       
       headers: finalHeaders as HeadersInit,
       status: finalStatus,
     });

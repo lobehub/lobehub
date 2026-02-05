@@ -602,8 +602,7 @@ const novitaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 60_288,
-    description:
-      'Mistral Nemo is a 7.3B model with multilingual support and strong coding performance.',
+    description: 'Mistral Nemo is a 7.3B model with multilingual support and strong coding performance.',
     displayName: 'Mistral Nemo',
     id: 'mistralai/mistral-nemo',
     pricing: {

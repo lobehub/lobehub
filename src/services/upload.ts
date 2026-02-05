@@ -6,8 +6,8 @@ import { sha256 } from 'js-sha256';
 import { fileEnv } from '@/envs/file';
 import { lambdaClient } from '@/libs/trpc/client';
 import { API_ENDPOINTS } from '@/services/_url';
-import type { FileMetadata, UploadBase64ToS3Result } from '@/types/files';
-import type { FileUploadState, FileUploadStatus } from '@/types/files/upload';
+import type {FileMetadata, UploadBase64ToS3Result} from '@/types/files';
+import type {FileUploadState, FileUploadStatus} from '@/types/files/upload';
 
 export const UPLOAD_NETWORK_ERROR = 'NetWorkError';
 

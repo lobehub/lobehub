@@ -2,9 +2,9 @@ import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 
 import { markUserValidAction } from '@/business/client/markUserValidAction';
 import { imageService } from '@/services/image';
-import type { StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 
-import type { ImageStore } from '../../store';
+import type {ImageStore} from '../../store';
 import { generationBatchSelectors } from '../generationBatch/selectors';
 import { imageGenerationConfigSelectors } from '../generationConfig/selectors';
 import { generationTopicSelectors } from '../generationTopic';

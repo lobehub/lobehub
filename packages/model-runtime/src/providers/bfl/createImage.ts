@@ -4,12 +4,19 @@ import type { RuntimeImageGenParamsValue } from 'model-bank';
 
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
-import type { TaskResult } from '../../utils/asyncifyPolling';
+import type {TaskResult} from '../../utils/asyncifyPolling';
 import { asyncifyPolling } from '../../utils/asyncifyPolling';
 import { AgentRuntimeError } from '../../utils/createError';
 import { parseDataUri } from '../../utils/uriParser';
-import type { BflAsyncResponse, BflModelId, BflRequest, BflResultResponse } from './types';
-import { BFL_ENDPOINTS, BflStatusResponse } from './types';
+import type {
+  BflAsyncResponse,
+  BflModelId,
+  BflRequest,
+  BflResultResponse} from './types';
+import {
+  BFL_ENDPOINTS,
+  BflStatusResponse,
+} from './types';
 
 const log = createDebug('lobe-image:bfl');
 

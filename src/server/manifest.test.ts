@@ -77,7 +77,7 @@ describe('Manifest', () => {
       expect(result).toEqual({
         cache_busting_mode: 'query',
         immutable: 'true',
-        max_age: 31_536_000,
+        max_age: 31536000,
         src: qs.stringifyUrl({ query: { v: version }, url: BRANDING_LOGO_URL || url }),
       });
     });
@@ -146,7 +146,7 @@ describe('Manifest', () => {
         cache_busting_mode: 'query',
         form_factor: 'narrow',
         immutable: 'true',
-        max_age: 31_536_000,
+        max_age: 31536000,
         sizes: '1280x676',
         src: 'https://example.com/screenshot.png?v=1',
         type: 'image/png',

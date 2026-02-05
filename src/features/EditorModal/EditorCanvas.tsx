@@ -1,4 +1,5 @@
-import type { IEditor } from '@lobehub/editor';
+import type {
+  IEditor} from '@lobehub/editor';
 import {
   ReactCodemirrorPlugin,
   ReactCodePlugin,

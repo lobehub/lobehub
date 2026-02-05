@@ -1,7 +1,7 @@
-import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import type {LobeChatPluginManifest} from '@lobehub/chat-plugin-sdk';
 import { Block, Button, Flexbox, Icon, Text } from '@lobehub/ui';
-import type { FormInstance } from 'antd';
-import { Form as AForm } from 'antd';
+import type {FormInstance} from 'antd';
+import { Form as AForm  } from 'antd';
 import { cssVar } from 'antd-style';
 import { FileCode } from 'lucide-react';
 import { memo } from 'react';

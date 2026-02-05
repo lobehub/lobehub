@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useIsDark } from '@/hooks/useIsDark';
 import Image from '@/libs/next/Image';
-import type { GroundingSearch } from '@/types/search';
+import type {GroundingSearch} from '@/types/search';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`

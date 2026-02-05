@@ -1,7 +1,7 @@
 import { Flexbox, Tag, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import type { CSSProperties } from 'react';
-import { memo } from 'react';
+import type {CSSProperties} from 'react';
+import {  memo } from 'react';
 
 import { calcGrowthPercentage } from './growthPercentage';
 

@@ -1,9 +1,9 @@
 'use client';
 
-import type { InputProps } from '@lobehub/ui';
-import { Input, Popover } from '@lobehub/ui';
+import type {InputProps} from '@lobehub/ui';
+import { Input,  Popover } from '@lobehub/ui';
 import type { InputRef, PopoverProps } from 'antd';
-import type { KeyboardEvent } from 'react';
+import type { KeyboardEvent} from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 function FocusableInput(props: InputProps) {

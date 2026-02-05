@@ -5,7 +5,7 @@ import { FileModel } from '@/database/models/file';
 import { fileEnv } from '@/envs/file';
 import { FileS3 } from '@/server/modules/S3';
 
-import type { FileServiceImpl } from './type';
+import type {FileServiceImpl} from './type';
 
 /**
  * S3-based file service implementation

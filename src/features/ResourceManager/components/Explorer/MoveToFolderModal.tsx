@@ -4,7 +4,7 @@ import { FolderIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { FolderTreeItem } from '@/features/ResourceManager/components/FolderTree';
+import type {FolderTreeItem} from '@/features/ResourceManager/components/FolderTree';
 import FolderTree from '@/features/ResourceManager/components/FolderTree';
 import { clearTreeFolderCache } from '@/features/ResourceManager/components/LibraryHierarchy';
 import { fileService } from '@/services/file';
@@ -174,6 +174,7 @@ const MoveToFolderModal = memo<MoveToFolderModalProps>(
       });
     }, []);
 
+     
     const handleFolderClick = useCallback((folderId: string, _folderSlug?: string | null) => {
       // Always use the document ID, not the slug
       setSelectedFolderId(folderId);

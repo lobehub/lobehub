@@ -1,12 +1,12 @@
-import { createRawModal, Flexbox, Tag, Tooltip } from '@lobehub/ui';
+import { createRawModal,Flexbox, Tag, Tooltip } from '@lobehub/ui';
 import { Progress } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import { useEventCallback } from '@/hooks/useEventCallback';
 import { useFileStore } from '@/store/file';
-import type { UploadFileItem } from '@/types/files/upload';
-import { UPLOAD_STATUS_SET } from '@/types/files/upload';
+import type {UploadFileItem} from '@/types/files/upload';
+import { UPLOAD_STATUS_SET  } from '@/types/files/upload';
 
 import Content from './Content';
 import FilePreviewModal from './FilePreviewModal';

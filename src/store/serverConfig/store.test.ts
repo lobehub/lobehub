@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_FEATURE_FLAGS, mapFeatureFlagsEnvToState } from '@/config/featureFlags';
 
-import type { ServerConfigStore } from './store';
+import type {ServerConfigStore } from './store';
 import { createServerConfigStore, initServerConfigStore } from './store';
 
 describe('createServerConfigStore', () => {

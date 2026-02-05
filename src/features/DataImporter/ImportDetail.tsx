@@ -7,7 +7,7 @@ import { Info } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { ImportPgDataStructure } from '@/types/export';
+import type {ImportPgDataStructure} from '@/types/export';
 
 const getNonEmptyTables = (data: ImportPgDataStructure) => {
   const result = [];

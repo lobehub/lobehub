@@ -3,10 +3,10 @@
 import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 
-import type { GroupBy } from './index';
+import type {GroupBy} from './index';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   itemWrapper: css`
@@ -33,7 +33,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     border-radius: 50%;
 
     background: ${cssVar.colorBgElevated};
-    box-shadow: 0 2px 4px -2px rgb(0 0 0 / 40%);
+    box-shadow: 0 2px 4px -2px rgba(0, 0, 0, 40%);
   `,
 }));
 

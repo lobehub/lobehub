@@ -1,4 +1,4 @@
-import type { BuiltinToolManifest } from '@lobechat/types';
+import type {BuiltinToolManifest} from '@lobechat/types';
 import dayjs from 'dayjs';
 
 import { systemPrompt } from './systemRole';

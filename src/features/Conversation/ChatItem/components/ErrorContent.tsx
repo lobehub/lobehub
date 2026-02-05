@@ -1,12 +1,12 @@
 import { Alert, Skeleton } from '@lobehub/ui';
 import { Button } from 'antd';
 import { RotateCcw } from 'lucide-react';
-import { memo, Suspense } from 'react';
+import { memo,Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useConversationStore } from '@/features/Conversation';
 
-import type { ChatItemProps } from '../type';
+import type {ChatItemProps} from '../type';
 
 export interface ErrorContentProps {
   customErrorRender?: ChatItemProps['customErrorRender'];

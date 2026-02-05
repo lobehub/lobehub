@@ -1,11 +1,11 @@
-import type { IEditor } from '@lobehub/editor';
+import type {IEditor} from '@lobehub/editor';
 import {
   CommonPlugin,
   Kernel,
   ListPlugin,
   LitexmlPlugin,
   MarkdownPlugin,
-  moment,
+  moment
 } from '@lobehub/editor';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

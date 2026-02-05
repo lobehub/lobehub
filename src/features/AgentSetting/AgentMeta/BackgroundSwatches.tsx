@@ -1,5 +1,5 @@
-import type { ColorSwatchesProps } from '@lobehub/ui';
-import { ColorSwatches, primaryColors } from '@lobehub/ui';
+import type {ColorSwatchesProps} from '@lobehub/ui';
+import { ColorSwatches,  primaryColors } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 

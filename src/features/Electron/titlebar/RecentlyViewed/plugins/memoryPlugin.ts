@@ -1,10 +1,11 @@
+ 
 import { Brain } from 'lucide-react';
 
 import { getRouteById } from '@/config/routes';
 
-import type { MemoryParams, PageReference, ResolvedPageData } from '../types';
-import type { PluginContext, RecentlyViewedPlugin } from './types';
-import { createPageReference } from './types';
+import type {MemoryParams, PageReference, ResolvedPageData} from '../types';
+import type {PluginContext, RecentlyViewedPlugin} from './types';
+import { createPageReference  } from './types';
 
 const memoryIcon = getRouteById('memory')?.icon || Brain;
 

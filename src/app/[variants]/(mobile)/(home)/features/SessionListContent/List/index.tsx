@@ -11,7 +11,7 @@ import { getSessionStoreState, useSessionStore } from '@/store/session';
 import { sessionGroupSelectors, sessionSelectors } from '@/store/session/selectors';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import type { LobeSessions } from '@/types/session';
+import type {LobeSessions} from '@/types/session';
 
 import SkeletonList from '../../SkeletonList';
 import AddButton from './AddButton';

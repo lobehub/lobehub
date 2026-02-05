@@ -1,7 +1,7 @@
 import { get } from 'es-toolkit/compat';
 
 export const hydrationPrompt = (prompt: string, context: any) => {
-  const regex = /\{\{([\s\S]+?)\}\}/g;
+  const regex = /{{([\S\s]+?)}}/g;
 
   // Use String.prototype.replace with a replacer function
   return prompt.replaceAll(regex, (match, key) => {

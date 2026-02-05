@@ -9,7 +9,7 @@ import type OpenAI from 'openai';
 import { systemToUserModels } from '../../const/models';
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { transformResponseToStream } from '../../core/openaiCompatibleFactory';
-import { createSSEDataExtractor, OpenAIStream } from '../../core/streams';
+import { createSSEDataExtractor,OpenAIStream } from '../../core/streams';
 import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
@@ -39,7 +39,7 @@ export class LobeAzureAI implements LobeRuntimeAI {
 
   async chat(payload: ChatStreamPayload, options?: ChatMethodOptions) {
     // Remove internal apiMode parameter to prevent sending to Azure AI API
-
+     
     const { messages, model, temperature, top_p, apiMode: _, ...params } = payload;
     // o1 series models on Azure OpenAI does not support streaming currently
     const enableStreaming = model.includes('o1') ? false : (params.stream ?? true);
@@ -70,7 +70,7 @@ export class LobeAzureAI implements LobeRuntimeAI {
 
       if (enableStreaming) {
         const unifiedStream = await (async () => {
-          if (typeof globalThis.window === 'undefined') {
+          if (typeof window === 'undefined') {
             /**
              * In Node.js the SDK exposes a Node readable stream, so we convert it to a Web ReadableStream
              * to reuse the same streaming pipeline used by Edge/browser runtimes.

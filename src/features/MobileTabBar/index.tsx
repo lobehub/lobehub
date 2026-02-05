@@ -1,6 +1,6 @@
 import { Icon } from '@lobehub/ui';
-import type { TabBarProps } from '@lobehub/ui/mobile';
-import { TabBar } from '@lobehub/ui/mobile';
+import type {TabBarProps} from '@lobehub/ui/mobile';
+import { TabBar  } from '@lobehub/ui/mobile';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Bot, MessageSquare, User } from 'lucide-react';
 import { memo, useMemo } from 'react';

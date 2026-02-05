@@ -18,7 +18,7 @@ vi.mock('@lobechat/utils/imageToBase64', async (importOriginal) => {
 const createContext = (messages: UIChatMessage[]): PipelineContext => ({
   initialState: { messages: [] } as any,
   messages,
-  metadata: { model: 'gpt-4', provider: 'openai', maxTokens: 100_000 },
+  metadata: { model: 'gpt-4', provider: 'openai', maxTokens: 100000 },
   isAborted: false,
 });
 

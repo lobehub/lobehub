@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { useChatStore } from '@/store/chat';
 import { chatSelectors } from '@/store/chat/selectors';
-import type { ThreadItem } from '@/types/topic';
+import type {ThreadItem} from '@/types/topic';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   active: css`

@@ -1,4 +1,4 @@
-import type { LobeSessions } from '@/types/session';
+import type {LobeSessions} from '@/types/session';
 
 export interface SessionState {
   activeAgentId?: string;

@@ -1,18 +1,18 @@
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
-import type { StateCreator } from 'zustand/vanilla';
+import type {StateCreator} from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
 import { flattenActions } from '../utils/flattenActions';
-import type { PageState } from './initialState';
+import type {PageState} from './initialState';
 import { initialState } from './initialState';
-import type { CrudAction } from './slices/crud';
+import type {CrudAction} from './slices/crud';
 import { createCrudSlice } from './slices/crud';
-import type { InternalAction } from './slices/internal';
+import type {InternalAction} from './slices/internal';
 import { createInternalSlice } from './slices/internal';
-import type { ListAction } from './slices/list';
+import type {ListAction} from './slices/list';
 import { createListSlice } from './slices/list';
-import type { SelectionAction } from './slices/selection';
+import type {SelectionAction} from './slices/selection';
 import { createSelectionSlice } from './slices/selection';
 
 //  ===============  Aggregate createStoreFn ============ //

@@ -1,8 +1,8 @@
 import { Flexbox } from '@lobehub/ui';
 import { Slider } from 'antd';
-import type { SliderSingleProps } from 'antd/es/slider';
-import type { CSSProperties } from 'react';
-import { memo, useMemo } from 'react';
+import type {SliderSingleProps} from 'antd/es/slider';
+import type {CSSProperties} from 'react';
+import {  memo, useMemo } from 'react';
 import useMergeState from 'use-merge-value';
 
 export interface LevelSliderProps<T extends string = string> {

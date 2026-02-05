@@ -5,8 +5,8 @@ import nodemailer from 'nodemailer';
 
 import { emailEnv } from '@/envs/email';
 
-import type { EmailPayload, EmailResponse, EmailServiceImpl } from '../type';
-import type { NodemailerConfig } from './type';
+import type {EmailPayload, EmailResponse, EmailServiceImpl} from '../type';
+import type {NodemailerConfig} from './type';
 
 const log = debug('lobe-email:Nodemailer');
 

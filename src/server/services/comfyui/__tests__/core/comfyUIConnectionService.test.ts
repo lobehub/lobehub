@@ -4,7 +4,7 @@ import { ComfyUIConnectionService } from '@/server/services/comfyui/core/comfyUI
 import { ServicesError } from '@/server/services/comfyui/errors';
 
 // Mock global fetch
-globalThis.fetch = vi.fn();
+global.fetch = vi.fn();
 
 describe('ComfyUIConnectionService', () => {
   let service: ComfyUIConnectionService;

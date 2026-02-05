@@ -1,1 +1,1 @@
-export * from './trimBatchProbe/trimBatchProbe';
+export * from './trimBatchProbe/trimBatchProbe'

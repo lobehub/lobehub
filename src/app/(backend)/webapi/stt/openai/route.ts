@@ -1,4 +1,4 @@
-import type { OpenAISTTPayload } from '@lobehub/tts';
+import type {OpenAISTTPayload} from '@lobehub/tts';
 import { createOpenaiAudioTranscriptions } from '@lobehub/tts/server';
 
 import { createBizOpenAI } from '@/app/(backend)/_deprecated/createBizOpenAI';
@@ -42,7 +42,7 @@ export const POST = async (req: Request) => {
     payload,
   });
 
-  return Response.json(res, {
+  return new Response(JSON.stringify(res), {
     headers: {
       'content-type': 'application/json;charset=UTF-8',
     },

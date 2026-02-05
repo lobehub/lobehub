@@ -3,7 +3,7 @@ import { and, desc, eq } from 'drizzle-orm';
 
 import { FileService } from '@/server/services/file';
 
-import type { GenerationTopicItem } from '../schemas/generation';
+import type { GenerationTopicItem} from '../schemas/generation';
 import { generationTopics } from '../schemas/generation';
 import type { LobeChatDatabase } from '../type';
 

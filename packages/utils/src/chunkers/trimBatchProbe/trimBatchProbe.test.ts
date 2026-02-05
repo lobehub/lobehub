@@ -1,12 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import {
-  hardTruncateFromTail,
-  normalizeToArray,
-  resolveJoiner,
-  trimBasedOnBatchProbe,
-  truncateByPunctuation,
-} from './trimBatchProbe';
+import { hardTruncateFromTail, normalizeToArray, resolveJoiner, trimBasedOnBatchProbe,truncateByPunctuation } from './trimBatchProbe';
 
 vi.mock('tokenx', () => ({
   estimateTokenCount: (str: string) => str.split(/\s+/).filter(Boolean).length,
@@ -15,10 +9,7 @@ vi.mock('tokenx', () => ({
 describe('trimBasedOnBatchProbe', () => {
   it('prefers compact builds to keep more segments', async () => {
     class BuildableChunk {
-      constructor(
-        private readonly detail: string,
-        private readonly summary: string,
-      ) {}
+      constructor(private readonly detail: string, private readonly summary: string) {}
       build(tryCompactIfPossible?: boolean) {
         return tryCompactIfPossible ? this.summary : this.detail;
       }
@@ -44,10 +35,7 @@ describe('trimBasedOnBatchProbe', () => {
 
   it('prefers compact probe when it allows keeping more segments', async () => {
     class BuildableChunk {
-      constructor(
-        private readonly detail: string,
-        private readonly summary: string,
-      ) {}
+      constructor(private readonly detail: string, private readonly summary: string) {}
       build(tryCompactIfPossible?: boolean) {
         return tryCompactIfPossible ? this.summary : this.detail;
       }
@@ -91,19 +79,13 @@ describe('trimBasedOnBatchProbe', () => {
 
   it('uses compact build for single buildable before truncation', async () => {
     class BuildableChunk {
-      constructor(
-        private readonly detail: string,
-        private readonly summary: string,
-      ) {}
+      constructor(private readonly detail: string, private readonly summary: string) {}
       build(tryCompactIfPossible?: boolean) {
         return tryCompactIfPossible ? this.summary : this.detail;
       }
     }
 
-    const result = await trimBasedOnBatchProbe(
-      new BuildableChunk('too long detail text', 'short'),
-      2,
-    );
+    const result = await trimBasedOnBatchProbe(new BuildableChunk('too long detail text', 'short'), 2);
 
     expect(result).toBe('short');
   });

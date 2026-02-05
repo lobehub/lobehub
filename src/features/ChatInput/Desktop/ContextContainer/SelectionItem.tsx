@@ -1,4 +1,4 @@
-import type { ChatContextContent } from '@lobechat/types';
+import type {ChatContextContent} from '@lobechat/types';
 import { Tag, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { TextIcon } from 'lucide-react';

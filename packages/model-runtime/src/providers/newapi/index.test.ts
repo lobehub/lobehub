@@ -1,12 +1,12 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
-import type { Mock } from 'vitest';
+import type { Mock} from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { responsesAPIModels } from '../../const/models';
 import type { ChatStreamPayload } from '../../types/chat';
 import * as modelParseModule from '../../utils/modelParse';
-import type { NewAPIModelCard, NewAPIPricing } from './index';
+import type { NewAPIModelCard, NewAPIPricing} from './index';
 import { LobeNewAPIAI, params } from './index';
 
 // Mock external dependencies
@@ -31,7 +31,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
   beforeEach(() => {
     // Setup fetch mock
     mockFetch = vi.fn();
-    globalThis.fetch = mockFetch;
+    global.fetch = mockFetch;
 
     // Setup utility function mocks
     mockProcessMultiProviderModelList = vi.mocked(modelParseModule.processMultiProviderModelList);
@@ -361,13 +361,9 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
         const model = { supported_endpoint_types: ['anthropic'] };
         let detectedProvider = 'openai';
 
-        if (
-          model.supported_endpoint_types &&
-          model.supported_endpoint_types.length > 0 &&
-          model.supported_endpoint_types.includes('anthropic')
-        ) {
-          detectedProvider = 'anthropic';
-        }
+        if (model.supported_endpoint_types && model.supported_endpoint_types.length > 0 && model.supported_endpoint_types.includes('anthropic')) {
+            detectedProvider = 'anthropic';
+          }
 
         expect(detectedProvider).toBe('anthropic');
       });
@@ -376,13 +372,9 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
         const model = { supported_endpoint_types: ['gemini'] };
         let detectedProvider = 'openai';
 
-        if (
-          model.supported_endpoint_types &&
-          model.supported_endpoint_types.length > 0 &&
-          model.supported_endpoint_types.includes('gemini')
-        ) {
-          detectedProvider = 'google';
-        }
+        if (model.supported_endpoint_types && model.supported_endpoint_types.length > 0 && model.supported_endpoint_types.includes('gemini')) {
+            detectedProvider = 'google';
+          }
 
         expect(detectedProvider).toBe('google');
       });
@@ -391,13 +383,9 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
         const model = { supported_endpoint_types: ['xai'] };
         let detectedProvider = 'openai';
 
-        if (
-          model.supported_endpoint_types &&
-          model.supported_endpoint_types.length > 0 &&
-          model.supported_endpoint_types.includes('xai')
-        ) {
-          detectedProvider = 'xai';
-        }
+        if (model.supported_endpoint_types && model.supported_endpoint_types.length > 0 && model.supported_endpoint_types.includes('xai')) {
+            detectedProvider = 'xai';
+          }
 
         expect(detectedProvider).toBe('xai');
       });
@@ -509,7 +497,7 @@ describe('NewAPI Runtime - 100% Branch Coverage', () => {
       const mockModel: NewAPIModelCard = {
         id: 'test-model',
         object: 'model',
-        created: 1_234_567_890,
+        created: 1234567890,
         owned_by: 'openai',
         supported_endpoint_types: ['openai'],
       };

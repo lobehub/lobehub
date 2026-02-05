@@ -3,12 +3,12 @@
 import type { UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 import isEqual from 'fast-deep-equal';
-import type { ReactNode } from 'react';
-import { memo, useMemo } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useMemo } from 'react';
 
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
-import { createStore, Provider } from './store';
+import { createStore,Provider } from './store';
 import StoreUpdater from './StoreUpdater';
 import type {
   ActionsBarConfig,

@@ -1,9 +1,9 @@
-import type { AssistantContentBlock, UIChatMessage } from '@lobechat/types';
+import type {AssistantContentBlock, UIChatMessage} from '@lobechat/types';
 import type { ActionIconGroupEvent, ActionIconGroupItemType } from '@lobehub/ui';
 import { ActionIconGroup, createRawModal } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 
-import type { ShareModalProps } from '../../../components/ShareMessageModal';
+import type {ShareModalProps} from '../../../components/ShareMessageModal';
 import ShareMessageModal from '../../../components/ShareMessageModal';
 import {
   createStore,

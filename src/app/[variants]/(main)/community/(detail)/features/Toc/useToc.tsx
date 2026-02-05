@@ -2,8 +2,8 @@
 
 import type { AnchorProps } from 'antd';
 import { unionBy } from 'es-toolkit/compat';
-import type { FC, PropsWithChildren } from 'react';
-import { createContext, useState } from 'react';
+import type {FC, PropsWithChildren} from 'react';
+import { createContext,   use, useState } from 'react';
 
 interface TocState {
   isLoading: boolean;

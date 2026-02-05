@@ -11,7 +11,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { ModelInfoTags } from '@/components/ModelSelect';
-import type { DiscoverModelItem } from '@/types/discover';
+import type {DiscoverModelItem} from '@/types/discover';
 
 import PublishedTime from '../../../../../../../../components/PublishedTime';
 import ModelTypeIcon from './ModelTypeIcon';

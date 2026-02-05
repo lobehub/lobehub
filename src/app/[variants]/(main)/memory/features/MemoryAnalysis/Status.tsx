@@ -20,7 +20,8 @@ export const MemoryAnalysisStatus = memo<StatusProps>(({ task }) => {
   const data = task;
 
   const status = data?.status;
-  const isRunning = status === AsyncTaskStatus.Pending || status === AsyncTaskStatus.Processing;
+  const isRunning =
+    status === AsyncTaskStatus.Pending || status === AsyncTaskStatus.Processing;
   const isError = status === AsyncTaskStatus.Error;
 
   if (!data || (!isRunning && !isError)) return null;
@@ -44,7 +45,7 @@ export const MemoryAnalysisStatus = memo<StatusProps>(({ task }) => {
       ? body
       : body && typeof body === 'object' && 'detail' in body && typeof body.detail === 'string'
         ? body.detail
-        : (data.error?.name ?? t('analysis.status.errorTitle'));
+        : data.error?.name ?? t('analysis.status.errorTitle');
 
   return (
     <Alert
@@ -62,7 +63,7 @@ export const MemoryAnalysisStatus = memo<StatusProps>(({ task }) => {
               style={{ flex: 1, minWidth: 220 }}
             />
             <Text fontSize={13} type={isError ? 'danger' : 'secondary'}>
-              {isError ? (errorText ?? t('analysis.status.errorTitle')) : progressText}
+              {isError ? errorText ?? t('analysis.status.errorTitle') : progressText}
             </Text>
           </Flexbox>
         </Flexbox>

@@ -1,7 +1,7 @@
 import type { AgentState } from '@lobechat/agent-runtime';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { RuntimeExecutorContext } from '../RuntimeExecutors';
+import type {RuntimeExecutorContext } from '../RuntimeExecutors';
 import { createRuntimeExecutors } from '../RuntimeExecutors';
 
 // Mock dependencies

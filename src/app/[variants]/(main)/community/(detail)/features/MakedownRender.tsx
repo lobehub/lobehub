@@ -2,7 +2,7 @@
 
 import { Center, Empty, Markdown } from '@lobehub/ui';
 import { FileText } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -43,6 +43,7 @@ const MarkdownRender = memo<{ children?: string }>(({ children }) => {
           if (typeof src !== 'string') return null;
           if (src.includes('glama.ai')) return null;
 
+           
           if (src.startsWith('http')) return <img src={src} {...rest} />;
           return null;
         },

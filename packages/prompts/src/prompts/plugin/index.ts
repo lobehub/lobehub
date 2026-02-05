@@ -1,4 +1,4 @@
-import type { Tool } from './tools';
+import type { Tool} from './tools';
 import { toolsPrompts } from './tools';
 
 export const pluginPrompts = ({ tools }: { tools: Tool[] }) => {

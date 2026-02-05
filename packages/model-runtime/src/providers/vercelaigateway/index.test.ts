@@ -3,7 +3,7 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import type { VercelAIGatewayModelCard } from './index';
+import type {VercelAIGatewayModelCard } from './index';
 import { formatPrice, LobeVercelAIGatewayAI, params } from './index';
 
 testProvider({

@@ -5,8 +5,8 @@ import { createWithEqualityFn } from 'zustand/traditional';
 
 import { createDevtools } from '@/store/middleware/createDevtools';
 
-import type { Store } from './action';
-import { store } from './action';
+import type {Store} from './action';
+import {  store } from './action';
 
 export type { PublicState, State } from './initialState';
 

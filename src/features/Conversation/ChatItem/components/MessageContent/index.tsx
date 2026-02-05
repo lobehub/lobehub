@@ -1,12 +1,12 @@
 import { Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
-import type { ReactNode } from 'react';
-import { memo, Suspense, useCallback } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  Suspense, useCallback } from 'react';
 
 import { useConversationStore } from '@/features/Conversation/store';
 import dynamic from '@/libs/next/dynamic';
 
-import type { ChatItemProps } from '../../type';
+import type {ChatItemProps} from '../../type';
 
 const EditorModal = dynamic(
   () => import('@/features/EditorModal').then((mode) => mode.EditorModal),

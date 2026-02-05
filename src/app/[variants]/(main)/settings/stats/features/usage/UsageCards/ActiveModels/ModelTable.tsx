@@ -6,11 +6,11 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
-import type { UsageLog } from '@/types/usage/usageRecord';
+import type {UsageLog} from '@/types/usage/usageRecord';
 import { formatPrice } from '@/utils/format';
 
-import type { UsageChartProps } from '../../../../types';
-import { GroupBy } from '../../../../types';
+import type {UsageChartProps} from '../../../../types';
+import { GroupBy  } from '../../../../types';
 
 interface WeightGroup {
   id: string;

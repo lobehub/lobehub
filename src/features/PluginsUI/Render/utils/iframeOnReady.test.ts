@@ -22,7 +22,7 @@ describe('useOnPluginReadyForInteraction', () => {
     });
 
     act(() => {
-      globalThis.dispatchEvent(event);
+      window.dispatchEvent(event);
     });
 
     expect(result.current).toBe(true); // After the event, readyForRender should be true
@@ -38,7 +38,7 @@ describe('useOnPluginReadyForInteraction', () => {
     });
 
     act(() => {
-      globalThis.dispatchEvent(event);
+      window.dispatchEvent(event);
     });
 
     expect(result.current).toBe(true); // After the event, readyForRender should be true
@@ -53,7 +53,7 @@ describe('useOnPluginReadyForInteraction', () => {
     });
 
     act(() => {
-      globalThis.dispatchEvent(event);
+      window.dispatchEvent(event);
     });
 
     expect(mockOnReady).not.toHaveBeenCalled();
@@ -68,7 +68,7 @@ describe('useOnPluginReadyForInteraction', () => {
       data: { type: PluginChannel.pluginReadyForRender },
     });
 
-    globalThis.dispatchEvent(event);
+    window.dispatchEvent(event);
 
     expect(mockOnReady).not.toHaveBeenCalled();
   });

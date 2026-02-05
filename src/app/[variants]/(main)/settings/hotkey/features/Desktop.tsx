@@ -1,7 +1,7 @@
 'use client';
 
-import type { FormGroupItemType } from '@lobehub/ui';
-import { Form, HotkeyInput, Icon, Skeleton } from '@lobehub/ui';
+import type {FormGroupItemType} from '@lobehub/ui';
+import { Form,  HotkeyInput, Icon, Skeleton  } from '@lobehub/ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
@@ -13,7 +13,7 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import hotkeyMeta from '@/locales/default/hotkey';
 import { useElectronStore } from '@/store/electron';
 import { desktopHotkeysSelectors } from '@/store/electron/selectors';
-import type { DesktopHotkeyItem } from '@/types/hotkey';
+import type {DesktopHotkeyItem} from '@/types/hotkey';
 
 const HotkeySetting = memo(() => {
   const { t } = useTranslation(['setting', 'hotkey']);

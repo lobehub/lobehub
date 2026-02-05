@@ -1,7 +1,7 @@
 import { AsyncTaskStatus } from '@/types/asyncTask';
 import type { Generation, GenerationBatch } from '@/types/generation';
 
-import type { GenerationBatchDispatch } from './reducer';
+import type { GenerationBatchDispatch} from './reducer';
 import { generationBatchReducer } from './reducer';
 
 // Test data factory functions
@@ -15,7 +15,7 @@ const createMockGeneration = (overrides: Partial<Generation> = {}): Generation =
     width: 1024,
     height: 1024,
   },
-  seed: 12_345,
+  seed: 12345,
   asyncTaskId: 'task1',
   createdAt: new Date('2024-01-01'),
   task: {
@@ -63,7 +63,7 @@ describe('generationBatchReducer', () => {
               width: 1024,
               height: 1024,
             },
-            seed: 67_890,
+            seed: 67890,
             asyncTaskId: 'task2',
             task: {
               id: 'task2',
@@ -93,7 +93,7 @@ describe('generationBatchReducer', () => {
               width: 1024,
               height: 1024,
             },
-            seed: 11_111,
+            seed: 11111,
             asyncTaskId: 'task3',
             createdAt: new Date('2024-01-02'),
             task: {
@@ -120,7 +120,7 @@ describe('generationBatchReducer', () => {
             width: 2048,
             height: 2048,
           },
-          seed: 99_999,
+          seed: 99999,
         },
       };
 
@@ -131,7 +131,7 @@ describe('generationBatchReducer', () => {
       expect(updatedGeneration).toBeDefined();
       expect(updatedGeneration?.asset?.url).toBe('files/newFile1.jpg');
       expect(updatedGeneration?.asset?.width).toBe(2048);
-      expect(updatedGeneration?.seed).toBe(99_999);
+      expect(updatedGeneration?.seed).toBe(99999);
       // Ensure other properties remain unchanged
       expect(updatedGeneration?.asyncTaskId).toBe('task1');
     });
@@ -141,7 +141,7 @@ describe('generationBatchReducer', () => {
         type: 'updateGenerationInBatch',
         batchId: 'nonexistentBatch',
         generationId: 'gen1',
-        value: { seed: 99_999 },
+        value: { seed: 99999 },
       };
 
       const newState = generationBatchReducer(initialState, payload);
@@ -153,7 +153,7 @@ describe('generationBatchReducer', () => {
         type: 'updateGenerationInBatch',
         batchId: 'batch1',
         generationId: 'nonexistentGen',
-        value: { seed: 99_999 },
+        value: { seed: 99999 },
       };
 
       const newState = generationBatchReducer(initialState, payload);
@@ -165,7 +165,7 @@ describe('generationBatchReducer', () => {
         type: 'updateGenerationInBatch',
         batchId: 'batch1',
         generationId: 'gen1',
-        value: { seed: 99_999 },
+        value: { seed: 99999 },
       };
 
       const newState = generationBatchReducer(initialState, payload);
@@ -173,8 +173,8 @@ describe('generationBatchReducer', () => {
       const gen1 = batch?.generations.find((g) => g.id === 'gen1');
       const gen2 = batch?.generations.find((g) => g.id === 'gen2');
 
-      expect(gen1?.seed).toBe(99_999);
-      expect(gen2?.seed).toBe(67_890); // Unchanged
+      expect(gen1?.seed).toBe(99999);
+      expect(gen2?.seed).toBe(67890); // Unchanged
     });
 
     it('should update asset properties', () => {
@@ -433,7 +433,7 @@ describe('generationBatchReducer', () => {
               width: 1024,
               height: 1024,
             },
-            seed: 22_222,
+            seed: 22222,
             asyncTaskId: 'task4',
             createdAt: new Date('2024-01-03'),
             task: {

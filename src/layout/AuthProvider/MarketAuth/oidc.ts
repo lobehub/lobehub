@@ -2,7 +2,7 @@ import { isDesktop } from '@/const/version';
 import { MARKET_OIDC_ENDPOINTS } from '@/services/_url';
 
 import { MarketAuthError } from './errors';
-import type { OIDCConfig, PKCEParams, TokenResponse } from './types';
+import type {OIDCConfig, PKCEParams, TokenResponse} from './types';
 
 /**
  * Market OIDC 授权工具类
@@ -170,7 +170,7 @@ export class MarketOIDC {
   async startAuthorization(): Promise<{ code: string; state: string }> {
     const authUrl = await this.buildAuthUrl();
 
-    if (typeof globalThis.window === 'undefined') {
+    if (typeof window === 'undefined') {
       throw new MarketAuthError('browserOnly', {
         message: 'Authorization can only be initiated in a browser environment.',
       });

@@ -2,7 +2,7 @@ import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-import type { DiscoverMcpItem } from '@/types/discover';
+import type {DiscoverMcpItem} from '@/types/discover';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {

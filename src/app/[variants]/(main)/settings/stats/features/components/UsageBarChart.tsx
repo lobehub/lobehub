@@ -1,5 +1,5 @@
-import type { BarChartProps } from '@lobehub/charts';
-import { BarChart, ChartTooltipFrame, ChartTooltipRow } from '@lobehub/charts';
+import type {BarChartProps} from '@lobehub/charts';
+import { BarChart,  ChartTooltipFrame, ChartTooltipRow } from '@lobehub/charts';
 import { Flexbox, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 

@@ -2,7 +2,7 @@
 
 import { ActionIcon, DropdownMenu } from '@lobehub/ui';
 import { Clock, MoreHorizontal } from 'lucide-react';
-import { memo, Suspense } from 'react';
+import { memo,Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 

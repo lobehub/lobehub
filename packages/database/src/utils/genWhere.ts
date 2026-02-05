@@ -1,6 +1,6 @@
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
-import type { SQL } from 'drizzle-orm';
+import type { SQL} from 'drizzle-orm';
 import { and, gte, lte } from 'drizzle-orm';
 
 export const genWhere = (sqls: (SQL<any> | undefined)[]): SQL<any> | undefined => {

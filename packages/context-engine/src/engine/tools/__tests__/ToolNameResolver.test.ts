@@ -42,7 +42,7 @@ describe('ToolNameResolver', () => {
       expect(result).toContain(identifier);
       expect(result).toContain('MD5HASH_');
       expect(result).toContain('____builtin');
-      expect(result).toMatch(/^my-plugin____MD5HASH_[a-f0-9]+____builtin$/);
+      expect(result).toMatch(/^my-plugin_{4}MD5HASH_[\da-f]+_{4}builtin$/);
     });
 
     it('should handle identifier that is itself long', () => {

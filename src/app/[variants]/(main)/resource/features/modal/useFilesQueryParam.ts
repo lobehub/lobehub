@@ -4,8 +4,8 @@ export const FILE_MODAL_QUERY_KEY = 'files';
 const FILE_MODAL_QUERY_EVENT = 'lobe-files-querychange';
 
 const getCurrentSearch = () => {
-  if (typeof globalThis.window === 'undefined') return '';
-  return globalThis.location.search;
+  if (typeof window === 'undefined') return '';
+  return window.location.search;
 };
 
 export const getCurrentFileModalId = () => {
@@ -17,19 +17,19 @@ export const getCurrentFileModalId = () => {
 };
 
 const pushStateWithParams = (params: URLSearchParams) => {
-  if (typeof globalThis.window === 'undefined') return;
+  if (typeof window === 'undefined') return;
 
   const search = params.toString();
-  const hash = globalThis.location.hash;
-  const pathname = globalThis.location.pathname;
+  const hash = window.location.hash;
+  const pathname = window.location.pathname;
   const url = `${pathname}${search ? `?${search}` : ''}${hash}`;
 
-  globalThis.history.pushState({}, '', url);
-  globalThis.dispatchEvent(new Event(FILE_MODAL_QUERY_EVENT));
+  window.history.pushState({}, '', url);
+  window.dispatchEvent(new Event(FILE_MODAL_QUERY_EVENT));
 };
 
 export const setFileModalId = (id?: string) => {
-  if (typeof globalThis.window === 'undefined') return;
+  if (typeof window === 'undefined') return;
 
   const params = new URLSearchParams(getCurrentSearch());
 
@@ -46,18 +46,18 @@ export const useFileModalId = (): string | undefined => {
   const [fileId, setFileId] = useState<string | undefined>(() => getCurrentFileModalId());
 
   useEffect(() => {
-    if (typeof globalThis.window === 'undefined') return;
+    if (typeof window === 'undefined') return;
 
     const handler = () => {
       setFileId(getCurrentFileModalId());
     };
 
-    globalThis.addEventListener('popstate', handler);
-    globalThis.addEventListener(FILE_MODAL_QUERY_EVENT, handler);
+    window.addEventListener('popstate', handler);
+    window.addEventListener(FILE_MODAL_QUERY_EVENT, handler);
 
     return () => {
-      globalThis.removeEventListener('popstate', handler);
-      globalThis.removeEventListener(FILE_MODAL_QUERY_EVENT, handler);
+      window.removeEventListener('popstate', handler);
+      window.removeEventListener(FILE_MODAL_QUERY_EVENT, handler);
     };
   }, []);
 

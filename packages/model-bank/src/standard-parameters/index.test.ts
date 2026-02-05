@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ModelParamsSchema, RuntimeImageGenParams } from './index';
-import { extractDefaultValues, ModelParamsMetaSchema, validateModelParamsSchema } from './index';
+import type {
+  ModelParamsSchema,RuntimeImageGenParams} from './index';
+import {
+  extractDefaultValues,
+  ModelParamsMetaSchema,
+  validateModelParamsSchema
+} from './index';
 
 describe('meta-schema', () => {
   describe('ModelParamsMetaSchema', () => {
@@ -147,7 +152,7 @@ describe('meta-schema', () => {
       const schema: ModelParamsSchema = {
         prompt: { default: 'test' },
         width: { default: 1024, min: 512, max: 2048 },
-        seed: { default: 12_345 },
+        seed: { default: 12345 },
         cfg: { default: 7.5, min: 1, max: 20, step: 0.5 },
         aspectRatio: { default: '16:9', enum: ['1:1', '16:9', '4:3'] },
         imageUrls: { default: ['test.jpg'] },

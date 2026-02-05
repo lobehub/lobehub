@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import type { DesktopDownloadType } from './index';
-import { resolveDesktopDownload, resolveDesktopDownloadFromUrls } from './index';
+import type {DesktopDownloadType} from './index';
+import {
+  resolveDesktopDownload,
+  resolveDesktopDownloadFromUrls
+} from './index';
 
 const mockRelease = {
   assets: [

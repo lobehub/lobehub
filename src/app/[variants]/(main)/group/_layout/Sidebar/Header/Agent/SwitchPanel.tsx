@@ -1,5 +1,5 @@
 import { Flexbox, Popover } from '@lobehub/ui';
-import type { PropsWithChildren } from 'react';
+import type {PropsWithChildren} from 'react';
 import React, { memo, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 

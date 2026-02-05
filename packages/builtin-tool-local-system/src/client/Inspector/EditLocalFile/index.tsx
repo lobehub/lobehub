@@ -1,17 +1,17 @@
 'use client';
 
-import type { EditLocalFileParams } from '@lobechat/electron-client-ipc';
-import type { BuiltinInspectorProps } from '@lobechat/types';
+import type {EditLocalFileParams} from '@lobechat/electron-client-ipc';
+import type {BuiltinInspectorProps} from '@lobechat/types';
 import { Icon, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { Minus, Plus } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { memo } from 'react';
+import type {ReactNode} from 'react';
+import {  memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import type { EditLocalFileState } from '../../../types';
+import type {EditLocalFileState} from '../../../types';
 import { FilePathDisplay } from '../../components/FilePathDisplay';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

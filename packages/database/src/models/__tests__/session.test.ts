@@ -4,7 +4,9 @@ import type { LLMParams } from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import type { NewSession, SessionItem } from '../../schemas';
+import type {
+  NewSession,
+  SessionItem} from '../../schemas';
 import {
   agents,
   agentsToSessions,

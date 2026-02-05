@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import GridCard from '@/app/[variants]/(main)/memory/features/GridView/GridCard';
 import ProgressIcon from '@/app/[variants]/(main)/memory/features/ProgressIcon';
-import type { DisplayContextMemory } from '@/database/repositories/userMemory';
+import type {DisplayContextMemory} from '@/database/repositories/userMemory';
 
 import ContextDropdown from '../../ContextDropdown';
 

@@ -1,4 +1,4 @@
-import type { Mock } from 'vitest';
+import type { Mock} from 'vitest';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -6,7 +6,7 @@ import type { GlobalRuntimeConfig } from '@/types/serverConfig';
 
 import { globalService } from '../global';
 
-globalThis.fetch = vi.fn();
+global.fetch = vi.fn();
 
 beforeEach(() => {
   vi.clearAllMocks();

@@ -39,7 +39,7 @@ export class InputTemplateProcessor extends BaseProcessor {
     try {
       // Compile the template
       const compiler = template(this.config.inputTemplate, {
-        interpolate: /\{\{\s*(text)\s*\}\}/g,
+        interpolate: /{{\s*(text)\s*}}/g,
       });
 
       log(`Applying input template: ${this.config.inputTemplate}`);

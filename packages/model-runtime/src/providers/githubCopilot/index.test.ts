@@ -8,7 +8,7 @@ vi.spyOn(console, 'error').mockImplementation(() => {});
 
 // Mock fetch
 const mockFetch = vi.fn();
-globalThis.fetch = mockFetch;
+global.fetch = mockFetch;
 
 describe('LobeGithubCopilotAI', () => {
   afterEach(() => {

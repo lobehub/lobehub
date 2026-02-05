@@ -2,7 +2,7 @@ import { Segmented } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { IdentityType } from './List';
+import type {IdentityType} from './List';
 
 interface SegmentedBarProps {
   onTypeChange: (type: IdentityType) => void;

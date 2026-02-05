@@ -40,6 +40,7 @@ describe('RetrievalUserMemoryContextProvider', () => {
             updatedAt: new Date(),
             userId: 'user-1',
             userMemoryId: 'mem-act-1',
+             
           } as any,
         ],
         contexts: [
@@ -61,6 +62,7 @@ describe('RetrievalUserMemoryContextProvider', () => {
             userId: 'user-1',
             userMemoryIds: ['mem-1'],
             // similarity is appended by retrieval pipeline
+             
           } as any,
         ],
         experiences: [
@@ -83,6 +85,7 @@ describe('RetrievalUserMemoryContextProvider', () => {
             updatedAt: new Date(),
             userId: 'user-1',
             userMemoryId: 'mem-2',
+             
           } as any,
         ],
         preferences: [
@@ -100,6 +103,7 @@ describe('RetrievalUserMemoryContextProvider', () => {
             updatedAt: new Date(),
             userId: 'user-1',
             userMemoryId: 'mem-3',
+             
           } as any,
         ],
       },

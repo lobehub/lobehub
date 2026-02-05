@@ -12,5 +12,5 @@ import { electronSyncSelectors } from '@/store/electron/selectors';
  */
 export const useAppOrigin = () => {
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
-  return isDesktop ? remoteServerUrl : globalThis.location.origin;
+  return isDesktop ? remoteServerUrl : window.location.origin;
 };

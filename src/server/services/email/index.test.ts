@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createEmailServiceImpl, EmailImplType } from './impls';
+import { createEmailServiceImpl,EmailImplType } from './impls';
 import { EmailService } from './index';
 
 // Mock dependencies

@@ -1,5 +1,5 @@
-import type { LobeToolRenderType } from '@lobechat/types';
-import type { PluginRequestPayload } from '@lobehub/chat-plugin-sdk';
+import type {LobeToolRenderType} from '@lobechat/types';
+import type {PluginRequestPayload} from '@lobehub/chat-plugin-sdk';
 import { memo } from 'react';
 
 import { ToolErrorBoundary } from '@/features/Conversation/Messages/Tool/ErrorBoundary';

@@ -3,7 +3,7 @@ import type { ClientSecretPayload } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { ChatStreamCallbacks, ChatStreamPayload } from '../index';
+import type { ChatStreamCallbacks, ChatStreamPayload} from '../index';
 import { LobeOpenAI, ModelRuntime } from '../index';
 import { providerRuntimeMap } from '../runtimeMap';
 import type { CreateImagePayload } from '../types/image';
@@ -82,12 +82,11 @@ beforeEach(async () => {
 describe('ModelRuntime', () => {
   describe('should initialize with various providers', () => {
     const providers = Object.values(ModelProvider).filter((i) => i !== 'lobehub');
-    const specialProviderIds = new Set([
-      ModelProvider.VertexAI,
-      ...specialProviders.map((p) => p.id),
-    ]);
+    const specialProviderIds = [ModelProvider.VertexAI, ...specialProviders.map((p) => p.id)];
 
-    const generalTestProviders = providers.filter((provider) => !specialProviderIds.has(provider));
+    const generalTestProviders = providers.filter(
+      (provider) => !specialProviderIds.includes(provider),
+    );
 
     generalTestProviders.forEach((provider) => {
       testRuntime(provider);

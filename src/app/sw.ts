@@ -12,6 +12,7 @@ declare global {
   }
 }
 
+ 
 declare const self: ServiceWorkerGlobalScope;
 
 const serwist = new Serwist({

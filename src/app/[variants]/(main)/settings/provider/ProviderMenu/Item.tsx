@@ -8,8 +8,8 @@ import { useLocation } from 'react-router-dom';
 import { ProductLogo } from '@/components/Branding/ProductLogo';
 import { isCustomBranding } from '@/const/version';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import type { AiProviderListItem } from '@/types/aiProvider';
-import { AiProviderSourceEnum } from '@/types/aiProvider';
+import type {AiProviderListItem} from '@/types/aiProvider';
+import {  AiProviderSourceEnum } from '@/types/aiProvider';
 
 interface ProviderItemProps extends AiProviderListItem {
   onClick: (id: string) => void;

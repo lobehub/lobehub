@@ -1,8 +1,8 @@
 'use client';
 
 import type React from 'react';
-import type { FC, PropsWithChildren } from 'react';
-import { useEffect, useState } from 'react';
+import type {FC, PropsWithChildren} from 'react';
+import {   useEffect, useState } from 'react';
 
 const ClientOnly: FC<PropsWithChildren<{ fallback?: React.ReactNode }>> = ({
   children,

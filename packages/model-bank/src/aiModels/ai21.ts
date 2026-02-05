@@ -6,8 +6,7 @@ const ai21ChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 256_000,
-    description:
-      'The most efficient model in its class, balancing speed and quality with a smaller footprint.',
+    description: 'The most efficient model in its class, balancing speed and quality with a smaller footprint.',
     displayName: 'Jamba Mini',
     enabled: true,
     id: 'jamba-mini',

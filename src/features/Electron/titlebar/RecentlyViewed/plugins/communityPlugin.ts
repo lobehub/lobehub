@@ -1,10 +1,11 @@
+ 
 import { ShapesIcon } from 'lucide-react';
 
 import { getRouteById } from '@/config/routes';
 
-import type { CommunityParams, PageReference, ResolvedPageData } from '../types';
-import type { PluginContext, RecentlyViewedPlugin } from './types';
-import { createPageReference } from './types';
+import type {CommunityParams, PageReference, ResolvedPageData} from '../types';
+import type {PluginContext, RecentlyViewedPlugin} from './types';
+import { createPageReference  } from './types';
 
 const communityIcon = getRouteById('community')?.icon || ShapesIcon;
 

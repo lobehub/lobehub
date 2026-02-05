@@ -1,8 +1,9 @@
+ 
 import { Home } from 'lucide-react';
 
-import type { HomeParams, PageReference, ResolvedPageData } from '../types';
-import type { PluginContext, RecentlyViewedPlugin } from './types';
-import { createPageReference } from './types';
+import type {HomeParams, PageReference, ResolvedPageData} from '../types';
+import type {PluginContext, RecentlyViewedPlugin} from './types';
+import { createPageReference  } from './types';
 
 export const homePlugin: RecentlyViewedPlugin<'home'> = {
   checkExists(_reference: PageReference<'home'>, _ctx: PluginContext): boolean {

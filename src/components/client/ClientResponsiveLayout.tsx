@@ -1,8 +1,8 @@
 'use client';
 
-import type { Loader } from 'next/dist/shared/lib/dynamic';
-import type { FC, PropsWithChildren } from 'react';
-import { memo } from 'react';
+import type {Loader} from 'next/dist/shared/lib/dynamic';
+import type {FC, PropsWithChildren} from 'react';
+import {   memo } from 'react';
 
 import MobileSwitchLoading from '@/features/MobileSwitchLoading';
 import { useIsMobile } from '@/hooks/useIsMobile';

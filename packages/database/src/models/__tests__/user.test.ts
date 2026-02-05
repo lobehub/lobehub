@@ -3,9 +3,9 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
-import { nextauthAccounts, users, userSettings } from '../../schemas';
+import { nextauthAccounts, users,userSettings } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
-import type { ListUsersForMemoryExtractorCursor } from '../user';
+import type { ListUsersForMemoryExtractorCursor} from '../user';
 import { UserModel, UserNotFoundError } from '../user';
 
 const userId = 'user-model-test';

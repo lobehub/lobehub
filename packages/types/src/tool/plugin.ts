@@ -49,6 +49,7 @@ export interface CustomPluginParams {
     headers?: Record<string, string>;
   };
   useProxy?: boolean;
+   
 }
 
 export interface LobeToolCustomPlugin {

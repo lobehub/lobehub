@@ -5,6 +5,7 @@ import { CloudSandboxApiName } from './types';
 
 export const CloudSandboxIdentifier = 'lobe-cloud-sandbox';
 
+/* eslint-disable sort-keys-fix/sort-keys-fix */
 export const CloudSandboxManifest: BuiltinToolManifest = {
   api: [
     {

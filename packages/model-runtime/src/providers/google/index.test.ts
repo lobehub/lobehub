@@ -172,7 +172,7 @@ describe('LobeGoogleAI', () => {
                       text: '*   **Worldwide:** $1.66 billion',
                     },
                     groundingChunkIndices: [0],
-                    confidenceScores: [0.952_182_65],
+                    confidenceScores: [0.95218265],
                   },
                   {
                     segment: {
@@ -181,7 +181,7 @@ describe('LobeGoogleAI', () => {
                       text: '*   **US & Canada:** $24,744,753',
                     },
                     groundingChunkIndices: [1],
-                    confidenceScores: [0.718_207_4],
+                    confidenceScores: [0.7182074],
                   },
                 ],
                 retrievalMetadata: {},

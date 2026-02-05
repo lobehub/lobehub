@@ -1,21 +1,18 @@
 import { getLobehubSkillProviderById } from '@lobechat/const';
 import { enableMapSet, produce } from 'immer';
-import type { SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
 import useSWR from 'swr';
 
 import { toolsClient } from '@/libs/trpc/client';
-import type { StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import type { ToolStore } from '../../store';
-import type { LobehubSkillStoreState } from './initialState';
-import type {
-  CallLobehubSkillToolParams,
-  CallLobehubSkillToolResult,
-  LobehubSkillServer,
-  LobehubSkillTool,
+import type {ToolStore} from '../../store';
+import type {LobehubSkillStoreState} from './initialState';
+import type {CallLobehubSkillToolParams, CallLobehubSkillToolResult, LobehubSkillServer, LobehubSkillTool} from './types';
+import {
+  LobehubSkillStatus
 } from './types';
-import { LobehubSkillStatus } from './types';
 
 enableMapSet();
 
@@ -131,7 +128,7 @@ export class LobehubSkillStoreActionImpl {
           const existingIndex = draft.lobehubSkillServers.findIndex(
             (s) => s.identifier === provider,
           );
-          if (existingIndex !== -1) {
+          if (existingIndex >= 0) {
             draft.lobehubSkillServers[existingIndex] = server;
           } else {
             draft.lobehubSkillServers.push(server);
@@ -186,7 +183,7 @@ export class LobehubSkillStoreActionImpl {
     this.#set(
       produce((draft: LobehubSkillStoreState) => {
         const serverIndex = draft.lobehubSkillServers.findIndex((s) => s.identifier === provider);
-        if (serverIndex !== -1) {
+        if (serverIndex >= 0) {
           draft.lobehubSkillServers[serverIndex] = {
             ...draft.lobehubSkillServers[serverIndex],
             ...update,
@@ -223,7 +220,7 @@ export class LobehubSkillStoreActionImpl {
       this.#set(
         produce((draft: LobehubSkillStoreState) => {
           const serverIndex = draft.lobehubSkillServers.findIndex((s) => s.identifier === provider);
-          if (serverIndex !== -1) {
+          if (serverIndex >= 0) {
             draft.lobehubSkillServers[serverIndex].tools = response.tools as LobehubSkillTool[];
           }
         }),

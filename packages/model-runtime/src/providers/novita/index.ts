@@ -29,9 +29,7 @@ export const LobeNovitaAI = createOpenAICompatibleRuntime({
     const formattedModels = modelList.map((m) => {
       const mm = m as any;
       const features: string[] = Array.isArray(mm.features) ? mm.features : [];
-      const inputModalities: string[] = Array.isArray(mm.input_modalities)
-        ? mm.input_modalities
-        : [];
+      const inputModalities: string[] = Array.isArray(mm.input_modalities) ? mm.input_modalities : [];
 
       return {
         contextWindowTokens: mm.context_size ?? mm.max_output_tokens ?? undefined,

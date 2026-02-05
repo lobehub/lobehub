@@ -28,16 +28,16 @@ export const useWatchBroadcast = <T extends MainBroadcastEventKey>(
   }, [handler]);
 
   useEffect(() => {
-    if (!globalThis.electron) return;
+    if (!window.electron) return;
 
     const listener = (_e: any, data: MainBroadcastParams<T>) => {
       handlerRef.current(data);
     };
 
-    globalThis.electron.ipcRenderer.on(event, listener);
+    window.electron.ipcRenderer.on(event, listener);
 
     return () => {
-      globalThis.electron.ipcRenderer.removeListener(event, listener);
+      window.electron.ipcRenderer.removeListener(event, listener);
     };
   }, [event]);
 };

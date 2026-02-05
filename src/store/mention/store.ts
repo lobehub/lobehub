@@ -1,12 +1,12 @@
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
-import type { StateCreator } from 'zustand/vanilla';
+import type {StateCreator} from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
 import { flattenActions } from '../utils/flattenActions';
-import type { MentionAction } from './action';
+import type {MentionAction} from './action';
 import { createMentionSlice } from './action';
-import type { MentionState } from './initialState';
+import type {MentionState} from './initialState';
 import { initialMentionState } from './initialState';
 
 export type MentionStore = MentionState & MentionAction;

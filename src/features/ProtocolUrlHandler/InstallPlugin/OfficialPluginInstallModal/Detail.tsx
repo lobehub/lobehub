@@ -5,8 +5,10 @@ import { memo, useState } from 'react';
 
 import MCPInstallProgress from '@/features/MCP/MCPInstallProgress';
 import Deployment from '@/features/MCPPluginDetail/Deployment';
-import type { DetailContextConfig } from '@/features/MCPPluginDetail/DetailProvider';
-import { DetailProvider } from '@/features/MCPPluginDetail/DetailProvider';
+import type {DetailContextConfig} from '@/features/MCPPluginDetail/DetailProvider';
+import {
+  DetailProvider
+} from '@/features/MCPPluginDetail/DetailProvider';
 import Header from '@/features/MCPPluginDetail/Header';
 import Nav from '@/features/MCPPluginDetail/Nav';
 import Overview from '@/features/MCPPluginDetail/Overview';

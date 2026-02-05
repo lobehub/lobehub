@@ -16,7 +16,7 @@ export function sanitizeError(error: any): any {
   const sanitized: any = {};
 
   // List of sensitive fields that should be removed or masked
-  const sensitiveFields = new Set([
+  const sensitiveFields = [
     'request',
     'headers',
     'authorization',
@@ -33,16 +33,16 @@ export function sanitizeError(error: any): any {
     'password',
     'config',
     'options',
-  ]);
+  ];
 
   // Copy safe fields and recursively sanitize nested objects
   for (const key in error) {
     if (error.hasOwnProperty(key)) {
       const value = error[key];
       const lowerKey = key.toLowerCase();
-
+      
       // Skip sensitive fields entirely
-      if (sensitiveFields.has(lowerKey)) {
+      if (sensitiveFields.includes(lowerKey)) {
         continue;
       }
 

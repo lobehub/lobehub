@@ -1,4 +1,4 @@
-/* eslint-disable unicorn/numeric-separators-style */
+ 
 
 // query: 设计思维的困境是什么 / text-embedding-3-small / 1024d
 export const designThinkingQuery = [

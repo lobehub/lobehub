@@ -11,7 +11,7 @@ import { SkeletonInput } from '@/components/Skeleton';
 import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey, LLMProviderBaseUrlKey } from '../../const';
-import type { ProviderItem } from '../../type';
+import type {ProviderItem} from '../../type';
 import ProviderDetail from '../default';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

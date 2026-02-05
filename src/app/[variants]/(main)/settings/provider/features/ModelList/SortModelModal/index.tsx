@@ -1,7 +1,7 @@
 import { Button, Flexbox, Modal, SortableList } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import type { AiProviderModelListItem } from 'model-bank';
+import type {AiProviderModelListItem} from 'model-bank';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

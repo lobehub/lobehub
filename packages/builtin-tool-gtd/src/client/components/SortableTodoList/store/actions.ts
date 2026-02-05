@@ -1,7 +1,7 @@
 import { debounce } from 'es-toolkit/compat';
 
-import type { TodoItem } from '../../../../types';
-import { getNextTodoStatus } from '../../../../types';
+import type {TodoItem} from '../../../../types';
+import { getNextTodoStatus  } from '../../../../types';
 import { AUTO_SAVE_DELAY, AUTO_SAVE_MAX_WAIT, initialState } from './initialState';
 import type { StoreInternals, TodoListItem, TodoListStore } from './types';
 import { ADD_ITEM_ID } from './types';
@@ -64,6 +64,7 @@ export const createActions = (
     ...initialState,
     items: defaultItems.map((item) => ({ ...item, id: generateId() })),
 
+    /* eslint-disable sort-keys-fix/sort-keys-fix */
     addItem: () => {
       const { items, newItemText } = get();
       if (!newItemText.trim()) return;

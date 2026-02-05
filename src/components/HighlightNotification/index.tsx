@@ -5,7 +5,7 @@ import { ActionIcon, Button, Flexbox } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
 import Link from 'next/link';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 
 export interface HighlightNotificationProps {
@@ -40,7 +40,7 @@ const styles = createStaticStyles(({ css }) => ({
     border-radius: 12px;
 
     background: ${cssVar.colorBgContainer};
-    box-shadow: 0 4px 24px rgb(0 0 0 / 12%);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 12%);
   `,
   closeButton: css`
     position: absolute;

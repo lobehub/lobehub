@@ -1,10 +1,10 @@
 import { ARTIFACT_TAG_CLOSED_REGEX, ARTIFACT_TAG_REGEX } from '@/const/plugin';
 import type { ChatStoreState } from '@/store/chat';
-import type { PortalArtifact } from '@/types/artifact';
+import type {PortalArtifact} from '@/types/artifact';
 
 import { dbMessageSelectors } from '../message/selectors';
-import type { PortalFile, PortalViewData } from './initialState';
-import { PortalViewType } from './initialState';
+import type {PortalFile, PortalViewData} from './initialState';
+import {   PortalViewType } from './initialState';
 
 // ============== Core Stack Selectors ==============
 
@@ -75,7 +75,7 @@ const artifactCode = (id: string) => (s: ChatStoreState) => {
   let content = result?.groups?.content || '';
 
   // Remove markdown code block if content is wrapped
-  content = content.replace(/^\s*```[^\n]*\n([\s\S]*?)\n```\s*$/, '$1');
+  content = content.replace(/^\s*```[^\n]*\n([\S\s]*?)\n```\s*$/, '$1');
 
   return content;
 };

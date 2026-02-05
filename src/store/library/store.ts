@@ -1,16 +1,16 @@
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
-import type { StateCreator } from 'zustand/vanilla';
+import type {StateCreator} from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
 import { flattenActions } from '../utils/flattenActions';
-import type { KnowledgeBaseStoreState } from './initialState';
+import type {KnowledgeBaseStoreState} from './initialState';
 import { initialState } from './initialState';
-import type { KnowledgeBaseContentAction } from './slices/content';
+import type {KnowledgeBaseContentAction} from './slices/content';
 import { createContentSlice } from './slices/content';
-import type { KnowledgeBaseCrudAction } from './slices/crud';
+import type {KnowledgeBaseCrudAction} from './slices/crud';
 import { createCrudSlice } from './slices/crud';
-import type { RAGEvalAction } from './slices/ragEval';
+import type {RAGEvalAction} from './slices/ragEval';
 import { createRagEvalSlice } from './slices/ragEval';
 
 //  ===============  Aggregate createStoreFn ============ //

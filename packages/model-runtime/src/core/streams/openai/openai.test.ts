@@ -434,7 +434,7 @@ describe('OpenAIStream', () => {
         {
           id: 'chatcmpl-B7CcnaeK3jqWBMOhxg7SSKFwlk7dC',
           object: 'chat.completion.chunk',
-          created: 1_741_056_525,
+          created: 1741056525,
           model: 'gpt-4o-mini-2024-07-18',
           choices: [{ index: 0, delta: { role: 'assistant', content: '' } }],
           service_tier: 'default',
@@ -443,7 +443,7 @@ describe('OpenAIStream', () => {
         {
           id: 'chatcmpl-B7CcnaeK3jqWBMOhxg7SSKFwlk7dC',
           object: 'chat.completion.chunk',
-          created: 1_741_056_525,
+          created: 1741056525,
           model: 'gpt-4o-mini-2024-07-18',
           choices: [{ index: 0, delta: { content: '你好！' } }],
           service_tier: 'default',
@@ -452,7 +452,7 @@ describe('OpenAIStream', () => {
         {
           id: 'chatcmpl-B7CcnaeK3jqWBMOhxg7SSKFwlk7dC',
           object: 'chat.completion.chunk',
-          created: 1_741_056_525,
+          created: 1741056525,
           model: 'gpt-4o-mini-2024-07-18',
           choices: [{ index: 0, delta: {}, finish_reason: 'stop' }],
           service_tier: 'default',
@@ -461,7 +461,7 @@ describe('OpenAIStream', () => {
         {
           id: 'chatcmpl-B7CcnaeK3jqWBMOhxg7SSKFwlk7dC',
           object: 'chat.completion.chunk',
-          created: 1_741_056_525,
+          created: 1741056525,
           model: 'gpt-4o-mini-2024-07-18',
           choices: [],
           service_tier: 'default',
@@ -523,7 +523,7 @@ describe('OpenAIStream', () => {
       const data = [
         {
           id: 'chatcmpl-c1f6a6a6-fcf8-463a-96bf-cf634d3e98a5',
-          created: 1_741_188_058,
+          created: 1741188058,
           model: 'gpt-4o-mini',
           object: 'chat.completion.chunk',
           system_fingerprint: 'fp_06737a9306',
@@ -532,7 +532,7 @@ describe('OpenAIStream', () => {
         },
         {
           id: 'chatcmpl-c1f6a6a6-fcf8-463a-96bf-cf634d3e98a5',
-          created: 1_741_188_068,
+          created: 1741188068,
           model: 'gpt-4o-mini',
           object: 'chat.completion.chunk',
           system_fingerprint: 'fp_06737a9306',
@@ -541,7 +541,7 @@ describe('OpenAIStream', () => {
         },
         {
           id: 'chatcmpl-c1f6a6a6-fcf8-463a-96bf-cf634d3e98a5',
-          created: 1_741_188_068,
+          created: 1741188068,
           model: 'gpt-4o-mini',
           object: 'chat.completion.chunk',
           system_fingerprint: 'fp_06737a9306',
@@ -550,7 +550,7 @@ describe('OpenAIStream', () => {
         },
         {
           id: 'chatcmpl-c1f6a6a6-fcf8-463a-96bf-cf634d3e98a5',
-          created: 1_741_188_068,
+          created: 1741188068,
           model: 'gpt-4o-mini',
           object: 'chat.completion.chunk',
           system_fingerprint: 'fp_06737a9306',
@@ -559,7 +559,7 @@ describe('OpenAIStream', () => {
         },
         {
           id: 'chatcmpl-c1f6a6a6-fcf8-463a-96bf-cf634d3e98a5',
-          created: 1_741_188_068,
+          created: 1741188068,
           model: 'gpt-4o-mini',
           object: 'chat.completion.chunk',
           system_fingerprint: 'fp_06737a9306',
@@ -895,7 +895,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_745_385_918,
+          created: 1745385918,
           model: 'Qwen/Qwen2.5-7B-Instruct-1M',
           choices: [
             {
@@ -918,7 +918,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_745_385_918,
+          created: 1745385918,
           model: 'Qwen/Qwen2.5-7B-Instruct-1M',
           choices: [
             {
@@ -932,7 +932,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_745_385_918,
+          created: 1745385918,
           model: 'Qwen/Qwen2.5-7B-Instruct-1M',
           choices: [
             {
@@ -946,7 +946,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_745_385_918,
+          created: 1745385918,
           model: 'Qwen/Qwen2.5-7B-Instruct-1M',
           choices: [
             {
@@ -960,7 +960,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_745_385_918,
+          created: 1745385918,
           model: 'Qwen/Qwen2.5-7B-Instruct-1M',
           choices: [
             {
@@ -974,7 +974,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_745_385_918,
+          created: 1745385918,
           model: 'Qwen/Qwen2.5-7B-Instruct-1M',
           choices: [
             {
@@ -989,7 +989,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_745_385_918,
+          created: 1745385918,
           model: 'Qwen/Qwen2.5-7B-Instruct-1M',
           choices: [],
           usage: { prompt_tokens: 333, total_tokens: 359, completion_tokens: 26 },
@@ -1378,7 +1378,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1393,7 +1393,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1408,7 +1408,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1423,7 +1423,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1438,7 +1438,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1453,7 +1453,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1468,7 +1468,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1541,7 +1541,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'minimax-m2',
           choices: [
             {
@@ -1555,7 +1555,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_071,
+          created: 1737563071,
           model: 'minimax-m2',
           choices: [
             {
@@ -1569,7 +1569,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_072,
+          created: 1737563072,
           model: 'minimax-m2',
           choices: [
             {
@@ -1621,7 +1621,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1636,7 +1636,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1651,7 +1651,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1666,7 +1666,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1681,7 +1681,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1696,7 +1696,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1711,7 +1711,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1726,7 +1726,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1741,7 +1741,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1822,7 +1822,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1837,7 +1837,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1852,7 +1852,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1867,7 +1867,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1882,7 +1882,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1897,7 +1897,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1912,7 +1912,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1927,7 +1927,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1942,7 +1942,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -1957,7 +1957,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2041,7 +2041,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2056,7 +2056,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2071,7 +2071,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2086,7 +2086,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2101,7 +2101,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2116,7 +2116,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2131,7 +2131,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2146,7 +2146,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2161,7 +2161,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2242,7 +2242,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2257,7 +2257,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2272,7 +2272,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2287,7 +2287,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2302,7 +2302,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2317,7 +2317,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2332,7 +2332,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2347,7 +2347,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2362,7 +2362,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2443,7 +2443,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2458,7 +2458,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2473,7 +2473,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2488,7 +2488,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2503,7 +2503,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2518,7 +2518,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2533,7 +2533,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2548,7 +2548,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2563,7 +2563,7 @@ describe('OpenAIStream', () => {
         {
           id: '1',
           object: 'chat.completion.chunk',
-          created: 1_737_563_070,
+          created: 1737563070,
           model: 'deepseek-reasoner',
           system_fingerprint: 'fp_1c5d8833bc',
           choices: [
@@ -2644,7 +2644,7 @@ describe('OpenAIStream', () => {
         {
           id: '055ccc4cbe1ca0dc18037256237d0823',
           object: 'chat.completion.chunk',
-          created: 1_762_498_892,
+          created: 1762498892,
           model: 'MiniMax-M2',
           choices: [
             {
@@ -2672,7 +2672,7 @@ describe('OpenAIStream', () => {
         {
           id: '055ccc4cbe1ca0dc18037256237d0823',
           object: 'chat.completion.chunk',
-          created: 1_762_498_892,
+          created: 1762498892,
           model: 'MiniMax-M2',
           choices: [
             {
@@ -2696,7 +2696,7 @@ describe('OpenAIStream', () => {
         {
           id: '055ccc4cbe1ca0dc18037256237d0823',
           object: 'chat.completion.chunk',
-          created: 1_762_498_892,
+          created: 1762498892,
           model: 'MiniMax-M2',
           choices: [
             {
@@ -2712,7 +2712,7 @@ describe('OpenAIStream', () => {
         {
           id: '055ccc4cbe1ca0dc18037256237d0823',
           object: 'chat.completion.chunk',
-          created: 1_762_498_892,
+          created: 1762498892,
           model: 'MiniMax-M2',
           choices: [
             {
@@ -2728,7 +2728,7 @@ describe('OpenAIStream', () => {
         {
           id: '055ccc4cbe1ca0dc18037256237d0823',
           object: 'chat.completion.chunk',
-          created: 1_762_498_892,
+          created: 1762498892,
           model: 'MiniMax-M2',
           choices: [
             {
@@ -2792,7 +2792,7 @@ describe('OpenAIStream', () => {
       const data = [
         {
           id: '1',
-          created: 1_740_505_568,
+          created: 1740505568,
           model: 'claude-3-7-sonnet-latest',
           object: 'chat.completion.chunk',
           choices: [
@@ -2814,7 +2814,7 @@ describe('OpenAIStream', () => {
         },
         {
           id: '1',
-          created: 1_740_505_569,
+          created: 1740505569,
           model: 'claude-3-7-sonnet-latest',
           object: 'chat.completion.chunk',
           choices: [
@@ -2835,7 +2835,7 @@ describe('OpenAIStream', () => {
         },
         {
           id: '1',
-          created: 1_740_505_569,
+          created: 1740505569,
           model: 'claude-3-7-sonnet-latest',
           object: 'chat.completion.chunk',
           choices: [
@@ -2854,7 +2854,7 @@ describe('OpenAIStream', () => {
         },
         {
           id: '1',
-          created: 1_740_505_571,
+          created: 1740505571,
           model: 'claude-3-7-sonnet-latest',
           object: 'chat.completion.chunk',
           choices: [
@@ -2873,7 +2873,7 @@ describe('OpenAIStream', () => {
         },
         {
           id: '1',
-          created: 1_740_505_571,
+          created: 1740505571,
           model: 'claude-3-7-sonnet-latest',
           object: 'chat.completion.chunk',
           choices: [
@@ -2888,28 +2888,28 @@ describe('OpenAIStream', () => {
         },
         {
           id: '1',
-          created: 1_740_505_571,
+          created: 1740505571,
           model: 'claude-3-7-sonnet-latest',
           object: 'chat.completion.chunk',
           choices: [{ index: 0, delta: { content: '要找出394的质因数，我需要将' } }],
         },
         {
           id: '1',
-          created: 1_740_505_571,
+          created: 1740505571,
           model: 'claude-3-7-sonnet-latest',
           object: 'chat.completion.chunk',
           choices: [{ index: 0, delta: { content: '394分解为质数的乘积' } }],
         },
         {
           id: '1',
-          created: 1_740_505_573,
+          created: 1740505573,
           model: 'claude-3-7-sonnet-latest',
           object: 'chat.completion.chunk',
           choices: [{ index: 0, delta: { content: '2和197。' } }],
         },
         {
           id: '1',
-          created: 1_740_505_573,
+          created: 1740505573,
           model: 'claude-3-7-sonnet-latest',
           object: 'chat.completion.chunk',
           choices: [{ finish_reason: 'stop', index: 0, delta: {} }],

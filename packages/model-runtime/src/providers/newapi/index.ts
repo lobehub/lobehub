@@ -28,7 +28,7 @@ export interface NewAPIPricing {
 /**
  * Detect if running in browser environment
  */
-const isBrowser = () => typeof globalThis.window !== 'undefined' && typeof document !== 'undefined';
+const isBrowser = () => typeof window !== 'undefined' && typeof document !== 'undefined';
 
 /**
  * Parse a pricing API HTTP response into a `NewAPIPricing[] | null`.

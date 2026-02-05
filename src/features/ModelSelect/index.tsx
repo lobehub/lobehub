@@ -1,12 +1,12 @@
-import type { LobeSelectProps } from '@lobehub/ui';
-import { LobeSelect, TooltipGroup } from '@lobehub/ui';
+import type {LobeSelectProps} from '@lobehub/ui';
+import { LobeSelect,  TooltipGroup } from '@lobehub/ui';
 import { createStyles } from 'antd-style';
-import type { ReactNode } from 'react';
-import { memo, useMemo } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useMemo } from 'react';
 
 import { ModelItemRender, ProviderItemRender } from '@/components/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
-import type { EnabledProviderWithModels } from '@/types/aiProvider';
+import type {EnabledProviderWithModels} from '@/types/aiProvider';
 
 const useStyles = createStyles(({ css }, { popupWidth }: { popupWidth?: number | string }) => ({
   popup: css`

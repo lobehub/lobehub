@@ -1,4 +1,4 @@
-import type { PluginRequestPayload } from '@lobehub/chat-plugin-sdk';
+import type {PluginRequestPayload} from '@lobehub/chat-plugin-sdk';
 import { Skeleton } from '@lobehub/ui';
 import { memo, useRef, useState } from 'react';
 

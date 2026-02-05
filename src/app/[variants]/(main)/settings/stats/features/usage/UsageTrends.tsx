@@ -1,13 +1,13 @@
-import type { BarChartProps } from '@lobehub/charts';
+import type {BarChartProps} from '@lobehub/charts';
 import { Segmented, Skeleton } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { UsageLog } from '@/types/usage/usageRecord';
+import type {UsageLog} from '@/types/usage/usageRecord';
 import { formatNumber } from '@/utils/format';
 
-import type { UsageChartProps } from '../../types';
-import { GroupBy } from '../../types';
+import type {UsageChartProps} from '../../types';
+import { GroupBy  } from '../../types';
 import StatsFormGroup from '../components/StatsFormGroup';
 import { UsageBarChart } from '../components/UsageBarChart';
 

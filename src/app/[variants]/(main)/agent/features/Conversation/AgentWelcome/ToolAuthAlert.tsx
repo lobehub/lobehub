@@ -1,7 +1,7 @@
 'use client';
 
-import type { KlavisServerType } from '@lobechat/const';
-import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
+import type {KlavisServerType} from '@lobechat/const';
+import { KLAVIS_SERVER_TYPES  } from '@lobechat/const';
 import { Alert, Avatar, Button, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
@@ -14,8 +14,11 @@ import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
-import type { KlavisServer } from '@/store/tool/slices/klavisStore';
-import { KlavisServerStatus, klavisStoreSelectors } from '@/store/tool/slices/klavisStore';
+import type {KlavisServer} from '@/store/tool/slices/klavisStore';
+import {
+  KlavisServerStatus,
+  klavisStoreSelectors
+} from '@/store/tool/slices/klavisStore';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 

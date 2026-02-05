@@ -22,7 +22,8 @@ export function createResponseMeta({ ctx, errors }: ResponseMetaParams): {
 } {
   const resHeaders =
     ctx && typeof ctx === 'object' && 'resHeaders' in ctx
-      ? (ctx as { resHeaders?: HeadersInit }).resHeaders
+      ?  
+        (ctx as { resHeaders?: HeadersInit }).resHeaders
       : undefined;
   const headers = resHeaders ? new Headers(resHeaders) : new Headers();
 

@@ -1,7 +1,10 @@
 import { ModelProvider } from 'model-bank';
 
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type {
+  OpenAICompatibleFactoryOptions} from '../../core/openaiCompatibleFactory';
+import {
+  createOpenAICompatibleRuntime
+} from '../../core/openaiCompatibleFactory';
 import { MODEL_LIST_CONFIGS, processModelList } from '../../utils/modelParse';
 
 export interface V0ModelCard {

@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import type { DisplayContextMemory } from '@/database/repositories/userMemory';
+import type {DisplayContextMemory} from '@/database/repositories/userMemory';
 import { useUserMemoryStore } from '@/store/userMemory';
 
 import { GridView } from '../../../../features/GridView';

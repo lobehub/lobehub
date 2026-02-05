@@ -273,7 +273,8 @@ const xaiChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 32_768,
-    description: 'Improved accuracy, instruction following, and multilingual capability.',
+    description:
+      'Improved accuracy, instruction following, and multilingual capability.',
     displayName: 'Grok 2 Vision 1212',
     id: 'grok-2-vision-1212', // legacy
     pricing: {

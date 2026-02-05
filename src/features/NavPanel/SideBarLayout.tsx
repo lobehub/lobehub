@@ -1,5 +1,5 @@
 import { Flexbox, ScrollShadow, TooltipGroup } from '@lobehub/ui';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo, Suspense } from 'react';
 
 import Footer from '@/app/[variants]/(main)/home/_layout/Footer';

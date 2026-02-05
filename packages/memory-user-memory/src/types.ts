@@ -61,6 +61,7 @@ export interface GatekeeperTemplateProps extends ExtractorTemplateProps {
   gateKeeperLanguage?: string;
 }
 
+ 
 export type GatekeeperOptions = Pick<ExtractorOptions, 'retrievedContexts' | 'topK'> & {
   additionalMessages?: OpenAIChatMessage[];
   callbacks?: ExtractorOptions['callbacks'];
@@ -98,6 +99,7 @@ export interface MemoryExtractionSourceMetadata {
   version?: string;
 }
 
+ 
 export type ContextOptions<P extends Record<string, unknown>> = P;
 
 export interface BuiltContext<T = Record<string, unknown>> {

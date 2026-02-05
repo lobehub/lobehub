@@ -1,7 +1,7 @@
 'use client';
 
-import type { ListLocalFileParams } from '@lobechat/electron-client-ipc';
-import type { BuiltinInspectorProps } from '@lobechat/types';
+import type {ListLocalFileParams} from '@lobechat/electron-client-ipc';
+import type {BuiltinInspectorProps} from '@lobechat/types';
 import { Text } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import type { LocalFileListState } from '../../..';
+import type {LocalFileListState} from '../../..';
 import { FilePathDisplay } from '../../components/FilePathDisplay';
 
 export const ListLocalFilesInspector = memo<

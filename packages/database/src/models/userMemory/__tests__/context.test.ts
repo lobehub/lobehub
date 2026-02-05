@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import type { NewUserMemoryContext } from '../../../schemas';
+import type { NewUserMemoryContext} from '../../../schemas';
 import { userMemories, userMemoriesContexts, users } from '../../../schemas';
 import type { LobeChatDatabase } from '../../../type';
 import { UserMemoryContextModel } from '../context';

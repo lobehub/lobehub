@@ -51,12 +51,7 @@ const SetupGuide = memo(() => {
                         ns={'components'}
                         components={[
                           <span key="0" />,
-                          <a
-                            href={'https://ollama.com/download'}
-                            key="1"
-                            rel="noreferrer"
-                            target="_blank"
-                          />,
+                          <a href={'https://ollama.com/download'} key="1" rel="noreferrer" target="_blank" />,
                         ]}
                       />
                     ),
@@ -71,7 +66,7 @@ const SetupGuide = memo(() => {
                         <Flexbox gap={8}>
                           {t('OllamaSetupGuide.cors.macos')}
                           <Snippet language={'bash'}>
-                            {}
+                            { }
                             launchctl setenv OLLAMA_ORIGINS "*"
                           </Snippet>
                           {t('OllamaSetupGuide.cors.reboot')}
@@ -102,12 +97,7 @@ const SetupGuide = memo(() => {
                         ns={'components'}
                         components={[
                           <span key="0" />,
-                          <a
-                            href={'https://ollama.com/download'}
-                            key="1"
-                            rel="noreferrer"
-                            target="_blank"
-                          />,
+                          <a href={'https://ollama.com/download'} key="1" rel="noreferrer" target="_blank" />,
                         ]}
                       />
                     ),
@@ -172,10 +162,11 @@ const SetupGuide = memo(() => {
                         <div>{t('OllamaSetupGuide.cors.description')}</div>
 
                         <div>{t('OllamaSetupGuide.cors.linux.systemd')}</div>
-                        {}
+                        { }
                         <Snippet language={'bash'}> sudo systemctl edit ollama.service</Snippet>
                         {t('OllamaSetupGuide.cors.linux.env')}
                         <Highlighter
+                           
                           fullFeatured
                           showLanguage
                           fileName={'ollama.service'}
@@ -225,7 +216,7 @@ Environment="OLLAMA_ORIGINS=*"`}
                           fileName={'ollama.service'}
                           language={'bash'}
                         >
-                          {}
+                          { }
                           docker run -d --gpus=all -v ollama:/root/.ollama -e OLLAMA_ORIGINS="*" -p
                           11434:11434 --name ollama ollama/ollama
                         </Highlighter>

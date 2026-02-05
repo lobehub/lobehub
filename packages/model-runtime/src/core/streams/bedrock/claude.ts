@@ -3,11 +3,12 @@ import type { InvokeModelWithResponseStreamResponse } from '@aws-sdk/client-bedr
 import type { ChatStreamCallbacks } from '../../../types';
 import { nanoid } from '../../../utils/uuid';
 import { transformAnthropicStream } from '../anthropic';
-import type { StreamContext } from '../protocol';
+import type {
+  StreamContext} from '../protocol';
 import {
   createCallbacksTransformer,
   createSSEProtocolTransformer,
-  createTokenSpeedCalculator,
+  createTokenSpeedCalculator
 } from '../protocol';
 import { createBedrockStream } from './common';
 

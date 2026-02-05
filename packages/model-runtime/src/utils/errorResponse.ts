@@ -62,5 +62,5 @@ export const createErrorResponse = (errorType: ILobeAgentRuntimeErrorType, body?
     );
   }
 
-  return Response.json(data, { status: statusCode });
+  return new Response(JSON.stringify(data), { status: statusCode });
 };

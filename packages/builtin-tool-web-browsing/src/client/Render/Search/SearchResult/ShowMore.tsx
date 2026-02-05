@@ -1,6 +1,6 @@
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import type { CSSProperties } from 'react';
+import type { CSSProperties} from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

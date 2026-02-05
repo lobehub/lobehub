@@ -4,8 +4,8 @@ import { BRANDING_NAME } from '@lobechat/business-const';
 import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { MessageSquareHeart } from 'lucide-react';
-import type { PropsWithChildren } from 'react';
-import { memo, useState } from 'react';
+import type {PropsWithChildren} from 'react';
+import { memo,  useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import GuideModal from '@/components/GuideModal';

@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync,readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -29,6 +29,7 @@ describe('model-bank package.json exports should cover all aiModels files', () =
     });
 
     if (missing.length > 0) {
+       
       console.error('Missing exports for aiModels files:', missing);
     }
 

@@ -32,7 +32,7 @@ const styles = createStaticStyles(({ css }) => {
       pointer-events: none;
 
       position: absolute;
-      inset-block: 0;
+      inset-block: 0 0;
       inset-inline: 0 1%;
 
       height: 100%;

@@ -1,3 +1,4 @@
+/* eslint-disable sort-keys-fix/sort-keys-fix */
 import { z } from 'zod';
 
 // Define a union type for feature flag values: either boolean or array of user IDs

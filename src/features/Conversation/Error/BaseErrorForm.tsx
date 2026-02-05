@@ -1,5 +1,5 @@
 import { Block, Flexbox, Text } from '@lobehub/ui';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 
 interface BaseErrorFormProps {

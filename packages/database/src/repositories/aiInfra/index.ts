@@ -6,8 +6,13 @@ import type {
   ProviderConfig,
 } from '@lobechat/types';
 import { isEmpty } from 'es-toolkit/compat';
-import type { AIChatModelCard, AiProviderModelListItem, EnabledAiModel } from 'model-bank';
-import { AiModelSourceEnum } from 'model-bank';
+import type {
+  AIChatModelCard,
+  AiProviderModelListItem,
+  EnabledAiModel} from 'model-bank';
+import {
+  AiModelSourceEnum
+} from 'model-bank';
 import * as modelBank from 'model-bank';
 import { DEFAULT_MODEL_PROVIDER_LIST } from 'model-bank/modelProviders';
 import pMap from 'p-map';

@@ -2,7 +2,7 @@ import type { UIChatMessage } from '@lobechat/types';
 import { TraceEventType } from '@lobechat/types';
 import * as lobeUIModules from '@lobehub/ui';
 import { act, renderHook } from '@testing-library/react';
-import type { Mock } from 'vitest';
+import type { Mock} from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mutate } from '@/libs/swr';

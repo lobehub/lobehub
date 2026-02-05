@@ -1,6 +1,6 @@
-import type { QueueServiceImpl } from './impls';
-import { createQueueServiceModule, LocalQueueServiceImpl } from './impls';
-import type { HealthCheckResult, QueueMessage, QueueStats } from './types';
+import type {QueueServiceImpl} from './impls';
+import { createQueueServiceModule,LocalQueueServiceImpl  } from './impls';
+import type {HealthCheckResult, QueueMessage, QueueStats} from './types';
 
 /**
  * Queue Service

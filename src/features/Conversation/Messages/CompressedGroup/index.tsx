@@ -1,8 +1,15 @@
 'use client';
 
 import type { CompressionGroupMetadata, UIChatMessage } from '@lobechat/types';
-import type { TabsProps } from '@lobehub/ui';
-import { ActionIcon, Flexbox, Icon, Markdown, ScrollShadow, Tabs } from '@lobehub/ui';
+import type {TabsProps} from '@lobehub/ui';
+import {
+  ActionIcon,
+  Flexbox,
+  Icon,
+  Markdown,
+  ScrollShadow,
+  Tabs
+} from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp, History, Sparkles } from 'lucide-react';
@@ -20,12 +27,12 @@ import CompressedMessageItem from './CompressedMessageItem';
 const STORAGE_KEY_PREFIX = 'compressed-group-tab:';
 
 const getStoredTab = (id: string): string => {
-  if (typeof globalThis.window === 'undefined') return 'summary';
+  if (typeof window === 'undefined') return 'summary';
   return localStorage.getItem(`${STORAGE_KEY_PREFIX}${id}`) || 'summary';
 };
 
 const setStoredTab = (id: string, tab: string) => {
-  if (typeof globalThis.window === 'undefined') return;
+  if (typeof window === 'undefined') return;
   localStorage.setItem(`${STORAGE_KEY_PREFIX}${id}`, tab);
 };
 

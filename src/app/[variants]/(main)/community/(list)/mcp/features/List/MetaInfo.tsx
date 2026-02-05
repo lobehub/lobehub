@@ -1,9 +1,9 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { DownloadIcon, StarIcon } from 'lucide-react';
-import type { CSSProperties } from 'react';
-import { memo } from 'react';
+import type {CSSProperties} from 'react';
+import {  memo } from 'react';
 
-import type { DiscoverMcpItem } from '@/types/discover';
+import type {DiscoverMcpItem} from '@/types/discover';
 
 interface MetaInfoProps {
   className?: string;

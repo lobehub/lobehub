@@ -4,7 +4,7 @@ import { memo } from 'react';
 
 import MetaInfo from '@/app/[variants]/(main)/community/(list)/mcp/features/List/MetaInfo';
 import { RECENT_BLOCK_SIZE } from '@/app/[variants]/(main)/home/features/const';
-import type { DiscoverMcpItem } from '@/types/discover';
+import type {DiscoverMcpItem} from '@/types/discover';
 
 const FeaturedPluginItem = memo<DiscoverMcpItem>(({ name, icon, github, installCount }) => {
   return (

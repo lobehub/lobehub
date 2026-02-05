@@ -1,4 +1,4 @@
-import type { QueryFileListParams } from '@lobechat/types';
+import type { QueryFileListParams} from '@lobechat/types';
 import { FilesTabs, SortType } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 

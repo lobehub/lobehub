@@ -2,8 +2,10 @@ import { AsyncTaskStatus } from '@lobechat/types';
 import { useEffect } from 'react';
 
 import { useClientDataSWR } from '@/libs/swr';
-import type { MemoryExtractionTask } from '@/services/userMemory/extraction';
-import { memoryExtractionService } from '@/services/userMemory/extraction';
+import type {MemoryExtractionTask} from '@/services/userMemory/extraction';
+import {
+  memoryExtractionService
+} from '@/services/userMemory/extraction';
 
 const SWR_KEY = 'user-memory:analysis-task';
 

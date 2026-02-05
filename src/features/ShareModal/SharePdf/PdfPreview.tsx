@@ -47,7 +47,7 @@ const styles = createStaticStyles(({ css }) => ({
     position: absolute;
     z-index: 10;
     inset-block-end: 0;
-    inset-inline: 0;
+    inset-inline: 0 0;
 
     padding: 12px;
     border-block-start: 1px solid color-mix(in srgb, black 10%, transparent);

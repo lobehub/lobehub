@@ -12,7 +12,7 @@ import Item from './Item';
 import MasonryItemWrapper from './Item/MasonryItemWrapper';
 import Loading from './Loading';
 import MasonrySkeleton from './MasonrySkeleton';
-import type { ViewMode } from './ViewSwitcher';
+import type {ViewMode} from './ViewSwitcher';
 import ViewSwitcher from './ViewSwitcher';
 
 export const List = memo(() => {
@@ -105,7 +105,7 @@ export const List = memo(() => {
         </Center>
       ) : viewMode === 'list' ? (
         <Virtuoso
-          increaseViewportBy={typeof globalThis.window !== 'undefined' ? window.innerHeight : 0}
+          increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
           overscan={24}
           style={{ flex: 1, marginInline: -16 }}
           totalCount={data!.length}

@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { LobeSessions } from '@/types/session';
 
-import type { SessionDispatch } from './reducers';
+import type { SessionDispatch} from './reducers';
 import { sessionsReducer } from './reducers';
 
 describe('sessionsReducer', () => {

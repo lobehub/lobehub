@@ -1117,7 +1117,7 @@ describe('FileModel', () => {
       const testFile = {
         name: 'large-file.txt',
         url: 'https://example.com/large-file.txt',
-        size: 100_000,
+        size: 100000,
         fileType: 'text/plain',
         fileHash: 'large-file-hash',
       };
@@ -1180,7 +1180,7 @@ describe('FileModel', () => {
       ]);
 
       // 插入embeddings (1024维向量)
-      const testEmbedding = Array.from({ length: 1024 }).fill(0.1);
+      const testEmbedding = Array.from({ length: 1024 }).fill(0.1) as number[];
       await serverDB
         .insert(embeddings)
         .values([{ chunkId: chunkId1, embeddings: testEmbedding, model: 'test-model', userId }]);
@@ -1240,7 +1240,7 @@ describe('FileModel', () => {
       await serverDB.insert(fileChunks).values([{ fileId, chunkId, userId }]);
 
       // 插入embeddings
-      const testEmbedding = Array.from({ length: 1024 }).fill(0.1);
+      const testEmbedding = Array.from({ length: 1024 }).fill(0.1) as number[];
       await serverDB
         .insert(embeddings)
         .values([{ chunkId, embeddings: testEmbedding, model: 'test-model', userId }]);
@@ -1296,7 +1296,7 @@ describe('FileModel', () => {
       await serverDB.insert(fileChunks).values([{ fileId, chunkId, userId }]);
 
       // 插入embeddings (1024维向量)
-      const testEmbedding = Array.from({ length: 1024 }).fill(0.1);
+      const testEmbedding = Array.from({ length: 1024 }).fill(0.1) as number[];
       await serverDB
         .insert(embeddings)
         .values([{ chunkId, embeddings: testEmbedding, model: 'test-model', userId }]);

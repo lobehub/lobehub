@@ -3,12 +3,14 @@ import type { Stream } from 'openai/streaming';
 
 import type { ChatStreamCallbacks } from '../../types';
 import { convertOpenAIUsage } from '../usageConverters';
-import type { StreamProtocolChunk, StreamProtocolToolCallChunk } from './protocol';
+import type {
+  StreamProtocolChunk,
+  StreamProtocolToolCallChunk} from './protocol';
 import {
   convertIterableToStream,
   createCallbacksTransformer,
   createSSEProtocolTransformer,
-  generateToolCallId,
+  generateToolCallId
 } from './protocol';
 
 export function transformSparkResponseToStream(data: OpenAI.ChatCompletion) {

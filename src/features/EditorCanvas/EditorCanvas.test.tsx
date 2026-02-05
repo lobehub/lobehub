@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import type { IEditor } from '@lobehub/editor';
+import type {IEditor} from '@lobehub/editor';
 import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

@@ -1,6 +1,6 @@
 'use client';
 
-import type { AssistantContentBlock, UIChatMessage } from '@lobechat/types';
+import type {AssistantContentBlock, UIChatMessage} from '@lobechat/types';
 import {
   Accordion,
   AccordionItem,
@@ -13,8 +13,8 @@ import {
 } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ScrollText, Workflow } from 'lucide-react';
-import type { RefObject } from 'react';
-import { memo, useEffect, useMemo, useState } from 'react';
+import type {RefObject} from 'react';
+import {  memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';

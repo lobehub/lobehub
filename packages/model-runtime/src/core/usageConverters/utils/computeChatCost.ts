@@ -1,3 +1,4 @@
+/* eslint-disable sort-keys-fix/sort-keys-fix */
 import { CREDITS_PER_DOLLAR, USD_TO_CNY } from '@lobechat/const/currency';
 import type { ModelTokensUsage } from '@lobechat/types';
 import debug from 'debug';

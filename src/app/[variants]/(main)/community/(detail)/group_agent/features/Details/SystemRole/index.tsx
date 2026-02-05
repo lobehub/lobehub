@@ -18,15 +18,7 @@ const SystemRole = memo(() => {
     <Flexbox gap={16}>
       {systemRole && (
         <>
-          <Title
-            tag={
-              tokenUsage && (
-                <Tag>
-                  {t('groupAgents.details.tokenUsage', { defaultValue: `${tokenUsage} tokens` })}
-                </Tag>
-              )
-            }
-          >
+          <Title tag={tokenUsage && <Tag>{t('groupAgents.details.tokenUsage', { defaultValue: `${tokenUsage} tokens` })}</Tag>}>
             {t('groupAgents.details.systemRole.title', { defaultValue: 'System Role' })}
           </Title>
           <Block gap={16} padding={16} variant={'outlined'}>

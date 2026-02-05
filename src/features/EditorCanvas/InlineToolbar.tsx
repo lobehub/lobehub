@@ -1,9 +1,12 @@
 'use client';
 
-import type { IEditor } from '@lobehub/editor';
-import { getHotkeyById, HotkeyEnum, INSERT_HEADING_COMMAND } from '@lobehub/editor';
-import type { ChatInputActionsProps, EditorState } from '@lobehub/editor/react';
-import { ChatInputActions, FloatActions } from '@lobehub/editor/react';
+import type {IEditor} from '@lobehub/editor';
+import { getHotkeyById,HotkeyEnum,  INSERT_HEADING_COMMAND } from '@lobehub/editor';
+import type {ChatInputActionsProps, EditorState} from '@lobehub/editor/react';
+import {
+  ChatInputActions,
+  FloatActions
+} from '@lobehub/editor/react';
 import { Block } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import {
@@ -25,8 +28,8 @@ import {
   UnderlineIcon,
   Undo2Icon,
 } from 'lucide-react';
-import type { CSSProperties } from 'react';
-import { memo, useMemo } from 'react';
+import type {CSSProperties} from 'react';
+import {  memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export interface InlineToolbarProps {

@@ -2,7 +2,7 @@ import { Avatar, Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-import type { DiscoverAssistantItem } from '@/types/discover';
+import type {DiscoverAssistantItem} from '@/types/discover';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {

@@ -1,4 +1,4 @@
-import type { SWRHook } from 'swr';
+import type {SWRHook} from 'swr';
 import useSWR from 'swr';
 
 /**

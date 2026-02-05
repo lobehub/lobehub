@@ -1,11 +1,11 @@
 'use client';
 
-import type { DraggablePanelProps } from '@lobehub/ui';
-import { DraggablePanel } from '@lobehub/ui';
+import type {DraggablePanelProps} from '@lobehub/ui';
+import { DraggablePanel  } from '@lobehub/ui';
 import { createStaticStyles, useResponsive } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import type { PropsWithChildren } from 'react';
-import { Activity, memo, useState } from 'react';
+import type {PropsWithChildren} from 'react';
+import { Activity, memo,  useState } from 'react';
 
 import {
   CHAT_PORTAL_MAX_WIDTH,

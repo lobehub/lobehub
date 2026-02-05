@@ -1,6 +1,6 @@
 'use client';
 
-import type { IEditor } from '@lobehub/editor';
+import type {IEditor} from '@lobehub/editor';
 import { Alert, Skeleton } from '@lobehub/ui';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

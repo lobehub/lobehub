@@ -1,6 +1,9 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import type { ModelParamsSchema, RuntimeImageGenParams } from 'model-bank';
-import { extractDefaultValues, ModelProvider } from 'model-bank';
+import type {ModelParamsSchema, RuntimeImageGenParams} from 'model-bank';
+import {
+  extractDefaultValues,
+  ModelProvider
+} from 'model-bank';
 import { nanoBananaProParameters } from 'model-bank/google';
 
 import { DEFAULT_IMAGE_CONFIG } from '@/const/settings';

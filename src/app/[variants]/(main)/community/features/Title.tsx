@@ -1,10 +1,10 @@
 'use client';
 
-import type { FlexboxProps } from '@lobehub/ui';
-import { Flexbox, Icon } from '@lobehub/ui';
+import type {FlexboxProps} from '@lobehub/ui';
+import { Flexbox,  Icon } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 

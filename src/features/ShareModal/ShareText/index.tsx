@@ -1,7 +1,7 @@
 import { FORM_STYLE } from '@lobechat/const';
 import { exportFile } from '@lobechat/utils/client';
-import type { FormItemProps } from '@lobehub/ui';
-import { Button, copyToClipboard, Flexbox, Form } from '@lobehub/ui';
+import type {FormItemProps} from '@lobehub/ui';
+import { Button, copyToClipboard,Flexbox,Form   } from '@lobehub/ui';
 import { App, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { CopyIcon } from 'lucide-react';
@@ -17,7 +17,7 @@ import { displayMessageSelectors, topicSelectors } from '@/store/chat/selectors'
 import { styles } from '../style';
 import Preview from './Preview';
 import { generateMarkdown } from './template';
-import type { FieldType } from './type';
+import type {FieldType} from './type';
 
 const DEFAULT_FIELD_VALUE: FieldType = {
   includeTool: true,

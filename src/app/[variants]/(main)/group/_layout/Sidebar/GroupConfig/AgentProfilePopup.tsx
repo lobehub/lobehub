@@ -4,8 +4,8 @@ import type { AgentItem } from '@lobechat/types';
 import { ActionIcon, Avatar, Center, Flexbox, Popover, Text, Tooltip } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Settings } from 'lucide-react';
-import type { PropsWithChildren } from 'react';
-import { memo, useState } from 'react';
+import type {PropsWithChildren} from 'react';
+import { memo,  useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 

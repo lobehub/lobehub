@@ -10,7 +10,7 @@ import { DEFAULT_AVATAR } from '@/const/index';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 
-import type { MarkdownElementProps } from '../type';
+import type {MarkdownElementProps} from '../type';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   mention: css`

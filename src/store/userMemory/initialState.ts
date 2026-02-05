@@ -1,16 +1,16 @@
 import type { RetrieveMemoryParams, RetrieveMemoryResult } from '@lobechat/types';
 
-import type { ActivitySliceState } from './slices/activity';
+import type {ActivitySliceState} from './slices/activity';
 import { activityInitialState } from './slices/activity';
-import type { AgentMemorySliceState } from './slices/agent';
+import type {AgentMemorySliceState} from './slices/agent';
 import { agentMemoryInitialState } from './slices/agent';
-import type { ContextSliceState } from './slices/context';
+import type {ContextSliceState} from './slices/context';
 import { contextInitialState } from './slices/context';
-import type { ExperienceSliceState } from './slices/experience';
+import type {ExperienceSliceState} from './slices/experience';
 import { experienceInitialState } from './slices/experience';
-import type { IdentitySliceState } from './slices/identity';
+import type {IdentitySliceState} from './slices/identity';
 import { identityInitialState } from './slices/identity';
-import type { PreferenceSliceState } from './slices/preference';
+import type {PreferenceSliceState} from './slices/preference';
 import { preferenceInitialState } from './slices/preference';
 
 export interface PersonaData {

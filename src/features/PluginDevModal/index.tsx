@@ -6,7 +6,7 @@ import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
-import type { LobeToolCustomPlugin } from '@/types/tool/plugin';
+import type {LobeToolCustomPlugin} from '@/types/tool/plugin';
 
 import MCPManifestForm from './MCPManifestForm';
 import PluginPreview from './PluginPreview';
@@ -153,7 +153,9 @@ const DevModal = memo<DevModalProps>(
                       <Flexbox horizontal align={'center'} gap={4} justify={'center'}>
                         {t('dev.manifest.mode.claude')}
                         <div>
-                          <Tag variant={'filled'}>{t('dev.manifest.mode.claudeWip')}</Tag>
+                          <Tag variant={'filled'}>
+                            {t('dev.manifest.mode.claudeWip')}
+                          </Tag>
                         </div>
                       </Flexbox>
                     ),

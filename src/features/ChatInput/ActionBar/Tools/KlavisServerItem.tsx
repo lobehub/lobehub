@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
-import type { KlavisServer } from '@/store/tool/slices/klavisStore';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import type {KlavisServer} from '@/store/tool/slices/klavisStore';
+import {  KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 

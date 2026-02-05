@@ -11,7 +11,7 @@ import { getTestDB } from '../../../core/getTestDB';
 import { SessionModel } from '../../../models/session';
 import { UserModel, UserNotFoundError } from '../../../models/user';
 import type { UserSettingsItem } from '../../../schemas';
-import { nextauthAccounts, users, userSettings } from '../../../schemas';
+import { nextauthAccounts, users,userSettings } from '../../../schemas';
 
 const serverDB = await getTestDB();
 

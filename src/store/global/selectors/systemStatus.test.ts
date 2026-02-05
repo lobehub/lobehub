@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { merge } from '@/utils/merge';
 
-import type { GlobalState } from '../initialState';
+import type { GlobalState} from '../initialState';
 import { INITIAL_STATUS, initialState } from '../initialState';
 import { systemStatusSelectors } from './systemStatus';
 

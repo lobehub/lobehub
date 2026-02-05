@@ -7,7 +7,7 @@ import { memo } from 'react';
 import Time from '@/app/[variants]/(main)/home/features/components/Time';
 import { RECENT_BLOCK_SIZE } from '@/app/[variants]/(main)/home/features/const';
 import FileIcon from '@/components/FileIcon';
-import type { FileListItem } from '@/types/files';
+import type {FileListItem} from '@/types/files';
 import { formatSize } from '@/utils/format';
 
 const IMAGE_FILE_TYPES = new Set([

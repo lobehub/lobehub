@@ -2,7 +2,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import PluginRender from '@/features/PluginsUI/Render';
-import type { ChatPluginPayload } from '@/types/index';
+import type {ChatPluginPayload} from '@/types/index';
 
 interface CustomRenderProps {
   content: string;

@@ -11,7 +11,10 @@
         "type": "string"
       }
     },
-    "required": ["id", "reason"],
+    "required": [
+      "id",
+      "reason"
+    ],
     "type": "object"
   }
 }

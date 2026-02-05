@@ -1,5 +1,5 @@
 import { LOADING_FLAT } from '@lobechat/const';
-import type { ChatToolResult, ToolIntervention } from '@lobechat/types';
+import type {ChatToolResult, ToolIntervention} from '@lobechat/types';
 import { AccordionItem, Flexbox, Skeleton } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { memo, useEffect, useState } from 'react';

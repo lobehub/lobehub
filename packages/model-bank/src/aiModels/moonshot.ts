@@ -138,8 +138,7 @@ const moonshotChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description:
-      'Moonshot V1 Auto selects the appropriate model based on current context token usage.',
+    description: 'Moonshot V1 Auto selects the appropriate model based on current context token usage.',
     displayName: 'Moonshot V1 Auto',
     id: 'moonshot-v1-auto',
     pricing: {

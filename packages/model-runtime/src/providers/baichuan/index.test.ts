@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { ModelProvider } from 'model-bank';
-import type { Mock } from 'vitest';
+import type { Mock} from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
@@ -265,7 +265,7 @@ describe('LobeBaichuanAI - custom features', () => {
         data: [
           {
             function_call: true,
-            max_input_length: 32_768,
+            max_input_length: 32768,
             max_tokens: 4096,
             model: 'Baichuan3-Turbo',
             model_show_name: 'Baichuan3-Turbo',
@@ -286,7 +286,7 @@ describe('LobeBaichuanAI - custom features', () => {
       expect(models[0]).toMatchObject({
         id: 'Baichuan3-Turbo',
         displayName: 'Baichuan3-Turbo',
-        contextWindowTokens: 32_768,
+        contextWindowTokens: 32768,
         maxOutput: 4096,
         functionCall: true,
         enabled: false,
@@ -310,7 +310,7 @@ describe('LobeBaichuanAI - custom features', () => {
         data: [
           {
             function_call: true,
-            max_input_length: 32_768,
+            max_input_length: 32768,
             max_tokens: 4096,
             model: 'Baichuan3-Turbo',
             model_show_name: 'Baichuan3 Turbo',
@@ -324,7 +324,7 @@ describe('LobeBaichuanAI - custom features', () => {
       // Should have properties from API
       expect(models[0].id).toBe('Baichuan3-Turbo');
       expect(models[0].displayName).toBe('Baichuan3 Turbo');
-      expect(models[0].contextWindowTokens).toBe(32_768);
+      expect(models[0].contextWindowTokens).toBe(32768);
       expect(models[0].maxOutput).toBe(4096);
       expect(models[0].functionCall).toBe(true);
     });
@@ -334,7 +334,7 @@ describe('LobeBaichuanAI - custom features', () => {
         data: [
           {
             function_call: true,
-            max_input_length: 32_768,
+            max_input_length: 32768,
             max_tokens: 4096,
             model: 'BAICHUAN3-TURBO',
             model_show_name: 'Baichuan3 Turbo Upper',
@@ -355,7 +355,7 @@ describe('LobeBaichuanAI - custom features', () => {
         data: [
           {
             function_call: true,
-            max_input_length: 32_768,
+            max_input_length: 32768,
             max_tokens: 4096,
             model: 'Baichuan3-Turbo',
             model_show_name: 'Baichuan3-Turbo',
@@ -416,7 +416,7 @@ describe('LobeBaichuanAI - custom features', () => {
         data: [
           {
             function_call: true,
-            max_input_length: 128_000,
+            max_input_length: 128000,
             max_tokens: 8192,
             model: 'Baichuan4-Pro',
             model_show_name: 'Baichuan4 Pro',
@@ -430,7 +430,7 @@ describe('LobeBaichuanAI - custom features', () => {
       expect(models[0]).toMatchObject({
         id: 'Baichuan4-Pro',
         displayName: 'Baichuan4 Pro',
-        contextWindowTokens: 128_000,
+        contextWindowTokens: 128000,
         maxOutput: 8192,
         functionCall: true,
       });
@@ -441,7 +441,7 @@ describe('LobeBaichuanAI - custom features', () => {
         data: [
           {
             function_call: true,
-            max_input_length: 32_768,
+            max_input_length: 32768,
             max_tokens: 4096,
             model: 'Baichuan3-Turbo',
             model_show_name: 'Baichuan3-Turbo',

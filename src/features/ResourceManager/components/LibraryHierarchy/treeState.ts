@@ -41,8 +41,8 @@ const treeState = new Map<
 export const TREE_REFRESH_EVENT = 'resource-tree-refresh';
 
 export const emitTreeRefresh = (knowledgeBaseId: string) => {
-  if (typeof globalThis.window === 'undefined') return;
-  globalThis.dispatchEvent(
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
     new CustomEvent(TREE_REFRESH_EVENT, {
       detail: { knowledgeBaseId },
     }),

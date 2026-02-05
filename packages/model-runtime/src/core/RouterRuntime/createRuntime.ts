@@ -11,7 +11,7 @@ import type { Stream } from 'openai/streaming';
 import { LobeOpenAI } from '../../providers/openai';
 import { LobeVertexAI } from '../../providers/vertexai';
 import type {
-  type ChatCompletionErrorPayload,
+  ChatCompletionErrorPayload,
   ChatMethodOptions,
   ChatStreamCallbacks,
   ChatStreamPayload,
@@ -22,8 +22,7 @@ import type {
   GenerateObjectOptions,
   GenerateObjectPayload,
   ILobeAgentRuntimeErrorType,
-  TextToSpeechPayload,
-} from '../../types';
+  TextToSpeechPayload} from '../../types';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { safeParseJSON } from '../../utils/safeParseJSON';
 import type { LobeRuntimeAI } from '../BaseAI';

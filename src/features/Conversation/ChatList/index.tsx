@@ -1,7 +1,7 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { memo, useCallback } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useCallback } from 'react';
 
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
 import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';

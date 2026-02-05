@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { modal } from '@/components/AntdStaticMethods';
 import { useToolStore } from '@/store/tool';
-import type { KlavisServer } from '@/store/tool/slices/klavisStore';
+import type {KlavisServer} from '@/store/tool/slices/klavisStore';
 
 interface KlavisAuthItemProps {
   server: KlavisServer;

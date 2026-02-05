@@ -1,7 +1,7 @@
-import type { ActionIconProps, FlexboxProps } from '@lobehub/ui';
-import { ActionIcon, Flexbox } from '@lobehub/ui';
+import type {ActionIconProps, FlexboxProps} from '@lobehub/ui';
+import { ActionIcon,  Flexbox  } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import React from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -20,6 +20,7 @@ interface HeaderProps extends Omit<FlexboxProps, 'title' | 'children'> {
 }
 
 const Header = ({ title, actions = [], extra, ...rest }: HeaderProps) => {
+
   return (
     <Flexbox
       horizontal

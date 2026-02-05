@@ -235,7 +235,7 @@ const PageExplorerPlaceholder = memo<PageExplorerPlaceholderProps>(
             // Update URL with stripped ID (without prefix)
             const cleanId = standardizeIdentifier(parsedDocument.id);
             const newPath = cleanId ? `/page/${cleanId}` : '/page';
-            globalThis.history.replaceState({}, '', newPath);
+            window.history.replaceState({}, '', newPath);
           } catch (error) {
             console.error('Failed to upload and parse file:', error);
             // Remove temp document on error

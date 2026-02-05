@@ -1,8 +1,8 @@
-import type { FC } from 'react';
+import type {FC} from 'react';
 
 import { ARTIFACT_TAG } from '@/const/plugin';
 
-import type { MarkdownElement, MarkdownElementProps } from '../type';
+import type {MarkdownElement, MarkdownElementProps} from '../type';
 import rehypePlugin from './rehypePlugin';
 import Component from './Render';
 

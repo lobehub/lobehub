@@ -1,7 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
-import type { CSSProperties, ReactNode } from 'react';
-import { memo, useMemo } from 'react';
+import type {CSSProperties, ReactNode} from 'react';
+import {  memo,  useMemo } from 'react';
 
 import { MAX_SIZE_DESKTOP, MIN_IMAGE_SIZE, styles } from './style';
 

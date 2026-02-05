@@ -35,7 +35,8 @@ const GroupForkTag = memo(() => {
         setLoading(true);
 
         // Get fork source info from market using the marketIdentifier
-        const forkSourceResponse = await marketApiService.getAgentGroupForkSource(marketIdentifier);
+        const forkSourceResponse =
+          await marketApiService.getAgentGroupForkSource(marketIdentifier);
 
         setForkSource(forkSourceResponse.source);
       } catch (error) {

@@ -1,4 +1,5 @@
-import type { LobeOpenAICompatibleRuntime } from '@lobechat/model-runtime';
+import type {
+  LobeOpenAICompatibleRuntime} from '@lobechat/model-runtime';
 import {
   LobeAnthropicAI,
   LobeAzureOpenAI,
@@ -31,7 +32,7 @@ vi.mock('i18next', () => ({
 
 vi.stubGlobal(
   'fetch',
-  vi.fn(() => Promise.resolve(Response.json({ some: 'data' }))),
+  vi.fn(() => Promise.resolve(new Response(JSON.stringify({ some: 'data' })))),
 );
 
 vi.mock('@lobechat/fetch-sse', async (importOriginal) => {

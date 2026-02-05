@@ -1,7 +1,7 @@
 import { renderPlaceholderTemplate } from '@lobechat/context-engine';
 
 import { activityPrompt } from '../prompts';
-import type { ActivityMemory } from '../schemas';
+import type { ActivityMemory} from '../schemas';
 import { ActivityMemorySchema } from '../schemas';
 import type { ExtractorTemplateProps } from '../types';
 import { BaseMemoryExtractor } from './base';

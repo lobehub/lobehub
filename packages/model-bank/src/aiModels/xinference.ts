@@ -89,8 +89,7 @@ const xinferenceChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 32_768,
-    description:
-      'Qwen2.5-Coder is the latest code-focused LLM in the Qwen family (formerly CodeQwen).',
+    description: 'Qwen2.5-Coder is the latest code-focused LLM in the Qwen family (formerly CodeQwen).',
     displayName: 'Qwen2.5 Coder Instruct',
     enabled: true,
     id: 'qwen2.5-coder-instruct',

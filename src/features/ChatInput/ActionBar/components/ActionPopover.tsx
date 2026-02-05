@@ -1,9 +1,9 @@
 'use client';
 
-import type { PopoverProps } from '@lobehub/ui';
-import { Flexbox, Popover } from '@lobehub/ui';
+import type {PopoverProps} from '@lobehub/ui';
+import { Flexbox, Popover  } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo, Suspense } from 'react';
 
 import DebugNode from '@/components/DebugNode';

@@ -324,7 +324,7 @@ describe('Unified Workflow Tests', () => {
     });
 
     it('should handle seed parameter consistently', async () => {
-      const testSeeds = [undefined, 0, 12_345, 999_999];
+      const testSeeds = [undefined, 0, 12345, 999999];
 
       for (const seed of testSeeds) {
         const params = {

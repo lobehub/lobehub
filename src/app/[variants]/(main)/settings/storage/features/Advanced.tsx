@@ -2,8 +2,8 @@
 
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { DEFAULT_SETTINGS } from '@lobechat/config';
-import type { FormGroupItemType } from '@lobehub/ui';
-import { Button, Form, Icon } from '@lobehub/ui';
+import type {FormGroupItemType} from '@lobehub/ui';
+import { Button, Form,  Icon } from '@lobehub/ui';
 import { App, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { HardDriveDownload, HardDriveUpload } from 'lucide-react';

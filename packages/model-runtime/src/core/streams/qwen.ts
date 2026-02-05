@@ -11,14 +11,13 @@ import type {
   StreamContext,
   StreamProtocolChunk,
   StreamProtocolToolCallChunk,
-  StreamToolCallChunkData,
-} from './protocol';
+  StreamToolCallChunkData} from './protocol';
 import {
   convertIterableToStream,
   createCallbacksTransformer,
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
-  generateToolCallId,
+  generateToolCallId
 } from './protocol';
 
 export const transformQwenStream = (
@@ -146,7 +145,7 @@ export const transformQwenStream = (
 export const QwenAIStream = (
   stream: Stream<OpenAI.ChatCompletionChunk> | ReadableStream,
   // TODO: preserve for RFC 097
-
+   
   {
     callbacks,
     inputStartAt,

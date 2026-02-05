@@ -1,5 +1,5 @@
-import type { CreatedLevelSliderProps } from './createLevelSlider';
-import { createLevelSliderComponent } from './createLevelSlider';
+import type {CreatedLevelSliderProps} from './createLevelSlider';
+import {  createLevelSliderComponent } from './createLevelSlider';
 
 const THINKING_MODES = ['disabled', 'auto', 'enabled'] as const;
 type ThinkingMode = (typeof THINKING_MODES)[number];

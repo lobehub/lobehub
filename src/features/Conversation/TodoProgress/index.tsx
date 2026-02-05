@@ -1,6 +1,6 @@
 'use client';
 
-import type { StepContextTodos } from '@lobechat/types';
+import type {StepContextTodos} from '@lobechat/types';
 import { Checkbox, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronDown, ChevronUp, CircleArrowRight, ListTodo } from 'lucide-react';

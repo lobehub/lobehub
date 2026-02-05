@@ -42,7 +42,7 @@ let serverDB: LobeChatDatabase;
 let userId: string;
 let testAgentId: string;
 let testGroupId: string;
-
+ 
 let mockResponsesCreate: any;
 
 const createTestCallerContext = (uid: string) => ({

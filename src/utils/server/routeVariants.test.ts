@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_LANG } from '@/const/locale';
 import type { DynamicLayoutProps } from '@/types/next';
 
-import type { IRouteVariants } from './routeVariants';
+import type { IRouteVariants} from './routeVariants';
 import { DEFAULT_VARIANTS, RouteVariants } from './routeVariants';
 
 describe('RouteVariants', () => {

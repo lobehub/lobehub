@@ -7,7 +7,7 @@ import { agents, agentsFiles, agentsKnowledgeBases } from './agent';
 import { asyncTasks } from './asyncTask';
 import { chatGroups, chatGroupsAgents } from './chatGroup';
 import { documents, files, knowledgeBases } from './file';
-import { generationBatches, generations, generationTopics } from './generation';
+import { generationBatches, generations,generationTopics } from './generation';
 import { messageGroups, messages, messagesFiles } from './message';
 import { chunks, documentChunks, unstructuredChunks } from './rag';
 import { sessionGroups, sessions } from './session';

@@ -7,7 +7,7 @@ import Balancer from 'react-wrap-balancer';
 
 import { GITHUB_ISSUES } from '@/const/url';
 import { githubService } from '@/services/github';
-import type { ErrorShape } from '@/types/importer';
+import type {ErrorShape} from '@/types/importer';
 
 interface ErrorProps {
   error?: ErrorShape;

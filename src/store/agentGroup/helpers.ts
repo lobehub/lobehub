@@ -10,7 +10,7 @@ export const chatGroupDevtools = (name: string) =>
 
         if (isDev && res && typeof res === 'object' && 'internal_dispatchChatGroup' in res) {
           // @ts-ignore
-          globalThis.dispatchChatGroup = res.internal_dispatchChatGroup;
+          window.dispatchChatGroup = res.internal_dispatchChatGroup;
         }
         return res;
       },

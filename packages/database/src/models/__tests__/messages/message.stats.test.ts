@@ -359,7 +359,7 @@ describe('MessageModel Statistics Tests', () => {
           createdAt: today.subtract(4, 'day').toDate(),
         },
         // 6 messages - level 2
-        ...Array.from({ length: 6 })
+        ...Array.from({length: 6})
           .fill(0)
           .map((_, i) => ({
             id: `2-${i}`,
@@ -369,7 +369,7 @@ describe('MessageModel Statistics Tests', () => {
             createdAt: today.subtract(3, 'day').toDate(),
           })),
         // 11 messages - level 3
-        ...Array.from({ length: 11 })
+        ...Array.from({length: 11})
           .fill(0)
           .map((_, i) => ({
             id: `3-${i}`,
@@ -379,7 +379,7 @@ describe('MessageModel Statistics Tests', () => {
             createdAt: today.subtract(2, 'day').toDate(),
           })),
         // 16 messages - level 4
-        ...Array.from({ length: 16 })
+        ...Array.from({length: 16})
           .fill(0)
           .map((_, i) => ({
             id: `4-${i}`,
@@ -389,7 +389,7 @@ describe('MessageModel Statistics Tests', () => {
             createdAt: today.subtract(1, 'day').toDate(),
           })),
         // 21 messages - level 4
-        ...Array.from({ length: 21 })
+        ...Array.from({length: 21})
           .fill(0)
           .map((_, i) => ({
             id: `5-${i}`,

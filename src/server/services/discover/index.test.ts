@@ -47,7 +47,7 @@ vi.mock('model-bank', async (importOriginal) => {
         displayName: 'Claude 3 Opus',
         description: 'Anthropic Claude 3 Opus model',
         providerId: 'anthropic',
-        contextWindowTokens: 200_000,
+        contextWindowTokens: 200000,
         abilities: {
           vision: true,
           reasoning: true,

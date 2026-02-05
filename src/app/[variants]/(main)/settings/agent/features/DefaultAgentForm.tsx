@@ -1,7 +1,7 @@
 'use client';
 
-import type { FormGroupItemType } from '@lobehub/ui';
-import { Form, Icon, Skeleton } from '@lobehub/ui';
+import type {FormGroupItemType} from '@lobehub/ui';
+import { Form,  Icon, Skeleton } from '@lobehub/ui';
 import { Form as AntForm } from 'antd';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';

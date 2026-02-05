@@ -39,12 +39,7 @@ const FileEditorCanvas = memo<FileEditorProps>(({ onBack }) => {
         <Flexbox flex={1} height={'100%'}>
           <NavHeader
             left={
-              <Flexbox
-                horizontal
-                align={'center'}
-                gap={12}
-                style={{ minHeight: 32, minWidth: 0, overflow: 'hidden' }}
-              >
+              <Flexbox horizontal align={'center'} gap={12} style={{ minHeight: 32, minWidth: 0, overflow: 'hidden' }}>
                 <ActionIcon icon={ArrowLeftIcon} title={t('back')} onClick={onBack} />
                 <span
                   title={fileDetail?.name}

@@ -2,8 +2,8 @@
 
 import { Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
-import type { MouseEventHandler } from 'react';
-import { memo, useCallback } from 'react';
+import type {MouseEventHandler} from 'react';
+import { memo,  useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';

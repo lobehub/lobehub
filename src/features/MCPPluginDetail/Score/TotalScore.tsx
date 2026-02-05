@@ -4,8 +4,8 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { ScoreResult } from '../../MCP/calculateScore';
-import { sortItemsByPriority } from '../../MCP/calculateScore';
+import type {ScoreResult} from '../../MCP/calculateScore';
+import {  sortItemsByPriority } from '../../MCP/calculateScore';
 
 // 使用 cssVar 的 getGradeColor 版本
 const getGradeColor = (grade: string): string => {

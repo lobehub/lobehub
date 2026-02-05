@@ -1,16 +1,16 @@
-import type { MenuRenderProps } from '@lobehub/editor/es/plugins/slash/react/type';
+import type {MenuRenderProps} from '@lobehub/editor/es/plugins/slash/react/type';
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import type { ReactNode } from 'react';
-import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type {ReactNode} from 'react';
+import {  memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
-import type { MentionListOption } from './types';
+import type {MentionListOption} from './types';
 
 /**
  * Get cursor position from browser selection API
  */
 const getCursorPosition = (): { x: number; y: number } | null => {
-  const selection = globalThis.getSelection();
+  const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return null;
 
   const range = selection.getRangeAt(0);

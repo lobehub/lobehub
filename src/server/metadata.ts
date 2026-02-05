@@ -1,12 +1,12 @@
 import { BRANDING_NAME, ORG_NAME } from '@lobechat/business-const';
-import type { Metadata } from 'next';
+import type {Metadata} from 'next';
 import qs from 'query-string';
 
 import { DEFAULT_LANG } from '@/const/locale';
 import { OG_URL } from '@/const/url';
 import { isCustomORG } from '@/const/version';
-import type { Locales } from '@/locales/resources';
-import { locales } from '@/locales/resources';
+import type {Locales} from '@/locales/resources';
+import {  locales } from '@/locales/resources';
 import { getCanonicalUrl } from '@/server/utils/url';
 import { formatDescLength, formatTitleLength } from '@/utils/genOG';
 
@@ -32,8 +32,9 @@ export class Meta {
     type?: 'website' | 'article';
     url: string;
   }): Metadata {
+     
     const formatedTitle = formatTitleLength(title, 21);
-
+     
     const formatedDescription = formatDescLength(description, tags);
     const siteTitle = title.includes(BRANDING_NAME) ? title : title + ` · ${BRANDING_NAME}`;
     return {

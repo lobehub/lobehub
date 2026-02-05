@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 
 const Statistic = memo<{ title: ReactNode; value: ReactNode }>(({ value, title }) => {

@@ -1,14 +1,10 @@
-import type {
-  ISandboxService,
-  SandboxCallToolResult,
-  SandboxExportFileResult,
-} from '@lobechat/builtin-tool-cloud-sandbox';
-import type { CodeInterpreterToolName } from '@lobehub/market-sdk';
+import type {ISandboxService, SandboxCallToolResult, SandboxExportFileResult} from '@lobechat/builtin-tool-cloud-sandbox';
+import type {CodeInterpreterToolName} from '@lobehub/market-sdk';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
 
 import { FileS3 } from '@/server/modules/S3';
-import type { FileService } from '@/server/services/file';
+import type {FileService} from '@/server/services/file';
 import type { MarketService } from '@/server/services/market';
 
 const log = debug('lobe-server:sandbox-service');

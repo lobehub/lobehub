@@ -30,7 +30,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import PublishedTime from '@/components/PublishedTime';
-import type { DiscoverGroupAgentItem, GroupAgentStatus } from '@/types/discover';
+import type {DiscoverGroupAgentItem, GroupAgentStatus} from '@/types/discover';
 import { formatIntergerNumber } from '@/utils/format';
 
 import { useUserDetailContext } from './DetailProvider';

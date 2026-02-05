@@ -1,4 +1,4 @@
-import type { SearchQuery, UniformSearchResponse } from '@lobechat/types';
+import type {SearchQuery, UniformSearchResponse} from '@lobechat/types';
 import { ActionIcon } from '@lobehub/ui';
 import { uniq } from 'es-toolkit/compat';
 import { XIcon } from 'lucide-react';

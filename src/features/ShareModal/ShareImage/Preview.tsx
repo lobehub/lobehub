@@ -12,7 +12,7 @@ import pkg from '../../../../package.json';
 import { containerStyles } from '../style';
 import ChatList from './ChatList';
 import { styles } from './style';
-import type { FieldType } from './type';
+import type {FieldType} from './type';
 import { WidthMode } from './type';
 
 const Preview = memo<FieldType & { title?: string }>(

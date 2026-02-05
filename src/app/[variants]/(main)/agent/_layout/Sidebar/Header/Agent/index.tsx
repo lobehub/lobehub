@@ -2,7 +2,7 @@
 
 import { ActionIcon, Avatar, Block, Text } from '@lobehub/ui';
 import { ChevronsUpDownIcon } from 'lucide-react';
-import type { PropsWithChildren } from 'react';
+import type {PropsWithChildren} from 'react';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

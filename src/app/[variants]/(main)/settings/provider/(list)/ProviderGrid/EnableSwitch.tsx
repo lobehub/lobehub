@@ -1,4 +1,4 @@
-import type { FC } from 'react';
+import type {FC} from 'react';
 
 import InstantSwitch from '@/components/InstantSwitch';
 import { useAiInfraStore } from '@/store/aiInfra';

@@ -48,6 +48,7 @@ const createExecutor = (privateOverrides?: Partial<MemoryExtractionPrivateConfig
     memory: {},
   };
 
+   
   // @ts-ignore accessing private constructor for testing
   return new MemoryExtractionExecutor(serverConfig as any, {
     ...basePrivateConfig,

@@ -6,7 +6,7 @@ import { Input, InputNumber } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Clock } from 'lucide-react';
-import type { ChangeEvent } from 'react';
+import type { ChangeEvent} from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

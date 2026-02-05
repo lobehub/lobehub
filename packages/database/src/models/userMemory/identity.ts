@@ -1,10 +1,15 @@
 import type { IdentityListParams, IdentityListResult } from '@lobechat/types';
 import { RelationshipEnum } from '@lobechat/types';
-import type { SQL } from 'drizzle-orm';
-import { and, asc, desc, eq, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
+import type {SQL} from 'drizzle-orm';
+import { and, asc, desc, eq, ilike, inArray, isNull, or,  sql } from 'drizzle-orm';
 
-import type { NewUserMemoryIdentity, UserMemoryIdentity } from '../../schemas';
-import { userMemories, userMemoriesIdentities } from '../../schemas';
+import type {
+  NewUserMemoryIdentity,
+  UserMemoryIdentity} from '../../schemas';
+import {
+  userMemories,
+  userMemoriesIdentities
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 
 export class UserMemoryIdentityModel {

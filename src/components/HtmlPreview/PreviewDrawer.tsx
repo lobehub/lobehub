@@ -33,7 +33,7 @@ const HtmlPreviewDrawer = memo<HtmlPreviewDrawerProps>(({ content, open, onClose
   const htmlContent = content;
 
   const extractTitle = useCallback(() => {
-    const m = htmlContent.match(/<title>([\s\S]*?)<\/title>/i);
+    const m = htmlContent.match(/<title>([\S\s]*?)<\/title>/i);
     return m ? m[1].trim() : undefined;
   }, [htmlContent]);
 

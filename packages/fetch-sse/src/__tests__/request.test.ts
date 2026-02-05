@@ -79,7 +79,7 @@ describe('getRequestBody', () => {
 
     it('should handle very long string', async () => {
       // Arrange
-      const body = 'a'.repeat(10_000);
+      const body = 'a'.repeat(10000);
 
       // Act
       const result = await getRequestBody(body);
@@ -180,8 +180,8 @@ describe('getRequestBody', () => {
       // Arrange
       const buffer = new ArrayBuffer(64);
       const int32View = new Int32Array(buffer, 16, 8); // offset: 16 bytes, length: 8 elements
-      int32View[0] = -12_345;
-      int32View[7] = 67_890;
+      int32View[0] = -12345;
+      int32View[7] = 67890;
 
       // Act
       const result = await getRequestBody(int32View);
@@ -193,16 +193,16 @@ describe('getRequestBody', () => {
 
       // Verify data
       const resultView = new Int32Array(result as ArrayBuffer);
-      expect(resultView[0]).toBe(-12_345);
-      expect(resultView[7]).toBe(67_890);
+      expect(resultView[0]).toBe(-12345);
+      expect(resultView[7]).toBe(67890);
     });
 
     it('should convert Float32Array to sliced ArrayBuffer', async () => {
       // Arrange
       const buffer = new ArrayBuffer(40);
       const float32View = new Float32Array(buffer, 4, 5);
-      float32View[0] = 3.141_59;
-      float32View[4] = 2.718_28;
+      float32View[0] = 3.14159;
+      float32View[4] = 2.71828;
 
       // Act
       const result = await getRequestBody(float32View);
@@ -212,8 +212,8 @@ describe('getRequestBody', () => {
       expect((result as ArrayBuffer).byteLength).toBe(20); // 5 elements * 4 bytes
 
       const resultView = new Float32Array(result as ArrayBuffer);
-      expect(resultView[0]).toBeCloseTo(3.141_59);
-      expect(resultView[4]).toBeCloseTo(2.718_28);
+      expect(resultView[0]).toBeCloseTo(3.14159);
+      expect(resultView[4]).toBeCloseTo(2.71828);
     });
 
     it('should convert DataView to sliced ArrayBuffer', async () => {
@@ -345,7 +345,7 @@ describe('getRequestBody', () => {
 
     it('should handle large Blob', async () => {
       // Arrange
-      const largeData = 'x'.repeat(100_000);
+      const largeData = 'x'.repeat(100000);
       const blob = new Blob([largeData], { type: 'text/plain' });
 
       // Act
@@ -353,7 +353,7 @@ describe('getRequestBody', () => {
 
       // Assert
       expect(result).toBeInstanceOf(ArrayBuffer);
-      expect((result as ArrayBuffer).byteLength).toBe(100_000);
+      expect((result as ArrayBuffer).byteLength).toBe(100000);
     });
   });
 

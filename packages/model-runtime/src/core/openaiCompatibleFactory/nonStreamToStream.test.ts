@@ -10,7 +10,7 @@ describe('nonStreamToStream', () => {
       const mockResponse: OpenAI.ChatCompletion = {
         id: 'chatcmpl-123',
         object: 'chat.completion',
-        created: 1_677_652_288,
+        created: 1677652288,
         model: 'gpt-3.5-turbo',
         choices: [
           {
@@ -56,7 +56,7 @@ describe('nonStreamToStream', () => {
               logprobs: null,
             },
           ],
-          created: 1_677_652_288,
+          created: 1677652288,
           id: 'chatcmpl-123',
           model: 'gpt-3.5-turbo',
           object: 'chat.completion.chunk',
@@ -64,7 +64,7 @@ describe('nonStreamToStream', () => {
         // Second chunk: usage chunk
         {
           choices: [],
-          created: 1_677_652_288,
+          created: 1677652288,
           id: 'chatcmpl-123',
           model: 'gpt-3.5-turbo',
           object: 'chat.completion.chunk',
@@ -87,7 +87,7 @@ describe('nonStreamToStream', () => {
               logprobs: null,
             },
           ],
-          created: 1_677_652_288,
+          created: 1677652288,
           id: 'chatcmpl-123',
           model: 'gpt-3.5-turbo',
           object: 'chat.completion.chunk',
@@ -100,7 +100,7 @@ describe('nonStreamToStream', () => {
       const mockResponse: unknown = {
         id: 'chatcmpl-reasoning-123',
         object: 'chat.completion',
-        created: 1_677_652_288,
+        created: 1677652288,
         model: 'deepseek-reasoner',
         choices: [
           {
@@ -146,7 +146,7 @@ describe('nonStreamToStream', () => {
               logprobs: null,
             },
           ],
-          created: 1_677_652_288,
+          created: 1677652288,
           id: 'chatcmpl-reasoning-123',
           model: 'deepseek-reasoner',
           object: 'chat.completion.chunk',
@@ -165,7 +165,7 @@ describe('nonStreamToStream', () => {
               logprobs: null,
             },
           ],
-          created: 1_677_652_288,
+          created: 1677652288,
           id: 'chatcmpl-reasoning-123',
           model: 'deepseek-reasoner',
           object: 'chat.completion.chunk',
@@ -173,7 +173,7 @@ describe('nonStreamToStream', () => {
         // Third chunk: usage chunk
         {
           choices: [],
-          created: 1_677_652_288,
+          created: 1677652288,
           id: 'chatcmpl-reasoning-123',
           model: 'deepseek-reasoner',
           object: 'chat.completion.chunk',
@@ -196,7 +196,7 @@ describe('nonStreamToStream', () => {
               logprobs: null,
             },
           ],
-          created: 1_677_652_288,
+          created: 1677652288,
           id: 'chatcmpl-reasoning-123',
           model: 'deepseek-reasoner',
           object: 'chat.completion.chunk',
@@ -209,7 +209,7 @@ describe('nonStreamToStream', () => {
       const mockResponse: OpenAI.ChatCompletion = {
         id: 'chatcmpl-tool-123',
         object: 'chat.completion',
-        created: 1_677_652_288,
+        created: 1677652288,
         model: 'gpt-4',
         choices: [
           {
@@ -275,7 +275,7 @@ describe('nonStreamToStream', () => {
               logprobs: null,
             },
           ],
-          created: 1_677_652_288,
+          created: 1677652288,
           id: 'chatcmpl-tool-123',
           model: 'gpt-4',
           object: 'chat.completion.chunk',
@@ -283,7 +283,7 @@ describe('nonStreamToStream', () => {
         // Second chunk: usage chunk
         {
           choices: [],
-          created: 1_677_652_288,
+          created: 1677652288,
           id: 'chatcmpl-tool-123',
           model: 'gpt-4',
           object: 'chat.completion.chunk',
@@ -306,7 +306,7 @@ describe('nonStreamToStream', () => {
               logprobs: null,
             },
           ],
-          created: 1_677_652_288,
+          created: 1677652288,
           id: 'chatcmpl-tool-123',
           model: 'gpt-4',
           object: 'chat.completion.chunk',
@@ -319,7 +319,7 @@ describe('nonStreamToStream', () => {
       const mockResponse: OpenAI.ChatCompletion = {
         id: 'chatcmpl-empty-123',
         object: 'chat.completion',
-        created: 1_677_652_288,
+        created: 1677652288,
         model: 'gpt-3.5-turbo',
         choices: [],
         usage: {
@@ -345,7 +345,7 @@ describe('nonStreamToStream', () => {
       expect(chunks[0].choices).toEqual([]);
       expect(chunks[1]).toEqual({
         choices: [],
-        created: 1_677_652_288,
+        created: 1677652288,
         id: 'chatcmpl-empty-123',
         model: 'gpt-3.5-turbo',
         object: 'chat.completion.chunk',
@@ -388,8 +388,8 @@ describe('nonStreamToStream', () => {
           input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
           output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
         },
-        created: 1_677_652_288,
-        created_at: 1_677_652_288,
+        created: 1677652288,
+        created_at: 1677652288,
         model: 'gpt-4o-realtime-preview',
       } as any;
 
@@ -440,8 +440,8 @@ describe('nonStreamToStream', () => {
           input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
           output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
         },
-        created: 1_677_652_288,
-        created_at: 1_677_652_288,
+        created: 1677652288,
+        created_at: 1677652288,
         model: 'gpt-4o-realtime-preview',
       } as any;
 
@@ -494,8 +494,8 @@ describe('nonStreamToStream', () => {
           input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
           output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
         },
-        created: 1_677_652_288,
-        created_at: 1_677_652_288,
+        created: 1677652288,
+        created_at: 1677652288,
         model: 'gpt-4o-realtime-preview',
       } as any;
 
@@ -547,8 +547,8 @@ describe('nonStreamToStream', () => {
           input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
           output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
         },
-        created: 1_677_652_288,
-        created_at: 1_677_652_288,
+        created: 1677652288,
+        created_at: 1677652288,
         model: 'gpt-4o-realtime-preview',
       } as any;
 
@@ -589,8 +589,8 @@ describe('nonStreamToStream', () => {
           input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
           output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
         },
-        created: 1_677_652_288,
-        created_at: 1_677_652_288,
+        created: 1677652288,
+        created_at: 1677652288,
         model: 'gpt-4o-realtime-preview',
       } as any;
 
@@ -628,8 +628,8 @@ describe('nonStreamToStream', () => {
           input_tokens_details: { audio_tokens: 0, cache_read_tokens: 0 },
           output_tokens_details: { audio_tokens: 0, reasoning_tokens: 0 },
         },
-        created: 1_677_652_288,
-        created_at: 1_677_652_288,
+        created: 1677652288,
+        created_at: 1677652288,
         model: 'gpt-4o-realtime-preview',
       } as any;
 

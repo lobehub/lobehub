@@ -8,6 +8,7 @@ export default defineConfig({
   },
   test: {
     alias: {
+      /* eslint-disable sort-keys-fix/sort-keys-fix */
       '@/const': resolve(__dirname, '../const/src'),
       '@/utils/errorResponse': resolve(__dirname, '../../src/utils/errorResponse'),
       '@/utils': resolve(__dirname, '../utils/src'),

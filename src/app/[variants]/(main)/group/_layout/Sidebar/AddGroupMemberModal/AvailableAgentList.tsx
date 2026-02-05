@@ -2,14 +2,14 @@
 
 import { Flexbox, SearchBar, Skeleton } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import type { ChangeEvent } from 'react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import type {ChangeEvent} from 'react';
+import {  memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso } from 'react-virtuoso';
 
 import AgentSelectionEmpty from '@/features/AgentSelectionEmpty';
 
-import type { AgentItemData } from './AgentItem';
+import type {AgentItemData} from './AgentItem';
 import AgentItem from './AgentItem';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

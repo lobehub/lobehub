@@ -23,7 +23,7 @@ const SuccessPage = memo(() => {
           provider,
           type: 'LOBEHUB_SKILL_AUTH_SUCCESS',
         },
-        globalThis.location.origin,
+        window.location.origin,
       );
 
       // Start countdown and close window after 3 seconds

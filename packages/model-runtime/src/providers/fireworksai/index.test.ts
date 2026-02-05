@@ -3,7 +3,7 @@ import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
-import type { FireworksAIModelCard } from './index';
+import type { FireworksAIModelCard} from './index';
 import { LobeFireworksAI, params } from './index';
 
 const provider = ModelProvider.FireworksAI;

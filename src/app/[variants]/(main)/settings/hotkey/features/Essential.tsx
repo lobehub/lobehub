@@ -1,7 +1,7 @@
 'use client';
 
-import type { FormGroupItemType } from '@lobehub/ui';
-import { Form, HotkeyInput, Icon, Skeleton } from '@lobehub/ui';
+import type {FormGroupItemType} from '@lobehub/ui';
+import { Form,  HotkeyInput, Icon, Skeleton  } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -12,8 +12,8 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import hotkeyMeta from '@/locales/default/hotkey';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
-import type { HotkeyItem } from '@/types/hotkey';
-import { HotkeyGroupEnum } from '@/types/hotkey';
+import type {HotkeyItem} from '@/types/hotkey';
+import { HotkeyGroupEnum  } from '@/types/hotkey';
 
 const HotkeySetting = memo(() => {
   const { t } = useTranslation(['setting', 'hotkey']);

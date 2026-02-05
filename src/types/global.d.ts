@@ -1,11 +1,12 @@
 import 'antd-style';
 
 import type { LobeCustomStylish, LobeCustomToken } from '@lobehub/ui';
-import type { AntdToken } from 'antd-style/lib/types/theme';
+import type {AntdToken} from 'antd-style/lib/types/theme';
 
 declare module 'antd-style' {
+   
   export interface CustomToken extends LobeCustomToken {}
-
+   
   export interface CustomStylish extends LobeCustomStylish {}
 }
 

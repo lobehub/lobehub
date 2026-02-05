@@ -6,7 +6,7 @@ import Time from '@/app/[variants]/(main)/home/features/components/Time';
 import { RECENT_BLOCK_SIZE } from '@/app/[variants]/(main)/home/features/const';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import GroupAvatar from '@/features/GroupAvatar';
-import type { RecentTopic } from '@/types/topic';
+import type {RecentTopic} from '@/types/topic';
 
 const ReactTopicItem = memo<RecentTopic>(({ title, updatedAt, agent, group, type }) => {
   const isGroup = type === 'group';

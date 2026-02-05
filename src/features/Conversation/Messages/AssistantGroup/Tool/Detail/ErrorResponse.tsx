@@ -1,4 +1,4 @@
-import type { ChatMessageError, ChatPluginPayload } from '@lobechat/types';
+import type {ChatMessageError, ChatPluginPayload} from '@lobechat/types';
 import { Alert, Flexbox, Highlighter } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';

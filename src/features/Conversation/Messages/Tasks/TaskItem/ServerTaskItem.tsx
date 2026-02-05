@@ -7,7 +7,7 @@ import type { UIChatMessage } from '@/types/index';
 import { ThreadStatus } from '@/types/index';
 
 import { TaskContent } from '../shared';
-import type { TaskMetrics } from './TaskTitle';
+import type {TaskMetrics} from './TaskTitle';
 import TaskTitle from './TaskTitle';
 
 interface ServerTaskItemProps {

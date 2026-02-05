@@ -138,7 +138,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
       // Verify origin for security
-      if (event.origin !== globalThis.location.origin) return;
+      if (event.origin !== window.location.origin) return;
 
       if (event.data?.type === 'LOBEHUB_SKILL_AUTH_SUCCESS' && event.data?.provider === provider) {
         console.log('[LobehubSkill] OAuth success message received for provider:', provider);
@@ -178,7 +178,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
     setIsConnecting(true);
     try {
       // Use /oauth/callback/success as redirect URI with provider param for auto-enable
-      const redirectUri = `${globalThis.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`;
+      const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`;
       const { authorizeUrl } = await getAuthorizeUrl(provider, { redirectUri });
       openOAuthWindow(authorizeUrl);
     } catch (error) {
@@ -254,7 +254,7 @@ const LobehubSkillServerItem = memo<LobehubSkillServerItemProps>(({ provider, la
             onClick={async (e) => {
               e.stopPropagation();
               try {
-                const redirectUri = `${globalThis.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`;
+                const redirectUri = `${window.location.origin}/oauth/callback/success?provider=${encodeURIComponent(provider)}`;
                 const { authorizeUrl } = await getAuthorizeUrl(provider, { redirectUri });
                 openOAuthWindow(authorizeUrl);
               } catch (error) {

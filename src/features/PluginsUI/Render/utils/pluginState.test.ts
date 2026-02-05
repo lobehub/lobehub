@@ -24,7 +24,7 @@ describe('useOnPluginStateUpdate', () => {
       data: { type: PluginChannel.updatePluginState, key: testKey, value: testValue },
     });
 
-    globalThis.dispatchEvent(event);
+    window.dispatchEvent(event);
 
     expect(mockCallback).toHaveBeenCalledWith(testKey, testValue);
   });
@@ -36,7 +36,7 @@ describe('useOnPluginStateUpdate', () => {
       data: { type: 'nonPluginMessage', key: 'key', value: 'value' },
     });
 
-    globalThis.dispatchEvent(event);
+    window.dispatchEvent(event);
 
     expect(mockCallback).not.toHaveBeenCalled();
   });

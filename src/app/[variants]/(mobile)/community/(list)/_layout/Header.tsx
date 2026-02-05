@@ -17,7 +17,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     position: absolute;
     z-index: 10;
     inset-block-start: 0;
-    inset-inline: 0;
+    inset-inline: 0 0;
 
     background: ${cssVar.colorBgLayout};
   `,

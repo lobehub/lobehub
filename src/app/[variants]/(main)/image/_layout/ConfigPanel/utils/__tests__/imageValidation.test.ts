@@ -47,7 +47,7 @@ describe('imageValidation', () => {
       const result = formatFileSize(1536.7);
       expect(result).toBe('1.5 KB');
 
-      const result2 = formatFileSize(1_048_576.123);
+      const result2 = formatFileSize(1048576.123);
       expect(result2).toBe('1 MB'); // parseFloat removes trailing .0
     });
 

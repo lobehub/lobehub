@@ -15,7 +15,6 @@
   },
   "dependencies": {
     "@lobechat/const": "workspace:*",
-    "@lobechat/ssrf-safe-fetch": "workspace:*",
     "@lobechat/types": "workspace:*",
     "@lobehub/chat-plugin-sdk": "^1.32.4",
     "@vercel/functions": "^3.3.0",
@@ -35,6 +34,7 @@
     "remark": "^15.0.1",
     "remark-gfm": "^4.0.1",
     "remark-html": "^16.0.1",
+    "@lobechat/ssrf-safe-fetch": "workspace:*",
     "tokenx": "^1.2.1",
     "ua-parser-js": "^1.0.41",
     "uuid": "^11.1.0",

@@ -49,7 +49,7 @@ export const messageGroups = pgTable(
     }),
 
     // Associated user message
-
+     
     parentMessageId: text('parent_message_id').references(() => messages.id, {
       onDelete: 'cascade',
     }),

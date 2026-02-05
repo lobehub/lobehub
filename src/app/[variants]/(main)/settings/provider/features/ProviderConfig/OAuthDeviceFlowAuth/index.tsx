@@ -6,8 +6,8 @@ import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
 import { App, Avatar, Button, Typography } from 'antd';
 import { createStyles, cssVar } from 'antd-style';
 import { ExternalLinkIcon, Loader2Icon, LogOutIcon, UnplugIcon } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lambdaQuery } from '@/libs/trpc/client';

@@ -149,7 +149,7 @@ describe('readStreamChunk', () => {
 
   it('should handle single large chunk', async () => {
     const encoder = new TextEncoder();
-    const largeText = 'A'.repeat(10_000);
+    const largeText = 'A'.repeat(10000);
 
     const stream = new ReadableStream({
       start(controller) {

@@ -39,7 +39,7 @@ type UpdateServerManifest = {
 const getBasename = (pathname: string) => {
   const cleaned = pathname.split('?')[0] || '';
   const lastSlash = cleaned.lastIndexOf('/');
-  return lastSlash !== -1 ? cleaned.slice(lastSlash + 1) : cleaned;
+  return lastSlash >= 0 ? cleaned.slice(lastSlash + 1) : cleaned;
 };
 
 const isAbsoluteUrl = (value: string) => /^https?:\/\//i.test(value);

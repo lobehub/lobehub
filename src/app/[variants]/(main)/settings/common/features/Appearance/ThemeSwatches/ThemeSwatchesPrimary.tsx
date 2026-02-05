@@ -1,5 +1,5 @@
-import type { PrimaryColors } from '@lobehub/ui';
-import { ColorSwatches, findCustomThemeName, primaryColors } from '@lobehub/ui';
+import type {PrimaryColors} from '@lobehub/ui';
+import { ColorSwatches, findCustomThemeName,  primaryColors } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

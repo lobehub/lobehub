@@ -1,5 +1,5 @@
 //@ts-nocheck
-
+ 
 /* eslint-disable */
 /**
  * Represents a message sent in an event stream

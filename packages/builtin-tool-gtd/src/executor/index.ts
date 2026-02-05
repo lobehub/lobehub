@@ -1,24 +1,15 @@
 import { formatTodoStateSummary } from '@lobechat/prompts';
-import type { BuiltinToolContext, BuiltinToolResult } from '@lobechat/types';
-import { BaseExecutor } from '@lobechat/types';
+import type {BuiltinToolContext, BuiltinToolResult} from '@lobechat/types';
+import { BaseExecutor   } from '@lobechat/types';
 
 import { notebookService } from '@/services/notebook';
 import { useNotebookStore } from '@/store/notebook';
 
 import { GTDIdentifier } from '../manifest';
-import type {
-  ClearTodosParams,
-  CreatePlanParams,
-  CreateTodosParams,
-  ExecTaskParams,
-  ExecTasksParams,
-  Plan,
-  TodoItem,
-  TodoState,
-  UpdatePlanParams,
-  UpdateTodosParams,
+import type {ClearTodosParams, CreatePlanParams, CreateTodosParams, ExecTaskParams, ExecTasksParams, Plan, TodoItem, TodoState, UpdatePlanParams, UpdateTodosParams} from '../types';
+import {
+  GTDApiName
 } from '../types';
-import { GTDApiName } from '../types';
 import { getTodosFromContext } from './helper';
 
 /**

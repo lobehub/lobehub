@@ -35,7 +35,7 @@ describe('LobeHunyuanAI', () => {
         {
           id: '939fbdb8dbb9b4c5944cbbe687c977c2',
           object: 'chat.completion.chunk',
-          created: 1_741_000_456,
+          created: 1741000456,
           model: 'hunyuan-turbo',
           system_fingerprint: '',
           choices: [
@@ -68,7 +68,7 @@ describe('LobeHunyuanAI', () => {
         {
           id: '939fbdb8dbb9b4c5944cbbe687c977c2',
           object: 'chat.completion.chunk',
-          created: 1_741_000_456,
+          created: 1741000456,
           model: 'hunyuan-turbo',
           system_fingerprint: '',
           choices: [

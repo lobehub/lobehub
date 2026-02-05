@@ -5,7 +5,7 @@ import { memo } from 'react';
 import { RECENT_BLOCK_SIZE } from '@/app/[variants]/(main)/home/features/const';
 import { DEFAULT_AVATAR } from '@/const/meta';
 import { useIsDark } from '@/hooks/useIsDark';
-import type { DiscoverAssistantItem } from '@/types/discover';
+import type {DiscoverAssistantItem} from '@/types/discover';
 
 const CommunityAgentItem = memo<DiscoverAssistantItem>(
   ({ title, avatar, backgroundColor, author, description }) => {

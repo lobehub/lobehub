@@ -1,7 +1,7 @@
 import { Readability } from '@mozilla/readability';
 import { Window } from 'happy-dom';
-import type { TranslatorConfigObject } from 'node-html-markdown';
-import { NodeHtmlMarkdown } from 'node-html-markdown';
+import type {TranslatorConfigObject} from 'node-html-markdown';
+import { NodeHtmlMarkdown  } from 'node-html-markdown';
 
 import type { FilterOptions } from '../type';
 

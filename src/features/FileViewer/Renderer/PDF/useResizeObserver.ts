@@ -12,13 +12,13 @@ import { useEffect } from 'react';
  */
 export default function useResizeObserver(
   element: Element | null,
-
+   
   observerCallback: ResizeObserverCallback,
-
+   
   options?: ResizeObserverOptions,
 ): void {
   useEffect(() => {
-    if (!element || !('ResizeObserver' in globalThis)) {
+    if (!element || !('ResizeObserver' in window)) {
       return undefined;
     }
 

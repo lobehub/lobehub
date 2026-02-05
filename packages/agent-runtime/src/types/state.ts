@@ -1,9 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import type {
-  ChatToolPayload,
-  SecurityBlacklistConfig,
-  UserInterventionConfig,
-} from '@lobechat/types';
+import type { ChatToolPayload, SecurityBlacklistConfig, UserInterventionConfig } from '@lobechat/types';
 
 import type { Cost, CostLimit, Usage } from './usage';
 

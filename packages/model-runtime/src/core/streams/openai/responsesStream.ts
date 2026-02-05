@@ -9,15 +9,14 @@ import type {
   StreamContext,
   StreamProtocolChunk,
   StreamProtocolToolCallChunk,
-  StreamToolCallChunkData,
-} from '../protocol';
+  StreamToolCallChunkData} from '../protocol';
 import {
   convertIterableToStream,
   createCallbacksTransformer,
   createFirstErrorHandleTransformer,
   createSSEProtocolTransformer,
   createTokenSpeedCalculator,
-  FIRST_CHUNK_ERROR_KEY,
+  FIRST_CHUNK_ERROR_KEY
 } from '../protocol';
 import type { OpenAIStreamOptions } from './openai';
 
@@ -179,6 +178,7 @@ const transformOpenAIStream = (
 
     const err = e as Error;
 
+    /* eslint-disable sort-keys-fix/sort-keys-fix */
     const errorData = {
       body: {
         message:
@@ -187,6 +187,7 @@ const transformOpenAIStream = (
       },
       type: errorName,
     } as ChatMessageError;
+     
 
     return { data: errorData, id: streamContext.id, type: 'error' };
   }

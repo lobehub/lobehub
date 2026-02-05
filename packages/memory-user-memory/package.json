@@ -11,9 +11,9 @@
   },
   "main": "src/index.ts",
   "scripts": {
-    "build:gen-response-formats": "tsx scripts/generate-response-formats.ts",
     "test": "vitest --run",
     "test:coverage": "vitest --coverage --silent='passed-only'",
+    "build:gen-response-formats": "tsx scripts/generate-response-formats.ts",
     "type-check": "tsgo --noEmit -p tsconfig.json"
   },
   "dependencies": {

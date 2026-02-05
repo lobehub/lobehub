@@ -1,6 +1,6 @@
 import { Flexbox, Text, Tooltip } from '@lobehub/ui';
-import type { ProgressProps } from 'antd';
-import { Progress } from 'antd';
+import type {ProgressProps} from 'antd';
+import { Progress  } from 'antd';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 

@@ -1,6 +1,6 @@
-import type { KlavisServerType } from '@lobechat/const';
-import { KLAVIS_SERVER_TYPES } from '@lobechat/const';
-import type { DiscoverPluginDetail, PluginSource } from '@lobechat/types';
+import type {KlavisServerType} from '@lobechat/const';
+import { KLAVIS_SERVER_TYPES  } from '@lobechat/const';
+import type {DiscoverPluginDetail, PluginSource} from '@lobechat/types';
 import { Avatar, Block, Flexbox, Icon, Image, Skeleton, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo, useMemo } from 'react';

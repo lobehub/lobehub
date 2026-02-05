@@ -1,5 +1,5 @@
-import type { IThreadType, UIChatMessage } from '@lobechat/types';
-import { ThreadType } from '@lobechat/types';
+import type {IThreadType, UIChatMessage} from '@lobechat/types';
+import {  ThreadType  } from '@lobechat/types';
 
 /**
  * Generate parent messages for thread display
@@ -22,7 +22,7 @@ export const genParentMessages = (
   // 如果是连续模式下，那么只显示话题开始消息和话题分割线
   const targetIndex = messages.findIndex((item) => item.id === startMessageId);
 
-  if (targetIndex === -1) return [];
+  if (targetIndex < 0) return [];
 
   return messages.slice(0, targetIndex + 1);
 };

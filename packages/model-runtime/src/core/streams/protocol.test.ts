@@ -99,7 +99,7 @@ describe('createSSEDataExtractor', () => {
 
   it('should process large chunks of data correctly', async () => {
     const transformer = createSSEDataExtractor();
-    const messages = Array.from({ length: 100 })
+    const messages = Array.from({length: 100})
       .fill(null)
       .map((_, i) => `data: {"message": "message${i}"}\n`)
       .join('');

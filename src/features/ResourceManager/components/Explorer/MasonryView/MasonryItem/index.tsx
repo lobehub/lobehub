@@ -8,7 +8,7 @@ import {
   useDragState,
 } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
 import { documentService } from '@/services/document';
-import type { FileListItem } from '@/types/files';
+import type {FileListItem} from '@/types/files';
 
 import { useFileItemClick } from '../../hooks/useFileItemClick';
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';

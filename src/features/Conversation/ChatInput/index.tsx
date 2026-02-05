@@ -1,14 +1,14 @@
 'use client';
 
 import type { SlashOptions } from '@lobehub/editor';
-import type { MenuProps } from '@lobehub/ui';
-import { Alert, Flexbox } from '@lobehub/ui';
-import type { ReactNode } from 'react';
-import { memo, useCallback } from 'react';
+import type {MenuProps} from '@lobehub/ui';
+import { Alert, Flexbox  } from '@lobehub/ui';
+import type {ReactNode} from 'react';
+import { memo,  useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { ActionKeys } from '@/features/ChatInput';
-import { ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import type {ActionKeys} from '@/features/ChatInput';
+import {  ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import type { SendButtonHandler, SendButtonProps } from '@/features/ChatInput/store/initialState';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';

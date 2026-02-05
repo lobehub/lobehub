@@ -57,12 +57,8 @@ describe('TopicModel - Stats', () => {
       it('should count legacy topics via agentsToSessions lookup', async () => {
         await serverDB.transaction(async (trx) => {
           await trx.insert(sessions).values([{ id: 'count-legacy-session', userId }]);
-          await trx
-            .insert(agents)
-            .values([{ id: 'count-legacy-agent', userId, title: 'Legacy Agent' }]);
-          await trx
-            .insert(agentsToSessions)
-            .values([{ agentId: 'count-legacy-agent', sessionId: 'count-legacy-session', userId }]);
+          await trx.insert(agents).values([{ id: 'count-legacy-agent', userId, title: 'Legacy Agent' }]);
+          await trx.insert(agentsToSessions).values([{ agentId: 'count-legacy-agent', sessionId: 'count-legacy-session', userId }]);
           await trx.insert(topics).values([
             { id: 'legacy-count-1', userId, sessionId: 'count-legacy-session', agentId: null },
             { id: 'legacy-count-2', userId, sessionId: 'count-legacy-session', agentId: null },
@@ -76,12 +72,8 @@ describe('TopicModel - Stats', () => {
       it('should count both new and legacy topics', async () => {
         await serverDB.transaction(async (trx) => {
           await trx.insert(sessions).values([{ id: 'count-mixed-session', userId }]);
-          await trx
-            .insert(agents)
-            .values([{ id: 'count-mixed-agent', userId, title: 'Mixed Agent' }]);
-          await trx
-            .insert(agentsToSessions)
-            .values([{ agentId: 'count-mixed-agent', sessionId: 'count-mixed-session', userId }]);
+          await trx.insert(agents).values([{ id: 'count-mixed-agent', userId, title: 'Mixed Agent' }]);
+          await trx.insert(agentsToSessions).values([{ agentId: 'count-mixed-agent', sessionId: 'count-mixed-session', userId }]);
           await trx.insert(topics).values([
             { id: 'mixed-count-legacy', userId, sessionId: 'count-mixed-session', agentId: null },
             { id: 'mixed-count-new', userId, agentId: 'count-mixed-agent', sessionId: null },

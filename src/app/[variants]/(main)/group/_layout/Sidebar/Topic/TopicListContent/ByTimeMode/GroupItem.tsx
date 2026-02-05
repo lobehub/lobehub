@@ -4,7 +4,7 @@ import { HashIcon } from 'lucide-react';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { GroupedTopic } from '@/types/topic';
+import type {GroupedTopic} from '@/types/topic';
 
 import TopicItem from '../../List/Item';
 

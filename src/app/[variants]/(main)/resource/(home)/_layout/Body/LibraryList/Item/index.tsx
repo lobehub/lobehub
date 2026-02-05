@@ -1,8 +1,8 @@
 import { Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2Icon } from 'lucide-react';
-import type { CSSProperties } from 'react';
-import React, { memo, useCallback, useMemo } from 'react';
+import type {CSSProperties} from 'react';
+import React, {  memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';

@@ -2,7 +2,7 @@ import { renderPlaceholderTemplate } from '@lobechat/context-engine';
 import type { GenerateObjectSchema } from '@lobechat/model-runtime';
 
 import { gatekeeperPrompt } from '../prompts';
-import type { GatekeeperResult } from '../schemas';
+import type { GatekeeperResult} from '../schemas';
 import { GatekeeperResultSchema } from '../schemas';
 import type { GatekeeperOptions } from '../types';
 import { BaseMemoryExtractor } from './base';

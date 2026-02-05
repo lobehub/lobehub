@@ -1,9 +1,9 @@
-import type { IconSize, TooltipProps } from '@lobehub/ui';
-import { Icon, Tooltip } from '@lobehub/ui';
+import type {IconSize, TooltipProps} from '@lobehub/ui';
+import { Icon,  Tooltip  } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { CircleHelp } from 'lucide-react';
-import type { CSSProperties } from 'react';
-import { memo } from 'react';
+import type {CSSProperties} from 'react';
+import {  memo } from 'react';
 
 interface InfoTooltipProps extends Omit<TooltipProps, 'children'> {
   iconStyle?: CSSProperties;

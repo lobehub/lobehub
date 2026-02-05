@@ -9,11 +9,11 @@ import { calculateThumbnailDimensions } from '@/utils/number';
 import { getYYYYmmddHHMMss } from '@/utils/time';
 import { inferFileExtensionFromImageUrl } from '@/utils/url';
 
-import { fetchImageFromUrl, GenerationService } from './index';
+import { fetchImageFromUrl,GenerationService } from './index';
 
 // Mock fetch globally
 const mockFetch = vi.fn();
-globalThis.fetch = mockFetch;
+global.fetch = mockFetch;
 
 vi.mock('debug', () => ({
   default: () => vi.fn(),

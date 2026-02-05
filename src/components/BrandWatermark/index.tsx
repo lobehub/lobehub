@@ -1,8 +1,8 @@
 'use client';
 
 import { ORG_NAME, UTM_SOURCE } from '@lobechat/business-const';
-import type { FlexboxProps } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import type {FlexboxProps} from '@lobehub/ui';
+import { Flexbox  } from '@lobehub/ui';
 import { LobeHub } from '@lobehub/ui/brand';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo } from 'react';

@@ -1826,15 +1826,13 @@ describe('call_tool executor', () => {
         originalCompleteOperation(opId);
         // Check if this is the createToolMessage operation completing
         const op = mockStore.operations[opId];
-        if (
-          op?.type === 'createToolMessage' && // Abort parent toolCalling operation right after message creation completes
-          toolCallingOpId
-        ) {
-          const parentOp = mockStore.operations[toolCallingOpId];
-          if (parentOp) {
-            parentOp.abortController.abort();
+        if (op?.type === 'createToolMessage' && // Abort parent toolCalling operation right after message creation completes
+          toolCallingOpId) {
+            const parentOp = mockStore.operations[toolCallingOpId];
+            if (parentOp) {
+              parentOp.abortController.abort();
+            }
           }
-        }
       });
 
       const originalStartOperation = mockStore.startOperation;

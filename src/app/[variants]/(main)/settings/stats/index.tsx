@@ -2,8 +2,8 @@
 
 import { FormGroup, Grid, Icon, Segmented } from '@lobehub/ui';
 import { ProviderIcon } from '@lobehub/ui/icons';
-import type { DatePickerProps } from 'antd';
-import { DatePicker, Divider } from 'antd';
+import type {DatePickerProps} from 'antd';
+import { DatePicker,  Divider } from 'antd';
 import dayjs from 'dayjs';
 import { Brain } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';

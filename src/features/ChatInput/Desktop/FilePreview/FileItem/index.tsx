@@ -5,7 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFileStore } from '@/store/file';
-import type { UploadFileItem } from '@/types/files/upload';
+import type {UploadFileItem} from '@/types/files/upload';
 
 import UploadDetail from '../../../components/UploadDetail';
 import Content from './Content';

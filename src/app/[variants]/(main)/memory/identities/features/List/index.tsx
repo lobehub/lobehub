@@ -7,7 +7,7 @@ import { useGlobalStore } from '@/store/global';
 import { useUserMemoryStore } from '@/store/userMemory';
 
 import MemoryEmpty from '../../../features/MemoryEmpty';
-import type { ViewMode } from '../../../features/ViewModeSwitcher';
+import type {ViewMode} from '../../../features/ViewModeSwitcher';
 import GridView from './GridView';
 import TimelineView from './TimelineView';
 
@@ -32,7 +32,10 @@ const IdentitiesList = memo<IdentitiesListProps>(({ isLoading, searchValue, view
 
   if (!identities || identities.length === 0)
     return (
-      <MemoryEmpty search={Boolean(searchValue)} title={t('identity.empty')}>
+      <MemoryEmpty
+        search={Boolean(searchValue)}
+        title={t('identity.empty')}
+      >
         <MemoryAnalysis />
       </MemoryEmpty>
     );

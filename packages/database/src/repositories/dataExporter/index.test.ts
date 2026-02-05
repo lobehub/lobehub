@@ -41,7 +41,7 @@ describe('DataExporterRepos', () => {
 
   beforeAll(async () => {
     db = await getTestDB();
-  }, 30_000);
+  }, 30000);
 
   const setupTestData = async () => {
     await db.transaction(async (trx) => {
@@ -159,7 +159,7 @@ describe('DataExporterRepos', () => {
     await db.delete(users);
     await db.delete(globalFiles);
     await setupTestData();
-  }, 30_000);
+  }, 30000);
 
   afterEach(async () => {
     await db.delete(users);

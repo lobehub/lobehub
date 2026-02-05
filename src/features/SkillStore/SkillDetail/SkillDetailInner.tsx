@@ -5,7 +5,7 @@ import { lazy, memo, Suspense, useState } from 'react';
 
 import Agents from './Agents';
 import Header from './Header';
-import type { TabKey } from './Nav';
+import type {TabKey} from './Nav';
 import Nav from './Nav';
 import Overview from './Overview';
 

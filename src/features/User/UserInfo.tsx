@@ -1,7 +1,7 @@
 'use client';
 
-import type { FlexboxProps } from '@lobehub/ui';
-import { Flexbox, Text } from '@lobehub/ui';
+import type {FlexboxProps} from '@lobehub/ui';
+import { Flexbox,  Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
@@ -9,7 +9,7 @@ import PlanTag from '@/features/User/PlanTag';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
-import type { UserAvatarProps } from './UserAvatar';
+import type {UserAvatarProps} from './UserAvatar';
 import UserAvatar from './UserAvatar';
 
 export interface UserInfoProps extends FlexboxProps {
@@ -36,7 +36,7 @@ const UserInfo = memo<UserInfoProps>(({ avatarProps, onClick, ...rest }) => {
       {...rest}
     >
       <Flexbox horizontal align={'center'} gap={10} onClick={onClick}>
-        <UserAvatar background={cssVar.colorFill} size={36} {...avatarProps} />
+        <UserAvatar background={cssVar.colorFill} size={36} {...(avatarProps as any)} />
         <Flexbox flex={1}>
           <Text style={{ lineHeight: 1.4 }} weight={'bold'}>
             {nickname}

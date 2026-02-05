@@ -1,7 +1,7 @@
 import type { KnowledgeBaseItem } from '@lobechat/types';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 
-import type { NewKnowledgeBase } from '../schemas';
+import type {NewKnowledgeBase } from '../schemas';
 import { documents, knowledgeBaseFiles, knowledgeBases } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 

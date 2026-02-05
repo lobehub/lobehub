@@ -1,7 +1,7 @@
 'use client';
 
-import type { LobeHubProps } from '@lobehub/ui/brand';
-import { LobeHub } from '@lobehub/ui/brand';
+import type {LobeHubProps} from '@lobehub/ui/brand';
+import { LobeHub  } from '@lobehub/ui/brand';
 import { memo } from 'react';
 
 import { isCustomBranding } from '@/const/version';

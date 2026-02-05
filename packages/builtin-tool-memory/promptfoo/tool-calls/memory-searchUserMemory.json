@@ -23,11 +23,18 @@
             "type": "integer"
           }
         },
-        "required": ["contexts", "experiences", "preferences"],
+        "required": [
+          "contexts",
+          "experiences",
+          "preferences"
+        ],
         "type": "object"
       }
     },
-    "required": ["query", "topK"],
+    "required": [
+      "query",
+      "topK"
+    ],
     "type": "object"
   }
 }

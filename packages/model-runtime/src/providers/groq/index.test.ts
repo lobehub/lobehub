@@ -651,7 +651,7 @@ describe('LobeGroq - custom features', () => {
       mockClient.models.list.mockResolvedValue({
         data: [
           { id: 'llama-3.1-70b-versatile', context_window: 8192 },
-          { id: 'mixtral-8x7b-32768', context_window: 32_768 },
+          { id: 'mixtral-8x7b-32768', context_window: 32768 },
           { id: 'gemma2-9b-it', context_window: 8192 },
         ],
       });
@@ -666,7 +666,7 @@ describe('LobeGroq - custom features', () => {
       });
       expect(models[1]).toMatchObject({
         id: 'mixtral-8x7b-32768',
-        contextWindowTokens: 32_768,
+        contextWindowTokens: 32768,
         functionCall: true, // Should detect function call from mixtral-8x7b-32768
       });
       expect(models[2]).toMatchObject({
@@ -701,7 +701,7 @@ describe('LobeGroq - custom features', () => {
       mockClient.models.list.mockResolvedValue({
         data: [
           { id: 'deepseek-r1-distill-llama-70b', context_window: 8192 },
-          { id: 'deepseek-r1-distill-qwen-32b', context_window: 32_768 },
+          { id: 'deepseek-r1-distill-qwen-32b', context_window: 32768 },
         ],
       });
 
@@ -838,7 +838,7 @@ describe('LobeGroq - custom features', () => {
       mockClient.models.list.mockResolvedValue({
         data: [
           { id: 'llama-3.2-11b-vision-preview', context_window: 8192 },
-          { id: 'llama-3.1-70b-versatile', context_window: 131_072 },
+          { id: 'llama-3.1-70b-versatile', context_window: 131072 },
         ],
       });
 

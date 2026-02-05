@@ -1,7 +1,7 @@
 'use client';
 
-import type { WriteLocalFileParams } from '@lobechat/electron-client-ipc';
-import type { BuiltinInspectorProps } from '@lobechat/types';
+import type {WriteLocalFileParams} from '@lobechat/electron-client-ipc';
+import type {BuiltinInspectorProps} from '@lobechat/types';
 import { Icon, Text } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
 import { Plus } from 'lucide-react';

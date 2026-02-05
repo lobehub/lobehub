@@ -6,7 +6,10 @@
     "properties": {
       "details": {
         "description": "Optional detailed information",
-        "type": ["string", "null"]
+        "type": [
+          "string",
+          "null"
+        ]
       },
       "memoryCategory": {
         "description": "Memory category",
@@ -50,7 +53,10 @@
             "type": "string"
           },
           "episodicDate": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "extractedLabels": {
             "items": {
@@ -101,10 +107,17 @@
             "type": "number"
           },
           "sourceEvidence": {
-            "type": ["string", "null"]
+            "type": [
+              "string",
+              "null"
+            ]
           },
           "type": {
-            "enum": ["demographic", "personal", "professional"],
+            "enum": [
+              "demographic",
+              "personal",
+              "professional"
+            ],
             "type": "string"
           }
         },

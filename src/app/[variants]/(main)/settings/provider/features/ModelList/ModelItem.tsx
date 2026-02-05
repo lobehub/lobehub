@@ -1,10 +1,10 @@
 import { ModelIcon } from '@lobehub/icons';
-import { ActionIcon, copyToClipboard, Flexbox, Tag, Text } from '@lobehub/ui';
+import { ActionIcon, copyToClipboard,Flexbox, Tag, Text } from '@lobehub/ui';
 import { App, Switch } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { LucidePencil, TrashIcon } from 'lucide-react';
-import type { AiProviderModelListItem } from 'model-bank';
-import { AiModelSourceEnum } from 'model-bank';
+import type {AiProviderModelListItem} from 'model-bank';
+import { AiModelSourceEnum  } from 'model-bank';
 import React, { memo, use, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

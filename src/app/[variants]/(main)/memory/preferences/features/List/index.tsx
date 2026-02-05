@@ -7,7 +7,7 @@ import { useQueryState } from '@/hooks/useQueryParam';
 import { useGlobalStore } from '@/store/global';
 import { useUserMemoryStore } from '@/store/userMemory';
 
-import type { ViewMode } from '../../../features/ViewModeSwitcher';
+import type {ViewMode} from '../../../features/ViewModeSwitcher';
 import GridView from './GridView';
 import TimelineView from './TimelineView';
 
@@ -32,7 +32,10 @@ const PreferencesList = memo<PreferencesListProps>(({ isLoading, searchValue, vi
 
   if (isEmpty) {
     return (
-      <MemoryEmpty search={Boolean(searchValue)} title={t('preference.empty')}>
+      <MemoryEmpty
+        search={Boolean(searchValue)}
+        title={t('preference.empty')}
+      >
         <MemoryAnalysis />
       </MemoryEmpty>
     );

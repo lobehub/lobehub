@@ -44,7 +44,8 @@ const ollamaChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 262_144,
-    description: 'A high-performance long-context model from Alibaba for agents and coding tasks.',
+    description:
+      'A high-performance long-context model from Alibaba for agents and coding tasks.',
     displayName: 'Qwen3 Coder 480B',
     id: 'qwen3-coder:480b',
     type: 'chat',
@@ -284,16 +285,14 @@ const ollamaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 128_000,
-    description:
-      'Phi-3 is Microsoft’s lightweight open model for efficient integration and large-scale reasoning.',
+    description: 'Phi-3 is Microsoft’s lightweight open model for efficient integration and large-scale reasoning.',
     displayName: 'Phi-3 3.8B',
     id: 'phi3',
     type: 'chat',
   },
   {
     contextWindowTokens: 128_000,
-    description:
-      'Phi-3 is Microsoft’s lightweight open model for efficient integration and large-scale reasoning.',
+    description: 'Phi-3 is Microsoft’s lightweight open model for efficient integration and large-scale reasoning.',
     displayName: 'Phi-3 14B',
     id: 'phi3:14b',
     type: 'chat',
@@ -374,24 +373,21 @@ const ollamaChatModels: AIChatModelCard[] = [
   },
   {
     contextWindowTokens: 32_768,
-    description:
-      'Codestral is Mistral AI’s first code model, delivering strong code generation support.',
+    description: 'Codestral is Mistral AI’s first code model, delivering strong code generation support.',
     displayName: 'Codestral 22B',
     id: 'codestral',
     type: 'chat',
   },
   {
     contextWindowTokens: 8192,
-    description:
-      'Aya 23 is Cohere’s multilingual model supporting 23 languages for diverse use cases.',
+    description: 'Aya 23 is Cohere’s multilingual model supporting 23 languages for diverse use cases.',
     displayName: 'Aya 23 8B',
     id: 'aya',
     type: 'chat',
   },
   {
     contextWindowTokens: 8192,
-    description:
-      'Aya 23 is Cohere’s multilingual model supporting 23 languages for diverse use cases.',
+    description: 'Aya 23 is Cohere’s multilingual model supporting 23 languages for diverse use cases.',
     displayName: 'Aya 23 35B',
     id: 'aya:35b',
     type: 'chat',
@@ -412,8 +408,7 @@ const ollamaChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description:
-      'Command R+ is a high-performance LLM designed for real enterprise scenarios and complex apps.',
+    description: 'Command R+ is a high-performance LLM designed for real enterprise scenarios and complex apps.',
     displayName: 'Command R+ 104B',
     id: 'command-r-plus',
     type: 'chat',

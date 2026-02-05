@@ -1,8 +1,8 @@
 import { FORM_STYLE } from '@lobechat/const';
-import type { TopicExportMode } from '@lobechat/types';
+import type {TopicExportMode} from '@lobechat/types';
 import { exportFile } from '@lobechat/utils/client';
-import type { FormItemProps } from '@lobehub/ui';
-import { Button, copyToClipboard, Flexbox, Form } from '@lobehub/ui';
+import type {FormItemProps} from '@lobehub/ui';
+import { Button, copyToClipboard,Flexbox,Form   } from '@lobehub/ui';
 import { App, Segmented, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { CopyIcon } from 'lucide-react';
@@ -19,7 +19,7 @@ import { styles } from '../style';
 import { generateFullExport } from './generateFullExport';
 import { generateMessages } from './generateMessages';
 import Preview from './Preview';
-import type { FieldType } from './type';
+import type {FieldType} from './type';
 
 const DEFAULT_FIELD_VALUE: FieldType = {
   exportMode: 'full',

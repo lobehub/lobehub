@@ -1,6 +1,6 @@
-import type { TextAreaProps as Props } from '@lobehub/ui';
-import { TextArea as LobeTextArea } from '@lobehub/ui';
-import type { TextAreaRef } from 'antd/es/input/TextArea';
+import type {TextAreaProps as Props} from '@lobehub/ui';
+import { TextArea as LobeTextArea  } from '@lobehub/ui';
+import type {TextAreaRef} from 'antd/es/input/TextArea';
 import { memo, useRef, useState } from 'react';
 
 interface TextAreaProps extends Omit<Props, 'onChange'> {

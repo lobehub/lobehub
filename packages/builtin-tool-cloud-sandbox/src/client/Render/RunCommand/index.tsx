@@ -5,7 +5,7 @@ import { Block, Flexbox, Highlighter } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
-import type { RunCommandState } from '../../../types';
+import type {RunCommandState} from '../../../types';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`

@@ -1,7 +1,14 @@
 'use client';
 
-import type { FormGroupItemType } from '@lobehub/ui';
-import { Flexbox, Form, Icon, ImageSelect, LobeSelect as Select, Skeleton } from '@lobehub/ui';
+import type {FormGroupItemType} from '@lobehub/ui';
+import {
+  Flexbox,
+  Form,
+  Icon,
+  ImageSelect,
+  LobeSelect as Select,
+  Skeleton
+} from '@lobehub/ui';
 import { Segmented, Switch } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { Ban, Gauge, Loader2Icon, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
@@ -17,7 +24,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
-import type { LocaleMode } from '@/types/locale';
+import type {LocaleMode} from '@/types/locale';
 
 const Common = memo(() => {
   const { t } = useTranslation('setting');

@@ -1,6 +1,6 @@
 import { useEditor } from '@lobehub/editor/react';
 import type { ModalProps } from '@lobehub/ui';
-import { createRawModal, Modal } from '@lobehub/ui';
+import { createRawModal,Modal } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

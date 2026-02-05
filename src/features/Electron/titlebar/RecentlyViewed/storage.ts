@@ -1,4 +1,4 @@
-import type { PageReference } from './types';
+import type {PageReference} from './types';
 
 export const PINNED_PAGES_STORAGE_KEY = 'lobechat:desktop:pinned-pages:v2';
 
@@ -6,10 +6,10 @@ export const PINNED_PAGES_STORAGE_KEY = 'lobechat:desktop:pinned-pages:v2';
  * Get pinned pages from localStorage
  */
 export const getPinnedPages = (): PageReference[] => {
-  if (typeof globalThis.window === 'undefined') return [];
+  if (typeof window === 'undefined') return [];
 
   try {
-    const data = globalThis.localStorage.getItem(PINNED_PAGES_STORAGE_KEY);
+    const data = window.localStorage.getItem(PINNED_PAGES_STORAGE_KEY);
     if (!data) return [];
 
     const parsed = JSON.parse(data);
@@ -34,10 +34,10 @@ export const getPinnedPages = (): PageReference[] => {
  * Save pinned pages to localStorage
  */
 export const savePinnedPages = (pages: PageReference[]): boolean => {
-  if (typeof globalThis.window === 'undefined') return false;
+  if (typeof window === 'undefined') return false;
 
   try {
-    globalThis.localStorage.setItem(PINNED_PAGES_STORAGE_KEY, JSON.stringify(pages));
+    window.localStorage.setItem(PINNED_PAGES_STORAGE_KEY, JSON.stringify(pages));
     return true;
   } catch {
     return false;
@@ -48,10 +48,10 @@ export const savePinnedPages = (pages: PageReference[]): boolean => {
  * Clear pinned pages from localStorage
  */
 export const clearPinnedPages = (): boolean => {
-  if (typeof globalThis.window === 'undefined') return false;
+  if (typeof window === 'undefined') return false;
 
   try {
-    globalThis.localStorage.removeItem(PINNED_PAGES_STORAGE_KEY);
+    window.localStorage.removeItem(PINNED_PAGES_STORAGE_KEY);
     return true;
   } catch {
     return false;

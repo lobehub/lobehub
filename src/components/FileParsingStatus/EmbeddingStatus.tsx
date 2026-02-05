@@ -4,8 +4,8 @@ import { BoltIcon, RotateCwIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { FileParsingTask } from '@/types/asyncTask';
-import { AsyncTaskStatus } from '@/types/asyncTask';
+import type {FileParsingTask} from '@/types/asyncTask';
+import { AsyncTaskStatus  } from '@/types/asyncTask';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   errorReason: css`

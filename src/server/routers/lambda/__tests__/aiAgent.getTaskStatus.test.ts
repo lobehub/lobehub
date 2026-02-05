@@ -239,7 +239,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
         currentState: {
           status: 'running',
           stepCount: 2,
-          cost: { total: 0.006_678 },
+          cost: { total: 0.006678 },
           usage: {
             llm: {
               tokens: { total: 8358 },
@@ -356,7 +356,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
             operationId: 'op-test-123',
             startedAt,
             completedAt,
-            duration: 300_000,
+            duration: 300000,
             totalTokens: 5000,
             totalToolCalls: 10,
             totalMessages: 20,
@@ -377,7 +377,7 @@ describe('aiAgentRouter.getSubAgentTaskStatus', () => {
         status: ThreadStatus.Completed,
         startedAt,
         completedAt,
-        duration: 300_000,
+        duration: 300000,
         totalTokens: 5000,
         totalToolCalls: 10,
         totalMessages: 20,

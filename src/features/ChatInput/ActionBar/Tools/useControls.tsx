@@ -4,8 +4,8 @@ import {
   RECOMMENDED_SKILLS,
   RecommendedSkillType,
 } from '@lobechat/const';
-import type { ItemType } from '@lobehub/ui';
-import { Avatar, Icon } from '@lobehub/ui';
+import type {ItemType} from '@lobehub/ui';
+import { Avatar, Icon  } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ToyBrick } from 'lucide-react';
 import { useMemo } from 'react';

@@ -1,7 +1,7 @@
 'use client';
 
-import type { ReactNode } from 'react';
-import { createContext, use } from 'react';
+import type {ReactNode} from 'react';
+import { createContext,  use } from 'react';
 
 interface SettingsContextType {
   showOpenAIApiKey?: boolean;

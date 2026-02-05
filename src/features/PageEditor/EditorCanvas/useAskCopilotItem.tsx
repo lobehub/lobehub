@@ -2,9 +2,9 @@
 
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { nanoid } from '@lobechat/utils';
-import type { IEditor } from '@lobehub/editor';
-import { HIDE_TOOLBAR_COMMAND } from '@lobehub/editor';
-import type { ChatInputActionsProps } from '@lobehub/editor/react';
+import type {IEditor} from '@lobehub/editor';
+import { HIDE_TOOLBAR_COMMAND  } from '@lobehub/editor';
+import type {ChatInputActionsProps} from '@lobehub/editor/react';
 import { Avatar, Block } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { useMemo } from 'react';

@@ -39,7 +39,9 @@
           "createdAt": "2023-05-08T13:56:00.000Z",
           "diaId": "D1:5",
           "imageCaption": "a photo of a dog walking past a wall with a painting of a woman",
-          "imageUrls": ["https://i.redd.it/l7hozpetnhlb1.jpg"],
+          "imageUrls": [
+            "https://i.redd.it/l7hozpetnhlb1.jpg"
+          ],
           "role": "user",
           "speaker": "Caroline",
           "text": "The transgender stories were so inspiring! I was so happy and thankful for all the support.\n[Image: a photo of a dog walking past a wall with a painting of a woman]"

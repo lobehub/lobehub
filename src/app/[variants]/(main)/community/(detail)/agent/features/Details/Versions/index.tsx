@@ -9,8 +9,8 @@ import InlineTable from '@/components/InlineTable';
 import PublishedTime from '@/components/PublishedTime';
 import Link from '@/libs/router/Link';
 import { usePathname, useQuery } from '@/libs/router/navigation';
-import type { AssistantMarketSource } from '@/types/discover';
-import { AssistantNavKey } from '@/types/discover';
+import type {AssistantMarketSource} from '@/types/discover';
+import {  AssistantNavKey } from '@/types/discover';
 
 import Title from '../../../../../features/Title';
 import { useDetailContext } from '../../DetailProvider';

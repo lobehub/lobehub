@@ -51,6 +51,7 @@ export default eslint(
       'unicorn/catch-error-name': 0,
       'unicorn/explicit-length-check': 0,
       'unicorn/no-array-callback-reference': 0,
+      'unicorn/require-module-specifiers': 0,
       'unicorn/no-array-for-each': 0,
       'unicorn/no-negated-condition': 0,
       'unicorn/no-null': 0,

@@ -1,5 +1,5 @@
 // @vitest-environment node
-import type { Mock } from 'vitest';
+import type { Mock} from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ChatCompletionTool } from '../../types/chat';
@@ -490,22 +490,24 @@ describe('LobeCloudflareAI', () => {
       const instance = new LobeCloudflareAI({ apiKey, baseURLOrAccountID: accountID });
 
       vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-        Response.json({
-          result: [
-            {
-              description: 'Model 1',
-              name: 'model1',
-              task: { name: 'Text Generation' },
-              properties: [{ property_id: 'beta', value: 'false' }],
-            },
-            {
-              description: 'Model 2',
-              name: 'model2',
-              task: { name: 'Text Generation' },
-              properties: [{ property_id: 'beta', value: 'true' }],
-            },
-          ],
-        }),
+        new Response(
+          JSON.stringify({
+            result: [
+              {
+                description: 'Model 1',
+                name: 'model1',
+                task: { name: 'Text Generation' },
+                properties: [{ property_id: 'beta', value: 'false' }],
+              },
+              {
+                description: 'Model 2',
+                name: 'model2',
+                task: { name: 'Text Generation' },
+                properties: [{ property_id: 'beta', value: 'true' }],
+              },
+            ],
+          }),
+        ),
       );
 
       // Act

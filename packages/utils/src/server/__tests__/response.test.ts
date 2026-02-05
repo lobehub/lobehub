@@ -38,13 +38,10 @@ describe('createNodeResponse', () => {
   });
 
   it('normalizes thrown Response-like errors via error options', async () => {
-    const upstreamError = Response.json(
-      { error: 'boom' },
-      {
-        status: 429,
-        statusText: 'Too Many Requests',
-      },
-    );
+    const upstreamError = new Response(JSON.stringify({ error: 'boom' }), {
+      status: 429,
+      statusText: 'Too Many Requests',
+    });
     upstreamError.headers.delete('content-type');
 
     const result = await createNodeResponse(

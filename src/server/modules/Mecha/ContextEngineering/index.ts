@@ -12,7 +12,7 @@ const createServerVariableGenerators = (model?: string, provider?: string) => ({
   date: () => new Date().toLocaleDateString('en-US', { dateStyle: 'full' }),
   datetime: () => new Date().toISOString(),
   time: () => new Date().toLocaleTimeString('en-US', { timeStyle: 'medium' }),
-
+  /* eslint-disable sort-keys-fix/sort-keys-fix */
   // Model-related variables
   model: () => model ?? '',
   provider: () => provider ?? '',

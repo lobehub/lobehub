@@ -4,9 +4,9 @@ import { Block, Flexbox, Text } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
-import type { KlavisServerType } from '@/const/index';
-import type { KlavisServer } from '@/store/tool/slices/klavisStore';
-import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import type {KlavisServerType} from '@/const/index';
+import type {KlavisServer} from '@/store/tool/slices/klavisStore';
+import {  KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 
 import { useKlavisOAuth } from '../hooks/useKlavisOAuth';
 import { useKlavisServerActions } from '../hooks/useKlavisServerActions';

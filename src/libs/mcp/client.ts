@@ -10,15 +10,10 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.d.ts'
 import type { Progress } from '@modelcontextprotocol/sdk/types.js';
 import debug from 'debug';
 
-import type {
-  MCPClientParams,
-  MCPError,
-  McpPrompt,
-  McpResource,
-  McpTool,
-  ToolCallResult,
+import type {MCPClientParams, MCPError, McpPrompt, McpResource, McpTool, ToolCallResult} from './types';
+import {
+  createMCPError
 } from './types';
-import { createMCPError } from './types';
 
 const log = debug('lobe-mcp:client');
 // MCP tool call timeout (milliseconds), configurable via the environment variable MCP_TOOL_TIMEOUT, default is 60000

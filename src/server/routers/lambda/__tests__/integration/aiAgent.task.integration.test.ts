@@ -526,7 +526,7 @@ describe('Agent Task Integration', () => {
         status: ThreadStatus.Completed,
         metadata: {
           completedAt,
-          duration: 300_000, // 5 minutes
+          duration: 300000, // 5 minutes
           operationId,
           startedAt,
           totalCost: 0.0123,
@@ -551,7 +551,7 @@ describe('Agent Task Integration', () => {
       expect(status.taskDetail?.status).toBe(ThreadStatus.Completed);
       expect(status.taskDetail?.startedAt).toBe(startedAt);
       expect(status.taskDetail?.completedAt).toBe(completedAt);
-      expect(status.taskDetail?.duration).toBe(300_000);
+      expect(status.taskDetail?.duration).toBe(300000);
       expect(status.taskDetail?.totalCost).toBe(0.0123);
       expect(status.taskDetail?.totalMessages).toBe(5);
       expect(status.taskDetail?.totalTokens).toBe(2500);
@@ -627,7 +627,7 @@ describe('Agent Task Integration', () => {
         status: ThreadStatus.Failed,
         metadata: {
           completedAt,
-          duration: 90_000, // 1.5 minutes
+          duration: 90000, // 1.5 minutes
           error: errorMessage,
           operationId,
           startedAt,
@@ -646,7 +646,7 @@ describe('Agent Task Integration', () => {
       expect(status.status).toBe('failed');
       expect(status.error).toBe(errorMessage);
       expect(status.taskDetail?.error).toBe(errorMessage);
-      expect(status.taskDetail?.duration).toBe(90_000);
+      expect(status.taskDetail?.duration).toBe(90000);
       expect(status.taskDetail?.totalToolCalls).toBe(1);
     });
 
@@ -668,7 +668,7 @@ describe('Agent Task Integration', () => {
         status: ThreadStatus.Cancel,
         metadata: {
           completedAt,
-          duration: 120_000, // 2 minutes
+          duration: 120000, // 2 minutes
           operationId,
           startedAt,
           totalCost: 0.008,
@@ -685,7 +685,7 @@ describe('Agent Task Integration', () => {
       expect(status.status).toBe('cancel');
       expect(status.taskDetail?.status).toBe(ThreadStatus.Cancel);
       expect(status.taskDetail?.completedAt).toBe(completedAt);
-      expect(status.taskDetail?.duration).toBe(120_000);
+      expect(status.taskDetail?.duration).toBe(120000);
     });
 
     it('should have correct status when waiting for human intervention', async () => {

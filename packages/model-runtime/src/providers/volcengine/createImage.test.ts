@@ -174,7 +174,7 @@ describe('createVolcengineImage', () => {
 
       payload.params = {
         prompt: 'test prompt',
-        seed: 12_345,
+        seed: 12345,
         size: '1024x1024',
       };
 
@@ -184,7 +184,7 @@ describe('createVolcengineImage', () => {
         model: 'doubao-seedream-3-0-t2i',
         watermark: false,
         prompt: 'test prompt',
-        seed: 12_345,
+        seed: 12345,
         size: '1024x1024',
       });
     });

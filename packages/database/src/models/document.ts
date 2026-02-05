@@ -1,6 +1,6 @@
 import { and, count, desc, eq, inArray } from 'drizzle-orm';
 
-import type { DocumentItem, NewDocument } from '../schemas';
+import type { DocumentItem,NewDocument } from '../schemas';
 import { documents } from '../schemas';
 import type { LobeChatDatabase } from '../type';
 

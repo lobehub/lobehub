@@ -1,11 +1,11 @@
 'use client';
 
 import { useEditor } from '@lobehub/editor/react';
-import type { ReactNode } from 'react';
+import type {ReactNode} from 'react';
 import { memo } from 'react';
 
-import { createStore, Provider } from './store';
-import type { StoreUpdaterProps } from './StoreUpdater';
+import { createStore,Provider } from './store';
+import type {StoreUpdaterProps} from './StoreUpdater';
 import StoreUpdater from './StoreUpdater';
 
 interface PageEditorProviderProps extends StoreUpdaterProps {

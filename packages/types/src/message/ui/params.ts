@@ -4,11 +4,11 @@ import { z } from 'zod';
 import type { ConversationContext } from '../../conversation';
 import type { UploadFileItem } from '../../files';
 import type { MessageSemanticSearchChunk } from '../../rag';
-import type { ChatMessageError } from '../common/base';
+import type { ChatMessageError} from '../common/base';
 import { ChatMessageErrorSchema } from '../common/base';
 // Import for local use
 import type { PageSelection } from '../common/pageSelection';
-import type { ChatPluginPayload } from '../common/tools';
+import type { ChatPluginPayload} from '../common/tools';
 import { ToolInterventionSchema } from '../common/tools';
 import type { UIChatMessage } from './chat';
 import { SemanticSearchChunkSchema } from './rag';

@@ -3,8 +3,16 @@ import type { AgentGroupDetail, AgentGroupMember } from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { and, eq, inArray } from 'drizzle-orm';
 
-import type { AgentItem, ChatGroupItem, NewChatGroup, NewChatGroupAgent } from '../../schemas';
-import { agents, chatGroups, chatGroupsAgents } from '../../schemas';
+import type {
+  AgentItem,
+  ChatGroupItem,
+  NewChatGroup,
+  NewChatGroupAgent} from '../../schemas';
+import {
+  agents,
+  chatGroups,
+  chatGroupsAgents
+} from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 
 export interface SupervisorAgentConfig {

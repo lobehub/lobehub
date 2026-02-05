@@ -1,5 +1,5 @@
 import { Button, Modal } from '@lobehub/ui';
-import type { FormInstance } from 'antd';
+import type {FormInstance} from 'antd';
 import { memo, use, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

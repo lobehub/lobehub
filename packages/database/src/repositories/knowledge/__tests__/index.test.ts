@@ -196,9 +196,9 @@ describe('KnowledgeRepo', () => {
       ]);
 
       // Add file to knowledge base
-      await serverDB
-        .insert(knowledgeBaseFiles)
-        .values([{ fileId: 'file-in-kb', knowledgeBaseId: 'kb-1', userId }]);
+      await serverDB.insert(knowledgeBaseFiles).values([
+        { fileId: 'file-in-kb', knowledgeBaseId: 'kb-1', userId },
+      ]);
     });
 
     it('should return files and documents for current user', async () => {

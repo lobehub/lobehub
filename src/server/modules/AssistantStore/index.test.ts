@@ -19,7 +19,7 @@ describe('AssistantStore', () => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
     // @ts-expect-error
-    globalThis.fetch = undefined;
+    global.fetch = undefined;
   });
 
   it('should return the default index URL when no language is provided', () => {
@@ -71,14 +71,14 @@ describe('AssistantStore', () => {
   });
 
   it('should return empty agents array with schema version when fetch fails', async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error('fetch failed'));
+    global.fetch = vi.fn().mockRejectedValue(new Error('fetch failed'));
     const store = new AssistantStore();
     const result = await store.getAgentIndex();
     expect(result).toEqual([]);
   });
 
   it('should handle fetch error and return empty agents with schema version when error.ok is false', async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    global.fetch = vi.fn().mockResolvedValue({
       ok: false,
       text: () => Promise.resolve('Error'),
     });
@@ -96,7 +96,7 @@ describe('AssistantStore', () => {
       schemaVersion: 1,
     };
 
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: () => Promise.resolve({ ...mockAgents }),
@@ -127,7 +127,7 @@ describe('AssistantStore', () => {
       schemaVersion: 1,
     };
 
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       json: () => Promise.resolve({ ...mockAgents }),
@@ -171,7 +171,7 @@ describe('AssistantStore', () => {
         clone: () => ({ json: () => Promise.resolve({ ...mockAgents }) }),
       });
 
-    globalThis.fetch = fetchMock as any;
+    global.fetch = fetchMock as any;
 
     // @ts-expect-error
     EdgeConfig.isEnabled.mockReturnValue(false);
@@ -185,9 +185,10 @@ describe('AssistantStore', () => {
   });
 
   it('should throw error for unexpected error in getAgentIndex', async () => {
-    globalThis.fetch = vi.fn().mockRejectedValue(new Error('something else'));
+    global.fetch = vi.fn().mockRejectedValue(new Error('something else'));
     const store = new AssistantStore();
 
+     
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(store.getAgentIndex()).rejects.toThrow('something else');

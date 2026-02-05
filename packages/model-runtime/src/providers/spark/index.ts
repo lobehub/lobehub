@@ -1,7 +1,10 @@
 import { ModelProvider } from 'model-bank';
 
-import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
-import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
+import type {
+  OpenAICompatibleFactoryOptions} from '../../core/openaiCompatibleFactory';
+import {
+  createOpenAICompatibleRuntime
+} from '../../core/openaiCompatibleFactory';
 import { SparkAIStream, transformSparkResponseToStream } from '../../core/streams';
 import type { ChatStreamPayload } from '../../types';
 

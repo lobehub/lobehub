@@ -60,14 +60,13 @@ const CONTEXT_CONFIGS: ContextConfig[] = [
     matcher: /^\/settings(?:\/([^/]+))?/,
     name: 'Settings',
     type: 'settings',
-    captureSubPath: true, // Captures sub-route like "profile"
+    captureSubPath: true  // Captures sub-route like "profile"
   },
   // ...
 ];
 ```
 
 **Example**: When on `/settings/profile`, context is:
-
 ```typescript
 {
   type: 'settings',
@@ -96,7 +95,6 @@ handleBack(); // pages = ['theme']
 ```
 
 **Keyboard Shortcuts**:
-
 - `Escape`: Go back one level or close if at root
 - `Backspace`: Go back when search is empty
 
@@ -107,7 +105,6 @@ Special mode for asking AI questions about your work.
 **Activation**: Press `Tab` when you have search text (and not already in AI mode)
 
 **Flow**:
-
 1. User types query in search
 2. Presses `Tab`
 3. Query becomes a user message in chat
@@ -115,7 +112,6 @@ Special mode for asking AI questions about your work.
 5. Search input switches to AI mode placeholder
 
 **State Management**:
-
 ```typescript
 const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 const isAiMode = page === 'ai-chat';
@@ -127,7 +123,7 @@ const handleAskAI = () => {
       id: Date.now().toString(),
       role: 'user',
     };
-    setChatMessages((prev) => [...prev, userMessage]);
+    setChatMessages(prev => [...prev, userMessage]);
   }
   setPages([...pages, 'ai-chat']);
 };
@@ -147,12 +143,11 @@ const debouncedSearch = useDebounce(search, { wait: 300 });
 const { data: searchResults, isLoading: isSearching } = useSWR<SearchResult[]>(
   hasSearch && !isAiMode ? ['search', searchQuery] : null,
   async () => lambdaClient.search.query.query({ query: searchQuery }),
-  { revalidateOnFocus: false, revalidateOnReconnect: false },
+  { revalidateOnFocus: false, revalidateOnReconnect: false }
 );
 ```
 
 **Search Types**:
-
 - `message`: Chat messages (NEW - highest priority in agent context)
 - `agent`: AI agents/assistants
 - `topic`: Conversation topics/threads
@@ -161,7 +156,6 @@ const { data: searchResults, isLoading: isSearching } = useSWR<SearchResult[]>(
 **Display**: Results are grouped by type in `SearchResults.tsx` with priority order: Messages → Topics → Agents → Files
 
 **Context-Aware Priority** (NEW):
-
 - **Agent Context** (`/agent/*`): Messages (10), Topics (5), Agents (3), Files (3)
   - Messages from current agent get 0.5-0.7 relevance (highest priority)
   - Other messages get 1-3 relevance (normal)
@@ -186,13 +180,12 @@ export const CONTEXT_COMMANDS: Record<ContextType, ContextCommand[]> = {
     },
     // ...more settings pages
   ],
-  agent: [], // No context commands for agent pages yet
+  agent: [],  // No context commands for agent pages yet
   // ...
 };
 ```
 
 **Smart Filtering**: Automatically hides the current page from the list
-
 ```typescript
 // If on /settings/profile, won't show "Profile" in context commands
 return commands.filter((cmd) => cmd.subPath !== currentSubPath);
@@ -260,19 +253,18 @@ CommandMenu unmounts
 
 ### Keyboard Shortcuts
 
-| Key            | Action                               |
-| -------------- | ------------------------------------ |
-| `Cmd/Ctrl + K` | Open/Close command menu (global)     |
-| `Escape`       | Go back or close                     |
-| `Backspace`    | Go back (when search empty)          |
-| `Tab`          | Enter AI mode (when search has text) |
-| `↑/↓`          | Navigate items                       |
-| `Enter`        | Select item                          |
+| Key | Action |
+|-----|--------|
+| `Cmd/Ctrl + K` | Open/Close command menu (global) |
+| `Escape` | Go back or close |
+| `Backspace` | Go back (when search empty) |
+| `Tab` | Enter AI mode (when search has text) |
+| `↑/↓` | Navigate items |
+| `Enter` | Select item |
 
 ### Smart Filtering
 
 The `cmdk` library provides built-in fuzzy filtering:
-
 - Searches across command labels, keywords, and descriptions
 - Only active when `shouldFilter={!isAiMode}` (disabled in AI mode)
 - Custom value strings for better search relevance (see `SearchResults.tsx:71-78`)
@@ -294,7 +286,6 @@ useEffect(() => {
 ### Loading States
 
 Search results show skeleton loaders while fetching:
-
 ```typescript
 if (isLoading) {
   return (
@@ -315,14 +306,12 @@ if (isLoading) {
 Uses `antd-style` for theme-aware CSS-in-JS:
 
 **Key Patterns**:
-
 1. Uses `token.*` for colors/spacing to support dark mode
 2. CSS animations for smooth transitions
 3. Responsive sizing with viewport units
 4. Flexbox for layouts
 
 **Example**:
-
 ```typescript
 commandRoot: css`
   width: min(640px, 90vw);
@@ -357,7 +346,10 @@ interface SystemStatus {
 }
 
 // Usage in hook
-const [open, setOpen] = useGlobalStore((s) => [s.status.showCommandMenu, s.updateSystemStatus]);
+const [open, setOpen] = useGlobalStore((s) => [
+  s.status.showCommandMenu,
+  s.updateSystemStatus
+]);
 ```
 
 ### Router Integration
@@ -396,7 +388,6 @@ const { t } = useTranslation('common');
 ```
 
 **Translation Keys** (in `src/locales/default/common.ts`):
-
 - `cmdk.searchPlaceholder`
 - `cmdk.aiModePlaceholder`
 - `cmdk.noResults`
@@ -409,7 +400,6 @@ const { t } = useTranslation('common');
 ### 1. Add a New Context
 
 **Step 1**: Add context type to `types.ts`:
-
 ```typescript
 export type ContextType =
   | 'agent'
@@ -421,7 +411,6 @@ export type ContextType =
 ```
 
 **Step 2**: Add detection rule to `utils/context.ts`:
-
 ```typescript
 const CONTEXT_CONFIGS: ContextConfig[] = [
   // ...existing configs
@@ -435,7 +424,6 @@ const CONTEXT_CONFIGS: ContextConfig[] = [
 ```
 
 **Step 3**: Add commands to `utils/contextCommands.ts`:
-
 ```typescript
 export const CONTEXT_COMMANDS: Record<ContextType, ContextCommand[]> = {
   // ...
@@ -454,7 +442,6 @@ export const CONTEXT_COMMANDS: Record<ContextType, ContextCommand[]> = {
 ### 2. Add a New Menu Page
 
 **Step 1**: Create component (e.g., `YourMenu.tsx`):
-
 ```typescript
 import { Command } from 'cmdk';
 import { memo } from 'react';
@@ -482,7 +469,6 @@ export default YourMenu;
 ```
 
 **Step 2**: Add handler to `useCommandMenu.ts`:
-
 ```typescript
 const handleYourAction = (value: string) => {
   // Do something
@@ -496,7 +482,6 @@ return {
 ```
 
 **Step 3**: Render in `index.tsx`:
-
 ```typescript
 {page === 'your-page' && (
   <YourMenu
@@ -507,7 +492,6 @@ return {
 ```
 
 **Step 4**: Add navigation to it:
-
 ```typescript
 // In MainMenu or elsewhere
 <Command.Item onSelect={() => navigateToPage('your-page')}>
@@ -518,7 +502,6 @@ return {
 ### 3. Add a New Main Menu Item
 
 In `MainMenu.tsx`:
-
 ```typescript
 <Command.Item
   onSelect={() => onNavigate('/your-route')}
@@ -532,7 +515,6 @@ In `MainMenu.tsx`:
 ```
 
 Remember to:
-
 1. Add translation keys to `src/locales/default/common.ts`
 2. Use existing icons from `lucide-react`
 3. Follow the existing pattern for consistency
@@ -544,7 +526,6 @@ Search is handled server-side via tRPC. To modify:
 **Backend**: Update `src/server/routers/lambda/search.ts` (or similar)
 
 **Frontend**: Search results display in `SearchResults.tsx`
-
 - Modify `getIcon()` for custom icons
 - Modify `handleNavigate()` for custom routing
 - Modify `getItemValue()` for search ranking
@@ -599,13 +580,11 @@ Search is handled server-side via tRPC. To modify:
 When testing CommandMenu features:
 
 1. **Context Detection**: Test pathname matching
-
    ```typescript
    expect(detectContext('/agent/123')).toEqual({ type: 'agent', name: 'Agent' });
    ```
 
 2. **Navigation Stack**: Test page state management
-
    ```typescript
    navigateToPage('theme');
    expect(pages).toEqual(['theme']);
@@ -647,7 +626,6 @@ Potential areas for enhancement:
 **Open Menu**: `Cmd/Ctrl + K`
 
 **Main Files**:
-
 - `index.tsx` - Main orchestration
 - `useCommandMenu.ts` - Business logic
 - `MainMenu.tsx` - Default commands
@@ -656,7 +634,6 @@ Potential areas for enhancement:
 - `utils/contextCommands.ts` - Context commands
 
 **Key Dependencies**:
-
 - `cmdk` - Command palette primitives
 - `react-router-dom` - Navigation
 - `zustand` - Global state
@@ -665,7 +642,6 @@ Potential areas for enhancement:
 - `lucide-react` - Icons
 
 **Related Documentation**:
-
 - [cmdk docs](https://cmdk.paco.me/)
 - [Zustand docs](https://zustand-demo.pmnd.rs/)
 - [SWR docs](https://swr.vercel.app/)

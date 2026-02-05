@@ -172,9 +172,9 @@ describe('LobeSenseNovaAI - custom features', () => {
       });
 
       it('should handle large max_tokens values', () => {
-        const payload = createMockPayload({ max_tokens: 100_000 });
+        const payload = createMockPayload({ max_tokens: 100000 });
         const result = params.chatCompletion.handlePayload(payload as any);
-        expect(result.max_new_tokens).toBe(100_000);
+        expect(result.max_new_tokens).toBe(100000);
       });
     });
 
