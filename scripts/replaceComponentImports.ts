@@ -230,7 +230,7 @@ function parseArgs(): ReplaceConfig | null {
   if (!componentsStr || !fromPackage || !toPackage) {
     console.error('❌ 错误: 必须指定 --components, --from 和 --to 参数');
     console.error('使用 --help 查看帮助信息');
-     
+
     process.exit(1);
   }
 

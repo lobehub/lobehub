@@ -18,7 +18,7 @@ import type {
   TaskResultPayload,
   TasksBatchResultPayload,
 } from '@lobechat/agent-runtime';
-import { calculateMessageTokens,UsageCounter } from '@lobechat/agent-runtime';
+import { calculateMessageTokens, UsageCounter } from '@lobechat/agent-runtime';
 import { isDesktop } from '@lobechat/const';
 import { chainCompressContext } from '@lobechat/prompts';
 import type { ChatToolPayload, ConversationContext, CreateMessageParams } from '@lobechat/types';
