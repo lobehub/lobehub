@@ -2,7 +2,7 @@ import { Brain, BrainCircuit, Info, Mic2, Settings2, Sparkles } from 'lucide-rea
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import { type CellProps } from '@/components/Cell';
+import type {CellProps} from '@/components/Cell';
 import { SettingsTabs } from '@/store/global/initialState';
 
 export const useCategory = () => {

@@ -1,4 +1,4 @@
-import { type OpenAIChatMessage, type UIChatMessage } from '@lobechat/types';
+import type {OpenAIChatMessage, UIChatMessage} from '@lobechat/types';
 
 import { encodeAsync } from '@/utils/tokenizer';
 

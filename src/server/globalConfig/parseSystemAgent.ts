@@ -1,5 +1,5 @@
 import { DEFAULT_SYSTEM_AGENT_CONFIG } from '@/const/settings';
-import { type UserSystemAgentConfig } from '@/types/user/settings';
+import type {UserSystemAgentConfig} from '@/types/user/settings';
 
 const protectedKeys = Object.keys(DEFAULT_SYSTEM_AGENT_CONFIG);
 
@@ -11,7 +11,7 @@ export const parseSystemAgent = (envString: string = ''): Partial<UserSystemAgen
   const config: Partial<UserSystemAgentConfig> = {};
 
   // Handle full-width commas and extra spaces
-  let envValue = envString.replaceAll('，', ',').trim();
+  const envValue = envString.replaceAll('，', ',').trim();
 
   const pairs = envValue.split(',');
 

@@ -2,12 +2,13 @@ import type { SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
-import { type StoreSetter } from '@/store/types';
-import { DocumentSourceType, type LobeDocument } from '@/types/document';
+import type {StoreSetter} from '@/store/types';
+import type {LobeDocument} from '@/types/document';
+import { DocumentSourceType  } from '@/types/document';
 import { standardizeIdentifier } from '@/utils/identifier';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type PageStore } from '../../store';
+import type {PageStore} from '../../store';
 
 const n = setNamespace('page/crud');
 

@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 
-import { type DisplayContextMemory } from '@/database/repositories/userMemory';
+import type {DisplayContextMemory} from '@/database/repositories/userMemory';
 import { useUserMemoryStore } from '@/store/userMemory';
 
 import { TimelineView as GenericTimelineView } from '../../../../features/TimeLineView';
@@ -25,13 +25,13 @@ const ContextTimelineView = memo<ContextTimelineViewProps>(({ contexts, isLoadin
       groupBy="day"
       hasMore={contextsHasMore}
       isLoading={isLoading}
-      onLoadMore={loadMoreContexts}
       renderHeader={(periodKey) => <PeriodHeader groupBy="day" periodKey={periodKey} />}
       renderItem={(context) => (
         <TimelineItemWrapper>
           <ContextCard context={context} onClick={() => onClick?.(context)} />
         </TimelineItemWrapper>
       )}
+      onLoadMore={loadMoreContexts}
     />
   );
 });

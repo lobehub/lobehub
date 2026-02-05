@@ -8,11 +8,11 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { UserMemoryModel } from '@/database/models/userMemory/model';
-import { getServerDB } from '@/database/server';
 import { userMemories } from '@/database/schemas';
+import { getServerDB } from '@/database/server';
+import { selectNonVectorColumns } from '@/database/utils/columns';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { LayersEnum } from '@/types/userMemory';
-import { selectNonVectorColumns } from '@/database/utils/columns';
 
 const bodySchema = z.object({
   layer: z.nativeEnum(LayersEnum).optional(),

@@ -1,6 +1,6 @@
-import { Flexbox, Icon, createModal, useModalContext } from '@lobehub/ui';
+import { createModal, Flexbox, Icon, useModalContext } from '@lobehub/ui';
 import { BookUp2Icon } from 'lucide-react';
-import { Suspense, memo, useCallback } from 'react';
+import { memo, Suspense, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SelectForm from './SelectForm';
@@ -21,7 +21,7 @@ const ModalContent = memo<ModalContentProps>(({ fileIds, knowledgeBaseId }) => {
   const { close } = useModalContext();
   return (
     <>
-      <Flexbox gap={8} horizontal paddingBlock={16} paddingInline={16} style={{ paddingBottom: 0 }}>
+      <Flexbox horizontal gap={8} paddingBlock={16} paddingInline={16} style={{ paddingBottom: 0 }}>
         <Icon icon={BookUp2Icon} />
         {t('addToKnowledgeBase.title')}
       </Flexbox>

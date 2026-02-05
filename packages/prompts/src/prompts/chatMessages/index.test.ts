@@ -1,4 +1,4 @@
-import { UIChatMessage } from '@lobechat/types';
+import type { UIChatMessage } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
 import {

@@ -38,11 +38,11 @@ const ContextRightPanel = memo(() => {
         <Text
           as={'h1'}
           fontSize={20}
+          weight={'bold'}
           style={{
             lineHeight: 1.4,
             marginBottom: 0,
           }}
-          weight={'bold'}
         >
           {context.title}
           <Tooltip title={context.currentStatus}>
@@ -57,22 +57,22 @@ const ContextRightPanel = memo(() => {
             </Center>
           </Tooltip>
         </Text>
-        <Flexbox align="center" gap={16} horizontal>
+        <Flexbox horizontal align="center" gap={16}>
           <ProgressIcon
+            showInfo
             format={(percent) => `${t('filter.sort.scoreImpact')}: ${percent}%`}
             percent={(context.scoreImpact ?? 0) * 100}
-            showInfo
           />
           <ProgressIcon
+            showInfo
             format={(percent) => `${t('filter.sort.scoreUrgency')}: ${percent}%`}
             percent={(context.scoreUrgency ?? 0) * 100}
-            showInfo
             strokeColor={
               (context.scoreUrgency ?? 0) >= 0.7 ? cssVar.colorError : cssVar.colorWarning
             }
           />
         </Flexbox>
-        <Flexbox align="center" gap={16} horizontal justify="space-between">
+        <Flexbox horizontal align="center" gap={16} justify="space-between">
           <SourceLink source={context.source} />
           <Time capturedAt={context.capturedAt || context.updatedAt || context.createdAt} />
         </Flexbox>

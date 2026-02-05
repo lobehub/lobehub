@@ -16,6 +16,12 @@ const FrequencyPenalty = memo<FrequencyPenaltyProps>(({ value, onChange, disable
         changeOnWheel
         controls={false}
         disabled={disabled}
+        max={2}
+        min={-2}
+        size={'small'}
+        step={0.1}
+        style={{ height: 42 }}
+        value={value}
         marks={{
           '-2': (
             <Icon icon={FileIcon} size={'small'} style={{ color: cssVar.colorTextQuaternary }} />
@@ -29,18 +35,12 @@ const FrequencyPenalty = memo<FrequencyPenaltyProps>(({ value, onChange, disable
             />
           ),
         }}
-        max={2}
-        min={-2}
-        onChange={onChange}
-        size={'small'}
-        step={0.1}
-        style={{ height: 42 }}
         styles={{
           input: {
             maxWidth: 43,
           },
         }}
-        value={value}
+        onChange={onChange}
       />
     </Flexbox>
   );

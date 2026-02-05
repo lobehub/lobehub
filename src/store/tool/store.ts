@@ -1,20 +1,27 @@
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
-import { type StateCreator } from 'zustand/vanilla';
+import type {StateCreator} from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
 import { flattenActions } from '../utils/flattenActions';
-import { type ToolStoreState, initialState } from './initialState';
-import { type BuiltinToolAction, createBuiltinToolSlice } from './slices/builtin';
-import { type CustomPluginAction, createCustomPluginSlice } from './slices/customPlugin';
-import { type KlavisStoreAction, createKlavisStoreSlice } from './slices/klavisStore';
+import type {ToolStoreState} from './initialState';
+import { initialState } from './initialState';
+import type {BuiltinToolAction} from './slices/builtin';
+import {  createBuiltinToolSlice } from './slices/builtin';
+import type {CustomPluginAction} from './slices/customPlugin';
+import { createCustomPluginSlice } from './slices/customPlugin';
+import type {KlavisStoreAction} from './slices/klavisStore';
+import { createKlavisStoreSlice } from './slices/klavisStore';
+import type {LobehubSkillStoreAction} from './slices/lobehubSkillStore';
 import {
-  type LobehubSkillStoreAction,
-  createLobehubSkillStoreSlice,
+  createLobehubSkillStoreSlice
 } from './slices/lobehubSkillStore';
-import { type PluginMCPStoreAction, createMCPPluginStoreSlice } from './slices/mcpStore';
-import { type PluginStoreAction, createPluginStoreSlice } from './slices/oldStore';
-import { type PluginAction, createPluginSlice } from './slices/plugin';
+import type {PluginMCPStoreAction} from './slices/mcpStore';
+import { createMCPPluginStoreSlice } from './slices/mcpStore';
+import type {PluginStoreAction} from './slices/oldStore';
+import { createPluginStoreSlice } from './slices/oldStore';
+import type {PluginAction} from './slices/plugin';
+import { createPluginSlice } from './slices/plugin';
 
 //  ===============  Aggregate createStoreFn ============ //
 

@@ -5,7 +5,7 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { dataSelectors, useConversationStore } from '../../../store';
-import { type MarkdownElementProps } from '../type';
+import type {MarkdownElementProps} from '../type';
 
 const isThinkingClosed = (input: string = '') => {
   const openTag = `<think>`;

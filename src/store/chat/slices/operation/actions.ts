@@ -3,9 +3,10 @@ import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 import { produce } from 'immer';
 
-import { type ChatStore } from '@/store/chat/store';
-import { type MessageMapKeyInput, messageMapKey } from '@/store/chat/utils/messageMapKey';
-import { type StoreSetter } from '@/store/types';
+import type {ChatStore} from '@/store/chat/store';
+import type {MessageMapKeyInput} from '@/store/chat/utils/messageMapKey';
+import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import type {StoreSetter} from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type {

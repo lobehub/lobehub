@@ -1,13 +1,14 @@
 import { Button, Icon } from '@lobehub/ui';
 import { Loader2Icon, Network } from 'lucide-react';
-import { type ReactNode, memo, useContext, useState } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  use, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
 import { FormAction } from '@/features/Conversation/Error/style';
 import { useProviderName } from '@/hooks/useProviderName';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
-import { type GlobalLLMProviderKey } from '@/types/user/settings';
+import type {GlobalLLMProviderKey} from '@/types/user/settings';
 
 import { LoadingContext } from './LoadingContext';
 import { useApiKey } from './useApiKey';
@@ -29,7 +30,7 @@ const ProviderApiKeyForm = memo<ProviderApiKeyFormProps>(
     const { apiKey, baseURL, setConfig } = useApiKey(provider);
     const { showOpenAIProxyUrl } = useServerConfigStore(featureFlagsSelectors);
     const providerName = useProviderName(provider);
-    const { loading } = useContext(LoadingContext);
+    const { loading } = use(LoadingContext);
 
     return (
       <FormAction
@@ -39,32 +40,32 @@ const ProviderApiKeyForm = memo<ProviderApiKeyFormProps>(
       >
         <FormPassword
           autoComplete={'new-password'}
+          placeholder={apiKeyPlaceholder || 'sk-***********************'}
+          suffix={<div>{loading && <Icon spin icon={Loader2Icon} />}</div>}
+          value={apiKey}
           onChange={(value) => {
             setConfig(provider, { apiKey: value });
           }}
-          placeholder={apiKeyPlaceholder || 'sk-***********************'}
-          suffix={<div>{loading && <Icon icon={Loader2Icon} spin />}</div>}
-          value={apiKey}
         />
 
         {showEndpoint &&
           showOpenAIProxyUrl &&
           (showProxy ? (
             <FormInput
+              placeholder={'https://api.openai.com/v1'}
+              suffix={<div>{loading && <Icon spin icon={Loader2Icon} />}</div>}
+              value={baseURL}
               onChange={(value) => {
                 setConfig(provider, { baseURL: value });
               }}
-              placeholder={'https://api.openai.com/v1'}
-              suffix={<div>{loading && <Icon icon={Loader2Icon} spin />}</div>}
-              value={baseURL}
             />
           ) : (
             <Button
               icon={<Icon icon={Network} />}
+              type={'text'}
               onClick={() => {
                 setShow(true);
               }}
-              type={'text'}
             >
               {errorT('unlock.addProxyUrl')}
             </Button>

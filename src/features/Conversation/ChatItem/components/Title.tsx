@@ -3,7 +3,7 @@ import dayjs from 'dayjs';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type ChatItemProps } from '../type';
+import type {ChatItemProps} from '../type';
 
 export interface TitleProps {
   avatar: ChatItemProps['avatar'];

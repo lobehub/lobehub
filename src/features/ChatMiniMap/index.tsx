@@ -24,16 +24,16 @@ const ChatMinimap = memo(() => {
     <Flexbox align={'center'} className={styles.container} justify={'center'}>
       <Flexbox
         className={styles.rail}
+        role={'group'}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        role={'group'}
       >
         <ActionIcon
           aria-label={t('minimap.previousMessage')}
           className={cx(styles.arrow, isHovered && styles.arrowVisible)}
           icon={ChevronUp}
-          onClick={() => handleStep('prev')}
           size={14}
+          onClick={() => handleStep('prev')}
         />
         <Flexbox className={styles.railContent}>
           <PopoverGroup contentLayoutAnimation>
@@ -42,12 +42,12 @@ const ChatMinimap = memo(() => {
                 activePosition={activeIndicatorPosition}
                 id={id}
                 key={id}
-                onJump={handleJump}
                 position={position}
                 preview={preview}
                 role={role}
                 virtuosoIndex={virtuosoIndex}
                 width={width}
+                onJump={handleJump}
               />
             ))}
           </PopoverGroup>
@@ -56,8 +56,8 @@ const ChatMinimap = memo(() => {
           aria-label={t('minimap.nextMessage')}
           className={cx(styles.arrow, isHovered && styles.arrowVisible)}
           icon={ChevronDown}
-          onClick={() => handleStep('next')}
           size={14}
+          onClick={() => handleStep('next')}
         />
       </Flexbox>
     </Flexbox>

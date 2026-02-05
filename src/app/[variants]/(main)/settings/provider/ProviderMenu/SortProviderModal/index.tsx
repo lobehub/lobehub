@@ -5,7 +5,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAiInfraStore } from '@/store/aiInfra';
-import { type AiProviderListItem } from '@/types/aiProvider';
+import type {AiProviderListItem} from '@/types/aiProvider';
 
 import GroupItem from './GroupItem';
 
@@ -38,33 +38,34 @@ const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, defaultI
     <Modal
       allowFullscreen
       footer={null}
-      onCancel={onCancel}
       open={open}
       title={t('sortModal.title')}
       width={400}
+      onCancel={onCancel}
     >
       <Flexbox gap={16}>
         <SortableList
           items={items}
-          onChange={async (items: AiProviderListItem[]) => {
-            setItems(items);
-          }}
           renderItem={(item: AiProviderListItem) => (
             <SortableList.Item
+              horizontal
               align={'center'}
               className={styles.container}
               gap={4}
-              horizontal
               id={item.id}
               justify={'space-between'}
             >
               <GroupItem {...item} />
             </SortableList.Item>
           )}
+          onChange={async (items: AiProviderListItem[]) => {
+            setItems(items);
+          }}
         />
         <Button
           block
           loading={loading}
+          type={'primary'}
           onClick={async () => {
             const sortMap = items.map((item, index) => ({
               id: item.id,
@@ -76,7 +77,6 @@ const ConfigGroupModal = memo<ConfigGroupModalProps>(({ open, onCancel, defaultI
             message.success(t('sortModal.success'));
             onCancel();
           }}
-          type={'primary'}
         >
           {t('sortModal.update')}
         </Button>

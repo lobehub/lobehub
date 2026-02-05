@@ -1,7 +1,7 @@
 /**
  * 集成测试通用设置
  */
-import { type LobeChatDatabase } from '@/database/type';
+import type {LobeChatDatabase} from '@/database/type';
 import { uuid } from '@/utils/uuid';
 
 /**

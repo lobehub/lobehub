@@ -1,4 +1,4 @@
-import { type DocumentType } from '@lobechat/builtin-tool-notebook';
+import type {DocumentType} from '@lobechat/builtin-tool-notebook';
 
 import { lambdaClient } from '@/libs/trpc/client';
 

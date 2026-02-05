@@ -12,7 +12,8 @@
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
 import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { type LobeToolManifest, ToolsEngine } from '@lobechat/context-engine';
+import type {LobeToolManifest} from '@lobechat/context-engine';
+import {  ToolsEngine } from '@lobechat/context-engine';
 import debug from 'debug';
 
 import { builtinTools } from '@/tools';

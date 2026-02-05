@@ -1,14 +1,14 @@
 'use client';
 
+import type {ReactNode} from 'react';
 import {
-  type ReactNode,
   createContext,
   memo,
+  use,
   useCallback,
-  useContext,
   useEffect,
   useRef,
-  useState,
+  useState
 } from 'react';
 
 interface DragUploadContextValue {
@@ -25,7 +25,7 @@ const DragUploadContext = createContext<DragUploadContextValue>({
 /**
  * Hook to access global drag state
  */
-export const useDragUploadContext = () => useContext(DragUploadContext);
+export const useDragUploadContext = () => use(DragUploadContext);
 
 interface DragUploadProviderProps {
   children: ReactNode;
@@ -89,9 +89,9 @@ export const DragUploadProvider = memo<DragUploadProviderProps>(({ children }) =
   }, [handleDragEnter, handleDragOver, handleDragLeave, handleDrop]);
 
   return (
-    <DragUploadContext.Provider value={{ isDraggingGlobally }}>
+    <DragUploadContext value={{ isDraggingGlobally }}>
       {children}
-    </DragUploadContext.Provider>
+    </DragUploadContext>
   );
 });
 

@@ -22,31 +22,31 @@ const User = memo<{ lite?: boolean }>(({ lite }) => {
   return (
     <UserPanel>
       <Block
-        align={'center'}
         clickable
-        gap={8}
         horizontal
+        align={'center'}
+        gap={8}
         paddingBlock={2}
+        variant={'borderless'}
         style={{
           minWidth: 32,
           overflow: 'hidden',
           paddingInlineEnd: lite ? 2 : 8,
           paddingInlineStart: 2,
         }}
-        variant={'borderless'}
       >
         <UserAvatar shape={'square'} size={28} />
         {!lite && (
-          <Flexbox align={'center'} gap={4} horizontal style={{ overflow: 'hidden' }}>
+          <Flexbox horizontal align={'center'} gap={4} style={{ overflow: 'hidden' }}>
             {!isSignedIn && (nickname || username) ? (
               <ProductLogo color={cssVar.colorText} size={28} type={'text'} />
             ) : (
               <Text
                 ellipsis
+                weight={500}
                 style={{
                   flex: 1,
                 }}
-                weight={500}
               >
                 {nickname || username}
               </Text>

@@ -9,7 +9,7 @@ import { SkeletonInput } from '@/components/Skeleton';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey, LLMProviderBaseUrlKey } from '../../const';
-import { type ProviderItem } from '../../type';
+import type {ProviderItem} from '../../type';
 import ProviderDetail from '../default';
 
 const providerKey = ModelProvider.AzureAI;

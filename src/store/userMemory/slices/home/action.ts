@@ -1,11 +1,11 @@
-import { type SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
 
-import { type QueryIdentityRolesResult } from '@/database/models/userMemory';
+import type {QueryIdentityRolesResult} from '@/database/models/userMemory';
 import { useClientDataSWR } from '@/libs/swr';
 import { userMemoryService } from '@/services/userMemory';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 
-import { type PersonaData } from '../../initialState';
+import type {PersonaData} from '../../initialState';
 import type { UserMemoryStore } from '../../store';
 
 const FETCH_TAGS_KEY = 'useFetchTags';

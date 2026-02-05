@@ -4,7 +4,7 @@ import { TopicModel } from '@/database/models/topic';
 import { getServerDB } from '@/database/server';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { type BatchTaskResult } from '@/types/service';
+import type {BatchTaskResult} from '@/types/service';
 
 const topicProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;

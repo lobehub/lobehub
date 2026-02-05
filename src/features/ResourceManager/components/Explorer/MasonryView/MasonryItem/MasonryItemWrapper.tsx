@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import { type FileListItem } from '@/types/files';
+import type {FileListItem} from '@/types/files';
 
 import MasonryFileItem from '.';
 
@@ -24,6 +24,7 @@ const MasonryItemWrapper = memo<MasonryItemWrapperProps>(({ data: item, context 
     <div style={{ padding: '8px 4px' }}>
       <MasonryFileItem
         knowledgeBaseId={context.knowledgeBaseId}
+        selected={context.selectFileIds.includes(item.id)}
         onSelectedChange={(id, checked) => {
           if (checked) {
             context.setSelectedFileIds([...context.selectFileIds, id]);
@@ -31,7 +32,6 @@ const MasonryItemWrapper = memo<MasonryItemWrapperProps>(({ data: item, context 
             context.setSelectedFileIds(context.selectFileIds.filter((item) => item !== id));
           }
         }}
-        selected={context.selectFileIds.includes(item.id)}
         {...item}
       />
     </div>

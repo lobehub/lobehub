@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { useQuery } from '@/hooks/useQuery';
-import { type AssistantMarketSource } from '@/types/discover';
+import type {AssistantMarketSource} from '@/types/discover';
 
 import Title from '../../../../../features/Title';
 import { useDetailContext } from '../../DetailProvider';

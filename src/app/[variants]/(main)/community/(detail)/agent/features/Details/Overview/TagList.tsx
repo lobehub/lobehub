@@ -7,7 +7,7 @@ import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useQuery } from '@/hooks/useQuery';
-import { type AssistantMarketSource } from '@/types/discover';
+import type {AssistantMarketSource} from '@/types/discover';
 
 const styles = createStaticStyles(({ cssVar, css }) => {
   return {
@@ -28,7 +28,7 @@ const TagList = memo<{ tags: string[] }>(({ tags }) => {
   const showTags = Boolean(tags?.length && tags?.length > 0);
   return (
     showTags && (
-      <Flexbox gap={8} horizontal wrap={'wrap'}>
+      <Flexbox horizontal gap={8} wrap={'wrap'}>
         {tags.map((tag) => (
           <Link
             key={tag}

@@ -41,13 +41,13 @@ export const FallbackArgumentRender = memo<FallbackArgumentRenderProps>(
             </Flexbox>
             <Highlighter
               language={language}
+              variant={'filled'}
               style={{
                 background: 'transparent',
                 borderRadius: 0,
                 maxHeight: 300,
                 overflow: 'auto',
               }}
-              variant={'filled'}
             >
               {data}
             </Highlighter>

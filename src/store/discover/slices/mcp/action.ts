@@ -1,16 +1,12 @@
-import { type CategoryItem, type CategoryListQuery } from '@lobehub/market-sdk';
-import { type SWRResponse } from 'swr';
+import type {CategoryItem, CategoryListQuery} from '@lobehub/market-sdk';
+import type {SWRResponse} from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { discoverService } from '@/services/discover';
-import { type DiscoverStore } from '@/store/discover';
+import type {DiscoverStore} from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
-import { type StoreSetter } from '@/store/types';
-import {
-  type DiscoverMcpDetail,
-  type McpListResponse,
-  type McpQueryParams,
-} from '@/types/discover';
+import type {StoreSetter} from '@/store/types';
+import type {DiscoverMcpDetail, McpListResponse, McpQueryParams} from '@/types/discover';
 
 type Setter = StoreSetter<DiscoverStore>;
 export const createMCPSlice = (set: Setter, get: () => DiscoverStore, _api?: unknown) =>

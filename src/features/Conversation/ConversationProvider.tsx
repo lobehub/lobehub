@@ -3,12 +3,13 @@
 import type { UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 import isEqual from 'fast-deep-equal';
-import { type ReactNode, memo, useMemo } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useMemo } from 'react';
 
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
+import { createStore,Provider } from './store';
 import StoreUpdater from './StoreUpdater';
-import { Provider, createStore } from './store';
 import type {
   ActionsBarConfig,
   ConversationContext,
@@ -98,9 +99,9 @@ export const ConversationProvider = memo<ConversationProviderProps>(
           hasInitMessages={hasInitMessages}
           hooks={hooks}
           messages={messages}
-          onMessagesChange={onMessagesChange}
           operationState={operationState}
           skipFetch={skipFetch}
+          onMessagesChange={onMessagesChange}
         />
         {children}
       </Provider>

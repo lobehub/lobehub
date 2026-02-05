@@ -1,6 +1,6 @@
 import { NodemailerImpl } from './nodemailer';
 import { ResendImpl } from './resend';
-import { type EmailServiceImpl } from './type';
+import type {EmailServiceImpl} from './type';
 
 /**
  * Available email service implementations

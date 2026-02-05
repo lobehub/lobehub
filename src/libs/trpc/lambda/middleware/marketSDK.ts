@@ -1,4 +1,4 @@
-import { type TrustedClientUserInfo } from '@/libs/trusted-client';
+import type {TrustedClientUserInfo} from '@/libs/trusted-client';
 import { MarketService } from '@/server/services/market';
 
 import { trpc } from '../init';

@@ -3,6 +3,13 @@ import {
   DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM,
 } from '@lobechat/const';
 import { messages, topics } from '@lobechat/database/schemas';
+import type {
+  BenchmarkLocomoPart,
+  MemoryExtractionAgent,
+  MemoryExtractionJob,
+  MemoryExtractionResult,
+  PersistedMemoryResult,
+} from '@lobechat/memory-user-memory';
 import {
   BenchmarkLocomoContextProvider,
   LobeChatTopicContextProvider,
@@ -12,19 +19,12 @@ import {
   RetrievalUserMemoryIdentitiesProvider,
 } from '@lobechat/memory-user-memory';
 import type {
-  BenchmarkLocomoPart,
-  MemoryExtractionAgent,
-  MemoryExtractionJob,
-  MemoryExtractionResult,
-  PersistedMemoryResult,
-} from '@lobechat/memory-user-memory';
-import { ModelRuntime } from '@lobechat/model-runtime';
-import type {
   Embeddings,
   GenerateObjectPayload,
   LLMRoleType,
   OpenAIChatMessage,
 } from '@lobechat/model-runtime';
+import { ModelRuntime } from '@lobechat/model-runtime';
 import { SpanStatusCode } from '@lobechat/observability-otel/api';
 import {
   ATTR_GEN_AI_OPERATION_NAME,
@@ -45,7 +45,7 @@ import type {
   MemoryExtractionTraceError,
   MemoryExtractionTracePayload,
 } from '@lobechat/types';
-import { FlowControl } from '@upstash/qstash';
+import type { FlowControl } from '@upstash/qstash';
 import { Client } from '@upstash/workflow';
 import debug from 'debug';
 import { and, asc, eq, inArray } from 'drizzle-orm';
@@ -62,20 +62,20 @@ import { UserMemorySourceBenchmarkLoCoMoModel } from '@/database/models/userMemo
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { getServerDB } from '@/database/server';
 import { getServerGlobalConfig } from '@/server/globalConfig';
+import type {MemoryAgentConfig} from '@/server/globalConfig/parseMemoryExtractionConfig';
 import {
-  type MemoryAgentConfig,
-  parseMemoryExtractionConfig,
+  parseMemoryExtractionConfig
 } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { S3 } from '@/server/modules/S3';
 import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@/types/asyncTask';
 import type { GlobalMemoryLayer } from '@/types/serverConfig';
 import type { ProviderConfig } from '@/types/user/settings';
+import type {MergeStrategyEnum} from '@/types/userMemory';
 import {
   LayersEnum,
   MemorySourceType,
-  type MergeStrategyEnum,
-  TypesEnum,
+  TypesEnum
 } from '@/types/userMemory';
 import { trimBasedOnBatchProbe } from '@/utils/chunkers';
 import { encodeAsync } from '@/utils/tokenizer';
@@ -1364,7 +1364,7 @@ export class MemoryExtractionExecutor {
             contextProvider: topicContextProvider,
             gatekeeperLanguage: this.privateConfig.agentGateKeeper.language || 'English',
             language: language,
-            resultRecorder: resultRecorder,
+            resultRecorder: resultRecorder as any,
             retrievedContexts: trimmedRetrievedContexts,
             retrievedIdentitiesContext: trimmedRetrievedIdentitiesContext,
 

@@ -98,8 +98,8 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
               isConnected={isConnected}
               key={item.provider.id}
               label={item.provider.label}
-              onOpenDetail={() => createLobehubSkillDetailModal({ identifier: item.provider.id })}
               type="lobehub"
+              onOpenDetail={() => createLobehubSkillDetailModal({ identifier: item.provider.id })}
             />
           );
         }
@@ -113,14 +113,14 @@ export const LobeHubList = memo<LobeHubListProps>(({ keywords }) => {
             isConnected={isConnected}
             key={item.serverType.identifier}
             label={item.serverType.label}
+            serverName={item.serverType.serverName}
+            type="klavis"
             onOpenDetail={() =>
               createKlavisSkillDetailModal({
                 identifier: item.serverType.identifier,
                 serverName: item.serverType.serverName,
               })
             }
-            serverName={item.serverType.serverName}
-            type="klavis"
           />
         );
       })}

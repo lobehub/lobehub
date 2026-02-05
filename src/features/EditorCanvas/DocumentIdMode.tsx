@@ -1,6 +1,6 @@
 'use client';
 
-import { type IEditor } from '@lobehub/editor';
+import type {IEditor} from '@lobehub/editor';
 import { Alert, Skeleton } from '@lobehub/ui';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,8 +30,8 @@ const EditorError = memo<{ error: Error }>(({ error }) => {
 
   return (
     <Alert
-      description={error.message || t('pageEditor.loadError', 'Failed to load document')}
       showIcon
+      description={error.message || t('pageEditor.loadError', 'Failed to load document')}
       style={{ margin: 16 }}
       title={t('pageEditor.error', 'Error')}
       type="error"
@@ -114,10 +114,10 @@ const DocumentIdMode = memo<DocumentIdModeProps>(
         {error && <EditorError error={error as Error} />}
         <InternalEditor
           editor={editor}
-          onContentChange={handleChange}
-          onInit={onEditorInit}
           placeholder={editorProps.placeholder || t('pageEditor.editorPlaceholder')}
           style={style}
+          onContentChange={handleChange}
+          onInit={onEditorInit}
           {...editorProps}
         />
       </>

@@ -1,16 +1,11 @@
+import type {BuiltinAgentSlug} from '@lobechat/builtin-agents';
 import {
   BUILTIN_AGENT_SLUGS,
-  type BuiltinAgentSlug,
-  getAgentRuntimeConfig,
+  getAgentRuntimeConfig
 } from '@lobechat/builtin-agents';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import type { LobeToolManifest } from '@lobechat/context-engine';
-import {
-  type ChatCompletionTool,
-  type LobeAgentChatConfig,
-  type LobeAgentConfig,
-  type MessageMapScope,
-} from '@lobechat/types';
+import type {ChatCompletionTool, LobeAgentChatConfig, LobeAgentConfig, MessageMapScope} from '@lobechat/types';
 import debug from 'debug';
 import { produce } from 'immer';
 

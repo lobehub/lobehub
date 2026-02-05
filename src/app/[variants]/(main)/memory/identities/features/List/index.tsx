@@ -7,7 +7,7 @@ import { useGlobalStore } from '@/store/global';
 import { useUserMemoryStore } from '@/store/userMemory';
 
 import MemoryEmpty from '../../../features/MemoryEmpty';
-import { type ViewMode } from '../../../features/ViewModeSwitcher';
+import type {ViewMode} from '../../../features/ViewModeSwitcher';
 import GridView from './GridView';
 import TimelineView from './TimelineView';
 

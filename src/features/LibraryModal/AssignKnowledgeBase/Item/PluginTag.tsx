@@ -4,7 +4,7 @@ import { BadgeCheck, CircleUser, Package } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type InstallPluginMeta } from '@/types/tool/plugin';
+import type {InstallPluginMeta} from '@/types/tool/plugin';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   community: css`

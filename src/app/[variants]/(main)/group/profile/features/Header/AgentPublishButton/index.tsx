@@ -60,7 +60,7 @@ const AgentPublishButton = memo(() => {
       }
 
       default: {
-        return <ActionIcon disabled icon={Loader2} loading title={t('checkingPermissions')} />;
+        return <ActionIcon disabled loading icon={Loader2} title={t('checkingPermissions')} />;
       }
     }
   }, [buttonType, meta?.marketIdentifier]);
@@ -70,8 +70,8 @@ const AgentPublishButton = memo(() => {
       {content}
       <PublishResultModal
         identifier={publishedIdentifier}
-        onCancel={() => setShowResultModal(false)}
         open={showResultModal}
+        onCancel={() => setShowResultModal(false)}
       />
     </>
   );

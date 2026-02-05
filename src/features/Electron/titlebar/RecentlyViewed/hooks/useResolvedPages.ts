@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { useElectronStore } from '@/store/electron';
 
 import { pluginRegistry } from '../plugins';
-import { type ResolvedPageData } from '../types';
+import type {ResolvedPageData} from '../types';
 import { usePluginContext } from './usePluginContext';
 
 interface UseResolvedPagesResult {

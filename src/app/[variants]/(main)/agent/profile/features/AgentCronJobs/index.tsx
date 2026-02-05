@@ -57,7 +57,7 @@ const AgentCronJobs = memo(() => {
   return (
     <Flexbox gap={12} style={{ marginBottom: 16, marginTop: 16 }}>
       <Title level={5} style={{ margin: 0 }}>
-        <Flexbox align="center" gap={8} horizontal>
+        <Flexbox horizontal align="center" gap={8}>
           <Clock size={16} />
           {t('agentCronJobs.title')}
         </Flexbox>

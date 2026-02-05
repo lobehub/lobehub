@@ -1,4 +1,4 @@
-import { type FC } from 'react';
+import type {FC} from 'react';
 
 import InstantSwitch from '@/components/InstantSwitch';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -18,10 +18,10 @@ const Switch = ({ id, Component, enabled }: SwitchProps) => {
   return (
     <InstantSwitch
       enabled={enabled}
+      size={'small'}
       onChange={async (checked) => {
         await toggleProviderEnabled(id, checked);
       }}
-      size={'small'}
     />
   );
 };

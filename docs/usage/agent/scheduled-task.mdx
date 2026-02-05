@@ -20,8 +20,36 @@ In simple terms, you can configure an Agent to execute tasks based on your promp
 
 ## Creating a Task
 
-![Create Task](/blog/assetsafa74c85aafea8a057e6047b0823e280.webp)
+Find Scheduled Tasks in the left panel of the Agent conversation page, and click `Add Scheduled Task` to start creating a task.
 
-To create a task, simply enter a prompt, name, and schedule.
+On the creation page, you can fill in the task name, set the task frequency and specific execution time, set the maximum number of times the task can be executed, and configure the task content.
+
+![Create Task](https://file.rene.wang/clipboard-1770261091677-74b74e4d6bf23.png)
+
+In the Task Content area, you can enter the Prompt or instructions to provide to the Agent. For example, the task content to be completed, whether to call plugins, etc. Each scheduled trigger will fully execute the content defined here. After creation, you can modify the scheduled task configuration at any time.
+
+## Pausing a Task
+
+If you temporarily don't need a scheduled task, you can disable it. After disabling, the task will no longer execute automatically, but the task's execution plan and Prompt configuration will be preserved. The task will resume execution after re-enabling.
+
+![Pause Task](https://file.rene.wang/clipboard-1770266335710-1fec523143aab.png)
 
 ## Deleting a Task
+
+If you no longer need a scheduled task, you can delete it. After deletion, the task's execution plan and Prompt configuration will be removed, and the system will no longer trigger any subsequent executions.
+
+## Use Cases
+
+Scheduled tasks are suitable for all work scenarios that have a fixed rhythm, require continuous follow-up, or need periodic delivery of results. Here are some common and frequently used approaches.
+
+### Periodic Social Media Monitoring with Notifications
+
+You can set up scheduled tasks to periodically check social media content related to specified platforms or keywords. The task will automatically fetch the latest updates, filter information that meets the criteria, and generate summaries or trigger notifications when important updates are detected. This scenario is suitable for brand reputation monitoring, competitor tracking, creator content update alerts, and more. You only need to view the results without repeatedly searching manually.
+
+### Periodic Summary and Report Generation
+
+For work that requires regular review, such as data analysis, project progress tracking, or content performance evaluation, you can use scheduled tasks to automatically complete aggregation and analysis. The task will collect relevant information at specified times and output structured conclusions, helping you continuously track trend changes without having to organize from scratch each time.
+
+### Scheduled Reminder Notifications
+
+You can set up reminders in advance for items that need attention, such as work to be handled, important milestones, periodic check tasks, etc., and let LobeHub automatically generate reminder messages and notify you via email or other methods without manual triggering. This approach is suitable for personal to-do reminders, important event notifications, periodic task prompts, and other scenarios, helping you receive clear action prompts at the right time and leaving the things you need to remember to the system.

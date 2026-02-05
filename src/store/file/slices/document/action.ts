@@ -4,12 +4,13 @@ import type { SWRResponse } from 'swr';
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
 import { useGlobalStore } from '@/store/global';
-import { type StoreSetter } from '@/store/types';
-import { DocumentSourceType, type LobeDocument } from '@/types/document';
+import type {StoreSetter} from '@/store/types';
+import type {LobeDocument} from '@/types/document';
+import { DocumentSourceType  } from '@/types/document';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type FileStore } from '../../store';
-import { type DocumentQueryFilter } from './initialState';
+import type {FileStore} from '../../store';
+import type {DocumentQueryFilter} from './initialState';
 
 const n = setNamespace('document');
 

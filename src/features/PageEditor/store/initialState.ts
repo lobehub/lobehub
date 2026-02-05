@@ -1,4 +1,4 @@
-import { type IEditor } from '@lobehub/editor';
+import type {IEditor} from '@lobehub/editor';
 
 export type MetaSaveStatus = 'idle' | 'saving' | 'saved';
 

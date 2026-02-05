@@ -1,4 +1,4 @@
-import { AIChatModelCard, AIEmbeddingModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIEmbeddingModelCard } from '../types/aiModel';
 
 // Model list provided by Vercel AI Gateway, sorted by SOTA, large models, small models
 const vercelAIGatewayChatModels: AIChatModelCard[] = [
@@ -1684,7 +1684,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     type: 'embedding',
   },
   {
-    description: "OpenAI’s improved, higher-performance ada embedding model variant.",
+    description: 'OpenAI’s improved, higher-performance ada embedding model variant.',
     displayName: 'text-embedding-3-small',
     id: 'openai/text-embedding-3-small',
     maxDimension: 1536,
@@ -1694,7 +1694,7 @@ const vercelAIGatewayEmbeddingModels: AIEmbeddingModelCard[] = [
     type: 'embedding',
   },
   {
-    description: "OpenAI’s legacy text embedding model.",
+    description: 'OpenAI’s legacy text embedding model.',
     displayName: 'text-embedding-ada-002',
     id: 'openai/text-embedding-ada-002',
     maxDimension: 1536,

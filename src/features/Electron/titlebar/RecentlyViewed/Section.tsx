@@ -4,7 +4,7 @@ import { memo } from 'react';
 
 import PageItem from './PageItem';
 import { useStyles } from './styles';
-import { type ResolvedPageData } from './types';
+import type {ResolvedPageData} from './types';
 
 interface SectionProps {
   isPinned: boolean;

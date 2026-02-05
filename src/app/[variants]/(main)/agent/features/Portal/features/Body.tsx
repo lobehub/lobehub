@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { css, cx } from 'antd-style';
-import { type PropsWithChildren } from 'react';
+import type {PropsWithChildren} from 'react';
 
 const body = css`
   :has(.portal-artifact) {

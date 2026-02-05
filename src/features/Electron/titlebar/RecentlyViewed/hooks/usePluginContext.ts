@@ -10,9 +10,9 @@ import { usePageStore } from '@/store/page';
 import { listSelectors } from '@/store/page/slices/list/selectors';
 import { useSessionStore } from '@/store/session';
 import { sessionGroupSelectors } from '@/store/session/slices/sessionGroup/selectors';
-import { type ChatTopic } from '@/types/topic';
+import type {ChatTopic} from '@/types/topic';
 
-import { type PluginContext } from '../plugins/types';
+import type {PluginContext} from '../plugins/types';
 
 /**
  * Search for a topic across all entries in topicDataMap

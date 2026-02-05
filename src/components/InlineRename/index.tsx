@@ -1,8 +1,10 @@
 'use client';
 
-import { Input, type InputProps, Popover } from '@lobehub/ui';
+import type {InputProps} from '@lobehub/ui';
+import { Input,  Popover } from '@lobehub/ui';
 import type { InputRef, PopoverProps } from 'antd';
-import { KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
+import type { KeyboardEvent} from 'react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 function FocusableInput(props: InputProps) {
   const ref = useRef<InputRef>(null);
@@ -85,6 +87,9 @@ const InlineRename = memo<InlineRenameProps>(
 
     return (
       <Popover
+        open={open}
+        placement={placement}
+        trigger="click"
         content={
           <FocusableInput
             defaultValue={title}
@@ -98,19 +103,16 @@ const InlineRename = memo<InlineRenameProps>(
             }}
           />
         }
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen) handleSave();
-          onOpenChange(nextOpen);
-        }}
-        open={open}
-        placement={placement}
         styles={{
           content: {
             padding: 4,
             width,
           },
         }}
-        trigger="click"
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) handleSave();
+          onOpenChange(nextOpen);
+        }}
       >
         <div />
       </Popover>

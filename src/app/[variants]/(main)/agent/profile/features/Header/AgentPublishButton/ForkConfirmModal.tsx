@@ -33,19 +33,19 @@ const ForkConfirmModal = memo<ForkConfirmModalProps>(
 
     return (
       <Modal
-        cancelText={t('cancel', { ns: 'common' })}
         centered
         closable
+        cancelText={t('cancel', { ns: 'common' })}
         confirmLoading={loading}
         okText={t('marketPublish.forkConfirm.confirm')}
-        onCancel={onCancel}
-        onOk={onConfirm}
         open={open}
         title={t('marketPublish.forkConfirm.title')}
         width={480}
+        onCancel={onCancel}
+        onOk={onConfirm}
       >
         <Flexbox gap={16} style={{ marginTop: 16 }}>
-          <Flexbox align="center" gap={12} horizontal>
+          <Flexbox horizontal align="center" gap={12}>
             <Avatar avatar={originalAgent.avatar} size={48} style={{ flex: 'none' }} />
             <Flexbox gap={4}>
               <div style={{ fontWeight: 500 }}>{originalAgent.name}</div>

@@ -3,8 +3,8 @@ import type { LobeChatGroupConfig } from '@lobechat/types';
 import { DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@/const/settings';
 import type { ChatGroupItem } from '@/database/schemas/chatGroup';
 import { chatGroupService } from '@/services/chatGroup';
-import { type ChatGroupStore } from '@/store/agentGroup/store';
-import { type StoreSetter } from '@/store/types';
+import type {ChatGroupStore} from '@/store/agentGroup/store';
+import type {StoreSetter} from '@/store/types';
 
 import { agentGroupSelectors } from '../selectors';
 

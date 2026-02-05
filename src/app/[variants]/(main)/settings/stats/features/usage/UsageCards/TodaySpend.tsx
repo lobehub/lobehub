@@ -10,10 +10,10 @@ import { useTranslation } from 'react-i18next';
 import Statistic from '@/components/Statistic';
 import StatisticCard from '@/components/StatisticCard';
 import TitleWithPercentage from '@/components/StatisticCard/TitleWithPercentage';
-import { type UsageLog } from '@/types/usage/usageRecord';
+import type {UsageLog} from '@/types/usage/usageRecord';
 import { formatNumber } from '@/utils/format';
 
-import { type UsageChartProps } from '../../../types';
+import type {UsageChartProps} from '../../../types';
 
 dayjs.extend(utc);
 dayjs.extend(isToday);

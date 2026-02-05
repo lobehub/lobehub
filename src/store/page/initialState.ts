@@ -1,6 +1,6 @@
-import { NavigateFunction } from 'react-router-dom';
+import type { NavigateFunction } from 'react-router-dom';
 
-import { type LobeDocument } from '@/types/document';
+import type {LobeDocument} from '@/types/document';
 
 export interface PageQueryFilter {
   fileTypes?: string[];

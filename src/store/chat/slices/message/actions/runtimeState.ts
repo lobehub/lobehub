@@ -1,6 +1,6 @@
-import { type ChatStore } from '@/store/chat/store';
-import { type StoreSetter } from '@/store/types';
-import { type Action } from '@/utils/storeDebug';
+import type {ChatStore} from '@/store/chat/store';
+import type {StoreSetter} from '@/store/types';
+import type {Action} from '@/utils/storeDebug';
 
 import type { ChatStoreState } from '../../../initialState';
 import { preventLeavingFn, toggleBooleanList } from '../../../utils';

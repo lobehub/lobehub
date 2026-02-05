@@ -2,7 +2,7 @@ import { initTRPC } from '@trpc/server';
 import debug from 'debug';
 import superjson from 'superjson';
 
-import { type AsyncContext } from './context';
+import type {AsyncContext} from './context';
 
 const log = debug('lobe-async:init');
 

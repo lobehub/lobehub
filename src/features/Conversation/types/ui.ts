@@ -1,7 +1,7 @@
-import { type LLMRoleType, type UIChatMessage } from '@lobechat/types';
-import { type ActionIconGroupItemType } from '@lobehub/ui';
-import { type ChatItemProps } from '@lobehub/ui/chat';
-import { type FC, type ReactNode } from 'react';
+import type {LLMRoleType, UIChatMessage} from '@lobechat/types';
+import type {ActionIconGroupItemType} from '@lobehub/ui';
+import type {ChatItemProps} from '@lobehub/ui/chat';
+import type {FC, ReactNode} from 'react';
 
 export type RenderRole = LLMRoleType | 'default' | 'history' | string;
 export type RenderMessage = FC<UIChatMessage & { editableContent: ReactNode }>;

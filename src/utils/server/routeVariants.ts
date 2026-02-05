@@ -1,6 +1,6 @@
 import { RouteVariants } from '@lobechat/desktop-bridge';
 
-import { type DynamicLayoutProps } from '@/types/next';
+import type {DynamicLayoutProps} from '@/types/next';
 
 export { LOBE_LOCALE_COOKIE } from '@/const/locale';
 export {

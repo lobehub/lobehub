@@ -2,7 +2,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import MarkdownMessage from '@/features/Conversation/Markdown';
-import { type UIChatMessage } from '@/types/index';
+import type {UIChatMessage} from '@/types/index';
 
 import { useMarkdown } from '../useMarkdown';
 import FileListViewer from './FileListViewer';

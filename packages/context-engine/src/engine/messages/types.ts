@@ -6,10 +6,10 @@ import type { OpenAIChatMessage, UIChatMessage } from '@/types/index';
 
 import type { AgentInfo } from '../../processors/GroupRoleTransform';
 import type { AgentBuilderContext } from '../../providers/AgentBuilderContextInjector';
-import type { GTDPlan } from '../../providers/GTDPlanInjector';
-import type { GTDTodoList } from '../../providers/GTDTodoInjector';
 import type { GroupAgentBuilderContext } from '../../providers/GroupAgentBuilderContextInjector';
 import type { GroupMemberInfo } from '../../providers/GroupContextInjector';
+import type { GTDPlan } from '../../providers/GTDPlanInjector';
+import type { GTDTodoList } from '../../providers/GTDTodoInjector';
 import type { LobeToolManifest } from '../tools/types';
 
 /**
@@ -67,42 +67,42 @@ export interface FileContextConfig {
  * Note: Properties can be null (from database) or undefined
  */
 export interface UserMemoryContextItem {
+  [key: string]: unknown;
   description?: string | null;
   id?: string;
   title?: string | null;
-  [key: string]: unknown;
 }
 
 export interface UserMemoryExperienceItem {
+  [key: string]: unknown;
   id?: string;
   keyLearning?: string | null;
   situation?: string | null;
-  [key: string]: unknown;
 }
 
 export interface UserMemoryPreferenceItem {
+  [key: string]: unknown;
   conclusionDirectives?: string | null;
   id?: string;
-  [key: string]: unknown;
 }
 
 export interface UserMemoryActivityItem {
+  [key: string]: unknown;
   endsAt?: string | Date | null;
   id?: string;
   startsAt?: string | Date | null;
   status?: string | null;
   timezone?: string | null;
   type?: string | null;
-  [key: string]: unknown;
 }
 
 export interface UserMemoryIdentityItem {
+  [key: string]: unknown;
   description?: string | null;
   id?: string;
   role?: string | null;
   /** Identity type: personal (role), professional (occupation), demographic (attribute) */
   type?: 'demographic' | 'personal' | 'professional' | string | null;
-  [key: string]: unknown;
 }
 
 /**
@@ -169,74 +169,74 @@ export interface GTDConfig {
  * MessagesEngine main parameters
  */
 export interface MessagesEngineParams {
-  // ========== Required parameters ==========
-  /** Original message list */
-  messages: UIChatMessage[];
-  /** Model ID */
-  model: string;
-  /** Provider ID */
-  provider: string;
-
-  // ========== Agent configuration ==========
-  /** Whether to enable history message count limit */
-  enableHistoryCount?: boolean;
-  /** Function to format history summary */
-  formatHistorySummary?: (summary: string) => string;
-  /** History message count limit */
-  historyCount?: number;
-  /** History summary content */
-  historySummary?: string;
-  /** Input template */
-  inputTemplate?: string;
-  /** System role */
-  systemRole?: string;
-
-  // ========== Capability injection (dependency injection) ==========
-  /** Model capability checker */
-  capabilities?: ModelCapabilityChecker;
-  /** Variable generators for placeholder replacement */
-  variableGenerators?: VariableGenerators;
-
-  // ========== Knowledge ==========
-  /** Knowledge configuration */
-  knowledge?: KnowledgeConfig;
-
-  // ========== Tools ==========
-  /** Tools configuration */
-  toolsConfig?: ToolsConfig;
-
-  // ========== File handling ==========
-  /** File context configuration */
-  fileContext?: FileContextConfig;
-
   // ========== Extended contexts (both frontend and backend) ==========
   /** Agent Builder context */
   agentBuilderContext?: AgentBuilderContext;
   /** Agent group configuration for multi-agent scenarios */
   agentGroup?: AgentGroupConfig;
+  // ========== Capability injection (dependency injection) ==========
+  /** Model capability checker */
+  capabilities?: ModelCapabilityChecker;
+
+  // ========== Agent configuration ==========
+  /** Whether to enable history message count limit */
+  enableHistoryCount?: boolean;
+  // ========== File handling ==========
+  /** File context configuration */
+  fileContext?: FileContextConfig;
+  /** Function to format history summary */
+  formatHistorySummary?: (summary: string) => string;
   /** Group Agent Builder context */
   groupAgentBuilderContext?: GroupAgentBuilderContext;
   /** GTD (Getting Things Done) configuration */
   gtd?: GTDConfig;
-  /** User memory configuration */
-  userMemory?: UserMemoryConfig;
+  /** History message count limit */
+  historyCount?: number;
 
+  /** History summary content */
+  historySummary?: string;
   // ========== Page Editor context ==========
   /**
    * Initial context captured at operation start (frontend runtime usage)
    * Contains static state like initial page content that doesn't change during execution
    */
   initialContext?: RuntimeInitialContext;
+
+  /** Input template */
+  inputTemplate?: string;
+
+  // ========== Knowledge ==========
+  /** Knowledge configuration */
+  knowledge?: KnowledgeConfig;
+
+  // ========== Required parameters ==========
+  /** Original message list */
+  messages: UIChatMessage[];
+
+  /** Model ID */
+  model: string;
   /**
    * Page content context for direct injection (server-side usage)
    * When provided, takes precedence over initialContext/stepContext
    */
   pageContentContext?: PageContentContext;
+  /** Provider ID */
+  provider: string;
   /**
    * Step context computed at the beginning of each step (frontend runtime usage)
    * Contains dynamic state like latest XML that changes between steps
    */
   stepContext?: RuntimeStepContext;
+  /** System role */
+  systemRole?: string;
+
+  // ========== Tools ==========
+  /** Tools configuration */
+  toolsConfig?: ToolsConfig;
+  /** User memory configuration */
+  userMemory?: UserMemoryConfig;
+  /** Variable generators for placeholder replacement */
+  variableGenerators?: VariableGenerators;
 }
 
 /**

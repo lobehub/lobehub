@@ -1,7 +1,8 @@
 import { fileManagerSelectors, useFileStore } from '@/store/file';
-import { type FileListItem, SortType } from '@/types/files';
+import type {FileListItem} from '@/types/files';
+import {  SortType } from '@/types/files';
 
-import { type State } from './initialState';
+import type {State} from './initialState';
 
 /**
  * Sort a file list based on sort settings

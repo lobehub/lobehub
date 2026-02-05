@@ -16,7 +16,7 @@ import {
 import { MemoryInterventions, MemoryManifest } from '@lobechat/builtin-tool-memory/client';
 import { NotebookManifest } from '@lobechat/builtin-tool-notebook';
 import { NotebookInterventions } from '@lobechat/builtin-tool-notebook/client';
-import { type BuiltinIntervention } from '@lobechat/types';
+import type {BuiltinIntervention} from '@lobechat/types';
 
 /**
  * Builtin tools interventions registry

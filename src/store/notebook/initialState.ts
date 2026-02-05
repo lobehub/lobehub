@@ -1,4 +1,4 @@
-import { type NotebookDocument } from '@lobechat/types';
+import type {NotebookDocument} from '@lobechat/types';
 
 export interface NotebookState {
   /**

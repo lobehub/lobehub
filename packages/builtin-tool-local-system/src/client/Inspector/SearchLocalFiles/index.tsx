@@ -1,7 +1,7 @@
 'use client';
 
-import { type LocalSearchFilesParams } from '@lobechat/electron-client-ipc';
-import { type BuiltinInspectorProps } from '@lobechat/types';
+import type { LocalSearchFilesParams } from '@lobechat/electron-client-ipc';
+import type { BuiltinInspectorProps } from '@lobechat/types';
 import { Text } from '@lobehub/ui';
 import { cssVar, cx } from 'antd-style';
 import { memo } from 'react';
@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { highlightTextStyles, inspectorTextStyles, shinyTextStyles } from '@/styles';
 
-import { type LocalFileSearchState } from '../../..';
+import type { LocalFileSearchState } from '../../..';
 
 export const SearchLocalFilesInspector = memo<
   BuiltinInspectorProps<LocalSearchFilesParams, LocalFileSearchState>

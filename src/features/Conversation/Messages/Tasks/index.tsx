@@ -1,6 +1,6 @@
 'use client';
 
-import { type UIChatMessage } from '@lobechat/types';
+import type {UIChatMessage} from '@lobechat/types';
 import { Flexbox, Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
@@ -37,18 +37,18 @@ const TasksMessage = memo<TasksMessageProps>(({ id, index }) => {
 
   return (
     <ChatItem
+      showTitle
       aboveMessage={null}
-      actions={
-        <AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} index={index} />
-      }
       avatar={avatar}
       customAvatarRender={(_, node) => <TaskAvatar>{node}</TaskAvatar>}
       id={id}
       message=""
       placement="left"
-      showTitle
       time={createdAt}
       titleAddon={<Tag>{t('task.batchTasks', { count: tasks.length })}</Tag>}
+      actions={
+        <AssistantActionsBar actionsConfig={actionsConfig} data={item} id={id} index={index} />
+      }
     >
       <Flexbox gap={8} width={'100%'}>
         {tasks.map((task) => (

@@ -2,7 +2,7 @@ import { t } from 'i18next';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
 import type { SessionStore } from '@/store/session';
-import { type MetaData } from '@/types/meta';
+import type {MetaData} from '@/types/meta';
 import { merge } from '@/utils/merge';
 
 import { sessionSelectors } from './list';

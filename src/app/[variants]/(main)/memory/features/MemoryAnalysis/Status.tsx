@@ -1,12 +1,11 @@
 'use client';
 
+import { AsyncTaskStatus } from '@lobechat/types';
 import { Alert, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Progress } from 'antd';
 import { Loader2Icon, TriangleAlertIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
-
-import { AsyncTaskStatus } from '@lobechat/types';
 
 import type { MemoryExtractionTask } from '@/services/userMemory/extraction';
 
@@ -50,9 +49,13 @@ export const MemoryAnalysisStatus = memo<StatusProps>(({ task }) => {
 
   return (
     <Alert
+      icon={<Icon icon={isError ? TriangleAlertIcon : Loader2Icon} spin={isRunning && !isError} />}
+      title={isError ? t('analysis.status.errorTitle') : t('analysis.status.title')}
+      type={isError ? 'error' : 'info'}
+      variant={'borderless'}
       description={
         <Flexbox gap={12}>
-          <Flexbox align="center" gap={12} horizontal wrap="wrap">
+          <Flexbox horizontal align="center" gap={12} wrap="wrap">
             <Progress
               percent={percent ?? 30}
               showInfo={Boolean(percent)}
@@ -65,10 +68,6 @@ export const MemoryAnalysisStatus = memo<StatusProps>(({ task }) => {
           </Flexbox>
         </Flexbox>
       }
-      icon={<Icon icon={isError ? TriangleAlertIcon : Loader2Icon} spin={isRunning && !isError} />}
-      title={isError ? t('analysis.status.errorTitle') : t('analysis.status.title')}
-      type={isError ? 'error' : 'info'}
-      variant={'borderless'}
     />
   );
 });

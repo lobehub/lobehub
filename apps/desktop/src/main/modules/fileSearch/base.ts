@@ -1,11 +1,11 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix */
-import { GlobFilesParams, GlobFilesResult } from '@lobechat/electron-client-ipc';
 import { stat } from 'node:fs/promises';
 import * as path from 'node:path';
 
-import { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
+import type { GlobFilesParams, GlobFilesResult } from '@lobechat/electron-client-ipc';
 
-import { FileResult, SearchOptions } from './types';
+import type { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
+
+import type { FileResult, SearchOptions } from './types';
 
 /**
  * Content type mapping for common file extensions

@@ -1,5 +1,5 @@
 import { NuqsAdapter } from 'nuqs/adapters/next/app';
-import { type FC, type PropsWithChildren } from 'react';
+import type {FC, PropsWithChildren} from 'react';
 
 import ClientOnly from '@/components/client/ClientOnly';
 

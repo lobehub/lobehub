@@ -1,17 +1,15 @@
 'use client';
 
+import type {Dispatch, ReactNode, SetStateAction} from 'react';
 import {
-  type Dispatch,
-  type ReactNode,
-  type SetStateAction,
   createContext,
+  use,
   useCallback,
-  useContext,
   useMemo,
-  useState,
+  useState
 } from 'react';
 
-import { type MenuContext, type PageType, type SelectedAgent } from './types';
+import type {MenuContext, PageType, SelectedAgent} from './types';
 import { detectContext } from './utils/context';
 import type { ValidSearchType } from './utils/queryParser';
 
@@ -104,11 +102,11 @@ export const CommandMenuProvider = ({ children, onClose, pathname }: CommandMenu
     ],
   );
 
-  return <CommandMenuContext.Provider value={contextValue}>{children}</CommandMenuContext.Provider>;
+  return <CommandMenuContext value={contextValue}>{children}</CommandMenuContext>;
 };
 
 export const useCommandMenuContext = () => {
-  const context = useContext(CommandMenuContext);
+  const context = use(CommandMenuContext);
   if (context === undefined) {
     throw new Error('useCommandMenuContext must be used within a CommandMenuProvider');
   }

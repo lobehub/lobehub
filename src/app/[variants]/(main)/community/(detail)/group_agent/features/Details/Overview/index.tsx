@@ -38,16 +38,16 @@ const MemberCard = memo(
     return (
       <Block
         height={'100%'}
+        variant={'outlined'}
+        width={'100%'}
         style={{
           cursor: 'default',
           overflow: 'hidden',
         }}
-        variant={'outlined'}
-        width={'100%'}
       >
         <Flexbox gap={12} padding={16}>
           {/* Avatar and Basic Info */}
-          <Flexbox align={'flex-start'} gap={12} horizontal>
+          <Flexbox horizontal align={'flex-start'} gap={12}>
             <Avatar
               avatar={currentVersion.avatar || agent.name?.[0]}
               shape={'square'}
@@ -61,7 +61,7 @@ const MemberCard = memo(
                 overflow: 'hidden',
               }}
             >
-              <Text as={'h3'} className={styles.title} ellipsis>
+              <Text ellipsis as={'h3'} className={styles.title}>
                 {currentVersion.name || agent.name}
               </Text>
             </Flexbox>
@@ -151,6 +151,7 @@ const Overview = memo(() => {
       <Collapse
         defaultActiveKey={['summary']}
         expandIconPlacement={'end'}
+        variant={'outlined'}
         items={[
           {
             children: summary || description,
@@ -158,7 +159,6 @@ const Overview = memo(() => {
             label: t('groupAgents.details.summary.title', { defaultValue: 'Summary' }),
           },
         ]}
-        variant={'outlined'}
       />
 
       {/* Members Section */}
@@ -191,17 +191,17 @@ const Overview = memo(() => {
             {t('groupAgents.details.overview.example', { defaultValue: 'Conversation Example' })}
           </Title>
           <Block
+            variant={'outlined'}
             style={{
               background: theme.colorBgContainerSecondary,
             }}
-            variant={'outlined'}
           >
             <ChatList
               data={data}
+              style={{ width: '100%' }}
               renderMessages={{
                 default: ({ id, editableContent }) => <div id={id}>{editableContent}</div>,
               }}
-              style={{ width: '100%' }}
             />
           </Block>
         </>

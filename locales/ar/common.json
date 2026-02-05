@@ -260,6 +260,7 @@
   "geminiImageChineseWarning.doNotShowAgain": "عدم الإظهار مرة أخرى",
   "geminiImageChineseWarning.title": "تنبيه إدخال باللغة الصينية",
   "historyRange": "نطاق السجل",
+  "home.suggestQuestions": "جرّب هذه الأمثلة",
   "import": "استيراد",
   "importData": "استيراد البيانات",
   "importModal.error.desc": "عذرًا، حدث خطأ أثناء عملية استيراد البيانات. يرجى المحاولة مرة أخرى، أو <1>إرسال طلب</1> وسنساعدك في حل المشكلة في أقرب وقت ممكن.",

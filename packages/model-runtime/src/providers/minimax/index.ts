@@ -1,4 +1,4 @@
-import { ModelProvider, minimax as minimaxChatModels } from 'model-bank';
+import { minimax as minimaxChatModels, ModelProvider } from 'model-bank';
 
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { resolveParameters } from '../../core/parameterResolver';
@@ -36,7 +36,7 @@ export const LobeMinimaxAI = createOpenAICompatibleRuntime({
           }
 
           // 有 signature 或没有 content 的情况，移除 reasoning 字段
-          // eslint-disable-next-line unused-imports/no-unused-vars, @typescript-eslint/no-unused-vars
+          // eslint-disable-next-line unused-imports/no-unused-vars
           const { reasoning, ...messageWithoutReasoning } = message;
           return messageWithoutReasoning;
         }

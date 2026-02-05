@@ -40,9 +40,9 @@ const AddButton = memo(() => {
       <ActionIcon
         icon={CreateBotIcon}
         loading={isMutatingAgent || isCreatingGroup}
-        onClick={handleMainIconClick}
         size={DESKTOP_HEADER_ICON_SIZE}
         title={tChat('newAgent')}
+        onClick={handleMainIconClick}
       />
       <DropdownMenu items={dropdownItems}>
         <ActionIcon

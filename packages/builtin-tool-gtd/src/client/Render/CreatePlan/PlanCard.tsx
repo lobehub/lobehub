@@ -51,12 +51,12 @@ const PlanCard = memo<PlanCardProps>(({ plan }) => {
     <Block gap={8} padding={12} style={{ overflow: 'hidden' }} variant={'outlined'}>
       {/* Header - clickable to open document */}
       <Flexbox
+        horizontal
         align={'center'}
         className={styles.header}
         gap={8}
-        horizontal
-        onClick={handleHeaderClick}
         style={{ overflow: 'hidden' }}
+        onClick={handleHeaderClick}
       >
         <Icon icon={ListChecksIcon} size={18} />
         <Text ellipsis fontSize={16} weight={500}>

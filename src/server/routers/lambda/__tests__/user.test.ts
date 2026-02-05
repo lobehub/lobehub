@@ -3,10 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
 import { SessionModel } from '@/database/models/session';
-import { UserModel, UserNotFoundError } from '@/database/models/user';
+import { UserModel } from '@/database/models/user';
 import { serverDB } from '@/database/server';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { UserService } from '@/server/services/user';
 
 import { userRouter } from '../user';
 

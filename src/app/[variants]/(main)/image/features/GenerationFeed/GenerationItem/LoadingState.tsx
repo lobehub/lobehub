@@ -10,7 +10,7 @@ import { AsyncTaskStatus } from '@/types/asyncTask';
 import { ActionButtons } from './ActionButtons';
 import { ElapsedTime } from './ElapsedTime';
 import { styles } from './styles';
-import { type LoadingStateProps } from './types';
+import type {LoadingStateProps} from './types';
 import { getThumbnailMaxWidth } from './utils';
 
 // 加载状态组件
@@ -25,11 +25,11 @@ export const LoadingState = memo<LoadingStateProps>(
         align={'center'}
         className={styles.placeholderContainer}
         justify={'center'}
+        variant={'filled'}
         style={{
           aspectRatio,
           maxWidth: getThumbnailMaxWidth(generation, generationBatch),
         }}
-        variant={'filled'}
       >
         <Center gap={8}>
           <Spin indicator={<LoadingOutlined spin />} />

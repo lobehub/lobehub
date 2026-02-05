@@ -1,5 +1,5 @@
-import { type LobeChatDatabase } from '@lobechat/database';
-import { type ChatToolPayload } from '@lobechat/types';
+import type {LobeChatDatabase} from '@lobechat/database';
+import type {ChatToolPayload} from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
 
@@ -7,7 +7,7 @@ import { KlavisService } from '@/server/services/klavis';
 import { MarketService } from '@/server/services/market';
 
 import { getServerRuntime, hasServerRuntime } from './serverRuntimes';
-import { type IToolExecutor, type ToolExecutionContext, type ToolExecutionResult } from './types';
+import type {IToolExecutor, ToolExecutionContext, ToolExecutionResult} from './types';
 
 const log = debug('lobe-server:builtin-tools-executor');
 

@@ -1,6 +1,7 @@
 'use client';
 
-import { type ReactNode, createContext, memo, useCallback, useContext, useMemo, useState } from 'react';
+import type {ReactNode} from 'react';
+import { createContext, memo,  use, useCallback, useMemo, useState } from 'react';
 
 export type FaviconState = 'default' | 'done' | 'error' | 'progress';
 
@@ -18,7 +19,7 @@ const FaviconStateContext = createContext<FaviconStateContextValue | null>(null)
 const FaviconSettersContext = createContext<FaviconSettersContextValue | null>(null);
 
 export const useFaviconState = () => {
-  const context = useContext(FaviconStateContext);
+  const context = use(FaviconStateContext);
   if (!context) {
     throw new Error('useFaviconState must be used within FaviconProvider');
   }
@@ -26,7 +27,7 @@ export const useFaviconState = () => {
 };
 
 export const useFaviconSetters = () => {
-  const context = useContext(FaviconSettersContext);
+  const context = use(FaviconSettersContext);
   if (!context) {
     throw new Error('useFaviconSetters must be used within FaviconProvider');
   }
@@ -105,11 +106,11 @@ export const FaviconProvider = memo<{ children: ReactNode }>(({ children }) => {
   );
 
   return (
-    <FaviconStateContext.Provider value={stateValue}>
-      <FaviconSettersContext.Provider value={settersValue}>
+    <FaviconStateContext value={stateValue}>
+      <FaviconSettersContext value={settersValue}>
         {children}
-      </FaviconSettersContext.Provider>
-    </FaviconStateContext.Provider>
+      </FaviconSettersContext>
+    </FaviconStateContext>
   );
 });
 

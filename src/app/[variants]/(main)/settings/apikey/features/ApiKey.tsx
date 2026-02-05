@@ -1,16 +1,18 @@
 'use client';
 
-import { type ActionType, type ProColumns, ProTable } from '@ant-design/pro-components';
+import type {ActionType, ProColumns} from '@ant-design/pro-components';
+import {   ProTable } from '@ant-design/pro-components';
 import { Button } from '@lobehub/ui';
 import { useMutation } from '@tanstack/react-query';
 import { Popconfirm, Switch } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { Trash } from 'lucide-react';
-import { type FC, useRef, useState } from 'react';
+import type {FC} from 'react';
+import {  useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lambdaClient } from '@/libs/trpc/client';
-import { type ApiKeyItem, type CreateApiKeyParams, type UpdateApiKeyParams } from '@/types/apiKey';
+import type {ApiKeyItem, CreateApiKeyParams, UpdateApiKeyParams} from '@/types/apiKey';
 
 import { ApiKeyDisplay, ApiKeyModal, EditableCell } from './index';
 
@@ -78,6 +80,9 @@ const ApiKey: FC = () => {
       key: 'name',
       render: (_, apiKey) => (
         <EditableCell
+          placeholder={t('apikey.display.enterPlaceholder')}
+          type="text"
+          value={apiKey.name}
           onSubmit={(name) => {
             if (!name || name === apiKey.name) {
               return;
@@ -85,9 +90,6 @@ const ApiKey: FC = () => {
 
             updateMutation.mutate({ id: apiKey.id!, params: { name: name as string } });
           }}
-          placeholder={t('apikey.display.enterPlaceholder')}
-          type="text"
-          value={apiKey.name}
         />
       ),
       title: t('apikey.list.columns.name'),
@@ -119,6 +121,9 @@ const ApiKey: FC = () => {
       key: 'expiresAt',
       render: (_, apiKey) => (
         <EditableCell
+          placeholder={t('apikey.display.neverExpires')}
+          type="date"
+          value={apiKey.expiresAt?.toLocaleString() || t('apikey.display.neverExpires')}
           onSubmit={(expiresAt) => {
             if (expiresAt === apiKey.expiresAt) {
               return;
@@ -129,9 +134,6 @@ const ApiKey: FC = () => {
               params: { expiresAt: expiresAt ? new Date(expiresAt as string) : null },
             });
           }}
-          placeholder={t('apikey.display.neverExpires')}
-          type="date"
-          value={apiKey.expiresAt?.toLocaleString() || t('apikey.display.neverExpires')}
         />
       ),
       title: t('apikey.list.columns.expiresAt'),
@@ -151,8 +153,8 @@ const ApiKey: FC = () => {
           cancelText={t('apikey.list.actions.deleteConfirm.actions.cancel')}
           description={t('apikey.list.actions.deleteConfirm.content')}
           okText={t('apikey.list.actions.deleteConfirm.actions.ok')}
-          onConfirm={() => deleteMutation.mutate(apiKey.id!)}
           title={t('apikey.list.actions.deleteConfirm.title')}
+          onConfirm={() => deleteMutation.mutate(apiKey.id!)}
         >
           <Button
             icon={Trash}
@@ -177,6 +179,8 @@ const ApiKey: FC = () => {
         headerTitle={t('apikey.list.title')}
         options={false}
         pagination={false}
+        rowKey="id"
+        search={false}
         request={async () => {
           const apiKeys = await lambdaClient.apiKey.getApiKeys.query();
 
@@ -185,21 +189,19 @@ const ApiKey: FC = () => {
             success: true,
           };
         }}
-        rowKey="id"
-        search={false}
         toolbar={{
           actions: [
-            <Button key="create" onClick={handleCreate} type="primary">
+            <Button key="create" type="primary" onClick={handleCreate}>
               {t('apikey.list.actions.create')}
             </Button>,
           ],
         }}
       />
       <ApiKeyModal
-        onCancel={() => setModalOpen(false)}
-        onOk={handleModalOk}
         open={modalOpen}
         submitLoading={createMutation.isPending}
+        onCancel={() => setModalOpen(false)}
+        onOk={handleModalOk}
       />
     </div>
   );

@@ -1,7 +1,7 @@
-import { mcpSystemDepsCheckService } from './MCPSystemDepsCheckService';
 import { ManualInstallationChecker } from './checkers/ManualInstallationChecker';
 import { NpmInstallationChecker } from './checkers/NpmInstallationChecker';
 import { PythonInstallationChecker } from './checkers/PythonInstallationChecker';
+import { mcpSystemDepsCheckService } from './MCPSystemDepsCheckService';
 
 // Register all checkers
 mcpSystemDepsCheckService.registerChecker('npm', new NpmInstallationChecker());

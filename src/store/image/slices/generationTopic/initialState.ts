@@ -1,4 +1,4 @@
-import { type ImageGenerationTopic } from '@/types/generation';
+import type {ImageGenerationTopic} from '@/types/generation';
 
 export interface GenerationTopicState {
   activeGenerationTopicId: string | null;

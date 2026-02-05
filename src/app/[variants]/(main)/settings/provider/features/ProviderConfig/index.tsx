@@ -3,20 +3,19 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { AES_GCM_URL, BASE_PROVIDER_DOC_URL, FORM_STYLE, isDesktop } from '@lobechat/const';
 import { ProviderCombine } from '@lobehub/icons';
+import type {FormGroupItemType, FormItemProps} from '@lobehub/ui';
 import {
   Avatar,
-  Form,
-  type FormGroupItemType,
-  type FormItemProps,
+Center, Flexbox,   Form,
   Icon,
-  Tooltip,
-} from '@lobehub/ui';
-import { Center, Flexbox, Skeleton } from '@lobehub/ui';
+Skeleton, 
+  Tooltip} from '@lobehub/ui';
 import { useDebounceFn } from 'ahooks';
 import { Form as AntdForm, Switch } from 'antd';
 import { createStaticStyles, cssVar, cx, responsive } from 'antd-style';
 import { Loader2Icon, LockIcon } from 'lucide-react';
-import { type ReactNode, memo, useCallback, useLayoutEffect, useRef } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useCallback, useLayoutEffect, useRef } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 import { z } from 'zod';
@@ -25,14 +24,14 @@ import { FormInput, FormPassword } from '@/components/FormInput';
 import { SkeletonInput, SkeletonSwitch } from '@/components/Skeleton';
 import { lambdaQuery } from '@/libs/trpc/client';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import type {AiProviderDetailItem, AiProviderSourceType} from '@/types/aiProvider';
 import {
-  type AiProviderDetailItem,
-  AiProviderSourceEnum,
-  type AiProviderSourceType,
+  AiProviderSourceEnum
 } from '@/types/aiProvider';
 
 import { KeyVaultsConfigKey, LLMProviderApiTokenKey, LLMProviderBaseUrlKey } from '../../const';
-import Checker, { type CheckErrorRender } from './Checker';
+import type {CheckErrorRender} from './Checker';
+import Checker from './Checker';
 import EnableSwitch from './EnableSwitch';
 import OAuthDeviceFlowAuth from './OAuthDeviceFlowAuth';
 import UpdateProviderInfo from './UpdateProviderInfo';
@@ -268,22 +267,22 @@ const ProviderConfig = memo<ProviderConfigProps>(
                   placeholder={t('providerModels.config.apiKey.placeholder', { name })}
                   suffix={
                     configUpdating && (
-                      <Icon icon={Loader2Icon} spin style={{ color: cssVar.colorTextTertiary }} />
+                      <Icon spin icon={Loader2Icon} style={{ color: cssVar.colorTextTertiary }} />
                     )
                   }
                 />
               ),
               desc: apiKeyUrl ? (
                 <Trans
+                  i18nKey="providerModels.config.apiKey.descWithUrl"
+                  ns={'modelProvider'}
+                  values={{ name }}
                   components={[
                     <span key="0" />,
                     <span key="1" />,
                     <span key="2" />,
                     <a href={apiKeyUrl} key="3" rel="noreferrer" target="_blank" />,
                   ]}
-                  i18nKey="providerModels.config.apiKey.descWithUrl"
-                  ns={'modelProvider'}
-                  values={{ name }}
                 />
               ) : (
                 t(`providerModels.config.apiKey.desc`, { name })
@@ -298,6 +297,8 @@ const ProviderConfig = memo<ProviderConfigProps>(
         <>
           <Icon icon={LockIcon} style={{ marginRight: 4 }} />
           <Trans
+            i18nKey="providerModels.config.aesGcm"
+            ns={'modelProvider'}
             components={[
               <span key="0" />,
               <a
@@ -308,8 +309,6 @@ const ProviderConfig = memo<ProviderConfigProps>(
                 target="_blank"
               />,
             ]}
-            i18nKey="providerModels.config.aesGcm"
-            ns={'modelProvider'}
           />
         </>
       ),
@@ -332,7 +331,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
               }
               suffix={
                 configUpdating && (
-                  <Icon icon={Loader2Icon} spin style={{ color: cssVar.colorTextTertiary }} />
+                  <Icon spin icon={Loader2Icon} style={{ color: cssVar.colorTextTertiary }} />
                 )
               }
             />
@@ -400,6 +399,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
               <Checker
                 checkErrorRender={checkErrorRender}
                 model={data?.checkModel || checkModel!}
+                provider={id}
                 onAfterCheck={async () => {
                   // 重置连接测试状态，允许后续的 onValuesChange 更新
                   isCheckingConnection.current = false;
@@ -410,7 +410,6 @@ const ProviderConfig = memo<ProviderConfigProps>(
                   // 主动保存表单最新值，确保 fetchAiProviderRuntimeState 获取最新数据
                   await updateAiProviderConfig(id, form.getFieldsValue());
                 }}
-                provider={id}
               />
             ),
             desc: t('providerModels.config.checker.desc'),
@@ -425,9 +424,9 @@ const ProviderConfig = memo<ProviderConfigProps>(
     // Header components - shared between OAuth card and Form
     const headerTitle = (
       <Flexbox
+        horizontal
         align={'center'}
         gap={4}
-        horizontal
         style={{
           height: 24,
           maxHeight: 24,
@@ -435,7 +434,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
         }}
       >
         {isCustom ? (
-          <Flexbox align={'center'} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} gap={8}>
             {logoUrl ? (
               <Avatar avatar={logoUrl} shape={'circle'} size={32} title={name || id} />
             ) : (
@@ -449,9 +448,9 @@ const ProviderConfig = memo<ProviderConfigProps>(
             <Tooltip title={t('providerModels.config.helpDoc')}>
               <a
                 href={urlJoin(BASE_PROVIDER_DOC_URL, id)}
-                onClick={(e) => e.stopPropagation()}
                 rel="noreferrer"
                 target="_blank"
+                onClick={(e) => e.stopPropagation()}
               >
                 <Center className={styles.help} height={20} width={20}>
                   ?
@@ -464,7 +463,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
     );
 
     const headerExtra = (
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         {extra}
         {isCustom && <UpdateProviderInfo />}
         {canDeactivate && !(ENABLE_BUSINESS_FEATURES && id === 'lobehub') && (
@@ -489,9 +488,9 @@ const ProviderConfig = memo<ProviderConfigProps>(
           <OAuthDeviceFlowAuth
             extra={headerExtra}
             name={name || id}
-            onAuthChange={handleOAuthChange}
             providerId={id}
             title={headerTitle}
+            onAuthChange={handleOAuthChange}
           />
         )}
         {shouldShowForm && (
@@ -499,10 +498,10 @@ const ProviderConfig = memo<ProviderConfigProps>(
             className={cx(styles.form, className)}
             form={form}
             items={[model]}
+            variant={'borderless'}
             onValuesChange={(_, values) => {
               debouncedHandleValueChange(id, values);
             }}
-            variant={'borderless'}
             {...FORM_STYLE}
           />
         )}

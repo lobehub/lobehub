@@ -32,8 +32,8 @@ const PageList = () => {
       {hasMore && !isLoadingMore && (
         <NavItem
           icon={MoreHorizontal}
-          onClick={openAllPagesDrawer}
           title={t('more', { ns: 'common' })}
+          onClick={openAllPagesDrawer}
         />
       )}
     </Flexbox>

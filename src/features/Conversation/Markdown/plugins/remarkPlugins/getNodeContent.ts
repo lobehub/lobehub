@@ -1,5 +1,5 @@
 import { toMarkdown } from 'mdast-util-to-markdown';
-import { type Parent } from 'unist';
+import type {Parent} from 'unist';
 
 const processNode = (node: any): string => {
   // 处理数学公式节点

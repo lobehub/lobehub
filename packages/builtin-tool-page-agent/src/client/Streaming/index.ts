@@ -1,4 +1,4 @@
-import { type BuiltinStreaming } from '@lobechat/types';
+import type { BuiltinStreaming } from '@lobechat/types';
 
 /**
  * Page Agent Streaming Components Registry

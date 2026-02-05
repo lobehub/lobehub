@@ -7,7 +7,7 @@ const DetailLoading = memo(() => {
       <Skeleton.Button active shape={'round'} size={'small'} width={64} />
       <Skeleton.Title active fontSize={20} lineHeight={1.4} />
       <Skeleton.Tags active count={2} />
-      <Flexbox align="center" gap={16} horizontal justify="space-between">
+      <Flexbox horizontal align="center" gap={16} justify="space-between">
         <Skeleton.Tags active />
         <Skeleton.Tags active />
       </Flexbox>

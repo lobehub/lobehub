@@ -3,7 +3,8 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
 import { cx } from 'antd-style';
-import { type FC, Suspense, lazy } from 'react';
+import type {FC} from 'react';
+import {  lazy,Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';
 import { Outlet } from 'react-router-dom';
 
@@ -58,7 +59,9 @@ const Layout: FC = () => {
       <Suspense fallback={null}>{isDesktop && <TitleBar />}</Suspense>
       <DndContextWrapper>
         <Flexbox
+          horizontal
           className={cx(isPWA ? styles.mainContainerPWA : styles.mainContainer)}
+          width={'100%'}
           height={
             isDesktop
               ? `calc(100% - ${TITLE_BAR_HEIGHT}px)`
@@ -66,8 +69,6 @@ const Layout: FC = () => {
                 ? `calc(100% - ${BANNER_HEIGHT}px)`
                 : '100%'
           }
-          horizontal
-          width={'100%'}
         >
           <NavPanel />
           <DesktopLayoutContainer>
@@ -90,8 +91,8 @@ const Layout: FC = () => {
           <Suspense fallback={null}>
             <FeedbackModal
               initialValues={feedbackInitialValues}
-              onClose={closeFeedbackModal}
               open={isFeedbackModalOpen}
+              onClose={closeFeedbackModal}
             />
           </Suspense>
         )}

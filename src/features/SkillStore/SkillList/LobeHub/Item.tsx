@@ -62,12 +62,14 @@ const Item = memo<ItemProps>(
 
     const renderAction = () => {
       if (isConnecting) {
-        return <ActionIcon icon={Loader2} loading />;
+        return <ActionIcon loading icon={Loader2} />;
       }
 
       if (isConnected) {
         return (
           <DropdownMenu
+            nativeButton={false}
+            placement="bottomRight"
             items={[
               {
                 icon: <Icon icon={Unplug} />,
@@ -76,8 +78,6 @@ const Item = memo<ItemProps>(
                 onClick: confirmDisconnect,
               },
             ]}
-            nativeButton={false}
-            placement="bottomRight"
           >
             <ActionIcon icon={MoreVerticalIcon} />
           </DropdownMenu>
@@ -85,21 +85,21 @@ const Item = memo<ItemProps>(
       }
 
       return (
-        <ActionIcon icon={Plus} onClick={handleConnect} title={t('tools.lobehubSkill.connect')} />
+        <ActionIcon icon={Plus} title={t('tools.lobehubSkill.connect')} onClick={handleConnect} />
       );
     };
 
     return (
       <Block
+        horizontal
         align={'center'}
         className={styles.container}
         gap={12}
-        horizontal
-        onClick={onOpenDetail}
         paddingBlock={12}
         paddingInline={12}
         style={{ cursor: 'pointer' }}
         variant={'outlined'}
+        onClick={onOpenDetail}
       >
         {renderIcon()}
         <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>

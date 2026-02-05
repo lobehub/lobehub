@@ -33,7 +33,7 @@ const TokenTag = memo<TokenTagProps>(
   ({ tokenUsage, pluginCount, knowledgeCount, forkCount, placement = 'right' }) => {
     const { t } = useTranslation('discover');
     return (
-      <Flexbox align={'center'} gap={4} horizontal>
+      <Flexbox horizontal align={'center'} gap={4}>
         <Tooltip
           placement={placement}
           styles={{ root: { pointerEvents: 'none' } }}

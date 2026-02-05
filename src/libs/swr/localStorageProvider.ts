@@ -22,10 +22,10 @@ interface CacheEntry<T = unknown> {
 }
 
 export interface LocalStorageCacheOptions {
-  /** localStorage key name, defaults to 'lobechat-swr-cache' */
-  cacheKey?: string;
   /** Allowed SWR key patterns (whitelist) */
   cacheablePatterns?: string[];
+  /** localStorage key name, defaults to 'lobechat-swr-cache' */
+  cacheKey?: string;
   /** Maximum cache entries, defaults to 50 */
   maxEntries?: number;
   /** Error callback */

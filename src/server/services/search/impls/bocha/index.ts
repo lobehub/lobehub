@@ -1,10 +1,10 @@
-import { type SearchParams, type UniformSearchResponse, type UniformSearchResult } from '@lobechat/types';
+import type {SearchParams, UniformSearchResponse, UniformSearchResult} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
-import { type SearchServiceImpl } from '../type';
-import { type BochaResponse, type BochaSearchParameters } from './type';
+import type {SearchServiceImpl} from '../type';
+import type {BochaResponse, BochaSearchParameters} from './type';
 
 const log = debug('lobe-search:Bocha');
 
@@ -39,7 +39,7 @@ export class BochaImpl implements SearchServiceImpl {
       summary: true,
     };
 
-    let body: BochaSearchParameters = {
+    const body: BochaSearchParameters = {
       ...defaultQueryParams,
       freshness:
         params?.searchTimeRange && params.searchTimeRange !== 'anytime'

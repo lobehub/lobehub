@@ -1,9 +1,9 @@
-import { usePathname } from '@/libs/router/navigation';
 import { useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { useQueryRoute } from '@/hooks/useQueryRoute';
+import { usePathname } from '@/libs/router/navigation';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 

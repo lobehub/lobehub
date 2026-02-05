@@ -4,12 +4,12 @@ import useSWR from 'swr';
 
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { userMemoryService } from '@/services/userMemory';
-import { type StoreSetter } from '@/store/types';
-import { LayersEnum } from '@/types/userMemory';
+import type {StoreSetter} from '@/store/types';
 import type { RetrieveMemoryParams, RetrieveMemoryResult } from '@/types/userMemory';
+import { LayersEnum } from '@/types/userMemory';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type UserMemoryStore } from '../../store';
+import type {UserMemoryStore} from '../../store';
 import type { IdentityForInjection } from '../../types';
 import { userMemoryCacheKey } from '../../utils/cacheKey';
 import { createMemorySearchParams } from '../../utils/searchParams';

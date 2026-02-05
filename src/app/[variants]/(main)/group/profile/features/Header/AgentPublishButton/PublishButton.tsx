@@ -131,9 +131,9 @@ const PublishButton = memo<MarketPublishButtonProps>(
       <ActionIcon
         icon={ShapesUploadIcon}
         loading={loading}
-        onClick={handleButtonClick}
         size={HEADER_ICON_SIZE(mobile)}
         title={buttonTitle}
+        onClick={handleButtonClick}
       />
     );
   },

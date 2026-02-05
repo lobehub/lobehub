@@ -1,4 +1,5 @@
-import { type IconType, SiLinear, SiX } from '@icons-pack/react-simple-icons';
+import type { IconType } from '@icons-pack/react-simple-icons';
+import { SiLinear, SiX } from '@icons-pack/react-simple-icons';
 
 export interface LobehubSkillProviderType {
   /**

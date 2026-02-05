@@ -22,12 +22,12 @@ export const usePersonaEditor = () => {
 
   const EditorModalElement = persona ? (
     <EditorModal
+      open={editOpen}
+      value={persona.content}
       onCancel={closeEditor}
       onConfirm={async () => {
         closeEditor();
       }}
-      open={editOpen}
-      value={persona.content}
     />
   ) : null;
 

@@ -1,15 +1,16 @@
 import { parse } from '@lobechat/conversation-flow';
-import { type TraceEventPayloads } from '@lobechat/types';
+import type {TraceEventPayloads} from '@lobechat/types';
 import debug from 'debug';
 import isEqual from 'fast-deep-equal';
 
 import { traceService } from '@/services/trace';
-import { type ChatStore } from '@/store/chat/store';
-import { type StoreSetter } from '@/store/types';
+import type {ChatStore} from '@/store/chat/store';
+import type {StoreSetter} from '@/store/types';
 
 import { displayMessageSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
-import { type MessageDispatch, messagesReducer } from '../reducer';
+import type {MessageDispatch} from '../reducer';
+import {  messagesReducer } from '../reducer';
 
 const log = debug('lobe-store:message-internals');
 

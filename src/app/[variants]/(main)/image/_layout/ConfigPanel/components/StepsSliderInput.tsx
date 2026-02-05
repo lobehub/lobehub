@@ -5,7 +5,7 @@ import { useGenerationConfigParam } from '@/store/image/slices/generationConfig/
 
 const StepsSliderInput = memo(() => {
   const { value, setValue, min, max } = useGenerationConfigParam('steps');
-  return <SliderWithInput max={max} min={min} onChange={setValue} value={value} />;
+  return <SliderWithInput max={max} min={min} value={value} onChange={setValue} />;
 });
 
 export default StepsSliderInput;

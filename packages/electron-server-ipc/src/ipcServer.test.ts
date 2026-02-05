@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ElectronIPCServer } from './ipcServer';
@@ -295,7 +296,7 @@ describe('ElectronIPCServer', () => {
           params: { data: 'test' },
         }) + '\n\n';
 
-      const firstHalf = fullMessage.substring(0, 20);
+      const firstHalf = fullMessage.slice(0, 20);
       await dataHandler(Buffer.from(firstHalf));
 
       // 确保异步处理完成
@@ -305,7 +306,7 @@ describe('ElectronIPCServer', () => {
       expect(mockEventHandler.testMethod).not.toHaveBeenCalled();
 
       // Send second half
-      const secondHalf = fullMessage.substring(20);
+      const secondHalf = fullMessage.slice(20);
       await dataHandler(Buffer.from(secondHalf));
 
       // 确保异步处理完成

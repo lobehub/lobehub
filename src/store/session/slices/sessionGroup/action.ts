@@ -2,15 +2,16 @@ import { t } from 'i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import { sessionService } from '@/services/session';
-import { type SessionStore } from '@/store/session';
-import { type StoreSetter } from '@/store/types';
-import { type SessionGroupItem } from '@/types/session';
+import type {SessionStore} from '@/store/session';
+import type {StoreSetter} from '@/store/types';
+import type {SessionGroupItem} from '@/types/session';
 
-import { type SessionGroupsDispatch, sessionGroupsReducer } from './reducer';
+import type {SessionGroupsDispatch} from './reducer';
+import {  sessionGroupsReducer } from './reducer';
 
 /* eslint-disable typescript-sort-keys/interface */
 
-/* eslint-enable */
+ 
 
 type Setter = StoreSetter<SessionStore>;
 export const createSessionGroupSlice = (set: Setter, get: () => SessionStore, _api?: unknown) =>

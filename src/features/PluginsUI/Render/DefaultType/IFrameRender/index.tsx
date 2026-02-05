@@ -1,4 +1,4 @@
-import { type PluginRenderProps } from '@lobehub/chat-plugin-sdk/client';
+import type {PluginRenderProps} from '@lobehub/chat-plugin-sdk/client';
 import { Skeleton } from '@lobehub/ui';
 import { memo, useRef, useState } from 'react';
 
@@ -41,11 +41,9 @@ const IFrameRender = memo<IFrameRenderProps>(({ url, width = 800, height = 300, 
         allowtransparency="true"
         height={height}
         hidden={loading}
-        onLoad={() => {
-          setLoading(false);
-        }}
         ref={iframeRef}
         src={url}
+        width={width}
         style={{
           border: 0,
           // iframe 在 color-scheme:dark 模式下无法透明
@@ -53,7 +51,9 @@ const IFrameRender = memo<IFrameRenderProps>(({ url, width = 800, height = 300, 
           colorScheme: 'light',
           maxWidth: '100%',
         }}
-        width={width}
+        onLoad={() => {
+          setLoading(false);
+        }}
       />
     </>
   );

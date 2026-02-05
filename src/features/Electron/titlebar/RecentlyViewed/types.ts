@@ -1,4 +1,4 @@
-import { type LucideIcon } from 'lucide-react';
+import type {LucideIcon} from 'lucide-react';
 
 // ======== Page Types ======== //
 
@@ -62,7 +62,7 @@ export interface ImageParams {
   section?: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-empty-interface
+ 
 export interface HomeParams {}
 
 /**

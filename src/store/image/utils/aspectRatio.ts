@@ -1,4 +1,4 @@
-import { type ModelParamsSchema } from 'model-bank';
+import type {ModelParamsSchema} from 'model-bank';
 
 /**
  * Calculate initial aspect ratio for image generation models

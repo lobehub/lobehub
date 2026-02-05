@@ -1,10 +1,10 @@
 import { WebBrowsingApiName, WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
-import { type ChatToolPayload, type CreateMessageParams, type SearchQuery } from '@lobechat/types';
+import type {ChatToolPayload, CreateMessageParams, SearchQuery} from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 
 import { dbMessageSelectors } from '@/store/chat/selectors';
-import { type ChatStore } from '@/store/chat/store';
-import { type StoreSetter } from '@/store/types';
+import type {ChatStore} from '@/store/chat/store';
+import type {StoreSetter} from '@/store/types';
 
 type Setter = StoreSetter<ChatStore>;
 export const searchSlice = (set: Setter, get: () => ChatStore, _api?: unknown) =>

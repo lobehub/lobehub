@@ -1,4 +1,4 @@
-import { type ResourceManagerMode } from '@/features/ResourceManager';
+import type {ResourceManagerMode} from '@/features/ResourceManager';
 import { FilesTabs, SortType } from '@/types/files';
 
 export type ViewMode = 'list' | 'masonry';
@@ -53,13 +53,13 @@ export interface State {
    */
   selectedFileIds: string[];
   /**
-   * Sort direction (ascending or descending)
-   */
-  sortType: SortType;
-  /**
    * Field to sort files by
    */
   sorter: 'name' | 'createdAt' | 'size';
+  /**
+   * Sort direction (ascending or descending)
+   */
+  sortType: SortType;
   /**
    * File explorer view mode (list or masonry)
    */

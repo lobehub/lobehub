@@ -1,4 +1,4 @@
-import { type AssistantContentBlock, type UIChatMessage } from '@lobechat/types';
+import type {AssistantContentBlock, UIChatMessage} from '@lobechat/types';
 
 import { INBOX_SESSION_ID } from '@/const/session';
 import { useAgentStore } from '@/store/agent';

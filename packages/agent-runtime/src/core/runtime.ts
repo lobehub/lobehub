@@ -1,7 +1,7 @@
-import { ChatToolPayload } from '@lobechat/types';
+import type { ChatToolPayload } from '@lobechat/types';
 import pMap from 'p-map';
 
-import {
+import type {
   Agent,
   AgentEvent,
   AgentInstruction,

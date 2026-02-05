@@ -41,57 +41,57 @@ const ProfileEditor = memo(() => {
   return (
     <>
       <Flexbox
+        style={{ cursor: 'default', marginBottom: 12 }}
         onClick={(e) => {
           e.stopPropagation();
         }}
-        style={{ cursor: 'default', marginBottom: 12 }}
       >
         {/* Header: Avatar + Name + Description */}
         <AgentHeader />
         {/* Config Bar: Model Selector + Settings Button */}
         <Flexbox
+          horizontal
           align={'center'}
           gap={8}
-          horizontal
           justify={'flex-start'}
           style={{ marginBottom: 12 }}
         >
           <ModelSelect
             initialWidth
-            onChange={updateConfig}
             popupWidth={400}
             value={{
               model: config.model,
               provider: config.provider,
             }}
+            onChange={updateConfig}
           />
           <Button
             icon={Settings2Icon}
-            onClick={() => useAgentStore.setState({ showAgentSetting: true })}
             size={'small'}
             style={{ color: theme.colorTextSecondary }}
             type={'text'}
+            onClick={() => useAgentStore.setState({ showAgentSetting: true })}
           >
             {t('advancedSettings')}
           </Button>
         </Flexbox>
         <AgentTool />
         <Flexbox
+          horizontal
           align={'center'}
           gap={8}
-          horizontal
           justify={'flex-start'}
           style={{ marginTop: 16 }}
         >
           <Button
             icon={PlayIcon}
+            type={'primary'}
             onClick={() => {
               if (!agentId) return;
               // Clear topicId before navigating to prevent stale state
               switchTopic(null, { skipRefreshMessage: true });
               router.push(urlJoin('/agent', agentId));
             }}
-            type={'primary'}
           >
             {t('startConversation')}
           </Button>

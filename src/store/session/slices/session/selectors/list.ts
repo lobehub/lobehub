@@ -1,15 +1,9 @@
 import { DEFAULT_AGENT_LOBE_SESSION, INBOX_SESSION_ID } from '@/const/session';
 import { sessionHelpers } from '@/store/session/slices/session/helpers';
-import { type MetaData } from '@/types/meta';
-import {
-  type CustomSessionGroup,
-  type GroupMemberWithAgent,
-  type LobeGroupSession,
-  type LobeSession,
-  type LobeSessions,
-} from '@/types/session';
+import type {MetaData} from '@/types/meta';
+import type {CustomSessionGroup, GroupMemberWithAgent, LobeGroupSession, LobeSession, LobeSessions} from '@/types/session';
 
-import { type SessionStore } from '../../../store';
+import type {SessionStore} from '../../../store';
 
 const defaultSessions = (s: SessionStore): LobeSessions => s.defaultSessions;
 

@@ -1,15 +1,11 @@
 import { ASYNC_TASK_TIMEOUT } from '@lobechat/business-config/server';
-import {
-  AsyncTaskError,
-  AsyncTaskErrorType,
-  AsyncTaskStatus,
-  AsyncTaskType,
-  type UserMemoryExtractionMetadata,
-} from '@lobechat/types';
+import type { AsyncTaskType, UserMemoryExtractionMetadata } from '@lobechat/types';
+import { AsyncTaskError, AsyncTaskErrorType, AsyncTaskStatus } from '@lobechat/types';
 import { and, eq, inArray, lt, or, sql } from 'drizzle-orm';
 
-import { AsyncTaskSelectItem, NewAsyncTaskItem, asyncTasks } from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { AsyncTaskSelectItem, NewAsyncTaskItem } from '../schemas';
+import { asyncTasks } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 export class AsyncTaskModel {
   private userId: string;

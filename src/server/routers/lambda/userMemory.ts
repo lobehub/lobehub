@@ -1,3 +1,5 @@
+import type {
+  UserMemoryExtractionMetadata} from '@lobechat/types';
 import {
   AsyncTaskError,
   AsyncTaskErrorType,
@@ -5,29 +7,26 @@ import {
   AsyncTaskType,
   CreateUserMemoryIdentitySchema,
   MemorySourceType,
-  UpdateUserMemoryIdentitySchema,
-  UserMemoryExtractionMetadata,
+  UpdateUserMemoryIdentitySchema
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { AsyncTaskModel, initUserMemoryExtractionMetadata } from '@/database/models/asyncTask';
 import { TopicModel } from '@/database/models/topic';
-import { UserMemoryModel } from '@/database/models/userMemory';
-import {
-  UserMemoryActivityModel,
+import {   UserMemoryActivityModel,
   UserMemoryContextModel,
   UserMemoryExperienceModel,
   UserMemoryIdentityModel,
-  UserMemoryPreferenceModel,
-} from '@/database/models/userMemory/index';
+UserMemoryModel,
+  UserMemoryPreferenceModel } from '@/database/models/userMemory';
+import { appEnv } from '@/envs/app';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { appEnv } from '@/envs/app';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import {
-  MemoryExtractionWorkflowService,
   buildWorkflowPayloadInput,
+  MemoryExtractionWorkflowService,
   normalizeMemoryExtractionPayload,
 } from '@/server/services/memory/userMemory/extract';
 

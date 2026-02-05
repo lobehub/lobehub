@@ -3,12 +3,12 @@ import { serve } from '@upstash/workflow/nextjs';
 import { chunk } from 'es-toolkit/compat';
 
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
+import type {MemoryExtractionPayloadInput} from '@/server/services/memory/userMemory/extract';
 import {
-  MemoryExtractionExecutor,
-  type MemoryExtractionPayloadInput,
-  MemoryExtractionWorkflowService,
   buildWorkflowPayloadInput,
-  normalizeMemoryExtractionPayload,
+  MemoryExtractionExecutor,
+  MemoryExtractionWorkflowService,
+  normalizeMemoryExtractionPayload
 } from '@/server/services/memory/userMemory/extract';
 
 const USER_PAGE_SIZE = 50;

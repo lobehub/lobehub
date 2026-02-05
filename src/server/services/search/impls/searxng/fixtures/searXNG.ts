@@ -1,4 +1,4 @@
-import { type SearXNGSearchResponse } from '../client';
+import type {SearXNGSearchResponse} from '../client';
 
 export const hetongxue: SearXNGSearchResponse = {
   answers: [

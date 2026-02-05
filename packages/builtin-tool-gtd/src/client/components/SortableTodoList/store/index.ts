@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
-import { StoreApi, createStore, useStore } from 'zustand';
+import type { StoreApi } from 'zustand';
+import { createStore, useStore } from 'zustand';
 
 import type { TodoItem } from '../../../../types';
 import { createActions } from './actions';

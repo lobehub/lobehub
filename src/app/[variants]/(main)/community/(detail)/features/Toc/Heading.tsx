@@ -4,14 +4,12 @@ import { Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { kebabCase } from 'es-toolkit/compat';
 import { Heading2, Heading3, Heading4, Heading5 } from 'lucide-react';
+import type {ComponentProps, FC, ReactNode} from 'react';
 import {
   Children,
-  type ComponentProps,
-  type FC,
-  type ReactNode,
   isValidElement,
   useEffect,
-  useMemo,
+  useMemo
 } from 'react';
 
 import { useToc } from './useToc';

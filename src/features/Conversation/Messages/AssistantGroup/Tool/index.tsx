@@ -1,5 +1,5 @@
 import { LOADING_FLAT } from '@lobechat/const';
-import { type ChatToolResult, type ToolIntervention } from '@lobechat/types';
+import type {ChatToolResult, ToolIntervention} from '@lobechat/types';
 import { AccordionItem, Flexbox, Skeleton } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { memo, useEffect, useState } from 'react';
@@ -110,6 +110,10 @@ const Tool = memo<GroupToolProps>(
 
     return (
       <AccordionItem
+        expand={isToolDetailExpand}
+        itemKey={id}
+        paddingBlock={4}
+        paddingInline={4}
         action={
           !disableEditing && (
             <Actions
@@ -123,11 +127,6 @@ const Tool = memo<GroupToolProps>(
             />
           )
         }
-        expand={isToolDetailExpand}
-        itemKey={id}
-        onExpandChange={handleExpand}
-        paddingBlock={4}
-        paddingInline={4}
         title={
           <Inspectors
             apiName={apiName}
@@ -138,6 +137,7 @@ const Tool = memo<GroupToolProps>(
             result={result}
           />
         }
+        onExpandChange={handleExpand}
       >
         <Flexbox gap={8} paddingBlock={8}>
           {showDebug && (

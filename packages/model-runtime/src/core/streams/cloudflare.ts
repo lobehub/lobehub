@@ -41,7 +41,7 @@ function fillUrl(accountID: string): string {
 }
 
 function desensitizeAccountId(path: string): string {
-  return path.replace(/\/[\dA-Fa-f]{32}\//, '/****/');
+  return path.replace(/\/[\da-f]{32}\//i, '/****/');
 }
 
 function desensitizeCloudflareUrl(url: string): string {

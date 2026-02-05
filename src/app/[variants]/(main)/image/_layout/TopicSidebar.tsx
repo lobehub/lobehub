@@ -1,4 +1,4 @@
-import React, { Suspense, memo } from 'react';
+import React, { memo,Suspense } from 'react';
 
 import ImageTopicPanel from '@/features/ImageTopicPanel';
 

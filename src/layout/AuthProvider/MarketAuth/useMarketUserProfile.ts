@@ -2,7 +2,7 @@ import useSWR from 'swr';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
-import { type MarketUserProfile } from './types';
+import type {MarketUserProfile} from './types';
 
 /**
  * Fetcher function for user profile using tRPC

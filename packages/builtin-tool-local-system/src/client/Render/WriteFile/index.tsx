@@ -1,5 +1,5 @@
-import { type WriteLocalFileParams } from '@lobechat/electron-client-ipc';
-import { type BuiltinRenderProps } from '@lobechat/types';
+import type { WriteLocalFileParams } from '@lobechat/electron-client-ipc';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Highlighter, Icon, Markdown, Skeleton } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
@@ -40,11 +40,11 @@ const WriteFile = memo<BuiltinRenderProps<WriteLocalFileParams>>(({ args }) => {
 
     return (
       <Highlighter
+        wrap
         language={ext || 'text'}
         showLanguage={false}
         style={{ maxHeight: 240, overflow: 'auto' }}
         variant={'borderless'}
-        wrap
       >
         {args.content}
       </Highlighter>
@@ -53,7 +53,7 @@ const WriteFile = memo<BuiltinRenderProps<WriteLocalFileParams>>(({ args }) => {
 
   return (
     <Flexbox className={styles.container} gap={12}>
-      <Flexbox align={'center'} horizontal>
+      <Flexbox horizontal align={'center'}>
         <LocalFolder path={dir} />
         <Icon icon={ChevronRight} />
         <LocalFile name={base} path={args.path} />

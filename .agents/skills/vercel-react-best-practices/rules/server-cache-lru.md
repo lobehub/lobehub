@@ -12,20 +12,20 @@ tags: server, cache, lru, cross-request
 **Implementation:**
 
 ```typescript
-import { LRUCache } from 'lru-cache'
+import { LRUCache } from 'lru-cache';
 
 const cache = new LRUCache<string, any>({
   max: 1000,
-  ttl: 5 * 60 * 1000  // 5 minutes
-})
+  ttl: 5 * 60 * 1000, // 5 minutes
+});
 
 export async function getUser(id: string) {
-  const cached = cache.get(id)
-  if (cached) return cached
+  const cached = cache.get(id);
+  if (cached) return cached;
 
-  const user = await db.user.findUnique({ where: { id } })
-  cache.set(id, user)
-  return user
+  const user = await db.user.findUnique({ where: { id } });
+  cache.set(id, user);
+  return user;
 }
 
 // Request 1: DB query, result cached
@@ -38,4 +38,4 @@ Use when sequential user actions hit multiple endpoints needing the same data wi
 
 **In traditional serverless:** Each invocation runs in isolation, so consider Redis for cross-process caching.
 
-Reference: [https://github.com/isaacs/node-lru-cache](https://github.com/isaacs/node-lru-cache)
+Reference: <https://github.com/isaacs/node-lru-cache>

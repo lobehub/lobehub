@@ -1,8 +1,8 @@
-import { ModelParamsSchema, RuntimeImageGenParams, gptImage1ParamsSchema } from 'model-bank';
-import { AIImageModelCard } from 'model-bank';
+import type { AIImageModelCard,ModelParamsSchema, RuntimeImageGenParams} from 'model-bank';
+import {gptImage1ParamsSchema  } from 'model-bank';
 import { describe, expect, it, vi } from 'vitest';
 
-import { ImageStore } from '@/store/image';
+import type { ImageStore } from '@/store/image';
 import { initialState } from '@/store/image/initialState';
 import { merge } from '@/utils/merge';
 

@@ -5,11 +5,11 @@ import { sha256 } from 'js-sha256';
 import { message } from '@/components/AntdStaticMethods';
 import { fileService } from '@/services/file';
 import { uploadService } from '@/services/upload';
-import { type StoreSetter } from '@/store/types';
-import { type FileMetadata, type UploadFileItem } from '@/types/files';
+import type {StoreSetter} from '@/store/types';
+import type {FileMetadata, UploadFileItem} from '@/types/files';
 import { getImageDimensions } from '@/utils/client/imageDimensions';
 
-import { type FileStore } from '../../store';
+import type {FileStore} from '../../store';
 
 type OnStatusUpdate = (
   data:

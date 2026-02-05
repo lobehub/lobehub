@@ -9,7 +9,7 @@ const Actions = memo(() => {
   const menuItems = useTopicActionsDropdownMenu({ onUploadClose: () => setOpen(false) });
 
   return (
-    <DropdownMenu items={menuItems} onOpenChange={setOpen} open={open}>
+    <DropdownMenu items={menuItems} open={open} onOpenChange={setOpen}>
       <ActionIcon icon={MoreHorizontal} size={'small'} />
     </DropdownMenu>
   );

@@ -1,13 +1,12 @@
+import type {ChatCompletionErrorPayload, ModelRuntime} from '@lobechat/model-runtime';
 import {
-  AGENT_RUNTIME_ERROR_SET,
-  type ChatCompletionErrorPayload,
-  type ModelRuntime,
+  AGENT_RUNTIME_ERROR_SET
 } from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
 import { createTraceOptions, initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
-import { type ChatStreamPayload } from '@/types/openai/chat';
+import type {ChatStreamPayload} from '@/types/openai/chat';
 import { createErrorResponse } from '@/utils/errorResponse';
 import { getTracePayload } from '@/utils/trace';
 

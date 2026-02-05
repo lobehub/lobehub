@@ -1,13 +1,14 @@
 import { chainLangDetect, chainTranslate } from '@lobechat/prompts';
-import { type ChatTranslate, TraceNameMap, type TracePayload } from '@lobechat/types';
+import type {ChatTranslate, TracePayload} from '@lobechat/types';
+import {  TraceNameMap  } from '@lobechat/types';
 import { merge } from '@lobechat/utils';
 
 import { supportLocales } from '@/locales/resources';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
 import { dbMessageSelectors } from '@/store/chat/selectors';
-import { type ChatStore } from '@/store/chat/store';
-import { type StoreSetter } from '@/store/types';
+import type {ChatStore} from '@/store/chat/store';
+import type {StoreSetter} from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
 

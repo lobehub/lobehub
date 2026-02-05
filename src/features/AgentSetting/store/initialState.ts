@@ -1,7 +1,7 @@
 import { DEFAULT_AGENT_META } from '@/const/meta';
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
-import { type LobeAgentConfig } from '@/types/agent';
-import { type MetaData } from '@/types/meta';
+import type {LobeAgentConfig} from '@/types/agent';
+import type {MetaData} from '@/types/meta';
 
 export type LoadingState = Record<Partial<keyof MetaData> | string, boolean>;
 export type SaveStatus = 'idle' | 'saving' | 'saved';

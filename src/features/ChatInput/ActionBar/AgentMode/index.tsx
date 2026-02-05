@@ -22,13 +22,13 @@ const AgentModeToggle = memo(() => {
   return (
     <ActionIcon
       icon={Bot}
-      onClick={() => {
-        handleToggle(!enableAgentMode);
-      }}
+      title={t('agentMode.title', { defaultValue: 'Agent Mode' })}
       style={{
         color: enableAgentMode ? 'var(--colorPrimary)' : undefined,
       }}
-      title={t('agentMode.title', { defaultValue: 'Agent Mode' })}
+      onClick={() => {
+        handleToggle(!enableAgentMode);
+      }}
     />
   );
 });

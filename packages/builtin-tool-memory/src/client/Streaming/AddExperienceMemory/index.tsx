@@ -8,7 +8,7 @@ import { ExperienceMemoryCard } from '../../components';
 
 export const AddExperienceMemoryStreaming = memo<BuiltinStreamingProps<AddExperienceMemoryParams>>(
   ({ args }) => {
-    return <ExperienceMemoryCard data={args} loading />;
+    return <ExperienceMemoryCard loading data={args} />;
   },
 );
 

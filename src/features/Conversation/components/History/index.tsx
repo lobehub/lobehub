@@ -42,7 +42,7 @@ const History = memo(() => {
       <HistoryDivider enable />
       {enableCompressHistory && !!content && (
         <Flexbox className={styles.container} gap={8}>
-          <Flexbox align={'flex-start'} gap={8} horizontal>
+          <Flexbox horizontal align={'flex-start'} gap={8}>
             <Center height={20} width={20}>
               <Icon icon={ScrollText} size={16} style={{ color: cssVar.colorTextDescription }} />
             </Center>
@@ -53,7 +53,7 @@ const History = memo(() => {
               </div>
             )}
           </Flexbox>
-          <Flexbox align={'flex-start'} gap={8} horizontal>
+          <Flexbox horizontal align={'flex-start'} gap={8}>
             <Flexbox align={'center'} padding={8} width={20}>
               <div className={styles.line} />
             </Flexbox>

@@ -1,10 +1,9 @@
+import type {DropdownMenuCheckboxItem, DropdownMenuProps} from '@lobehub/ui';
 import {
   ActionIcon,
   DropdownMenu,
-  type DropdownMenuCheckboxItem,
-  type DropdownMenuProps,
   Flexbox,
-  Text,
+  Text
 } from '@lobehub/ui';
 import { Languages } from 'lucide-react';
 import { memo, useMemo } from 'react';

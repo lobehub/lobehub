@@ -1,4 +1,4 @@
-import { StoreApi } from 'zustand';
+import type { StoreApi } from 'zustand';
 
 export interface StoreApiWithSelector<Store> extends Omit<StoreApi<Store>, 'subscribe'> {
   subscribe: <T extends keyof Store>(

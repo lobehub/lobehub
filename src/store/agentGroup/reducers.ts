@@ -1,9 +1,9 @@
 import type { AgentGroupDetail } from '@lobechat/types';
 import { produce } from 'immer';
 
-import { type ChatGroupItem } from '@/database/schemas/chatGroup';
+import type {ChatGroupItem} from '@/database/schemas/chatGroup';
 
-import { type ChatGroupState } from './initialState';
+import type {ChatGroupState} from './initialState';
 
 /**
  * Convert ChatGroupItem to AgentGroupDetail by adding empty agents array

@@ -2,7 +2,7 @@ import { Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 
-import { type AssistantContentBlock } from '@/types/index';
+import type {AssistantContentBlock} from '@/types/index';
 
 import { useConversationStore } from '../../../store';
 import ContentBlock from './ContentBlock';

@@ -1,5 +1,5 @@
 import type { GenerateObjectSchema } from '@lobechat/model-runtime';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
 export interface BuildSchemaOptions {

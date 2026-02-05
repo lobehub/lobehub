@@ -1,16 +1,11 @@
 import isEqual from 'fast-deep-equal';
-import {
-  type AiModelSortMap,
-  type AiProviderModelListItem,
-  type CreateAiModelParams,
-  type ToggleAiModelEnableParams,
-} from 'model-bank';
+import type {AiModelSortMap, AiProviderModelListItem, CreateAiModelParams, ToggleAiModelEnableParams} from 'model-bank';
 import type { SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { aiModelService } from '@/services/aiModel';
-import { type AiInfraStore } from '@/store/aiInfra/store';
-import { type StoreSetter } from '@/store/types';
+import type {AiInfraStore} from '@/store/aiInfra/store';
+import type {StoreSetter} from '@/store/types';
 
 const FETCH_AI_PROVIDER_MODEL_LIST_KEY = 'FETCH_AI_PROVIDER_MODELS';
 

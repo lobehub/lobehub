@@ -1,4 +1,4 @@
-import { type ToolIntervention } from '@lobechat/types';
+import type {ToolIntervention} from '@lobechat/types';
 import { safeParseJSON, safeParsePartialJSON } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
@@ -41,7 +41,7 @@ const Inspectors = memo<InspectorProps>(
       const args = safeParseJSON(argsStr);
       const partialJson = safeParsePartialJSON(argsStr);
       return (
-        <Flexbox align={'center'} gap={6} horizontal>
+        <Flexbox allowShrink horizontal align={'center'} gap={6}>
           <StatusIndicator intervention={intervention} result={result} />
           <CustomInspector
             apiName={apiName}
@@ -58,7 +58,7 @@ const Inspectors = memo<InspectorProps>(
     }
 
     return (
-      <Flexbox align={'center'} gap={6} horizontal>
+      <Flexbox horizontal align={'center'} gap={6}>
         <StatusIndicator intervention={intervention} result={result} />
         <ToolTitle
           apiName={apiName}

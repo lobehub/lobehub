@@ -1,6 +1,6 @@
-import { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
-import {
+import type {
   CreateDocumentArgs,
   CreateDocumentState,
   DeleteDocumentArgs,

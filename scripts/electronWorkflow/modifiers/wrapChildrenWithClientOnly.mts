@@ -10,8 +10,10 @@ export const wrapChildrenWithClientOnly = async (TEMP_DIR: string) => {
 
   await updateFile({
     assertAfter: (code) => {
-      const hasClientOnlyImport = /import ClientOnly from ["']@\/components\/client\/ClientOnly["']/.test(code);
-      const hasLoadingImport = /import Loading from ["']@\/components\/Loading\/BrandTextLoading["']/.test(code);
+      const hasClientOnlyImport =
+        /import ClientOnly from ["']@\/components\/client\/ClientOnly["']/.test(code);
+      const hasLoadingImport =
+        /import Loading from ["']@\/components\/Loading\/BrandTextLoading["']/.test(code);
       const hasClientOnlyWrapper = /<ClientOnly fallback={<Loading/.test(code);
       return hasClientOnlyImport && hasLoadingImport && hasClientOnlyWrapper;
     },
@@ -23,16 +25,23 @@ export const wrapChildrenWithClientOnly = async (TEMP_DIR: string) => {
 
       let result = code;
 
-      const hasClientOnlyImport = /import ClientOnly from ["']@\/components\/client\/ClientOnly["']/.test(code);
-      const hasLoadingImport = /import Loading from ["']@\/components\/Loading\/BrandTextLoading["']/.test(code);
+      const hasClientOnlyImport =
+        /import ClientOnly from ["']@\/components\/client\/ClientOnly["']/.test(code);
+      const hasLoadingImport =
+        /import Loading from ["']@\/components\/Loading\/BrandTextLoading["']/.test(code);
 
-      const lastImport = root.findAll({
-        rule: {
-          kind: 'import_statement',
-        },
-      }).at(-1);
+      const lastImport = root
+        .findAll({
+          rule: {
+            kind: 'import_statement',
+          },
+        })
+        .at(-1);
 
-      invariant(lastImport, '[wrapChildrenWithClientOnly] No import statements found in layout.tsx');
+      invariant(
+        lastImport,
+        '[wrapChildrenWithClientOnly] No import statements found in layout.tsx',
+      );
 
       const insertPos = lastImport!.range().end.index;
       let importsToAdd = '';

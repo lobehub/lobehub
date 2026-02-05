@@ -1,7 +1,7 @@
-import { PluginItem, PluginListResponse } from '@lobehub/market-sdk';
-import { PluginItemDetail } from '@lobehub/market-types';
+import type { PluginItem, PluginListResponse } from '@lobehub/market-sdk';
+import type { PluginItemDetail } from '@lobehub/market-types';
 
-import { DiscoverAssistantItem } from './assistants';
+import type { DiscoverAssistantItem } from './assistants';
 
 export enum McpCategory {
   All = 'all',

@@ -1,4 +1,4 @@
-import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
+import type {AgentRuntimeContext} from '@lobechat/agent-runtime';
 
 export interface QueueMessage {
   context?: AgentRuntimeContext;

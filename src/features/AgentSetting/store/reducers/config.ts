@@ -1,7 +1,7 @@
 import { produce } from 'immer';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
-import { type LobeAgentConfig } from '@/types/agent';
+import type {LobeAgentConfig} from '@/types/agent';
 import { merge } from '@/utils/merge';
 
 export type ConfigDispatch =

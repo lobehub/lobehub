@@ -57,22 +57,22 @@ const ExperienceRightPanel = memo(() => {
         <Text
           as={'h1'}
           fontSize={20}
+          weight={'bold'}
           style={{
             lineHeight: 1.4,
             marginBottom: 0,
           }}
-          weight={'bold'}
         >
           {experience.title}
         </Text>
-        <Flexbox align="center" gap={16} horizontal justify="space-between">
+        <Flexbox horizontal align="center" gap={16} justify="space-between">
           <ProgressIcon
+            showInfo
             format={(percent) => `${t('filter.sort.scoreConfidence')}: ${percent}%`}
             percent={(experience.scoreConfidence ?? 0) * 100}
-            showInfo
           />
         </Flexbox>
-        <Flexbox align="center" gap={16} horizontal justify="space-between">
+        <Flexbox horizontal align="center" gap={16} justify="space-between">
           <SourceLink source={experience.source} />
           <Time capturedAt={experience.capturedAt || experience.updatedAt || experience.createdAt} />
         </Flexbox>
@@ -85,13 +85,14 @@ const ExperienceRightPanel = memo(() => {
           className={styles.stepsContainer}
           current={null as any}
           direction="vertical"
+          size="small"
           items={[
             {
               description: <HighlightedContent>{experience.situation}</HighlightedContent>,
               icon: (
                 <Avatar
-                  avatar={'S'}
                   shadow
+                  avatar={'S'}
                   shape={'square'}
                   size={24}
                   style={{
@@ -109,8 +110,8 @@ const ExperienceRightPanel = memo(() => {
               description: <HighlightedContent>{experience.reasoning}</HighlightedContent>,
               icon: (
                 <Avatar
-                  avatar={'T'}
                   shadow
+                  avatar={'T'}
                   shape={'square'}
                   size={24}
                   style={{
@@ -128,8 +129,8 @@ const ExperienceRightPanel = memo(() => {
               description: <HighlightedContent>{experience.action}</HighlightedContent>,
               icon: (
                 <Avatar
-                  avatar={'A'}
                   shadow
+                  avatar={'A'}
                   shape={'square'}
                   size={24}
                   style={{
@@ -147,8 +148,8 @@ const ExperienceRightPanel = memo(() => {
               description: <HighlightedContent>{experience.possibleOutcome}</HighlightedContent>,
               icon: (
                 <Avatar
-                  avatar={'R'}
                   shadow
+                  avatar={'R'}
                   shape={'square'}
                   size={24}
                   style={{
@@ -163,7 +164,6 @@ const ExperienceRightPanel = memo(() => {
               ),
             },
           ]}
-          size="small"
         />
 
         <HashTags hashTags={experience.tags} />

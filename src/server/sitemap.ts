@@ -1,12 +1,13 @@
 import { flatten } from 'es-toolkit/compat';
-import { type MetadataRoute } from 'next';
+import type {MetadataRoute} from 'next';
 import qs from 'query-string';
 import urlJoin from 'url-join';
 
 import { serverFeatureFlags } from '@/config/featureFlags';
 import { DEFAULT_LANG } from '@/const/locale';
 import { SITEMAP_BASE_URL } from '@/const/url';
-import { type Locales, locales as allLocales } from '@/locales/resources';
+import type {Locales} from '@/locales/resources';
+import {  locales as allLocales } from '@/locales/resources';
 import { DiscoverService } from '@/server/services/discover';
 import { getCanonicalUrl } from '@/server/utils/url';
 import { isDev } from '@/utils/env';

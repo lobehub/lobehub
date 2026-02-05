@@ -1,9 +1,9 @@
-import { type FC } from 'react';
+import type {FC} from 'react';
 
 import { LOCAL_FILE_TAG } from '@/const/plugin';
 
 import { createRemarkSelfClosingTagPlugin } from '../remarkPlugins/createRemarkSelfClosingTagPlugin';
-import { type MarkdownElement, type MarkdownElementProps } from '../type';
+import type {MarkdownElement, MarkdownElementProps} from '../type';
 import RenderComponent from './Render';
 
 // 定义此元素的标签名

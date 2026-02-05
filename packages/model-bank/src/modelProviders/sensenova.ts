@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 // ref https://platform.sensenova.cn/pricing
 // ref https://platform.sensenova.cn/release?path=/release-202409.md

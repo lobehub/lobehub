@@ -4,7 +4,7 @@ import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Modal } from '@lobehub/
 import { App, Button } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
-import React, { Suspense, memo, useState } from 'react';
+import React, { memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
@@ -16,7 +16,7 @@ import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { useToolStore } from '@/store/tool';
 import { mcpStoreSelectors, pluginSelectors } from '@/store/tool/selectors';
-import { type DiscoverMcpItem } from '@/types/discover';
+import type {DiscoverMcpItem} from '@/types/discover';
 
 import { itemStyles } from '../style';
 
@@ -73,6 +73,8 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
     if (installed) {
       return (
         <DropdownMenu
+          nativeButton={false}
+          placement="bottomRight"
           items={[
             {
               danger: true,
@@ -95,8 +97,6 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
               },
             },
           ]}
-          nativeButton={false}
-          placement="bottomRight"
         >
           <ActionIcon icon={MoreVerticalIcon} />
         </DropdownMenu>
@@ -105,28 +105,28 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
 
     if (installing) {
       return (
-        <Button onClick={handleCancel} size="small" variant={'filled'}>
+        <Button size="small" variant={'filled'} onClick={handleCancel}>
           {t('store.actions.cancel')}
         </Button>
       );
     }
 
-    return <ActionIcon icon={Plus} onClick={handleInstall} title={t('store.actions.install')} />;
+    return <ActionIcon icon={Plus} title={t('store.actions.install')} onClick={handleInstall} />;
   };
 
   return (
     <>
       <Flexbox className={styles.container} gap={0}>
         <Block
-          align={'center'}
           clickable
-          gap={12}
           horizontal
-          onClick={() => setDetailOpen(true)}
+          align={'center'}
+          gap={12}
           paddingBlock={12}
           paddingInline={12}
           style={{ cursor: 'pointer' }}
           variant={'outlined'}
+          onClick={() => setDetailOpen(true)}
         >
           <PluginAvatar avatar={icon} size={40} />
           <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
@@ -145,13 +145,13 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
       <Modal
         destroyOnHidden
         footer={null}
-        onCancel={() => setDetailOpen(false)}
         open={detailOpen}
         title={t('dev.title.skillDetails')}
         width={800}
+        onCancel={() => setDetailOpen(false)}
       >
         <Suspense fallback={<McpDetailLoading />}>
-          <McpDetail identifier={identifier} noSettings />
+          <McpDetail noSettings identifier={identifier} />
         </Suspense>
       </Modal>
     </>

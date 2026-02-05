@@ -3,7 +3,7 @@
 import { Grid } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { type DiscoverModelItem } from '@/types/discover';
+import type {DiscoverModelItem} from '@/types/discover';
 
 import ModelEmpty from '../../../../features/ModelEmpty';
 import Item from './Item';

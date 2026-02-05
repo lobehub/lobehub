@@ -2,11 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import { LayersEnum, MemorySourceType } from '@/types/userMemory';
 
+import type {MemoryExtractionNormalizedPayload, MemoryExtractionPayloadInput} from '../extract';
 import {
-  type MemoryExtractionNormalizedPayload,
-  type MemoryExtractionPayloadInput,
   buildWorkflowPayloadInput,
-  normalizeMemoryExtractionPayload,
+  normalizeMemoryExtractionPayload
 } from '../extract';
 
 describe('normalizeMemoryExtractionPayload', () => {

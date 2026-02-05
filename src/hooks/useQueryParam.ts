@@ -43,7 +43,7 @@ export function useQueryParam<T>(
     throttleMs = 0,
   } = options;
 
-  // eslint-disable-next-line no-undef
+   
   const throttleTimer = useRef<NodeJS.Timeout | null>(null);
   const lastExecuteTime = useRef<number>(0);
 
@@ -256,49 +256,49 @@ export function useQueryState(
 ): [string | null, (value: string | null | ((prev: string | null) => string | null)) => void];
 
 // String parser with default value
-// eslint-disable-next-line no-redeclare
+ 
 export function useQueryState(
   key: string,
   parserWithDefault: ParserWithDefault<string>,
 ): [string, (value: string | ((prev: string) => string)) => void];
 
 // Boolean parser
-// eslint-disable-next-line no-redeclare
+ 
 export function useQueryState(
   key: string,
   parser: typeof parseAsBoolean,
 ): [boolean | null, (value: boolean | null | ((prev: boolean | null) => boolean | null)) => void];
 
 // Boolean parser with default value
-// eslint-disable-next-line no-redeclare
+ 
 export function useQueryState(
   key: string,
   parserWithDefault: ParserWithDefault<boolean>,
 ): [boolean, (value: boolean | ((prev: boolean) => boolean)) => void];
 
 // Integer parser
-// eslint-disable-next-line no-redeclare
+ 
 export function useQueryState(
   key: string,
   parser: typeof parseAsInteger,
 ): [number | null, (value: number | null | ((prev: number | null) => number | null)) => void];
 
 // Integer parser with default value
-// eslint-disable-next-line no-redeclare
+ 
 export function useQueryState(
   key: string,
   parserWithDefault: ParserWithDefault<number>,
 ): [number, (value: number | ((prev: number) => number)) => void];
 
 // String enum parser with default value
-// eslint-disable-next-line no-redeclare
+ 
 export function useQueryState<T extends string>(
   key: string,
   parserWithDefault: ParserWithDefault<T>,
 ): [T, (value: T | ((prev: T) => T)) => void];
 
 // --- Single Implementation ---
-// eslint-disable-next-line no-redeclare
+ 
 export function useQueryState(key: string, parserOrOptions?: any): any {
   // Fixed logic dispatch issue
   let parser: Parser<any>;

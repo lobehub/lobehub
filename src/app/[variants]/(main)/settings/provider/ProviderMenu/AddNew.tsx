@@ -15,11 +15,11 @@ const AddNewProvider = () => {
     <>
       <ActionIcon
         icon={PlusIcon}
-        onClick={() => setOpen(true)}
         size={'small'}
         title={t('menu.addCustomProvider')}
+        onClick={() => setOpen(true)}
       />
-      <CreateNewProvider onClose={() => setOpen(false)} open={open} />
+      <CreateNewProvider open={open} onClose={() => setOpen(false)} />
     </>
   );
 };

@@ -1,4 +1,4 @@
-import { type ChatToolPayloadWithResult } from '@lobechat/types';
+import type {ChatToolPayloadWithResult} from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 

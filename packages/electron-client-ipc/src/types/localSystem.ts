@@ -81,8 +81,8 @@ export interface LocalReadFileResult {
    */
   content: string;
   createdTime: Date;
-  fileType: string;
   filename: string;
+  fileType: string;
   /**
    * Line count of the content within the specified `loc` range.
    */
@@ -100,29 +100,29 @@ export interface LocalReadFileResult {
 }
 
 export interface LocalSearchFilesParams {
-  // Basic search
-  keywords: string;
-
-  // Path options
-  directory?: string; // Limit search to specific directory
-  exclude?: string[]; // Paths to exclude from search
-
-  // File type options
-  fileTypes?: string[]; // File extensions to filter (e.g., ['pdf', 'docx'])
-
   // Content options
   contentContains?: string; // Search for files containing specific text
 
   // Time options (ISO 8601 date strings)
   createdAfter?: string;
   createdBefore?: string;
-  modifiedAfter?: string;
-  modifiedBefore?: string;
 
   // Result options
   detailed?: boolean;
+
+  // Path options
+  directory?: string; // Limit search to specific directory
+
+  exclude?: string[]; // Paths to exclude from search
+  // File type options
+  fileTypes?: string[]; // File extensions to filter (e.g., ['pdf', 'docx'])
+  // Basic search
+  keywords: string;
   limit?: number;
+
   liveUpdate?: boolean;
+  modifiedAfter?: string;
+  modifiedBefore?: string;
   sortBy?: 'name' | 'date' | 'size';
   sortDirection?: 'asc' | 'desc';
 }

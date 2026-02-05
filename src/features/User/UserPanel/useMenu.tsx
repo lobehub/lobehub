@@ -1,9 +1,10 @@
 import { LOBE_CHAT_CLOUD, UTM_SOURCE } from '@lobechat/business-const';
 import { DOWNLOAD_URL, isDesktop } from '@lobechat/const';
 import { Flexbox, Hotkey, Icon, Tag } from '@lobehub/ui';
-import { type ItemType } from 'antd/es/menu/interface';
+import type {ItemType} from 'antd/es/menu/interface';
 import { Cloudy, Download, HardDriveDownload, LogOut, Settings2 } from 'lucide-react';
-import { type PropsWithChildren, memo, useMemo } from 'react';
+import type {PropsWithChildren} from 'react';
+import { memo,  useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
@@ -33,7 +34,7 @@ const NewVersionBadge = memo(
         </Flexbox>
       );
     return (
-      <Flexbox align={'center'} flex={1} gap={8} horizontal onClick={onClick} width={'100%'}>
+      <Flexbox horizontal align={'center'} flex={1} gap={8} width={'100%'} onClick={onClick}>
         {children}
         <Tag color={'info'} size={'small'} style={{ borderRadius: 16, paddingInline: 8 }}>
           {t('upgradeVersion.hasNew')}

@@ -1,5 +1,5 @@
 import { CURRENT_VERSION } from '@lobechat/const';
-import { type CallReportRequest } from '@lobehub/market-types';
+import type {CallReportRequest} from '@lobehub/market-types';
 import { after } from 'next/server';
 
 import { DiscoverService } from '@/server/services/discover';

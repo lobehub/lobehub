@@ -1,12 +1,13 @@
 'use client';
 
-import { DropdownMenu, Flexbox, Icon, type MenuProps, Tag } from '@lobehub/ui';
+import type {MenuProps} from '@lobehub/ui';
+import { DropdownMenu, Flexbox, Icon,  Tag } from '@lobehub/ui';
 import { LibraryBig } from 'lucide-react';
 import { memo } from 'react';
 
 import KnowledgeIcon from '@/components/KnowledgeIcon';
 import { oneLineEllipsis } from '@/styles';
-import { type KnowledgeItem } from '@/types/knowledgeBase';
+import type {KnowledgeItem} from '@/types/knowledgeBase';
 
 export interface PluginTagProps {
   data: KnowledgeItem[];

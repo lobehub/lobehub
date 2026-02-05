@@ -6,7 +6,7 @@ import { GitForkIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type DiscoverGroupAgentItem } from '@/types/discover';
+import type {DiscoverGroupAgentItem} from '@/types/discover';
 
 import UserGroupCard from './UserGroupCard';
 
@@ -32,7 +32,7 @@ const UserForkedAgentGroups = memo<UserForkedAgentGroupsProps>(
 
     return (
       <Flexbox gap={16}>
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           <GitForkIcon size={16} />
           <Text fontSize={16} weight={500}>
             {t('user.forkedAgentGroups')}
@@ -48,10 +48,10 @@ const UserForkedAgentGroups = memo<UserForkedAgentGroupsProps>(
           <Flexbox align={'center'} justify={'center'}>
             <Pagination
               current={currentPage}
-              onChange={(page) => setCurrentPage(page)}
               pageSize={pageSize}
               showSizeChanger={false}
               total={agentGroups.length}
+              onChange={(page) => setCurrentPage(page)}
             />
           </Flexbox>
         )}

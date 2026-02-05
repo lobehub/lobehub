@@ -52,7 +52,7 @@ services:
   minio:
     image: minio/minio:RELEASE.2025-04-22T22-12-26Z
     container_name: lobe-minio
-    network_mode: "service:network-service"
+    network_mode: 'service:network-service'
     volumes:
       - './s3_data:/etc/minio/data'
     environment:
@@ -62,6 +62,7 @@ services:
     restart: always
     command: >
       server /etc/minio/data --address ":${MINIO_PORT}" --console-address ":9001"
+
 
   logto:
     image: svhd/logto

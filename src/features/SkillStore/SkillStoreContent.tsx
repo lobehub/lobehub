@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Segmented } from '@lobehub/ui';
-import { type SegmentedOptions } from 'antd/es/segmented';
+import type {SegmentedOptions} from 'antd/es/segmented';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -35,14 +35,14 @@ export const SkillStoreContent = () => {
   return (
     <Flexbox gap={8} style={{ maxHeight: '75vh' }} width={'100%'}>
       <Flexbox gap={8} paddingInline={16}>
-        <Flexbox align={'center'} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} gap={8}>
           <Segmented
             block
-            onChange={(v) => setActiveTab(v as SkillStoreTab)}
             options={options}
             style={{ flex: 1 }}
             value={activeTab}
             variant={'filled'}
+            onChange={(v) => setActiveTab(v as SkillStoreTab)}
           />
           <AddSkillButton />
         </Flexbox>

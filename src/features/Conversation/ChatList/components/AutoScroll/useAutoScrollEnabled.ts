@@ -13,7 +13,6 @@ export const useAutoScrollEnabled = (): boolean => {
   const agentId = useConversationStore(contextSelectors.agentId);
 
   const agentChatConfig = useAgentStore(chatConfigByIdSelectors.getChatConfigById(agentId));
-  console.log('agentChatConfig', agentChatConfig);
   const agentSetting = agentChatConfig?.enableAutoScrollOnStreaming;
 
   const globalSetting = useUserStore(userGeneralSettingsSelectors.enableAutoScrollOnStreaming);

@@ -1,12 +1,5 @@
-import {
-  type AiProviderDetailItem,
-  type AiProviderRuntimeState,
-  type AiProviderSortMap,
-  type CreateAiProviderParams,
-  type UpdateAiProviderConfigParams,
-} from '@/types/aiProvider';
-
 import { lambdaClient } from '@/libs/trpc/client';
+import type {AiProviderDetailItem, AiProviderRuntimeState, AiProviderSortMap, CreateAiProviderParams, UpdateAiProviderConfigParams} from '@/types/aiProvider';
 
 export class AiProviderService {
   createAiProvider = async (params: CreateAiProviderParams) => {

@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 
-import { type DisplayPreferenceMemory } from '@/database/repositories/userMemory';
+import type {DisplayPreferenceMemory} from '@/database/repositories/userMemory';
 import { useUserMemoryStore } from '@/store/userMemory';
 
 import { TimelineView as GenericTimelineView } from '../../../../features/TimeLineView';
@@ -26,13 +26,13 @@ const PreferenceTimelineView = memo<PreferenceTimelineViewProps>(
         groupBy="day"
         hasMore={preferencesHasMore}
         isLoading={isLoading}
-        onLoadMore={loadMorePreferences}
         renderHeader={(periodKey) => <PeriodHeader groupBy="day" periodKey={periodKey} />}
         renderItem={(preference) => (
           <TimelineItemWrapper>
-            <PreferenceCard onClick={() => onClick?.(preference)} preference={preference} />
+            <PreferenceCard preference={preference} onClick={() => onClick?.(preference)} />
           </TimelineItemWrapper>
         )}
+        onLoadMore={loadMorePreferences}
       />
     );
   },

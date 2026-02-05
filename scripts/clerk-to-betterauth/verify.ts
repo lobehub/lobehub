@@ -1,8 +1,7 @@
-/* eslint-disable unicorn/prefer-top-level-await */
 import { getMigrationMode, resolveDataPaths } from './_internal/config';
 import { db, pool, schema } from './_internal/db';
-import { loadCSVData, loadClerkUsersFromFile } from './_internal/load-data-from-files';
-import { ClerkExternalAccount, ClerkUser } from './_internal/types';
+import { loadClerkUsersFromFile, loadCSVData } from './_internal/load-data-from-files';
+import type { ClerkExternalAccount, ClerkUser } from './_internal/types';
 
 type ExpectedAccount = {
   accountId?: string;
@@ -48,7 +47,7 @@ function buildExpectedAccounts(
         expectedAccounts.push({
           accountId: external.provider_user_id,
           providerId: providerIdFromExternal(external),
-          scope: external.approved_scopes?.replace(/\s+/g, ','),
+          scope: external.approved_scopes?.replaceAll(/\s+/g, ','),
           userId: user.id,
         });
       }

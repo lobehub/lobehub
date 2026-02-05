@@ -1,10 +1,11 @@
 import isEqual from 'fast-deep-equal';
 
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type PageStore } from '../../store';
-import { type DocumentsDispatch, documentsReducer } from './reducer';
+import type {PageStore} from '../../store';
+import type {DocumentsDispatch} from './reducer';
+import {  documentsReducer } from './reducer';
 
 const n = setNamespace('page/internal');
 

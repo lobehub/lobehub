@@ -3,59 +3,37 @@ import {
   DEFAULT_DISCOVER_ASSISTANT_ITEM,
   DEFAULT_DISCOVER_PLUGIN_ITEM,
   DEFAULT_DISCOVER_PROVIDER_ITEM,
-  KLAVIS_SERVER_TYPES,
   isDesktop,
+  KLAVIS_SERVER_TYPES,
 } from '@lobechat/const';
+import type {AgentStatus, AssistantListResponse, AssistantMarketSource, AssistantQueryParams, DiscoverAssistantDetail, DiscoverAssistantItem, DiscoverMcpDetail, DiscoverModelDetail, DiscoverModelItem, DiscoverPluginDetail, DiscoverPluginItem, DiscoverProviderDetail, DiscoverProviderItem, DiscoverUserProfile, IdentifiersResponse, McpListResponse, McpQueryParams, ModelListResponse, ModelQueryParams, PluginListResponse, PluginQueryParams, ProviderListResponse, ProviderQueryParams} from '@lobechat/types';
 import {
-  type AgentStatus,
   AssistantCategory,
-  type AssistantListResponse,
-  type AssistantMarketSource,
-  type AssistantQueryParams,
   AssistantSorts,
   CacheRevalidate,
   CacheTag,
-  type DiscoverAssistantDetail,
-  type DiscoverAssistantItem,
-  type DiscoverMcpDetail,
-  type DiscoverModelDetail,
-  type DiscoverModelItem,
-  type DiscoverPluginDetail,
-  type DiscoverPluginItem,
-  type DiscoverProviderDetail,
-  type DiscoverProviderItem,
-  type DiscoverUserProfile,
-  type IdentifiersResponse,
   McpCategory,
-  type McpListResponse,
-  type McpQueryParams,
   McpSorts,
-  type ModelListResponse,
-  type ModelQueryParams,
   ModelSorts,
-  type PluginListResponse,
-  type PluginQueryParams,
   PluginSorts,
-  type ProviderListResponse,
-  type ProviderQueryParams,
-  ProviderSorts,
+  ProviderSorts
 } from '@lobechat/types';
 import {
   getAudioInputUnitRate,
   getTextInputUnitRate,
   getTextOutputUnitRate,
 } from '@lobechat/utils';
-import {
-  type CategoryItem,
-  type CategoryListQuery,
+import type {
+  CategoryItem,
+  CategoryListQuery,
   MarketSDK,
-  type UserInfoResponse,
+  UserInfoResponse,
 } from '@lobehub/market-sdk';
-import {
+import type {
   AgentEventRequest,
-  type CallReportRequest,
-  type InstallReportRequest,
-  type PluginEventRequest,
+  CallReportRequest,
+  InstallReportRequest,
+  PluginEventRequest,
 } from '@lobehub/market-types';
 import dayjs from 'dayjs';
 import debug from 'debug';
@@ -63,7 +41,7 @@ import { cloneDeep, countBy, isString, merge, uniq, uniqBy } from 'es-toolkit/co
 import matter from 'gray-matter';
 import urlJoin from 'url-join';
 
-import { type TrustedClientUserInfo } from '@/libs/trusted-client';
+import type {TrustedClientUserInfo} from '@/libs/trusted-client';
 import { normalizeLocale } from '@/locales/resources';
 import { AssistantStore } from '@/server/modules/AssistantStore';
 import { PluginStore } from '@/server/modules/PluginStore';
@@ -367,7 +345,7 @@ export class DiscoverService {
     log('legacyGetAssistantDetail: params=%O', params);
     const { locale, identifier } = params;
     const normalizedLocale = normalizeLocale(locale);
-    let data = await this.assistantStore.getAgent(identifier, normalizedLocale);
+    const data = await this.assistantStore.getAgent(identifier, normalizedLocale);
     if (!data) {
       log('legacyGetAssistantDetail: assistant not found for identifier=%s', identifier);
       return;
@@ -1316,7 +1294,7 @@ export class DiscoverService {
     const { identifier, locale, withReadme } = params;
     const { LOBE_DEFAULT_MODEL_LIST } = await import('model-bank');
     const all = await this._getProviderList();
-    let provider = all.find((item) => item.identifier === identifier);
+    const provider = all.find((item) => item.identifier === identifier);
     if (!provider) {
       log('getProviderDetail: provider not found for identifier=%s', identifier);
       return;
@@ -1511,7 +1489,7 @@ export class DiscoverService {
     );
 
     // 2. Select the model with most complete abilities from each identifier group
-    let deduplicatedByIdentifier = Array.from(identifierGroups.values()).map((models) =>
+    const deduplicatedByIdentifier = Array.from(identifierGroups.values()).map((models) =>
       this.selectModelWithBestAbilities(models),
     );
 

@@ -10,15 +10,15 @@ import { useLocation } from 'react-router-dom';
 
 import { useGlobalStore } from '@/store/global';
 
-import AskAIMenu from './AskAIMenu';
 import AskAgentCommands from './AskAgentCommands';
+import AskAIMenu from './AskAIMenu';
 import { CommandMenuProvider, useCommandMenuContext } from './CommandMenuContext';
-import MainMenu from './MainMenu';
-import SearchResults from './SearchResults';
-import ThemeMenu from './ThemeMenu';
 import CommandFooter from './components/CommandFooter';
 import CommandInput from './components/CommandInput';
+import MainMenu from './MainMenu';
+import SearchResults from './SearchResults';
 import { styles } from './styles';
+import ThemeMenu from './ThemeMenu';
 import { useCommandMenu } from './useCommandMenu';
 
 const CLOSE_ANIMATION_DURATION = 150;
@@ -72,6 +72,9 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
         <Command
           className={styles.commandRoot}
           data-closing={isClosing}
+          shouldFilter={page !== 'ask-ai' && !selectedAgent && !search.trimStart().startsWith('@')}
+          value={value}
+          onValueChange={setValue}
           onKeyDown={(e) => {
             // Enter key to send message to selected agent
             if (e.key === 'Enter' && selectedAgent && search.trim()) {
@@ -107,9 +110,6 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
               }
             }
           }}
-          onValueChange={setValue}
-          shouldFilter={page !== 'ask-ai' && !selectedAgent && !search.trimStart().startsWith('@')}
-          value={value}
         >
           <CommandInput />
 
@@ -121,12 +121,12 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
               <Command.Group>
                 <Command.Item
                   disabled={!search.trim()}
-                  onSelect={handleSendToSelectedAgent}
                   value="send-to-agent"
+                  onSelect={handleSendToSelectedAgent}
                 >
                   <Avatar
-                    avatar={selectedAgent.avatar}
                     emojiScaleWithBackground
+                    avatar={selectedAgent.avatar}
                     shape="square"
                     size={20}
                   />
@@ -152,11 +152,11 @@ const CommandMenuContent = memo<CommandMenuContentProps>(({ isClosing, onClose }
             {!page && !selectedAgent && hasSearch && !search.trimStart().startsWith('@') && (
               <SearchResults
                 isLoading={isSearching}
-                onClose={onClose}
-                onSetTypeFilter={setTypeFilter}
                 results={searchResults}
                 searchQuery={searchQuery}
                 typeFilter={typeFilter}
+                onClose={onClose}
+                onSetTypeFilter={setTypeFilter}
               />
             )}
           </Command.List>
@@ -247,7 +247,7 @@ const CommandMenu = memo(() => {
   if (!mounted || !isVisible || !appRoot) return null;
 
   return createPortal(
-    <CommandMenuProvider onClose={handleClose} pathname={pathname}>
+    <CommandMenuProvider pathname={pathname} onClose={handleClose}>
       <CommandMenuContent isClosing={isClosing} onClose={handleClose} />
     </CommandMenuProvider>,
     appRoot,

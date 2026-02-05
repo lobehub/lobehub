@@ -1,6 +1,6 @@
 import { DEFAULT_FILES_CONFIG } from '@/const/settings/knowledge';
-import { type SystemEmbeddingConfig } from '@/types/knowledgeBase';
-import { type FilesConfig } from '@/types/user/settings/filesConfig';
+import type {SystemEmbeddingConfig} from '@/types/knowledgeBase';
+import type {FilesConfig} from '@/types/user/settings/filesConfig';
 
 const protectedKeys = Object.keys({
   embedding_model: null,
@@ -13,7 +13,7 @@ export const parseFilesConfig = (envString: string = ''): SystemEmbeddingConfig 
   const config: FilesConfig = {} as any;
 
   // Handle full-width commas and extra spaces
-  let envValue = envString.replaceAll('，', ',').trim();
+  const envValue = envString.replaceAll('，', ',').trim();
 
   const pairs = envValue.split(',');
 

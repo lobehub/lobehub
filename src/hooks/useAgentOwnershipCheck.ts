@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
-import { type MarketAuthContextType } from '@/layout/AuthProvider/MarketAuth/types';
+import type {MarketAuthContextType} from '@/layout/AuthProvider/MarketAuth/types';
 import { marketApiService } from '@/services/marketApi';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 

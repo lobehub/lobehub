@@ -13,8 +13,8 @@ const Typo = memo(() => {
     <Action
       active={showTypoBar}
       icon={TypeIcon}
-      onClick={() => setShowTypoBar(!showTypoBar)}
       title={t(showTypoBar ? 'actions.typobar.off' : 'actions.typobar.on')}
+      onClick={() => setShowTypoBar(!showTypoBar)}
     />
   );
 });

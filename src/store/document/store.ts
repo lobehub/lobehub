@@ -1,15 +1,15 @@
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
-import { type StateCreator } from 'zustand/vanilla';
+import type {StateCreator} from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
 import { flattenActions } from '../utils/flattenActions';
-import { type DocumentAction, createDocumentSlice } from './slices/document';
+import type {DocumentAction} from './slices/document';
+import { createDocumentSlice } from './slices/document';
+import type {EditorAction, EditorState} from './slices/editor';
 import {
-  type EditorAction,
-  type EditorState,
   createEditorSlice,
-  initialEditorState,
+  initialEditorState
 } from './slices/editor';
 
 // State type

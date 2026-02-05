@@ -1,21 +1,21 @@
 import { getMessageError } from '@lobechat/fetch-sse';
-import { type ChatMessageError } from '@lobechat/types';
+import type {ChatMessageError} from '@lobechat/types';
 import { AudioPlayer } from '@lobehub/tts/react';
-import { Alert, Button, Flexbox, Highlighter, Select, type SelectProps } from '@lobehub/ui';
-import { type RefSelectProps } from 'antd';
+import type {SelectProps} from '@lobehub/ui';
+import { Alert, Button, Flexbox, Highlighter, Select  } from '@lobehub/ui';
+import type {RefSelectProps} from 'antd';
 import { cssVar } from 'antd-style';
-import { forwardRef, useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useTTS } from '@/hooks/useTTS';
-import { type TTSServer } from '@/types/agent';
+import type {TTSServer} from '@/types/agent';
 
 interface SelectWithTTSPreviewProps extends SelectProps {
   server: TTSServer;
 }
 
-const SelectWithTTSPreview = forwardRef<RefSelectProps, SelectWithTTSPreviewProps>(
-  ({ value, options, server, onSelect, ...rest }, ref) => {
+const SelectWithTTSPreview = ({ ref, value, options, server, onSelect, ...rest }: SelectWithTTSPreviewProps & { ref?: React.RefObject<RefSelectProps | null> }) => {
     const [error, setError] = useState<ChatMessageError>();
     const [voice, setVoice] = useState<string>(value);
     const { t } = useTranslation('welcome');
@@ -71,35 +71,38 @@ const SelectWithTTSPreview = forwardRef<RefSelectProps, SelectWithTTSPreviewProp
     };
     return (
       <Flexbox gap={8}>
-        <Flexbox align={'center'} gap={8} horizontal style={{ width: '100%' }}>
-          <Select onSelect={handleSelect} options={options} ref={ref} value={value} {...rest} />
+        <Flexbox horizontal align={'center'} gap={8} style={{ width: '100%' }}>
+          <Select options={options} ref={ref} value={value} onSelect={handleSelect} {...rest} />
           <AudioPlayer
+            buttonActive
             allowPause={false}
             audio={audio}
-            buttonActive
             buttonSize={{ blockSize: 36, size: 16 }}
-            buttonStyle={{
-              background: cssVar.colorBgContainer,
-              border: `1px solid ${cssVar.colorBorder}`,
-            }}
             isLoading={isGlobalLoading}
-            onInitPlay={start}
-            onLoadingStop={stop}
             showDonload={false}
             showSlider={false}
             showTime={false}
             style={{ flex: 'none', padding: 0, width: 'unset' }}
             title={t('settingTTS.voice.preview', { ns: 'setting' })}
+            buttonStyle={{
+              background: cssVar.colorBgContainer,
+              border: `1px solid ${cssVar.colorBorder}`,
+            }}
+            onInitPlay={start}
+            onLoadingStop={stop}
           />
         </Flexbox>
         {error && (
           <Alert
+            closable
+            style={{ alignItems: 'center', width: '100%' }}
+            title={error.message}
+            type="error"
             action={
-              <Button onClick={handleRetry} size={'small'} type={'primary'}>
+              <Button size={'small'} type={'primary'} onClick={handleRetry}>
                 {t('retry', { ns: 'common' })}
               </Button>
             }
-            closable
             extra={
               error.body && (
                 <Highlighter actionIconSize={'small'} language={'json'} variant={'borderless'}>
@@ -108,14 +111,10 @@ const SelectWithTTSPreview = forwardRef<RefSelectProps, SelectWithTTSPreviewProp
               )
             }
             onClose={handleCloseError}
-            style={{ alignItems: 'center', width: '100%' }}
-            title={error.message}
-            type="error"
           />
         )}
       </Flexbox>
     );
-  },
-);
+  };
 
 export default SelectWithTTSPreview;

@@ -7,7 +7,7 @@ import { FileService } from '@/server/services/file';
 import { MarketService } from '@/server/services/market';
 import { ServerSandboxService } from '@/server/services/sandbox';
 
-import { type ServerRuntimeRegistration } from './types';
+import type {ServerRuntimeRegistration} from './types';
 
 /**
  * CloudSandbox Server Runtime

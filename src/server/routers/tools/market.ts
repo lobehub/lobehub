@@ -1,10 +1,10 @@
-import { type CodeInterpreterToolName } from '@lobehub/market-sdk';
+import type {CodeInterpreterToolName} from '@lobehub/market-sdk';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { sha256 } from 'js-sha256';
 import { z } from 'zod';
 
-import { type ToolCallContent } from '@/libs/mcp';
+import type {ToolCallContent} from '@/libs/mcp';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { marketUserInfo, serverDatabase, telemetry } from '@/libs/trpc/lambda/middleware';
 import { marketSDK, requireMarketAuth } from '@/libs/trpc/lambda/middleware/marketSDK';

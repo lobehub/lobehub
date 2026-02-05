@@ -3,7 +3,7 @@ import { MAX_ONBOARDING_STEPS } from '@lobechat/types';
 
 import { userService } from '@/services/user';
 import { getAgentStoreState } from '@/store/agent';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import type { UserStore } from '@/store/user';
 
 import { settingsSelectors } from '../settings/selectors';

@@ -1,4 +1,4 @@
-import { type ImageType } from '@/hooks/useScreenshot';
+import type {ImageType} from '@/hooks/useScreenshot';
 
 export enum WidthMode {
   Narrow = 'narrow',

@@ -23,6 +23,8 @@ const AuthErrorPage = memo(() => {
 
   return (
     <AuthCard
+      subtitle={description}
+      title={t('title')}
       footer={
         <Flexbox gap={12} justify="center" wrap="wrap">
           <Link href="/signin">
@@ -42,8 +44,6 @@ const AuthErrorPage = memo(() => {
           </Link>
         </Flexbox>
       }
-      subtitle={description}
-      title={t('title')}
     >
       <Text style={{ fontFamily: cssVar.fontFamilyCode }} type={'secondary'}>
         ErrorCode: {error || 'UNKNOWN'}

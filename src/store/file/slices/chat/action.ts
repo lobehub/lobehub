@@ -1,4 +1,4 @@
-import { type ChatContextContent } from '@lobechat/types';
+import type {ChatContextContent} from '@lobechat/types';
 import { t } from 'i18next';
 
 import { notification } from '@/components/AntdStaticMethods';
@@ -6,18 +6,18 @@ import { FILE_UPLOAD_BLACKLIST } from '@/const/file';
 import { fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
 import { UPLOAD_NETWORK_ERROR } from '@/services/upload';
+import type {UploadFileListDispatch} from '@/store/file/reducers/uploadFileList';
 import {
-  type UploadFileListDispatch,
-  uploadFileListReducer,
+  uploadFileListReducer
 } from '@/store/file/reducers/uploadFileList';
-import { type StoreSetter } from '@/store/types';
-import { type FileListItem } from '@/types/files';
-import { type UploadFileItem } from '@/types/files/upload';
+import type {StoreSetter} from '@/store/types';
+import type {FileListItem} from '@/types/files';
+import type {UploadFileItem} from '@/types/files/upload';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type FileStore } from '../../store';
+import type {FileStore} from '../../store';
 
 const n = setNamespace('chat');
 

@@ -1,12 +1,12 @@
 'use client';
 
+import type {PropsWithChildren} from 'react';
 import {
-  type PropsWithChildren,
   createContext,
-  useContext,
+  use,
   useEffect,
   useState,
-  useTransition,
+  useTransition
 } from 'react';
 
 import { usePathname } from '@/libs/router/navigation';
@@ -28,7 +28,7 @@ const CachePanelContext = createContext<CachePanelContextProps>({
   setEntries: () => {},
 });
 
-export const useCachePanelContext = () => useContext(CachePanelContext);
+export const useCachePanelContext = () => use(CachePanelContext);
 
 export const CachePanelContextProvider = (
   props: PropsWithChildren<{
@@ -51,7 +51,7 @@ export const CachePanelContextProvider = (
   }, [pathname]);
 
   return (
-    <CachePanelContext.Provider
+    <CachePanelContext
       value={{
         entries,
         isLoading,
@@ -60,6 +60,6 @@ export const CachePanelContextProvider = (
       }}
     >
       {props.children}
-    </CachePanelContext.Provider>
+    </CachePanelContext>
   );
 };

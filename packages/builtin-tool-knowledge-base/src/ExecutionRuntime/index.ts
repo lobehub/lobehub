@@ -1,7 +1,7 @@
 import { formatSearchResults, promptFileContents, promptNoSearchResults } from '@lobechat/prompts';
-import { BuiltinServerRuntimeOutput } from '@lobechat/types';
+import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
-import {
+import type {
   ReadKnowledgeArgs,
   ReadKnowledgeState,
   SearchKnowledgeBaseArgs,

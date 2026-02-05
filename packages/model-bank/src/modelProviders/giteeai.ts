@@ -1,10 +1,11 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 // ref: https://ai.gitee.com/serverless-api/packages/1910
 const GiteeAI: ModelProviderCard = {
   chatModels: [],
   checkModel: 'Qwen2.5-72B-Instruct',
-  description: 'Gitee AI Serverless APIs provide plug-and-play LLM inference services for developers.',
+  description:
+    'Gitee AI Serverless APIs provide plug-and-play LLM inference services for developers.',
   disableBrowserRequest: true,
   id: 'giteeai',
   modelList: { showModelFetcher: true },

@@ -6,7 +6,8 @@ import type {
   UpdateResourceParams,
 } from '@/types/resource';
 
-import { type CreateDocumentParams, documentService } from '../document';
+import type {CreateDocumentParams} from '../document';
+import {  documentService } from '../document';
 import { fileService } from '../file';
 
 /**

@@ -1,4 +1,5 @@
 import { describe } from 'vitest';
+
 import { testService } from '~test-utils';
 
 import { ThreadService } from './index';

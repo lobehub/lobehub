@@ -1,4 +1,4 @@
-import { type LobeTool } from '@lobechat/types';
+import type {LobeTool} from '@lobechat/types';
 
 export type PluginsSettings = Record<string, any>;
 

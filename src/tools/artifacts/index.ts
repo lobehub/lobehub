@@ -1,4 +1,4 @@
-import { type BuiltinToolManifest } from '@lobechat/types';
+import type {BuiltinToolManifest} from '@lobechat/types';
 
 import { systemPrompt } from '@/tools/artifacts/systemRole';
 

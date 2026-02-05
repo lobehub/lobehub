@@ -1,4 +1,4 @@
-import { type MetadataRoute } from 'next';
+import type {MetadataRoute} from 'next';
 
 import { Sitemap } from '@/server/sitemap';
 import { getCanonicalUrl } from '@/server/utils/url';

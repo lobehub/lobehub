@@ -49,7 +49,7 @@ describe('KeyVaultsGateKeeper', () => {
       await KeyVaultsGateKeeper.initWithEnvKey();
     } catch (e) {
       expect(e).toEqual(
-        Error(` \`KEY_VAULTS_SECRET\` is not set, please set it in your environment variables.
+        new Error(` \`KEY_VAULTS_SECRET\` is not set, please set it in your environment variables.
 
 If you don't have it, please run \`openssl rand -base64 32\` to create one.
 `),

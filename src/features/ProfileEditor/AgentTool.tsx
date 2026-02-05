@@ -1,14 +1,16 @@
 'use client';
 
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import { Avatar, Button, Flexbox, Icon, type ItemType } from '@lobehub/ui';
+import type {ItemType} from '@lobehub/ui';
+import { Avatar, Button, Flexbox, Icon  } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { PlusIcon, ToyBrick } from 'lucide-react';
-import React, { Suspense, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
+import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
 import KlavisServerItem from '@/features/ChatInput/ActionBar/Tools/KlavisServerItem';
 import KlavisSkillIcon, {
   SKILL_ICON_SIZE,
@@ -16,7 +18,6 @@ import KlavisSkillIcon, {
 import LobehubSkillIcon from '@/features/ChatInput/ActionBar/Tools/LobehubSkillIcon';
 import LobehubSkillServerItem from '@/features/ChatInput/ActionBar/Tools/LobehubSkillServerItem';
 import ToolItem from '@/features/ChatInput/ActionBar/Tools/ToolItem';
-import ActionDropdown from '@/features/ChatInput/ActionBar/components/ActionDropdown';
 import { createSkillStoreModal } from '@/features/SkillStore';
 import { useCheckPluginsIsInstalled } from '@/hooks/useCheckPluginsIsInstalled';
 import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
@@ -30,7 +31,7 @@ import {
   lobehubSkillStoreSelectors,
   pluginSelectors,
 } from '@/store/tool/selectors';
-import { type LobeToolMetaWithAvailability } from '@/store/tool/slices/builtin/selectors';
+import type {LobeToolMetaWithAvailability} from '@/store/tool/slices/builtin/selectors';
 
 import PluginTag from './PluginTag';
 import PopoverContent from './PopoverContent';
@@ -558,11 +559,15 @@ const AgentTool = memo<AgentToolProps>(
     return (
       <>
         {/* Plugin Selector and Tags */}
-        <Flexbox align="center" gap={8} horizontal wrap={'wrap'}>
+        <Flexbox horizontal align="center" gap={8} wrap={'wrap'}>
           <Suspense fallback={button}>
             {/* Plugin Selector Dropdown - Using Action component pattern */}
             <ActionDropdown
               maxWidth={400}
+              minWidth={400}
+              open={dropdownOpen}
+              placement={'bottomLeft'}
+              trigger={'click'}
               menu={{
                 items: [],
                 style: {
@@ -571,10 +576,6 @@ const AgentTool = memo<AgentToolProps>(
                   overflowY: 'visible',
                 },
               }}
-              minWidth={400}
-              onOpenChange={setDropdownOpen}
-              open={dropdownOpen}
-              placement={'bottomLeft'}
               popupProps={{
                 style: {
                   padding: 0,
@@ -586,11 +587,11 @@ const AgentTool = memo<AgentToolProps>(
                   allTabItems={allTabItems}
                   installedTabItems={installedTabItems}
                   onClose={() => setDropdownOpen(false)}
+                  onTabChange={setActiveTab}
                   onOpenStore={() => {
                     setDropdownOpen(false);
                     createSkillStoreModal();
                   }}
-                  onTabChange={setActiveTab}
                 />
               )}
               positionerProps={{
@@ -599,7 +600,7 @@ const AgentTool = memo<AgentToolProps>(
                   typeof document === 'undefined' ? undefined : document.documentElement,
                 positionMethod: 'fixed',
               }}
-              trigger={'click'}
+              onOpenChange={setDropdownOpen}
             >
               {button}
             </ActionDropdown>
@@ -609,10 +610,10 @@ const AgentTool = memo<AgentToolProps>(
             return (
               <PluginTag
                 key={pluginId}
-                onRemove={handleRemovePlugin(pluginId)}
                 pluginId={pluginId}
                 showDesktopOnlyLabel={filterAvailableInWeb}
                 useAllMetaList={useAllMetaList}
+                onRemove={handleRemovePlugin(pluginId)}
               />
             );
           })}

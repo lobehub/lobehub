@@ -37,7 +37,8 @@ const FilePreview = () => {
       {chunkText && (
         <Segmented
           block
-          onChange={(v) => setTab(v as FilePreviewTab)}
+          value={tab}
+          variant={'filled'}
           options={[
             {
               icon: <Icon icon={BoltIcon} />,
@@ -50,8 +51,7 @@ const FilePreview = () => {
               value: FilePreviewTab.File,
             },
           ]}
-          value={tab}
-          variant={'filled'}
+          onChange={(v) => setTab(v as FilePreviewTab)}
         />
       )}
 

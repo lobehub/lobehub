@@ -13,7 +13,7 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type UIChatMessage } from '@/types/index';
+import type {UIChatMessage} from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
 

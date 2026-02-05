@@ -4,16 +4,10 @@ import type { PartialDeep } from 'type-fest';
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { shareService } from '@/services/share';
 import { userService } from '@/services/user';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import type { UserStore } from '@/store/user';
-import { type LobeAgentSettings } from '@/types/session';
-import {
-  type SystemAgentItem,
-  type UserGeneralConfig,
-  type UserKeyVaults,
-  type UserSettings,
-  type UserSystemAgentConfigKey,
-} from '@/types/user/settings';
+import type {LobeAgentSettings} from '@/types/session';
+import type {SystemAgentItem, UserGeneralConfig, UserKeyVaults, UserSettings, UserSystemAgentConfigKey} from '@/types/user/settings';
 import { difference } from '@/utils/difference';
 import { merge } from '@/utils/merge';
 

@@ -3,7 +3,8 @@
 import { DraggablePanel } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { AnimatePresence, motion } from 'motion/react';
-import { type ReactNode, memo, useMemo, useRef } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useMemo, useRef } from 'react';
 
 import { USER_DROPDOWN_ICON_ID } from '@/app/[variants]/(main)/home/_layout/Header/components/User';
 import { isDesktop } from '@/const/version';
@@ -141,11 +142,11 @@ export const NavPanelDraggable = memo<NavPanelDraggableProps>(({ activeContent }
       expandable={false}
       maxWidth={400}
       minWidth={240}
-      onExpandChange={togglePanel}
-      onSizeDragging={handleSizeChange}
       placement="left"
       showBorder={false}
       style={styles}
+      onExpandChange={togglePanel}
+      onSizeDragging={handleSizeChange}
     >
       <AnimatePresence initial={false} mode="popLayout">
         <motion.div

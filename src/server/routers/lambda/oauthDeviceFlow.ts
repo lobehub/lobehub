@@ -7,8 +7,8 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import {
-  GithubCopilotOAuthService,
   getOAuthService,
+  GithubCopilotOAuthService,
 } from '@/server/services/oauthDeviceFlow/providers/githubCopilot';
 
 const oauthProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {

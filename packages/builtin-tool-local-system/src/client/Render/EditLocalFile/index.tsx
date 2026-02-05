@@ -1,6 +1,6 @@
-import { type EditLocalFileState } from '@lobechat/builtin-tool-local-system';
-import { type EditLocalFileParams } from '@lobechat/electron-client-ipc';
-import { type BuiltinRenderProps } from '@lobechat/types';
+import type { EditLocalFileState } from '@lobechat/builtin-tool-local-system';
+import type { EditLocalFileParams } from '@lobechat/electron-client-ipc';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Alert, Flexbox, PatchDiff, Skeleton } from '@lobehub/ui';
 import React, { memo } from 'react';
 
@@ -12,8 +12,8 @@ const EditLocalFile = memo<BuiltinRenderProps<EditLocalFileParams, EditLocalFile
       <Flexbox gap={12}>
         {pluginError ? (
           <Alert
-            description={pluginError.message || 'Unknown error occurred'}
             showIcon
+            description={pluginError.message || 'Unknown error occurred'}
             title="Edit Failed"
             type="error"
           />

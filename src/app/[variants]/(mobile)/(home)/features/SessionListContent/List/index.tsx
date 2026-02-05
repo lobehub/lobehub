@@ -11,7 +11,7 @@ import { getSessionStoreState, useSessionStore } from '@/store/session';
 import { sessionGroupSelectors, sessionSelectors } from '@/store/session/selectors';
 import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
-import { type LobeSessions } from '@/types/session';
+import type {LobeSessions} from '@/types/session';
 
 import SkeletonList from '../../SkeletonList';
 import AddButton from './AddButton';
@@ -43,6 +43,7 @@ const SessionList = memo<SessionListProps>(({ dataSource, groupId, showAddButton
       <LazyLoad className={styles} key={id}>
         <Link
           aria-label={id}
+          to={SESSION_CHAT_URL((res as any).config?.id, mobile)}
           onClick={(e) => {
             e.preventDefault();
             navigateToAgent((res as any).config?.id);
@@ -76,7 +77,6 @@ const SessionList = memo<SessionListProps>(({ dataSource, groupId, showAddButton
               }
             }
           }}
-          to={SESSION_CHAT_URL((res as any).config?.id, mobile)}
         >
           <SessionItem id={id} />
         </Link>

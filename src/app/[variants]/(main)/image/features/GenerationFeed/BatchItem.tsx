@@ -9,7 +9,7 @@ import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { omit } from 'es-toolkit/compat';
 import { CopyIcon, RotateCcwSquareIcon, Trash2 } from 'lucide-react';
-import { type RuntimeImageGenParams } from 'model-bank';
+import type {RuntimeImageGenParams} from 'model-bank';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,7 +17,7 @@ import useRenderBusinessBatchItem from '@/business/client/hooks/useRenderBusines
 import APIKeyForm from '@/components/InvalidAPIKey';
 import { useImageStore } from '@/store/image';
 import { AsyncTaskErrorType } from '@/types/asyncTask';
-import { type GenerationBatch } from '@/types/generation';
+import type {GenerationBatch} from '@/types/generation';
 
 import { GenerationItem } from './GenerationItem';
 import { DEFAULT_MAX_ITEM_WIDTH } from './GenerationItem/utils';
@@ -119,18 +119,18 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
     return (
       <APIKeyForm
         bedrockDescription={t('bedrock.unlock.imageGenerationDescription', { ns: 'modelProvider' })}
+        id={batch.id}
+        provider={batch.provider}
         description={t('unlock.apiKey.imageGenerationDescription', {
           name: batch.provider,
           ns: 'error',
         })}
-        id={batch.id}
         onClose={() => {
           removeGenerationBatch(batch.id, activeTopicId!);
         }}
         onRecreate={() => {
           recreateImage(batch.id);
         }}
-        provider={batch.provider}
       />
     );
   }
@@ -149,8 +149,8 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
   const promptAndMetadata = (
     <>
       <Markdown variant={'chat'}>{batch.prompt}</Markdown>
-      <Flexbox gap={4} horizontal justify="space-between" style={{ marginBottom: 10 }}>
-        <Flexbox gap={4} horizontal>
+      <Flexbox horizontal gap={4} justify="space-between" style={{ marginBottom: 10 }}>
+        <Flexbox horizontal gap={4}>
           <ModelTag model={batch.model} />
           {batch.width && batch.height && (
             <Tag>
@@ -167,7 +167,7 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
     <Block className={styles.container} gap={8} variant="borderless">
       {isSingleImageLayout ? (
         // Single image layout: horizontal arrangement with vertical centering
-        <Flexbox align="center" gap={16} horizontal>
+        <Flexbox horizontal align="center" gap={16}>
           <ReferenceImages
             imageUrl={batch.config?.imageUrl}
             imageUrls={batch.config?.imageUrls}
@@ -203,9 +203,9 @@ export const GenerationBatchItem = memo<GenerationBatchItemProps>(({ batch }) =>
         ))}
       </Grid>
       <Flexbox
+        horizontal
         align={'center'}
         className={styles.batchActions}
-        horizontal
         justify={'space-between'}
       >
         <Text as={'time'} fontSize={12} type={'secondary'}>

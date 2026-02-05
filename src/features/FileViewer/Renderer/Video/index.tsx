@@ -39,7 +39,7 @@ const VideoViewer = memo<VideoViewerProps>(({ url }) => {
 
   return (
     <Center className={styles.container} height={'100%'} width={'100%'}>
-      <video className={styles.video} controls height={'100%'} src={url} width={'100%'} />
+      <video controls className={styles.video} height={'100%'} src={url} width={'100%'} />
     </Center>
   );
 });

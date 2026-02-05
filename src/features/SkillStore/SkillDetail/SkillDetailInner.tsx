@@ -1,11 +1,12 @@
 'use client';
 
 import { Flexbox, Skeleton } from '@lobehub/ui';
-import { Suspense, lazy, memo, useState } from 'react';
+import { lazy, memo, Suspense, useState } from 'react';
 
 import Agents from './Agents';
 import Header from './Header';
-import Nav, { type TabKey } from './Nav';
+import type {TabKey} from './Nav';
+import Nav from './Nav';
 import Overview from './Overview';
 
 const Schema = lazy(() => import('./Schema'));

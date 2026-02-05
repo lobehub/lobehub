@@ -1,4 +1,4 @@
-/* eslint-disable no-undef */
+ 
 import { App } from 'antd';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

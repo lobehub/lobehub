@@ -1,5 +1,5 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
-import { type LobeChatDatabase } from '@lobechat/database';
+import type {LobeChatDatabase} from '@lobechat/database';
 
 import { initNewUserForBusiness } from '@/business/server/user';
 import { UserModel } from '@/database/models/user';

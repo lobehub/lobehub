@@ -1,5 +1,6 @@
-import { ModelParamsSchema, PRESET_ASPECT_RATIOS } from '../standard-parameters';
-import { AIImageModelCard } from '../types';
+import type { ModelParamsSchema } from '../standard-parameters';
+import { PRESET_ASPECT_RATIOS } from '../standard-parameters';
+import type { AIImageModelCard } from '../types';
 
 /**
  * Aspect ratios supported by FLUX models

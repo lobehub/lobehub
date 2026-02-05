@@ -5,7 +5,7 @@ import { memo, useEffect, useState } from 'react';
 
 import Loading from '@/components/Loading/BrandTextLoading';
 import { DESKTOP_HEADER_ICON_SIZE } from '@/const/layoutTokens';
-import { type QueryTagsResult } from '@/database/models/userMemory';
+import type {QueryTagsResult} from '@/database/models/userMemory';
 import dynamic from '@/libs/next/dynamic';
 
 const TagCloudCanvas = dynamic(() => import('./TagCloudCanvas'), {
@@ -68,20 +68,20 @@ const RoleTagCloud = memo<RoleTagCloudProps>(({ tags }) => {
   if (!tags.length) return null;
   return (
     <Block
+      variant={fullscreen ? 'borderless' : 'outlined'}
       className={cx(
         styles.root,
         fullscreen && styles.fullscreen,
         fullscreenAnimation && styles.fullscreenAnimation,
       )}
-      variant={fullscreen ? 'borderless' : 'outlined'}
     >
       <ActionIcon
         className={cx('fullscreen-icon', styles.icon)}
         icon={fullscreen ? MinimizeIcon : MaximizeIcon}
+        size={DESKTOP_HEADER_ICON_SIZE}
         onClick={() => {
           setFullscreen(!fullscreen);
         }}
-        size={DESKTOP_HEADER_ICON_SIZE}
       />
       <TagCloudCanvas tags={tags} />
     </Block>

@@ -1,4 +1,4 @@
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 
 import type { ElectronStore } from '../store';
 

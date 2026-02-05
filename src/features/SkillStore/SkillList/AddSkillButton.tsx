@@ -1,13 +1,15 @@
-import { Button } from '@lobehub/ui';
+import type {ButtonProps} from '@lobehub/ui';
+import { Button  } from '@lobehub/ui';
 import { Grid2x2Plus } from 'lucide-react';
-import { forwardRef, useState } from 'react';
+import type {Ref} from 'react';
+import {  useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DevModal from '@/features/PluginDevModal';
 import { useAgentStore } from '@/store/agent';
 import { useToolStore } from '@/store/tool';
 
-const AddSkillButton = forwardRef<HTMLButtonElement>((props, ref) => {
+const AddSkillButton = ({ ref, ...props }: ButtonProps & { ref?: Ref<HTMLButtonElement> }) => {
   const { t } = useTranslation('setting');
   const [showModal, setModal] = useState(false);
 
@@ -24,25 +26,25 @@ const AddSkillButton = forwardRef<HTMLButtonElement>((props, ref) => {
       }}
     >
       <DevModal
+        open={showModal}
         onOpenChange={setModal}
+        onValueChange={updateNewDevPlugin}
         onSave={async (devPlugin) => {
           await installCustomPlugin(devPlugin);
           await togglePlugin(devPlugin.identifier);
         }}
-        onValueChange={updateNewDevPlugin}
-        open={showModal}
       />
       <Button
         icon={Grid2x2Plus}
+        ref={ref}
         onClick={() => {
           setModal(true);
         }}
-        ref={ref}
       >
         {t('tab.addCustomSkill')}
       </Button>
     </div>
   );
-});
+};
 
 export default AddSkillButton;

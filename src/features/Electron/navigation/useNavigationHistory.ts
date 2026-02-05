@@ -6,10 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { pluginRegistry } from '@/features/Electron/titlebar/RecentlyViewed/plugins';
-import {
-  type CachedPageData,
-  type PageReference,
-} from '@/features/Electron/titlebar/RecentlyViewed/types';
+import type {CachedPageData, PageReference} from '@/features/Electron/titlebar/RecentlyViewed/types';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors/selectors';
 import { useChatStore } from '@/store/chat';

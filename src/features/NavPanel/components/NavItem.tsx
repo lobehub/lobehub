@@ -1,18 +1,17 @@
 'use client';
 
+import type {BlockProps, GenericItemType, IconProps} from '@lobehub/ui';
 import {
   Block,
-  type BlockProps,
   Center,
   ContextMenuTrigger,
   Flexbox,
-  type GenericItemType,
   Icon,
-  type IconProps,
-  Text,
+  Text
 } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { type ReactNode, memo } from 'react';
+import type {ReactNode} from 'react';
+import { memo } from 'react';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 
@@ -90,12 +89,14 @@ const NavItem = memo<NavItemProps>(
 
     const Content = (
       <Block
+        horizontal
         align={'center'}
         className={cx(styles.container, className)}
         clickable={!disabled}
         gap={8}
         height={36}
-        horizontal
+        paddingInline={4}
+        variant={variant}
         onClick={(e) => {
           if (disabled || loading) return;
           // Prevent default link behavior for normal clicks (let onClick handle it)
@@ -105,8 +106,6 @@ const NavItem = memo<NavItemProps>(
           }
           onClick?.(e);
         }}
-        paddingInline={4}
-        variant={variant}
         {...linkProps}
         {...rest}
       >
@@ -120,14 +119,14 @@ const NavItem = memo<NavItemProps>(
           </Center>
         )}
 
-        <Flexbox align={'center'} flex={1} gap={8} horizontal style={{ overflow: 'hidden' }}>
-          <Text color={textColor} ellipsis style={{ flex: 1 }}>
+        <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ overflow: 'hidden' }}>
+          <Text ellipsis color={textColor} style={{ flex: 1 }}>
             {title}
           </Text>
           <Flexbox
+            horizontal
             align={'center'}
             gap={2}
-            horizontal
             justify={'flex-end'}
             onClick={(e) => {
               e.preventDefault();
@@ -137,10 +136,10 @@ const NavItem = memo<NavItemProps>(
             {extra}
             {actions && (
               <Flexbox
+                horizontal
                 align={'center'}
                 className={ACTION_CLASS_NAME}
                 gap={2}
-                horizontal
                 justify={'flex-end'}
                 onClick={(e) => {
                   e.preventDefault();

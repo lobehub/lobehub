@@ -4,12 +4,11 @@ import { z } from 'zod';
 
 import { chargeBeforeGenerate } from '@/business/server/image-generation/chargeBeforeGenerate';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
+import type {NewGeneration, NewGenerationBatch} from '@/database/schemas';
 import {
-  type NewGeneration,
-  type NewGenerationBatch,
   asyncTasks,
   generationBatches,
-  generations,
+  generations
 } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { keyVaults, serverDatabase } from '@/libs/trpc/lambda/middleware';

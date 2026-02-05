@@ -1,6 +1,8 @@
-import { Center, Empty, Flexbox, type EmptyProps } from '@lobehub/ui';
+import type {EmptyProps} from '@lobehub/ui';
+import { Center, Empty, Flexbox } from '@lobehub/ui';
 import { BrainCircuitIcon } from 'lucide-react';
-import { memo, ReactNode } from 'react';
+import type { ReactNode } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const MemoryEmpty = memo<
@@ -12,15 +14,15 @@ const MemoryEmpty = memo<
         <Flexbox align="center" gap={12}>
           <Empty
             description={search ? t('empty.search') : t('empty.description')}
+            icon={BrainCircuitIcon}
+            title={search ? undefined : title || t('empty.title')}
+            type={search ? 'default' : 'page'}
             descriptionProps={{
               fontSize: 14,
             }}
-            icon={BrainCircuitIcon}
             style={{
               maxWidth: 550,
             }}
-            title={search ? undefined : title || t('empty.title')}
-            type={search ? 'default' : 'page'}
             {...rest}
           >
           <Flexbox>

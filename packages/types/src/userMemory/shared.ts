@@ -72,8 +72,8 @@ export enum ContextStatusEnum {
   Aborted = 'aborted',
   Cancelled = 'cancelled',
   Completed = 'completed',
-  OnHold = 'on_hold',
   Ongoing = 'ongoing',
+  OnHold = 'on_hold',
   Planned = 'planned',
 }
 export const CONTEXT_STATUS = Object.values(ContextStatusEnum);

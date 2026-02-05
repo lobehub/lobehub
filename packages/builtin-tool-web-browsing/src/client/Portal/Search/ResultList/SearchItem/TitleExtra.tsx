@@ -16,7 +16,7 @@ const TitleExtra = memo<TitleExtraProps>(({ category, score, highlight, engines 
   const { t } = useTranslation('tool');
 
   return (
-    <Flexbox align={'center'} gap={4} horizontal>
+    <Flexbox horizontal align={'center'} gap={4}>
       <EngineAvatarGroup engines={engines} />
       {typeof score === 'number' && (
         <Tooltip title={t(highlight ? 'search.includedTooltip' : 'search.scoreTooltip')}>

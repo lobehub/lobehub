@@ -32,10 +32,10 @@ const shouldBuild = shouldProceedBuild();
 console.log('shouldBuild:', shouldBuild);
 if (shouldBuild) {
   console.log('✅ - Build can proceed');
-  // eslint-disable-next-line unicorn/no-process-exit
+
   process.exit(1);
 } else {
   console.log('🛑 - Build cancelled');
-  // eslint-disable-next-line unicorn/no-process-exit
+
   process.exit(0);
 }

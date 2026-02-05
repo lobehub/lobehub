@@ -1,4 +1,4 @@
-import { type NotebookDocument } from '@lobechat/types';
+import type {NotebookDocument} from '@lobechat/types';
 import { z } from 'zod';
 
 import { DocumentModel } from '@/database/models/document';

@@ -1,6 +1,6 @@
-import { type UIChatMessage } from '@lobechat/types';
-import { ActionIconGroup, Flexbox } from '@lobehub/ui';
+import type {UIChatMessage} from '@lobechat/types';
 import type { ActionIconGroupEvent, ActionIconGroupItemType } from '@lobehub/ui';
+import { ActionIconGroup, Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
@@ -163,7 +163,7 @@ const Actions = memo<ActionsProps>(({ id, data, disableEditing }) => {
   const { branch } = data;
 
   return (
-    <Flexbox align={'center'} horizontal>
+    <Flexbox horizontal align={'center'}>
       {!disableEditing && (
         <Flexbox align={'flex-start'} role="menubar">
           {actionBarHolder}

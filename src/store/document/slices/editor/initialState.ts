@@ -1,7 +1,7 @@
 'use client';
 
-import { type IEditor } from '@lobehub/editor';
-import { type EditorState as LobehubEditorState } from '@lobehub/editor/react';
+import type {IEditor} from '@lobehub/editor';
+import type {EditorState as LobehubEditorState} from '@lobehub/editor/react';
 
 /**
  * Document source type - determines which service to use for persistence

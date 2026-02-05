@@ -1,4 +1,4 @@
-import { type InstallPluginMeta } from '@/types/tool/plugin';
+import type {InstallPluginMeta} from '@/types/tool/plugin';
 
 import type { ToolStoreState } from '../../initialState';
 

@@ -1,8 +1,7 @@
-import { ModelTokensUsage } from '@lobechat/types';
-import { Pricing } from 'model-bank';
+import type { ModelTokensUsage } from '@lobechat/types';
+import type { Pricing } from 'model-bank';
 import anthropicChatModels from 'model-bank/anthropic';
 import googleChatModels from 'model-bank/google';
-import lobehubChatModels from 'model-bank/lobehub';
 import openaiChatModels from 'model-bank/openai';
 import { describe, expect, it } from 'vitest';
 

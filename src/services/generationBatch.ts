@@ -1,6 +1,6 @@
-import { type GenerationBatchItem } from '@/database/schemas';
+import type {GenerationBatchItem} from '@/database/schemas';
 import { lambdaClient } from '@/libs/trpc/client';
-import { type Generation, type GenerationBatch } from '@/types/generation';
+import type {Generation, GenerationBatch} from '@/types/generation';
 
 type GenerationBatchWithAsyncTaskId = GenerationBatch & {
   generations: (Generation & { asyncTaskId?: string | null })[];

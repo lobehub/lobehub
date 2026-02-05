@@ -1,11 +1,12 @@
-import { type DeploymentOption, type SystemDependency } from '@lobehub/market-sdk';
-import debug from 'debug';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 
-import { type SystemDependencyCheckResult } from '@/types/plugins';
+import type {DeploymentOption, SystemDependency} from '@lobehub/market-sdk';
+import debug from 'debug';
 
-import { type InstallationChecker, type PackageInstallCheckResult } from './types';
+import type {SystemDependencyCheckResult} from '@/types/plugins';
+
+import type {InstallationChecker, PackageInstallCheckResult} from './types';
 
 const execPromise = promisify(exec);
 const log = debug('lobe-mcp:deps-check');
@@ -83,7 +84,7 @@ class MCPSystemDepsCheckService {
       // Process version parsing
       if (dependency.versionParsingRequired) {
         // Extract version number - usually in format vX.Y.Z or X.Y.Z
-        const versionMatch = output.match(/[Vv]?(\d+(\.\d+)*)/);
+        const versionMatch = output.match(/v?(\d+(\.\d+)*)/i);
         if (versionMatch) {
           version = versionMatch[0];
         }
@@ -93,7 +94,7 @@ class MCPSystemDepsCheckService {
 
       if (dependency.requiredVersion) {
         // Extract numeric part
-        const currentVersion = version.replace(/^[Vv]/, ''); // Remove possible v prefix
+        const currentVersion = version.replace(/^v/i, ''); // Remove possible v prefix
         const currentVersionNum = parseFloat(currentVersion);
 
         // Extract condition and number from required version

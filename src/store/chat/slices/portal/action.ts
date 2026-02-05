@@ -1,8 +1,9 @@
-import { type ChatStore } from '@/store/chat/store';
-import { type StoreSetter } from '@/store/types';
-import { type PortalArtifact } from '@/types/artifact';
+import type {ChatStore} from '@/store/chat/store';
+import type {StoreSetter} from '@/store/types';
+import type {PortalArtifact} from '@/types/artifact';
 
-import { type PortalFile, type PortalViewData, PortalViewType } from './initialState';
+import type {PortalFile, PortalViewData} from './initialState';
+import {   PortalViewType } from './initialState';
 
 // Helper to get current view type from stack
 const getCurrentViewType = (portalStack: PortalViewData[]): PortalViewType | null => {

@@ -1,4 +1,4 @@
-import { type LobeDocument } from '@/types/document';
+import type {LobeDocument} from '@/types/document';
 
 export interface DocumentQueryFilter {
   fileTypes?: string[];

@@ -1,4 +1,4 @@
-import { CrawlImpl } from '../type';
+import type { CrawlImpl } from '../type';
 
 export const jina: CrawlImpl<{ apiKey?: string }> = async (url, params) => {
   const token = params.apiKey ?? process.env.JINA_READER_API_KEY ?? process.env.JINA_API_KEY;

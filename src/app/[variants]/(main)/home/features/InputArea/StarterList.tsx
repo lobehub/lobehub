@@ -1,5 +1,6 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { Button, type ButtonProps, Center, Tooltip } from '@lobehub/ui';
+import type {ButtonProps} from '@lobehub/ui';
+import { Button,  Center, Tooltip } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { BotIcon, PenLineIcon } from 'lucide-react';
@@ -7,7 +8,8 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useInitBuiltinAgent } from '@/hooks/useInitBuiltinAgent';
-import { type StarterMode, useHomeStore } from '@/store/home';
+import type {StarterMode} from '@/store/home';
+import {  useHomeStore } from '@/store/home';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   active: css`
@@ -92,21 +94,21 @@ const StarterList = memo(() => {
   );
 
   return (
-    <Center gap={8} horizontal>
+    <Center horizontal gap={8}>
       {items.map((item) => {
         const button = (
           <Button
             className={cx(styles.button, inputActiveMode === item.key && styles.active)}
             disabled={item.disabled}
             icon={item.icon}
+            key={item.key}
+            shape={'round'}
+            variant={'outlined'}
             iconProps={{
               color: inputActiveMode === item.key ? cssVar.colorText : cssVar.colorTextSecondary,
               size: 18,
             }}
-            key={item.key}
             onClick={() => handleClick(item.key)}
-            shape={'round'}
-            variant={'outlined'}
           >
             {t(item.titleKey)}
           </Button>

@@ -184,7 +184,7 @@ export const resolveParameters = (
   if (hasConflict) {
     if (preferTemperature && shouldSetTemperature) {
       // Set temperature only
-      let finalTemp =
+      const finalTemp =
         normalizeTemperature && temperature !== undefined ? temperature / 2 : temperature;
       result.temperature = applyRangeConstraint(finalTemp, temperatureRange);
     } else if (shouldSetTopP) {
@@ -194,7 +194,7 @@ export const resolveParameters = (
   } else {
     // No conflict: set both parameters if provided
     if (shouldSetTemperature) {
-      let finalTemp =
+      const finalTemp =
         normalizeTemperature && temperature !== undefined ? temperature / 2 : temperature;
       result.temperature = applyRangeConstraint(finalTemp, temperatureRange);
     }

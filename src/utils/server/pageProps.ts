@@ -1,5 +1,5 @@
 import { translation } from '@/server/translation';
-import { type DynamicLayoutProps } from '@/types/next';
+import type {DynamicLayoutProps} from '@/types/next';
 
 import { RouteVariants } from './routeVariants';
 

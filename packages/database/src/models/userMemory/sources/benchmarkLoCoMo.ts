@@ -1,5 +1,5 @@
 import { createNanoId } from '../../../utils/idGenerator';
-import { UserMemorySource } from './shared';
+import type { UserMemorySource } from './shared';
 
 export interface BenchmarkLoCoMoPart {
   content: string;

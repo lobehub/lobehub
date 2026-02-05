@@ -1,7 +1,7 @@
 import { MENTION_TAG } from '@/const/plugin';
 
 import { createRemarkSelfClosingTagPlugin } from '../remarkPlugins/createRemarkSelfClosingTagPlugin';
-import { type MarkdownElement } from '../type';
+import type {MarkdownElement} from '../type';
 import Component from './Render';
 
 const Mention: MarkdownElement = {

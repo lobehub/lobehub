@@ -1,49 +1,49 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix , typescript-sort-keys/interface */
-import { GroundingSearch } from '../../search';
-import { MessageMetadata, ModelReasoning, ToolIntervention } from '../common';
+import type { GroundingSearch } from '../../search';
+import type { MessageMetadata, ModelReasoning, ToolIntervention } from '../common';
 
 export interface DBMessageItem {
-  id: string;
-
-  role: string;
-  content: string;
-  reasoning: ModelReasoning | null;
-  search: GroundingSearch | null;
-  tools: any | null;
-
-  sessionId: string | null;
-  topicId: string | null;
-  threadId: string | null;
   agentId: string | null;
 
-  parentId: string | null;
-  quotaId: string | null;
-  favorite: boolean | null;
-  metadata?: MessageMetadata | null;
+  clientId: string | null;
+  content: string;
+  createdAt: Date;
   error: any | null;
-  model: string | null;
-  provider: string | null;
+  favorite: boolean | null;
 
-  traceId: string | null;
+  id: string;
+  metadata?: MessageMetadata | null;
+  model: string | null;
   observationId: string | null;
 
-  clientId: string | null;
+  parentId: string | null;
+  provider: string | null;
+  quotaId: string | null;
+  reasoning: ModelReasoning | null;
+  role: string;
+  search: GroundingSearch | null;
+  sessionId: string | null;
 
-  userId: string;
+  threadId: string | null;
+  tools: any | null;
+
+  topicId: string | null;
+
+  traceId: string | null;
   updatedAt: Date;
-  createdAt: Date;
+  userId: string;
 }
 
 export interface MessagePluginItem {
-  id: string;
-  toolCallId?: string;
-  type: string;
-  intervention?: ToolIntervention;
   apiName?: string;
   arguments?: string;
-  identifier?: string;
-  state?: any;
-  error?: any;
   clientId?: string;
+  error?: any;
+  id: string;
+  identifier?: string;
+  intervention?: ToolIntervention;
+  state?: any;
+  toolCallId?: string;
+  type: string;
   userId: string;
 }

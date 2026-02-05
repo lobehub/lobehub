@@ -1,8 +1,9 @@
 'use client';
 
-import { type ReactNode, createContext, memo, use } from 'react';
+import type {ReactNode} from 'react';
+import { createContext, memo,  use } from 'react';
 
-import { type DiscoverProviderDetail } from '@/types/discover';
+import type {DiscoverProviderDetail} from '@/types/discover';
 
 export type DetailContextConfig = Partial<DiscoverProviderDetail>;
 

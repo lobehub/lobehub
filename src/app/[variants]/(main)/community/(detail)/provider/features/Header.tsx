@@ -18,9 +18,9 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   return (
     <Flexbox gap={12}>
       <Flexbox
+        horizontal
         align={'flex-start'}
         gap={8}
-        horizontal
         justify={'space-between'}
         style={{
           overflow: 'hidden',
@@ -29,7 +29,7 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
       >
         <Flexbox align={'flex-start'} width={'100%'}>
           <ProviderCombine provider={identifier} size={mobile ? 32 : 48} />
-          <Flexbox align={'center'} gap={4} horizontal>
+          <Flexbox horizontal align={'center'} gap={4}>
             {Boolean(url || modelsUrl) ? (
               <a href={url || (modelsUrl as string)} rel="noreferrer" target="_blank">
                 @{name}
@@ -39,26 +39,26 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
             )}
           </Flexbox>
         </Flexbox>
-        <Flexbox align={'center'} horizontal>
+        <Flexbox horizontal align={'center'}>
           {Boolean(url || modelsUrl) && (
             <a
               href={(url || modelsUrl) as string}
-              onClick={(e) => e.stopPropagation()}
               rel="noreferrer"
               target="_blank"
+              onClick={(e) => e.stopPropagation()}
             >
               <ActionIcon color={cssVar.colorTextDescription} icon={GlobeIcon} />
             </a>
           )}
 
           <a
+            rel="noreferrer"
+            target="_blank"
             href={urlJoin(
               'https://github.com/lobehub/lobe-chat-agents/tree/main/locales',
               identifier as string,
             )}
             onClick={(e) => e.stopPropagation()}
-            rel="noreferrer"
-            target="_blank"
           >
             <ActionIcon fill={cssVar.colorTextDescription} icon={Github} />
           </a>
@@ -66,9 +66,9 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
       </Flexbox>
 
       <Flexbox
+        horizontal
         align={'center'}
         gap={mobile ? 12 : 24}
-        horizontal
         style={{
           color: cssVar.colorTextSecondary,
         }}

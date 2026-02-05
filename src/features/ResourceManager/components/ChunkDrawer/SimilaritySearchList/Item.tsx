@@ -2,7 +2,7 @@ import { Flexbox, Tag } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 
-import { type SemanticSearchChunk } from '@/types/chunk';
+import type {SemanticSearchChunk} from '@/types/chunk';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -48,7 +48,7 @@ const SearchItem = memo<ChunkItemProps>(({ text, pageNumber, type, similarity })
     <Flexbox className={cx(styles.container, typeClassName)} gap={8}>
       {text}
 
-      <Flexbox align={'center'} distribution={'space-between'} horizontal>
+      <Flexbox horizontal align={'center'} distribution={'space-between'}>
         <Tag variant={'filled'}>{similarity.toFixed(2)}</Tag>
         <Flexbox className={styles.pageNumber}>第 {pageNumber} 页</Flexbox>
       </Flexbox>

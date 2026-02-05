@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import GridCard from '@/app/[variants]/(main)/memory/features/GridView/GridCard';
 import ProgressIcon from '@/app/[variants]/(main)/memory/features/ProgressIcon';
-import { type DisplayContextMemory } from '@/database/repositories/userMemory';
+import type {DisplayContextMemory} from '@/database/repositories/userMemory';
 
 import ContextDropdown from '../../ContextDropdown';
 
@@ -19,6 +19,9 @@ const ContextCard = memo<ContextCardProps>(({ context, onClick }) => {
   return (
     <GridCard
       actions={<ContextDropdown id={context.id} />}
+      capturedAt={context.capturedAt || context.updatedAt || context.createdAt}
+      cate={context.type}
+      title={context.title}
       badges={
         <>
           <ProgressIcon
@@ -34,10 +37,7 @@ const ContextCard = memo<ContextCardProps>(({ context, onClick }) => {
           />
         </>
       }
-      capturedAt={context.capturedAt || context.updatedAt || context.createdAt}
-      cate={context.type}
       onClick={onClick}
-      title={context.title}
     >
       {context.description}
     </GridCard>

@@ -13,6 +13,7 @@ const OllamaDesktopSetupGuide = memo(() => {
     <Center gap={16} paddingBlock={32} style={{ maxWidth: 300, width: '100%' }}>
       <FormAction
         avatar={<Ollama color={cssVar.colorPrimary} size={64} />}
+        title={t('OllamaSetupGuide.install.title')}
         description={
           <span>
             <Trans
@@ -22,7 +23,6 @@ const OllamaDesktopSetupGuide = memo(() => {
             />
           </span>
         }
-        title={t('OllamaSetupGuide.install.title')}
       />
     </Center>
   );

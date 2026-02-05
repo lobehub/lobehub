@@ -1,7 +1,7 @@
 'use client';
 
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
-import { BuiltinInterventionProps } from '@lobechat/types';
+import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Avatar, Flexbox } from '@lobehub/ui';
 import { CheckCircle } from 'lucide-react';
 import Image from 'next/image';
@@ -65,9 +65,9 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
     if (isPluginInstalled) {
       return (
         <Flexbox
+          horizontal
           align="center"
           gap={12}
-          horizontal
           style={{
             background: 'var(--lobe-fill-tertiary)',
             borderRadius: 8,
@@ -99,21 +99,21 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
           gap={12}
           style={{ background: 'var(--lobe-fill-tertiary)', borderRadius: 8, padding: 16 }}
         >
-          <Flexbox align="center" gap={12} horizontal>
+          <Flexbox horizontal align="center" gap={12}>
             {icon ? (
               <Image
+                unoptimized
                 alt={klavisTypeInfo?.label || identifier}
                 height={40}
                 src={icon}
                 style={{ borderRadius: 8 }}
-                unoptimized
                 width={40}
               />
             ) : (
               <Avatar avatar="☁️" size={40} style={{ borderRadius: 8 }} />
             )}
             <Flexbox flex={1} gap={4}>
-              <Flexbox align="center" gap={8} horizontal>
+              <Flexbox horizontal align="center" gap={8}>
                 <span style={{ fontWeight: 600 }}>{klavisTypeInfo?.label || identifier}</span>
                 <span style={{ color: 'var(--lobe-text-tertiary)', fontSize: 12 }}>Klavis</span>
               </Flexbox>
@@ -142,21 +142,21 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
           gap={12}
           style={{ background: 'var(--lobe-fill-tertiary)', borderRadius: 8, padding: 16 }}
         >
-          <Flexbox align="center" gap={12} horizontal>
+          <Flexbox horizontal align="center" gap={12}>
             {icon ? (
               <Image
+                unoptimized
                 alt={lobehubSkillProviderInfo?.label || identifier}
                 height={40}
                 src={icon}
                 style={{ borderRadius: 8 }}
-                unoptimized
                 width={40}
               />
             ) : (
               <Avatar avatar="🔗" size={40} style={{ borderRadius: 8 }} />
             )}
             <Flexbox flex={1} gap={4}>
-              <Flexbox align="center" gap={8} horizontal>
+              <Flexbox horizontal align="center" gap={8}>
                 <span style={{ fontWeight: 600 }}>
                   {lobehubSkillProviderInfo?.label || identifier}
                 </span>
@@ -186,21 +186,21 @@ const InstallPluginIntervention = memo<BuiltinInterventionProps<InstallPluginPar
         gap={12}
         style={{ background: 'var(--lobe-fill-tertiary)', borderRadius: 8, padding: 16 }}
       >
-        <Flexbox align="center" gap={12} horizontal>
+        <Flexbox horizontal align="center" gap={12}>
           {pluginIcon && typeof pluginIcon === 'string' && pluginIcon.startsWith('http') ? (
             <Image
+              unoptimized
               alt={pluginName}
               height={40}
               src={pluginIcon}
               style={{ borderRadius: 8 }}
-              unoptimized
               width={40}
             />
           ) : (
             <Avatar avatar={pluginIcon || '🔧'} size={40} style={{ borderRadius: 8 }} />
           )}
           <Flexbox flex={1} gap={4}>
-            <Flexbox align="center" gap={8} horizontal>
+            <Flexbox horizontal align="center" gap={8}>
               <span style={{ fontWeight: 600 }}>{pluginName}</span>
               <span style={{ color: 'var(--lobe-text-tertiary)', fontSize: 12 }}>{pluginType}</span>
             </Flexbox>

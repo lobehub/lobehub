@@ -11,11 +11,14 @@ vi.mock('zustand/traditional');
 
 beforeEach(() => {
   vi.clearAllMocks();
-  useChatStore.setState({
-    activeId: 'test-session-id',
-    messagesMap: {},
-    loadingIds: [],
-  }, false);
+  useChatStore.setState(
+    {
+      activeId: 'test-session-id',
+      messagesMap: {},
+      loadingIds: [],
+    },
+    false,
+  );
 
   vi.spyOn(messageService, 'createMessage').mockResolvedValue('new-message-id');
 
@@ -132,6 +135,7 @@ it('should fetch data', async () => {
 ```
 
 **Key points for SWR:**
+
 - DO NOT mock useSWR - let it use real implementation
 - Only mock service methods (fetchers)
 - Use `waitFor` for async operations

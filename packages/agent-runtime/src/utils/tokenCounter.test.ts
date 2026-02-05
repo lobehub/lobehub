@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  calculateMessageTokens,
   DEFAULT_MAX_CONTEXT,
   DEFAULT_THRESHOLD_RATIO,
-  calculateMessageTokens,
   estimateTokens,
   getCompressionThreshold,
   shouldCompress,

@@ -9,7 +9,7 @@ const SeedNumberInput = memo(() => {
   const { t } = useTranslation('image');
   const { value, setValue } = useGenerationConfigParam('seed');
 
-  return <InputNumber onChange={setValue} placeholder={t('config.seed.random')} value={value} />;
+  return <InputNumber placeholder={t('config.seed.random')} value={value} onChange={setValue} />;
 });
 
 export default SeedNumberInput;

@@ -1,4 +1,4 @@
-import { type SessionStoreState } from '../../initialState';
+import type {SessionStoreState} from '../../initialState';
 
 const isRecentTopicsInit = (s: SessionStoreState) => s.isRecentTopicsInit;
 const isRecentResourcesInit = (s: SessionStoreState) => s.isRecentResourcesInit;

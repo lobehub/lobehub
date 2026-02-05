@@ -1,10 +1,11 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 import { ShapesIcon } from 'lucide-react';
 
 import { getRouteById } from '@/config/routes';
 
-import { type CommunityParams, type PageReference, type ResolvedPageData } from '../types';
-import { type PluginContext, type RecentlyViewedPlugin, createPageReference } from './types';
+import type {CommunityParams, PageReference, ResolvedPageData} from '../types';
+import type {PluginContext, RecentlyViewedPlugin} from './types';
+import { createPageReference  } from './types';
 
 const communityIcon = getRouteById('community')?.icon || ShapesIcon;
 

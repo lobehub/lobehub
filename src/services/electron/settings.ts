@@ -1,4 +1,4 @@
-import { type NetworkProxySettings, type ShortcutUpdateResult } from '@lobechat/electron-client-ipc';
+import type {NetworkProxySettings, ShortcutUpdateResult} from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 

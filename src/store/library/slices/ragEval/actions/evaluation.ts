@@ -1,10 +1,10 @@
-import { type CreateNewEvalEvaluation, type RAGEvalDataSetItem } from '@lobechat/types';
+import type {CreateNewEvalEvaluation, RAGEvalDataSetItem} from '@lobechat/types';
 import type { SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { ragEvalService } from '@/services/ragEval';
-import { type KnowledgeBaseStore } from '@/store/library/store';
-import { type StoreSetter } from '@/store/types';
+import type {KnowledgeBaseStore} from '@/store/library/store';
+import type {StoreSetter} from '@/store/types';
 
 const FETCH_EVALUATION_LIST_KEY = 'FETCH_EVALUATION_LIST_KEY';
 

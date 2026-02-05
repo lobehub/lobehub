@@ -9,7 +9,8 @@ import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors'
 
 import ForkConfirmModal from './ForkConfirmModal';
 import type { MarketPublishAction } from './types';
-import { type OriginalAgentInfo, useMarketPublish } from './useMarketPublish';
+import type {OriginalAgentInfo} from './useMarketPublish';
+import {  useMarketPublish } from './useMarketPublish';
 
 interface MarketPublishButtonProps {
   action: MarketPublishAction;
@@ -101,17 +102,17 @@ const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess
       <Button
         icon={ShapesUploadIcon}
         loading={loading}
-        onClick={handleButtonClick}
         title={buttonTitle}
+        onClick={handleButtonClick}
       >
         {t('publishToCommunity')}
       </Button>
       <ForkConfirmModal
         loading={isPublishing}
-        onCancel={handleForkCancel}
-        onConfirm={handleForkConfirm}
         open={showForkModal}
         originalAgent={originalAgentInfo}
+        onCancel={handleForkCancel}
+        onConfirm={handleForkConfirm}
       />
     </>
   );

@@ -21,7 +21,7 @@ import {
 } from '@lobechat/builtin-tool-local-system/client';
 import { MemoryManifest, MemoryStreamings } from '@lobechat/builtin-tool-memory/client';
 import { NotebookManifest, NotebookStreamings } from '@lobechat/builtin-tool-notebook/client';
-import { type BuiltinStreaming } from '@lobechat/types';
+import type {BuiltinStreaming} from '@lobechat/types';
 
 /**
  * Builtin tools streaming renderer registry

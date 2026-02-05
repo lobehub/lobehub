@@ -3,7 +3,7 @@ import type { PartialDeep } from 'type-fest';
 
 import { chatGroupService } from '@/services/chatGroup';
 import { getAgentStoreState } from '@/store/agent';
-import { type ChatGroupStore } from '@/store/agentGroup/store';
+import type {ChatGroupStore} from '@/store/agentGroup/store';
 
 type ChatGroupStoreWithRefresh = ChatGroupStore & {
   refreshGroupDetail: (groupId: string) => Promise<void>;

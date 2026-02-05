@@ -1,4 +1,4 @@
-import { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
+import type { AIChatModelCard, AIImageModelCard } from '../types/aiModel';
 
 // https://help.aliyun.com/zh/model-studio/models?spm=a2c4g.11186623
 
@@ -1019,7 +1019,8 @@ const qwenChatModels: AIChatModelCard[] = [
       deploymentName: 'qwen-plus-2025-12-01',
     },
     contextWindowTokens: 1_000_000,
-    description: 'Enhanced ultra-large Qwen model supporting Chinese, English, and other languages.',
+    description:
+      'Enhanced ultra-large Qwen model supporting Chinese, English, and other languages.',
     displayName: 'Qwen Plus',
     enabled: true,
     id: 'qwen-plus',
@@ -1477,7 +1478,8 @@ const qwenChatModels: AIChatModelCard[] = [
       vision: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Qwen3 VL 8B non-thinking mode (Instruct) for standard multimodal generation and recognition.',
+    description:
+      'Qwen3 VL 8B non-thinking mode (Instruct) for standard multimodal generation and recognition.',
     displayName: 'Qwen3 VL 8B Instruct',
     id: 'qwen3-vl-8b-instruct',
     maxOutput: 32_768,

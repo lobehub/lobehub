@@ -1,9 +1,9 @@
 'use client';
 
-import { type ConversationContext, type SendMessageParams } from '@lobechat/types';
+import type {ConversationContext, SendMessageParams} from '@lobechat/types';
 import { useMemo } from 'react';
 
-import { type ConversationHooks } from '@/features/Conversation';
+import type {ConversationHooks} from '@/features/Conversation';
 import { useChatStore } from '@/store/chat';
 
 /**

@@ -4,7 +4,7 @@ import { memo, useCallback } from 'react';
 import { useFileStore } from '@/store/file';
 
 import { useConversationStore } from '../../../../store';
-import { type TTSProps } from './InitPlayer';
+import type {TTSProps} from './InitPlayer';
 import Player from './Player';
 
 const FilePlayer = memo<TTSProps>(({ file, id }) => {

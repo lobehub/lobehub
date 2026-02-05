@@ -1,6 +1,6 @@
-import { type UIChatMessage } from '@lobechat/types';
+import type {UIChatMessage} from '@lobechat/types';
 
-import { type ChatGroupAgentItem } from '@/database/schemas/chatGroup';
+import type {ChatGroupAgentItem} from '@/database/schemas/chatGroup';
 
 export interface ChatMessageState {
   activeAgentId: string;

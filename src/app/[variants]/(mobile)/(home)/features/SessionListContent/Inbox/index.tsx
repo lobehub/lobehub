@@ -21,16 +21,17 @@ const Inbox = memo(() => {
   return (
     <Link
       aria-label={'Lobe AI'}
+      to={SESSION_CHAT_URL(inboxAgentId, mobile)}
       onClick={(e) => {
         e.preventDefault();
         navigateToAgent(inboxAgentId);
       }}
-      to={SESSION_CHAT_URL(inboxAgentId, mobile)}
     >
       <ListItem
         active={isInboxActive}
         avatar={DEFAULT_INBOX_AVATAR}
         key={'inbox'}
+        title={'Lobe AI'}
         styles={{
           container: {
             gap: 12,
@@ -40,7 +41,6 @@ const Inbox = memo(() => {
             maskImage: `linear-gradient(90deg, #000 90%, transparent)`,
           },
         }}
-        title={'Lobe AI'}
       />
     </Link>
   );

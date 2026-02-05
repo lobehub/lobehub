@@ -3,7 +3,7 @@ import { memo } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
 import { useErrorContent } from '@/features/Conversation/Error';
-import { type AssistantContentBlock } from '@/types/index';
+import type {AssistantContentBlock} from '@/types/index';
 
 import ErrorContent from '../../../ChatItem/components/ErrorContent';
 import { messageStateSelectors, useConversationStore } from '../../../store';

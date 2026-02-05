@@ -1,10 +1,11 @@
-import useSWR, { type SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
+import useSWR from 'swr';
 
 import { discoverService } from '@/services/discover';
-import { type DiscoverStore } from '@/store/discover';
+import type {DiscoverStore} from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
-import { type StoreSetter } from '@/store/types';
-import { type DiscoverUserProfile } from '@/types/discover';
+import type {StoreSetter} from '@/store/types';
+import type {DiscoverUserProfile} from '@/types/discover';
 
 type Setter = StoreSetter<DiscoverStore>;
 export const createUserSlice = (set: Setter, get: () => DiscoverStore, _api?: unknown) =>

@@ -1,4 +1,5 @@
 import './env';
+
 import type { ClerkToBetterAuthMode, DatabaseDriver } from './types';
 
 const DEFAULT_MODE: ClerkToBetterAuthMode = 'test';

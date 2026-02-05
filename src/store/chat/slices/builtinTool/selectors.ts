@@ -1,4 +1,4 @@
-import { type ChatStoreState } from '@/store/chat';
+import type {ChatStoreState} from '@/store/chat';
 
 const isInterpreterExecuting = (id: string) => (s: ChatStoreState) => {
   // Check if there's a running builtinToolInterpreter operation for this message

@@ -1,7 +1,7 @@
 import { useGlobalStore } from '@/store/global';
-import { type LobeDocument } from '@/types/document';
+import type {LobeDocument} from '@/types/document';
 
-import { type PageState } from '../../initialState';
+import type {PageState} from '../../initialState';
 
 /**
  * Check if documents are still loading (undefined means not yet loaded)

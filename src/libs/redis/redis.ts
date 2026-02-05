@@ -1,15 +1,7 @@
 import debug from 'debug';
 import type { Redis } from 'ioredis';
 
-import {
-  type BaseRedisProvider,
-  type RedisConfig,
-  type RedisKey,
-  type RedisMSetArgument,
-  type RedisSetResult,
-  type RedisValue,
-  type SetOptions,
-} from './types';
+import type {BaseRedisProvider, RedisConfig, RedisKey, RedisMSetArgument, RedisSetResult, RedisValue, SetOptions} from './types';
 import { buildIORedisSetArgs, normalizeMsetValues } from './utils';
 
 const log = debug('lobe:redis');

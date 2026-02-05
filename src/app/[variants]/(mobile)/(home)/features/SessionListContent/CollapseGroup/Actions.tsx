@@ -1,9 +1,8 @@
+import type {DropdownMenuProps, MenuProps} from '@lobehub/ui';
 import {
   ActionIcon,
   DropdownMenu,
-  type DropdownMenuProps,
-  Icon,
-  type MenuProps,
+  Icon
 } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
@@ -181,19 +180,19 @@ const Actions = memo<ActionsProps>(
             active={isMobile ? true : false}
             icon={MoreVertical}
             loading={isCreatingGroup}
+            size={{ blockSize: 22, size: 16 }}
+            style={{ background: isMobile ? 'transparent' : '', marginRight: -8 }}
             onClick={(e) => {
               e.stopPropagation();
             }}
-            size={{ blockSize: 22, size: 16 }}
-            style={{ background: isMobile ? 'transparent' : '', marginRight: -8 }}
           />
         </DropdownMenu>
 
         <MemberSelectionModal
           mode="create"
+          open={isGroupModalOpen}
           onCancel={handleGroupModalCancel}
           onConfirm={handleCreateGroupWithMembers}
-          open={isGroupModalOpen}
         />
       </>
     );

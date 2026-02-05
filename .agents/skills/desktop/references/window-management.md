@@ -131,8 +131,12 @@ const window = new BrowserWindow({
 ```
 
 ```css
-.titlebar { -webkit-app-region: drag; }
-.titlebar-button { -webkit-app-region: no-drag; }
+.titlebar {
+  -webkit-app-region: drag;
+}
+.titlebar-button {
+  -webkit-app-region: no-drag;
+}
 ```
 
 ## Best Practices

@@ -115,25 +115,25 @@ const CreateGroupModal = memo<CreateGroupModalProps>(({ id, onCancel, open }) =>
       <Modal
         allowFullscreen
         destroyOnHidden
+        open={open}
+        title={t('sessionGroup.createGroup')}
+        width={800}
         footer={
-          <Flexbox gap={8} horizontal justify="end">
+          <Flexbox horizontal gap={8} justify="end">
             <Button onClick={handleCancel}>{t('cancel', { ns: 'common' })}</Button>
             <Button
               disabled={isConfirmDisabled}
               loading={isCreating}
-              onClick={handleConfirm}
               type="primary"
+              onClick={handleConfirm}
             >
               {t('sessionGroup.createGroup')}
             </Button>
           </Flexbox>
         }
         onCancel={handleCancel}
-        open={open}
-        title={t('sessionGroup.createGroup')}
-        width={800}
       >
-        <Flexbox className={styles.container} horizontal>
+        <Flexbox horizontal className={styles.container}>
           {/* Left Column - Available Agents */}
           <AvailableAgentList agents={allAgents} isLoading={isLoadingAgents} />
 

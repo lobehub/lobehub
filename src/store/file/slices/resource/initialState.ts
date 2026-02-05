@@ -39,15 +39,15 @@ export interface ResourceState {
 
   syncError?: Error;
   /**
+   * Track which resources are currently syncing
+   */
+  syncingIds: Set<string>;
+
+  /**
    * Sync queue (FIFO)
    * Contains pending operations to be synced to server
    */
   syncQueue: SyncOperation[];
-
-  /**
-   * Track which resources are currently syncing
-   */
-  syncingIds: Set<string>;
   total: number;
 }
 

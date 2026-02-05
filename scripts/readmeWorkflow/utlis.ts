@@ -1,6 +1,7 @@
-import { kebabCase } from 'es-toolkit/compat';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+import { kebabCase } from 'es-toolkit/compat';
 
 import { AGENT_I18N_URL, AGENT_URL, PLUGIN_I18N_URL, PLUGIN_URL, root } from './const';
 

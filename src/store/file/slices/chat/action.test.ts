@@ -1,9 +1,5 @@
 import { act, renderHook } from '@testing-library/react';
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-
-import { notification } from '@/components/AntdStaticMethods';
-import { fileService } from '@/services/file';
-import { uploadService } from '@/services/upload';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useFileStore as useStore } from '../../store';
 

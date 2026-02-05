@@ -1,6 +1,6 @@
 import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { createStaticStyles, responsive } from 'antd-style';
-import { type LucideIcon } from 'lucide-react';
+import type {LucideIcon} from 'lucide-react';
 import { memo } from 'react';
 
 import { useIsDark } from '@/hooks/useIsDark';
@@ -56,7 +56,7 @@ const FeatureList = memo<FeatureListProps>(({ data }) => {
     <Flexbox gap={32}>
       {data.map((item) => {
         return (
-          <Flexbox align={'flex-start'} gap={24} horizontal key={item.title}>
+          <Flexbox horizontal align={'flex-start'} gap={24} key={item.title}>
             <Center className={isDarkMode ? styles.iconCtnDark : styles.iconCtnLight}>
               <Icon
                 className={isDarkMode ? styles.iconDark : styles.iconLight}

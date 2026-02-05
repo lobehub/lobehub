@@ -171,7 +171,7 @@ describe('createModelPullStream', () => {
 
     // If there's a second chunk, it should be the cancelled status
     if (chunks.length > 1) {
-      const lastChunk = JSON.parse(chunks[chunks.length - 1]);
+      const lastChunk = JSON.parse(chunks.at(-1)!);
       expect(lastChunk.status).toBe('cancelled');
     }
   });
@@ -214,7 +214,7 @@ describe('createModelPullStream', () => {
 
     // Last chunk should be error status
     if (chunks.length > 1) {
-      const lastChunk = JSON.parse(chunks[chunks.length - 1]);
+      const lastChunk = JSON.parse(chunks.at(-1)!);
       expect(lastChunk.status).toBe('error');
       expect(lastChunk.error).toBe('Network error');
     }
@@ -259,7 +259,7 @@ describe('createModelPullStream', () => {
     }
 
     if (chunks.length > 1) {
-      const lastChunk = JSON.parse(chunks[chunks.length - 1]);
+      const lastChunk = JSON.parse(chunks.at(-1)!);
       expect(lastChunk.error).toBe('String error');
     }
 

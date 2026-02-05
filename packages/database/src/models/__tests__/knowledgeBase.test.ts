@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { sleep } from '@/utils/sleep';
 
 import { getTestDB } from '../../core/getTestDB';
+import type { NewKnowledgeBase } from '../../schemas';
 import {
-  NewKnowledgeBase,
   documents,
   files,
   globalFiles,
@@ -14,7 +14,7 @@ import {
   knowledgeBases,
   users,
 } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { KnowledgeBaseModel } from '../knowledgeBase';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -206,7 +206,20 @@ describe('KnowledgeBaseModel', () => {
         },
       ]);
 
-      // Create document first
+      // Create mirror file first (document references it via fileId)
+      await serverDB.insert(files).values([
+        {
+          id: 'file1',
+          name: 'document.pdf',
+          url: 'https://example.com/document.pdf',
+          fileHash: 'hash1',
+          size: 1000,
+          fileType: 'application/pdf',
+          userId,
+        },
+      ]);
+
+      // Create document with fileId pointing to the mirror file
       await serverDB.insert(documents).values([
         {
           id: 'docs_test123',
@@ -217,20 +230,7 @@ describe('KnowledgeBaseModel', () => {
           totalLineCount: 10,
           sourceType: 'file',
           source: 'test.pdf',
-          userId,
-        },
-      ]);
-
-      // Create mirror file with parentId pointing to the document
-      await serverDB.insert(files).values([
-        {
-          id: 'file1',
-          name: 'document.pdf',
-          url: 'https://example.com/document.pdf',
-          fileHash: 'hash1',
-          size: 1000,
-          fileType: 'application/pdf',
-          parentId: 'docs_test123', // Mirror file points to document
+          fileId: 'file1',
           userId,
         },
       ]);
@@ -278,7 +278,21 @@ describe('KnowledgeBaseModel', () => {
         },
       ]);
 
-      // Create document first
+      // Create files - file1 is mirror of the document, file2 is standalone
+      await serverDB.insert(files).values([
+        {
+          id: 'file1',
+          name: 'document.pdf',
+          url: 'https://example.com/document.pdf',
+          fileHash: 'hash1',
+          size: 1000,
+          fileType: 'application/pdf',
+          userId,
+        },
+        fileList[1], // file2 - standalone file
+      ]);
+
+      // Create document with fileId pointing to the mirror file
       await serverDB.insert(documents).values([
         {
           id: 'docs_test456',
@@ -289,23 +303,9 @@ describe('KnowledgeBaseModel', () => {
           totalLineCount: 10,
           sourceType: 'file',
           source: 'test.pdf',
+          fileId: 'file1',
           userId,
         },
-      ]);
-
-      // Create files - file1 is mirror of the document, file2 is standalone
-      await serverDB.insert(files).values([
-        {
-          id: 'file1',
-          name: 'document.pdf',
-          url: 'https://example.com/document.pdf',
-          fileHash: 'hash1',
-          size: 1000,
-          fileType: 'application/pdf',
-          parentId: 'docs_test456', // Mirror file points to document
-          userId,
-        },
-        fileList[1], // file2 - standalone file
       ]);
 
       const { id: knowledgeBaseId } = await knowledgeBaseModel.create({ name: 'Test Group' });
@@ -368,7 +368,20 @@ describe('KnowledgeBaseModel', () => {
         },
       ]);
 
-      // Create document first
+      // Create mirror file first (document references it via fileId)
+      await serverDB.insert(files).values([
+        {
+          id: 'file1',
+          name: 'document.pdf',
+          url: 'https://example.com/document.pdf',
+          fileHash: 'hash1',
+          size: 1000,
+          fileType: 'application/pdf',
+          userId,
+        },
+      ]);
+
+      // Create document with fileId pointing to the mirror file
       await serverDB.insert(documents).values([
         {
           id: 'docs_test789',
@@ -379,20 +392,7 @@ describe('KnowledgeBaseModel', () => {
           totalLineCount: 10,
           sourceType: 'file',
           source: 'test.pdf',
-          userId,
-        },
-      ]);
-
-      // Create mirror file with parentId pointing to the document
-      await serverDB.insert(files).values([
-        {
-          id: 'file1',
-          name: 'document.pdf',
-          url: 'https://example.com/document.pdf',
-          fileHash: 'hash1',
-          size: 1000,
-          fileType: 'application/pdf',
-          parentId: 'docs_test789', // Mirror file points to document
+          fileId: 'file1',
           userId,
         },
       ]);

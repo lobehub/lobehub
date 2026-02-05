@@ -1,4 +1,4 @@
-import { type ChatPluginPayload } from '@lobechat/types';
+import type {ChatPluginPayload} from '@lobechat/types';
 import { memo } from 'react';
 
 import { getBuiltinRender } from '@/tools/renders';

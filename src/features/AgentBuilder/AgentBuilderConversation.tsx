@@ -26,7 +26,7 @@ const AgentBuilderConversation = memo<AgentBuilderConversationProps>(({ agentId 
   const { handleUploadFiles } = useUploadFiles({ model, provider });
 
   return (
-    <DragUploadZone onUploadFiles={handleUploadFiles} style={{ flex: 1, height: '100%' }}>
+    <DragUploadZone style={{ flex: 1, height: '100%' }} onUploadFiles={handleUploadFiles}>
       <Flexbox flex={1} height={'100%'}>
         <TopicSelector agentId={agentId} />
         <Flexbox flex={1} style={{ overflow: 'hidden' }}>

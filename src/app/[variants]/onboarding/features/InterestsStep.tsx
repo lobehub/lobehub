@@ -82,17 +82,17 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
       <LobeMessage
         sentences={[t('interests.title'), t('interests.title2'), t('interests.title3')]}
       />
-      <Flexbox align={'center'} gap={12} horizontal wrap={'wrap'}>
+      <Flexbox horizontal align={'center'} gap={12} wrap={'wrap'}>
         {areas.map((item) => {
           const isSelected = selectedInterests.includes(item.label);
           return (
             <Block
               clickable
-              gap={8}
               horizontal
+              gap={8}
               key={item.key}
-              onClick={() => toggleInterest(item.label)}
               padding={12}
+              variant={'outlined'}
               style={
                 isSelected
                   ? {
@@ -101,7 +101,7 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
                     }
                   : {}
               }
-              variant={'outlined'}
+              onClick={() => toggleInterest(item.label)}
             >
               <Icon color={cssVar.colorTextSecondary} icon={item.icon} size={16} />
               <Text fontSize={15} weight={500}>
@@ -112,16 +112,16 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
         })}
         <Block
           clickable
-          gap={8}
           horizontal
-          onClick={() => setShowCustomInput(!showCustomInput)}
+          gap={8}
           padding={12}
+          variant={'outlined'}
           style={
             showCustomInput
               ? { background: cssVar.colorFillSecondary, borderColor: cssVar.colorFillSecondary }
               : {}
           }
-          variant={'outlined'}
+          onClick={() => setShowCustomInput(!showCustomInput)}
         >
           <Icon color={cssVar.colorTextSecondary} icon={BriefcaseIcon} size={16} />
           <Text fontSize={15} weight={500}>
@@ -132,9 +132,10 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
       {showCustomInput && (
         <Input
           autoFocus
-          onChange={(e) => setCustomInput(e.target.value)}
-          onPressEnter={handleAddCustom}
           placeholder={t('interests.placeholder')}
+          size="large"
+          title={t('interests.hint')}
+          value={customInput}
           prefix={
             <Icon
               color={cssVar.colorTextDescription}
@@ -142,22 +143,21 @@ const InterestsStep = memo<InterestsStepProps>(({ onBack, onNext }) => {
               style={{ marginInline: 8 }}
             />
           }
-          size="large"
-          title={t('interests.hint')}
-          value={customInput}
+          onChange={(e) => setCustomInput(e.target.value)}
+          onPressEnter={handleAddCustom}
         />
       )}
       <Flexbox horizontal justify={'space-between'} style={{ marginTop: 32 }}>
         <Button
           disabled={isNavigating}
           icon={Undo2Icon}
-          onClick={handleBack}
           style={{ color: cssVar.colorTextDescription }}
           type={'text'}
+          onClick={handleBack}
         >
           {t('back')}
         </Button>
-        <Button disabled={isNavigating} onClick={handleNext} type={'primary'}>
+        <Button disabled={isNavigating} type={'primary'} onClick={handleNext}>
           {t('next')}
         </Button>
       </Flexbox>

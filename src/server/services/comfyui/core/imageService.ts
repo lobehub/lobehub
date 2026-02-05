@@ -4,14 +4,14 @@
  * Business logic for image processing including URL fetching
  * and workflow execution
  */
-import { type PromptBuilder } from '@saintno/comfyui-sdk';
+import type { CreateImagePayload, CreateImageResponse } from '@lobechat/model-runtime';
+import type {PromptBuilder} from '@saintno/comfyui-sdk';
 import debug from 'debug';
 
-import type { CreateImagePayload, CreateImageResponse } from '@lobechat/model-runtime';
-import { type ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
+import type {ComfyUIClientService} from '@/server/services/comfyui/core/comfyUIClientService';
 import { ErrorHandlerService } from '@/server/services/comfyui/core/errorHandlerService';
-import { type ModelResolverService } from '@/server/services/comfyui/core/modelResolverService';
-import { type WorkflowBuilderService } from '@/server/services/comfyui/core/workflowBuilderService';
+import type {ModelResolverService} from '@/server/services/comfyui/core/modelResolverService';
+import type {WorkflowBuilderService} from '@/server/services/comfyui/core/workflowBuilderService';
 import { ServicesError } from '@/server/services/comfyui/errors';
 import { imageResizer } from '@/server/services/comfyui/utils/imageResizer';
 import { WorkflowDetector } from '@/server/services/comfyui/utils/workflowDetector';

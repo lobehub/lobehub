@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 // ref: https://docs.mistral.ai/getting-started/models/
 // ref: https://docs.mistral.ai/capabilities/function_calling/

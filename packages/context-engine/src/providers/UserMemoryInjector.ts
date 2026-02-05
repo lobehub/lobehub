@@ -1,5 +1,5 @@
-import { promptUserMemory } from '@lobechat/prompts';
 import type { UserMemoryData } from '@lobechat/prompts';
+import { promptUserMemory } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { BaseFirstUserContentProvider } from '../base/BaseFirstUserContentProvider';
@@ -26,7 +26,6 @@ export class UserMemoryInjector extends BaseFirstUserContentProvider {
     super(options);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   protected buildContent(_context: PipelineContext): string | null {
     const { memories } = this.config;
     if (!memories) return null;

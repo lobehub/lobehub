@@ -20,20 +20,20 @@ const Header = memo(() => {
 
   return (
     <ChatHeader
+      style={mobileHeaderSticky}
       left={
-        <Flexbox align={'center'} className={styles.leftContainer} gap={8} horizontal>
-          <UserAvatar onClick={() => navigate('/me')} size={32} />
+        <Flexbox horizontal align={'center'} className={styles.leftContainer} gap={8}>
+          <UserAvatar size={32} onClick={() => navigate('/me')} />
           <ProductLogo type={'text'} />
         </Flexbox>
       }
       right={
         <ActionIcon
           icon={MessageSquarePlus}
-          onClick={() => createSession()}
           size={MOBILE_HEADER_ICON_SIZE}
+          onClick={() => createSession()}
         />
       }
-      style={mobileHeaderSticky}
     />
   );
 });

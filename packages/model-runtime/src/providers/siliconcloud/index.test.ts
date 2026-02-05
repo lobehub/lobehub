@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { testProvider } from '../../providerTestUtils';
 import { AgentRuntimeErrorType } from '../../types/error';
-import { LobeSiliconCloudAI, SiliconCloudModelCard } from './index';
+import type { SiliconCloudModelCard } from './index';
+import { LobeSiliconCloudAI } from './index';
 
 testProvider({
   Runtime: LobeSiliconCloudAI,

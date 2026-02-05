@@ -9,7 +9,7 @@ import {
   WebBrowsingManifest,
   WebBrowsingPlaceholders,
 } from '@lobechat/builtin-tool-web-browsing/client';
-import { type BuiltinPlaceholder } from '@lobechat/types';
+import type {BuiltinPlaceholder} from '@lobechat/types';
 
 /**
  * Builtin tools placeholders registry

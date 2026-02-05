@@ -1,6 +1,6 @@
-import { type LobeDocument } from '@/types/document';
+import type {LobeDocument} from '@/types/document';
 
-import { type PageQueryFilter } from '../../initialState';
+import type {PageQueryFilter} from '../../initialState';
 
 export interface ListState {
   currentPage: number;

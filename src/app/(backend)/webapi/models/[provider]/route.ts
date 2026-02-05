@@ -1,4 +1,4 @@
-import { type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
+import type {ChatCompletionErrorPayload} from '@lobechat/model-runtime';
 import { ChatErrorType } from '@lobechat/types';
 import { NextResponse } from 'next/server';
 

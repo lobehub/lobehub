@@ -1,8 +1,9 @@
-import Anthropic, { ClientOptions } from '@anthropic-ai/sdk';
+import type { ClientOptions } from '@anthropic-ai/sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { ModelProvider } from 'model-bank';
 
 import { hasTemperatureTopPConflict } from '../../const/models';
-import { LobeRuntimeAI } from '../../core/BaseAI';
+import type { LobeRuntimeAI } from '../../core/BaseAI';
 import {
   buildAnthropicMessages,
   buildAnthropicTools,
@@ -10,8 +11,8 @@ import {
 } from '../../core/contextBuilders/anthropic';
 import { resolveParameters } from '../../core/parameterResolver';
 import { AnthropicStream } from '../../core/streams';
-import {
-  type ChatCompletionErrorPayload,
+import type {
+  ChatCompletionErrorPayload,
   ChatMethodOptions,
   ChatStreamPayload,
   GenerateObjectOptions,

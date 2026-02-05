@@ -1,8 +1,8 @@
 import { and, count, eq } from 'drizzle-orm';
 
-import { LobeChatDatabase } from '../type';
-
-import { NewEmbeddingsItem, embeddings } from '../schemas';
+import type { NewEmbeddingsItem } from '../schemas';
+import { embeddings } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 export class EmbeddingModel {
   private userId: string;

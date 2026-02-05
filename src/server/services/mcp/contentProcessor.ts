@@ -4,8 +4,8 @@ import urlJoin from 'url-join';
 
 import { appEnv } from '@/envs/app';
 import { fileEnv } from '@/envs/file';
-import { type AudioContent, type ImageContent, type ToolCallContent } from '@/libs/mcp';
-import { type FileService } from '@/server/services/file';
+import type {AudioContent, ImageContent, ToolCallContent} from '@/libs/mcp';
+import type {FileService} from '@/server/services/file';
 import { nanoid } from '@/utils/uuid';
 
 const log = debug('lobe-mcp:content-processor');

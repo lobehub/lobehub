@@ -7,7 +7,7 @@ import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
 import { getChatGroupStoreState } from '@/store/agentGroup';
 import { useChatStore } from '@/store/chat';
 import type { HomeStore } from '@/store/home/store';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { StarterMode } from './initialState';

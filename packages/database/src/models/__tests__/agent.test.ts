@@ -4,8 +4,8 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
+import type { NewAgent } from '../../schemas';
 import {
-  NewAgent,
   agents,
   agentsFiles,
   agentsKnowledgeBases,
@@ -17,7 +17,7 @@ import {
   sessions,
   users,
 } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { AgentModel } from '../agent';
 
 const serverDB: LobeChatDatabase = await getTestDB();

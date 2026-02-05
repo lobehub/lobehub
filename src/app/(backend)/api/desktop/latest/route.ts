@@ -3,12 +3,12 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { zodValidator } from '@/app/(backend)/middleware/validate';
+import type {DesktopDownloadType} from '@/server/services/desktopRelease';
 import {
-  type DesktopDownloadType,
   getLatestDesktopReleaseFromGithub,
   getStableDesktopReleaseInfoFromUpdateServer,
   resolveDesktopDownload,
-  resolveDesktopDownloadFromUrls,
+  resolveDesktopDownloadFromUrls
 } from '@/server/services/desktopRelease';
 
 const log = debug('api-route:desktop:latest');

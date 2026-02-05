@@ -3,7 +3,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useToolStore } from '@/store/tool';
-import { type MCPErrorInfo } from '@/types/plugins';
+import type {MCPErrorInfo} from '@/types/plugins';
 
 import ErrorDetails from './ErrorDetails';
 
@@ -20,15 +20,17 @@ const InstallError = memo<InstallErrorProps>(({ errorInfo, identifier }) => {
   return (
     <Flexbox gap={8}>
       <Alert
+        type="error"
+        variant={'borderless'}
         action={
           <Flexbox>
             <Button
               color={'default'}
+              size={'small'}
+              variant={'filled'}
               onClick={() => {
                 cancelInstallMCPPlugin(identifier);
               }}
-              size={'small'}
-              variant={'filled'}
             >
               {t('common:close')}
             </Button>
@@ -37,8 +39,6 @@ const InstallError = memo<InstallErrorProps>(({ errorInfo, identifier }) => {
         title={t('mcpInstall.installError', {
           detail: t(`mcpInstall.errorTypes.${errorInfo.type}`),
         })}
-        type="error"
-        variant={'borderless'}
       />
       {errorInfo.metadata && (
         <ErrorDetails errorInfo={errorInfo.metadata} errorMessage={errorInfo.message} />

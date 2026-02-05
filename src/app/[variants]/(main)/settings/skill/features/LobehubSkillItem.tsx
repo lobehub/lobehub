@@ -1,7 +1,7 @@
 'use client';
 
-import { type LobehubSkillProviderType } from '@lobechat/const';
-import { Avatar, DropdownMenu, Flexbox, Icon, Button as LobeButton } from '@lobehub/ui';
+import type {LobehubSkillProviderType} from '@lobechat/const';
+import { Avatar, Button as LobeButton,DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { App, Button } from 'antd';
 import { cssVar } from 'antd-style';
 import { Loader2, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
@@ -10,9 +10,9 @@ import { useTranslation } from 'react-i18next';
 
 import { createLobehubSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { useToolStore } from '@/store/tool';
+import type {LobehubSkillServer} from '@/store/tool/slices/lobehubSkillStore/types';
 import {
-  type LobehubSkillServer,
-  LobehubSkillStatus,
+  LobehubSkillStatus
 } from '@/store/tool/slices/lobehubSkillStore/types';
 
 import { styles } from './style';
@@ -219,7 +219,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
   const renderAction = () => {
     if (isConnecting || isWaitingAuth) {
       return (
-        <Button disabled icon={<Icon icon={Loader2} spin />} type="default">
+        <Button disabled icon={<Icon spin icon={Loader2} />} type="default">
           {t('tools.lobehubSkill.connect')}
         </Button>
       );
@@ -227,7 +227,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
 
     if (!server || server.status !== LobehubSkillStatus.CONNECTED) {
       return (
-        <Button icon={<Icon icon={SquareArrowOutUpRight} />} onClick={handleConnect} type="default">
+        <Button icon={<Icon icon={SquareArrowOutUpRight} />} type="default" onClick={handleConnect}>
           {t('tools.lobehubSkill.connect')}
         </Button>
       );
@@ -235,6 +235,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
 
     return (
       <DropdownMenu
+        placement="bottomRight"
         items={[
           {
             icon: <Icon icon={Unplug} />,
@@ -243,7 +244,6 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
             onClick: handleDisconnect,
           },
         ]}
-        placement="bottomRight"
       >
         <LobeButton icon={MoreHorizontalIcon} />
       </DropdownMenu>
@@ -254,23 +254,23 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
 
   return (
     <Flexbox
+      horizontal
       align="center"
       className={styles.container}
       gap={16}
-      horizontal
       justify="space-between"
     >
-      <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
+      <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
         <Flexbox
+          horizontal
           align="center"
           gap={16}
-          horizontal
+          style={{ cursor: 'pointer' }}
           onClick={() =>
             createLobehubSkillDetailModal({
               identifier: provider.id,
             })
           }
-          style={{ cursor: 'pointer' }}
         >
           <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
             {renderIcon()}
@@ -283,7 +283,7 @@ const LobehubSkillItem = memo<LobehubSkillItemProps>(({ provider, server }) => {
           </Flexbox>
         </Flexbox>
       </Flexbox>
-      <Flexbox align="center" gap={12} horizontal>
+      <Flexbox horizontal align="center" gap={12}>
         {isConnected && renderStatus()}
         {renderAction()}
       </Flexbox>

@@ -11,7 +11,6 @@ import {
   createInitialState,
   createTestContext,
   executeWithMockContext,
-  expectMessageCreated,
 } from './helpers';
 
 describe('resolve_aborted_tools executor', () => {

@@ -2,12 +2,12 @@ import { ProviderIcon } from '@lobehub/icons';
 import { Avatar, Flexbox, SortableList } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { type AiProviderListItem } from '@/types/aiProvider';
+import type {AiProviderListItem} from '@/types/aiProvider';
 
 const GroupItem = memo<AiProviderListItem>(({ id, name, source, logo }) => {
   return (
     <>
-      <Flexbox gap={8} horizontal>
+      <Flexbox horizontal gap={8}>
         {source === 'custom' && logo ? (
           <Avatar
             alt={name || id}

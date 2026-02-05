@@ -1,5 +1,5 @@
 import { getServerDBConfig } from '@/config/db';
-import { type UserKeyVaults } from '@/types/user/settings';
+import type {UserKeyVaults} from '@/types/user/settings';
 
 interface DecryptionResult {
   plaintext: string;

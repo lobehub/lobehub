@@ -1,4 +1,4 @@
-import { type SessionGroupItem } from '@/types/session';
+import type {SessionGroupItem} from '@/types/session';
 
 export type AddSessionGroupAction = { item: SessionGroupItem; type: 'addSessionGroupItem' };
 export type DeleteSessionGroupAction = { id: string; type: 'deleteSessionGroupItem' };

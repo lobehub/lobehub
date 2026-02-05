@@ -1,7 +1,8 @@
 'use client';
 
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { Flexbox, Icon, Tabs, type TabsProps, Tag } from '@lobehub/ui';
+import type {TabsProps} from '@lobehub/ui';
+import { Flexbox, Icon, Tabs,  Tag } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import {
   BookOpenIcon,
@@ -100,9 +101,9 @@ const Nav = memo<NavProps>(
               label:
                 deploymentCount > 1 ? (
                   <Flexbox
+                    horizontal
                     align={'center'}
                     gap={6}
-                    horizontal
                     style={{
                       display: 'inline-flex',
                     }}
@@ -120,9 +121,9 @@ const Nav = memo<NavProps>(
               label:
                 schemaCount > 1 ? (
                   <Flexbox
+                    horizontal
                     align={'center'}
                     gap={6}
-                    horizontal
                     style={{
                       display: 'inline-flex',
                     }}
@@ -155,9 +156,9 @@ const Nav = memo<NavProps>(
               label:
                 versionCount > 1 ? (
                   <Flexbox
+                    horizontal
                     align={'center'}
                     gap={6}
-                    horizontal
                     style={{
                       display: 'inline-flex',
                     }}
@@ -178,10 +179,10 @@ const Nav = memo<NavProps>(
     return mobile ? (
       nav
     ) : (
-      <Flexbox align={'center'} className={styles.nav} horizontal justify={'space-between'}>
+      <Flexbox horizontal align={'center'} className={styles.nav} justify={'space-between'}>
         {nav}
         {!inModal && (
-          <Flexbox gap={12} horizontal>
+          <Flexbox horizontal gap={12}>
             <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
               {t('mcp.details.nav.needHelp')}
             </a>

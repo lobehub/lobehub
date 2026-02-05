@@ -1,9 +1,9 @@
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { z } from 'zod';
 
 import type { RuntimeStepContext } from '../stepContext';
-import { HumanInterventionConfigSchema, HumanInterventionPolicySchema } from './intervention';
 import type { HumanInterventionConfig, HumanInterventionPolicy } from './intervention';
+import { HumanInterventionConfigSchema, HumanInterventionPolicySchema } from './intervention';
 
 interface Meta {
   /**
@@ -547,7 +547,7 @@ export interface IBuiltinToolExecutor {
    *
    * @returns Array of supported API names
    */
-  getApiNames(): string[];
+  getApiNames: () => string[];
 
   /**
    * Check if this executor supports the given API
@@ -555,7 +555,7 @@ export interface IBuiltinToolExecutor {
    * @param apiName - The API name to check
    * @returns Whether the API is supported
    */
-  hasApi(apiName: string): boolean;
+  hasApi: (apiName: string) => boolean;
 
   /**
    * The tool identifier (e.g., 'lobe-group-management')
@@ -570,7 +570,7 @@ export interface IBuiltinToolExecutor {
    * @param ctx - Execution context
    * @returns The execution result
    */
-  invoke(apiName: string, params: any, ctx: BuiltinToolContext): Promise<BuiltinToolResult>;
+  invoke: (apiName: string, params: any, ctx: BuiltinToolContext) => Promise<BuiltinToolResult>;
 }
 
 /**

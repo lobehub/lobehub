@@ -1,4 +1,4 @@
-import { CrawlImpl, CrawlSuccessResult } from '../type';
+import type { CrawlImpl, CrawlSuccessResult } from '../type';
 import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../utils/errorType';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 
@@ -67,8 +67,8 @@ export const tavily: CrawlImpl = async (url) => {
     const data = (await res.json()) as TavilyResponse;
 
     if (!data.results || data.results.length === 0) {
-      console.warn( 'Tavily API returned no results for URL:', url )
-      return
+      console.warn('Tavily API returned no results for URL:', url);
+      return;
     }
 
     const firstResult = data.results[0];

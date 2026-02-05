@@ -1,4 +1,4 @@
-import { type ChatPluginPayload } from '@lobechat/types';
+import type {ChatPluginPayload} from '@lobechat/types';
 import { Avatar, Button, Center, Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
@@ -49,12 +49,12 @@ const PluginSettings = memo<PluginSettingsProps>(({ id, plugin }) => {
           )}
           <Button
             block
+            style={{ marginTop: 8 }}
+            type={'primary'}
             onClick={() => {
               resend(id);
               deleteMessage(id);
             }}
-            style={{ marginTop: 8 }}
-            type={'primary'}
           >
             {t('unlock.confirm')}
           </Button>

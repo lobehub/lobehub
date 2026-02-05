@@ -6,14 +6,14 @@ export interface SystemDependencyCheckResult {
    * Error message
    */
   error?: string;
-  installInstructions?: {
-    current?: string;
-    manual?: string;
-  };
   /**
    * Whether installed
    */
   installed: boolean;
+  installInstructions?: {
+    current?: string;
+    manual?: string;
+  };
   /**
    * Whether meets version requirements
    */

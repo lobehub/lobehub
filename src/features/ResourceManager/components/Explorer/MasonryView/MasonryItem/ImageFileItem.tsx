@@ -1,13 +1,14 @@
-import { Button, Tooltip } from '@lobehub/ui';
+import { Button, Flexbox, Tooltip } from '@lobehub/ui';
+import { Image } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { isNull } from 'es-toolkit/compat';
 import { FileBoxIcon } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
-import { type AsyncTaskStatus, type IAsyncTaskError } from '@/types/asyncTask';
+import type {AsyncTaskStatus, IAsyncTaskError} from '@/types/asyncTask';
 import { formatSize } from '@/utils/format';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 
@@ -39,7 +40,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     justify-content: center;
 
     padding: 16px;
-    border-radius: ${cssVar.borderRadiusLG};
 
     opacity: 0;
     background: ${cssVar.colorBgMask};
@@ -50,61 +50,34 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       opacity: 1;
     }
   `,
-  iconWrapper: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    height: 120px;
-    margin-block-end: 12px;
-    border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  markdownLoading: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    min-height: 120px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  markdownPreview: css`
+  imageWrapper: css`
     position: relative;
 
-    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 
     width: 100%;
     min-height: 120px;
-    max-height: 300px;
-    padding: 16px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    font-size: 13px;
-    line-height: 1.6;
-    color: ${cssVar.colorTextSecondary};
-    word-wrap: break-word;
-    white-space: pre-wrap;
 
     background: ${cssVar.colorFillQuaternary};
 
-    &::after {
-      pointer-events: none;
-      content: '';
-
-      position: absolute;
-      inset-block-end: 0;
-      inset-inline: 0;
-
-      height: 60px;
-
-      background: linear-gradient(to bottom, transparent, ${cssVar.colorFillQuaternary});
+    img {
+      display: block;
+      height: auto;
     }
+  `,
+  name: css`
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+
+    margin-block-end: 12px;
+
+    font-weight: ${cssVar.fontWeightStrong};
+    color: ${cssVar.colorText};
+    word-break: break-word;
   `,
   overlaySize: css`
     font-size: 12px;
@@ -128,7 +101,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-interface MarkdownFileItemProps {
+interface ImageFileItemProps {
   chunkCount?: number | null;
   chunkingError?: IAsyncTaskError | null;
   chunkingStatus?: AsyncTaskStatus | null;
@@ -137,13 +110,13 @@ interface MarkdownFileItemProps {
   fileType?: string;
   finishEmbedding?: boolean;
   id: string;
-  isLoadingMarkdown: boolean;
-  markdownContent: string;
+  isInView: boolean;
   name: string;
   size: number;
+  url?: string;
 }
 
-const MarkdownFileItem = memo<MarkdownFileItemProps>(
+const ImageFileItem = memo<ImageFileItemProps>(
   ({
     chunkCount,
     chunkingError,
@@ -153,12 +126,13 @@ const MarkdownFileItem = memo<MarkdownFileItemProps>(
     fileType,
     finishEmbedding,
     id,
-    isLoadingMarkdown,
-    markdownContent,
+    isInView,
     name,
     size,
+    url,
   }) => {
     const { t } = useTranslation('components');
+    const [imageLoaded, setImageLoaded] = useState(false);
     const [isCreatingFileParseTask, parseFiles] = useFileStore((s) => [
       fileManagerSelectors.isCreatingFileParseTask(id)(s),
       s.parseFilesToChunks,
@@ -168,21 +142,62 @@ const MarkdownFileItem = memo<MarkdownFileItemProps>(
 
     return (
       <>
-        <div style={{ position: 'relative' }}>
-          {isLoadingMarkdown ? (
-            <div className={styles.markdownLoading}>Loading preview...</div>
-          ) : markdownContent ? (
-            <div className={styles.markdownPreview}>{markdownContent}</div>
-          ) : (
-            <div className={styles.iconWrapper}>
-              <FileIcon fileName={name} fileType={fileType} size={64} />
+        <div className={styles.imageWrapper}>
+          {!imageLoaded && (
+            <Flexbox
+              align={'center'}
+              gap={12}
+              justify={'center'}
+              paddingBlock={24}
+              paddingInline={12}
+            >
+              <FileIcon fileName={name} fileType={fileType} size={48} />
+              <div className={styles.name} style={{ textAlign: 'center' }}>
+                {name}
+              </div>
+              <div
+                style={{
+                  color: 'var(--lobe-chat-text-tertiary)',
+                  fontSize: 12,
+                  textAlign: 'center',
+                }}
+              >
+                {formatSize(size)}
+              </div>
+            </Flexbox>
+          )}
+          {isInView && url && (
+            <Image
+              alt={name}
+              loading="lazy"
+              src={url}
+              preview={{
+                src: url,
+              }}
+              style={{
+                display: 'block',
+                height: 'auto',
+                opacity: imageLoaded ? 1 : 0,
+                transition: 'opacity 0.3s',
+                width: '100%',
+              }}
+              wrapperStyle={{
+                inset: 0,
+                pointerEvents: imageLoaded ? 'auto' : 'none',
+                position: imageLoaded ? 'relative' : 'absolute',
+                width: '100%',
+              }}
+              onError={() => setImageLoaded(false)}
+              onLoad={() => setImageLoaded(true)}
+            />
+          )}
+          {/* Hover overlay - only show when image is loaded */}
+          {imageLoaded && (
+            <div className={styles.hoverOverlay}>
+              <div className={styles.overlayTitle}>{name}</div>
+              <div className={styles.overlaySize}>{formatSize(size)}</div>
             </div>
           )}
-          {/* Hover overlay */}
-          <div className={styles.hoverOverlay}>
-            <div className={styles.overlayTitle}>{name}</div>
-            <div className={styles.overlaySize}>{formatSize(size)}</div>
-          </div>
         </div>
         {/* Floating chunk badge or action button */}
         {!isNull(chunkingStatus) && chunkingStatus ? (
@@ -205,13 +220,13 @@ const MarkdownFileItem = memo<MarkdownFileItemProps>(
             <Tooltip title={t('FileManager.actions.chunkingTooltip')}>
               <div
                 className={cx('floatingChunkBadge', styles.floatingChunkBadge)}
+                style={{ cursor: 'pointer' }}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!isCreatingFileParseTask) {
                     parseFiles([id]);
                   }
                 }}
-                style={{ cursor: 'pointer' }}
               >
                 <Button
                   icon={FileBoxIcon}
@@ -228,4 +243,4 @@ const MarkdownFileItem = memo<MarkdownFileItemProps>(
   },
 );
 
-export default MarkdownFileItem;
+export default ImageFileItem;

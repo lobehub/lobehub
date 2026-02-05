@@ -7,7 +7,7 @@ import { useQueryState } from '@/hooks/useQueryParam';
 import { useGlobalStore } from '@/store/global';
 import { useUserMemoryStore } from '@/store/userMemory';
 
-import { type ViewMode } from '../../../features/ViewModeSwitcher';
+import type {ViewMode} from '../../../features/ViewModeSwitcher';
 import GridView from './GridView';
 import TimelineView from './TimelineView';
 
@@ -42,9 +42,9 @@ const PreferencesList = memo<PreferencesListProps>(({ isLoading, searchValue, vi
   }
 
   return viewMode === 'timeline' ? (
-    <TimelineView isLoading={isLoading} onClick={handleCardClick} preferences={preferences} />
+    <TimelineView isLoading={isLoading} preferences={preferences} onClick={handleCardClick} />
   ) : (
-    <GridView isLoading={isLoading} onClick={handleCardClick} preferences={preferences} />
+    <GridView isLoading={isLoading} preferences={preferences} onClick={handleCardClick} />
   );
 });
 

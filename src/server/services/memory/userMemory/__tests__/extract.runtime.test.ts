@@ -48,7 +48,7 @@ const createExecutor = (privateOverrides?: Partial<MemoryExtractionPrivateConfig
     memory: {},
   };
 
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+   
   // @ts-ignore accessing private constructor for testing
   return new MemoryExtractionExecutor(serverConfig as any, {
     ...basePrivateConfig,

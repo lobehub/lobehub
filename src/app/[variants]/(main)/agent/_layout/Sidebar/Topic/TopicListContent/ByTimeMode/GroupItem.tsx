@@ -4,7 +4,7 @@ import { HashIcon } from 'lucide-react';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type GroupedTopic } from '@/types/topic';
+import type {GroupedTopic} from '@/types/topic';
 
 import TopicItem from '../../List/Item';
 
@@ -29,7 +29,7 @@ const GroupItem = memo<GroupItemProps>(({ group, activeTopicId, activeThreadId }
       paddingBlock={4}
       paddingInline={'8px 4px'}
       title={
-        <Flexbox align="center" gap={6} height={24} horizontal style={{ overflow: 'hidden' }}>
+        <Flexbox horizontal align="center" gap={6} height={24} style={{ overflow: 'hidden' }}>
           <Icon icon={HashIcon} style={{ opacity: 0.5 }} />
           <Text ellipsis fontSize={12} style={{ flex: 1 }} type={'secondary'} weight={500}>
             {title || timeTitle}

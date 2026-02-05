@@ -46,8 +46,8 @@ const Conversation = memo<ConversationProps>(({ agentId }) => {
 
   return (
     <DragUploadZone
-      onUploadFiles={handleUploadFiles}
       style={{ flex: 1, height: '100%', minWidth: 300 }}
+      onUploadFiles={handleUploadFiles}
     >
       <Flexbox
         flex={1}

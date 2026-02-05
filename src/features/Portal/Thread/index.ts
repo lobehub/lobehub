@@ -1,4 +1,4 @@
-import { type PortalImpl } from '../type';
+import type {PortalImpl} from '../type';
 import Chat from './Chat';
 import Header from './Header';
 

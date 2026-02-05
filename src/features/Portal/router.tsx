@@ -7,6 +7,7 @@ import { chatPortalSelectors } from '@/store/chat/selectors';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 
 import { Artifacts } from './Artifacts';
+import Header from './components/Header';
 import { Document } from './Document';
 import { FilePreview } from './FilePreview';
 import { GroupThread } from './GroupThread';
@@ -15,8 +16,7 @@ import { MessageDetail } from './MessageDetail';
 import { Notebook } from './Notebook';
 import { Plugins } from './Plugins';
 import { Thread } from './Thread';
-import Header from './components/Header';
-import { type PortalImpl } from './type';
+import type {PortalImpl} from './type';
 
 // View type to component mapping
 const VIEW_COMPONENTS: Record<PortalViewType, PortalImpl> = {

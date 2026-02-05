@@ -2,7 +2,7 @@
 
 import { ActionIcon, DropdownMenu } from '@lobehub/ui';
 import { FileTextIcon, MoreHorizontal } from 'lucide-react';
-import { Suspense, memo } from 'react';
+import { memo,Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -34,6 +34,8 @@ const RecentPage = memo(() => {
 
   return (
     <GroupBlock
+      icon={FileTextIcon}
+      title={t('home.recentPages')}
       action={
         <>
           {isRevalidating && <NeuralNetworkLoading size={14} />}
@@ -53,8 +55,6 @@ const RecentPage = memo(() => {
           </DropdownMenu>
         </>
       }
-      icon={FileTextIcon}
-      title={t('home.recentPages')}
     >
       <ScrollShadowWithButton>
         <Suspense

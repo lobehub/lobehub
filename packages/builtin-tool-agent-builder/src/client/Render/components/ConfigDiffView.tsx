@@ -30,7 +30,7 @@ const ConfigDiffView = memo<ConfigDiffViewProps>(({ updatedFields, previousValue
 
   return (
     <Flexbox gap={8} style={{ fontSize: 13 }}>
-      <Flexbox align={'center'} gap={6} horizontal style={{ color: 'var(--lobe-success-6)' }}>
+      <Flexbox horizontal align={'center'} gap={6} style={{ color: 'var(--lobe-success-6)' }}>
         <CheckCircle size={14} />
         <span style={{ fontWeight: 500 }}>Updated {updatedFields.length} field(s)</span>
       </Flexbox>
@@ -43,7 +43,7 @@ const ConfigDiffView = memo<ConfigDiffViewProps>(({ updatedFields, previousValue
           return (
             <Flexbox gap={4} key={field}>
               <span style={{ color: 'var(--lobe-text-secondary)', fontWeight: 500 }}>{field}:</span>
-              <Flexbox align={'center'} gap={8} horizontal style={{ marginLeft: 12 }}>
+              <Flexbox horizontal align={'center'} gap={8} style={{ marginLeft: 12 }}>
                 <span
                   style={{
                     color: 'var(--lobe-text-tertiary)',

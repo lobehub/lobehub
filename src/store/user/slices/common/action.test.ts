@@ -1,13 +1,13 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { withSWR } from '~test-utils';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
 import { userService } from '@/services/user';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
-import { GlobalServerConfig } from '@/types/serverConfig';
-import { UserInitializationState, UserPreference } from '@/types/user';
+import type { GlobalServerConfig } from '@/types/serverConfig';
+import type { UserInitializationState, UserPreference } from '@/types/user';
+import { withSWR } from '~test-utils';
 
 vi.mock('zustand/traditional');
 

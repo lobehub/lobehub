@@ -2,7 +2,8 @@
 
 import type { AssistantContentBlock } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import { type MouseEventHandler, Suspense, memo, useCallback, useMemo } from 'react';
+import type {MouseEventHandler} from 'react';
+import { memo,  Suspense, useCallback, useMemo } from 'react';
 
 import { MESSAGE_ACTION_BAR_PORTAL_ATTRIBUTES } from '@/const/messageActionPortal';
 import { ChatItem } from '@/features/Conversation/ChatItem';
@@ -15,13 +16,13 @@ import { useGlobalStore } from '@/store/global';
 
 import { useAgentMeta } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
+import Usage from '../components/Extras/Usage';
+import MessageBranch from '../components/MessageBranch';
 import {
   useSetMessageItemActionElementPortialContext,
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
 import FileListViewer from '../User/components/FileListViewer';
-import Usage from '../components/Extras/Usage';
-import MessageBranch from '../components/MessageBranch';
 import Group from './components/Group';
 
 const EditState = dynamic(() => import('./components/EditState'), {
@@ -103,6 +104,11 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
 
   return (
     <ChatItem
+      showTitle
+      avatar={avatar}
+      newScreenMinHeight={minHeight}
+      placement={'left'}
+      time={createdAt}
       actions={
         !disableEditing && (
           <>
@@ -117,13 +123,8 @@ const GroupMessage = memo<GroupMessageProps>(({ id, index, disableEditing, isLat
           </>
         )
       }
-      avatar={avatar}
-      newScreenMinHeight={minHeight}
       onAvatarClick={onAvatarClick}
       onMouseEnter={onMouseEnter}
-      placement={'left'}
-      showTitle
-      time={createdAt}
     >
       {children && children.length > 0 && (
         <Group

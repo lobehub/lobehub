@@ -1,12 +1,13 @@
 import { Input } from '@lobehub/ui';
-import { Checkbox, Form, type FormInstance, Select } from 'antd';
-import { type AiModelType } from 'model-bank';
+import type {FormInstance} from 'antd';
+import { Checkbox, Form,  Select } from 'antd';
+import type {AiModelType} from 'model-bank';
 import { memo, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import MaxTokenSlider from '@/components/MaxTokenSlider';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { type ChatModelCard } from '@/types/llm';
+import type {ChatModelCard} from '@/types/llm';
 
 import ExtendParamsSelect from './ExtendParamsSelect';
 

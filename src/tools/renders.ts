@@ -21,7 +21,7 @@ import {
   WebBrowsingManifest,
   WebBrowsingRenders,
 } from '@lobechat/builtin-tool-web-browsing/client';
-import { type BuiltinRender } from '@lobechat/types';
+import type {BuiltinRender} from '@lobechat/types';
 
 /**
  * Builtin tools renders registry

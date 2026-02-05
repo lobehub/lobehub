@@ -15,9 +15,9 @@ const Header = memo(() => {
 
   return (
     <ChatHeader
-      onBackClick={() => navigate(`/${path}`)}
       showBackButton
       style={mobileHeaderSticky}
+      onBackClick={() => navigate(`/${path}`)}
     />
   );
 });

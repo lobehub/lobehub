@@ -33,26 +33,26 @@ const Nav = memo(() => {
     <Flexbox gap={1} paddingInline={4}>
       <NavItem
         icon={MessageSquarePlusIcon}
-        onClick={switchToNewTopic}
         title={tTopic('actions.addNewTopic')}
+        onClick={switchToNewTopic}
       />
       {isAgentEditable && (
         <NavItem
           active={isProfileActive}
           icon={BotPromptIcon}
+          title={t('tab.groupProfile')}
           onClick={() => {
             switchTopic(null, { skipRefreshMessage: true });
             router.push(urlJoin('/group', groupId!, 'profile'));
           }}
-          title={t('tab.groupProfile')}
         />
       )}
       <NavItem
         icon={SearchIcon}
+        title={t('tab.search')}
         onClick={() => {
           toggleCommandMenu(true);
         }}
-        title={t('tab.search')}
       />
     </Flexbox>
   );

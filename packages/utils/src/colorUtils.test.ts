@@ -127,7 +127,7 @@ describe('colorUtils', () => {
       const result = convertAlphaToSolid('rgba(255, 165, 0, 1.0)', '#000000');
 
       // Orange color
-      expect(result).toMatch(/^#[0-9a-f]{6}$/);
+      expect(result).toMatch(/^#[\da-f]{6}$/);
       expect(result).toBe('#ffa500');
     });
 

@@ -22,16 +22,16 @@ const ViewModeSwitcher = memo<ViewModeSwitcherProps>(({ value, onChange }) => {
       <ActionIcon
         active={value === 'timeline'}
         icon={CalendarDaysIcon}
-        onClick={() => onChange('timeline')}
         size={DESKTOP_HEADER_ICON_SIZE}
         title={t('viewMode.timeline')}
+        onClick={() => onChange('timeline')}
       />
       <ActionIcon
         active={value === 'grid'}
         icon={LayoutDashboardIcon}
-        onClick={() => onChange('grid')}
         size={DESKTOP_HEADER_ICON_SIZE}
         title={t('viewMode.masonry')}
+        onClick={() => onChange('grid')}
       />
     </>
   );

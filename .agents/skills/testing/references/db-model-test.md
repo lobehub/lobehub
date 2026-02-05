@@ -19,18 +19,24 @@ cd packages/database && TEST_SERVER_DB=1 bunx vitest run --silent='passed-only' 
 ```typescript
 // ❌ DANGEROUS: Missing permission check
 update = async (id: string, data: Partial<MyModel>) => {
-  return this.db.update(myTable).set(data)
-    .where(eq(myTable.id, id))  // Only checks ID
+  return this.db
+    .update(myTable)
+    .set(data)
+    .where(eq(myTable.id, id)) // Only checks ID
     .returning();
 };
 
 // ✅ SECURE: Permission check included
 update = async (id: string, data: Partial<MyModel>) => {
-  return this.db.update(myTable).set(data)
-    .where(and(
-      eq(myTable.id, id),
-      eq(myTable.userId, this.userId)  // ✅ Permission check
-    ))
+  return this.db
+    .update(myTable)
+    .set(data)
+    .where(
+      and(
+        eq(myTable.id, id),
+        eq(myTable.userId, this.userId), // ✅ Permission check
+      ),
+    )
     .returning();
 };
 ```
@@ -40,18 +46,22 @@ update = async (id: string, data: Partial<MyModel>) => {
 ```typescript
 // @vitest-environment node
 describe('MyModel', () => {
-  describe('create', () => { /* ... */ });
-  describe('queryAll', () => { /* ... */ });
+  describe('create', () => {
+    /* ... */
+  });
+  describe('queryAll', () => {
+    /* ... */
+  });
   describe('update', () => {
     it('should update own records');
-    it('should NOT update other users records');  // 🔒 Security
+    it('should NOT update other users records'); // 🔒 Security
   });
   describe('delete', () => {
     it('should delete own records');
-    it('should NOT delete other users records');  // 🔒 Security
+    it('should NOT delete other users records'); // 🔒 Security
   });
   describe('user isolation', () => {
-    it('should enforce user data isolation');  // 🔒 Core security
+    it('should enforce user data isolation'); // 🔒 Core security
   });
 });
 ```
@@ -102,8 +112,10 @@ const testData = { asyncTaskId: null, fileId: null };
 
 // ✅ Or: Create referenced record first
 beforeEach(async () => {
-  const [asyncTask] = await serverDB.insert(asyncTasks)
-    .values({ id: 'valid-id', status: 'pending' }).returning();
+  const [asyncTask] = await serverDB
+    .insert(asyncTasks)
+    .values({ id: 'valid-id', status: 'pending' })
+    .returning();
   testData.asyncTaskId = asyncTask.id;
 });
 ```
@@ -120,5 +132,5 @@ await serverDB.insert(table).values([
 ]);
 
 // ❌ Don't rely on insert order
-await serverDB.insert(table).values([data1, data2]);  // Unpredictable
+await serverDB.insert(table).values([data1, data2]); // Unpredictable
 ```

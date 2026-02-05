@@ -260,6 +260,7 @@
   "geminiImageChineseWarning.doNotShowAgain": "Não Mostrar Novamente",
   "geminiImageChineseWarning.title": "Aviso sobre Entrada em Chinês",
   "historyRange": "Período do Histórico",
+  "home.suggestQuestions": "Experimente estes exemplos",
   "import": "Importar",
   "importData": "Importar Dados",
   "importModal.error.desc": "Desculpe, ocorreu um erro durante o processo de importação de dados. Tente importar novamente ou <1>envie uma solicitação</1> e ajudaremos a resolver o problema o mais rápido possível.",

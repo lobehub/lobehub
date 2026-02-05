@@ -1,6 +1,6 @@
+import type { IEditor } from '@lobehub/editor';
 import {
   CommonPlugin,
-  type IEditor,
   Kernel,
   ListPlugin,
   LitexmlPlugin,
@@ -11,8 +11,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EditorRuntime } from '../EditorRuntime';
 import editAllFixture from './fixtures/edit-all.json';
-import removeThenAddFixture from './fixtures/remove-then-add.json';
 import removeFixture from './fixtures/remove.json';
+import removeThenAddFixture from './fixtures/remove-then-add.json';
 
 describe('EditorRuntime - Real Cases', () => {
   let runtime: EditorRuntime;

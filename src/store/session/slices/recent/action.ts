@@ -1,15 +1,15 @@
 import isEqual from 'fast-deep-equal';
-import { type SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { fileService } from '@/services/file';
 import { topicService } from '@/services/topic';
-import { type StoreSetter } from '@/store/types';
-import { type FileListItem } from '@/types/files';
-import { type RecentTopic } from '@/types/topic';
+import type {StoreSetter} from '@/store/types';
+import type {FileListItem} from '@/types/files';
+import type {RecentTopic} from '@/types/topic';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type SessionStore } from '../../store';
+import type {SessionStore} from '../../store';
 
 const n = setNamespace('recent');
 

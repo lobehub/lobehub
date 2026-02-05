@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { LobeGroq, params } from './index';
@@ -547,7 +547,7 @@ describe('LobeGroq - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'mistralai/mistral-7b-instruct:free',
-        temperature: -1.0,
+        temperature: -1,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(

@@ -1,4 +1,4 @@
-import { type LobeToolMeta } from '@lobechat/types';
+import type {LobeToolMeta} from '@lobechat/types';
 
 import { shouldEnableTool } from '@/helpers/toolFilters';
 

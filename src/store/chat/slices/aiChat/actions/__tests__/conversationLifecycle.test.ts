@@ -7,7 +7,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getSessionStoreState } from '@/store/session';
 
 import { useChatStore } from '../../../../store';
-import { TEST_CONTENT, TEST_IDS, createMockMessage } from './fixtures';
+import { createMockMessage,TEST_CONTENT, TEST_IDS } from './fixtures';
 import { resetTestEnvironment, setupMockSelectors, spyOnMessageService } from './helpers';
 
 // Keep zustand mock as it's needed globally

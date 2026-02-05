@@ -2,22 +2,34 @@
 import { subscribeWithSelector } from 'zustand/middleware';
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
-import { type StateCreator } from 'zustand/vanilla';
+import type {StateCreator} from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
 import { flattenActions } from '../utils/flattenActions';
-import { type ChatStoreState, initialState } from './initialState';
-import { type ChatBuiltinToolAction, chatToolSlice } from './slices/builtinTool/actions';
-import { type ChatPortalAction, ChatPortalActionImpl } from './slices/portal/action';
-import { type ChatTranslateAction, ChatTranslateActionImpl } from './slices/translate/action';
-import { type ChatMessageAction, chatMessage } from './slices/message/actions';
-import { type ChatPluginAction, chatPlugin } from './slices/plugin/actions';
-import { type ChatTopicAction, ChatTopicActionImpl } from './slices/topic/action';
-import { type ChatAIChatAction, chatAiChat } from './slices/aiChat/actions';
-import { type ChatTTSAction, ChatTTSActionImpl } from './slices/tts/action';
-import { type ChatThreadAction, ChatThreadActionImpl } from './slices/thread/action';
-import { type OperationActions, OperationActionsImpl } from './slices/operation/actions';
-import { type ChatAIAgentAction, chatAiAgent } from './slices/aiAgent/actions';
+import type {ChatStoreState} from './initialState';
+import {  initialState } from './initialState';
+import type {ChatAIAgentAction} from './slices/aiAgent/actions';
+import { chatAiAgent } from './slices/aiAgent/actions';
+import type {ChatAIChatAction} from './slices/aiChat/actions';
+import { chatAiChat } from './slices/aiChat/actions';
+import type {ChatBuiltinToolAction} from './slices/builtinTool/actions';
+import {  chatToolSlice } from './slices/builtinTool/actions';
+import type {ChatMessageAction} from './slices/message/actions';
+import { chatMessage } from './slices/message/actions';
+import type {OperationActions} from './slices/operation/actions';
+import {  OperationActionsImpl } from './slices/operation/actions';
+import type {ChatPluginAction} from './slices/plugin/actions';
+import { chatPlugin } from './slices/plugin/actions';
+import type {ChatPortalAction} from './slices/portal/action';
+import {  ChatPortalActionImpl } from './slices/portal/action';
+import type {ChatThreadAction} from './slices/thread/action';
+import {  ChatThreadActionImpl } from './slices/thread/action';
+import type {ChatTopicAction} from './slices/topic/action';
+import {  ChatTopicActionImpl } from './slices/topic/action';
+import type {ChatTranslateAction} from './slices/translate/action';
+import {  ChatTranslateActionImpl } from './slices/translate/action';
+import type {ChatTTSAction} from './slices/tts/action';
+import {  ChatTTSActionImpl } from './slices/tts/action';
 
 export type ChatStoreAction = ChatMessageAction &
   ChatThreadAction &

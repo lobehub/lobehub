@@ -6,9 +6,9 @@
  * - Pre-instantiated runtimes (e.g., WebBrowsing - no per-request context needed)
  * - Per-request runtimes (e.g., CloudSandbox - needs topicId, userId)
  */
-import { type ToolExecutionContext } from '../types';
+import type {ToolExecutionContext} from '../types';
 import { cloudSandboxRuntime } from './cloudSandbox';
-import { type ServerRuntimeFactory, type ServerRuntimeRegistration } from './types';
+import type {ServerRuntimeFactory, ServerRuntimeRegistration} from './types';
 import { webBrowsingRuntime } from './webBrowsing';
 
 /**

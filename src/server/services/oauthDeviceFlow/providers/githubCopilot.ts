@@ -1,4 +1,4 @@
-import { type OAuthDeviceFlowConfig } from '@/types/aiProvider';
+import type {OAuthDeviceFlowConfig} from '@/types/aiProvider';
 
 import { OAuthDeviceFlowService } from '../index';
 

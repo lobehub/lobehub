@@ -1,5 +1,6 @@
 import { isDesktop } from '@lobechat/const';
-import { type DropdownItem, Icon } from '@lobehub/ui';
+import type {DropdownItem} from '@lobehub/ui';
+import {  Icon } from '@lobehub/ui';
 import { App } from 'antd';
 import { cssVar, useResponsive } from 'antd-style';
 import dayjs from 'dayjs';

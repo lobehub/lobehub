@@ -16,9 +16,9 @@ const IdentityCard = memo<IdentityCardProps>(({ identity, onClick }) => {
       actions={<IdentityDropdown id={identity.id} />}
       cate={identity.type}
       hashTags={identity.tags}
-      onClick={() => onClick?.(identity)}
       title={identity.title}
       titleAddon={identity.role?.toLowerCase()}
+      onClick={() => onClick?.(identity)}
     >
       {identity.description}
     </GridCard>

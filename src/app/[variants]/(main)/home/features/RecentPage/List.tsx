@@ -28,11 +28,11 @@ const RecentPageList = memo(() => {
     return (
       <Link
         key={document.id}
+        to={pageUrl}
         style={{
           color: 'inherit',
           textDecoration: 'none',
         }}
-        to={pageUrl}
       >
         <RecentPageItem document={document} />
       </Link>

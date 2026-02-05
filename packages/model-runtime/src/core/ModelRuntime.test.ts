@@ -1,11 +1,12 @@
 // @vitest-environment node
-import { ClientSecretPayload } from '@lobechat/types';
+import type { ClientSecretPayload } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ChatStreamCallbacks, ChatStreamPayload, LobeOpenAI, ModelRuntime } from '../index';
+import type { ChatStreamCallbacks, ChatStreamPayload } from '../index';
+import { LobeOpenAI, ModelRuntime } from '../index';
 import { providerRuntimeMap } from '../runtimeMap';
-import { CreateImagePayload } from '../types/image';
+import type { CreateImagePayload } from '../types/image';
 
 /**
  * Mock createTraceOptions for testing purposes.

@@ -1,10 +1,11 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 import { Database } from 'lucide-react';
 
 import { getRouteById } from '@/config/routes';
 
-import { type PageReference, type ResolvedPageData, type ResourceParams } from '../types';
-import { type PluginContext, type RecentlyViewedPlugin, createPageReference } from './types';
+import type {PageReference, ResolvedPageData, ResourceParams} from '../types';
+import type {PluginContext, RecentlyViewedPlugin} from './types';
+import { createPageReference  } from './types';
 
 const resourceIcon = getRouteById('resource')?.icon || Database;
 

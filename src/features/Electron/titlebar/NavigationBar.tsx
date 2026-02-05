@@ -73,22 +73,22 @@ const NavigationBar = memo(() => {
 
   return (
     <Flexbox
+      horizontal
       align="center"
       data-width={leftPanelWidth}
-      horizontal
       justify="end"
       style={{ width: `${leftPanelWidth - 12}px` }}
     >
-      <Flexbox align="center" className={electronStylish.nodrag} gap={2} horizontal>
-        <ActionIcon disabled={!canGoBack} icon={ArrowLeft} onClick={goBack} size="small" />
-        <ActionIcon disabled={!canGoForward} icon={ArrowRight} onClick={goForward} size="small" />
+      <Flexbox horizontal align="center" className={electronStylish.nodrag} gap={2}>
+        <ActionIcon disabled={!canGoBack} icon={ArrowLeft} size="small" onClick={goBack} />
+        <ActionIcon disabled={!canGoForward} icon={ArrowRight} size="small" onClick={goForward} />
         <Popover
           content={<RecentlyViewed onClose={() => setHistoryOpen(false)} />}
-          onOpenChange={setHistoryOpen}
           open={historyOpen}
           placement="bottomLeft"
           styles={{ content: { padding: 0 } }}
           trigger="click"
+          onOpenChange={setHistoryOpen}
         >
           <div className={styles.clock}>
             <Tooltip open={historyOpen ? false : undefined} title={tooltipContent}>

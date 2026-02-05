@@ -5,7 +5,7 @@ import { useClientDataSWRWithSync } from '@/libs/swr';
 import { fileService } from '@/services/file';
 import { topicService } from '@/services/topic';
 import type { HomeStore } from '@/store/home/store';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import type { FileListItem } from '@/types/files';
 import type { RecentTopic } from '@/types/topic';
 import { setNamespace } from '@/utils/storeDebug';

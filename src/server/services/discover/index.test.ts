@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AssistantStore } from '@/server/modules/AssistantStore';
 import { PluginStore } from '@/server/modules/PluginStore';
-import { AssistantSorts, ModelSorts, PluginSorts, ProviderSorts } from '@/types/discover';
+import { ModelSorts, PluginSorts, ProviderSorts } from '@/types/discover';
 
 import { DiscoverService } from './index';
 

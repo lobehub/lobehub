@@ -4,7 +4,7 @@ import type { AgentCronJob } from '@/database/schemas/agentCronJob';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client/lambda';
 import { agentCronJobService } from '@/services/agentCronJob';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 
 import type { AgentStore } from '../../store';
 

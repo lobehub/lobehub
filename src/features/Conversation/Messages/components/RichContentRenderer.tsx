@@ -1,7 +1,7 @@
 import { Flexbox, Image, Markdown } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { type MessageContentPart } from '@/types/index';
+import type {MessageContentPart} from '@/types/index';
 
 interface RichContentRendererProps {
   parts: MessageContentPart[];

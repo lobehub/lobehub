@@ -10,7 +10,7 @@ import { DEFAULT_AVATAR } from '@/const/index';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 
-import { type MarkdownElementProps } from '../type';
+import type {MarkdownElementProps} from '../type';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   mention: css`
@@ -74,9 +74,10 @@ const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => 
 
   return (
     <Popover
+      trigger="click"
       content={
         <Flexbox gap={12} style={{ overflow: 'hidden' }} width={320}>
-          <Flexbox align="center" gap={8} horizontal>
+          <Flexbox horizontal align="center" gap={8}>
             <Avatar
               avatar={member.avatar || DEFAULT_AVATAR}
               background={member.backgroundColor ?? undefined}
@@ -91,7 +92,6 @@ const Render = memo<MarkdownElementProps<MentionProps>>(({ children, node }) => 
           </Flexbox>
         </Flexbox>
       }
-      trigger="click"
     >
       <span className={styles.mention}>
         {'@'}

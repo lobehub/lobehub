@@ -3,7 +3,7 @@ import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import KnowledgeIcon from '@/components/KnowledgeIcon';
-import { type KnowledgeItem } from '@/types/knowledgeBase';
+import type {KnowledgeItem} from '@/types/knowledgeBase';
 
 import Actions from './Action';
 
@@ -46,7 +46,7 @@ const MasonryItem = memo<KnowledgeItem>(({ id, fileType, name, type, description
   return (
     <div className={styles.card}>
       <Flexbox gap={12} style={{ position: 'relative' }}>
-        <Flexbox align={'center'} gap={12} horizontal>
+        <Flexbox horizontal align={'center'} gap={12}>
           <KnowledgeIcon
             fileType={fileType}
             name={name}

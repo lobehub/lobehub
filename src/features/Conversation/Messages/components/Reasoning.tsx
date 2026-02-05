@@ -1,4 +1,4 @@
-import { type MessageContentPart } from '@lobechat/types';
+import type {MessageContentPart} from '@lobechat/types';
 import { deserializeParts } from '@lobechat/utils';
 import { memo } from 'react';
 

@@ -1,5 +1,5 @@
-import { UIChatMessage } from '@lobechat/types';
-import { Mock, describe, expect, it, vi } from 'vitest';
+import type { UIChatMessage } from '@lobechat/types';
+import { describe, expect, it } from 'vitest';
 
 import { chainSummaryHistory } from '../summaryHistory';
 

@@ -1,7 +1,7 @@
 import CryptoJS from 'crypto-js';
 import mime from 'mime';
 
-import { ImgInfo } from './types';
+import type { ImgInfo } from './types';
 
 class FileNameGenerator {
   date: Date;

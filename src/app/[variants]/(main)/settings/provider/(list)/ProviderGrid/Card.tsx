@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { BrandingProviderCard } from '@/business/client/features/BrandingProviderCard';
 import { useIsDark } from '@/hooks/useIsDark';
-import { type AiProviderListItem } from '@/types/aiProvider';
+import type {AiProviderListItem} from '@/types/aiProvider';
 
 import EnableSwitch from './EnableSwitch';
 import { styles } from './style';
@@ -41,13 +41,13 @@ const ProviderCard = memo<ProviderCardProps>(
       <Flexbox className={cx(isDarkMode ? styles.containerDark : styles.containerLight)} gap={24}>
         <Flexbox gap={12} padding={16} width={'100%'}>
           <div
+            style={{ cursor: 'pointer' }}
             onClick={() => {
               onProviderSelect(id);
             }}
-            style={{ cursor: 'pointer' }}
           >
             <Flexbox gap={12} width={'100%'}>
-              <Flexbox align={'center'} horizontal justify={'space-between'}>
+              <Flexbox horizontal align={'center'} justify={'space-between'}>
                 {source === 'builtin' ? (
                   <ProviderCombine
                     provider={id}
@@ -56,7 +56,7 @@ const ProviderCard = memo<ProviderCardProps>(
                     title={name}
                   />
                 ) : (
-                  <Flexbox align={'center'} gap={12} horizontal>
+                  <Flexbox horizontal align={'center'} gap={12}>
                     {logo ? (
                       <Avatar alt={name || id} avatar={logo} size={28} />
                     ) : (

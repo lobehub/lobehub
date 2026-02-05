@@ -6,7 +6,7 @@ import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
 import { dataSelectors, useConversationStore } from '../../../store';
-import { type MarkdownElementProps } from '../type';
+import type {MarkdownElementProps} from '../type';
 import { isTagClosed } from '../utils';
 
 const Render = memo<MarkdownElementProps>(({ children, id }) => {

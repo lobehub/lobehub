@@ -1,8 +1,4 @@
-import {
-  type RecentTopic,
-  type RecentTopicGroup,
-  type RecentTopicGroupMember,
-} from '@lobechat/types';
+import type {RecentTopic, RecentTopicGroup, RecentTopicGroupMember} from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 import { eq, inArray } from 'drizzle-orm';
 import { after } from 'next/server';
@@ -15,7 +11,7 @@ import { TopicImporterRepo } from '@/database/repositories/topicImporter';
 import { agents, chatGroups, chatGroupsAgents } from '@/database/schemas';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { type BatchTaskResult } from '@/types/service';
+import type {BatchTaskResult} from '@/types/service';
 
 import {
   batchResolveAgentIdFromSessions,

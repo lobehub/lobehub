@@ -1,7 +1,7 @@
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type PageStore } from '../../store';
+import type {PageStore} from '../../store';
 
 const n = setNamespace('page/selection');
 

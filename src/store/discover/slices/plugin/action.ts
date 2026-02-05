@@ -1,16 +1,12 @@
-import {
-  type DiscoverPluginDetail,
-  type IdentifiersResponse,
-  type PluginListResponse,
-  type PluginQueryParams,
-} from '@lobechat/types';
-import { type CategoryItem, type CategoryListQuery } from '@lobehub/market-sdk';
-import useSWR, { type SWRResponse } from 'swr';
+import type {DiscoverPluginDetail, IdentifiersResponse, PluginListResponse, PluginQueryParams} from '@lobechat/types';
+import type {CategoryItem, CategoryListQuery} from '@lobehub/market-sdk';
+import type {SWRResponse} from 'swr';
+import useSWR from 'swr';
 
 import { discoverService } from '@/services/discover';
-import { type DiscoverStore } from '@/store/discover';
+import type {DiscoverStore} from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 
 type Setter = StoreSetter<DiscoverStore>;
 export const createPluginSlice = (set: Setter, get: () => DiscoverStore, _api?: unknown) =>

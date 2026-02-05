@@ -1,4 +1,4 @@
-import { type BuiltinAgentSlug } from '@lobechat/builtin-agents';
+import type {BuiltinAgentSlug} from '@lobechat/builtin-agents';
 
 import { useAgentStore } from '@/store/agent';
 import { useUserStore } from '@/store/user';

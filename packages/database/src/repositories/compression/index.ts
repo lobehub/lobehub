@@ -1,8 +1,10 @@
-import { CompressionGroupMetadata, MessageGroupType } from '@lobechat/types';
+import type { CompressionGroupMetadata } from '@lobechat/types';
+import { MessageGroupType } from '@lobechat/types';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 
-import { MessageGroupItem, messageGroups, messages } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
+import type { MessageGroupItem } from '../../schemas';
+import { messageGroups, messages } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
 
 export interface CreateCompressionGroupParams {
   content: string;

@@ -1,4 +1,4 @@
-import { type IEditor } from '@lobehub/editor';
+import type {IEditor} from '@lobehub/editor';
 import { useCallback, useEffect } from 'react';
 
 import { getFileListFromDataTransferItems } from './useLocalDragUpload';

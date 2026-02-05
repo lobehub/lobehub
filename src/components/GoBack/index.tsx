@@ -32,7 +32,7 @@ const GoBack = memo<GoBackProps>(({ href }) => {
 
   return (
     <Link to={href}>
-      <Flexbox align={'center'} className={styles.container} gap={4} horizontal>
+      <Flexbox horizontal align={'center'} className={styles.container} gap={4}>
         <Icon icon={ArrowLeft} />
         <div>{t('GoBack.back')}</div>
       </Flexbox>

@@ -1,6 +1,6 @@
-import { type SSOProvider } from '@lobechat/types';
+import type {SSOProvider} from '@lobechat/types';
 
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 
 import type { UserStore } from '../../store';
 

@@ -1,4 +1,4 @@
-import { TraceEventType, TraceNameMap } from './enum';
+import type { TraceEventType, TraceNameMap } from './enum';
 
 export interface TraceEventBasePayload {
   content: string;

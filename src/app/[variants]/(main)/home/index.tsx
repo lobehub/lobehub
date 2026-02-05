@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { type FC } from 'react';
+import type {FC} from 'react';
 import { useLocation } from 'react-router-dom';
 
 import PageTitle from '@/components/PageTitle';

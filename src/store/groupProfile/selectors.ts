@@ -1,5 +1,5 @@
-import { type Store } from './action';
-import { type SaveState } from './initialState';
+import type {Store} from './action';
+import type {SaveState} from './initialState';
 
 const DEFAULT_SAVE_STATE: SaveState = { lastUpdatedTime: null, saveStatus: 'idle' };
 

@@ -1,11 +1,11 @@
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { Resend } from 'resend';
 import type { CreateEmailOptions } from 'resend';
+import { Resend } from 'resend';
 
 import { emailEnv } from '@/envs/email';
 
-import { type EmailPayload, type EmailResponse, type EmailServiceImpl } from '../type';
+import type {EmailPayload, EmailResponse, EmailServiceImpl} from '../type';
 
 const log = debug('lobe-email:Resend');
 

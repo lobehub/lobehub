@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import debug from 'debug';
-import { Suspense, memo, useMemo } from 'react';
+import { memo, Suspense, useMemo } from 'react';
 
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider, TodoProgress } from '@/features/Conversation';
@@ -52,20 +52,20 @@ const Conversation = memo(() => {
       context={context}
       hasInitMessages={!!messages}
       messages={messages}
+      operationState={operationState}
       onMessagesChange={(messages, ctx) => {
         replaceMessages(messages, { context: ctx });
       }}
-      operationState={operationState}
     >
       <ZenModeToast />
       <Flexbox
         flex={1}
+        width={'100%'}
         style={{
           overflowX: 'hidden',
           overflowY: 'auto',
           position: 'relative',
         }}
-        width={'100%'}
       >
         <ChatList welcome={<WelcomeChatItem />} />
       </Flexbox>

@@ -6,7 +6,7 @@ import { memo } from 'react';
 const VirtuosoLoading = memo(() => {
   return (
     <Center padding={16}>
-      <Icon color={cssVar.colorTextDescription} icon={Loader2Icon} spin />
+      <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} />
     </Center>
   );
 });

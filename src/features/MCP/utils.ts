@@ -1,4 +1,4 @@
-import { type ConnectionConfig, type DeploymentOption } from '@lobehub/market-types';
+import type {ConnectionConfig, DeploymentOption} from '@lobehub/market-types';
 
 export const genServerConfig = (identifier?: string, connection?: ConnectionConfig) => {
   // 检查是否为 HTTP 类型

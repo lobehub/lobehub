@@ -1,7 +1,7 @@
 import { ActionIcon, Block, Flexbox, Popover } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { ChevronsUpDownIcon, Clock3Icon, PanelRightCloseIcon, PlusIcon } from 'lucide-react';
-import { Suspense, memo, useCallback, useMemo, useState } from 'react';
+import { memo, Suspense, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AgentAvatar from '@/app/[variants]/(main)/home/_layout/Body/Agent/List/AgentItem/Avatar';
@@ -107,6 +107,9 @@ const AgentSelector = memo<AgentSelectorProps>(({ agentId, onAgentChange }) => {
 
   return (
     <Popover
+      open={open}
+      placement="bottomLeft"
+      trigger="click"
       content={
         <Suspense fallback={<SkeletonList rows={6} />}>
           <AgentModalProvider>
@@ -114,27 +117,24 @@ const AgentSelector = memo<AgentSelectorProps>(({ agentId, onAgentChange }) => {
           </AgentModalProvider>
         </Suspense>
       }
-      onOpenChange={setOpen}
-      open={open}
-      placement="bottomLeft"
       styles={{
         content: {
           padding: 0,
           width: 240,
         },
       }}
-      trigger="click"
+      onOpenChange={setOpen}
     >
       <Block
-        align={'center'}
         clickable
-        gap={4}
         horizontal
+        align={'center'}
+        gap={4}
         padding={2}
+        variant={'borderless'}
         style={{
           minWidth: 32,
         }}
-        variant={'borderless'}
       >
         <AgentAvatar
           avatar={typeof activeAgent?.avatar === 'string' ? activeAgent.avatar : undefined}
@@ -190,8 +190,9 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId, isHovered }) => {
 
   return (
     <NavHeader
+      showTogglePanelButton={false}
       left={
-        <Flexbox align="center" gap={8} horizontal>
+        <Flexbox horizontal align="center" gap={8}>
           <AgentSelector agentId={agentId} onAgentChange={handleAgentChange} />
         </Flexbox>
       }
@@ -200,12 +201,15 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId, isHovered }) => {
           <div className={cx(styles.fadeContainer, isHovered ? styles.fadeIn : styles.fadeOut)}>
             <ActionIcon
               icon={PlusIcon}
-              onClick={() => switchTopic(null, { scope: 'page' })}
               size={DESKTOP_HEADER_ICON_SIZE}
               title={t('actions.addNewTopic')}
+              onClick={() => switchTopic(null, { scope: 'page' })}
             />
             {!hideHistory && (
               <Popover
+                open={isLoadingTopics ? false : topicPopoverOpen}
+                placement="bottomRight"
+                trigger="click"
                 content={
                   <Flexbox
                     gap={4}
@@ -220,24 +224,21 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId, isHovered }) => {
                       <TopicItem
                         active={topic.id === activeTopicId}
                         key={topic.id}
-                        onClose={() => setTopicPopoverOpen(false)}
-                        onTopicChange={(id) => switchTopic(id)}
                         topicId={topic.id}
                         topicTitle={topic.title}
+                        onClose={() => setTopicPopoverOpen(false)}
+                        onTopicChange={(id) => switchTopic(id)}
                       />
                     ))}
                   </Flexbox>
                 }
-                onOpenChange={setTopicPopoverOpen}
-                open={isLoadingTopics ? false : topicPopoverOpen}
-                placement="bottomRight"
                 styles={{
                   content: {
                     padding: 0,
                     width: 240,
                   },
                 }}
-                trigger="click"
+                onOpenChange={setTopicPopoverOpen}
               >
                 <ActionIcon
                   disabled={isLoadingTopics}
@@ -250,12 +251,11 @@ const CopilotToolbar = memo<CopilotToolbarProps>(({ agentId, isHovered }) => {
           </div>
           <ActionIcon
             icon={PanelRightCloseIcon}
-            onClick={() => toggleRightPanel()}
             size={DESKTOP_HEADER_ICON_SIZE}
+            onClick={() => toggleRightPanel()}
           />
         </>
       }
-      showTogglePanelButton={false}
     />
   );
 });

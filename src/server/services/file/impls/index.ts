@@ -1,7 +1,7 @@
-import { LobeChatDatabase } from '@lobechat/database';
+import type { LobeChatDatabase } from '@lobechat/database';
 
 import { S3StaticFileImpl } from './s3';
-import { type FileServiceImpl } from './type';
+import type {FileServiceImpl} from './type';
 
 /**
  * Create file service module

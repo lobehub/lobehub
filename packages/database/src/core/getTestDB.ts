@@ -1,16 +1,17 @@
+import { join } from 'node:path';
+
 import { PGlite } from '@electric-sql/pglite';
 import { vector } from '@electric-sql/pglite/vector';
-import { drizzle as pgliteDrizzle } from 'drizzle-orm/pglite';
-import { migrate as pgliteMigrate } from 'drizzle-orm/pglite/migrator';
 import { drizzle as nodeDrizzle } from 'drizzle-orm/node-postgres';
 import { migrate as nodeMigrate } from 'drizzle-orm/node-postgres/migrator';
-import { join } from 'node:path';
+import { drizzle as pgliteDrizzle } from 'drizzle-orm/pglite';
+import { migrate as pgliteMigrate } from 'drizzle-orm/pglite/migrator';
 import { Pool as NodePool } from 'pg';
 
 import { serverDBEnv } from '@/config/db';
 
 import * as schema from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { LobeChatDatabase } from '../type';
 
 const migrationsFolder = join(__dirname, '../../migrations');
 

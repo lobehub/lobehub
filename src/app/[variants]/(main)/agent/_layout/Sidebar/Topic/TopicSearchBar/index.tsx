@@ -35,6 +35,11 @@ const TopicSearchBar = memo<{ onClear?: () => void }>(({ onClear }) => {
   return (
     <SearchBar
       autoFocus
+      placeholder={t('searchPlaceholder')}
+      spotlight={!mobile}
+      value={tempValue}
+      variant={'filled'}
+      onPressEnter={startSearchTopic}
       onBlur={() => {
         if (tempValue === '') {
           onClear?.();
@@ -47,11 +52,6 @@ const TopicSearchBar = memo<{ onClear?: () => void }>(({ onClear }) => {
       onChange={(e) => {
         setTempValue(e.target.value);
       }}
-      onPressEnter={startSearchTopic}
-      placeholder={t('searchPlaceholder')}
-      spotlight={!mobile}
-      value={tempValue}
-      variant={'filled'}
     />
   );
 });

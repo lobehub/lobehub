@@ -1,7 +1,7 @@
 import type { GeneralAgentCallToolResultPayload } from '@lobechat/agent-runtime';
 import type { ChatToolPayload } from '@lobechat/types';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Mock } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { OperationCancelContext } from '@/store/chat/slices/operation/types';
 
@@ -1826,15 +1826,13 @@ describe('call_tool executor', () => {
         originalCompleteOperation(opId);
         // Check if this is the createToolMessage operation completing
         const op = mockStore.operations[opId];
-        if (op?.type === 'createToolMessage') {
-          // Abort parent toolCalling operation right after message creation completes
-          if (toolCallingOpId) {
+        if (op?.type === 'createToolMessage' && // Abort parent toolCalling operation right after message creation completes
+          toolCallingOpId) {
             const parentOp = mockStore.operations[toolCallingOpId];
             if (parentOp) {
               parentOp.abortController.abort();
             }
           }
-        }
       });
 
       const originalStartOperation = mockStore.startOperation;

@@ -1,8 +1,8 @@
-import { type CreateMessageParams } from '@lobechat/types';
+import type {CreateMessageParams} from '@lobechat/types';
 
 import { INBOX_SESSION_ID } from '@/const/session';
 import { lambdaClient } from '@/libs/trpc/client';
-import { type CreateThreadParams, type ThreadItem } from '@/types/topic';
+import type {CreateThreadParams, ThreadItem} from '@/types/topic';
 
 interface CreateThreadWithMessageParams extends CreateThreadParams {
   message: CreateMessageParams;

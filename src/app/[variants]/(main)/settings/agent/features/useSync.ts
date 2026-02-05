@@ -1,4 +1,4 @@
-import { type FormInstance } from 'antd';
+import type {FormInstance} from 'antd';
 import { useLayoutEffect } from 'react';
 
 import { useUserStore } from '@/store/user';

@@ -52,7 +52,7 @@ const AgentList = memo<{ onMoreClick?: () => void }>(({ onMoreClick }) => {
           onMoreClick={onMoreClick}
         />
       )}
-      <AllAgentsDrawer onClose={closeAllAgentsDrawer} open={allAgentsDrawerOpen} />
+      <AllAgentsDrawer open={allAgentsDrawerOpen} onClose={closeAllAgentsDrawer} />
     </>
   );
 });

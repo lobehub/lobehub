@@ -9,10 +9,10 @@ interface ContextCachingSwitchProps {
 const ContextCachingSwitch = memo<ContextCachingSwitchProps>(({ value, onChange }) => {
   return (
     <Switch
+      value={!value}
       onChange={(checked) => {
         onChange?.(!checked);
       }}
-      value={!value}
     />
   );
 });

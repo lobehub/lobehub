@@ -1,7 +1,9 @@
-import { Typography as Typo, type TypographyProps } from '@lobehub/ui';
+import type {TypographyProps} from '@lobehub/ui';
+import { Typography as Typo  } from '@lobehub/ui';
 import { mdxComponents } from '@lobehub/ui/mdx';
-import { MDXRemote, type MDXRemoteProps } from 'next-mdx-remote/rsc';
-import { type FC } from 'react';
+import type {MDXRemoteProps} from 'next-mdx-remote/rsc';
+import { MDXRemote  } from 'next-mdx-remote/rsc';
+import type {FC} from 'react';
 import remarkGfm from 'remark-gfm';
 
 import CodeBlock from './CodeBlock';

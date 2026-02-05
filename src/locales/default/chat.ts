@@ -70,10 +70,10 @@ export default {
   'emptyAgent': 'No Agents yet. Start with your first Agent—build your system over time.',
   'emptyAgentAction': 'Create Agent',
   'extendParams.disableContextCaching.desc':
-    'Reduce by up to 90% of the cost of generating a single conversation and bring a max of 4x speed. Enabling this will automatically disable the limit on the number of historical messages. <1>Learn more</1>',
+    'Reduce by up to 90% of the cost of generating a single conversation and bring a max of 4x speed. <1>Learn more</1>',
   'extendParams.disableContextCaching.title': 'Enable Context Caching',
   'extendParams.enableReasoning.desc':
-    'Based on the Claude Thinking mechanism limit, enabling this will automatically disable the limit on the number of historical messages. <1>Learn more</1>',
+    'Based on the Claude Thinking mechanism limit. <1>Learn more</1>',
   'extendParams.enableReasoning.title': 'Enable Deep Thinking',
   'extendParams.imageAspectRatio.title': 'Image Aspect Ratio',
   'extendParams.imageResolution.title': 'Image Resolution',

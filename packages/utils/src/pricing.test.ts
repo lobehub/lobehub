@@ -1,4 +1,4 @@
-import { Pricing } from 'model-bank';
+import type { Pricing } from 'model-bank';
 import { describe, expect, it } from 'vitest';
 
 import {

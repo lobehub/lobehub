@@ -4,6 +4,7 @@ import { memo, useLayoutEffect } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
 import Container from '@/app/[variants]/(main)/resource/library/features/Container';
+import NotFound from '@/components/404';
 import NProgress from '@/components/NProgress';
 import ResourceManager from '@/features/ResourceManager';
 
@@ -17,7 +18,7 @@ const MainContent = memo(() => {
   const setLibraryId = useResourceManagerStore((s) => s.setLibraryId);
 
   // Load knowledge base data
-  useKnowledgeBaseItem(knowledgeBaseId || '');
+  const { data, isLoading } = useKnowledgeBaseItem(knowledgeBaseId || '');
 
   // Sync libraryId from URL params using useLayoutEffect
   // useLayoutEffect runs synchronously before browser paint, ensuring state is set
@@ -32,6 +33,8 @@ const MainContent = memo(() => {
 
   // Sync file view mode from URL
   useInitFileCheck();
+
+  if (!isLoading && !data) return <NotFound />;
 
   return <ResourceManager />;
 });

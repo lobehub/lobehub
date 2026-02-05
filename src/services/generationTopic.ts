@@ -1,7 +1,7 @@
-import { type GenerationTopicItem } from '@/database/schemas';
+import type {GenerationTopicItem} from '@/database/schemas';
 import { lambdaClient } from '@/libs/trpc/client';
-import { type UpdateTopicValue } from '@/server/routers/lambda/generationTopic';
-import { type ImageGenerationTopic } from '@/types/generation';
+import type {UpdateTopicValue} from '@/server/routers/lambda/generationTopic';
+import type {ImageGenerationTopic} from '@/types/generation';
 
 export class ServerService {
   async getAllGenerationTopics(): Promise<ImageGenerationTopic[]> {

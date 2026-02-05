@@ -1,10 +1,7 @@
+import type {ActionIconGroupEvent, ActionIconGroupItemType, DropdownItem, GenericItemType} from '@lobehub/ui';
 import {
-  type ActionIconGroupEvent,
-  type ActionIconGroupItemType,
-  type DropdownItem,
-  type GenericItemType,
   createRawModal,
-  showContextMenu,
+  showContextMenu
 } from '@lobehub/ui';
 import { App } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -18,12 +15,13 @@ import { sessionSelectors } from '@/store/session/selectors';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
-import ShareMessageModal, { type ShareModalProps } from '../components/ShareMessageModal';
+import type {ShareModalProps} from '../components/ShareMessageModal';
+import ShareMessageModal from '../components/ShareMessageModal';
 import {
-  Provider,
   createStore,
   dataSelectors,
   messageStateSelectors,
+  Provider,
   useConversationStore,
   useConversationStoreApi,
 } from '../store';

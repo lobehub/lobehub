@@ -1,18 +1,18 @@
 import { Icon, Tooltip } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { startCase } from 'es-toolkit/compat';
+import type {LucideIcon} from 'lucide-react';
 import {
   AudioLines,
   BoltIcon,
   ImageIcon,
-  type LucideIcon,
   MessageSquareTextIcon,
   MicIcon,
   MusicIcon,
   PhoneIcon,
-  VideoIcon,
+  VideoIcon
 } from 'lucide-react';
-import { type AiModelType } from 'model-bank';
+import type {AiModelType} from 'model-bank';
 import { memo } from 'react';
 
 const icons: Record<AiModelType, LucideIcon> = {

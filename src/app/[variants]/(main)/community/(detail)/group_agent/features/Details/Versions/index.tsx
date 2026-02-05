@@ -56,6 +56,9 @@ const Versions = memo(() => {
       </Title>
       <Block variant={'outlined'}>
         <InlineTable
+          dataSource={versions}
+          rowKey={'version'}
+          size={'middle'}
           columns={[
             {
               dataIndex: 'version',
@@ -68,7 +71,7 @@ const Versions = memo(() => {
                 const statusMeta = statusKey ? statusTagMap[statusKey] : undefined;
 
                 return (
-                  <Flexbox align={'center'} gap={8} horizontal>
+                  <Flexbox horizontal align={'center'} gap={8}>
                     <code style={{ fontSize: 14 }}>{record.version}</code>
                     {(record.isLatest || record.version === currentVersion) && (
                       <Tag color={'info'}>
@@ -105,9 +108,6 @@ const Versions = memo(() => {
               }),
             },
           ]}
-          dataSource={versions}
-          rowKey={'version'}
-          size={'middle'}
         />
       </Block>
     </Flexbox>

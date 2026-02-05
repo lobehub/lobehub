@@ -118,7 +118,7 @@ const AddGroupAgent = memo<{ mobile?: boolean }>(() => {
       };
       // Filter out null/undefined values
       supervisorConfig = Object.fromEntries(
-        // eslint-disable-next-line eqeqeq, @typescript-eslint/no-unused-vars
+         
         Object.entries(rawConfig).filter(([_, v]) => v != null),
       );
     }
@@ -242,15 +242,15 @@ const AddGroupAgent = memo<{ mobile?: boolean }>(() => {
   ];
 
   return (
-    <Flexbox className={styles.buttonGroup} gap={0} horizontal>
+    <Flexbox horizontal className={styles.buttonGroup} gap={0}>
       <Button
         block
         className={styles.primaryButton}
         loading={isLoading}
-        onClick={handleAddAndConverse}
         size={'large'}
         style={{ flex: 1, width: 'unset' }}
         type={'primary'}
+        onClick={handleAddAndConverse}
       >
         {t('groupAgents.addAndConverse', { defaultValue: 'Add & Start Conversation' })}
       </Button>

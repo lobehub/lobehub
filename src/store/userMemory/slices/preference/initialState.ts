@@ -1,4 +1,4 @@
-import { type DisplayPreferenceMemory } from '@/database/repositories/userMemory';
+import type {DisplayPreferenceMemory} from '@/database/repositories/userMemory';
 
 export interface PreferenceSliceState {
   preferences: DisplayPreferenceMemory[];

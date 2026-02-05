@@ -14,7 +14,7 @@ export interface ExecutionConditions {
 export const cronPatternSchema = z
   .string()
   .regex(
-    /^(@(annually|yearly|monthly|weekly|daily|hourly|reboot))|(@every (\d+(ns|us|µs|ms|s|m|h))+)|((((\d+,)+\d+|(\d+(\/|-)\d+)|\d+|\*) ?){5,7})$/,
+    /^(@(annually|yearly|monthly|weekly|daily|hourly|reboot))|(@every (\d+(ns|us|µs|ms|[hms]))+)|((((\d+,)+\d+|(\d+([/-])\d+)|\d+|\*) ?){5,7})$/,
     'Invalid cron pattern',
   );
 

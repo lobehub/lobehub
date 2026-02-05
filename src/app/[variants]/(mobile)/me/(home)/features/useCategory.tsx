@@ -13,7 +13,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import { type CellProps } from '@/components/Cell';
+import type {CellProps} from '@/components/Cell';
 import { DOCUMENTS, FEEDBACK } from '@/const/index';
 import { usePlatform } from '@/hooks/usePlatform';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';

@@ -1,4 +1,4 @@
-import { type RouteConfig } from '@/utils/router';
+import type {RouteConfig} from '@/utils/router';
 
 export const BusinessDesktopRoutesWithMainLayout: RouteConfig[] = [];
 export const BusinessDesktopRoutesWithSettingsLayout: RouteConfig[] = [];

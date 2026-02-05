@@ -1,9 +1,9 @@
 import debug from 'debug';
 
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type ToolStore } from '../../store';
+import type {ToolStore} from '../../store';
 import { invokeExecutor } from './executors/index';
 import type { BuiltinToolContext, BuiltinToolResult } from './types';
 

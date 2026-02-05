@@ -1,5 +1,6 @@
-import debug from 'debug';
 import { readFile } from 'node:fs/promises';
+
+import debug from 'debug';
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
 import { getDocument, version } from 'pdfjs-dist/legacy/build/pdf.mjs';
 // @ts-ignore

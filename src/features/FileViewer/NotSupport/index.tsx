@@ -1,6 +1,7 @@
 import { Button, Center, Flexbox, FluentEmoji } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { type CSSProperties, type ComponentType, useState } from 'react';
+import type {ComponentType, CSSProperties} from 'react';
+import {   useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { MORE_FILE_PREVIEW_REQUEST_URL } from '@/const/url';

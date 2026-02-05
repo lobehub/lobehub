@@ -1,12 +1,12 @@
 import { Skeleton } from '@lobehub/ui';
-import { Suspense, memo } from 'react';
+import { memo,Suspense } from 'react';
 
 import { ChatSettingsTabs } from '@/store/global/initialState';
 import { useServerConfigStore } from '@/store/serverConfig';
 
 import AgentSettingsContent from './AgentSettingsContent';
 import { AgentSettingsProvider } from './AgentSettingsProvider';
-import { type StoreUpdaterProps } from './StoreUpdater';
+import type {StoreUpdaterProps} from './StoreUpdater';
 
 export interface AgentSettingsProps extends StoreUpdaterProps {
   tab: ChatSettingsTabs;

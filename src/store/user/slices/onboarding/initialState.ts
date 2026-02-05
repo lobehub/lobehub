@@ -1,4 +1,4 @@
-import { type UserOnboarding } from '@/types/user';
+import type {UserOnboarding} from '@/types/user';
 
 export interface OnboardingState {
   /**

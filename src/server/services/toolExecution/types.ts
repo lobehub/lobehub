@@ -1,6 +1,6 @@
-import { type LobeToolManifest } from '@lobechat/context-engine';
-import { type LobeChatDatabase } from '@lobechat/database';
-import { type ChatToolPayload } from '@lobechat/types';
+import type {LobeToolManifest} from '@lobechat/context-engine';
+import type {LobeChatDatabase} from '@lobechat/database';
+import type {ChatToolPayload} from '@lobechat/types';
 
 export interface ToolExecutionContext {
   /** Server database for LobeHub Skills execution */
@@ -28,5 +28,5 @@ export interface ToolExecutionResultResponse extends ToolExecutionResult {
 }
 
 export interface IToolExecutor {
-  execute(payload: ChatToolPayload, context: ToolExecutionContext): Promise<ToolExecutionResult>;
+  execute: (payload: ChatToolPayload, context: ToolExecutionContext) => Promise<ToolExecutionResult>;
 }

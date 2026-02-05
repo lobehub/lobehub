@@ -1,5 +1,5 @@
 import type { HomeStore } from '@/store/home/store';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 
 type Setter = StoreSetter<HomeStore>;
 export const createGroupSlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>

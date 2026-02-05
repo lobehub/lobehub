@@ -1,6 +1,6 @@
 import { lambdaClient } from '@/libs/trpc/client';
 import { globalHelpers } from '@/store/global/helpers';
-import { type PluginQueryParams } from '@/types/discover';
+import type {PluginQueryParams} from '@/types/discover';
 import { convertOpenAIManifestToLobeManifest, getToolManifest } from '@/utils/toolManifest';
 
 class ToolService {

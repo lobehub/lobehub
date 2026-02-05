@@ -1,14 +1,11 @@
-import {
-  type DataSyncConfig,
-  type ElectronAppState,
-  type NetworkProxySettings,
-} from '@lobechat/electron-client-ipc';
+import type {DataSyncConfig, ElectronAppState, NetworkProxySettings} from '@lobechat/electron-client-ipc';
 
+import type {NavigationHistoryState} from './actions/navigationHistory';
 import {
-  type NavigationHistoryState,
-  navigationHistoryInitialState,
+  navigationHistoryInitialState
 } from './actions/navigationHistory';
-import { type RecentPagesState, recentPagesInitialState } from './actions/recentPages';
+import type {RecentPagesState} from './actions/recentPages';
+import {  recentPagesInitialState } from './actions/recentPages';
 
 export type RemoteServerError = 'CONFIG_ERROR' | 'AUTH_ERROR' | 'DISCONNECT_ERROR';
 

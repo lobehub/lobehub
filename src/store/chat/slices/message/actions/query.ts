@@ -1,14 +1,15 @@
 import { parse } from '@lobechat/conversation-flow';
-import { type ConversationContext, type UIChatMessage } from '@lobechat/types';
+import type {ConversationContext, UIChatMessage} from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import { type SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
 
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { messageService } from '@/services/message';
-import { type ChatStore } from '@/store/chat/store';
-import { type StoreSetter } from '@/store/types';
+import type {ChatStore} from '@/store/chat/store';
+import type {StoreSetter} from '@/store/types';
 
-import { type MessageMapKeyInput, messageMapKey } from '../../../utils/messageMapKey';
+import type {MessageMapKeyInput} from '../../../utils/messageMapKey';
+import { messageMapKey } from '../../../utils/messageMapKey';
 
 const SWR_USE_FETCH_MESSAGES = 'SWR_USE_FETCH_MESSAGES';
 

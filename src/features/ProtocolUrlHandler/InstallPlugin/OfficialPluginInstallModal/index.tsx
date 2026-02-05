@@ -11,7 +11,7 @@ import { useDiscoverStore } from '@/store/discover';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/slices/plugin/selectors';
 
-import { type McpInstallRequest } from '../types';
+import type {McpInstallRequest} from '../types';
 import OfficialDetail from './Detail';
 
 interface OfficialPluginInstallModalProps {
@@ -80,7 +80,10 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
 
     return (
       <Modal
+        open
         confirmLoading={loading}
+        title={t('protocolInstall.official.title')}
+        width={800}
         okButtonProps={{
           disabled: installed || isLoading,
           type: installed ? 'default' : 'primary',
@@ -90,9 +93,6 @@ const OfficialPluginInstallModal = memo<OfficialPluginInstallModalProps>(
         }
         onCancel={onComplete}
         onOk={handleConfirm}
-        open
-        title={t('protocolInstall.official.title')}
-        width={800}
       >
         {renderContent()}
       </Modal>

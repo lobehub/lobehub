@@ -8,7 +8,7 @@ import { HOTKEYS_REGISTRATION } from '@/const/hotkeys';
 import hotkeyMeta from '@/locales/default/hotkey';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors';
-import { type HotkeyGroupId } from '@/types/hotkey';
+import type {HotkeyGroupId} from '@/types/hotkey';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   desc: css`
@@ -37,7 +37,7 @@ const HotkeyContent = memo<HotkeyContentProps>(({ groupId }) => {
   return (
     <>
       {HOTKEYS_REGISTRATION.filter((item) => item.group === groupId).map((item) => (
-        <Flexbox align={'flex-start'} gap={16} horizontal key={item.id} width={'100%'}>
+        <Flexbox horizontal align={'flex-start'} gap={16} key={item.id} width={'100%'}>
           <Flexbox flex={1} gap={4} justify={'space-between'}>
             <span>{t(`${item.id}.title`)}</span>
             {hotkeyMeta[`${item.id}.desc`] ? (

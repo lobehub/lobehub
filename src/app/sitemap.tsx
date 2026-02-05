@@ -1,4 +1,4 @@
-import { type MetadataRoute } from 'next';
+import type {MetadataRoute} from 'next';
 
 import { LAST_MODIFIED, Sitemap, SitemapType } from '@/server/sitemap';
 

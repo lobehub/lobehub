@@ -12,7 +12,7 @@ export const parseAgentConfig = (envStr: string) => {
 
   while ((match = regex.exec(envStr)) !== null) {
     const key = match[1].trim();
-    let value = match[2].trim();
+    const value = match[2].trim();
     if (!key || !value) return;
 
     let finalValue: any = value;

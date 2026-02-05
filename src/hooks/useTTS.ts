@@ -1,12 +1,9 @@
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
+import type {EdgeSpeechOptions, MicrosoftSpeechOptions, OpenAITTSOptions, TTSOptions} from '@lobehub/tts/react';
 import {
-  type EdgeSpeechOptions,
-  type MicrosoftSpeechOptions,
-  type OpenAITTSOptions,
-  type TTSOptions,
   useEdgeSpeech,
   useMicrosoftSpeech,
-  useOpenAITTS,
+  useOpenAITTS
 } from '@lobehub/tts/react';
 import isEqual from 'fast-deep-equal';
 
@@ -19,7 +16,7 @@ import { useGlobalStore } from '@/store/global';
 import { globalGeneralSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
-import { type TTSServer } from '@/types/agent';
+import type {TTSServer} from '@/types/agent';
 
 interface TTSConfig extends TTSOptions {
   onUpload?: (currentVoice: string, arraybuffers: ArrayBuffer[]) => void;

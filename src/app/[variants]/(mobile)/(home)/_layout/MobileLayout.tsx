@@ -1,4 +1,4 @@
-import { type PropsWithChildren } from 'react';
+import type {PropsWithChildren} from 'react';
 
 import MobileContentLayout from '@/components/server/MobileNavLayout';
 
@@ -8,7 +8,7 @@ import SessionSearchBar from './SessionSearchBar';
 
 const MobileLayout = ({ children }: PropsWithChildren) => {
   return (
-    <MobileContentLayout header={<SessionHeader />} withNav>
+    <MobileContentLayout withNav header={<SessionHeader />}>
       <div className={styles.searchBarContainer}>
         <SessionSearchBar mobile />
       </div>

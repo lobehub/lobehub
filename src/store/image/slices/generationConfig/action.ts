@@ -1,15 +1,11 @@
+import type {AIImageModelCard, ModelParamsSchema, RuntimeImageGenParams, RuntimeImageGenParamsKeys, RuntimeImageGenParamsValue} from 'model-bank';
 import {
-  type AIImageModelCard,
-  type ModelParamsSchema,
-  type RuntimeImageGenParams,
-  type RuntimeImageGenParamsKeys,
-  type RuntimeImageGenParamsValue,
-  extractDefaultValues,
+  extractDefaultValues
 } from 'model-bank';
 
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 import { useGlobalStore } from '@/store/global';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors';

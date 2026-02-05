@@ -1,8 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
+ 
 import { Users } from 'lucide-react';
 
-import { type GroupParams, type PageReference, type ResolvedPageData } from '../types';
-import { type PluginContext, type RecentlyViewedPlugin, createPageReference } from './types';
+import type {GroupParams, PageReference, ResolvedPageData} from '../types';
+import type {PluginContext, RecentlyViewedPlugin} from './types';
+import { createPageReference  } from './types';
 
 const GROUP_PATH_REGEX = /^\/group\/([^/?]+)$/;
 

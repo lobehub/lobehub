@@ -33,20 +33,20 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
         }}
       >
         <Result
+          icon={<FluentEmoji emoji={'⌛'} size={96} type={'anim'} />}
           extra={
-            <Button onClick={handleBackToMarket} size={'large'} type="primary">
+            <Button size={'large'} type="primary" onClick={handleBackToMarket}>
               {t('assistants.status.backToMarket')}
             </Button>
           }
-          icon={<FluentEmoji emoji={'⌛'} size={96} type={'anim'} />}
           subTitle={
             <Text fontSize={16} type={'secondary'}>
               <Trans
+                i18nKey="assistants.status.unpublished.subtitle"
+                ns="discover"
                 components={{
                   email: <a href="mailto:support@lobehub.com">support@lobehub.com</a>,
                 }}
-                i18nKey="assistants.status.unpublished.subtitle"
-                ns="discover"
               />
             </Text>
           }
@@ -81,12 +81,13 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
       }}
     >
       <Result
+        icon={statusIcon}
+        title={t(`assistants.status.${statusKey}.title`)}
         extra={
-          <Button onClick={handleBackToMarket} type="primary">
+          <Button type="primary" onClick={handleBackToMarket}>
             {t('assistants.status.backToMarket')}
           </Button>
         }
-        icon={statusIcon}
         subTitle={
           <div style={{ color: '#666', lineHeight: 1.6 }}>
             <p>{t(`assistants.status.${statusKey}.subtitle`)}</p>
@@ -96,16 +97,15 @@ const StatusPage = memo<StatusPageProps>(({ status }) => {
             </ul>
             <p>
               <Trans
+                i18nKey="assistants.status.support"
+                ns="discover"
                 components={{
                   email: <a href="mailto:support@lobehub.com">support@lobehub.com</a>,
                 }}
-                i18nKey="assistants.status.support"
-                ns="discover"
               />
             </p>
           </div>
         }
-        title={t(`assistants.status.${statusKey}.title`)}
       />
     </div>
   );

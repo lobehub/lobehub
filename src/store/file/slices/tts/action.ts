@@ -1,11 +1,11 @@
-import { type SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { fileService } from '@/services/file';
-import { type StoreSetter } from '@/store/types';
-import { type FileItem } from '@/types/files';
+import type {StoreSetter} from '@/store/types';
+import type {FileItem} from '@/types/files';
 
-import { type FileStore } from '../../store';
+import type {FileStore} from '../../store';
 
 const FETCH_TTS_FILE = 'fetchTTSFile';
 

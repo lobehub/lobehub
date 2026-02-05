@@ -1,4 +1,4 @@
-import { type PageReference } from './types';
+import type {PageReference} from './types';
 
 export const PINNED_PAGES_STORAGE_KEY = 'lobechat:desktop:pinned-pages:v2';
 

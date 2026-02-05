@@ -1,4 +1,4 @@
-import { type ModelProviderCard } from '@/types/llm';
+import type { ModelProviderCard } from '@/types/llm';
 
 // ref https://developers.cloudflare.com/workers-ai/models/#text-generation
 // api https://developers.cloudflare.com/workers-ai/configuration/open-ai-compatibility

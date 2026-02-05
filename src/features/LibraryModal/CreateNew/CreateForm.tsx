@@ -3,7 +3,7 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useKnowledgeBaseStore } from '@/store/library';
-import { type CreateKnowledgeBaseParams } from '@/types/knowledgeBase';
+import type {CreateKnowledgeBaseParams} from '@/types/knowledgeBase';
 
 interface CreateFormProps {
   onClose?: () => void;
@@ -37,12 +37,14 @@ const CreateForm = memo<CreateFormProps>(({ onClose, onSuccess }) => {
 
   return (
     <Form
+      gap={16}
+      itemsType={'flat'}
+      layout={'vertical'}
       footer={
         <Button block htmlType={'submit'} loading={loading} type={'primary'}>
           {t('createNew.confirm')}
         </Button>
       }
-      gap={16}
       items={[
         {
           children: <Input autoFocus placeholder={t('createNew.name.placeholder')} />,
@@ -61,8 +63,6 @@ const CreateForm = memo<CreateFormProps>(({ onClose, onSuccess }) => {
           name: 'description',
         },
       ]}
-      itemsType={'flat'}
-      layout={'vertical'}
       onFinish={onFinish}
     />
   );

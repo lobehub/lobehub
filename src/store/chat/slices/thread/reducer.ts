@@ -1,6 +1,6 @@
 import { produce } from 'immer';
 
-import { type ThreadItem } from '@/types/topic';
+import type {ThreadItem} from '@/types/topic';
 
 type UpdateThreadAction = {
   id: string;

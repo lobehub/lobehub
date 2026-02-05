@@ -1,4 +1,4 @@
-import { CrawlImpl, CrawlSuccessResult } from '../type';
+import type { CrawlImpl, CrawlSuccessResult } from '../type';
 import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../utils/errorType';
 import { DEFAULT_TIMEOUT, withTimeout } from '../utils/withTimeout';
 

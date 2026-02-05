@@ -3,7 +3,7 @@ import { Check, Grid3x3Icon, ListIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type MenuProps } from '@/components/Menu';
+import type {MenuProps} from '@/components/Menu';
 
 import { useViewMode } from '../hooks/useViewMode';
 import ActionIconWithChevron from './ActionIconWithChevron';

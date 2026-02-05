@@ -1,4 +1,4 @@
-import { OFFICIAL_URL, imageUrl } from '@lobechat/const';
+import { imageUrl,OFFICIAL_URL } from '@lobechat/const';
 import { Center, Flexbox, Grid, lobeStaticStylish } from '@lobehub/ui';
 import { createStaticStyles, cx, responsive } from 'antd-style';
 import { memo } from 'react';
@@ -97,7 +97,7 @@ const Preview = memo(() => {
         <Center className={styles.container} gap={12} padding={24}>
           <ProductLogo size={24} type={'text'} />
           <div className={styles.title}>{t('stats.share.title')}</div>
-          <Flexbox align={'center'} horizontal>
+          <Flexbox horizontal align={'center'}>
             <UserAvatar
               className={styles.avatar}
               shape={'circle'}
@@ -110,26 +110,26 @@ const Preview = memo(() => {
             <Center
               className={styles.avatar}
               height={48}
+              width={48}
               style={{
                 borderRadius: '50%',
                 zIndex: 1,
               }}
-              width={48}
             >
               <ProductLogo size={40} />
             </Center>
           </Flexbox>
           <Flexbox gap={12} paddingBlock={12} width={'100%'}>
             <AiHeatmaps
+              inShare
               blockMargin={2}
               blockRadius={1}
               blockSize={4.5}
               className={styles.heatmaps}
-              inShare
+              width={'100%'}
               style={{
                 marginTop: -12,
               }}
-              width={'100%'}
             />
             <Grid gap={8} maxItemWidth={100} rows={2} width={'100%'}>
               <TotalMessages inShare />

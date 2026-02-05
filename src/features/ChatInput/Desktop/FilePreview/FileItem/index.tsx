@@ -5,7 +5,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useFileStore } from '@/store/file';
-import { type UploadFileItem } from '@/types/files/upload';
+import type {UploadFileItem} from '@/types/files/upload';
 
 import UploadDetail from '../../../components/UploadDetail';
 import Content from './Content';
@@ -52,16 +52,16 @@ const FileItem = memo<FileItemProps>((props) => {
   const [removeChatUploadFile] = useFileStore((s) => [s.removeChatUploadFile]);
 
   return (
-    <Block align={'center'} className={styles.container} horizontal variant={'outlined'}>
+    <Block horizontal align={'center'} className={styles.container} variant={'outlined'}>
       <Center flex={1} height={64} padding={4} style={{ maxWidth: 64 }}>
         <Content {...props} />
       </Center>
       <Flexbox flex={1} gap={4} style={{ paddingBottom: 4, paddingInline: 4 }}>
         <Text
+          style={{ fontSize: 12, maxWidth: 88 }}
           ellipsis={{
             tooltip: file.name,
           }}
-          style={{ fontSize: 12, maxWidth: 88 }}
         >
           {file.name}
         </Text>
@@ -71,11 +71,11 @@ const FileItem = memo<FileItemProps>((props) => {
         <ActionIcon
           color={'red'}
           icon={Trash2Icon}
+          size={'small'}
+          title={t('delete', { ns: 'common' })}
           onClick={() => {
             removeChatUploadFile(id);
           }}
-          size={'small'}
-          title={t('delete', { ns: 'common' })}
         />
       </Flexbox>
     </Block>

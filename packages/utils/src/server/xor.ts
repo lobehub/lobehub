@@ -1,4 +1,4 @@
-import { ClientSecretPayload } from '@lobechat/types';
+import type { ClientSecretPayload } from '@lobechat/types';
 
 import { SECRET_XOR_KEY } from '@/envs/auth';
 

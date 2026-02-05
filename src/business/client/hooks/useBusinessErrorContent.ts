@@ -6,7 +6,7 @@ export interface BusinessErrorContentResult {
 }
 
 export default function useBusinessErrorContent(
-  // eslint-disable-next-line unused-imports/no-unused-vars, @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line unused-imports/no-unused-vars
   errorType?: ErrorType | string,
 ): BusinessErrorContentResult {
   return {};

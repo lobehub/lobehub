@@ -1,5 +1,5 @@
 import { contextSupervisorMakeDecision } from '@lobechat/prompts';
-import { type GroupMemberWithAgent, type UIChatMessage } from '@lobechat/types';
+import type {GroupMemberWithAgent, UIChatMessage} from '@lobechat/types';
 
 import { aiChatService } from '@/services/aiChat';
 
@@ -22,8 +22,8 @@ export interface SupervisorTodoItem {
 
 export interface SupervisorDecisionResult {
   decisions: SupervisorDecisionList;
-  todoUpdated: boolean;
   todos: SupervisorTodoItem[];
+  todoUpdated: boolean;
 }
 
 export type SupervisorToolName =

@@ -1,10 +1,11 @@
-import { type DataSyncConfig } from '@lobechat/electron-client-ipc';
+import type {DataSyncConfig} from '@lobechat/electron-client-ipc';
 import isEqual from 'fast-deep-equal';
-import useSWR, { type SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
+import useSWR from 'swr';
 
 import { mutate } from '@/libs/swr';
 import { remoteServerService } from '@/services/electron/remoteServer';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 
 import { initialState } from '../initialState';
 import type { ElectronStore } from '../store';

@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   formatFileSize,
   validateImageCount,
-  validateImageFileSize,
   validateImageFiles,
+  validateImageFileSize,
 } from '../imageValidation';
 
 describe('imageValidation', () => {

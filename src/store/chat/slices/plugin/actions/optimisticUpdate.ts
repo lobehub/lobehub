@@ -1,16 +1,11 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import {
-  type ChatMessageError,
-  type ChatMessagePluginError,
-  type ChatToolPayload,
-  type MessagePluginItem,
-} from '@lobechat/types';
+import type {ChatMessageError, ChatMessagePluginError, ChatToolPayload, MessagePluginItem} from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
 import { messageService } from '@/services/message';
-import { type OptimisticUpdateContext } from '@/store/chat/slices/message/actions/optimisticUpdate';
-import { type ChatStore } from '@/store/chat/store';
-import { type StoreSetter } from '@/store/types';
+import type {OptimisticUpdateContext} from '@/store/chat/slices/message/actions/optimisticUpdate';
+import type {ChatStore} from '@/store/chat/store';
+import type {StoreSetter} from '@/store/types';
 import { merge } from '@/utils/merge';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 

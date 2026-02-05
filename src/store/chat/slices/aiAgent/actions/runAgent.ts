@@ -1,11 +1,12 @@
 import { isDesktop } from '@lobechat/const';
-import { type ChatToolPayload } from '@lobechat/types';
+import type {ChatToolPayload} from '@lobechat/types';
 import debug from 'debug';
 import i18n from 'i18next';
 
-import { type StreamEvent, agentRuntimeService } from '@/services/agentRuntime';
-import { type ChatStore } from '@/store/chat/store';
-import { type StoreSetter } from '@/store/types';
+import type {StreamEvent} from '@/services/agentRuntime';
+import { agentRuntimeService } from '@/services/agentRuntime';
+import type {ChatStore} from '@/store/chat/store';
+import type {StoreSetter} from '@/store/types';
 
 const log = debug('store:chat:ai-agent:runAgent');
 

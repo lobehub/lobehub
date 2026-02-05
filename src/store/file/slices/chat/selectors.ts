@@ -1,6 +1,6 @@
 import { UPLOAD_STATUS_SET } from '@/types/files/upload';
 
-import { type FilesStoreState } from '../../initialState';
+import type {FilesStoreState} from '../../initialState';
 
 const chatUploadFileList = (s: FilesStoreState) => s.chatUploadFileList;
 const chatContextSelections = (s: FilesStoreState) => s.chatContextSelections;

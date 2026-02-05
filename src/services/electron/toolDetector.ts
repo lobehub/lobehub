@@ -1,4 +1,4 @@
-import { type ToolCategory, type ToolInfo, type ToolStatus } from '@lobechat/electron-client-ipc';
+import type {ToolCategory, ToolInfo, ToolStatus} from '@lobechat/electron-client-ipc';
 
 import { ensureElectronIpc } from '@/utils/electron/ipc';
 

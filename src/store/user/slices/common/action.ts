@@ -1,15 +1,16 @@
 import { isDesktop } from '@lobechat/const';
 import { getSingletonAnalyticsOptional } from '@lobehub/analytics';
-import useSWR, { type SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
+import useSWR from 'swr';
 import type { PartialDeep } from 'type-fest';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
 import { mutate, useOnlyFetchOnceSWR } from '@/libs/swr';
 import { userService } from '@/services/user';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import type { UserStore } from '@/store/user';
 import type { GlobalServerConfig } from '@/types/serverConfig';
-import { type LobeUser, type UserInitializationState } from '@/types/user';
+import type {LobeUser, UserInitializationState} from '@/types/user';
 import type { UserSettings } from '@/types/user/settings';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';

@@ -1,16 +1,11 @@
-import { type LucideIcon } from 'lucide-react';
+import type {LucideIcon} from 'lucide-react';
 
-import { type LobeDocument } from '@/types/document';
-import { type MetaData } from '@/types/meta';
-import { type SessionGroupItem } from '@/types/session';
-import { type ChatTopic } from '@/types/topic';
+import type {LobeDocument} from '@/types/document';
+import type {MetaData} from '@/types/meta';
+import type {SessionGroupItem} from '@/types/session';
+import type {ChatTopic} from '@/types/topic';
 
-import {
-  type PageParamsMap,
-  type PageReference,
-  type PageType,
-  type ResolvedPageData,
-} from '../types';
+import type {PageParamsMap, PageReference, PageType, ResolvedPageData} from '../types';
 
 // ======== Plugin Context ======== //
 

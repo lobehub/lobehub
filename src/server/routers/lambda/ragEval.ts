@@ -1,12 +1,10 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
+import type {EvalDatasetRecord, InsertEvalDatasetRecord, RAGEvalDataSetItem} from '@lobechat/types';
 import {
-  type EvalDatasetRecord,
   EvalEvaluationStatus,
-  type InsertEvalDatasetRecord,
-  type RAGEvalDataSetItem,
   insertEvalDatasetRecordSchema,
   insertEvalDatasetsSchema,
-  insertEvalEvaluationSchema,
+  insertEvalEvaluationSchema
 } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import dayjs from 'dayjs';

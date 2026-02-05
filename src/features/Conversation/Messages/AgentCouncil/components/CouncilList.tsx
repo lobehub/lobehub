@@ -1,6 +1,6 @@
 'use client';
 
-import { type UIChatMessage } from '@lobechat/types';
+import type {UIChatMessage} from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { Divider } from 'antd';
 import isEqual from 'fast-deep-equal';
@@ -69,11 +69,11 @@ const CouncilList = memo<CouncilListProps>(({ members, displayMode, activeTab })
                   <Flexbox
                     gap={12}
                     key={member.id}
+                    width={`min(${MIN_WIDTH}px, 100%)`}
                     style={{
                       minWidth: MIN_WIDTH,
                       position: 'relative',
                     }}
-                    width={`min(${MIN_WIDTH}px, 100%)`}
                   >
                     <CouncilMember index={idx} item={member} />
                   </Flexbox>

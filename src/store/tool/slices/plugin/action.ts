@@ -1,13 +1,13 @@
-import { type Schema, type ValidationResult } from '@cfworker/json-schema';
-import { type SWRResponse } from 'swr';
+import type {Schema, ValidationResult} from '@cfworker/json-schema';
+import type {SWRResponse} from 'swr';
 
 import { MESSAGE_CANCEL_FLAT } from '@/const/message';
 import { useClientDataSWR } from '@/libs/swr';
 import { pluginService } from '@/services/plugin';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { merge } from '@/utils/merge';
 
-import { type ToolStore } from '../../store';
+import type {ToolStore} from '../../store';
 import { pluginStoreSelectors } from '../oldStore/selectors';
 import { pluginSelectors } from './selectors';
 

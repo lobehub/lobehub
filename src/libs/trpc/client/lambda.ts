@@ -1,8 +1,9 @@
-import { type TRPCLink, createTRPCClient, httpBatchLink, httpLink, splitLink } from '@trpc/client';
+import type {TRPCLink} from '@trpc/client';
+import { createTRPCClient, httpBatchLink, httpLink, splitLink } from '@trpc/client';
 import { createTRPCReact } from '@trpc/react-query';
 import { observable } from '@trpc/server/observable';
 import debug from 'debug';
-import { type ModelProvider } from 'model-bank';
+import type {ModelProvider} from 'model-bank';
 import superjson from 'superjson';
 
 import { withElectronProtocolIfElectron } from '@/const/protocol';
@@ -75,23 +76,23 @@ const errorHandlingLink: TRPCLink<LambdaRouter> = () => {
 
 // 2. Shared link options
 const linkOptions = {
-  // eslint-disable-next-line no-undef
+   
   fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
     // Ensure credentials are included to send cookies (like mp_token)
-    // eslint-disable-next-line no-undef
+     
     const fetchOptions: RequestInit = {
       ...init,
       credentials: 'include',
     };
 
     if (isDesktop) {
-      // eslint-disable-next-line no-undef
+       
       const res = await fetch(input as string, fetchOptions);
 
       if (res) return res;
     }
 
-    // eslint-disable-next-line no-undef
+     
     return await fetch(input, fetchOptions);
   },
   headers: async () => {

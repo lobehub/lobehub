@@ -1,4 +1,4 @@
-import { type GenerationBatch } from '@/types/generation';
+import type {GenerationBatch} from '@/types/generation';
 
 export interface GenerationBatchState {
   /**

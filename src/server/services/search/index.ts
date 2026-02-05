@@ -1,10 +1,11 @@
-import { type SearchParams, type SearchQuery } from '@lobechat/types';
-import { type CrawlImplType } from '@lobechat/web-crawler';
+import type {SearchParams, SearchQuery} from '@lobechat/types';
+import type {CrawlImplType} from '@lobechat/web-crawler';
 import pMap from 'p-map';
 
 import { toolsEnv } from '@/envs/tools';
 
-import { type SearchImplType, type SearchServiceImpl, createSearchServiceImpl } from './impls';
+import type {SearchImplType, SearchServiceImpl} from './impls';
+import {   createSearchServiceImpl } from './impls';
 
 const parseImplEnv = (envString: string = '') => {
   // Handle full-width commas and extra whitespace

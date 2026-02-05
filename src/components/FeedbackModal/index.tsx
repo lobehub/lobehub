@@ -120,23 +120,23 @@ const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }
   return (
     <Modal
       centered
+      open={open}
+      title={t('feedback.title')}
+      width={600}
       footer={
-        <Flexbox gap={8} horizontal justify="flex-end">
+        <Flexbox horizontal gap={8} justify="flex-end">
           <Button onClick={handleCancel}>{t('cancel')}</Button>
           <Button
             icon={<Icon icon={Send} />}
             loading={loading}
-            onClick={handleSubmit}
             type="primary"
+            onClick={handleSubmit}
           >
             {t('feedback.submit')}
           </Button>
         </Flexbox>
       }
       onCancel={handleCancel}
-      open={open}
-      title={t('feedback.title')}
-      width={600}
     >
       <Form form={form} initialValues={initialValues} layout="vertical">
         <Form.Item
@@ -147,7 +147,7 @@ const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }
             { max: 200, message: t('feedback.fields.title.maxLength') },
           ]}
         >
-          <Input maxLength={200} placeholder={t('feedback.fields.title.placeholder')} showCount />
+          <Input showCount maxLength={200} placeholder={t('feedback.fields.title.placeholder')} />
         </Form.Item>
 
         <Form.Item
@@ -159,10 +159,10 @@ const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }
           ]}
         >
           <TextArea
+            showCount
             maxLength={5000}
             placeholder={t('feedback.fields.message.placeholder')}
             rows={6}
-            showCount
           />
         </Form.Item>
 
@@ -182,11 +182,11 @@ const FeedbackModal = memo<FeedbackModalProps>(({ initialValues, onClose, open }
             ) : (
               <Upload
                 accept="image/*"
+                showUploadList={false}
                 beforeUpload={(file) => {
                   handleScreenshotUpload(file);
                   return false;
                 }}
-                showUploadList={false}
               >
                 <Button icon={<Icon icon={ImagePlus} />} loading={uploadingScreenshot}>
                   {uploadingScreenshot

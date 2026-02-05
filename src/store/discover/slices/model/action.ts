@@ -1,16 +1,12 @@
-import { type CategoryItem, type CategoryListQuery } from '@lobehub/market-sdk';
-import useSWR, { type SWRResponse } from 'swr';
+import type {CategoryItem, CategoryListQuery} from '@lobehub/market-sdk';
+import type {SWRResponse} from 'swr';
+import useSWR from 'swr';
 
 import { discoverService } from '@/services/discover';
-import { type DiscoverStore } from '@/store/discover';
+import type {DiscoverStore} from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
-import { type StoreSetter } from '@/store/types';
-import {
-  type DiscoverModelDetail,
-  type IdentifiersResponse,
-  type ModelListResponse,
-  type ModelQueryParams,
-} from '@/types/discover';
+import type {StoreSetter} from '@/store/types';
+import type {DiscoverModelDetail, IdentifiersResponse, ModelListResponse, ModelQueryParams} from '@/types/discover';
 
 type Setter = StoreSetter<DiscoverStore>;
 export const createModelSlice = (set: Setter, get: () => DiscoverStore, _api?: unknown) =>

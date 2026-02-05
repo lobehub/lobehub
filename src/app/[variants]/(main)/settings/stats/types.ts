@@ -1,4 +1,4 @@
-import { type UsageLog } from '@/types/usage/usageRecord';
+import type {UsageLog} from '@/types/usage/usageRecord';
 
 export interface UsageChartProps {
   data?: UsageLog[];

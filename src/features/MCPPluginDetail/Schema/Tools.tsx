@@ -41,6 +41,7 @@ const Tools = memo<ToolsProps>(({ mode, activeKey = [], setActiveKey }) => {
       activeKey={activeKey}
       expandIconPlacement={'end'}
       gap={8}
+      variant={'outlined'}
       items={tools.map((item) => {
         let properties: {
           description?: string;
@@ -71,6 +72,9 @@ const Tools = memo<ToolsProps>(({ mode, activeKey = [], setActiveKey }) => {
                   children:
                     mode === ModeType.Docs ? (
                       <InlineTable
+                        dataSource={properties}
+                        pagination={false}
+                        rowKey={'name'}
                         columns={[
                           {
                             dataIndex: 'name',
@@ -95,12 +99,12 @@ const Tools = memo<ToolsProps>(({ mode, activeKey = [], setActiveKey }) => {
                             dataIndex: 'required',
                             render: (_, record) => (
                               <Icon
+                                icon={record.required ? CheckIcon : MinusIcon}
                                 color={
                                   record.required
                                     ? cssVar.colorSuccess
                                     : cssVar.colorTextDescription
                                 }
-                                icon={record.required ? CheckIcon : MinusIcon}
                               />
                             ),
                             title: t('mcp.details.schema.tools.table.required'),
@@ -110,9 +114,6 @@ const Tools = memo<ToolsProps>(({ mode, activeKey = [], setActiveKey }) => {
                             title: t('mcp.details.schema.tools.table.description'),
                           },
                         ]}
-                        dataSource={properties}
-                        pagination={false}
-                        rowKey={'name'}
                       />
                     ) : (
                       <Highlighter
@@ -143,7 +144,6 @@ const Tools = memo<ToolsProps>(({ mode, activeKey = [], setActiveKey }) => {
         };
       })}
       onChange={setActiveKey}
-      variant={'outlined'}
     />
   );
 });

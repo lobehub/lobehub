@@ -260,6 +260,7 @@
   "geminiImageChineseWarning.doNotShowAgain": "不再提示",
   "geminiImageChineseWarning.title": "中文輸入提示",
   "historyRange": "歷史範圍",
+  "home.suggestQuestions": "試試這些範例",
   "import": "匯入",
   "importData": "匯入資料",
   "importModal.error.desc": "非常抱歉，資料匯入過程發生異常。請嘗試重新匯入，或 <1>提交問題</1>，我們將會第一時間幫你排查問題。",

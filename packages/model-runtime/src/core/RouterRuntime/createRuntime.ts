@@ -4,31 +4,30 @@
 import type { GoogleGenAIOptions } from '@google/genai';
 import type { ChatModelCard } from '@lobechat/types';
 import debug from 'debug';
-import OpenAI, { ClientOptions } from 'openai';
-import { Stream } from 'openai/streaming';
+import type { ClientOptions } from 'openai';
+import type OpenAI from 'openai';
+import type { Stream } from 'openai/streaming';
 
 import { LobeOpenAI } from '../../providers/openai';
 import { LobeVertexAI } from '../../providers/vertexai';
-import {
-  CreateImagePayload,
-  CreateImageResponse,
-  GenerateObjectOptions,
-  GenerateObjectPayload,
-  ILobeAgentRuntimeErrorType,
-} from '../../types';
-import {
-  type ChatCompletionErrorPayload,
+import type {
+  ChatCompletionErrorPayload,
   ChatMethodOptions,
   ChatStreamCallbacks,
   ChatStreamPayload,
+  CreateImagePayload,
+  CreateImageResponse,
   EmbeddingsOptions,
   EmbeddingsPayload,
+  GenerateObjectOptions,
+  GenerateObjectPayload,
+  ILobeAgentRuntimeErrorType,
   TextToSpeechPayload,
 } from '../../types';
 import { postProcessModelList } from '../../utils/postProcessModelList';
 import { safeParseJSON } from '../../utils/safeParseJSON';
-import { LobeRuntimeAI } from '../BaseAI';
-import { CreateImageOptions, CustomClientOptions } from '../openaiCompatibleFactory';
+import type { LobeRuntimeAI } from '../BaseAI';
+import type { CreateImageOptions, CustomClientOptions } from '../openaiCompatibleFactory';
 import { baseRuntimeMap } from './baseRuntimeMap';
 
 const log = debug('lobe-model-runtime:router-runtime');

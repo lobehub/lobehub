@@ -1,13 +1,13 @@
-import { type ClientSecretPayload } from '@lobechat/types';
+import type { Context as OtContext } from '@lobechat/observability-otel/api';
+import type {ClientSecretPayload} from '@lobechat/types';
 import { parse } from 'cookie';
 import debug from 'debug';
-import { type NextRequest } from 'next/server';
+import type {NextRequest} from 'next/server';
 
 import { auth } from '@/auth';
-import { LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER, authEnv } from '@/envs/auth';
-import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
+import { authEnv,LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext } from '@/libs/observability/traceparent';
-import type { Context as OtContext } from '@lobechat/observability-otel/api';
+import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';
 
 // Create context logger namespace
 const log = debug('lobe-trpc:lambda:context');

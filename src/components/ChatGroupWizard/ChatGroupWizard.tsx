@@ -17,7 +17,8 @@ import { Switch } from 'antd';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { omit } from 'es-toolkit/compat';
 import { Users } from 'lucide-react';
-import { type ChangeEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type {ChangeEvent} from 'react';
+import {  memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_AVATAR } from '@/const/meta';
@@ -25,9 +26,11 @@ import GroupAvatar from '@/features/GroupAvatar';
 import ModelSelect from '@/features/ModelSelect';
 import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { useSessionStore } from '@/store/session';
-import { type LobeAgentSession, LobeSessionType } from '@/types/session';
+import type {LobeAgentSession} from '@/types/session';
+import {  LobeSessionType } from '@/types/session';
 
-import { type GroupTemplate, useGroupTemplates } from './templates';
+import type {GroupTemplate} from './templates';
+import {  useGroupTemplates } from './templates';
 
 const TemplateItem = memo<{
   cx: (..._args: any[]) => string;
@@ -40,27 +43,27 @@ const TemplateItem = memo<{
 
   return (
     <div className={cx(styles.listItem)} onClick={() => onToggle(template.id)}>
-      <Flexbox align="center" gap={12} horizontal width="100%">
+      <Flexbox horizontal align="center" gap={12} width="100%">
         <Checkbox
           checked={isSelected}
           onChange={() => onToggle(template.id)}
           onClick={(e) => e.stopPropagation()}
         />
         <GroupAvatar
+          size={40}
           avatars={template.members
             .filter((member) => member !== null && member !== undefined)
             .map((member) => ({
               avatar: member.avatar || DEFAULT_AVATAR,
               background: member.backgroundColor || undefined,
             }))}
-          size={40}
         />
         <Flexbox flex={1} gap={2}>
           <Text className={styles.title}>{template.title}</Text>
-          <Text className={styles.description} ellipsis>
+          <Text ellipsis className={styles.description}>
             {template.description}
           </Text>
-          <Flexbox align="center" gap={4} horizontal>
+          <Flexbox horizontal align="center" gap={4}>
             <Users size={11} style={{ color: '#999' }} />
             <Text style={{ fontSize: 11 }} type="secondary">
               {t('groupWizard.memberCount', {
@@ -93,7 +96,7 @@ const ExistingMemberItem = memo<{
 
   return (
     <div className={cx(styles.listItem)} onClick={() => onToggle(agentId)}>
-      <Flexbox align="center" gap={12} horizontal width="100%">
+      <Flexbox horizontal align="center" gap={12} width="100%">
         <Checkbox
           checked={isSelected}
           onChange={() => onToggle(agentId)}
@@ -103,7 +106,7 @@ const ExistingMemberItem = memo<{
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
           <Text className={styles.title}>{title}</Text>
           {description && (
-            <Text className={styles.description} ellipsis>
+            <Text ellipsis className={styles.description}>
               {description}
             </Text>
           )}
@@ -453,10 +456,10 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
               actions: (
                 <Switch
                   checked
+                  size="small"
                   onChange={(checked) => {
                     if (!checked) handleRemoveAgent(agentId);
                   }}
-                  size="small"
                 />
               ),
               avatar: <Avatar avatar={avatar} background={avatarBackground} size={40} />,
@@ -472,7 +475,7 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
               title,
             };
           })
-          // eslint-disable-next-line unicorn/prefer-native-coercion-functions
+           
           .filter((item): item is NonNullable<typeof item> => Boolean(item))
       );
     }, [selectedAgents, agentSessions, t, handleRemoveAgent, memberDescriptionClass]);
@@ -541,54 +544,56 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
 
     return (
       <Modal
+        open={open}
+        title={t('groupWizard.title')}
+        width={900}
         footer={
-          <Flexbox gap={8} horizontal justify="end">
+          <Flexbox horizontal gap={8} justify="end">
             <Button onClick={handleCancel}>{t('cancel', { ns: 'common' })}</Button>
             <Button
               disabled={confirmDisabled}
               loading={confirmLoading}
-              onClick={handleConfirm}
               type="primary"
+              onClick={handleConfirm}
             >
               {t('groupWizard.createGroup')}
             </Button>
           </Flexbox>
         }
         onCancel={handleCancel}
-        open={open}
-        title={t('groupWizard.title')}
-        width={900}
       >
-        <Flexbox className={styles.container} horizontal>
+        <Flexbox horizontal className={styles.container}>
           <Flexbox className={styles.leftColumn} flex={1} gap={12}>
             <SearchBar
               allowClear
-              onChange={handleSearchChange}
               placeholder={t('memberSelection.searchAgents')}
               style={{ margin: `${cssVar.paddingSM} ${cssVar.paddingSM} 0 ${cssVar.paddingSM}` }}
               value={inputValue}
               variant="filled"
+              onChange={handleSearchChange}
             />
             <Flexbox flex={1} style={{ overflowY: 'auto', padding: `0 ${cssVar.paddingSM}` }}>
               <Collapse
                 accordion
-                activeKey={activePanel}
                 collapsible
+                activeKey={activePanel}
                 expandIconPlacement="end"
                 gap={12}
+                size="small"
+                variant="borderless"
                 items={[
                   {
                     children:
                       filteredTemplates.length === 0 ? (
                         <Empty
+                          descriptionProps={{ fontSize: 14 }}
+                          icon={Users}
+                          style={{ maxWidth: 400 }}
                           description={
                             searchTerm
                               ? t('groupWizard.noMatchingTemplates')
                               : t('groupWizard.noTemplates')
                           }
-                          descriptionProps={{ fontSize: 14 }}
-                          icon={Users}
-                          style={{ maxWidth: 400 }}
                         />
                       ) : (
                         <Flexbox gap={4}>
@@ -597,9 +602,9 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                               cx={cx}
                               isSelected={selectedTemplate === template.id}
                               key={template.id}
-                              onToggle={handleTemplateToggle}
                               styles={styles}
                               template={template}
+                              onToggle={handleTemplateToggle}
                             />
                           ))}
                         </Flexbox>
@@ -611,14 +616,14 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                     children:
                       filteredAgents.length === 0 ? (
                         <Empty
+                          descriptionProps={{ fontSize: 14 }}
+                          icon={Users}
+                          style={{ maxWidth: 400 }}
                           description={
                             searchTerm
                               ? t('noMatchingAgents', { ns: 'chat' })
                               : t('noAvailableAgents', { ns: 'chat' })
                           }
-                          descriptionProps={{ fontSize: 14 }}
-                          icon={Users}
-                          style={{ maxWidth: 400 }}
                         />
                       ) : (
                         <Flexbox gap={4}>
@@ -628,8 +633,8 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                               cx={cx}
                               isSelected={selectedAgents.includes(agent.config?.id || '')}
                               key={agent.id}
-                              onToggle={handleAgentToggle}
                               styles={styles}
+                              onToggle={handleAgentToggle}
                             />
                           ))}
                         </Flexbox>
@@ -638,8 +643,6 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                     label: t('groupWizard.existingMembers'),
                   },
                 ]}
-                onChange={handlePanelChange}
-                size="small"
                 styles={{
                   header: {
                     color: cssVar.colorTextDescription,
@@ -647,14 +650,14 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                     padding: 0,
                   },
                 }}
-                variant="borderless"
+                onChange={handlePanelChange}
               />
             </Flexbox>
           </Flexbox>
 
           <Flexbox className={styles.rightColumn} flex={1}>
             <Flexbox flex={1} gap={16} style={{ overflowY: 'auto' }}>
-              <Flexbox align="center" className={styles.hostCard} gap={12} horizontal>
+              <Flexbox horizontal align="center" className={styles.hostCard} gap={12}>
                 <Flexbox flex={1} gap={2}>
                   <Text
                     style={{ fontSize: 14, fontWeight: 500 }}
@@ -669,22 +672,22 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                     {t('groupWizard.host.description')}
                   </Text>
                 </Flexbox>
-                <Flexbox align="center" gap={12} horizontal>
+                <Flexbox horizontal align="center" gap={12}>
                   <div
                     className={cx(isHostRemoved && styles.modelSelectDisabled)}
                     style={{ opacity: isHostRemoved ? 0.6 : 1 }}
                   >
                     <ModelSelect
-                      onChange={handleHostModelChange}
                       requiredAbilities={['functionCall']}
                       value={normalizedHostModelConfig}
+                      onChange={handleHostModelChange}
                     />
                   </div>
                   <Tooltip title={t('groupWizard.host.tooltip')}>
                     <Switch
                       checked={!isHostRemoved}
-                      onChange={(checked) => handleHostToggle(checked)}
                       size="small"
+                      onChange={(checked) => handleHostToggle(checked)}
                     />
                   </Tooltip>
                 </Flexbox>
@@ -698,10 +701,10 @@ const ChatGroupWizard = memo<ChatGroupWizardProps>(
                         actions: (
                           <Switch
                             checked={!member.isRemoved}
+                            size="small"
                             onChange={(checked) =>
                               handleToggleMember(selectedTemplate, member.title, checked)
                             }
-                            size="small"
                           />
                         ),
                         avatar: (

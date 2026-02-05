@@ -62,7 +62,7 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
         <div className={styles.description}>{t('providerModels.list.empty.desc')}</div>
       </Flexbox>
 
-      <Flexbox gap={8} horizontal>
+      <Flexbox horizontal gap={8}>
         <Button
           icon={PlusIcon}
           onClick={() => {
@@ -75,6 +75,7 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
         <Button
           icon={<Icon icon={LucideRefreshCcwDot} />}
           loading={fetchRemoteModelsLoading}
+          type={'primary'}
           onClick={async () => {
             setFetchRemoteModelsLoading(true);
             try {
@@ -84,7 +85,6 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
             }
             setFetchRemoteModelsLoading(false);
           }}
-          type={'primary'}
         >
           {fetchRemoteModelsLoading
             ? t('providerModels.list.fetcher.fetching')

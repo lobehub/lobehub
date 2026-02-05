@@ -1,12 +1,7 @@
 import { DEFAULT_MINI_PROVIDER } from '@lobechat/business-const';
 import { DEFAULT_MINI_MODEL, DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM } from '@lobechat/const';
 
-import {
-  type GlobalMemoryExtractionConfig,
-  type GlobalMemoryLayer,
-  type MemoryAgentPublicConfig,
-  type MemoryLayerExtractorPublicConfig,
-} from '@/types/serverConfig';
+import type {GlobalMemoryExtractionConfig, GlobalMemoryLayer, MemoryAgentPublicConfig, MemoryLayerExtractorPublicConfig} from '@/types/serverConfig';
 
 const MEMORY_LAYERS: GlobalMemoryLayer[] = [
   'activity',

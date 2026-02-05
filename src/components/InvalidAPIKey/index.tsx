@@ -4,7 +4,7 @@ import { ModelProvider } from 'model-bank';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type GlobalLLMProviderKey } from '@/types/user/settings';
+import type {GlobalLLMProviderKey} from '@/types/user/settings';
 
 import BedrockForm from './Bedrock';
 import ComfyUIForm from './ComfyUIForm';
@@ -80,22 +80,22 @@ const APIKeyForm = memo<APIKeyFormProps>(
             <ComfyUIForm description={description} />
           ) : (
             <ProviderApiKeyForm
+              showEndpoint
               apiKeyPlaceholder={apiKeyPlaceholder}
               avatar={<ProviderIcon provider={provider} size={80} type={'avatar'} />}
               description={description}
               provider={provider as GlobalLLMProviderKey}
-              showEndpoint
             />
           )}
           <Flexbox gap={12} width={'100%'}>
             <Button
               block
               disabled={loading}
+              style={{ marginTop: 8 }}
+              type={'primary'}
               onClick={() => {
                 onRecreate();
               }}
-              style={{ marginTop: 8 }}
-              type={'primary'}
             >
               {t('unlock.confirm')}
             </Button>

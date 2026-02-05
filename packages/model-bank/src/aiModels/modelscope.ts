@@ -1,4 +1,4 @@
-import { AIChatModelCard } from '../types/aiModel';
+import type { AIChatModelCard } from '../types/aiModel';
 
 const modelscopeChatModels: AIChatModelCard[] = [
   {
@@ -62,7 +62,8 @@ const modelscopeChatModels: AIChatModelCard[] = [
       functionCall: true,
     },
     contextWindowTokens: 131_072,
-    description: 'Qwen3 235B A22B is the Qwen3 ultra-scale model delivering top-tier AI capability.',
+    description:
+      'Qwen3 235B A22B is the Qwen3 ultra-scale model delivering top-tier AI capability.',
     displayName: 'Qwen3 235B A22B',
     id: 'Qwen/Qwen3-235B-A22B',
     type: 'chat',

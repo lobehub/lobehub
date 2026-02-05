@@ -1,9 +1,9 @@
 Log:
   Level: 'info'
 
-ExternalPort: 443 
+ExternalPort: 443
 ExternalDomain: example.com #Your zitadel's domain name
-ExternalSecure: true 
+ExternalSecure: true
 TLS:
   Enabled: false # ZITADEL_TLS_ENABLED
 

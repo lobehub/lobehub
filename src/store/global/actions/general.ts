@@ -1,6 +1,6 @@
 import isEqual from 'fast-deep-equal';
 import { gt, parse, valid } from 'semver';
-import { type SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
 
 import { CURRENT_VERSION, isDesktop } from '@/const/version';
 import { useOnlyFetchOnceSWR } from '@/libs/swr';
@@ -8,8 +8,8 @@ import { globalService } from '@/services/global';
 import { getElectronStoreState } from '@/store/electron';
 import { electronSyncSelectors } from '@/store/electron/selectors';
 import type { SystemStatus } from '@/store/global/initialState';
-import { type StoreSetter } from '@/store/types';
-import { type LocaleMode } from '@/types/locale';
+import type {StoreSetter} from '@/store/types';
+import type {LocaleMode} from '@/types/locale';
 import { switchLang } from '@/utils/client/switchLang';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';

@@ -1,21 +1,17 @@
 import { CloudSandboxIdentifier } from '@lobechat/builtin-tool-cloud-sandbox';
-import {
-  type CodeInterpreterFileItem,
-  type CodeInterpreterParams,
-  type CodeInterpreterResponse,
-} from '@lobechat/types';
+import type {CodeInterpreterFileItem, CodeInterpreterParams, CodeInterpreterResponse} from '@lobechat/types';
 import debug from 'debug';
 import { produce } from 'immer';
 import pMap from 'p-map';
-import { type SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { fileService } from '@/services/file';
 import { pythonService } from '@/services/python';
 import { dbMessageSelectors } from '@/store/chat/selectors';
-import { type ChatStore } from '@/store/chat/store';
+import type {ChatStore} from '@/store/chat/store';
 import { useFileStore } from '@/store/file';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 const n = setNamespace('codeInterpreter');

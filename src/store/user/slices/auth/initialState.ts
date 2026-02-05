@@ -1,6 +1,6 @@
-import { type SSOProvider } from '@lobechat/types';
+import type {SSOProvider} from '@lobechat/types';
 
-import { type LobeUser } from '@/types/user';
+import type {LobeUser} from '@/types/user';
 
 export interface UserAuthState {
   authProviders?: SSOProvider[];

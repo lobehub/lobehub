@@ -1,17 +1,10 @@
-import { ChunkMetadata, FileChunk } from '@lobechat/types';
+import type { ChunkMetadata, FileChunk } from '@lobechat/types';
 import { and, asc, cosineDistance, count, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { chunk } from 'es-toolkit/compat';
 
-import {
-  NewChunkItem,
-  NewUnstructuredChunkItem,
-  chunks,
-  embeddings,
-  fileChunks,
-  files,
-  unstructuredChunks,
-} from '../schemas';
-import { LobeChatDatabase } from '../type';
+import type { NewChunkItem, NewUnstructuredChunkItem } from '../schemas';
+import { chunks, embeddings, fileChunks, files, unstructuredChunks } from '../schemas';
+import type { LobeChatDatabase } from '../type';
 
 export class ChunkModel {
   private userId: string;

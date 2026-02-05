@@ -1,5 +1,5 @@
 import { Icon } from '@lobehub/ui';
-import { type MenuItemType } from 'antd/es/menu/interface';
+import type {MenuItemType} from 'antd/es/menu/interface';
 import { Bot, BrainCog, Handshake, MessagesSquare, Mic2, UserCircle } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

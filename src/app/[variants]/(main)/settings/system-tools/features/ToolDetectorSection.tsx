@@ -1,17 +1,17 @@
 'use client';
 
-import { type ToolStatus } from '@lobechat/electron-client-ipc';
+import type {ToolStatus} from '@lobechat/electron-client-ipc';
+import type {FormGroupItemType} from '@lobehub/ui';
 import {
   Button,
   CopyButton,
   Flexbox,
   Form,
-  type FormGroupItemType,
   Icon,
   Skeleton,
   Tag,
   Text,
-  Tooltip,
+  Tooltip
 } from '@lobehub/ui';
 import { CheckCircle2, Loader2Icon, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
@@ -55,8 +55,8 @@ const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting })
 
   if (isDetecting) {
     return (
-      <Flexbox align="center" gap={8} horizontal>
-        <Icon icon={Loader2Icon} size={16} spin style={{ opacity: 0.5 }} />
+      <Flexbox horizontal align="center" gap={8}>
+        <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
         <Text type="secondary">{t('settingSystemTools.detecting')}</Text>
       </Flexbox>
     );
@@ -64,7 +64,7 @@ const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting })
 
   if (!status) {
     return (
-      <Flexbox align="center" gap={8} horizontal>
+      <Flexbox horizontal align="center" gap={8}>
         <Icon color="var(--ant-color-text-quaternary)" icon={XCircle} size={16} />
         <Text type="secondary">{t('settingSystemTools.status.notDetected')}</Text>
       </Flexbox>
@@ -72,7 +72,7 @@ const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting })
   }
 
   return (
-    <Flexbox align="center" gap={8} horizontal wrap="wrap">
+    <Flexbox horizontal align="center" gap={8} wrap="wrap">
       {status.available ? (
         <>
           <Icon color="var(--ant-color-success)" icon={CheckCircle2} size={16} />
@@ -84,7 +84,7 @@ const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting })
           )}
           {status.path && (
             <Tooltip title={status.path}>
-              <Flexbox align="center" gap={4} horizontal style={{ maxWidth: 200 }}>
+              <Flexbox horizontal align="center" gap={4} style={{ maxWidth: 200 }}>
                 <Text ellipsis style={{ fontSize: 12 }} type="secondary">
                   {status.path}
                 </Text>
@@ -160,11 +160,14 @@ const ToolDetectorSection = memo(() => {
   return (
     <Form
       collapsible={false}
+      items={formItems}
+      itemsType={'group'}
+      variant={'filled'}
       footer={
         <Flexbox
+          horizontal
           align="center"
           gap={16}
-          horizontal
           justify="flex-end"
           style={{ marginBlockStart: 8 }}
         >
@@ -178,9 +181,6 @@ const ToolDetectorSection = memo(() => {
           </Button>
         </Flexbox>
       }
-      items={formItems}
-      itemsType={'group'}
-      variant={'filled'}
       {...FORM_STYLE}
     />
   );

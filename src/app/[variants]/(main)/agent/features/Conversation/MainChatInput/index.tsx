@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 
-import { type ActionKeys } from '@/features/ChatInput';
+import type {ActionKeys} from '@/features/ChatInput';
 import { ChatInput } from '@/features/Conversation';
 import { useChatStore } from '@/store/chat';
 
@@ -34,12 +34,12 @@ const MainChatInput = memo(() => {
   return (
     <ChatInput
       leftActions={leftActions}
+      rightActions={rightActions}
+      sendMenu={{ items: sendMenuItems }}
       onEditorReady={(instance) => {
         // Sync to global ChatStore for compatibility with other features
         useChatStore.setState({ mainInputEditor: instance });
       }}
-      rightActions={rightActions}
-      sendMenu={{ items: sendMenuItems }}
     />
   );
 });

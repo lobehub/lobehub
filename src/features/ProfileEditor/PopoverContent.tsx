@@ -1,4 +1,5 @@
-import { Flexbox, Icon, type ItemType, Segmented } from '@lobehub/ui';
+import type {ItemType} from '@lobehub/ui';
+import { Flexbox, Icon,  Segmented } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRight, ExternalLink, Settings, Store } from 'lucide-react';
 import { memo } from 'react';
@@ -53,7 +54,8 @@ const PopoverContent = memo<PopoverContentProps>(
         <div className={styles.header} onClick={(e) => e.stopPropagation()}>
           <Segmented
             block
-            onChange={(v) => onTabChange(v as TabType)}
+            size="small"
+            value={activeTab}
             options={[
               {
                 label: t('tools.tabs.all', { defaultValue: 'All' }),
@@ -64,8 +66,7 @@ const PopoverContent = memo<PopoverContentProps>(
                 value: 'installed',
               },
             ]}
-            size="small"
-            value={activeTab}
+            onChange={(v) => onTabChange(v as TabType)}
           />
         </div>
         <div className={styles.scroller} style={{ flex: 1 }}>
@@ -76,7 +77,7 @@ const PopoverContent = memo<PopoverContentProps>(
           )}
         </div>
         <div className={styles.footer}>
-          <div className={toolsListStyles.item} onClick={onOpenStore} role="button" tabIndex={0}>
+          <div className={toolsListStyles.item} role="button" tabIndex={0} onClick={onOpenStore}>
             <div className={toolsListStyles.itemIcon}>
               <Icon icon={Store} size={SKILL_ICON_SIZE} />
             </div>
@@ -85,12 +86,12 @@ const PopoverContent = memo<PopoverContentProps>(
           </div>
           <div
             className={toolsListStyles.item}
+            role="button"
+            tabIndex={0}
             onClick={() => {
               onClose?.();
               navigate('/settings/skill');
             }}
-            role="button"
-            tabIndex={0}
           >
             <div className={toolsListStyles.itemIcon}>
               <Icon icon={Settings} size={SKILL_ICON_SIZE} />

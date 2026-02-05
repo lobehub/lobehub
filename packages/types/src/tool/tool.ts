@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { MetaData } from '../meta';
+import type { MetaData } from '../meta';
 
 export type LobeToolType = 'builtin' | 'customPlugin' | 'plugin';
 

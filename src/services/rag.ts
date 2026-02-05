@@ -1,5 +1,5 @@
 import { lambdaClient } from '@/libs/trpc/client';
-import { type SemanticSearchSchemaType } from '@/types/rag';
+import type {SemanticSearchSchemaType} from '@/types/rag';
 
 class RAGService {
   parseFileContent = async (id: string, skipExist?: boolean) => {

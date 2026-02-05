@@ -30,10 +30,10 @@ const LikeButton = memo<LikeButtonProps>(
                 block
                 className={styles.number}
                 icon={ThumbsUpIcon}
-                onClick={() => onLikeClick?.(!isLiked)}
                 size={'large'}
                 style={{ flex: 1 }}
                 type={isLiked ? 'primary' : undefined}
+                onClick={() => onLikeClick?.(!isLiked)}
               >
                 {formatShortenNumber(count)}
               </Button>
@@ -42,10 +42,10 @@ const LikeButton = memo<LikeButtonProps>(
               <Button
                 className={styles.number}
                 icon={<Icon icon={ThumbsDownIcon} />}
-                onClick={() => onDislikeClick?.(!isDisliked)}
                 size={'large'}
                 style={{ flex: 'none' }}
                 type={isDisliked ? 'primary' : 'default'}
+                onClick={() => onDislikeClick?.(!isDisliked)}
               />
             </Tooltip>
           </Space.Compact>
@@ -58,10 +58,10 @@ const LikeButton = memo<LikeButtonProps>(
           <Button
             className={styles.number}
             icon={<Icon icon={ThumbsUpIcon} />}
-            onClick={() => onLikeClick?.(!isLiked)}
             size={'large'}
             style={{ width: '100%' }}
             type={isLiked ? 'primary' : 'default'}
+            onClick={() => onLikeClick?.(!isLiked)}
           >
             {formatShortenNumber(count)}
           </Button>

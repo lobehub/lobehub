@@ -1,6 +1,6 @@
-import { type DeploymentOption } from '@lobehub/market-types';
+import type {DeploymentOption} from '@lobehub/market-types';
 
-import { type DiscoverMcpDetail } from '@/types/discover';
+import type {DiscoverMcpDetail} from '@/types/discover';
 
 export interface ScoreItem {
   check: boolean;
@@ -47,8 +47,8 @@ export interface ScoreDataInput {
 // 计算后的布尔值结果
 export interface ScoreFlags {
   hasClaimed: boolean;
-  hasDeployMoreThanManual: boolean;
   hasDeployment: boolean;
+  hasDeployMoreThanManual: boolean;
   hasLicense: boolean;
   hasPrompts: boolean;
   hasReadme: boolean;

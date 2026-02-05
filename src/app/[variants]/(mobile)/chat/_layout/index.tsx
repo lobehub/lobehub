@@ -1,6 +1,6 @@
 'use client';
 
-import { type FC } from 'react';
+import type {FC} from 'react';
 import { Outlet } from 'react-router-dom';
 
 import AgentIdSync from '@/app/[variants]/(main)/agent/_layout/AgentIdSync';

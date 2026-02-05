@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { useShowMobileWorkspace } from '@/hooks/useShowMobileWorkspace';
-import { type SettingsTabs } from '@/store/global/initialState';
+import type {SettingsTabs} from '@/store/global/initialState';
 import { useSessionStore } from '@/store/session';
 import { mobileHeaderSticky } from '@/styles/mobileHeader';
 
@@ -32,10 +32,12 @@ const Header = memo(() => {
 
   return (
     <ChatHeader
+      showBackButton
+      style={mobileHeaderSticky}
       center={
         <ChatHeader.Title
           title={
-            <Flexbox align={'center'} gap={8} horizontal>
+            <Flexbox horizontal align={'center'} gap={8}>
               <span style={{ lineHeight: 1.2 }}>
                 {isProvider
                   ? params.providerId
@@ -46,8 +48,6 @@ const Header = memo(() => {
         />
       }
       onBackClick={handleBackClick}
-      showBackButton
-      style={mobileHeaderSticky}
     />
   );
 });

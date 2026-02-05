@@ -13,11 +13,11 @@ Access latest values in callbacks without adding them to dependency arrays. Prev
 
 ```typescript
 function useLatest<T>(value: T) {
-  const ref = useRef(value)
+  const ref = useRef(value);
   useLayoutEffect(() => {
-    ref.current = value
-  }, [value])
-  return ref
+    ref.current = value;
+  }, [value]);
+  return ref;
 }
 ```
 
@@ -25,12 +25,12 @@ function useLatest<T>(value: T) {
 
 ```tsx
 function SearchInput({ onSearch }: { onSearch: (q: string) => void }) {
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
-    const timeout = setTimeout(() => onSearch(query), 300)
-    return () => clearTimeout(timeout)
-  }, [query, onSearch])
+    const timeout = setTimeout(() => onSearch(query), 300);
+    return () => clearTimeout(timeout);
+  }, [query, onSearch]);
 }
 ```
 
@@ -38,12 +38,12 @@ function SearchInput({ onSearch }: { onSearch: (q: string) => void }) {
 
 ```tsx
 function SearchInput({ onSearch }: { onSearch: (q: string) => void }) {
-  const [query, setQuery] = useState('')
-  const onSearchRef = useLatest(onSearch)
+  const [query, setQuery] = useState('');
+  const onSearchRef = useLatest(onSearch);
 
   useEffect(() => {
-    const timeout = setTimeout(() => onSearchRef.current(query), 300)
-    return () => clearTimeout(timeout)
-  }, [query])
+    const timeout = setTimeout(() => onSearchRef.current(query), 300);
+    return () => clearTimeout(timeout);
+  }, [query]);
 }
 ```

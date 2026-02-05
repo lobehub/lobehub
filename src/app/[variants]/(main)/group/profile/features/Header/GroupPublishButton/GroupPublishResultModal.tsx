@@ -27,14 +27,14 @@ const GroupPublishResultModal = memo<GroupPublishResultModalProps>(
 
     return (
       <Modal
-        cancelText={tCommon('cancel')}
         centered
+        cancelText={tCommon('cancel')}
         okText={t('marketPublish.resultModal.view')}
-        onCancel={onCancel}
-        onOk={handleGoToMarket}
         open={open}
         title={null}
         width={440}
+        onCancel={onCancel}
+        onOk={handleGoToMarket}
       >
         <Result
           icon={<FluentEmoji emoji={'🎉'} size={96} type={'anim'} />}

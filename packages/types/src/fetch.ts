@@ -37,7 +37,6 @@ export const ChatErrorType = {
   ServiceUnavailable: 503,
   GatewayTimeout: 504,
 } as const;
-/* eslint-enable */
 
 export type ErrorType = (typeof ChatErrorType)[keyof typeof ChatErrorType];
 

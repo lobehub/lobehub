@@ -121,33 +121,33 @@ const ImageNum = memo<ImageNumSelectorProps>(
 
     if (isEditing) {
       return (
-        <Flexbox gap={8} horizontal style={{ width: '100%' }}>
+        <Flexbox horizontal gap={8} style={{ width: '100%' }}>
           <InputNumber
             max={max}
             min={min}
+            placeholder={`${min}-${max}`}
+            ref={inputRef}
+            size="small"
+            style={{ flex: 1 }}
+            value={customCount}
             onChange={handleInputChange}
+            onPressEnter={handleCustomConfirm}
             onKeyDown={(e) => {
               if (e.key === 'Escape') {
                 e.preventDefault();
                 handleCustomCancel();
               }
             }}
-            onPressEnter={handleCustomConfirm}
-            placeholder={`${min}-${max}`}
-            ref={inputRef}
-            size="small"
-            style={{ flex: 1 }}
-            value={customCount}
           />
           <ActionIcon
             color="success"
             disabled={!isValidInput}
             icon={Check}
-            onClick={handleCustomConfirm}
             size="small"
             variant="filled"
+            onClick={handleCustomConfirm}
           />
-          <ActionIcon icon={X} onClick={handleCustomCancel} size="small" variant="filled" />
+          <ActionIcon icon={X} size="small" variant="filled" onClick={handleCustomCancel} />
         </Flexbox>
       );
     }
@@ -156,11 +156,11 @@ const ImageNum = memo<ImageNumSelectorProps>(
       <Segmented
         block
         disabled={disabled}
-        onChange={handleChange}
         options={options}
         style={{ width: '100%' }}
         value={isCustomValue ? imageNum : imageNum}
         variant="filled"
+        onChange={handleChange}
       />
     );
   },

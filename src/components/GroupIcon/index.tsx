@@ -1,6 +1,6 @@
 import { Center, Icon } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { type LucideIcon } from 'lucide-react';
+import type {LucideIcon} from 'lucide-react';
 import { memo } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({

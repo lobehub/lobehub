@@ -80,12 +80,12 @@ const MessageBranch = memo<MessageBranchProps>(({ activeBranchIndex, count, mess
   const canGoNext = activeBranchIndex < count - 1;
 
   return (
-    <Flexbox className={styles.container} horizontal>
+    <Flexbox horizontal className={styles.container}>
       <div
         className={cx(styles.button, !canGoPrevious && `${prefixCls}-disabled`)}
-        onClick={handlePrevious}
         role="button"
         tabIndex={canGoPrevious ? 0 : -1}
+        onClick={handlePrevious}
       >
         <Icon icon={ChevronLeft} size={16} />
       </div>
@@ -94,9 +94,9 @@ const MessageBranch = memo<MessageBranchProps>(({ activeBranchIndex, count, mess
       </Center>
       <div
         className={cx(styles.button, !canGoNext && `${prefixCls}-disabled`)}
-        onClick={handleNext}
         role="button"
         tabIndex={canGoNext ? 0 : -1}
+        onClick={handleNext}
       >
         <Icon icon={ChevronRight} size={16} />
       </div>

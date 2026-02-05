@@ -260,6 +260,7 @@
   "geminiImageChineseWarning.doNotShowAgain": "今後表示しない",
   "geminiImageChineseWarning.title": "中国語入力のヒント",
   "historyRange": "履歴範囲",
+  "home.suggestQuestions": "次の例をお試しください",
   "import": "インポート",
   "importData": "データをインポート",
   "importModal.error.desc": "データのインポート中に問題が発生しました。再度インポートを試すか、<1>問題を報告</1>してください。原因を調査いたします",

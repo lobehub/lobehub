@@ -60,7 +60,7 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
 
   if (operationType === 'contextCompression') {
     return (
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         <NeuralNetworkLoading size={16} />
         <span className={shinyTextStyles.shinyText}>{t('operation.contextCompression')}</span>
       </Flexbox>
@@ -68,7 +68,7 @@ const ContentLoading = memo<ContentLoadingProps>(({ id }) => {
   }
 
   return (
-    <Flexbox align={'center'} horizontal>
+    <Flexbox horizontal align={'center'}>
       <BubblesLoading />
       {operationLabel && (
         <Text type={'secondary'}>

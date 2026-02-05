@@ -1,14 +1,14 @@
 import type { ActivityListResult } from '@lobechat/types';
 import { uniqBy } from 'es-toolkit/compat';
 import { produce } from 'immer';
-import useSWR, { type SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
+import useSWR from 'swr';
 
-import { userMemoryService } from '@/services/userMemory';
-import { memoryCRUDService } from '@/services/userMemory/index';
-import { type StoreSetter } from '@/store/types';
+import { memoryCRUDService,userMemoryService  } from '@/services/userMemory';
+import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type UserMemoryStore } from '../../store';
+import type {UserMemoryStore} from '../../store';
 
 const n = setNamespace('userMemory/activity');
 

@@ -4,7 +4,7 @@ import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type DiscoverProviderDetailModelItem } from '@/types/discover';
+import type {DiscoverProviderDetailModelItem} from '@/types/discover';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {
@@ -29,7 +29,7 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 const RelatedItem = memo<DiscoverProviderDetailModelItem>(({ id, displayName }) => {
   const { t } = useTranslation('models');
   return (
-    <Block gap={12} horizontal key={id} padding={12} variant={'outlined'}>
+    <Block horizontal gap={12} key={id} padding={12} variant={'outlined'}>
       <ModelIcon model={id} size={40} style={{ flex: 'none' }} type={'avatar'} />
       <Flexbox
         flex={1}
@@ -38,7 +38,7 @@ const RelatedItem = memo<DiscoverProviderDetailModelItem>(({ id, displayName }) 
           overflow: 'hidden',
         }}
       >
-        <Text as={'h2'} className={styles.title} ellipsis>
+        <Text ellipsis as={'h2'} className={styles.title}>
           {displayName || id}
         </Text>
         <Text

@@ -1,4 +1,4 @@
-import { type ChatMessageError, type ChatPluginPayload } from '@lobechat/types';
+import type {ChatMessageError, ChatPluginPayload} from '@lobechat/types';
 import { Alert, Flexbox, Highlighter } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
@@ -25,6 +25,9 @@ const ErrorResponse = memo<ErrorResponseProps>(({ id, type, body, message, plugi
 
   return (
     <Alert
+      showIcon
+      title={t(`response.${type}` as any)}
+      type={'secondary'}
       extra={
         <Flexbox className={styles.errorResponseExtra}>
           <Highlighter actionIconSize={'small'} language={'json'} variant={'borderless'}>
@@ -32,9 +35,6 @@ const ErrorResponse = memo<ErrorResponseProps>(({ id, type, body, message, plugi
           </Highlighter>
         </Flexbox>
       }
-      showIcon
-      title={t(`response.${type}` as any)}
-      type={'secondary'}
     />
   );
 });

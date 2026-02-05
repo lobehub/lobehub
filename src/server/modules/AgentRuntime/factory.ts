@@ -5,8 +5,8 @@ import { appEnv } from '@/envs/app';
 import { AgentStateManager } from './AgentStateManager';
 import { inMemoryAgentStateManager } from './InMemoryAgentStateManager';
 import { inMemoryStreamEventManager } from './InMemoryStreamEventManager';
-import { StreamEventManager } from './StreamEventManager';
 import { getAgentRuntimeRedisClient } from './redis';
+import { StreamEventManager } from './StreamEventManager';
 import type { IAgentStateManager, IStreamEventManager } from './types';
 
 const log = debug('lobe-server:agent-runtime:factory');

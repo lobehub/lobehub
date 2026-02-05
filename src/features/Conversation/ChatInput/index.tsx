@@ -1,11 +1,14 @@
 'use client';
 
 import type { SlashOptions } from '@lobehub/editor';
-import { Alert, Flexbox, type MenuProps } from '@lobehub/ui';
-import { type ReactNode, memo, useCallback } from 'react';
+import type {MenuProps} from '@lobehub/ui';
+import { Alert, Flexbox  } from '@lobehub/ui';
+import type {ReactNode} from 'react';
+import { memo,  useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type ActionKeys, ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
+import type {ActionKeys} from '@/features/ChatInput';
+import {  ChatInputProvider, DesktopChatInput } from '@/features/ChatInput';
 import type { SendButtonHandler, SendButtonProps } from '@/features/ChatInput/store/initialState';
 import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
@@ -137,9 +140,9 @@ const ChatInput = memo<ChatInputProps>(
           <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
             <Alert
               closable
-              onClose={clearSendMessageError}
               title={t('input.errorMsg', { errorMsg: sendMessageErrorMsg })}
               type={'secondary'}
+              onClose={clearSendMessageError}
             />
           </Flexbox>
         )}
@@ -150,19 +153,19 @@ const ChatInput = memo<ChatInputProps>(
     return (
       <ChatInputProvider
         agentId={agentId}
+        leftActions={leftActions}
+        mentionItems={mentionItems}
+        rightActions={rightActions}
+        sendButtonProps={sendButtonProps}
+        sendMenu={sendMenu}
         chatInputEditorRef={(instance) => {
           if (instance) {
             setEditor(instance);
             onEditorReady?.(instance);
           }
         }}
-        leftActions={leftActions}
-        mentionItems={mentionItems}
         onMarkdownContentChange={updateInputMessage}
         onSend={handleSend}
-        rightActions={rightActions}
-        sendButtonProps={sendButtonProps}
-        sendMenu={sendMenu}
       >
         {children ?? defaultContent}
       </ChatInputProvider>

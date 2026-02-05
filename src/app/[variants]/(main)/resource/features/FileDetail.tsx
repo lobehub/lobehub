@@ -7,7 +7,7 @@ import { BoltIcon, DownloadIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type FileListItem } from '@/types/files';
+import type {FileListItem} from '@/types/files';
 import { downloadFile } from '@/utils/client/downloadFile';
 import { formatSize } from '@/utils/format';
 
@@ -55,11 +55,13 @@ const FileDetail = memo<FileDetailProps>((props) => {
 
   const dataItems = [
     {
-      children: (
+      children: chunkCount ? (
         <Tag icon={<Icon icon={BoltIcon} />} variant={'filled'}>
           {' '}
           {chunkCount}
         </Tag>
+      ) : (
+        t('detail.data.noChunk')
       ),
       key: 'chunkCount',
       label: t('detail.data.chunkCount'),
@@ -80,21 +82,21 @@ const FileDetail = memo<FileDetailProps>((props) => {
       <Descriptions
         colon={false}
         column={1}
-        extra={
-          showDownloadButton && url ? (
-            <ActionIcon
-              icon={DownloadIcon}
-              onClick={() => {
-                downloadFile(url, name);
-              }}
-              title={t('download', { ns: 'common' })}
-            />
-          ) : undefined
-        }
         items={items}
         labelStyle={{ width: 120 }}
         size={'small'}
         title={showTitle ? t('detail.basic.title') : undefined}
+        extra={
+          showDownloadButton && url ? (
+            <ActionIcon
+              icon={DownloadIcon}
+              title={t('download', { ns: 'common' })}
+              onClick={() => {
+                downloadFile(url, name);
+              }}
+            />
+          ) : undefined
+        }
       />
       <Divider />
       <Descriptions

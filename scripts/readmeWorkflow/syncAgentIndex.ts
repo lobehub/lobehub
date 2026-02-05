@@ -2,7 +2,8 @@ import { consola } from 'consola';
 import { markdownTable } from 'markdown-table';
 import urlJoin from 'url-join';
 
-import { AGENT_SPLIT, DataItem } from './const';
+import type { DataItem } from './const';
+import { AGENT_SPLIT } from './const';
 import {
   fetchAgentIndex,
   genLink,

@@ -1,7 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { type ChatVideoItem } from '@/types/index';
+import type {ChatVideoItem} from '@/types/index';
 
 interface VideoFileListViewerProps {
   items: ChatVideoItem[];

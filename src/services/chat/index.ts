@@ -1,24 +1,22 @@
 import { AgentBuilderIdentifier } from '@lobechat/builtin-tool-agent-builder';
 import { KLAVIS_SERVER_TYPES, LOBEHUB_SKILL_PROVIDERS } from '@lobechat/const';
 import type { OfficialToolItem } from '@lobechat/context-engine';
+import type {FetchSSEOptions} from '@lobechat/fetch-sse';
 import {
-  type FetchSSEOptions,
   fetchSSE,
   getMessageError,
-  standardizeAnimationStyle,
+  standardizeAnimationStyle
 } from '@lobechat/fetch-sse';
-import { AgentRuntimeError, type ChatCompletionErrorPayload } from '@lobechat/model-runtime';
+import type {ChatCompletionErrorPayload} from '@lobechat/model-runtime';
+import { AgentRuntimeError  } from '@lobechat/model-runtime';
+import type {RuntimeInitialContext, RuntimeStepContext, TracePayload, UIChatMessage} from '@lobechat/types';
 import {
   ChatErrorType,
-  type RuntimeInitialContext,
-  type RuntimeStepContext,
-  type TracePayload,
-  TraceTagMap,
-  type UIChatMessage,
+  TraceTagMap
 } from '@lobechat/types';
+import type {PluginRequestPayload} from '@lobehub/chat-plugin-sdk';
 import {
-  type PluginRequestPayload,
-  createHeadersWithPluginSettings,
+  createHeadersWithPluginSettings
 } from '@lobehub/chat-plugin-sdk';
 import { merge } from 'es-toolkit/compat';
 import { ModelProvider } from 'model-bank';
@@ -54,14 +52,14 @@ import { createTraceHeader, getTraceId } from '@/utils/trace';
 import { createHeaderWithAuth } from '../_auth';
 import { API_ENDPOINTS } from '../_url';
 import { findDeploymentName, isEnableFetchOnClient, resolveRuntimeProvider } from './helper';
+import type {ResolvedAgentConfig} from './mecha';
 import {
-  type ResolvedAgentConfig,
   contextEngineering,
   getTargetAgentId,
   initializeWithClientStore,
-  resolveModelExtendParams,
+  resolveModelExtendParams
 } from './mecha';
-import { type FetchOptions } from './types';
+import type {FetchOptions} from './types';
 
 interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
   agentId?: string;
@@ -364,7 +362,7 @@ class ChatService {
     /**
      * Use browser agent runtime
      */
-    let enableFetchOnClient = isEnableFetchOnClient(provider);
+    const enableFetchOnClient = isEnableFetchOnClient(provider);
 
     let fetcher: typeof fetch | undefined = undefined;
 

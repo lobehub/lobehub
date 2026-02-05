@@ -1,4 +1,4 @@
-import { ChatToolPayload, MessageToolCall } from '@lobechat/types';
+import type { ChatToolPayload, MessageToolCall } from '@lobechat/types';
 
 export interface GeneralAgentCallLLMInstructionPayload {
   /** Force create a new assistant message (e.g., after compression) */

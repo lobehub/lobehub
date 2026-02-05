@@ -6,7 +6,7 @@ import { ChatGroupModel } from '@/database/models/chatGroup';
 import { UserModel } from '@/database/models/user';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
 import { insertAgentSchema } from '@/database/schemas';
-import { type ChatGroupConfig } from '@/database/types/chatGroup';
+import type {ChatGroupConfig} from '@/database/types/chatGroup';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { AgentGroupService } from '@/server/services/agentGroup';
@@ -162,7 +162,7 @@ export const agentGroupRouter = router({
       // Filter out null/undefined values from supervisorConfig
       const supervisorConfig = input.supervisorConfig
         ? Object.fromEntries(
-            // eslint-disable-next-line @typescript-eslint/no-unused-vars, eqeqeq
+             
             Object.entries(input.supervisorConfig).filter(([_, v]) => v != null),
           )
         : undefined;

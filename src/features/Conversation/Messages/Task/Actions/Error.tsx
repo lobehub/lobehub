@@ -1,5 +1,5 @@
-import { ActionIconGroup } from '@lobehub/ui';
 import type { ActionIconGroupEvent } from '@lobehub/ui';
+import { ActionIconGroup } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { AssistantActions } from './useAssistantActions';

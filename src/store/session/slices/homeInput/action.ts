@@ -2,7 +2,7 @@ import { documentService } from '@/services/document';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';
 import type { SessionStore } from '@/store/session/store';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { StarterMode } from './initialState';

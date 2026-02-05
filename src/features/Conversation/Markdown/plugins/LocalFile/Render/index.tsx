@@ -3,7 +3,7 @@ import React, { memo } from 'react';
 
 import { LocalFile } from '@/features/LocalFile';
 
-import { type MarkdownElementProps } from '../../type';
+import type {MarkdownElementProps} from '../../type';
 
 interface LocalFileProps {
   isDirectory: boolean;

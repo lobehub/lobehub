@@ -1,4 +1,4 @@
-import { GenerateContentResponse } from '@google/genai';
+import type { GenerateContentResponse } from '@google/genai';
 import { describe, expect, it, vi } from 'vitest';
 
 import * as uuidModule from '../../../utils/uuid';
@@ -1103,7 +1103,7 @@ describe('GoogleGenerativeAIStream', () => {
               content: {
                 parts: [
                   {
-                    text: '**Planning the Solution**\n\nI\'m solidifying my plan...',
+                    text: "**Planning the Solution**\n\nI'm solidifying my plan...",
                     thought: true,
                   },
                 ],

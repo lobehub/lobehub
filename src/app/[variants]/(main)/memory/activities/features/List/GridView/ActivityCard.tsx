@@ -24,9 +24,9 @@ const ActivityCard = memo<ActivityCardProps>(({ activity, onClick }) => {
       capturedAt={capturedAt}
       cate={activity.type}
       hashTags={activity.tags}
-      onClick={() => onClick(activity)}
       title={activity.title || t('activity.defaultType')}
       titleAddon={activity.timezone}
+      onClick={() => onClick(activity)}
     >
       {activity.narrative || activity.notes || t('activity.defaultType')}
     </GridCard>

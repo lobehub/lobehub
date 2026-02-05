@@ -11,7 +11,7 @@ import {
   MessageSquareTextIcon,
   MicIcon,
 } from 'lucide-react';
-import { Suspense, memo, useMemo, useState } from 'react';
+import { memo, Suspense, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useIsMobile } from '@/hooks/useIsMobile';
@@ -21,9 +21,9 @@ import DisabledModels from './DisabledModels';
 import EmptyModels from './EmptyModels';
 import EnabledModelList from './EnabledModelList';
 import ModelTitle from './ModelTitle';
+import type {ProviderSettingsContextValue} from './ProviderSettingsContext';
 import {
-  ProviderSettingsContext,
-  type ProviderSettingsContextValue,
+  ProviderSettingsContext
 } from './ProviderSettingsContext';
 import SearchResult from './SearchResult';
 import SkeletonList from './SkeletonList';
@@ -131,9 +131,9 @@ const Content = memo<ContentProps>(({ id }) => {
       <Tabs
         activeKey={currentActiveTab}
         items={tabs}
-        onChange={setActiveTab}
         size="small"
         style={{ marginBottom: 12, marginLeft: -6 }}
+        onChange={setActiveTab}
       />
       <EnabledModelList activeTab={currentActiveTab} />
       <DisabledModels activeTab={currentActiveTab} providerId={id} />

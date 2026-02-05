@@ -1,4 +1,4 @@
-import { type NextRequest } from 'next/server';
+import type {NextRequest} from 'next/server';
 import { describe, expect, it } from 'vitest';
 
 import { createRouteMatcher } from './createRouteMatcher';

@@ -1,9 +1,6 @@
-import { CompressionRepository, type LobeChatDatabase } from '@lobechat/database';
-import {
-  type CreateMessageParams,
-  type UIChatMessage,
-  type UpdateMessageParams,
-} from '@lobechat/types';
+import type {LobeChatDatabase} from '@lobechat/database';
+import { CompressionRepository  } from '@lobechat/database';
+import type {CreateMessageParams, UIChatMessage, UpdateMessageParams} from '@lobechat/types';
 
 import { MessageModel } from '@/database/models/message';
 

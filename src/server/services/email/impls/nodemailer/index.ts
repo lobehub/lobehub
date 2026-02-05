@@ -1,12 +1,12 @@
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
+import nodemailer from 'nodemailer';
 
 import { emailEnv } from '@/envs/email';
 
-import { type EmailPayload, type EmailResponse, type EmailServiceImpl } from '../type';
-import { type NodemailerConfig } from './type';
+import type {EmailPayload, EmailResponse, EmailServiceImpl} from '../type';
+import type {NodemailerConfig} from './type';
 
 const log = debug('lobe-email:Nodemailer');
 

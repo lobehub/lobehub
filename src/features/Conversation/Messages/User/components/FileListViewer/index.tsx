@@ -1,7 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { type ChatFileItem } from '@/types/index';
+import type {ChatFileItem} from '@/types/index';
 
 import FileItem from './Item';
 

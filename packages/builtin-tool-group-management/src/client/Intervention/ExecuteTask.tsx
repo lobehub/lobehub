@@ -1,12 +1,13 @@
 'use client';
 
-import { BuiltinInterventionProps } from '@lobechat/types';
+import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Avatar, Flexbox, Tooltip } from '@lobehub/ui';
 import { Input, InputNumber } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Clock } from 'lucide-react';
-import { ChangeEvent, memo, useCallback, useEffect, useState } from 'react';
+import type { ChangeEvent } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAgentGroupStore } from '@/store/agentGroup';
@@ -123,8 +124,8 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
     return (
       <Flexbox className={styles.container} gap={12}>
         {/* Header: Agent info + Timeout */}
-        <Flexbox align={'center'} gap={12} horizontal justify={'space-between'}>
-          <Flexbox align={'center'} flex={1} gap={12} horizontal style={{ minWidth: 0 }}>
+        <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+          <Flexbox horizontal align={'center'} flex={1} gap={12} style={{ minWidth: 0 }}>
             <Avatar
               avatar={agent?.avatar || '🤖'}
               background={agent?.backgroundColor || undefined}
@@ -137,7 +138,7 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
               </span>
             </Flexbox>
           </Flexbox>
-          <Flexbox align="center" gap={8} horizontal style={{ flexShrink: 0 }}>
+          <Flexbox horizontal align="center" gap={8} style={{ flexShrink: 0 }}>
             <Tooltip title={t('agentGroupManagement.executeTask.intervention.timeout')}>
               <Clock size={14} />
             </Tooltip>
@@ -145,11 +146,11 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
               className={styles.timeoutInput}
               max={120}
               min={1}
-              onChange={handleTimeoutChange}
               size={'small'}
               suffix={t('agentGroupManagement.executeTask.intervention.timeoutUnit')}
               value={Math.round(timeout / 60_000)}
               variant={'filled'}
+              onChange={handleTimeoutChange}
             />
           </Flexbox>
         </Flexbox>
@@ -157,9 +158,9 @@ const ExecuteTaskIntervention = memo<BuiltinInterventionProps<ExecuteTaskParams>
         {/* Instruction input */}
         <Input.TextArea
           autoSize={{ maxRows: 10, minRows: 6 }}
-          onChange={handleInstructionChange}
           placeholder={t('agentGroupManagement.executeTask.intervention.taskPlaceholder')}
           value={instruction}
+          onChange={handleInstructionChange}
         />
       </Flexbox>
     );

@@ -50,7 +50,7 @@ export const CreateDocumentStreaming = memo<BuiltinStreamingProps<CreateDocument
     return (
       <Flexbox className={styles.container}>
         {/* Header */}
-        <Flexbox align={'center'} className={styles.header} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} className={styles.header} gap={8}>
           <NotebookText className={styles.icon} size={16} />
           <Flexbox flex={1}>
             <div className={styles.title}>{title}</div>

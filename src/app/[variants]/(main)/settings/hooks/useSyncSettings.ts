@@ -1,4 +1,4 @@
-import { type FormInstance } from 'antd/es/form/hooks/useForm';
+import type {FormInstance} from 'antd/es/form/hooks/useForm';
 import { useLayoutEffect } from 'react';
 
 import { useUserStore } from '@/store/user';

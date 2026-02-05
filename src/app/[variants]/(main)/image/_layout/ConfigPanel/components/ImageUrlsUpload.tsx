@@ -30,8 +30,8 @@ const ImageUrlsUpload = memo(() => {
     return (
       <ImageUpload
         maxFileSize={maxFileSize}
-        onChange={handleSingleChange}
         value={value?.[0] ?? null}
+        onChange={handleSingleChange}
       />
     );
   }
@@ -59,8 +59,8 @@ const ImageUrlsUpload = memo(() => {
     <MultiImagesUpload
       maxCount={maxCount}
       maxFileSize={maxFileSize}
-      onChange={handleChange}
       value={value}
+      onChange={handleChange}
     />
   );
 });

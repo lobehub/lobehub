@@ -1,15 +1,17 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
 import type { Stream } from '@anthropic-ai/sdk/streaming';
-import { ChatCitationItem } from '@lobechat/types';
+import type { ChatCitationItem } from '@lobechat/types';
 
-import { ChatStreamCallbacks } from '../../types';
+import type { ChatStreamCallbacks } from '../../types';
 import { convertAnthropicUsage } from '../usageConverters';
-import {
+import type {
   ChatPayloadForTransformStream,
   StreamContext,
   StreamProtocolChunk,
   StreamProtocolToolCallChunk,
   StreamToolCallChunkData,
+} from './protocol';
+import {
   convertIterableToStream,
   createCallbacksTransformer,
   createSSEProtocolTransformer,

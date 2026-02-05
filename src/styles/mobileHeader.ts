@@ -1,4 +1,4 @@
-import { type CSSProperties } from 'react';
+import type {CSSProperties} from 'react';
 
 export const mobileHeaderSticky: CSSProperties = {
   position: 'sticky',

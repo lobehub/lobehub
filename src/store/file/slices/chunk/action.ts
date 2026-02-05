@@ -1,7 +1,7 @@
 import { ragService } from '@/services/rag';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 
-import { type FileStore } from '../../store';
+import type {FileStore} from '../../store';
 
 type Setter = StoreSetter<FileStore>;
 export const createFileChunkSlice = (set: Setter, get: () => FileStore, _api?: unknown) =>

@@ -1,10 +1,10 @@
-import { type SearchParams, type UniformSearchResponse, type UniformSearchResult } from '@lobechat/types';
+import type {SearchParams, UniformSearchResponse, UniformSearchResult} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
-import { type SearchServiceImpl } from '../type';
-import { type Search1ApiResponse } from './type';
+import type {SearchServiceImpl} from '../type';
+import type {Search1ApiResponse} from './type';
 
 interface Search1APIQueryParams {
   crawl_results?: 0 | 1;

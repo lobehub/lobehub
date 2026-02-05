@@ -2,7 +2,7 @@ import { isDesktop } from '@/const/version';
 import { MARKET_OIDC_ENDPOINTS } from '@/services/_url';
 
 import { MarketAuthError } from './errors';
-import { type OIDCConfig, type PKCEParams, type TokenResponse } from './types';
+import type {OIDCConfig, PKCEParams, TokenResponse} from './types';
 
 /**
  * Market OIDC 授权工具类

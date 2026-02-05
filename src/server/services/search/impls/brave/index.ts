@@ -1,10 +1,10 @@
-import { type SearchParams, type UniformSearchResponse, type UniformSearchResult } from '@lobechat/types';
+import type {SearchParams, UniformSearchResponse, UniformSearchResult} from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import urlJoin from 'url-join';
 
-import { type SearchServiceImpl } from '../type';
-import { type BraveResponse, type BraveSearchParameters } from './type';
+import type {SearchServiceImpl} from '../type';
+import type {BraveResponse, BraveSearchParameters} from './type';
 
 const log = debug('lobe-search:Brave');
 
@@ -39,7 +39,7 @@ export class BraveImpl implements SearchServiceImpl {
       result_filter: 'web',
     };
 
-    let body: BraveSearchParameters = {
+    const body: BraveSearchParameters = {
       ...defaultQueryParams,
       freshness:
         params?.searchTimeRange && params.searchTimeRange !== 'anytime'

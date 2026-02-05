@@ -6,7 +6,7 @@ import { GitForkIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type DiscoverAssistantItem } from '@/types/discover';
+import type {DiscoverAssistantItem} from '@/types/discover';
 
 import UserAgentCard from './UserAgentCard';
 
@@ -31,7 +31,7 @@ const UserForkedAgents = memo<UserForkedAgentsProps>(({ agents = [], rows = 4, p
 
   return (
     <Flexbox gap={16}>
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         <GitForkIcon size={16} />
         <Text fontSize={16} weight={500}>
           {t('user.forkedAgents')}
@@ -47,10 +47,10 @@ const UserForkedAgents = memo<UserForkedAgentsProps>(({ agents = [], rows = 4, p
         <Flexbox align={'center'} justify={'center'}>
           <Pagination
             current={currentPage}
-            onChange={(page) => setCurrentPage(page)}
             pageSize={pageSize}
             showSizeChanger={false}
             total={agents.length}
+            onChange={(page) => setCurrentPage(page)}
           />
         </Flexbox>
       )}

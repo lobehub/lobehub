@@ -1,4 +1,4 @@
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
+import type {LobeChatPluginManifest} from '@lobehub/chat-plugin-sdk';
 import { merge } from 'es-toolkit/compat';
 import { t } from 'i18next';
 
@@ -7,11 +7,11 @@ import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
 import { toolService } from '@/services/tool';
 import { pluginHelpers } from '@/store/tool/helpers';
-import { type StoreSetter } from '@/store/types';
-import { type LobeToolCustomPlugin, type PluginInstallError } from '@/types/tool/plugin';
+import type {StoreSetter} from '@/store/types';
+import type {LobeToolCustomPlugin, PluginInstallError} from '@/types/tool/plugin';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type ToolStore } from '../../store';
+import type {ToolStore} from '../../store';
 import { pluginSelectors } from '../plugin/selectors';
 import { defaultCustomPlugin } from './initialState';
 

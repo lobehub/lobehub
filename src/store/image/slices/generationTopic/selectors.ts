@@ -1,4 +1,4 @@
-import { type ImageStoreState } from '../../initialState';
+import type {ImageStoreState} from '../../initialState';
 
 const activeGenerationTopicId = (s: ImageStoreState) => s.activeGenerationTopicId;
 const generationTopics = (s: ImageStoreState) => s.generationTopics;

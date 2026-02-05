@@ -6,10 +6,10 @@ import { useTranslation } from 'react-i18next';
 import Statistic from '@/components/Statistic';
 import StatisticCard from '@/components/StatisticCard';
 import TitleWithPercentage from '@/components/StatisticCard/TitleWithPercentage';
-import { type UsageLog } from '@/types/usage/usageRecord';
+import type {UsageLog} from '@/types/usage/usageRecord';
 import { formatNumber } from '@/utils/format';
 
-import { type UsageChartProps } from '../../../types';
+import type {UsageChartProps} from '../../../types';
 
 const computeMonth = (
   data: UsageLog[],
@@ -36,13 +36,13 @@ const MonthSpend = memo<UsageChartProps>(({ data, isLoading }) => {
   return (
     <StatisticCard
       loading={isLoading}
+      title={<TitleWithPercentage title={t('usage.cards.month.title')} />}
       statistic={{
         description: <Statistic title={t('usage.cards.month.modelCalls')} value={calls} />,
         precision: 2,
         prefix: '$',
         value: spend,
       }}
-      title={<TitleWithPercentage title={t('usage.cards.month.title')} />}
     />
   );
 });

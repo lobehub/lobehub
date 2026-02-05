@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react';
 
 import { useResourceManagerStore } from '@/app/[variants]/(main)/resource/features/store';
-import { type ViewMode } from '@/app/[variants]/(main)/resource/features/store/initialState';
+import type {ViewMode} from '@/app/[variants]/(main)/resource/features/store/initialState';
 import { parseAsStringEnum, useQueryState } from '@/hooks/useQueryParam';
 
 /**

@@ -29,15 +29,15 @@ const TitleSection = memo(() => {
   return (
     <Flexbox
       gap={16}
-      onClick={(e) => {
-        e.stopPropagation();
-        e.preventDefault();
-      }}
-      onMouseEnter={() => setIsHoveringTitle(true)}
-      onMouseLeave={() => setIsHoveringTitle(false)}
       paddingBlock={16}
       style={{
         cursor: 'default',
+      }}
+      onMouseEnter={() => setIsHoveringTitle(true)}
+      onMouseLeave={() => setIsHoveringTitle(false)}
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
       }}
     >
       {/* Emoji picker above Choose Icon button */}
@@ -45,6 +45,11 @@ const TitleSection = memo(() => {
         <EmojiPicker
           allowDelete
           locale={locale}
+          open={showEmojiPicker}
+          shape={'square'}
+          size={72}
+          title={t('pageEditor.chooseIcon')}
+          value={emoji}
           onChange={(e) => {
             setEmoji(e);
             setShowEmojiPicker(false);
@@ -56,11 +61,6 @@ const TitleSection = memo(() => {
           onOpenChange={(open) => {
             setShowEmojiPicker(open);
           }}
-          open={showEmojiPicker}
-          shape={'square'}
-          size={72}
-          title={t('pageEditor.chooseIcon')}
-          value={emoji}
         />
       )}
 
@@ -68,17 +68,17 @@ const TitleSection = memo(() => {
       {!emoji && !showEmojiPicker && (
         <Button
           icon={<Icon icon={SmilePlus} />}
-          onClick={() => {
-            setEmoji('📄');
-            setShowEmojiPicker(true);
-          }}
           size="small"
+          type="text"
           style={{
             opacity: isHoveringTitle ? 1 : 0,
             transition: `opacity ${cssVar.motionDurationMid} ${cssVar.motionEaseInOut}`,
             width: 'fit-content',
           }}
-          type="text"
+          onClick={() => {
+            setEmoji('📄');
+            setShowEmojiPicker(true);
+          }}
         >
           {t('pageEditor.chooseIcon')}
         </Button>
@@ -87,6 +87,16 @@ const TitleSection = memo(() => {
       {/* Title Input */}
       <TextArea
         autoSize={{ minRows: 1 }}
+        placeholder={t('pageEditor.titlePlaceholder')}
+        value={title}
+        variant={'borderless'}
+        style={{
+          fontSize: 36,
+          fontWeight: 600,
+          padding: 0,
+          resize: 'none',
+          width: '100%',
+        }}
         onChange={(e) => {
           const truncated = truncateByWeightedLength(e.target.value, 100);
           setTitle(truncated);
@@ -97,16 +107,6 @@ const TitleSection = memo(() => {
             handleTitleSubmit();
           }
         }}
-        placeholder={t('pageEditor.titlePlaceholder')}
-        style={{
-          fontSize: 36,
-          fontWeight: 600,
-          padding: 0,
-          resize: 'none',
-          width: '100%',
-        }}
-        value={title}
-        variant={'borderless'}
       />
     </Flexbox>
   );

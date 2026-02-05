@@ -1,16 +1,16 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 import type { AgentState, ExecutorResult } from '@lobechat/agent-runtime';
 import { GroupOrchestrationRuntime, GroupOrchestrationSupervisor } from '@lobechat/agent-runtime';
-import { type TaskStatusResult } from '@lobechat/types';
+import type {TaskStatusResult} from '@lobechat/types';
 import debug from 'debug';
-import { type SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { aiAgentService } from '@/services/aiAgent';
 import { createGroupOrchestrationExecutors } from '@/store/chat/agents/GroupOrchestration';
-import { type ChatStore } from '@/store/chat/store';
+import type {ChatStore} from '@/store/chat/store';
 import type { GroupOrchestrationCallbacks } from '@/store/tool/slices/builtin/types';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 
 const log = debug('lobe-store:group-orchestration');
 

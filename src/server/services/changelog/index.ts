@@ -5,8 +5,8 @@ import semver from 'semver';
 import urlJoin from 'url-join';
 
 import { FetchCacheTag } from '@/const/cacheControl';
-import { type Locales } from '@/locales/resources';
-import { type ChangelogIndexItem } from '@/types/changelog';
+import type {Locales} from '@/locales/resources';
+import type {ChangelogIndexItem} from '@/types/changelog';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 const URL_TEMPLATE = 'https://raw.githubusercontent.com/{{user}}/{{repo}}/{{branch}}/{{path}}';
@@ -186,7 +186,7 @@ export class ChangelogService {
 
   private genUrl(path: string) {
     // Custom delimiter set to {{}}
-    const compiledTemplate = template(this.config.urlTemplate, { interpolate: /{{([\S\s]+?)}}/g });
+    const compiledTemplate = template(this.config.urlTemplate, { interpolate: /\{{([\s\S]+?)\}}/g });
 
     return compiledTemplate({ ...this.config, path });
   }

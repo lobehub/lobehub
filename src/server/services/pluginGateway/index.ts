@@ -1,12 +1,12 @@
-import { type ChatToolPayload } from '@lobechat/types';
+import type {ChatToolPayload} from '@lobechat/types';
 import { safeParseJSON } from '@lobechat/utils';
 import type { PluginRequestPayload } from '@lobehub/chat-plugin-sdk';
-import { type GatewaySuccessResponse } from '@lobehub/chat-plugins-gateway';
+import type {GatewaySuccessResponse} from '@lobehub/chat-plugins-gateway';
 import debug from 'debug';
 
 import { getAppConfig } from '@/envs/app';
 import { parserPluginSettings } from '@/server/services/pluginGateway/settings';
-import { type ToolExecutionContext } from '@/server/services/toolExecution/types';
+import type {ToolExecutionContext} from '@/server/services/toolExecution/types';
 
 const log = debug('lobe-server:plugin-gateway-service');
 

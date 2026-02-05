@@ -6,14 +6,9 @@ import {
   DEFAULT_MODEL,
   DEFAUTT_AGENT_TTS_CONFIG,
 } from '@lobechat/const';
+import type {AgentMode, KnowledgeItem, LobeAgentConfig, LobeAgentTTSConfig, LocalSystemConfig, MetaData} from '@lobechat/types';
 import {
-  type AgentMode,
-  type KnowledgeItem,
-  KnowledgeType,
-  type LobeAgentConfig,
-  type LobeAgentTTSConfig,
-  type LocalSystemConfig,
-  type MetaData,
+  KnowledgeType
 } from '@lobechat/types';
 import { VoiceList } from '@lobehub/tts';
 

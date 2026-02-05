@@ -1,34 +1,32 @@
 import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
-import { type PluginItem, type PluginListResponse } from '@lobehub/market-sdk';
-import { type TRPCClientError } from '@trpc/client';
+import type {LobeChatPluginManifest} from '@lobehub/chat-plugin-sdk';
+import type {PluginItem, PluginListResponse} from '@lobehub/market-sdk';
+import type {TRPCClientError} from '@trpc/client';
 import debug from 'debug';
 import { uniqBy } from 'es-toolkit/compat';
 import { produce } from 'immer';
 import { gt, valid } from 'semver';
-import useSWR, { type SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
+import useSWR from 'swr';
 
-import { type MCPErrorData, parseStdioErrorMessage } from '@/libs/mcp/types';
+import type {MCPErrorData} from '@/libs/mcp/types';
+import {  parseStdioErrorMessage } from '@/libs/mcp/types';
 import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
 import { globalHelpers } from '@/store/global/helpers';
 import { mcpStoreSelectors } from '@/store/tool/selectors';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { McpConnectionType } from '@/types/discover';
+import type {CheckMcpInstallResult, McpConnectionParams, MCPErrorInfo, MCPInstallProgress, MCPPluginListParams} from '@/types/plugins';
 import {
-  type CheckMcpInstallResult,
-  type MCPErrorInfo,
-  type MCPInstallProgress,
-  MCPInstallStep,
-  type MCPPluginListParams,
-  type McpConnectionParams,
+  MCPInstallStep
 } from '@/types/plugins';
 import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type ToolStore } from '../../store';
-import { type MCPStoreState } from './initialState';
+import type {ToolStore} from '../../store';
+import type {MCPStoreState} from './initialState';
 
 const log = debug('lobe-mcp:store:action');
 
@@ -295,7 +293,7 @@ export class PluginMCPStoreActionImpl {
         // Prioritize endpoint (http/cloud) over stdio in all environments
         // Desktop: endpoint > stdio
         // Web: endpoint only (stdio not supported)
-        let shouldUseHttpDeployment = !!httpOption;
+        const shouldUseHttpDeployment = !!httpOption;
 
         if (hasCloudEndpoint) {
           // Use cloudEndPoint, create cloud type connection

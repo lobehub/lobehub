@@ -1,7 +1,7 @@
 import { Flexbox, Markdown } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useState } from 'react';
 
-import { type UserGeneralConfig } from '@/types/user/settings';
+import type {UserGeneralConfig} from '@/types/user/settings';
 
 const data = `
 ### Features
@@ -65,7 +65,7 @@ const ChatTransitionPreview = memo<ChatTransitionPreviewProps>(({ mode }) => {
 
   return (
     <Flexbox height={180}>
-      <Markdown animated={mode === 'fadeIn'} enableStream variant={'chat'}>
+      <Markdown enableStream animated={mode === 'fadeIn'} variant={'chat'}>
         {streamedContent}
       </Markdown>
     </Flexbox>

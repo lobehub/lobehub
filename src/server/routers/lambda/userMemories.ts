@@ -4,7 +4,7 @@ import {
   DEFAULT_USER_MEMORY_EMBEDDING_DIMENSIONS,
   DEFAULT_USER_MEMORY_EMBEDDING_MODEL_ITEM,
 } from '@lobechat/const';
-import { type LobeChatDatabase } from '@lobechat/database';
+import type {LobeChatDatabase} from '@lobechat/database';
 import {
   ActivityMemoryItemSchema,
   AddIdentityActionSchema,
@@ -14,18 +14,19 @@ import {
   RemoveIdentityActionSchema,
   UpdateIdentityActionSchema,
 } from '@lobechat/memory-user-memory';
-import { LayersEnum, type SearchMemoryResult, searchMemorySchema } from '@lobechat/types';
-import { type SQL, and, asc, eq, gte, lte } from 'drizzle-orm';
+import type {SearchMemoryResult} from '@lobechat/types';
+import { LayersEnum,  searchMemorySchema } from '@lobechat/types';
+import type {SQL} from 'drizzle-orm';
+import { and, asc, eq, gte, lte } from 'drizzle-orm';
 import pMap from 'p-map';
 import { z } from 'zod';
 
+import type {IdentityEntryBasePayload, IdentityEntryPayload} from '@/database/models/userMemory';
 import {
-  type IdentityEntryBasePayload,
-  type IdentityEntryPayload,
   UserMemoryActivityModel,
   UserMemoryExperienceModel,
   UserMemoryIdentityModel,
-  UserMemoryModel,
+  UserMemoryModel
 } from '@/database/models/userMemory';
 import { UserMemoryTopicRepository } from '@/database/repositories/userMemory';
 import {

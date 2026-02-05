@@ -15,6 +15,7 @@
   "detail.data.embedding.processing": "进行中",
   "detail.data.embedding.success": "已完成",
   "detail.data.embeddingStatus": "向量化",
+  "detail.data.noChunk": "无分块",
   "empty": "这里还没有文件或文件夹。先上传一个文件，或创建文稿开始整理",
   "header.actions.builtInBlockList.filtered": "已过滤 {{ignored}} 个文件（共 {{total}} 个文件）",
   "header.actions.connect": "连接…",

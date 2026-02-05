@@ -1,4 +1,4 @@
-import dayjs from 'dayjs';
+import type dayjs from 'dayjs';
 import { eq, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 

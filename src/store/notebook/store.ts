@@ -1,11 +1,13 @@
 import { shallow } from 'zustand/shallow';
 import { createWithEqualityFn } from 'zustand/traditional';
-import { type StateCreator } from 'zustand/vanilla';
+import type {StateCreator} from 'zustand/vanilla';
 
 import { createDevtools } from '../middleware/createDevtools';
 import { flattenActions } from '../utils/flattenActions';
-import { type NotebookAction, createNotebookAction } from './action';
-import { type NotebookState, initialNotebookState } from './initialState';
+import type {NotebookAction} from './action';
+import { createNotebookAction } from './action';
+import type {NotebookState} from './initialState';
+import { initialNotebookState } from './initialState';
 
 export type NotebookStore = NotebookState & NotebookAction;
 

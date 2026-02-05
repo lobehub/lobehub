@@ -3,8 +3,9 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
 import { agents, messagePlugins, messages, sessions, topics, users } from '../../../schemas';
-import { LobeChatDatabase } from '../../../type';
-import { CreateTopicParams, TopicModel } from '../../topic';
+import type { LobeChatDatabase } from '../../../type';
+import type { CreateTopicParams } from '../../topic';
+import { TopicModel } from '../../topic';
 
 const userId = 'topic-create-user';
 const userId2 = 'topic-create-user-2';

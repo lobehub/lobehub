@@ -1,22 +1,18 @@
+import { spawn } from 'node:child_process';
+
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import {
-  StdioClientTransport,
   getDefaultEnvironment,
+  StdioClientTransport,
 } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.d.ts';
 import type { Progress } from '@modelcontextprotocol/sdk/types.js';
 import debug from 'debug';
-import { spawn } from 'node:child_process';
 
+import type {MCPClientParams, MCPError, McpPrompt, McpResource, McpTool, ToolCallResult} from './types';
 import {
-  type MCPClientParams,
-  type MCPError,
-  type McpPrompt,
-  type McpResource,
-  type McpTool,
-  type ToolCallResult,
-  createMCPError,
+  createMCPError
 } from './types';
 
 const log = debug('lobe-mcp:client');

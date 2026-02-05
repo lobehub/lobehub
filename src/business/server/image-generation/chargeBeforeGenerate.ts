@@ -1,4 +1,4 @@
-import { type NewGeneration, type NewGenerationBatch } from '@/database/schemas';
+import type {NewGeneration, NewGenerationBatch} from '@/database/schemas';
 import type { CreateImageServicePayload } from '@/server/routers/lambda/image';
 
 interface ChargeParams {
@@ -23,7 +23,7 @@ type ChargeResult =
     };
 
 export async function chargeBeforeGenerate(
-  // eslint-disable-next-line unused-imports/no-unused-vars, @typescript-eslint/no-unused-vars
+  // eslint-disable-next-line unused-imports/no-unused-vars
   params: ChargeParams,
 ): Promise<ChargeResult> {
   return undefined;

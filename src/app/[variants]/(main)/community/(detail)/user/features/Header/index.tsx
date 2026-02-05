@@ -48,14 +48,14 @@ const UserHeader = memo(() => {
           size={64}
           style={{ boxShadow: `0 0 0 4px ${cssVar.colorBgContainer}`, flexShrink: 0 }}
         />
-        <Flexbox align={'flex-start'} gap={16} horizontal justify={'space-between'}>
+        <Flexbox horizontal align={'flex-start'} gap={16} justify={'space-between'}>
           <Flexbox
             gap={4}
             style={{
               overflow: 'hidden',
             }}
           >
-            <Text as={'h1'} ellipsis fontSize={24} style={{ margin: 0 }} weight={'bold'}>
+            <Text ellipsis as={'h1'} fontSize={24} style={{ margin: 0 }} weight={'bold'}>
               {displayName}
             </Text>
             <Text ellipsis fontSize={12} type={'secondary'}>
@@ -64,7 +64,7 @@ const UserHeader = memo(() => {
           </Flexbox>
           {isOwner ? (
             onEditProfile && (
-              <Button onClick={() => onEditProfile()} shape={'round'}>
+              <Button shape={'round'} onClick={() => onEditProfile()}>
                 {t('user.editProfile')}
               </Button>
             )
@@ -78,7 +78,7 @@ const UserHeader = memo(() => {
         {user.description && <Text as={'p'}>{user.description}</Text>}
 
         <TooltipGroup>
-          <Flexbox align={'center'} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} gap={8}>
             {user.socialLinks?.github && (
               <Tooltip title={`@${user.socialLinks?.github}`}>
                 <a

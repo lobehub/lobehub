@@ -26,13 +26,13 @@ const ActivityTimelineView = memo<ActivityTimelineViewProps>(
         groupBy="day"
         hasMore={activitiesHasMore}
         isLoading={isLoading}
-        onLoadMore={loadMoreActivities}
         renderHeader={(periodKey: string) => <PeriodHeader groupBy="day" periodKey={periodKey} />}
         renderItem={(activity: ActivityListItem) => (
           <TimelineItemWrapper>
             <ActivityCard activity={activity} onClick={onCardClick} />
           </TimelineItemWrapper>
         )}
+        onLoadMore={loadMoreActivities}
       />
     );
   },

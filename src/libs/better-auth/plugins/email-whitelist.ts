@@ -1,5 +1,5 @@
 import { APIError } from 'better-auth/api';
-import { type BetterAuthPlugin } from 'better-auth/types';
+import type {BetterAuthPlugin} from 'better-auth/types';
 
 import { authEnv } from '@/envs/auth';
 

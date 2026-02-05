@@ -3,7 +3,8 @@ import type { SidebarAgentItem } from '@lobechat/types';
 import { ActionIcon, Icon } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import { Loader2, PinIcon } from 'lucide-react';
-import { type CSSProperties, type DragEvent, memo, useCallback, useMemo } from 'react';
+import type {CSSProperties, DragEvent} from 'react';
+import {   memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
@@ -80,7 +81,7 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
   // Memoize avatar icon (show loader when updating)
   const avatarIcon = useMemo(() => {
     if (isUpdating) {
-      return <Icon color={cssVar.colorTextDescription} icon={Loader2} size={18} spin />;
+      return <Icon spin color={cssVar.colorTextDescription} icon={Loader2} size={18} />;
     }
     return <GroupAvatar avatars={(avatar as any) || []} size={22} />;
   }, [isUpdating, avatar]);
@@ -103,11 +104,11 @@ const GroupItem = memo<GroupItemProps>(({ item, style, className }) => {
           extra={pinIcon}
           icon={avatarIcon}
           key={id}
+          style={style}
+          title={displayTitle}
           onDoubleClick={handleDoubleClick}
           onDragEnd={handleDragEnd}
           onDragStart={handleDragStart}
-          style={style}
-          title={displayTitle}
         />
       </Link>
       <Editing id={id} title={displayTitle} toggleEditing={toggleEditing} />

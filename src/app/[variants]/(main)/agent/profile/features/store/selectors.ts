@@ -1,4 +1,4 @@
-import { type Store } from './action';
+import type {Store} from './action';
 
 export const selectors = {
   editor: (s: Store) => s.editor,

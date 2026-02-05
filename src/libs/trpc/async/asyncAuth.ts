@@ -1,4 +1,4 @@
-import { type LobeChatDatabase } from '@lobechat/database';
+import type {LobeChatDatabase} from '@lobechat/database';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 

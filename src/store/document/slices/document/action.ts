@@ -1,18 +1,18 @@
 'use client';
 
 import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
-import { type DocumentItem } from '@lobechat/database/schemas';
-import { type IEditor } from '@lobehub/editor';
+import type {DocumentItem} from '@lobechat/database/schemas';
+import type {IEditor} from '@lobehub/editor';
 import { debounce } from 'es-toolkit/compat';
 import type { SWRResponse } from 'swr';
 
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { DocumentStore } from '../../store';
-import { type DocumentSourceType } from '../editor/initialState';
+import type {DocumentSourceType} from '../editor/initialState';
 
 const n = setNamespace('document/document');
 

@@ -44,10 +44,10 @@ const ImageAspectRatioSelectInner = memo<{
 
   return (
     <Select
-      onChange={(v: string) => onChange(v as AspectRatio)}
       options={options}
       style={{ height: 32, marginRight: 10, width: 75 }}
       value={value}
+      onChange={(v: string) => onChange(v as AspectRatio)}
     />
   );
 });
@@ -64,7 +64,7 @@ const ImageAspectRatioSelectWithStore = memo<{ defaultValue: AspectRatio }>(({ d
     updateAgentChatConfig({ imageAspectRatio: ratio });
   };
 
-  return <ImageAspectRatioSelectInner onChange={handleChange} value={storeValue} />;
+  return <ImageAspectRatioSelectInner value={storeValue} onChange={handleChange} />;
 });
 
 // Main exported component - chooses between controlled and store mode
@@ -76,8 +76,8 @@ const ImageAspectRatioSelect = memo<ImageAspectRatioSelectProps>(
       // Controlled mode: use props only, no store access
       return (
         <ImageAspectRatioSelectInner
-          onChange={controlledOnChange ?? (() => {})}
           value={controlledValue ?? defaultValue}
+          onChange={controlledOnChange ?? (() => {})}
         />
       );
     }

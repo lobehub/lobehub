@@ -1,13 +1,7 @@
 import { INBOX_SESSION_ID } from '@/const/session';
 import { lambdaClient } from '@/libs/trpc/client';
-import { type BatchTaskResult } from '@/types/service';
-import {
-  type ChatTopic,
-  type CreateTopicParams,
-  type QueryTopicParams,
-  type RecentTopic,
-  type TopicRankItem,
-} from '@/types/topic';
+import type {BatchTaskResult} from '@/types/service';
+import type {ChatTopic, CreateTopicParams, QueryTopicParams, RecentTopic, TopicRankItem} from '@/types/topic';
 
 export class TopicService {
   createTopic = (params: CreateTopicParams): Promise<string> => {

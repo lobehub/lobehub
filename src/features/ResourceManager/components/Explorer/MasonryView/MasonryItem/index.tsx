@@ -8,7 +8,7 @@ import {
   useDragState,
 } from '@/app/[variants]/(main)/resource/features/DndContextWrapper';
 import { documentService } from '@/services/document';
-import { type FileListItem } from '@/types/files';
+import type {FileListItem} from '@/types/files';
 
 import { useFileItemClick } from '../../hooks/useFileItemClick';
 import DropdownMenu from '../../ItemDropdown/DropdownMenu';
@@ -372,32 +372,32 @@ const MasonryFileItem = memo<MasonryFileItemProps>(
 
     return (
       <div
+        data-drop-target-id={id}
+        data-is-folder={isFolder}
+        draggable={!!knowledgeBaseId}
+        ref={cardRef}
         className={cx(
           styles.card,
           selected && styles.selected,
           isDragging && styles.dragging,
           isOver && styles.dragOver,
         )}
-        data-drop-target-id={id}
-        data-is-folder={isFolder}
-        draggable={!!knowledgeBaseId}
-        onContextMenu={(e) => {
-          e.preventDefault();
-          showContextMenu(menuItems());
-        }}
         onDragEnd={handleDragEnd}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
         onDragStart={handleDragStart}
-        ref={cardRef}
+        onContextMenu={(e) => {
+          e.preventDefault();
+          showContextMenu(menuItems());
+        }}
       >
         <div
           className={cx('checkbox', styles.checkbox)}
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();
             onSelectedChange(id, !selected);
           }}
-          onPointerDown={(e) => e.stopPropagation()}
         >
           <Checkbox checked={selected} />
         </div>

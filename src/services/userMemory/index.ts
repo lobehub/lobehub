@@ -7,26 +7,8 @@ import type {
   RemoveIdentityActionSchema,
   UpdateIdentityActionSchema,
 } from '@lobechat/memory-user-memory/schemas';
-import {
-  type ActivityListParams,
-  type ActivityListResult,
-  type AddActivityMemoryResult,
-  type AddContextMemoryResult,
-  type AddExperienceMemoryResult,
-  type AddIdentityMemoryResult,
-  type AddPreferenceMemoryResult,
-  type ExperienceListParams,
-  type ExperienceListResult,
-  type IdentityListParams,
-  type IdentityListResult,
-  type LayersEnum,
-  type RemoveIdentityMemoryResult,
-  type SearchMemoryParams,
-  type SearchMemoryResult,
-  type TypesEnum,
-  type UpdateIdentityMemoryResult,
-} from '@lobechat/types';
-import { type z } from 'zod';
+import type {ActivityListParams, ActivityListResult, AddActivityMemoryResult, AddContextMemoryResult, AddExperienceMemoryResult, AddIdentityMemoryResult, AddPreferenceMemoryResult, ExperienceListParams, ExperienceListResult, IdentityListParams, IdentityListResult, LayersEnum, RemoveIdentityMemoryResult, SearchMemoryParams, SearchMemoryResult, TypesEnum, UpdateIdentityMemoryResult} from '@lobechat/types';
+import type {z} from 'zod';
 
 import { lambdaClient } from '@/libs/trpc/client';
 

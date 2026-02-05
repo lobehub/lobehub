@@ -1,6 +1,6 @@
 'use client';
 
-import { type MarkdownProps } from '@lobehub/ui';
+import type {MarkdownProps} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
 

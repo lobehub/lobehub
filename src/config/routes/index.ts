@@ -1,11 +1,11 @@
+import type {LucideIcon} from 'lucide-react';
 import {
   BrainCircuit,
   FilePenIcon,
   Image,
   LibraryBigIcon,
-  type LucideIcon,
   Settings,
-  ShapesIcon,
+  ShapesIcon
 } from 'lucide-react';
 
 export interface NavigationRoute {

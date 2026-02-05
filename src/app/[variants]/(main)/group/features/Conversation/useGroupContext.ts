@@ -1,6 +1,6 @@
 'use client';
 
-import { type ConversationContext } from '@lobechat/types';
+import type {ConversationContext} from '@lobechat/types';
 
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';

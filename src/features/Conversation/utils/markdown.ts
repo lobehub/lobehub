@@ -6,7 +6,7 @@ import { ARTIFACT_TAG_REGEX, ARTIFACT_THINKING_TAG_REGEX } from '@lobechat/const
 export const processWithArtifact = (input: string = '') => {
   // First remove outer fenced code block if it exists
   let output = input.replace(
-    /^([\S\s]*?)\s*```[^\n]*\n((?:<lobeThinking>[\S\s]*?<\/lobeThinking>\s*\n\s*)?<lobeArtifact[\S\s]*?<\/lobeArtifact>\s*)\n```\s*([\S\s]*?)$/,
+    /^([\s\S]*?)\s*```[^\n]*\n((?:<lobeThinking>[\s\S]*?<\/lobeThinking>[\t\v\f\r \xA0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]*\n\s*)?<lobeArtifact[\s\S]*?<\/lobeArtifact>\s*)\n```\s*([\s\S]*)$/,
     (_, before = '', content, after = '') => {
       return [before.trim(), content.trim(), after.trim()].filter(Boolean).join('\n\n');
     },
@@ -27,7 +27,7 @@ export const processWithArtifact = (input: string = '') => {
 
   // Remove fenced code block between lobeArtifact and HTML content
   output = output.replace(
-    /(<lobeArtifact[^>]*>)\s*```[^\n]*\n([\S\s]*?)(```\n)?(<\/lobeArtifact>)/,
+    /(<lobeArtifact[^>]*>)\s*```[^\n]*\n([\s\S]*?)(```\n)?(<\/lobeArtifact>)/,
     (_, start, content, __, end) => {
       if (content.trim().startsWith('<!DOCTYPE html') || content.trim().startsWith('<html')) {
         return start + content.trim() + end;
@@ -38,7 +38,7 @@ export const processWithArtifact = (input: string = '') => {
 
   // Keep existing code blocks that are not part of lobeArtifact
   output = output.replace(
-    /^([\S\s]*?)(<lobeThinking>[\S\s]*?<\/lobeThinking>\s*\n\s*<lobeArtifact[\S\s]*?<\/lobeArtifact>)([\S\s]*?)$/,
+    /^([\s\S]*?)(<lobeThinking>[\s\S]*?<\/lobeThinking>[\t\v\f\r \xA0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]*\n\s*<lobeArtifact[\s\S]*?<\/lobeArtifact>)([\s\S]*)$/,
     (_, before, content, after) => {
       return [before.trim(), content.trim(), after.trim()].filter(Boolean).join('\n\n');
     },
@@ -51,7 +51,7 @@ export const processWithArtifact = (input: string = '') => {
   }
 
   // if not match, check if it's start with <lobeArtifact but not closed
-  const regex = /<lobeArtifact\b(?:(?!\/?>)[\S\s])*$/;
+  const regex = /<lobeArtifact\b(?:(?!\/?>)[\s\S])*$/;
   if (regex.test(output)) {
     output = output.replace(regex, '<lobeArtifact>');
   }

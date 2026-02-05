@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { useProviderName } from '@/hooks/useProviderName';
-import { type GlobalLLMProviderKey } from '@/types/user/settings/modelProvider';
+import type {GlobalLLMProviderKey} from '@/types/user/settings/modelProvider';
 
 import { useConversationStore } from '../store';
 import BaseErrorForm from './BaseErrorForm';
@@ -24,18 +24,19 @@ const ChatInvalidAPIKey = memo<ChatInvalidAPIKeyProps>(({ id, provider }) => {
 
   return (
     <BaseErrorForm
+      avatar={<ProviderIcon provider={provider} shape={'square'} size={40} />}
+      title={t(`unlock.apiKey.title`, { name: providerName, ns: 'error' })}
       action={
         <Button
+          type={'primary'}
           onClick={() => {
             navigate(urlJoin('/settings/provider', provider || 'all'));
             deleteMessage(id);
           }}
-          type={'primary'}
         >
           {t('unlock.goToSettings', { ns: 'error' })}
         </Button>
       }
-      avatar={<ProviderIcon provider={provider} shape={'square'} size={40} />}
       desc={
         provider === ModelProvider.Bedrock
           ? t('bedrock.unlock.description')
@@ -44,7 +45,6 @@ const ChatInvalidAPIKey = memo<ChatInvalidAPIKeyProps>(({ id, provider }) => {
               ns: 'error',
             })
       }
-      title={t(`unlock.apiKey.title`, { name: providerName, ns: 'error' })}
     />
   );
 });

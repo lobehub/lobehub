@@ -80,7 +80,7 @@ export const useOperationState = (context: ConversationContext): OperationState 
           isRegenerating: runningOps.some((op) => op.type === 'regenerate'),
         };
       },
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+       
       getToolOperationState: (messageId: string, index: number, _toolCallId?: string) => {
         const state = useChatStore.getState();
 

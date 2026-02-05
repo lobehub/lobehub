@@ -1,8 +1,9 @@
-import { type LobeTool } from '@lobechat/types';
+import type {LobeTool} from '@lobechat/types';
 import { uniqBy } from 'es-toolkit/compat';
 import { t } from 'i18next';
 import { produce } from 'immer';
-import useSWR, { type SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
+import useSWR from 'swr';
 
 import { notification } from '@/components/AntdStaticMethods';
 import { mutate } from '@/libs/swr';
@@ -10,21 +11,16 @@ import { pluginService } from '@/services/plugin';
 import { toolService } from '@/services/tool';
 import { globalHelpers } from '@/store/global/helpers';
 import { pluginStoreSelectors } from '@/store/tool/selectors';
-import { type StoreSetter } from '@/store/types';
-import {
-  type DiscoverPluginItem,
-  type PluginListResponse,
-  type PluginQueryParams,
-} from '@/types/discover';
-import { type PluginInstallError } from '@/types/tool/plugin';
+import type {StoreSetter} from '@/store/types';
+import type {DiscoverPluginItem, PluginListResponse, PluginQueryParams} from '@/types/discover';
+import type {PluginInstallError} from '@/types/tool/plugin';
 import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type ToolStore } from '../../store';
+import type {ToolStore} from '../../store';
+import type {PluginInstallProgress, PluginStoreState} from './initialState';
 import {
-  type PluginInstallProgress,
-  PluginInstallStep,
-  type PluginStoreState,
+  PluginInstallStep
 } from './initialState';
 
 const n = setNamespace('pluginStore');

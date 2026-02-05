@@ -3,7 +3,7 @@ import { WebBrowsingExecutionRuntime } from '@lobechat/builtin-tool-web-browsing
 
 import { SearchService } from '@/server/services/search';
 
-import { type ServerRuntimeRegistration } from './types';
+import type {ServerRuntimeRegistration} from './types';
 
 // Pre-instantiated (no per-request context needed)
 const runtime = new WebBrowsingExecutionRuntime({

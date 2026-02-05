@@ -1,10 +1,10 @@
-import { type RenderDisplayControl } from '@lobechat/types';
+import type {RenderDisplayControl} from '@lobechat/types';
 import type { LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
 
-import { type MetaData } from '@/types/meta';
-import { type LobeToolMeta } from '@/types/tool/tool';
+import type {MetaData} from '@/types/meta';
+import type {LobeToolMeta} from '@/types/tool/tool';
 
-import { type ToolStoreState } from '../initialState';
+import type {ToolStoreState} from '../initialState';
 import { builtinToolSelectors } from '../slices/builtin/selectors';
 import { lobehubSkillStoreSelectors } from '../slices/lobehubSkillStore/selectors';
 import { pluginSelectors } from '../slices/plugin/selectors';

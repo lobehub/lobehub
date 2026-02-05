@@ -1,4 +1,3 @@
-/* eslint-disable unicorn/no-process-exit */
 import { execSync } from 'node:child_process';
 import os from 'node:os';
 

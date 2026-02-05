@@ -10,7 +10,7 @@ import { knowledgeEnv } from '@/envs/knowledge';
 import { langfuseEnv } from '@/envs/langfuse';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { parseSystemAgent } from '@/server/globalConfig/parseSystemAgent';
-import { type GlobalServerConfig } from '@/types/serverConfig';
+import type {GlobalServerConfig} from '@/types/serverConfig';
 import { cleanObject } from '@/utils/object';
 
 import { genServerAiProvidersConfig } from './genServerAiProviderConfig';

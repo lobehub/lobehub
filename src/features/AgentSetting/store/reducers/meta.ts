@@ -1,7 +1,7 @@
 import { produce } from 'immer';
 
 import { DEFAULT_AGENT_META } from '@/const/meta';
-import { type MetaData } from '@/types/meta';
+import type {MetaData} from '@/types/meta';
 import { merge } from '@/utils/merge';
 
 export type MetaDataDispatch = { type: 'update'; value: Partial<MetaData> } | { type: 'reset' };

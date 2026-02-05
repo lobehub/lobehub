@@ -1,5 +1,5 @@
 import { LOADING_FLAT } from '@lobechat/const';
-import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
+import type {ModelPerformance, ModelUsage} from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
@@ -8,8 +8,8 @@ import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
 import ExtraContainer from '../../components/Extras/ExtraContainer';
-import TTS from '../../components/Extras/TTS';
 import Translate from '../../components/Extras/Translate';
+import TTS from '../../components/Extras/TTS';
 import Usage from '../../components/Extras/Usage';
 
 interface AssistantMessageExtraProps {

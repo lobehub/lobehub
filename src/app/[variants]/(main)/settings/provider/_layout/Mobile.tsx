@@ -1,6 +1,6 @@
 'use client';
 
-import { type PropsWithChildren } from 'react';
+import type {PropsWithChildren} from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import ProviderMenu from '../ProviderMenu';

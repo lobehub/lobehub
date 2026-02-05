@@ -1,12 +1,13 @@
 import { ActionIcon, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { XIcon } from 'lucide-react';
-import { type ReactNode, memo, useMemo } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
 import { useFileStore } from '@/store/file';
-import { type UploadFileItem } from '@/types/files/upload';
+import type {UploadFileItem} from '@/types/files/upload';
 import { formatSize, formatSpeed, formatTime } from '@/utils/format';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
@@ -114,10 +115,10 @@ const UploadItem = memo<UploadItemProps>(({ id, file, status, uploadState }) => 
 
   return (
     <Flexbox
+      horizontal
       align={'center'}
       className={styles.container}
       gap={12}
-      horizontal
       key={name}
       paddingBlock={8}
       paddingInline={12}
@@ -133,11 +134,11 @@ const UploadItem = memo<UploadItemProps>(({ id, file, status, uploadState }) => 
         <ActionIcon
           className={`${styles.cancelButton} cancel-button`}
           icon={XIcon}
+          size="small"
+          title={t('uploadDock.body.item.cancel')}
           onClick={() => {
             cancelUpload(id);
           }}
-          size="small"
-          title={t('uploadDock.body.item.cancel')}
         />
       )}
 

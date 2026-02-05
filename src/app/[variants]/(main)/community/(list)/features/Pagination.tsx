@@ -7,7 +7,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { SCROLL_PARENT_ID } from '@/app/[variants]/(main)/community/features/const';
 import { useQuery } from '@/hooks/useQuery';
-import { type DiscoverTab } from '@/types/discover';
+import type {DiscoverTab} from '@/types/discover';
 
 const SCROLL_CONTAINER_ID = 'lobe-mobile-scroll-container';
 
@@ -58,13 +58,13 @@ const Pagination = memo<PaginationProps>(({ tab, currentPage, total, pageSize })
       className={styles.page}
       current={page ? Number(page) : currentPage}
       data-testid="pagination"
-      onChange={handlePageChange}
       pageSize={pageSize}
       showSizeChanger={false}
+      total={total}
       style={{
         alignSelf: 'flex-end',
       }}
-      total={total}
+      onChange={handlePageChange}
     />
   );
 });

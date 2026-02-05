@@ -7,14 +7,13 @@ import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerGlobalConfig } from '@/server/globalConfig';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
+import type {AiProviderDetailItem, AiProviderRuntimeState} from '@/types/aiProvider';
 import {
-  type AiProviderDetailItem,
-  type AiProviderRuntimeState,
   CreateAiProviderSchema,
   UpdateAiProviderConfigSchema,
-  UpdateAiProviderSchema,
+  UpdateAiProviderSchema
 } from '@/types/aiProvider';
-import { type ProviderConfig } from '@/types/user/settings';
+import type {ProviderConfig} from '@/types/user/settings';
 
 const aiProviderProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;

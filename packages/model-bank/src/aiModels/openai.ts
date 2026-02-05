@@ -1,5 +1,5 @@
-import { ModelParamsSchema } from '../standard-parameters';
-import {
+import type { ModelParamsSchema } from '../standard-parameters';
+import type {
   AIChatModelCard,
   AIEmbeddingModelCard,
   AIImageModelCard,

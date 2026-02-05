@@ -1,11 +1,11 @@
 'use client';
 
-import { HotkeyEnum, type IEditor, INSERT_HEADING_COMMAND, getHotkeyById } from '@lobehub/editor';
+import type {IEditor} from '@lobehub/editor';
+import { getHotkeyById,HotkeyEnum,  INSERT_HEADING_COMMAND } from '@lobehub/editor';
+import type {ChatInputActionsProps, EditorState} from '@lobehub/editor/react';
 import {
   ChatInputActions,
-  type ChatInputActionsProps,
-  type EditorState,
-  FloatActions,
+  FloatActions
 } from '@lobehub/editor/react';
 import { Block } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
@@ -28,7 +28,8 @@ import {
   UnderlineIcon,
   Undo2Icon,
 } from 'lucide-react';
-import { type CSSProperties, memo, useMemo } from 'react';
+import type {CSSProperties} from 'react';
+import {  memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 export interface InlineToolbarProps {
@@ -214,9 +215,10 @@ const InlineToolbar = memo<InlineToolbarProps>(
     // Fixed toolbar - wrap in a styled container
     return (
       <Block
+        shadow
         className={className}
         padding={4}
-        shadow
+        variant={'outlined'}
         style={{
           background: cssVar.colorBgElevated,
           borderRadius: 8,
@@ -227,7 +229,6 @@ const InlineToolbar = memo<InlineToolbarProps>(
           zIndex: 10,
           ...style,
         }}
-        variant={'outlined'}
       >
         <ChatInputActions items={items} />
       </Block>

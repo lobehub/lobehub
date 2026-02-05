@@ -1,7 +1,6 @@
-import dynamic from '@/libs/next/dynamic';
-
 import { isDesktop } from '@/const/version';
 import { analyticsEnv } from '@/envs/analytics';
+import dynamic from '@/libs/next/dynamic';
 
 import Desktop from './Desktop';
 import Google from './Google';

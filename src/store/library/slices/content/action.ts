@@ -1,7 +1,7 @@
 import { knowledgeBaseService } from '@/services/knowledgeBase';
 import { revalidateResources } from '@/store/file/slices/resource/hooks';
-import { type KnowledgeBaseStore } from '@/store/library/store';
-import { type StoreSetter } from '@/store/types';
+import type {KnowledgeBaseStore} from '@/store/library/store';
+import type {StoreSetter} from '@/store/types';
 
 type Setter = StoreSetter<KnowledgeBaseStore>;
 export const createContentSlice = (set: Setter, get: () => KnowledgeBaseStore, _api?: unknown) =>

@@ -1,4 +1,4 @@
-import { type NextRequest } from 'next/server';
+import type {NextRequest} from 'next/server';
 
 /**
  * Creates a route matcher function that checks if a request path matches any of the given patterns

@@ -1,15 +1,16 @@
 'use client';
 
 import type { IEditor } from '@lobehub/editor/es/types';
-import { type EditorState as LobehubEditorState } from '@lobehub/editor/react';
+import type {EditorState as LobehubEditorState} from '@lobehub/editor/react';
 import isEqual from 'fast-deep-equal';
 
 import { documentService } from '@/services/document';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { DocumentStore } from '../../store';
-import { type DocumentDispatch, documentReducer } from './reducer';
+import type {DocumentDispatch} from './reducer';
+import {  documentReducer } from './reducer';
 
 const n = setNamespace('document/editor');
 

@@ -102,17 +102,17 @@ const InterestsRow = ({ mobile }: InterestsRowProps) => {
       transition={{ duration: 0.2 }}
     >
       <Flexbox gap={12}>
-        <Flexbox align="center" gap={8} horizontal wrap="wrap">
+        <Flexbox horizontal align="center" gap={8} wrap="wrap">
           {areas.map((item) => {
             const isSelected = selectedInterests.includes(item.label);
             return (
               <Block
                 clickable
-                gap={8}
                 horizontal
+                gap={8}
                 key={item.key}
-                onClick={() => toggleInterest(item.label)}
                 padding={8}
+                variant="outlined"
                 style={
                   isSelected
                     ? {
@@ -121,7 +121,7 @@ const InterestsRow = ({ mobile }: InterestsRowProps) => {
                       }
                     : {}
                 }
-                variant="outlined"
+                onClick={() => toggleInterest(item.label)}
               >
                 <Icon color={cssVar.colorTextSecondary} icon={item.icon} size={14} />
                 <Text fontSize={13} weight={500}>
@@ -137,13 +137,13 @@ const InterestsRow = ({ mobile }: InterestsRowProps) => {
               <Block
                 clickable
                 key={interest}
-                onClick={() => toggleInterest(interest)}
                 padding={8}
+                variant="outlined"
                 style={{
                   background: cssVar.colorFillSecondary,
                   borderColor: cssVar.colorFillSecondary,
                 }}
-                variant="outlined"
+                onClick={() => toggleInterest(interest)}
               >
                 <Text fontSize={13} weight={500}>
                   {interest}
@@ -152,16 +152,16 @@ const InterestsRow = ({ mobile }: InterestsRowProps) => {
             ))}
           <Block
             clickable
-            gap={8}
             horizontal
-            onClick={() => setShowCustomInput(!showCustomInput)}
+            gap={8}
             padding={8}
+            variant="outlined"
             style={
               showCustomInput
                 ? { background: cssVar.colorFillSecondary, borderColor: cssVar.colorFillSecondary }
                 : {}
             }
-            variant="outlined"
+            onClick={() => setShowCustomInput(!showCustomInput)}
           >
             <Icon color={cssVar.colorTextSecondary} icon={BriefcaseIcon} size={14} />
             <Text fontSize={13} weight={500}>
@@ -171,19 +171,19 @@ const InterestsRow = ({ mobile }: InterestsRowProps) => {
         </Flexbox>
         {showCustomInput && (
           <Input
-            onChange={(e) => setCustomInput(e.target.value)}
-            onPressEnter={handleAddCustom}
             placeholder={tOnboarding('interests.placeholder')}
             size="small"
             style={{ width: 200 }}
             value={customInput}
+            onChange={(e) => setCustomInput(e.target.value)}
+            onPressEnter={handleAddCustom}
           />
         )}
-        <Flexbox gap={8} horizontal justify="flex-end">
-          <Button disabled={saving} onClick={handleCancel} size="small">
+        <Flexbox horizontal gap={8} justify="flex-end">
+          <Button disabled={saving} size="small" onClick={handleCancel}>
             {t('profile.cancel')}
           </Button>
-          <Button loading={saving} onClick={handleSave} size="small" type="primary">
+          <Button loading={saving} size="small" type="primary" onClick={handleSave}>
             {t('profile.save')}
           </Button>
         </Flexbox>
@@ -201,7 +201,7 @@ const InterestsRow = ({ mobile }: InterestsRowProps) => {
     >
       {mobile ? (
         interests.length > 0 ? (
-          <Flexbox gap={8} horizontal style={{ flexWrap: 'wrap' }}>
+          <Flexbox horizontal gap={8} style={{ flexWrap: 'wrap' }}>
             {interests.map((interest) => (
               <Tag key={interest}>{interest}</Tag>
             ))}
@@ -210,9 +210,9 @@ const InterestsRow = ({ mobile }: InterestsRowProps) => {
           <Text>--</Text>
         )
       ) : (
-        <Flexbox align="center" horizontal justify="space-between">
+        <Flexbox horizontal align="center" justify="space-between">
           {interests.length > 0 ? (
-            <Flexbox gap={8} horizontal style={{ flexWrap: 'wrap' }}>
+            <Flexbox horizontal gap={8} style={{ flexWrap: 'wrap' }}>
               {interests.map((interest) => (
                 <Tag key={interest}>{interest}</Tag>
               ))}
@@ -220,7 +220,7 @@ const InterestsRow = ({ mobile }: InterestsRowProps) => {
           ) : (
             <Text>--</Text>
           )}
-          <Text onClick={handleStartEdit} style={{ cursor: 'pointer', fontSize: 13 }}>
+          <Text style={{ cursor: 'pointer', fontSize: 13 }} onClick={handleStartEdit}>
             {t('profile.updateInterests')}
           </Text>
         </Flexbox>
@@ -231,10 +231,10 @@ const InterestsRow = ({ mobile }: InterestsRowProps) => {
   if (mobile) {
     return (
       <Flexbox gap={12} style={rowStyle}>
-        <Flexbox align="center" horizontal justify="space-between">
+        <Flexbox horizontal align="center" justify="space-between">
           <Text strong>{t('profile.interests')}</Text>
           {!isEditing && (
-            <Text onClick={handleStartEdit} style={{ cursor: 'pointer', fontSize: 13 }}>
+            <Text style={{ cursor: 'pointer', fontSize: 13 }} onClick={handleStartEdit}>
               {t('profile.updateInterests')}
             </Text>
           )}
@@ -245,7 +245,7 @@ const InterestsRow = ({ mobile }: InterestsRowProps) => {
   }
 
   return (
-    <Flexbox gap={24} horizontal style={rowStyle}>
+    <Flexbox horizontal gap={24} style={rowStyle}>
       <Text style={labelStyle}>{t('profile.interests')}</Text>
       <Flexbox style={{ flex: 1 }}>
         <AnimatePresence mode="wait">{isEditing ? editingContent : displayContent}</AnimatePresence>

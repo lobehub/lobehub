@@ -78,7 +78,7 @@ const Toast = () => {
   return (
     <div className={styles.container}>
       <div className={styles.toast}>
-        <Flexbox align={'center'} className={styles.text} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} className={styles.text} gap={8}>
           {t('zenMode')} <Hotkey inverseTheme keys={hotkey} />
         </Flexbox>
       </div>

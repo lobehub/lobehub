@@ -5,7 +5,7 @@ import { memo } from 'react';
 
 import FileIcon from '@/components/FileIcon';
 import UploadDetail from '@/features/ChatInput/components/UploadDetail';
-import { type UploadFileItem } from '@/types/files';
+import type {UploadFileItem} from '@/types/files';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -45,21 +45,21 @@ interface FileItemProps extends UploadFileItem {
 
 const FileItem = memo<FileItemProps>(({ id, onRemove, file, status, uploadState, tasks }) => {
   return (
-    <Flexbox align={'center'} className={styles.container} gap={12} horizontal key={id}>
+    <Flexbox horizontal align={'center'} className={styles.container} gap={12} key={id}>
       <FileIcon fileName={file.name} fileType={file.type} />
       <Flexbox style={{ overflow: 'hidden' }}>
         <Text ellipsis>{file.name}</Text>
         <UploadDetail size={file.size} status={status} tasks={tasks} uploadState={uploadState} />
       </Flexbox>
       <ActionIcon
-        className={styles.deleteButton}
         glass
+        className={styles.deleteButton}
         icon={Trash}
+        size={'small'}
         onClick={(e) => {
           e.stopPropagation();
           onRemove?.();
         }}
-        size={'small'}
       />
     </Flexbox>
   );

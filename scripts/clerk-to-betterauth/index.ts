@@ -1,10 +1,9 @@
-/* eslint-disable unicorn/prefer-top-level-await */
 import { sql } from 'drizzle-orm';
 
 import { getMigrationMode } from './_internal/config';
 import { db, pool, schema } from './_internal/db';
-import { loadCSVData, loadClerkUsersFromFile } from './_internal/load-data-from-files';
-import { ClerkExternalAccount } from './_internal/types';
+import { loadClerkUsersFromFile, loadCSVData } from './_internal/load-data-from-files';
+import type { ClerkExternalAccount } from './_internal/types';
 import { generateBackupCodes, safeDateConversion } from './_internal/utils';
 
 const BATCH_SIZE = Number(process.env.CLERK_TO_BETTERAUTH_BATCH_SIZE) || 300;
@@ -81,7 +80,7 @@ async function migrateFromClerk() {
   let processed = 0;
   let accountAttempts = 0;
   let twoFactorAttempts = 0;
-  let skipped = csvUsers.length - unprocessedUsers.length;
+  const skipped = csvUsers.length - unprocessedUsers.length;
   const startedAt = Date.now();
   const accountCounts: Record<string, number> = {};
   let missingScopeNonCredential = 0;
@@ -154,7 +153,7 @@ async function migrateFromClerk() {
             createdAt: safeDateConversion(externalAccount.created_at),
             id: externalAccount.id,
             providerId,
-            scope: externalAccount.approved_scopes?.replace(/\s+/g, ',') || undefined,
+            scope: externalAccount.approved_scopes?.replaceAll(/\s+/g, ',') || undefined,
             updatedAt: safeDateConversion(externalAccount.updated_at),
             userId: user.id,
           });
@@ -306,10 +305,15 @@ async function main() {
   try {
     await migrateFromClerk();
     console.log('');
-    console.log(`${GREEN_BOLD}✅ Migration success!${RESET} (${formatDuration(Date.now() - startedAt)})`);
+    console.log(
+      `${GREEN_BOLD}✅ Migration success!${RESET} (${formatDuration(Date.now() - startedAt)})`,
+    );
   } catch (error) {
     console.log('');
-    console.error(`${RED_BOLD}❌ Migration failed${RESET} (${formatDuration(Date.now() - startedAt)}):`, error);
+    console.error(
+      `${RED_BOLD}❌ Migration failed${RESET} (${formatDuration(Date.now() - startedAt)}):`,
+      error,
+    );
     process.exitCode = 1;
   } finally {
     await pool.end();

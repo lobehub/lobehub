@@ -1,7 +1,7 @@
 'use client';
 
 import { AccordionItem, ContextMenuTrigger, Flexbox, Text } from '@lobehub/ui';
-import React, { Suspense, memo, useCallback } from 'react';
+import React, { memo, Suspense, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
@@ -38,14 +38,14 @@ const Agent = memo<AgentProps>(({ itemKey }) => {
   return (
     <AccordionItem
       action={<Actions dropdownMenu={dropdownMenu} isLoading={isLoading} />}
-      headerWrapper={(header) => (
-        <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>
-      )}
       itemKey={itemKey}
       paddingBlock={4}
       paddingInline={'8px 4px'}
+      headerWrapper={(header) => (
+        <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>
+      )}
       title={
-        <Flexbox align="center" gap={4} horizontal>
+        <Flexbox horizontal align="center" gap={4}>
           <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
             {t('navPanel.agent')}
           </Text>

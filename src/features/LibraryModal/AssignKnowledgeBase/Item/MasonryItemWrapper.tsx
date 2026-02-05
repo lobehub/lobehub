@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import { type KnowledgeItem } from '@/types/knowledgeBase';
+import type {KnowledgeItem} from '@/types/knowledgeBase';
 
 import MasonryItem from './MasonryItem';
 

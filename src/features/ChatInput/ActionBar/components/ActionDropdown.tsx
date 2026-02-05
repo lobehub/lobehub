@@ -1,30 +1,25 @@
 'use client';
 
+import type {DropdownMenuPopupProps, DropdownMenuProps, MenuItemType, MenuProps, PopoverTrigger} from '@lobehub/ui';
 import {
   DropdownMenuPopup,
-  type DropdownMenuPopupProps,
   DropdownMenuPortal,
   DropdownMenuPositioner,
-  type DropdownMenuProps,
   DropdownMenuRoot,
   DropdownMenuTrigger,
-  type MenuItemType,
-  type MenuProps,
-  type PopoverTrigger,
-  renderDropdownMenuItems,
+  renderDropdownMenuItems
 } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
+import type {CSSProperties, ReactNode} from 'react';
 import {
-  type CSSProperties,
-  type ReactNode,
-  Suspense,
   isValidElement,
   memo,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
   useRef,
-  useState,
+  useState
 } from 'react';
 
 import DebugNode from '@/components/DebugNode';
@@ -262,9 +257,9 @@ const ActionDropdown = memo<ActionDropdownProps>(
       <DropdownMenuRoot
         {...rest}
         defaultOpen={defaultOpen}
+        open={open}
         onOpenChange={handleOpenChange}
         onOpenChangeComplete={handleOpenChangeComplete}
-        open={open}
       >
         <DropdownMenuTrigger {...resolvedTriggerProps}>{children}</DropdownMenuTrigger>
         <DropdownMenuPortal container={resolvedPortalContainer} {...restPortalProps}>

@@ -6,7 +6,8 @@ import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
 import { App, Avatar, Button, Typography } from 'antd';
 import { createStyles, cssVar } from 'antd-style';
 import { ExternalLinkIcon, Loader2Icon, LogOutIcon, UnplugIcon } from 'lucide-react';
-import { type ReactNode, memo, useCallback, useEffect, useRef, useState } from 'react';
+import type {ReactNode} from 'react';
+import { memo,  useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { lambdaQuery } from '@/libs/trpc/client';
@@ -246,7 +247,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
         if (state === 'requesting' || !deviceCodeInfo) {
           return (
             <div className={styles.content}>
-              <Icon icon={Loader2Icon} size={24} spin />
+              <Icon spin icon={Loader2Icon} size={24} />
               <Text type="secondary">{t('providerModels.config.oauth.connecting')}</Text>
             </div>
           );
@@ -257,15 +258,15 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
           const errorKey = `providerModels.config.oauth.${error}`;
           return (
             <div className={styles.content}>
-              <Flexbox align="center" gap={8} horizontal>
+              <Flexbox horizontal align="center" gap={8}>
                 <Icon color={cssVar.colorError} icon={UnplugIcon} size={20} />
                 <Text className={styles.errorText}>{t(errorKey as any)}</Text>
               </Flexbox>
               <Flexbox gap={12} style={{ width: '100%' }} width={280}>
-                <Button block onClick={handleStartAuth} type="primary">
+                <Button block type="primary" onClick={handleStartAuth}>
                   {t('providerModels.config.oauth.retry')}
                 </Button>
-                <Button block onClick={handleCancelAuth} type="text">
+                <Button block type="text" onClick={handleCancelAuth}>
                   {t('providerModels.config.oauth.cancel')}
                 </Button>
               </Flexbox>
@@ -278,7 +279,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
           <div className={styles.content}>
             <Flexbox align="center" gap={12} style={{ width: '100%' }} width={320}>
               <Text type="secondary">{t('providerModels.config.oauth.enterCode')}</Text>
-              <Flexbox align="center" gap={12} horizontal style={{ width: '100%' }}>
+              <Flexbox horizontal align="center" gap={12} style={{ width: '100%' }}>
                 <div className={styles.codeBox}>{deviceCodeInfo.userCode}</div>
                 <CopyButton content={deviceCodeInfo.userCode} />
               </Flexbox>
@@ -288,9 +289,9 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
               <Button
                 block
                 icon={<Icon icon={ExternalLinkIcon} />}
-                onClick={handleOpenBrowser}
                 size="large"
                 type="primary"
+                onClick={handleOpenBrowser}
               >
                 {t('providerModels.config.oauth.openBrowser')}
               </Button>
@@ -306,11 +307,11 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
             </Link>
 
             <div className={styles.pollingHint}>
-              <Icon icon={Loader2Icon} spin />
+              <Icon spin icon={Loader2Icon} />
               <span>{t('providerModels.config.oauth.polling')}</span>
             </div>
 
-            <Button onClick={handleCancelAuth} type="text">
+            <Button type="text" onClick={handleCancelAuth}>
               {t('providerModels.config.oauth.cancel')}
             </Button>
           </div>
@@ -322,11 +323,11 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
         const errorKey = `providerModels.config.oauth.${error}`;
         return (
           <div className={styles.content}>
-            <Flexbox align="center" gap={8} horizontal>
+            <Flexbox horizontal align="center" gap={8}>
               <Icon color={cssVar.colorError} icon={UnplugIcon} size={18} />
               <Text className={styles.errorText}>{t(errorKey as any)}</Text>
             </Flexbox>
-            <Button onClick={handleStartAuth} size="large" type="primary">
+            <Button size="large" type="primary" onClick={handleStartAuth}>
               {t('providerModels.config.oauth.connect', { name })}
             </Button>
             <div className={styles.serviceNote}>
@@ -339,7 +340,7 @@ const OAuthDeviceFlowAuth = memo<OAuthDeviceFlowAuthProps>(
       // Default state - show connect button
       return (
         <div className={styles.content}>
-          <Button onClick={handleStartAuth} size="large" type="primary">
+          <Button size="large" type="primary" onClick={handleStartAuth}>
             {t('providerModels.config.oauth.connect', { name })}
           </Button>
           <div className={styles.serviceNote}>

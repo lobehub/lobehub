@@ -1,6 +1,6 @@
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 
-import { type MentionStore } from './store';
+import type {MentionStore} from './store';
 
 type Setter = StoreSetter<MentionStore>;
 export const createMentionSlice = (set: Setter, get: () => MentionStore, _api?: unknown) =>

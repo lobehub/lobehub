@@ -3,7 +3,7 @@ import { cssVar } from 'antd-style';
 import { Link2 } from 'lucide-react';
 import { memo } from 'react';
 
-import { type MemorySource } from '@/database/repositories/userMemory';
+import type {MemorySource} from '@/database/repositories/userMemory';
 import Link from '@/libs/router/Link';
 
 const SourceLink = memo<{ source?: MemorySource | null }>(({ source }) => {
@@ -23,15 +23,15 @@ const SourceLink = memo<{ source?: MemorySource | null }>(({ source }) => {
       <Button
         icon={<Icon icon={Link2} />}
         size={'small'}
+        title={title}
+        type={'text'}
         style={{
           flex: 1,
           maxWidth: '100%',
           overflow: 'hidden',
         }}
-        title={title}
-        type={'text'}
       >
-        <Text color={cssVar.colorTextSecondary} ellipsis>
+        <Text ellipsis color={cssVar.colorTextSecondary}>
           {title}
         </Text>
       </Button>

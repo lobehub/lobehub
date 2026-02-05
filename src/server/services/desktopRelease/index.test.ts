@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import type {DesktopDownloadType} from './index';
 import {
-  type DesktopDownloadType,
   resolveDesktopDownload,
-  resolveDesktopDownloadFromUrls,
+  resolveDesktopDownloadFromUrls
 } from './index';
 
 const mockRelease = {

@@ -13,10 +13,10 @@ const ModelSelect = memo(() => {
 
   return (
     <Select
+      value={{ model, provider }}
       onChange={(props) => {
         updateConfig(props);
       }}
-      value={{ model, provider }}
     />
   );
 });

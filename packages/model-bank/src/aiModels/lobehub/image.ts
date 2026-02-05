@@ -1,4 +1,4 @@
-import { AIImageModelCard } from '../../types/aiModel';
+import type { AIImageModelCard } from '../../types/aiModel';
 import { huanyuanImageParamsSchema, qwenEditParamsSchema, qwenImageParamsSchema } from '../fal';
 import {
   gptImage1Schema,

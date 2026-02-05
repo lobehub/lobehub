@@ -1,7 +1,7 @@
 import debug from 'debug';
 
 import { lambdaClient } from '@/libs/trpc/client';
-import { type CreateImageServicePayload } from '@/server/routers/lambda/image';
+import type {CreateImageServicePayload} from '@/server/routers/lambda/image';
 
 // Create debug logger
 const log = debug('lobe-image:service');

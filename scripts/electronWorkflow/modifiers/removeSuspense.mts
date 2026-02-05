@@ -34,7 +34,11 @@ const removeSuspenseWrapper = (code: string): string => {
 
     for (const child of children) {
       const kind = child.kind();
-      if (kind === 'jsx_element' || kind === 'jsx_self_closing_element' || kind === 'jsx_fragment') {
+      if (
+        kind === 'jsx_element' ||
+        kind === 'jsx_self_closing_element' ||
+        kind === 'jsx_fragment'
+      ) {
         childrenText = child.text();
         break;
       }

@@ -43,11 +43,13 @@ Reference: `docs/usage/providers/fal.mdx`
 
 ```markdown
 ### `{PROVIDER}_API_KEY`
+
 - Type: Required
 - Description: API key from {Provider Name}
 - Example: `{api-key-format}`
 
 ### `{PROVIDER}_MODEL_LIST`
+
 - Type: Optional
 - Description: Control model list. Use `+` to add, `-` to hide
 - Example: `-all,+model-1,+model-2=Display Name`

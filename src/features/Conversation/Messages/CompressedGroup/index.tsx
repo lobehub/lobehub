@@ -1,14 +1,14 @@
 'use client';
 
 import type { CompressionGroupMetadata, UIChatMessage } from '@lobechat/types';
+import type {TabsProps} from '@lobehub/ui';
 import {
   ActionIcon,
   Flexbox,
   Icon,
   Markdown,
   ScrollShadow,
-  Tabs,
-  type TabsProps,
+  Tabs
 } from '@lobehub/ui';
 import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -136,19 +136,19 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
           <StreamingMarkdown>{content}</StreamingMarkdown>
         </>
       ) : (
-        <Flexbox align={'center'} distribution={'space-between'} horizontal width={'100%'}>
+        <Flexbox horizontal align={'center'} distribution={'space-between'} width={'100%'}>
           <Tabs
+            compact
             activeKey={isGeneratingSummary ? 'summary' : activeTab}
             className={styles.header}
-            compact
             items={tabItems}
-            onChange={handleTabChange}
             variant={'rounded'}
+            onChange={handleTabChange}
           />
           <ActionIcon
             icon={expanded ? ChevronUp : ChevronDown}
-            onClick={() => toggleCompressedGroupExpanded(id)}
             size={'small'}
+            onClick={() => toggleCompressedGroupExpanded(id)}
           />
         </Flexbox>
       )}

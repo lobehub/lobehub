@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { testProvider } from '../../providerTestUtils';
 import { LobeSearch1API, params } from './index';
 
@@ -506,7 +506,7 @@ describe('LobeSearch1API - custom features', () => {
       await instance.chat({
         messages: [{ content: 'Hello', role: 'user' }],
         model: 'gpt-4o-mini',
-        temperature: 2.0,
+        temperature: 2,
       });
 
       expect(instance['client'].chat.completions.create).toHaveBeenCalledWith(

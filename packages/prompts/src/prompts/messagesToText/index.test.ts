@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { Message, conversationToText } from './index';
+import type { Message } from './index';
+import { conversationToText } from './index';
 
 describe('conversationToText', () => {
   it('should format a single message correctly', () => {

@@ -907,7 +907,7 @@ describe('AgentRuntimeService', () => {
         const shouldContinue = (service as any).shouldContinueExecution(
           {
             status: 'running',
-            cost: { total: 1.0 },
+            cost: { total: 1 },
             costLimit: { maxTotalCost: 0.5, onExceeded: 'stop' },
           },
           { phase: 'user_input' },
@@ -919,7 +919,7 @@ describe('AgentRuntimeService', () => {
         const shouldContinue = (service as any).shouldContinueExecution(
           {
             status: 'running',
-            cost: { total: 1.0 },
+            cost: { total: 1 },
             costLimit: { maxTotalCost: 0.5, onExceeded: 'continue' },
           },
           { phase: 'user_input' },

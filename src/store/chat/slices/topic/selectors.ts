@@ -1,11 +1,11 @@
 import { t } from 'i18next';
 
-import { type ChatTopic, type ChatTopicSummary, type GroupedTopic } from '@/types/topic';
+import type {ChatTopic, ChatTopicSummary, GroupedTopic} from '@/types/topic';
 import { groupTopicsByTime } from '@/utils/client/topic';
 
-import { type ChatStoreState } from '../../initialState';
+import type {ChatStoreState} from '../../initialState';
 import { topicMapKey } from '../../utils/topicMapKey';
-import { type TopicData } from './initialState';
+import type {TopicData} from './initialState';
 
 // Helper selector: get current topic data based on session context
 const currentTopicData = (s: ChatStoreState): TopicData | undefined => {

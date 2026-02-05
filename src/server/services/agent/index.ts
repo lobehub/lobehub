@@ -1,7 +1,8 @@
-import { BUILTIN_AGENTS, type BuiltinAgentSlug } from '@lobechat/builtin-agents';
+import type {BuiltinAgentSlug} from '@lobechat/builtin-agents';
+import { BUILTIN_AGENTS  } from '@lobechat/builtin-agents';
 import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
-import { type LobeChatDatabase } from '@lobechat/database';
-import { type AgentItem, type LobeAgentConfig } from '@lobechat/types';
+import type {LobeChatDatabase} from '@lobechat/database';
+import type {AgentItem, LobeAgentConfig} from '@lobechat/types';
 import { cleanObject, merge } from '@lobechat/utils';
 import debug from 'debug';
 import type { PartialDeep } from 'type-fest';
@@ -10,10 +11,10 @@ import { AgentModel } from '@/database/models/agent';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
 import { getRedisConfig } from '@/envs/redis';
-import { RedisKeyNamespace, RedisKeys, initializeRedisWithPrefix, isRedisEnabled } from '@/libs/redis';
+import { initializeRedisWithPrefix, isRedisEnabled,RedisKeyNamespace, RedisKeys } from '@/libs/redis';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
 
-import { type UpdateAgentResult } from './type';
+import type {UpdateAgentResult} from './type';
 
 const log = debug('lobe-agent:service');
 

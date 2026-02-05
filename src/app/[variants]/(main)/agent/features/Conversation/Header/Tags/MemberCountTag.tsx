@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
-import { type LobeGroupSession } from '@/types/session';
+import type {LobeGroupSession} from '@/types/session';
 
 const MemberCountTag = memo(() => {
   const { t } = useTranslation('chat');

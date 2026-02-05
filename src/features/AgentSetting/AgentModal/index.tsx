@@ -1,13 +1,11 @@
 'use client';
 
+import type {FormGroupItemType, FormItemProps} from '@lobehub/ui';
 import {
+Flexbox, 
   Form,
-  type FormGroupItemType,
-  type FormItemProps,
   Select,
-  SliderWithInput,
-} from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+  SliderWithInput} from '@lobehub/ui';
 import { Form as AntdForm, Switch } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -44,26 +42,26 @@ interface SliderWithCheckboxProps {
 const SliderWithCheckbox = memo<SliderWithCheckboxProps>(
   ({ value, onChange, disabled, checked, onToggle, min, max, step, unlimitedInput }) => {
     return (
-      <Flexbox align="center" gap={12} horizontal justify={'flex-end'} width={300}>
+      <Flexbox horizontal align="center" gap={12} justify={'flex-end'} width={300}>
         {!disabled && (
           <div style={{ flex: 1 }}>
             <SliderWithInput
               disabled={disabled}
               max={max}
               min={min}
-              onChange={onChange}
               step={step}
               unlimitedInput={unlimitedInput}
               value={value}
+              onChange={onChange}
             />
           </div>
         )}
         <Switch
           checked={checked}
+          size={checked ? 'small' : 'default'}
           onChange={(v) => {
             onToggle(v);
           }}
-          size={checked ? 'small' : 'default'}
         />
       </Flexbox>
     );
@@ -82,18 +80,18 @@ interface SelectWithCheckboxProps {
 const SelectWithCheckbox = memo<SelectWithCheckboxProps>(
   ({ value, onChange, checked, onToggle, options }) => {
     return (
-      <Flexbox align="center" gap={12} horizontal justify={'flex-end'} width={300}>
+      <Flexbox horizontal align="center" gap={12} justify={'flex-end'} width={300}>
         {checked && (
           <div style={{ flex: 1 }}>
-            <Select onChange={onChange} options={options} value={value} />
+            <Select options={options} value={value} onChange={onChange} />
           </div>
         )}
         <Switch
           checked={checked}
+          size={checked ? 'small' : 'default'}
           onChange={(v) => {
             onToggle(v);
           }}
-          size={checked ? 'small' : 'default'}
         />
       </Flexbox>
     );
@@ -242,14 +240,14 @@ const AgentModal = memo(() => {
           disabled={!enabled}
           max={meta.slider.max}
           min={meta.slider.min}
-          onToggle={(checked) => handleToggle(key, checked)}
           step={meta.slider.step}
           styles={styles}
+          onToggle={(checked) => handleToggle(key, checked)}
         />
       ),
       desc: t(meta.descKey as any),
       label: (
-        <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
+        <Flexbox horizontal align={'center'} className={styles.label} gap={8}>
           {t(meta.labelKey as any)}
           <InfoTooltip title={t(meta.descKey as any)} />
         </Flexbox>
@@ -278,10 +276,13 @@ const AgentModal = memo(() => {
       {
         children: (
           <SliderWithCheckbox
+            unlimitedInput
             checked={typeof maxTokensValue === 'number'}
             disabled={typeof maxTokensValue !== 'number'}
             max={32_000}
             min={0}
+            step={100}
+            styles={styles}
             onToggle={(checked) => {
               if (!checked) {
                 form.setFieldValue(['params', 'max_tokens'], undefined);
@@ -289,14 +290,11 @@ const AgentModal = memo(() => {
                 form.setFieldValue(['params', 'max_tokens'], 4096);
               }
             }}
-            step={100}
-            styles={styles}
-            unlimitedInput
           />
         ),
         desc: t('settingModel.maxTokens.desc'),
         label: (
-          <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} className={styles.label} gap={8}>
             {t('settingModel.maxTokens.title')}
             <InfoTooltip title={t('settingModel.maxTokens.desc')} />
           </Flexbox>
@@ -309,6 +307,11 @@ const AgentModal = memo(() => {
         children: (
           <SelectWithCheckbox
             checked={typeof reasoningEffortValue === 'string'}
+            options={[
+              { label: t('settingModel.reasoningEffort.options.low'), value: 'low' },
+              { label: t('settingModel.reasoningEffort.options.medium'), value: 'medium' },
+              { label: t('settingModel.reasoningEffort.options.high'), value: 'high' },
+            ]}
             onToggle={(checked) => {
               if (!checked) {
                 form.setFieldValue(['params', 'reasoning_effort'], undefined);
@@ -316,16 +319,11 @@ const AgentModal = memo(() => {
                 form.setFieldValue(['params', 'reasoning_effort'], 'medium');
               }
             }}
-            options={[
-              { label: t('settingModel.reasoningEffort.options.low'), value: 'low' },
-              { label: t('settingModel.reasoningEffort.options.medium'), value: 'medium' },
-              { label: t('settingModel.reasoningEffort.options.high'), value: 'high' },
-            ]}
           />
         ),
         desc: t('settingModel.reasoningEffort.desc'),
         label: (
-          <Flexbox align={'center'} className={styles.label} gap={8} horizontal>
+          <Flexbox horizontal align={'center'} className={styles.label} gap={8}>
             {t('settingModel.reasoningEffort.title')}
             <InfoTooltip title={t('settingModel.reasoningEffort.desc')} />
           </Flexbox>
@@ -345,6 +343,7 @@ const AgentModal = memo(() => {
       initialValues={config}
       items={[model]}
       itemsType={'group'}
+      variant={'borderless'}
       onFinish={(values) => {
         // 清理 params 中的 undefined 和 null 值，确保禁用的参数被正确移除
         const cleanedValues = { ...values };
@@ -361,7 +360,6 @@ const AgentModal = memo(() => {
 
         updateConfig(cleanedValues);
       }}
-      variant={'borderless'}
       {...FORM_STYLE}
     />
   );

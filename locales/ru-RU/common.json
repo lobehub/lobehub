@@ -260,6 +260,7 @@
   "geminiImageChineseWarning.doNotShowAgain": "Больше не показывать",
   "geminiImageChineseWarning.title": "Уведомление о вводе на китайском",
   "historyRange": "Диапазон истории",
+  "home.suggestQuestions": "Попробуйте эти примеры",
   "import": "Импорт",
   "importData": "Импорт данных",
   "importModal.error.desc": "Извините, произошла ошибка при импорте данных. Пожалуйста, попробуйте снова или <1>отправьте запрос</1>, и мы поможем вам как можно скорее.",

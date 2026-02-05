@@ -1,4 +1,4 @@
-import { type ModelUsage } from '@/types/index';
+import type {ModelUsage} from '@/types/index';
 
 interface ChargeParams {
   metadata: {
@@ -12,5 +12,5 @@ interface ChargeParams {
   userId: string;
 }
 
-// eslint-disable-next-line unused-imports/no-unused-vars, @typescript-eslint/no-unused-vars
+// eslint-disable-next-line unused-imports/no-unused-vars
 export async function chargeAfterGenerate(params: ChargeParams): Promise<void> {}

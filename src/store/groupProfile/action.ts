@@ -1,10 +1,11 @@
 import { debounce } from 'es-toolkit/compat';
-import { type StateCreator } from 'zustand';
+import type {StateCreator} from 'zustand';
 
 import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@/const/index';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 
-import { type SaveState, type SaveStatus, type State, initialState } from './initialState';
+import type {SaveState, SaveStatus, State} from './initialState';
+import { initialState   } from './initialState';
 
 type SaveContentPayload = {
   content: string;

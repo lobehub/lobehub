@@ -2,7 +2,7 @@ import { appEnv } from '@/envs/app';
 
 import { LocalQueueServiceImpl } from './local';
 import { QStashQueueServiceImpl } from './qstash';
-import { type QueueServiceImpl } from './type';
+import type {QueueServiceImpl} from './type';
 
 /**
  * Check if queue-based agent runtime is enabled

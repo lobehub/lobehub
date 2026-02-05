@@ -5,7 +5,7 @@ import { useGenerationConfigParam } from '@/store/image/slices/generationConfig/
 
 const CfgSliderInput = memo(() => {
   const { value, setValue, min, max } = useGenerationConfigParam('cfg');
-  return <SliderWithInput max={max} min={min} onChange={setValue} value={value} />;
+  return <SliderWithInput max={max} min={min} value={value} onChange={setValue} />;
 });
 
 export default CfgSliderInput;

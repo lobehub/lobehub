@@ -1,12 +1,12 @@
 // @vitest-environment node
-import { ImageGenerationTopic } from '@lobechat/types';
+import type { ImageGenerationTopic } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { generationBatches, generationTopics, generations, users } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
-import { GenerationTopicModel } from '../generationTopic';
 import { getTestDB } from '../../core/getTestDB';
+import { generationBatches, generations, generationTopics, users } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import { GenerationTopicModel } from '../generationTopic';
 
 // Mock FileService
 const mockGetFullFileUrl = vi.fn();

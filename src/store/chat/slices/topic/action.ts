@@ -2,15 +2,14 @@
 // Note: To make the code more logic and readable, we just disable the auto sort key eslint rule
 // DON'T REMOVE THE FIRST LINE
 import { chainSummaryTitle } from '@lobechat/prompts';
+import type {ChatTopicMetadata, MessageMapScope, UIChatMessage} from '@lobechat/types';
 import {
-  type ChatTopicMetadata,
-  type MessageMapScope,
-  TraceNameMap,
-  type UIChatMessage,
+  TraceNameMap
 } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { t } from 'i18next';
-import useSWR, { type SWRResponse } from 'swr';
+import type {SWRResponse} from 'swr';
+import useSWR from 'swr';
 
 import { message } from '@/components/AntdStaticMethods';
 import { LOADING_FLAT } from '@/const/message';
@@ -22,16 +21,17 @@ import type { ChatStore } from '@/store/chat';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { useGlobalStore } from '@/store/global';
 import { globalHelpers } from '@/store/global/helpers';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
-import { type ChatTopic, type CreateTopicParams } from '@/types/topic';
+import type {ChatTopic, CreateTopicParams} from '@/types/topic';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { displayMessageSelectors } from '../message/selectors';
-import { type TopicData } from './initialState';
-import { type ChatTopicDispatch, topicReducer } from './reducer';
+import type {TopicData} from './initialState';
+import type {ChatTopicDispatch} from './reducer';
+import {  topicReducer } from './reducer';
 import { topicSelectors } from './selectors';
 
 const n = setNamespace('t');

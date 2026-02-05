@@ -1,4 +1,4 @@
-import { ActionIcon, Block, Flexbox, Text } from '@lobehub/ui';
+import { ActionIcon, Block, Text } from '@lobehub/ui';
 import { GroupBotSquareIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { BotIcon, FilePenIcon, ImageIcon, PenLineIcon, X } from 'lucide-react';
@@ -41,29 +41,27 @@ const ModeHeader = memo(() => {
   const Icon = config.icon;
 
   return (
-    <Flexbox align={'flex-start'} padding={4}>
-      <Block
-        align="center"
-        className={styles.container}
-        gap={8}
-        horizontal
-        padding={4}
-        variant={'filled'}
-      >
-        <Icon color={cssVar.colorTextDescription} size={16} />
-        <Text fontSize={12} type={'secondary'}>
-          {t(config.titleKey)}
-        </Text>
-        <ActionIcon
-          icon={X}
-          onClick={clearInputMode}
-          size="small"
-          style={{
-            borderRadius: 16,
-          }}
-        />
-      </Block>
-    </Flexbox>
+    <Block
+      horizontal
+      align="center"
+      className={styles.container}
+      gap={8}
+      padding={4}
+      variant={'filled'}
+    >
+      <Icon color={cssVar.colorTextDescription} size={16} />
+      <Text fontSize={12} type={'secondary'}>
+        {t(config.titleKey)}
+      </Text>
+      <ActionIcon
+        icon={X}
+        size="small"
+        style={{
+          borderRadius: 16,
+        }}
+        onClick={clearInputMode}
+      />
+    </Block>
   );
 });
 

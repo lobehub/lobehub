@@ -6,7 +6,7 @@ import { useParams } from 'react-router-dom';
 
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
-import { type AssistantMarketSource } from '@/types/discover';
+import type {AssistantMarketSource} from '@/types/discover';
 
 import NotFound from '../components/NotFound';
 import { TocProvider } from '../features/Toc/useToc';

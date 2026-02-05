@@ -1,6 +1,6 @@
 import { OFFICIAL_URL } from '@lobechat/const';
 
-import { type ElectronState } from '../initialState';
+import type {ElectronState} from '../initialState';
 
 const isSyncActive = (s: ElectronState) => s.dataSyncConfig.active;
 

@@ -2,10 +2,10 @@ import type { ChatModelCard } from '@lobechat/types';
 import { ModelProvider } from 'model-bank';
 import OpenAI from 'openai';
 
-import { LobeRuntimeAI } from '../../core/BaseAI';
+import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { pruneReasoningPayload } from '../../core/contextBuilders/openai';
 import { OpenAIStream } from '../../core/streams';
-import { ChatMethodOptions, ChatStreamPayload } from '../../types';
+import type { ChatMethodOptions, ChatStreamPayload } from '../../types';
 import { AgentRuntimeErrorType } from '../../types/error';
 import { AgentRuntimeError } from '../../utils/createError';
 import { StreamingResponse } from '../../utils/response';

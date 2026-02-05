@@ -4,7 +4,7 @@ import { memo, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { useMarketAuth, useMarketUserProfile } from '@/layout/AuthProvider/MarketAuth';
-import { type MarketUserProfile } from '@/layout/AuthProvider/MarketAuth/types';
+import type {MarketUserProfile} from '@/layout/AuthProvider/MarketAuth/types';
 import { useDiscoverStore } from '@/store/discover';
 
 import NotFound from '../components/NotFound';

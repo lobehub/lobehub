@@ -5,13 +5,13 @@ import isEqual from 'fast-deep-equal';
 
 import { messageService } from '@/services/message';
 import { topicService } from '@/services/topic';
-import { type ChatStore } from '@/store/chat/store';
-import { type StoreSetter } from '@/store/types';
+import type {ChatStore} from '@/store/chat/store';
+import type {StoreSetter} from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { dbMessageSelectors, displayMessageSelectors } from '../../../selectors';
 import { toggleBooleanList } from '../../../utils';
-import { type OptimisticUpdateContext } from './optimisticUpdate';
+import type {OptimisticUpdateContext} from './optimisticUpdate';
 
 const n = setNamespace('m');
 
@@ -143,7 +143,7 @@ export class MessagePublicApiActionImpl {
     const message = dbMessageSelectors.getDbMessageById(id)(this.#get());
     if (!message) return;
 
-    let ids = [message.id];
+    const ids = [message.id];
 
     this.#get().internal_dispatchMessage({ type: 'deleteMessages', ids });
     const ctx = this.#get().internal_getConversationContext();

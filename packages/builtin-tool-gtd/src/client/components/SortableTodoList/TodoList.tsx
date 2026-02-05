@@ -5,7 +5,8 @@ import { memo, useCallback } from 'react';
 
 import AddItemRow from './AddItemRow';
 import SortableItem from './SortableItem';
-import { TodoListItem, useTodoListStore } from './store';
+import type { TodoListItem } from './store';
+import { useTodoListStore } from './store';
 
 interface TodoListProps {
   placeholder?: string;
@@ -44,9 +45,9 @@ const TodoList = memo<TodoListProps>(({ placeholder }) => {
         gap={0}
         items={items}
         key={listKey}
-        onChange={handleSortEnd}
         renderItem={renderItem}
         style={{ marginBottom: 0 }}
+        onChange={handleSortEnd}
       />
       <AddItemRow placeholder={placeholder} />
     </>

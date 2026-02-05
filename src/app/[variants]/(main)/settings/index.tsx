@@ -5,7 +5,7 @@ import { useParams } from 'react-router-dom';
 
 import { SettingsTabs } from '@/store/global/initialState';
 
-import { type LayoutProps } from './_layout/type';
+import type {LayoutProps} from './_layout/type';
 import SettingsContent from './features/SettingsContent';
 
 const Layout = memo<LayoutProps>(() => {

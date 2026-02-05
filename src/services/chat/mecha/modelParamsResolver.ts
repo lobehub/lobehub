@@ -1,4 +1,4 @@
-import { type LobeAgentChatConfig } from '@lobechat/types';
+import type {LobeAgentChatConfig} from '@lobechat/types';
 
 import { aiModelSelectors, getAiInfraStoreState } from '@/store/aiInfra';
 

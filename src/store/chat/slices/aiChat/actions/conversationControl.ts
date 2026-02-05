@@ -1,15 +1,15 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 // Disable the auto sort key eslint rule to make the code more logic and readable
-import { type AgentRuntimeContext } from '@lobechat/agent-runtime';
+import type {AgentRuntimeContext} from '@lobechat/agent-runtime';
 import { MESSAGE_CANCEL_FLAT } from '@lobechat/const';
-import { type ConversationContext } from '@lobechat/types';
+import type {ConversationContext} from '@lobechat/types';
 
-import { type ChatStore } from '@/store/chat/store';
-import { type StoreSetter } from '@/store/types';
+import type {ChatStore} from '@/store/chat/store';
+import type {StoreSetter} from '@/store/types';
 
 import { displayMessageSelectors } from '../../../selectors';
 import { messageMapKey } from '../../../utils/messageMapKey';
-import { type OptimisticUpdateContext } from '../../message/actions/optimisticUpdate';
+import type {OptimisticUpdateContext} from '../../message/actions/optimisticUpdate';
 import { dbMessageSelectors } from '../../message/selectors';
 
 /**

@@ -1,9 +1,9 @@
-import { type ChatTopic, type ExportedTopic, type UIChatMessage } from '@lobechat/types';
+import type {ChatTopic, ExportedTopic, UIChatMessage} from '@lobechat/types';
 import { cleanObject } from '@lobechat/utils';
 
 import { LOADING_FLAT } from '@/const/message';
 
-import { type BaseExportOptions } from './type';
+import type {BaseExportOptions} from './type';
 
 interface FullExportParams extends BaseExportOptions {
   messages: UIChatMessage[];

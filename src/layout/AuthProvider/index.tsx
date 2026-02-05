@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { type PropsWithChildren } from 'react';
+import type {PropsWithChildren} from 'react';
 
 import { authEnv } from '@/envs/auth';
 

@@ -1,4 +1,4 @@
-import { type LobeUser, type SSOProvider } from '@lobechat/types';
+import type {LobeUser, SSOProvider} from '@lobechat/types';
 import { t } from 'i18next';
 
 import type { UserStore } from '@/store/user';

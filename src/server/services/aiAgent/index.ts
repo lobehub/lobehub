@@ -1,6 +1,6 @@
 import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
 import type { LobeToolManifest } from '@lobechat/context-engine';
-import { type LobeChatDatabase } from '@lobechat/database';
+import type {LobeChatDatabase} from '@lobechat/database';
 import type {
   ExecAgentParams,
   ExecAgentResult,
@@ -20,10 +20,10 @@ import { MessageModel } from '@/database/models/message';
 import { PluginModel } from '@/database/models/plugin';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
+import type {ServerAgentToolsContext} from '@/server/modules/Mecha';
 import {
-  type ServerAgentToolsContext,
   createServerAgentToolsEngine,
-  serverMessagesEngine,
+  serverMessagesEngine
 } from '@/server/modules/Mecha';
 import { AgentService } from '@/server/services/agent';
 import { AgentRuntimeService } from '@/server/services/agentRuntime';

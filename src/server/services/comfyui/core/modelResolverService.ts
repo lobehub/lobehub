@@ -16,7 +16,7 @@ import {
   MODEL_REGISTRY,
 } from '@/server/services/comfyui/config/modelRegistry';
 import { SYSTEM_COMPONENTS } from '@/server/services/comfyui/config/systemComponents';
-import { type ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
+import type {ComfyUIClientService} from '@/server/services/comfyui/core/comfyUIClientService';
 import { ModelResolverError } from '@/server/services/comfyui/errors/modelResolverError';
 import { TTLCacheManager } from '@/server/services/comfyui/utils/cacheManager';
 import { getModelsByVariant } from '@/server/services/comfyui/utils/staticModelLookup';
@@ -276,7 +276,7 @@ export class ModelResolverService {
       // expectedFiles are already sorted by priority from getModelsByVariant
       const topPriorityFiles = details.expectedFiles.slice(0, 1); // Show top priority options
 
-      let errorMessage = `Model not found: ${topPriorityFiles.join(', ')}, please install one first.`;
+      const errorMessage = `Model not found: ${topPriorityFiles.join(', ')}, please install one first.`;
 
       throw new ModelResolverError(ModelResolverError.Reasons.MODEL_NOT_FOUND, errorMessage, {
         expectedFiles: details.expectedFiles,

@@ -1,9 +1,10 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Avatar, type AvatarProps } from '@lobehub/ui';
+import type {AvatarProps} from '@lobehub/ui';
+import { Avatar  } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { forwardRef, useMemo } from 'react';
+import { useMemo } from 'react';
 
 import { DEFAULT_USER_AVATAR_URL } from '@/const/meta';
 import { isDesktop } from '@/const/version';
@@ -48,8 +49,7 @@ export interface UserAvatarProps extends AvatarProps {
   clickable?: boolean;
 }
 
-const UserAvatar = forwardRef<HTMLDivElement, UserAvatarProps>(
-  ({ size = 40, background, clickable, className, style, ...rest }, ref) => {
+const UserAvatar = ({ ref, size = 40, background, clickable, className, style, ...rest }: UserAvatarProps & { ref?: React.RefObject<HTMLDivElement | null> }) => {
     const [avatar, nickName, username] = useUserStore((s) => [
       userProfileSelectors.userAvatar(s),
       userProfileSelectors.nickName(s),
@@ -85,7 +85,6 @@ const UserAvatar = forwardRef<HTMLDivElement, UserAvatarProps>(
         {...rest}
       />
     );
-  },
-);
+  };
 
 export default UserAvatar;

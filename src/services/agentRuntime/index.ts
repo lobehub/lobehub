@@ -1,8 +1,8 @@
-import { type UIChatMessage } from '@lobechat/types';
+import type {UIChatMessage} from '@lobechat/types';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
 import { lambdaClient } from '@/libs/trpc/client';
-import { type HumanInterventionRequest } from '@/services/agentRuntime/type';
+import type {HumanInterventionRequest} from '@/services/agentRuntime/type';
 import { contextEngineering } from '@/services/chat/mecha';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';

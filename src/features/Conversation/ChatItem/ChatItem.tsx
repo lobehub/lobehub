@@ -10,7 +10,7 @@ import ErrorContent from './components/ErrorContent';
 import MessageContent from './components/MessageContent';
 import Title from './components/Title';
 import { styles } from './style';
-import { type ChatItemProps } from './type';
+import type {ChatItemProps} from './type';
 
 const ChatItem = memo<ChatItemProps>(
   ({
@@ -53,8 +53,8 @@ const ChatItem = memo<ChatItemProps>(
       <Avatar
         alt={avatarProps?.alt || avatar.title || 'avatar'}
         loading={loading}
-        onClick={onAvatarClick}
         shape={'square'}
+        onClick={onAvatarClick}
         {...avatarProps}
         avatar={avatar}
       />
@@ -103,6 +103,7 @@ const ChatItem = memo<ChatItemProps>(
               editing={editing}
               id={id!}
               message={message}
+              variant={isUser ? 'bubble' : undefined}
               messageExtra={
                 <>
                   {errorContent}
@@ -110,7 +111,6 @@ const ChatItem = memo<ChatItemProps>(
                 </>
               }
               onDoubleClick={onDoubleClick}
-              variant={isUser ? 'bubble' : undefined}
             >
               {children}
             </MessageContent>

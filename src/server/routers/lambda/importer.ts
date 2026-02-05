@@ -5,8 +5,8 @@ import { DataImporterRepos } from '@/database/repositories/dataImporter';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
-import { type ImportPgDataStructure } from '@/types/export';
-import { type ImportResultData, type ImporterEntryData } from '@/types/importer';
+import type {ImportPgDataStructure} from '@/types/export';
+import type {ImporterEntryData, ImportResultData} from '@/types/importer';
 
 const importProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;

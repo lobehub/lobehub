@@ -1,4 +1,4 @@
-import { type NewUserMemoryIdentity } from '@lobechat/types';
+import type {NewUserMemoryIdentity} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 

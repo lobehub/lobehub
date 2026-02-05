@@ -1,7 +1,7 @@
 'use client';
 
-import { type KlavisServerType } from '@lobechat/const';
-import { Avatar, DropdownMenu, Flexbox, Icon, Button as LobeButton } from '@lobehub/ui';
+import type {KlavisServerType} from '@lobechat/const';
+import { Avatar, Button as LobeButton,DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { App, Button } from 'antd';
 import { cssVar } from 'antd-style';
 import { Loader2, MoreHorizontalIcon, SquareArrowOutUpRight, Unplug } from 'lucide-react';
@@ -10,7 +10,8 @@ import { useTranslation } from 'react-i18next';
 
 import { createKlavisSkillDetailModal } from '@/features/SkillStore/SkillDetail';
 import { useToolStore } from '@/store/tool';
-import { type KlavisServer, KlavisServerStatus } from '@/store/tool/slices/klavisStore';
+import type {KlavisServer} from '@/store/tool/slices/klavisStore';
+import {  KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -215,7 +216,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
   const renderAction = () => {
     if (isConnecting || isWaitingAuth) {
       return (
-        <Button disabled icon={<Icon icon={Loader2} spin />} type="default">
+        <Button disabled icon={<Icon spin icon={Loader2} />} type="default">
           {t('tools.klavis.connect', { defaultValue: 'Connect' })}
         </Button>
       );
@@ -223,7 +224,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
 
     if (!server) {
       return (
-        <Button icon={<Icon icon={SquareArrowOutUpRight} />} onClick={handleConnect} type="default">
+        <Button icon={<Icon icon={SquareArrowOutUpRight} />} type="default" onClick={handleConnect}>
           {t('tools.klavis.connect', { defaultValue: 'Connect' })}
         </Button>
       );
@@ -233,12 +234,12 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
       return (
         <Button
           icon={<Icon icon={SquareArrowOutUpRight} />}
+          type="default"
           onClick={() => {
             if (server.oauthUrl) {
               openOAuthWindow(server.oauthUrl, server.identifier);
             }
           }}
-          type="default"
         >
           {t('tools.klavis.pendingAuth', { defaultValue: 'Authorize' })}
         </Button>
@@ -248,6 +249,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
     if (server.status === KlavisServerStatus.CONNECTED) {
       return (
         <DropdownMenu
+          placement="bottomRight"
           items={[
             {
               icon: <Icon icon={Unplug} />,
@@ -256,7 +258,6 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
               onClick: handleDisconnect,
             },
           ]}
-          placement="bottomRight"
         >
           <LobeButton icon={MoreHorizontalIcon} />
         </DropdownMenu>
@@ -270,24 +271,24 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
 
   return (
     <Flexbox
+      horizontal
       align="center"
       className={styles.container}
       gap={16}
-      horizontal
       justify="space-between"
     >
-      <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
+      <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
         <Flexbox
+          horizontal
           align="center"
           gap={16}
-          horizontal
+          style={{ cursor: 'pointer' }}
           onClick={() =>
             createKlavisSkillDetailModal({
               identifier: serverType.identifier,
               serverName: serverType.serverName,
             })
           }
-          style={{ cursor: 'pointer' }}
         >
           <div className={`${styles.icon} ${!isConnected ? styles.disconnectedIcon : ''}`}>
             {renderIcon()}
@@ -300,7 +301,7 @@ const KlavisSkillItem = memo<KlavisSkillItemProps>(({ serverType, server }) => {
           </Flexbox>
         </Flexbox>
       </Flexbox>
-      <Flexbox align="center" gap={12} horizontal>
+      <Flexbox horizontal align="center" gap={12}>
         {isConnected && renderStatus()}
         {renderAction()}
       </Flexbox>

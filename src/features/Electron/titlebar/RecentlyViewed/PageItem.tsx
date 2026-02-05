@@ -10,7 +10,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useElectronStore } from '@/store/electron';
 
 import { useStyles } from './styles';
-import { type ResolvedPageData } from './types';
+import type {ResolvedPageData} from './types';
 
 interface PageItemProps {
   isPinned: boolean;
@@ -47,10 +47,10 @@ const PageItem = memo<PageItemProps>(({ item, isPinned, onClose }) => {
 
   return (
     <Flexbox
+      horizontal
       align="center"
       className={cx(styles.item, isActive && styles.itemActive)}
       gap={8}
-      horizontal
       onClick={handleClick}
     >
       {item.icon && <Icon className={styles.icon} icon={item.icon} size="small" />}
@@ -58,9 +58,9 @@ const PageItem = memo<PageItemProps>(({ item, isPinned, onClose }) => {
       <ActionIcon
         className={cx('actionIcon', styles.actionIcon)}
         icon={isPinned ? PinOff : Pin}
-        onClick={handlePinToggle}
         size="small"
         title={isPinned ? t('navigation.unpin') : t('navigation.pin')}
+        onClick={handlePinToggle}
       />
     </Flexbox>
   );

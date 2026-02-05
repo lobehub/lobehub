@@ -1,8 +1,8 @@
-import { type UIChatMessage } from '@lobechat/types';
+import type {UIChatMessage} from '@lobechat/types';
 
 import { LOADING_FLAT } from '@/const/message';
 
-import { type BaseExportOptions } from './type';
+import type {BaseExportOptions} from './type';
 
 interface JSONParams extends BaseExportOptions {
   messages: UIChatMessage[];

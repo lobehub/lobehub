@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import {
   COMPOUND_STYLES,
-  STYLE_ADJECTIVE_PATTERNS,
-  STYLE_KEYWORDS,
-  STYLE_SYNONYMS,
   extractStyleAdjectives,
   getAllStyleKeywords,
   getCompoundStyles,
   isStyleAdjective,
   normalizeStyleTerm,
+  STYLE_ADJECTIVE_PATTERNS,
+  STYLE_KEYWORDS,
+  STYLE_SYNONYMS,
 } from '@/server/services/comfyui/config/promptToolConst';
 
 describe('promptToolConst', () => {

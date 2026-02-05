@@ -21,23 +21,23 @@ const UpdateProviderInfo = memo(() => {
       <Tooltip title={t('updateAiProvider.tooltip')}>
         <Button
           icon={SettingsIcon}
+          size={'small'}
+          type={'text'}
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
             setOpen(true);
           }}
-          size={'small'}
-          type={'text'}
         />
       </Tooltip>
       {open && providerConfig && (
         <SettingModal
           id={providerConfig.id}
           initialValues={providerConfig}
+          open={open}
           onClose={() => {
             setOpen(false);
           }}
-          open={open}
         />
       )}
     </>

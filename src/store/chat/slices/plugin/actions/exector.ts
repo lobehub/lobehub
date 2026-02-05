@@ -1,7 +1,7 @@
-import { type MCPToolCallResult } from '@/libs/mcp';
+import type {MCPToolCallResult} from '@/libs/mcp';
 import { truncateToolResult } from '@/server/utils/truncateToolResult';
 import { useToolStore } from '@/store/tool';
-import { type ChatToolPayload } from '@/types/message';
+import type {ChatToolPayload} from '@/types/message';
 import { safeParseJSON } from '@/utils/safeParseJSON';
 
 /**

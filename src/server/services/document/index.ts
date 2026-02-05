@@ -1,12 +1,13 @@
-import { type LobeChatDatabase } from '@lobechat/database';
-import { type DocumentItem, documents, files } from '@lobechat/database/schemas';
+import type {LobeChatDatabase} from '@lobechat/database';
+import type {DocumentItem} from '@lobechat/database/schemas';
+import {  documents, files } from '@lobechat/database/schemas';
 import { loadFile } from '@lobechat/file-loaders';
 import debug from 'debug';
 import { and, eq } from 'drizzle-orm';
 
 import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
-import { type LobeDocument } from '@/types/document';
+import type {LobeDocument} from '@/types/document';
 
 import { FileService } from '../file';
 

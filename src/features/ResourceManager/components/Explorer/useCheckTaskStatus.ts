@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 
 import { revalidateResources } from '@/store/file/slices/resource/hooks';
 import { AsyncTaskStatus } from '@/types/asyncTask';
-import { type FileListItem } from '@/types/files';
+import type {FileListItem} from '@/types/files';
 
 export const useCheckTaskStatus = (data: FileListItem[] | undefined) => {
   const hasProcessingChunkTask = data?.some(

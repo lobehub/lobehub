@@ -1,7 +1,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { type ChatItemProps } from '../type';
+import type {ChatItemProps} from '../type';
 
 export interface ActionsProps {
   actions: ChatItemProps['actions'];

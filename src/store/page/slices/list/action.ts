@@ -3,12 +3,12 @@ import type { SWRResponse } from 'swr';
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
 import { useGlobalStore } from '@/store/global';
-import { type StoreSetter } from '@/store/types';
-import { type LobeDocument } from '@/types/document';
+import type {StoreSetter} from '@/store/types';
+import type {LobeDocument} from '@/types/document';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type PageQueryFilter } from '../../initialState';
-import { type PageStore } from '../../store';
+import type {PageQueryFilter} from '../../initialState';
+import type {PageStore} from '../../store';
 
 const n = setNamespace('page/list');
 

@@ -6,7 +6,7 @@ import { getTestDB } from '../../core/getTestDB';
 import { agents } from '../../schemas/agent';
 import { chatGroups, chatGroupsAgents } from '../../schemas/chatGroup';
 import { users } from '../../schemas/user';
-import { LobeChatDatabase } from '../../type';
+import type { LobeChatDatabase } from '../../type';
 import { AgentGroupRepository } from './index';
 
 const userId = 'agent-group-test-user';

@@ -30,7 +30,7 @@ import {
   WebBrowsingInspectors,
   WebBrowsingManifest,
 } from '@lobechat/builtin-tool-web-browsing/client';
-import { type BuiltinInspector } from '@lobechat/types';
+import type {BuiltinInspector} from '@lobechat/types';
 
 /**
  * Builtin tools inspector registry

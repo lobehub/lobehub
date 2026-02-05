@@ -1,17 +1,17 @@
 import { Flexbox } from '@lobehub/ui';
-import { type FC } from 'react';
+import type {FC} from 'react';
 import { Outlet } from 'react-router-dom';
 
 import RegisterHotkeys from './RegisterHotkeys';
 import Sidebar from './Sidebar';
-import TopicSidebar from './TopicSidebar';
 import { styles } from './style';
+import TopicSidebar from './TopicSidebar';
 
 const Layout: FC = () => {
   return (
     <>
       <Sidebar />
-      <Flexbox className={styles.mainContainer} flex={1} height={'100%'} horizontal>
+      <Flexbox horizontal className={styles.mainContainer} flex={1} height={'100%'}>
         <Flexbox className={styles.contentContainer} flex={1} height={'100%'}>
           <Outlet />
         </Flexbox>

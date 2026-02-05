@@ -1,7 +1,7 @@
+import type {SendMessageServerResponse} from '@lobechat/types';
 import {
   AiSendMessageServerSchema,
-  type SendMessageServerResponse,
-  StructureOutputSchema,
+  StructureOutputSchema
 } from '@lobechat/types';
 import debug from 'debug';
 

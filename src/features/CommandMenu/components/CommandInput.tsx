@@ -70,8 +70,8 @@ const CommandInput = memo(() => {
             closable
             icon={
               <Avatar
-                avatar={selectedAgent.avatar}
                 emojiScaleWithBackground
+                avatar={selectedAgent.avatar}
                 shape="square"
                 size={14}
               />
@@ -84,9 +84,9 @@ const CommandInput = memo(() => {
         <Command.Input
           autoFocus
           maxLength={500}
-          onValueChange={setSearch}
           placeholder={getPlaceholder()}
           value={search}
+          onValueChange={setSearch}
         />
         {page !== 'ask-ai' && !hasSelectedAgent && search.trim() ? (
           <>

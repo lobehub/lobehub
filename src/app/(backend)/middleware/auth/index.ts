@@ -1,15 +1,15 @@
+import type {ChatCompletionErrorPayload, ModelRuntime} from '@lobechat/model-runtime';
 import {
-  AgentRuntimeError,
-  type ChatCompletionErrorPayload,
-  type ModelRuntime,
+  AgentRuntimeError
 } from '@lobechat/model-runtime';
 import { context as otContext } from '@lobechat/observability-otel/api';
-import { ChatErrorType, type ClientSecretPayload } from '@lobechat/types';
+import type {ClientSecretPayload} from '@lobechat/types';
+import { ChatErrorType  } from '@lobechat/types';
 import { getXorPayload } from '@lobechat/utils/server';
 
 import { auth } from '@/auth';
 import { getServerDB } from '@/database/core/db-adaptor';
-import { type LobeChatDatabase } from '@/database/type';
+import type {LobeChatDatabase} from '@/database/type';
 import { LOBE_CHAT_AUTH_HEADER, LOBE_CHAT_OIDC_AUTH_HEADER, OAUTH_AUTHORIZED } from '@/envs/auth';
 import { extractTraceContext, injectActiveTraceHeaders } from '@/libs/observability/traceparent';
 import { validateOIDCJWT } from '@/libs/oidc-provider/jwt';

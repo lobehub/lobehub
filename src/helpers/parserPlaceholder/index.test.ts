@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  VARIABLE_GENERATORS,
   parsePlaceholderVariables,
   parsePlaceholderVariablesMessages,
+  VARIABLE_GENERATORS,
 } from './index';
 
 // Mock dependencies

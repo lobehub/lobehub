@@ -1,13 +1,14 @@
-import { type DocumentType } from '@lobechat/builtin-tool-notebook';
-import { type DocumentItem } from '@lobechat/database/schemas';
-import { type NotebookDocument } from '@lobechat/types';
+import type {DocumentType} from '@lobechat/builtin-tool-notebook';
+import type {DocumentItem} from '@lobechat/database/schemas';
+import type {NotebookDocument} from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import { type SWRResponse, mutate } from 'swr';
+import type {SWRResponse} from 'swr';
+import {  mutate } from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { notebookService } from '@/services/notebook';
 import { useChatStore } from '@/store/chat';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { NotebookStore } from './store';

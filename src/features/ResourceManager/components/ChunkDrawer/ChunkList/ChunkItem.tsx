@@ -3,7 +3,7 @@ import { createStaticStyles, cx } from 'antd-style';
 import { memo, useMemo } from 'react';
 
 import { useFileStore } from '@/store/file';
-import { type FileChunk } from '@/types/chunk';
+import type {FileChunk} from '@/types/chunk';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`

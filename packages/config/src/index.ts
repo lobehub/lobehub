@@ -9,7 +9,7 @@ import {
   DEFAULT_TOOL_CONFIG,
   DEFAULT_TTS_CONFIG,
 } from '@lobechat/const';
-import { UserSettings } from '@lobechat/types';
+import type { UserSettings } from '@lobechat/types';
 
 export const DEFAULT_SETTINGS: UserSettings = {
   defaultAgent: DEFAULT_AGENT,

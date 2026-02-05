@@ -1,4 +1,4 @@
-import { type KlavisServer } from './types';
+import type {KlavisServer} from './types';
 
 /**
  * Klavis Store state interface

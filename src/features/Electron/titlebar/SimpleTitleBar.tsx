@@ -2,7 +2,7 @@
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
-import { type FC } from 'react';
+import type {FC} from 'react';
 
 import { ProductLogo } from '@/components/Branding/ProductLogo';
 import { electronStylish } from '@/styles/electron';
@@ -18,10 +18,10 @@ const SimpleTitleBar: FC = () => {
   useWatchThemeUpdate();
   return (
     <Flexbox
+      horizontal
       align={'center'}
       className={electronStylish.draggable}
       height={TITLE_BAR_HEIGHT}
-      horizontal
       justify={'center'}
       width={'100%'}
     >

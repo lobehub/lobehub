@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox, Modal } from '@lobehub/ui';
-import { Suspense, memo, useState } from 'react';
+import { memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
@@ -11,7 +11,7 @@ import McpDetailLoading from '@/features/MCP/MCPDetail/Loading';
 import PluginDetailModal from '@/features/PluginDetailModal';
 import { useToolStore } from '@/store/tool';
 import { pluginSelectors } from '@/store/tool/selectors';
-import { type LobeToolType } from '@/types/tool/tool';
+import type {LobeToolType} from '@/types/tool/tool';
 
 import Actions from './Actions';
 import { styles } from './style';
@@ -38,19 +38,19 @@ const McpSkillItem = memo<McpSkillItemProps>(
     return (
       <>
         <Flexbox
+          horizontal
           align="center"
           className={styles.container}
           gap={16}
-          horizontal
           justify="space-between"
         >
-          <Flexbox align="center" gap={16} horizontal style={{ flex: 1, overflow: 'hidden' }}>
+          <Flexbox horizontal align="center" gap={16} style={{ flex: 1, overflow: 'hidden' }}>
             <Flexbox
+              horizontal
               align="center"
               gap={16}
-              horizontal
-              onClick={() => setDetailOpen(true)}
               style={{ cursor: 'pointer' }}
+              onClick={() => setDetailOpen(true)}
             >
               <div className={styles.icon}>
                 <PluginAvatar avatar={avatar} size={32} />
@@ -65,23 +65,23 @@ const McpSkillItem = memo<McpSkillItemProps>(
           <Modal
             destroyOnHidden
             footer={null}
-            onCancel={() => setDetailOpen(false)}
             open={detailOpen}
             title={t('dev.title.skillDetails')}
             width={800}
+            onCancel={() => setDetailOpen(false)}
           >
             <Suspense fallback={<McpDetailLoading />}>
-              <McpDetail identifier={identifier} noSettings />
+              <McpDetail noSettings identifier={identifier} />
             </Suspense>
           </Modal>
         )}
         {isCustomPlugin && (
           <PluginDetailModal
             id={identifier}
-            onClose={() => setDetailOpen(false)}
             open={detailOpen}
             schema={plugin?.settings}
             tab="info"
+            onClose={() => setDetailOpen(false)}
           />
         )}
       </>

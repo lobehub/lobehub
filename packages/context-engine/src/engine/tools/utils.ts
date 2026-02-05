@@ -1,5 +1,5 @@
 import { ToolNameResolver } from './ToolNameResolver';
-import { LobeToolManifest } from './types';
+import type { LobeToolManifest } from './types';
 
 // Create a singleton instance for backward compatibility
 const resolver = new ToolNameResolver();

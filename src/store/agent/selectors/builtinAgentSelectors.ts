@@ -1,7 +1,7 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 
-import { type AgentStoreState } from '@/store/agent/initialState';
+import type {AgentStoreState} from '@/store/agent/initialState';
 
 /**
  * Get builtin agent ID by slug

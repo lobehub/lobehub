@@ -1,11 +1,10 @@
 'use client';
 
+import type {PropsWithChildren, ReactNode} from 'react';
 import {
-  type PropsWithChildren,
-  type ReactNode,
   memo,
   useLayoutEffect,
-  useSyncExternalStore,
+  useSyncExternalStore
 } from 'react';
 
 import Sidebar from '../../app/[variants]/(main)/home/_layout/Sidebar';

@@ -10,11 +10,11 @@ import { styles } from './style';
 const Layout = () => {
   return (
     <MobileContentLayout
+      withNav
       className={styles.mainContainer}
       gap={16}
       header={<Header />}
       id={SCROLL_PARENT_ID}
-      withNav
     >
       <Outlet />
       <div />

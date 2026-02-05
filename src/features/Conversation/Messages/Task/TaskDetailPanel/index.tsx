@@ -2,7 +2,7 @@
 
 import { memo } from 'react';
 
-import { type TaskDetail } from '@/types/index';
+import type {TaskDetail} from '@/types/index';
 
 import StatusContent from './StatusContent';
 

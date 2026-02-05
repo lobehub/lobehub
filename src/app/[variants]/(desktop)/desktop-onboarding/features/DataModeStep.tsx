@@ -40,8 +40,8 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
 
   const checkIcon = (
     <Checkbox
-      backgroundColor={cssVar.colorSuccess}
       checked
+      backgroundColor={cssVar.colorSuccess}
       shape={'circle'}
       size={20}
       style={{ position: 'absolute', right: 12, top: 12 }}
@@ -60,24 +60,24 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
           clickable
           flex={1}
           gap={16}
-          onClick={() => setMode('share')}
           padding={16}
           style={{ borderColor: selectedMode === 'share' ? cssVar.colorSuccess : undefined }}
           variant={'outlined'}
+          onClick={() => setMode('share')}
         >
           {selectedMode === 'share' && checkIcon}
           <Empty
             description={t('screen4.share.description')}
-            descriptionProps={{
-              fontSize: 14,
-            }}
             icon={HeartHandshake}
             padding={0}
             title={t('screen4.share.title')}
+            type={'page'}
+            descriptionProps={{
+              fontSize: 14,
+            }}
             titleProps={{
               fontSize: 18,
             }}
-            type={'page'}
           />
           <Flexbox as={'ul'} gap={4} style={{ listStyle: 'none', padding: 0 }}>
             <li>
@@ -97,13 +97,13 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
           clickable
           flex={1}
           gap={6}
-          onClick={() => setMode('privacy')}
           padding={16}
           style={{ borderColor: selectedMode === 'privacy' ? cssVar.colorSuccess : undefined }}
           variant={'outlined'}
+          onClick={() => setMode('privacy')}
         >
           {selectedMode === 'privacy' && checkIcon}
-          <Text fontSize={18} strong>
+          <Text strong fontSize={18}>
             {t('screen4.privacy.title')}
           </Text>
           <Text fontSize={14} type={'secondary'}>
@@ -118,15 +118,15 @@ const DataModeStep = memo<DataModeStepProps>(({ onBack, onNext }) => {
         left={
           <Button
             icon={Undo2Icon}
-            onClick={onBack}
             style={{ color: cssVar.colorTextDescription }}
             type={'text'}
+            onClick={onBack}
           >
             {t('back')}
           </Button>
         }
         right={
-          <Button onClick={onNext} type={'primary'}>
+          <Button type={'primary'} onClick={onNext}>
             {t('next')}
           </Button>
         }

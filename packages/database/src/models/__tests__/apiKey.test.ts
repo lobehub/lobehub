@@ -2,10 +2,10 @@
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { apiKeys, users } from '../../schemas';
-import { LobeChatDatabase } from '../../type';
-import { ApiKeyModel } from '../apiKey';
 import { getTestDB } from '../../core/getTestDB';
+import { apiKeys, users } from '../../schemas';
+import type { LobeChatDatabase } from '../../type';
+import { ApiKeyModel } from '../apiKey';
 
 const serverDB: LobeChatDatabase = await getTestDB();
 

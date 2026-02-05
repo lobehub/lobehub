@@ -9,6 +9,7 @@ export default {
   'detail.basic.type': 'Format',
   'detail.basic.updatedAt': 'Update Time',
   'detail.data.chunkCount': 'Chunks',
+  'detail.data.noChunk': 'No chunk',
   'detail.data.embedding.default': 'Not embedding',
   'detail.data.embedding.error': 'Failed',
   'detail.data.embedding.pending': 'Pending start',

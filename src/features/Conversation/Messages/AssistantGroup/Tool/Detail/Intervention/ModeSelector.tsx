@@ -1,4 +1,5 @@
-import { Button, Center, DropdownMenu, Icon, type MenuProps } from '@lobehub/ui';
+import type {MenuProps} from '@lobehub/ui';
+import { Button, Center, DropdownMenu, Icon  } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { Check, ChevronDown, Hand, ListChecks, Zap } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
@@ -7,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useUserStore } from '@/store/user';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 
-import { type ApprovalMode } from './index';
+import type {ApprovalMode} from './index';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   icon: css`

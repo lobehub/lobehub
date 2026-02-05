@@ -1,4 +1,4 @@
-import { type ToolExecutionContext } from '../types';
+import type {ToolExecutionContext} from '../types';
 
 /**
  * Factory function type for creating server runtimes

@@ -16,6 +16,12 @@ const PresencePenalty = memo<PresencePenaltyProps>(({ value, onChange, disabled 
         changeOnWheel
         controls={false}
         disabled={disabled}
+        max={2}
+        min={-2}
+        size={'small'}
+        step={0.1}
+        style={{ height: 42 }}
+        value={value}
         marks={{
           '-2': (
             <Icon icon={RepeatIcon} size={'small'} style={{ color: cssVar.colorTextQuaternary }} />
@@ -23,18 +29,12 @@ const PresencePenalty = memo<PresencePenaltyProps>(({ value, onChange, disabled 
           0: <div />,
           2: <Icon icon={AtomIcon} size={'small'} style={{ color: cssVar.colorTextQuaternary }} />,
         }}
-        max={2}
-        min={-2}
-        onChange={onChange}
-        size={'small'}
-        step={0.1}
-        style={{ height: 42 }}
         styles={{
           input: {
             maxWidth: 43,
           },
         }}
-        value={value}
+        onChange={onChange}
       />
     </Flexbox>
   );

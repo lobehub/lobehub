@@ -14,7 +14,7 @@ import { inferFileExtensionFromImageUrl } from '@/utils/url';
 import { ErrorState } from './ErrorState';
 import { LoadingState } from './LoadingState';
 import { SuccessState } from './SuccessState';
-import { type GenerationItemProps } from './types';
+import type {GenerationItemProps} from './types';
 import { getAspectRatio } from './utils';
 
 const isSupportedParamSelector = imageGenerationConfigSelectors.isSupportedParam;
@@ -115,11 +115,11 @@ export const GenerationItem = memo<GenerationItemProps>(
           aspectRatio={aspectRatio}
           generation={generation}
           generationBatch={generationBatch}
+          prompt={prompt}
+          seedTooltip={seedTooltip}
           onCopySeed={handleCopySeed}
           onDelete={handleDeleteGeneration}
           onDownload={handleDownloadImage}
-          prompt={prompt}
-          seedTooltip={seedTooltip}
         />
       );
     }

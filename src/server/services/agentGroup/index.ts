@@ -1,14 +1,14 @@
 import { DEFAULT_AGENT_CONFIG, DEFAULT_CHAT_GROUP_CHAT_CONFIG } from '@lobechat/const';
-import { type LobeChatDatabase } from '@lobechat/database';
-import { type LobeAgentConfig } from '@lobechat/types';
+import type {LobeChatDatabase} from '@lobechat/database';
+import type {LobeAgentConfig} from '@lobechat/types';
 import { cleanObject, merge } from '@lobechat/utils';
 import type { PartialDeep } from 'type-fest';
 
 import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
-import { type UserModel } from '@/database/models/user';
+import type {UserModel} from '@/database/models/user';
 import { AgentGroupRepository } from '@/database/repositories/agentGroup';
-import { type ChatGroupConfig } from '@/database/types/chatGroup';
+import type {ChatGroupConfig} from '@/database/types/chatGroup';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
 
 type DefaultAgentConfig = Awaited<ReturnType<UserModel['getUserSettingsDefaultAgentConfig']>>;

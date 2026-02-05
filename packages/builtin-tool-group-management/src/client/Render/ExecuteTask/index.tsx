@@ -1,6 +1,6 @@
 'use client';
 
-import { BuiltinRenderProps } from '@lobechat/types';
+import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { Clock } from 'lucide-react';
@@ -42,11 +42,11 @@ const ExecuteTaskRender = memo<BuiltinRenderProps<ExecuteTaskParams, ExecuteTask
     return (
       <Flexbox className={styles.container} gap={12}>
         {/* Header: Agent info + Timeout */}
-        <Flexbox align={'center'} gap={12} horizontal justify={'space-between'}>
-          <Flexbox align={'center'} flex={1} gap={12} horizontal style={{ minWidth: 0 }}>
+        <Flexbox horizontal align={'center'} gap={12} justify={'space-between'}>
+          <Flexbox horizontal align={'center'} flex={1} gap={12} style={{ minWidth: 0 }}>
             <span className={styles.agentTitle}>{args?.title}</span>
           </Flexbox>
-          <Flexbox align="center" className={styles.timeout} gap={4} horizontal>
+          <Flexbox horizontal align="center" className={styles.timeout} gap={4}>
             <Clock size={14} />
             <span>
               {timeoutMinutes} {t('agentGroupManagement.executeTask.intervention.timeoutUnit')}

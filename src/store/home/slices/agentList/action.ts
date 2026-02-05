@@ -5,7 +5,7 @@ import type { SidebarAgentItem, SidebarAgentListResponse } from '@/database/repo
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
 import { homeService } from '@/services/home';
 import type { HomeStore } from '@/store/home/store';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { mapResponseToState } from './initialState';

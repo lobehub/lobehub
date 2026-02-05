@@ -9,12 +9,12 @@ import { VirtuosoGrid } from 'react-virtuoso';
 
 import { useClientDataSWR } from '@/libs/swr';
 import { discoverService } from '@/services/discover';
-import { type DiscoverAssistantItem } from '@/types/discover';
+import type {DiscoverAssistantItem} from '@/types/discover';
 
 import AgentItem from './AgentItem';
 import { useDetailContext } from './DetailContext';
-import VirtuosoLoading from './VirtuosoLoading';
 import { agentListStyles as styles } from './style';
+import VirtuosoLoading from './VirtuosoLoading';
 
 const PAGE_SIZE = 12;
 
@@ -101,9 +101,6 @@ const Agents = memo(() => {
   // Use VirtuosoGrid for rendering
   return (
     <VirtuosoGrid
-      components={{
-        Footer: isLoading ? VirtuosoLoading : () => <div style={{ height: 16 }} />,
-      }}
       data={items}
       endReached={loadMore}
       increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
@@ -112,6 +109,9 @@ const Agents = memo(() => {
       listClassName={styles.list}
       overscan={24}
       style={{ height: '50vh', width: '100%' }}
+      components={{
+        Footer: isLoading ? VirtuosoLoading : () => <div style={{ height: 16 }} />,
+      }}
     />
   );
 });

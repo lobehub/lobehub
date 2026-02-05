@@ -1,4 +1,5 @@
-import { Avatar, type ItemType } from '@lobehub/ui';
+import type {ItemType} from '@lobehub/ui';
+import { Avatar  } from '@lobehub/ui';
 import { AtSign } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -53,13 +54,13 @@ const Mention = memo(() => {
 
   return (
     <Action
+      icon={AtSign}
+      title={t('mention.title')}
       dropdown={{
         maxHeight: 320,
         menu: { items },
         minWidth: 200,
       }}
-      icon={AtSign}
-      title={t('mention.title')}
     />
   );
 });

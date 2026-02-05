@@ -1,9 +1,9 @@
 'use client';
 
+import type {IEditor} from '@lobehub/editor';
 import {
-  type IEditor,
-  ReactCodePlugin,
   ReactCodemirrorPlugin,
+  ReactCodePlugin,
   ReactHRPlugin,
   ReactImagePlugin,
   ReactLinkPlugin,
@@ -11,7 +11,7 @@ import {
   ReactLiteXmlPlugin,
   ReactMathPlugin,
   ReactTablePlugin,
-  ReactToolbarPlugin,
+  ReactToolbarPlugin
 } from '@lobehub/editor';
 import { Editor, useEditorState } from '@lobehub/editor/react';
 import { memo, useEffect, useMemo, useRef } from 'react';
@@ -80,10 +80,10 @@ const InternalEditor = memo<InternalEditorProps>(
           Editor.withProps(ReactToolbarPlugin, {
             children: (
               <InlineToolbar
+                floating
                 editor={editor}
                 editorState={editorState}
                 extraItems={toolbarExtraItems}
-                floating
               />
             ),
           }),
@@ -147,15 +147,15 @@ const InternalEditor = memo<InternalEditorProps>(
           content={''}
           editor={editor}
           lineEmptyPlaceholder={finalPlaceholder}
-          onInit={onInit}
           placeholder={finalPlaceholder}
           plugins={plugins}
           slashOption={slashItems ? { items: slashItems } : undefined}
+          type={'text'}
           style={{
             paddingBottom: 64,
             ...style,
           }}
-          type={'text'}
+          onInit={onInit}
         />
       </div>
     );

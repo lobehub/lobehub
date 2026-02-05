@@ -1,7 +1,7 @@
-/* eslint-disable unicorn/no-process-exit */
-import fs from 'fs-extra';
 import { execSync } from 'node:child_process';
 import path from 'node:path';
+
+import fs from 'fs-extra';
 
 type ReleaseChannel = 'stable' | 'beta' | 'nightly';
 

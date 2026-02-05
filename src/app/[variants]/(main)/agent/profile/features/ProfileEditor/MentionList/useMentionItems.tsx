@@ -1,8 +1,11 @@
-import { KLAVIS_SERVER_TYPES, type KlavisServerType } from '@lobechat/const';
+import type {KlavisServerType} from '@lobechat/const';
+import { KLAVIS_SERVER_TYPES  } from '@lobechat/const';
 import { ToolNameResolver } from '@lobechat/context-engine';
-import { type API, apiPrompt, toolPrompt } from '@lobechat/prompts';
-import { type LobeChatPluginManifest } from '@lobehub/chat-plugin-sdk';
-import { type IEditor, INSERT_MENTION_COMMAND } from '@lobehub/editor';
+import type {API} from '@lobechat/prompts';
+import {  apiPrompt, toolPrompt } from '@lobechat/prompts';
+import type {LobeChatPluginManifest} from '@lobehub/chat-plugin-sdk';
+import type {IEditor} from '@lobehub/editor';
+import {  INSERT_MENTION_COMMAND } from '@lobehub/editor';
 import { Icon, Image } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -16,7 +19,7 @@ import { toolSelectors } from '@/store/tool/selectors';
 import { hydrationPrompt } from '@/utils/promptTemplate';
 
 import MentionDropdown from './MentionDropdown';
-import { type MentionListOption, type MentionMetadata } from './types';
+import type {MentionListOption, MentionMetadata} from './types';
 
 // 根据 identifier 获取 Klavis 服务器类型配置
 const getKlavisServerType = (identifier: string) =>

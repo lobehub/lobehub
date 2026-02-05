@@ -14,16 +14,16 @@ import { mutate, useClientDataSWR } from '@/libs/swr';
 import { documentService } from '@/services/document';
 import { FileService, fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
+import type {UploadFileListDispatch} from '@/store/file/reducers/uploadFileList';
 import {
-  type UploadFileListDispatch,
-  uploadFileListReducer,
+  uploadFileListReducer
 } from '@/store/file/reducers/uploadFileList';
-import { type StoreSetter } from '@/store/types';
-import { type FileListItem, type QueryFileListParams } from '@/types/files';
+import type {StoreSetter} from '@/store/types';
+import type {FileListItem, QueryFileListParams} from '@/types/files';
 import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 import { unzipFile } from '@/utils/unzipFile';
 
-import { type FileStore } from '../../store';
+import type {FileStore} from '../../store';
 import { fileManagerSelectors } from './selectors';
 
 const serverFileService = new FileService();

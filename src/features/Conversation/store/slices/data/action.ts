@@ -9,7 +9,8 @@ import { messageService } from '@/services/message';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import type { Store as ConversationStore } from '../../action';
-import { type MessageDispatch, messagesReducer } from './reducer';
+import type {MessageDispatch} from './reducer';
+import {  messagesReducer } from './reducer';
 import { dataSelectors } from './selectors';
 
 const log = debug('lobe-render:features:Conversation');

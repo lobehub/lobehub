@@ -13,10 +13,10 @@ import type { ResourceQueryParams } from '@/types/resource';
 import { HierarchyNode } from './HierarchyNode';
 import TreeSkeleton from './TreeSkeleton';
 import {
-  TREE_REFRESH_EVENT,
   getTreeState,
   resourceItemToTreeItem,
   sortTreeItems,
+  TREE_REFRESH_EVENT,
 } from './treeState';
 import type { TreeItem } from './types';
 
@@ -105,6 +105,7 @@ const LibraryHierarchy = memo(() => {
       fileType: item.fileType,
       id: item.id,
       isFolder: item.fileType === 'custom/folder',
+      metadata: item.metadata ?? undefined,
       name: item.name,
       slug: item.slug,
       sourceType: item.sourceType,
@@ -212,6 +213,7 @@ const LibraryHierarchy = memo(() => {
           fileType: item.fileType,
           id: item.id,
           isFolder: item.fileType === 'custom/folder',
+          metadata: item.metadata ?? undefined,
           name: item.name,
           slug: item.slug,
           sourceType: item.sourceType,
@@ -379,10 +381,10 @@ const LibraryHierarchy = memo(() => {
               item={item}
               level={level}
               loadingFolders={loadingFolders}
-              onLoadFolder={handleLoadFolder}
-              onToggleFolder={handleToggleFolder}
               selectedKey={selectedKey}
               updateKey={updateKey}
+              onLoadFolder={handleLoadFolder}
+              onToggleFolder={handleToggleFolder}
             />
           </div>
         ))}

@@ -1,32 +1,17 @@
 import { getModelPropertyWithFallback, resolveImageSinglePrice } from '@lobechat/model-runtime';
 import { uniqBy } from 'es-toolkit/compat';
-import {
-  type AIImageModelCard,
-  type EnabledAiModel,
-  type LobeDefaultAiModelListItem,
-  type ModelAbilities,
-  type ModelParamsSchema,
-  type Pricing,
-} from 'model-bank';
+import type {AIImageModelCard, EnabledAiModel, LobeDefaultAiModelListItem, ModelAbilities, ModelParamsSchema, Pricing} from 'model-bank';
 import type { SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { aiProviderService } from '@/services/aiProvider';
-import { type AiInfraStore } from '@/store/aiInfra/store';
-import { type StoreSetter } from '@/store/types';
+import type {AiInfraStore} from '@/store/aiInfra/store';
+import type {StoreSetter} from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
+import type {AiProviderDetailItem, AiProviderListItem, AiProviderRuntimeState, AiProviderSortMap, CreateAiProviderParams, EnabledProvider, EnabledProviderWithModels, UpdateAiProviderConfigParams, UpdateAiProviderParams} from '@/types/aiProvider';
 import {
-  type AiProviderDetailItem,
-  type AiProviderListItem,
-  type AiProviderRuntimeState,
-  type AiProviderSortMap,
-  AiProviderSourceEnum,
-  type CreateAiProviderParams,
-  type EnabledProvider,
-  type EnabledProviderWithModels,
-  type UpdateAiProviderConfigParams,
-  type UpdateAiProviderParams,
+  AiProviderSourceEnum
 } from '@/types/aiProvider';
 
 export type ProviderModelListItem = {

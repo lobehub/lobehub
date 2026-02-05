@@ -1,6 +1,6 @@
 import { LOBE_CHAT_CLOUD } from '@lobechat/business-const';
 import { LibraryBig } from 'lucide-react';
-import { Suspense, memo, useState } from 'react';
+import { memo, Suspense, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import TipGuide from '@/components/TipGuide';
@@ -39,16 +39,16 @@ const Knowledge = memo(() => {
 
   const content = (
     <Action
+      icon={LibraryBig}
+      loading={updating}
+      showTooltip={false}
+      title={t('knowledgeBase.title')}
       dropdown={{
         maxHeight: 500,
         maxWidth: 480,
         menu: { items },
         minWidth: 240,
       }}
-      icon={LibraryBig}
-      loading={updating}
-      showTooltip={false}
-      title={t('knowledgeBase.title')}
     />
   );
 
@@ -56,12 +56,12 @@ const Knowledge = memo(() => {
     <Suspense fallback={<Action disabled icon={LibraryBig} title={t('knowledgeBase.title')} />}>
       {showTip ? (
         <TipGuide
-          onOpenChange={() => {
-            updateGuideState({ uploadFileInKnowledgeBase: false });
-          }}
           open={showTip}
           placement={'top'}
           title={t('knowledgeBase.uploadGuide')}
+          onOpenChange={() => {
+            updateGuideState({ uploadFileInKnowledgeBase: false });
+          }}
         >
           {content}
         </TipGuide>

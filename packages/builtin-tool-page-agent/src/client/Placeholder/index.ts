@@ -1,4 +1,4 @@
-import { type BuiltinPlaceholder } from '@lobechat/types';
+import type { BuiltinPlaceholder } from '@lobechat/types';
 
 /**
  * Page Agent Placeholder Components Registry

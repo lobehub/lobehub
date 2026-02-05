@@ -14,7 +14,7 @@ import ChatWithModel from './ChatWithModel';
 const ActionButton = memo(() => {
   const { description, providers, displayName, identifier } = useDetailContext();
   return (
-    <Flexbox align={'center'} gap={8} horizontal>
+    <Flexbox horizontal align={'center'} gap={8}>
       <ChatWithModel />
       <ShareButton
         meta={{

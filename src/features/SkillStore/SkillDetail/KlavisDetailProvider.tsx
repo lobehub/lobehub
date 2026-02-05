@@ -10,7 +10,8 @@ import { useToolStore } from '@/store/tool';
 import { klavisStoreSelectors } from '@/store/tool/selectors';
 import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 
-import { DetailContext, type DetailContextValue } from './DetailContext';
+import type {DetailContextValue} from './DetailContext';
+import { DetailContext  } from './DetailContext';
 
 interface KlavisDetailProviderProps {
   children: ReactNode;
@@ -70,5 +71,5 @@ export const KlavisDetailProvider = ({
     toolsLoading,
   };
 
-  return <DetailContext.Provider value={value}>{children}</DetailContext.Provider>;
+  return <DetailContext value={value}>{children}</DetailContext>;
 };

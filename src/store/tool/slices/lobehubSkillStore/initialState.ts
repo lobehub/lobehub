@@ -1,4 +1,4 @@
-import { type LobehubSkillServer } from './types';
+import type {LobehubSkillServer} from './types';
 
 /**
  * LobeHub Skill Store state interface

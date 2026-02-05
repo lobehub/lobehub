@@ -1,5 +1,5 @@
-import { type FileListItem, type QueryFileListParams } from '@/types/files';
-import { type UploadFileItem } from '@/types/files/upload';
+import type {FileListItem, QueryFileListParams} from '@/types/files';
+import type {UploadFileItem} from '@/types/files/upload';
 
 export interface FileManagerState {
   creatingChunkingTaskIds: string[];

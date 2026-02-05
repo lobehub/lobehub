@@ -30,7 +30,7 @@ const UserAgentList = memo<UserAgentListProps>(({ rows = 4, pageSize = 10 }) => 
 
   return (
     <Flexbox gap={16}>
-      <Flexbox align={'center'} gap={8} horizontal>
+      <Flexbox horizontal align={'center'} gap={8}>
         <Text fontSize={16} weight={500}>
           {t('user.publishedAgents')}
         </Text>
@@ -45,10 +45,10 @@ const UserAgentList = memo<UserAgentListProps>(({ rows = 4, pageSize = 10 }) => 
         <Flexbox align={'center'} justify={'center'}>
           <Pagination
             current={currentPage}
-            onChange={(page) => setCurrentPage(page)}
             pageSize={pageSize}
             showSizeChanger={false}
             total={agents.length}
+            onChange={(page) => setCurrentPage(page)}
           />
         </Flexbox>
       )}

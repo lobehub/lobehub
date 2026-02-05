@@ -3,7 +3,7 @@
 import { Grid } from '@lobehub/ui';
 import { memo } from 'react';
 
-import { type DiscoverMcpItem } from '@/types/discover';
+import type {DiscoverMcpItem} from '@/types/discover';
 
 import McpEmpty from '../../../../features/McpEmpty';
 import Item from './Item';

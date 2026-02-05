@@ -1,6 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 
-import { type UserStore } from '../../../store';
+import type {UserStore} from '../../../store';
 import { currentSettings } from './settings';
 
 const generalConfig = (s: UserStore) => currentSettings(s).general || {};

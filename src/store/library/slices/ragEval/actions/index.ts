@@ -1,10 +1,12 @@
-import { type StateCreator } from 'zustand/vanilla';
+import type {StateCreator} from 'zustand/vanilla';
 
-import { type KnowledgeBaseStore } from '@/store/library/store';
+import type {KnowledgeBaseStore} from '@/store/library/store';
 import { flattenActions } from '@/store/utils/flattenActions';
 
-import { type RAGEvalDatasetAction, createRagEvalDatasetSlice } from './dataset';
-import { type RAGEvalEvaluationAction, createRagEvalEvaluationSlice } from './evaluation';
+import type {RAGEvalDatasetAction} from './dataset';
+import {  createRagEvalDatasetSlice } from './dataset';
+import type {RAGEvalEvaluationAction} from './evaluation';
+import {  createRagEvalEvaluationSlice } from './evaluation';
 
 export type RAGEvalAction = RAGEvalDatasetAction & RAGEvalEvaluationAction;
 

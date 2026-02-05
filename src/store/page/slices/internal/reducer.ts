@@ -1,6 +1,6 @@
 import { produce } from 'immer';
 
-import { type LobeDocument } from '@/types/document';
+import type {LobeDocument} from '@/types/document';
 
 // ============ Action Types ============
 

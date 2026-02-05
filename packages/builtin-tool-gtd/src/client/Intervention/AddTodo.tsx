@@ -1,6 +1,6 @@
 'use client';
 
-import { BuiltinInterventionProps } from '@lobechat/types';
+import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Block } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback } from 'react';
@@ -32,9 +32,9 @@ const AddTodoIntervention = memo<BuiltinInterventionProps<CreateTodosParams>>(
       <Block variant={'outlined'}>
         <SortableTodoList
           defaultItems={defaultItems}
-          onSave={handleSave}
           placeholder={t('lobe-gtd.addTodo.placeholder')}
           registerBeforeApprove={registerBeforeApprove}
+          onSave={handleSave}
         />
       </Block>
     );

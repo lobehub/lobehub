@@ -57,11 +57,11 @@ const BottomMenu = memo(() => {
       {items.map((item) => (
         <Link
           key={item.key}
+          to={item.url}
           onClick={(e) => {
             e.preventDefault();
             navigate(item.url);
           }}
-          to={item.url}
         >
           <NavItem active={tab === item.key} icon={item.icon} title={item.title} />
         </Link>

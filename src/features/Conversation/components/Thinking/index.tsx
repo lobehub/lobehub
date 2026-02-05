@@ -1,17 +1,15 @@
 import { Accordion, AccordionItem, ScrollShadow } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
+import type {CSSProperties, ReactNode, RefObject} from 'react';
 import {
-  type CSSProperties,
-  type ReactNode,
-  type RefObject,
   memo,
   useEffect,
-  useState,
+  useState
 } from 'react';
 
 import MarkdownMessage from '@/features/Conversation/Markdown';
 import { useAutoScroll } from '@/hooks/useAutoScroll';
-import { type ChatCitationItem } from '@/types/index';
+import type {ChatCitationItem} from '@/types/index';
 
 import Title from './Title';
 
@@ -66,18 +64,18 @@ const Thinking = memo<ThinkingProps>((props) => {
         <ScrollShadow
           className={styles.contentScroll}
           offset={12}
-          onScroll={handleScroll}
           ref={ref as RefObject<HTMLDivElement>}
           size={12}
+          onScroll={handleScroll}
         >
           {typeof content === 'string' ? (
             <MarkdownMessage
               animated={thinkingAnimated}
               citations={citations}
+              variant={'chat'}
               style={{
                 overflow: 'unset',
               }}
-              variant={'chat'}
             >
               {content}
             </MarkdownMessage>

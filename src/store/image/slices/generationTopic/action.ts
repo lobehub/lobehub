@@ -4,19 +4,20 @@ import type { SWRResponse } from 'swr';
 
 import { LOADING_FLAT } from '@/const/message';
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { type UpdateTopicValue } from '@/server/routers/lambda/generationTopic';
+import type {UpdateTopicValue} from '@/server/routers/lambda/generationTopic';
 import { chatService } from '@/services/chat';
 import { generationTopicService } from '@/services/generationTopic';
 import { globalHelpers } from '@/store/global/helpers';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { useUserStore } from '@/store/user';
 import { systemAgentSelectors } from '@/store/user/selectors';
-import { type ImageGenerationTopic } from '@/types/generation';
+import type {ImageGenerationTopic} from '@/types/generation';
 import { merge } from '@/utils/merge';
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { ImageStore } from '../../store';
-import { type GenerationTopicDispatch, generationTopicReducer } from './reducer';
+import type {GenerationTopicDispatch} from './reducer';
+import {  generationTopicReducer } from './reducer';
 import { generationTopicSelectors } from './selectors';
 
 const FETCH_GENERATION_TOPICS_KEY = 'fetchGenerationTopics';

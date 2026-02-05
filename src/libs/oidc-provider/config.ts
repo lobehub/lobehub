@@ -1,4 +1,4 @@
-import { type ClientMetadata } from 'oidc-provider';
+import type {ClientMetadata} from 'oidc-provider';
 import urlJoin from 'url-join';
 
 import { appEnv } from '@/envs/app';

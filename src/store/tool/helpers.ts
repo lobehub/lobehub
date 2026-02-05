@@ -1,7 +1,7 @@
-import { type LobeTool } from '@lobechat/types';
+import type {LobeTool} from '@lobechat/types';
 import type { PluginSchema } from '@lobehub/chat-plugin-sdk';
 
-import { type MetaData } from '@/types/meta';
+import type {MetaData} from '@/types/meta';
 
 const getPluginFormList = (list: LobeTool[], id: string) => list?.find((p) => p.identifier === id);
 

@@ -1,5 +1,5 @@
-import { Button, Modal, type ModalProps, SortableList } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
+import type {ModalProps} from '@lobehub/ui';
+import { Button, Flexbox,Modal,  SortableList  } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { Plus } from 'lucide-react';
@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useSessionStore } from '@/store/session';
 import { sessionGroupSelectors } from '@/store/session/selectors';
-import { type SessionGroupItem } from '@/types/session';
+import type {SessionGroupItem} from '@/types/session';
 
 import GroupItem from './GroupItem';
 
@@ -38,29 +38,29 @@ const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
     <Modal
       allowFullscreen
       footer={null}
-      onCancel={onCancel}
       open={open}
       title={t('sessionGroup.config')}
       width={400}
+      onCancel={onCancel}
     >
       <Flexbox>
         <SortableList
           items={sessionGroupItems}
-          onChange={(items: SessionGroupItem[]) => {
-            updateSessionGroupSort(items);
-          }}
           renderItem={(item: SessionGroupItem) => (
             <SortableList.Item
+              horizontal
               align={'center'}
               className={styles.container}
               gap={4}
-              horizontal
               id={item.id}
               justify={'space-between'}
             >
               <GroupItem {...item} />
             </SortableList.Item>
           )}
+          onChange={(items: SessionGroupItem[]) => {
+            updateSessionGroupSort(items);
+          }}
         />
         <Button
           block

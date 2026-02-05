@@ -1,4 +1,4 @@
-import { type TopicExportMode } from '@lobechat/types';
+import type {TopicExportMode} from '@lobechat/types';
 
 export interface BaseExportOptions {
   includeTool: boolean;

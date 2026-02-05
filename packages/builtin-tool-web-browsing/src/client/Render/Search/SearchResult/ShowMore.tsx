@@ -1,6 +1,7 @@
 import { Block, Flexbox, Text } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { CSSProperties, memo } from 'react';
+import type { CSSProperties } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
@@ -33,14 +34,14 @@ const ShowMore = memo<ShowMoreProps>(({ style, messageId, engines, resultsNumber
       className={styles.container}
       gap={2}
       justify={'space-between'}
+      style={style}
+      variant={'outlined'}
       onClick={() => {
         openToolUI(messageId, WebBrowsingManifest.identifier);
       }}
-      style={style}
-      variant={'outlined'}
     >
       <Text ellipsis={{ rows: 2 }}>{t('search.viewMoreResults', { results: resultsNumber })}</Text>
-      <Flexbox align={'center'} gap={4} horizontal>
+      <Flexbox horizontal align={'center'} gap={4}>
         <EngineAvatarGroup engines={engines} />
       </Flexbox>
     </Block>

@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { localeOptions } from '@/locales/resources';
-import { type UIChatMessage } from '@/types/index';
+import type {UIChatMessage} from '@/types/index';
 
 import { messageStateSelectors, useConversationStore } from '../../../store';
 

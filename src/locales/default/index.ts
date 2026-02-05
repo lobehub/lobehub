@@ -32,6 +32,7 @@ import ragEval from './ragEval';
 import setting from './setting';
 import spend from './spend';
 import subscription from './subscription';
+import suggestQuestions from './suggestQuestions';
 import thread from './thread';
 import tool from './tool';
 import topic from './topic';
@@ -75,6 +76,7 @@ const resources = {
   setting,
   spend,
   subscription,
+  suggestQuestions,
   thread,
   tool,
   topic,

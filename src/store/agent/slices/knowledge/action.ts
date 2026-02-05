@@ -1,9 +1,9 @@
-import { type KnowledgeItem } from '@lobechat/types';
+import type {KnowledgeItem} from '@lobechat/types';
 import type { SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { agentService } from '@/services/agent';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 
 import type { AgentStore } from '../../store';
 

@@ -7,12 +7,18 @@ import { isDev } from '@/utils/env';
 
 import { createDevtools } from '../middleware/createDevtools';
 import { flattenActions } from '../utils/flattenActions';
-import { type HomeStoreState, initialState } from './initialState';
-import { type AgentListAction, createAgentListSlice } from './slices/agentList/action';
-import { type GroupAction, createGroupSlice } from './slices/group/action';
-import { type HomeInputAction, createHomeInputSlice } from './slices/homeInput/action';
-import { type RecentAction, createRecentSlice } from './slices/recent/action';
-import { type SidebarUIAction, createSidebarUISlice } from './slices/sidebarUI/action';
+import type {HomeStoreState} from './initialState';
+import {  initialState } from './initialState';
+import type {AgentListAction} from './slices/agentList/action';
+import {  createAgentListSlice } from './slices/agentList/action';
+import type {GroupAction} from './slices/group/action';
+import { createGroupSlice } from './slices/group/action';
+import type {HomeInputAction} from './slices/homeInput/action';
+import { createHomeInputSlice } from './slices/homeInput/action';
+import type {RecentAction} from './slices/recent/action';
+import { createRecentSlice } from './slices/recent/action';
+import type {SidebarUIAction} from './slices/sidebarUI/action';
+import { createSidebarUISlice } from './slices/sidebarUI/action';
 
 //  ===============  Aggregate createStoreFn ============ //
 

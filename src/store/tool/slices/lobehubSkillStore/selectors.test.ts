@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import { initialState } from '../../initialState';
-import { type ToolStore } from '../../store';
+import type {ToolStore} from '../../store';
 import { lobehubSkillStoreSelectors } from './selectors';
-import { type LobehubSkillServer, LobehubSkillStatus } from './types';
+import type {LobehubSkillServer} from './types';
+import {  LobehubSkillStatus } from './types';
 
 describe('lobehubSkillStoreSelectors', () => {
   describe('getServers', () => {

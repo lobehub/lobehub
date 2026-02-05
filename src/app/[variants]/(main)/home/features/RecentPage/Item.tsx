@@ -7,7 +7,7 @@ import { memo } from 'react';
 
 import Time from '@/app/[variants]/(main)/home/features/components/Time';
 import { RECENT_BLOCK_SIZE } from '@/app/[variants]/(main)/home/features/const';
-import { type FileListItem } from '@/types/files';
+import type {FileListItem} from '@/types/files';
 import markdownToTxt from '@/utils/markdownToTxt';
 
 // Helper to extract title from markdown content
@@ -50,12 +50,12 @@ const RecentPageItem = memo<RecentPageItemProps>(({ document }) => {
       clickable
       flex={'none'}
       height={RECENT_BLOCK_SIZE.PAGE.HEIGHT}
+      variant={'outlined'}
+      width={RECENT_BLOCK_SIZE.PAGE.WIDTH}
       style={{
         borderRadius: cssVar.borderRadiusLG,
         overflow: 'hidden',
       }}
-      variant={'outlined'}
-      width={RECENT_BLOCK_SIZE.PAGE.WIDTH}
     >
       <Center
         flex={'none'}

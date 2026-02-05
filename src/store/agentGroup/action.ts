@@ -1,23 +1,22 @@
 import type { AgentGroupDetail } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
-import { type StateCreator } from 'zustand/vanilla';
+import type {StateCreator} from 'zustand/vanilla';
 
 import type { ChatGroupItem } from '@/database/schemas/chatGroup';
 import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { chatGroupService } from '@/services/chatGroup';
 import { getAgentStoreState } from '@/store/agent';
-import { type ChatGroupStore } from '@/store/agentGroup/store';
+import type {ChatGroupStore} from '@/store/agentGroup/store';
 import { useChatStore } from '@/store/chat';
-import { type StoreSetter } from '@/store/types';
+import type {StoreSetter} from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type ChatGroupState } from './initialState';
+import type {ChatGroupState} from './initialState';
+import type {ChatGroupDispatchPayloads, ChatGroupReducer} from './reducers';
 import {
-  type ChatGroupDispatchPayloads,
-  type ChatGroupReducer,
-  chatGroupReducers,
+  chatGroupReducers
 } from './reducers';
 import { ChatGroupCurdAction } from './slices/curd';
 import { ChatGroupLifecycleAction } from './slices/lifecycle';

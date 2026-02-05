@@ -1,11 +1,11 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
-import { type ChatToolPayload, type RuntimeStepContext, type UIChatMessage } from '@lobechat/types';
+import type {ChatToolPayload, RuntimeStepContext, UIChatMessage} from '@lobechat/types';
 import i18n from 'i18next';
 
-import { type ChatStore } from '@/store/chat/store';
-import { type StoreSetter } from '@/store/types';
+import type {ChatStore} from '@/store/chat/store';
+import type {StoreSetter} from '@/store/types';
 
-import { type OptimisticUpdateContext } from '../../message/actions/optimisticUpdate';
+import type {OptimisticUpdateContext} from '../../message/actions/optimisticUpdate';
 import { displayMessageSelectors } from '../../message/selectors';
 
 /**

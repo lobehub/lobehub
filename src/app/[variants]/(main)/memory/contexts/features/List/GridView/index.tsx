@@ -1,6 +1,6 @@
 import { memo } from 'react';
 
-import { type DisplayContextMemory } from '@/database/repositories/userMemory';
+import type {DisplayContextMemory} from '@/database/repositories/userMemory';
 import { useUserMemoryStore } from '@/store/userMemory';
 
 import { GridView } from '../../../../features/GridView';
@@ -22,8 +22,8 @@ const ContextsGridView = memo<GridViewProps>(({ contexts, isLoading, onClick }) 
       hasMore={contextsHasMore}
       isLoading={isLoading}
       items={contexts}
-      onLoadMore={loadMoreContexts}
       renderItem={(context) => <ContextCard context={context} onClick={() => onClick(context)} />}
+      onLoadMore={loadMoreContexts}
     />
   );
 });

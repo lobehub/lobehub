@@ -3,7 +3,7 @@ import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import FileIcon from '@/components/FileIcon';
-import { type UploadFileItem } from '@/types/files/upload';
+import type {UploadFileItem} from '@/types/files/upload';
 
 const styles = createStaticStyles(({ css }) => ({
   image: css`

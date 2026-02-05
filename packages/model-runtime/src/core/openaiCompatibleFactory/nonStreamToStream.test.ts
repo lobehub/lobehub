@@ -1,5 +1,5 @@
 // @vitest-environment node
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import { describe, expect, it } from 'vitest';
 
 import { transformResponseAPIToStream, transformResponseToStream } from './nonStreamToStream';
