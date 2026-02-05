@@ -61,11 +61,13 @@ export const SubscriptionIframeWrapper = memo<SubscriptionIframeWrapperProps>(({
 
     const LINK_CLICK_PREFIX = '__EXTERNAL_LINK__:';
 
-    // Inject script to intercept all link clicks after DOM is ready
+    // Inject script to intercept all link clicks and window.open after DOM is ready
     const handleDomReady = () => {
       webview.executeJavaScript(`
         (function() {
           const PREFIX = '${LINK_CLICK_PREFIX}';
+
+          // Intercept link clicks
           document.addEventListener('click', function(e) {
             const link = e.target.closest('a');
             if (link && link.href) {
@@ -75,6 +77,18 @@ export const SubscriptionIframeWrapper = memo<SubscriptionIframeWrapperProps>(({
               console.log(PREFIX + link.href);
             }
           }, true);
+
+          // Intercept window.open calls
+          const originalOpen = window.open;
+          window.open = function(url, target, features) {
+            if (url) {
+              // Resolve relative URLs to absolute
+              const absoluteUrl = new URL(url, window.location.href).href;
+              console.log(PREFIX + absoluteUrl);
+            }
+            // Return null to indicate popup was blocked (expected behavior)
+            return null;
+          };
         })();
       `);
     };
