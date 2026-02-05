@@ -11,6 +11,8 @@ services:
     command: tail -f /dev/null
     networks:
       - lobe-network
+    env_file:
+      - .env
 
   postgresql:
     image: pgvector/pgvector:pg17
@@ -30,6 +32,8 @@ services:
     restart: always
     networks:
       - lobe-network
+    env_file:
+      - .env
 
   redis:
     image: redis:7-alpine
@@ -64,6 +68,8 @@ services:
       timeout: 3s
       retries: 30
     command: ["--access-key","${RUSTFS_ACCESS_KEY}","--secret-key","${RUSTFS_SECRET_KEY}","/data"]
+    env_file:
+      - .env
 
   rustfs-init:
     image: minio/mc:latest
@@ -87,6 +93,8 @@ services:
     restart: "no"
     networks:
       - lobe-network
+    env_file:
+      - .env
 
   searxng:
     image: searxng/searxng
