@@ -28,7 +28,7 @@ const MCP_TOOL_TIMEOUT = (() => {
 })();
 
 /**
- * 预检查 stdio 命令，捕获详细的错误信息
+ * Pre-check stdio command to capture detailed error information
  */
 async function preCheckStdioCommand(params: {
   args: string[];
@@ -54,7 +54,7 @@ async function preCheckStdioCommand(params: {
     let stderr = '';
     let resolved = false;
 
-    // 设置超时时间 (5秒)
+    // Set timeout (5 seconds)
     const timeout = setTimeout(() => {
       if (!resolved) {
         resolved = true;
@@ -73,12 +73,12 @@ async function preCheckStdioCommand(params: {
       }
     }, 5000);
 
-    // 收集 stdout
+    // Collect stdout
     child.stdout?.on('data', (data) => {
       stdout += data.toString();
     });
 
-    // 收集 stderr - 这是关键部分
+    // Collect stderr - this is the critical part
     child.stderr?.on('data', (data) => {
       stderr += data.toString();
       log('Captured stderr: %s', data.toString());
@@ -132,7 +132,7 @@ async function preCheckStdioCommand(params: {
       }
     });
 
-    // 发送简单的 JSON-RPC 初始化消息来测试连接
+    // Send a simple JSON-RPC initialization message to test the connection
     try {
       const initMessage =
         JSON.stringify({
@@ -166,10 +166,10 @@ export class MCPClient {
       case 'http': {
         log('Using HTTP transport with url: %s', params.url);
 
-        // 构建头部信息，包括用户自定义的 headers 和认证信息
+        // Build headers, including custom headers and authentication information
         const headers: Record<string, string> = { ...params.headers };
 
-        // 处理认证配置
+        // Handle authentication configuration
         if (params.auth) {
           switch (params.auth.type) {
             case 'bearer': {
@@ -188,13 +188,13 @@ export class MCPClient {
             }
 
             default: {
-              // 不需要认证
+              // No authentication required
               break;
             }
           }
         }
 
-        // 创建 StreamableHTTPClientTransport 并传递 headers
+        // Create StreamableHTTPClientTransport and pass headers
         this.transport = new StreamableHTTPClientTransport(new URL(params.url), {
           requestInit: { headers },
         });
@@ -249,7 +249,7 @@ export class MCPClient {
         throw e;
       }
 
-      // 对于 stdio 连接失败，尝试预检查命令以获取详细错误信息
+      // For stdio connection failure, attempt to pre-check command to get detailed error information
       if (this.params.type === 'stdio') {
         log('Attempting to pre-check stdio command for detailed error information...');
 
