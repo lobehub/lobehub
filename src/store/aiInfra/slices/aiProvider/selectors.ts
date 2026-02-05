@@ -52,6 +52,7 @@ const isActiveProviderEndpointNotEmpty = (s: AIProviderStoreState) => {
 
 const isActiveProviderApiKeyNotEmpty = (s: AIProviderStoreState) => {
   const vault = activeProviderKeyVaults(s);
+  if (vault?.baseURL?.startsWith('https://gateway.ai.cloudflare.com/v1')) return true;
   return !!vault?.apiKey || !!vault?.accessKeyId || !!vault?.secretAccessKey;
 };
 
@@ -66,36 +67,28 @@ const providerConfigById =
 const isProviderConfigUpdating = (id: string) => (s: AIProviderStoreState) =>
   s.aiProviderConfigUpdatingIds.includes(id);
 
-/**
- * @description The conditions to enable client fetch
- * 1. If no baseUrl and apikey input, force on Server.
- * 2. If only contains baseUrl, force on Client
- * 3. Follow the user settings.
- * 4. On Server, by default.
- */
 const isProviderFetchOnClient =
   (provider: GlobalLLMProviderKey | string) => (s: AIProviderStoreState) => {
     const config = providerConfigById(provider)(s);
 
-    // If the provider already disable browser request in model config, force on Server.
     if (isProviderDisableBrowserRequest(provider)) return false;
 
-    // If the provider in the whitelist, follow the user settings
     if (providerWhitelist.has(provider) && typeof config?.fetchOnClient !== 'undefined')
       return config?.fetchOnClient;
 
-    // 1. If no baseUrl and apikey input, force on Server.
     const isProviderEndpointNotEmpty = !!config?.keyVaults.baseURL;
     const isProviderApiKeyNotEmpty = !!config?.keyVaults.apiKey;
+    const isCloudflareGateway = config?.keyVaults.baseURL?.startsWith(
+      'https://gateway.ai.cloudflare.com/v1',
+    );
+
     if (!isProviderEndpointNotEmpty && !isProviderApiKeyNotEmpty) return false;
 
-    // 2. If only contains baseUrl, force on Client
-    if (isProviderEndpointNotEmpty && !isProviderApiKeyNotEmpty) return true;
+    if (isProviderEndpointNotEmpty && (!isProviderApiKeyNotEmpty || isCloudflareGateway))
+      return true;
 
-    // 3. Follow the user settings.
     if (typeof config?.fetchOnClient !== 'undefined') return config?.fetchOnClient;
 
-    // 4. On Server, by default.
     return false;
   };
 

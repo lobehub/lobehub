@@ -168,26 +168,25 @@ const ProviderConfig = memo<ProviderConfigProps>(
     const formUsername = AntdForm.useWatch(['keyVaults', 'username'], form);
     const formPassword = AntdForm.useWatch(['keyVaults', 'password'], form);
 
-    // Check if provider has endpoint and apiKey based on runtime config
-    // Fallback to data.keyVaults if runtime config is not yet loaded
     const keyVaults = providerRuntimeConfig?.keyVaults || data?.keyVaults;
-    // Use form values first (for immediate update), fallback to stored values
     const isProviderEndpointNotEmpty =
       !!formBaseURL || !!formEndpoint || !!keyVaults?.baseURL || !!keyVaults?.endpoint;
-    // Check if any credential is present for different authentication types:
-    // - Standard apiKey (OpenAI, Azure, Cloudflare, VertexAI, etc.)
-    // - AWS Bedrock credentials (accessKeyId, secretAccessKey)
-    // - ComfyUI basic auth (username and password)
-    const isProviderApiKeyNotEmpty = !!(
-      formApiKey ||
-      keyVaults?.apiKey ||
-      formAccessKeyId ||
-      keyVaults?.accessKeyId ||
-      formSecretAccessKey ||
-      keyVaults?.secretAccessKey ||
-      (formUsername && formPassword) ||
-      (keyVaults?.username && keyVaults?.password)
-    );
+
+    const baseURL = formBaseURL || keyVaults?.baseURL;
+    const isCloudflareGateway = baseURL?.startsWith('https://gateway.ai.cloudflare.com/v1');
+
+    const isProviderApiKeyNotEmpty =
+      isCloudflareGateway ||
+      !!(
+        formApiKey ||
+        keyVaults?.apiKey ||
+        formAccessKeyId ||
+        keyVaults?.accessKeyId ||
+        formSecretAccessKey ||
+        keyVaults?.secretAccessKey ||
+        (formUsername && formPassword) ||
+        (keyVaults?.username && keyVaults?.password)
+      );
 
     // Track the last initialized provider ID to avoid resetting form during edits
     const lastInitializedIdRef = useRef<string | null>(null);
