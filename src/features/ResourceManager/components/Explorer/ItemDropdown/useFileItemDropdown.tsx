@@ -89,7 +89,8 @@ export const useFileItemDropdown = ({
     lowerFilename?.endsWith('.ppt') ||
     lowerFilename?.endsWith('.pptx') ||
     lowerFilename?.endsWith('.odt');
-  const isPage = !isPDF && !isOfficeFile && (sourceType === 'document' || fileType === PAGE_FILE_TYPE);
+  const isPage =
+    !isPDF && !isOfficeFile && (sourceType === 'document' || fileType === PAGE_FILE_TYPE);
 
   const menuItems = useCallback(() => {
     // Filter out current knowledge base and create submenu items
@@ -163,12 +164,12 @@ export const useFileItemDropdown = ({
               children: moveToKnowledgeBaseSubmenu,
               icon: <Icon icon={BookPlusIcon} />,
               key: 'moveToOtherLibrary',
-              label: t('FileManager.actions.moveToOtherKnowledgeBase'),
+              label: t('FileManager.actions.moveToOtherLibrary'),
             },
             {
               icon: <Icon icon={BookMinusIcon} />,
               key: 'removeFromLibrary',
-              label: t('FileManager.actions.removeFromKnowledgeBase'),
+              label: t('FileManager.actions.removeFromLibrary'),
               onClick: async ({ domEvent }) => {
                 domEvent.stopPropagation();
 
@@ -179,9 +180,9 @@ export const useFileItemDropdown = ({
                   onOk: async () => {
                     await removeFilesFromKnowledgeBase(libraryId, [id]);
 
-                    message.success(t('FileManager.actions.removeFromKnowledgeBaseSuccess'));
+                    message.success(t('FileManager.actions.removeFromLibrarySuccess'));
                   },
-                  title: t('FileManager.actions.confirmRemoveFromKnowledgeBase', {
+                  title: t('FileManager.actions.confirmRemoveFromLibrary', {
                     count: 1,
                   }),
                 });
@@ -193,7 +194,7 @@ export const useFileItemDropdown = ({
               children: addToKnowledgeBaseSubmenu,
               icon: <Icon icon={BookPlusIcon} />,
               key: 'addToLibrary',
-              label: t('FileManager.actions.addToKnowledgeBase'),
+              label: t('FileManager.actions.addToLibrary'),
             },
           ]
     ) as ItemType[];

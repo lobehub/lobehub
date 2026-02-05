@@ -221,6 +221,49 @@ export class ResourceActionImpl {
     log('enqueue deleteResource', id, syncEngine);
   };
 
+  deleteResources = async (ids: string[]) => {
+    if (ids.length === 0) return;
+
+    // 1. Read sourceType from resourceMap for each ID (client-side, no API call)
+    const { resourceMap, resourceList } = this.#get();
+    const fileIds: string[] = [];
+    const documentIds: string[] = [];
+
+    for (const id of ids) {
+      const resource = resourceMap.get(id);
+      if (resource?.sourceType === 'document') {
+        documentIds.push(id);
+      } else {
+        fileIds.push(id);
+      }
+    }
+
+    // 2. Optimistically remove all items from store in one set() call
+    const idsSet = new Set(ids);
+    const newMap = new Map(resourceMap);
+    for (const id of ids) {
+      newMap.delete(id);
+    }
+
+    this.#set(
+      {
+        resourceList: resourceList.filter((r) => !idsSet.has(r.id)),
+        resourceMap: newMap,
+      },
+      false,
+      'deleteResources/optimistic',
+    );
+
+    // 3. Fire batch delete APIs in background (no await — UI already updated)
+    const promises: Promise<void>[] = [];
+    if (fileIds.length > 0) promises.push(fileService.removeFiles(fileIds));
+    if (documentIds.length > 0) promises.push(documentService.deleteDocuments(documentIds));
+
+    Promise.all(promises).catch((error) => {
+      console.error('Failed to delete resources:', error);
+    });
+  };
+
   /**
    * Flush pending sync operations immediately
    */

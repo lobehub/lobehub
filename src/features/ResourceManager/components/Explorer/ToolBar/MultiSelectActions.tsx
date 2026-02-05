@@ -88,16 +88,16 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
                       },
                       onOk: async () => {
                         await onActionClick('removeFromKnowledgeBase');
-                        message.success(t('FileManager.actions.removeFromKnowledgeBaseSuccess'));
+                        message.success(t('FileManager.actions.removeFromLibrarySuccess'));
                       },
-                      title: t('FileManager.actions.confirmRemoveFromKnowledgeBase', {
+                      title: t('FileManager.actions.confirmRemoveFromLibrary', {
                         count: selectCount,
                       }),
                     });
                   }}
                   size={'small'}
                 >
-                  {t('FileManager.actions.removeFromKnowledgeBase')}
+                  {t('FileManager.actions.removeFromLibrary')}
                 </Button>
                 <Button
                   color={'default'}
@@ -108,7 +108,7 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
                   size={'small'}
                   variant={'filled'}
                 >
-                  {t('FileManager.actions.moveToOtherKnowledgeBase')}
+                  {t('FileManager.actions.moveToOtherLibrary')}
                 </Button>
               </>
             ) : (
@@ -121,7 +121,7 @@ const MultiSelectActions = memo<MultiSelectActionsProps>(
                 size={'small'}
                 variant={'filled'}
               >
-                {t('FileManager.actions.addToKnowledgeBase')}
+                {t('FileManager.actions.addToLibrary')}
               </Button>
             )}
             <Button

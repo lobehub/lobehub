@@ -50,14 +50,14 @@ const Header = memo(() => {
               },
               onOk: async () => {
                 await onActionClick('removeFromKnowledgeBase');
-                message.success(t('FileManager.actions.removeFromKnowledgeBaseSuccess'));
+                message.success(t('FileManager.actions.removeFromLibrarySuccess'));
               },
-              title: t('FileManager.actions.confirmRemoveFromKnowledgeBase', {
+              title: t('FileManager.actions.confirmRemoveFromLibrary', {
                 count: selectCount,
               }),
             });
           }}
-          title={t('FileManager.actions.removeFromKnowledgeBase')}
+          title={t('FileManager.actions.removeFromLibrary')}
         />
       ) : null}
 

@@ -20,7 +20,7 @@ const Config = memo<ConfigProps>(({ config, onConfigChange }) => {
         onConfigChange({ showFilesInKnowledgeBase: !config.showFilesInKnowledgeBase });
       }}
     >
-      {t('FileManager.config.showFilesInKnowledgeBase')}
+      {t('FileManager.config.showFilesInLibrary')}
       <Switch size={'small'} value={config.showFilesInKnowledgeBase} />
     </Flexbox>
   );
