@@ -273,7 +273,7 @@ describe('convertOpenAIResponseInputs', () => {
 
     expect(result).toEqual([
       {
-        arguments: 'test_function',
+        arguments: '{"key": "value"}',
         call_id: 'call_123',
         name: 'test_function',
         type: 'function_call',
@@ -362,7 +362,7 @@ describe('convertOpenAIResponseInputs', () => {
     expect(result).toEqual([
       { role: 'user', content: 'I need help with a function' },
       {
-        arguments: 'get_data',
+        arguments: '{}',
         call_id: 'call_456',
         name: 'get_data',
         type: 'function_call',
