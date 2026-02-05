@@ -7,6 +7,7 @@ services:
     ports:
       - '${MINIO_PORT}:${MINIO_PORT}' # MinIO API
       - '9001:9001' # MinIO Console
+      - '${CASDOOR_PORT}:${CASDOOR_PORT}' # Casdoor
       - '${LOBE_PORT}:3210' # LobeChat
       - '3000:3000' # Grafana
       - '4318:4318' # otel-collector HTTP
@@ -59,6 +60,26 @@ services:
         mc mb myminio/${MINIO_LOBE_BUCKET}
         wait \$MINIO_PID
       "
+
+  # version lock ref: https://github.com/lobehub/lobe-chat/pull/7331
+  casdoor:
+    image: casbin/casdoor:v2.13.0
+    container_name: lobe-casdoor
+    entrypoint: /bin/sh -c './server --createDatabase=true'
+    network_mode: 'service:network-service'
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    environment:
+      httpport: ${CASDOOR_PORT}
+      RUNNING_IN_DOCKER: 'true'
+      driverName: 'postgres'
+      dataSourceName: 'user=postgres password=${POSTGRES_PASSWORD} host=postgresql port=5432 sslmode=disable dbname=casdoor'
+      runmode: 'dev'
+    volumes:
+      - ./init_data.json:/init_data.json
+    env_file:
+      - .env
 
   searxng:
     image: searxng/searxng
@@ -146,8 +167,11 @@ services:
         condition: service_started
       minio:
         condition: service_started
+      casdoor:
+        condition: service_started
 
     environment:
+      - 'AUTH_SSO_PROVIDERS=casdoor'
       - 'KEY_VAULTS_SECRET=Kix2wcUONd4CX51E/ZPAd36BqM4wzJgKjPtz2sGztqQ='
       - 'AUTH_SECRET=NX2kaPE923dt6BL2U8e9oSre5RfoT7hg'
       - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
@@ -171,6 +195,29 @@ services:
         /bin/node /app/startServer.js &
         LOBE_PID=\$!
         sleep 3
+        if [ $(wget --timeout=5 --spider --server-response ${AUTH_CASDOOR_ISSUER}/.well-known/openid-configuration 2>&1 | grep -c 'HTTP/1.1 200 OK') -eq 0 ]; then
+          echo '⚠️Warning: Unable to fetch OIDC configuration from Casdoor'
+          echo 'Request URL: ${AUTH_CASDOOR_ISSUER}/.well-known/openid-configuration'
+          echo 'Read more at: https://lobehub.com/docs/self-hosting/server-database/docker-compose#necessary-configuration'
+          echo ''
+          echo '⚠️注意：无法从 Casdoor 获取 OIDC 配置'
+          echo '请求 URL: ${AUTH_CASDOOR_ISSUER}/.well-known/openid-configuration'
+          echo '了解更多：https://lobehub.com/zh/docs/self-hosting/server-database/docker-compose#necessary-configuration'
+          echo ''
+        else
+          if ! wget -O - --timeout=5 ${AUTH_CASDOOR_ISSUER}/.well-known/openid-configuration 2>&1 | grep 'issuer' | grep ${AUTH_CASDOOR_ISSUER}; then
+            printf '❌Error: The Auth issuer is conflict, Issuer in OIDC configuration is: %s' \$(wget -O - --timeout=5 ${AUTH_CASDOOR_ISSUER}/.well-known/openid-configuration 2>&1 | grep -E 'issuer.*' | awk -F '\"' '{print \$4}')
+            echo ' , but the issuer in .env file is: ${AUTH_CASDOOR_ISSUER} '
+            echo 'Request URL: ${AUTH_CASDOOR_ISSUER}/.well-known/openid-configuration'
+            echo 'Read more at: https://lobehub.com/docs/self-hosting/server-database/docker-compose#necessary-configuration'
+            echo ''
+            printf '❌错误：Auth 的 issuer 冲突，OIDC 配置中的 issuer 是：%s' \$(wget -O - --timeout=5 ${AUTH_CASDOOR_ISSUER}/.well-known/openid-configuration 2>&1 | grep -E 'issuer.*' | awk -F '\"' '{print \$4}')
+            echo ' , 但 .env 文件中的 issuer 是：${AUTH_CASDOOR_ISSUER} '
+            echo '请求 URL: ${AUTH_CASDOOR_ISSUER}/.well-known/openid-configuration'
+            echo '了解更多：https://lobehub.com/zh/docs/self-hosting/server-database/docker-compose#necessary-configuration'
+            echo ''
+          fi
+        fi
         if [ $(wget --timeout=5 --spider --server-response ${S3_ENDPOINT}/minio/health/live 2>&1 | grep -c 'HTTP/1.1 200 OK') -eq 0 ]; then
           echo '⚠️Warning: Unable to fetch MinIO health status'
           echo 'Request URL: ${S3_ENDPOINT}/minio/health/live'
