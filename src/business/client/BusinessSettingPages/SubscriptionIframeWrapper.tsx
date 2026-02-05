@@ -5,9 +5,12 @@ import { Spin } from 'antd';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { OFFICIAL_URL } from '@/const/url';
 import { useIsCloudActive } from '@/hooks/useIsCloudActive';
 import { remoteServerService } from '@/services/electron/remoteServer';
 import { electronSystemService } from '@/services/electron/system';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 const PARTITION_ID = 'persist:subscription';
 
@@ -23,10 +26,12 @@ export const SubscriptionIframeWrapper = memo<SubscriptionIframeWrapperProps>(({
   const { i18n } = useTranslation();
   const isCloudActive = useIsCloudActive();
 
-  const iframeUrl = useMemo(() => {
-    // if (!isCloudActive) return null;
+  const enableBusinessFeatures = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
 
-    const url = new URL(`/embed/subscription/${page}`, 'https://cloud-dev.lobehub.com');
+  const iframeUrl = useMemo(() => {
+    if (!isCloudActive) return null;
+
+    const url = new URL(`/embed/subscription/${page}`, OFFICIAL_URL);
     // Sync locale to embed page via hl parameter
     if (i18n.language) {
       url.searchParams.set('hl', i18n.language);
@@ -51,7 +56,6 @@ export const SubscriptionIframeWrapper = memo<SubscriptionIframeWrapperProps>(({
   // Intercept all link clicks in webview and open them in default browser
   // This webview only hosts the current page, any navigation should open externally
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const webview = webviewRef.current as any;
     if (!webview || !sessionReady) return;
 
@@ -75,8 +79,6 @@ export const SubscriptionIframeWrapper = memo<SubscriptionIframeWrapperProps>(({
       `);
     };
 
-    // Handle console-message event to capture link clicks from injected script
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const handleConsoleMessage = (event: any) => {
       const message = event.message as string | undefined;
       if (message?.startsWith(LINK_CLICK_PREFIX)) {
@@ -104,13 +106,13 @@ export const SubscriptionIframeWrapper = memo<SubscriptionIframeWrapperProps>(({
       .catch(() => setError('Failed to initialize subscription session'));
   }, []);
 
-  // if (!enableBusinessFeatures || !iframeUrl) return null;
+  if (!enableBusinessFeatures || !iframeUrl) return null;
 
   if (error) {
     return (
       <div style={{ padding: 24, textAlign: 'center' }}>
         <p>{error}</p>
-        <button onClick={handleRetry} type="button">
+        <button type="button" onClick={handleRetry}>
           Retry
         </button>
       </div>
