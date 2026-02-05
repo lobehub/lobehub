@@ -1340,16 +1340,33 @@ const qwenChatModels: AIChatModelCard[] = [
       reasoning: true,
       search: true,
     },
+    config: {
+      deploymentName: 'qwen3-max', // Supports context caching
+    },
     contextWindowTokens: 262_144,
     description:
       'Qwen3 Max models deliver large gains over the 2.5 series in general ability, Chinese/English understanding, complex instruction following, subjective open tasks, multilingual ability, and tool use, with fewer hallucinations. The latest qwen3-max improves agentic programming and tool use over qwen3-max-preview. This release reaches field SOTA and targets more complex agent needs.',
-    displayName: 'Qwen3 Max Thinking',
-    id: 'qwen3-max-2026-01-23',
+    displayName: 'Qwen3 Max',
+    enabled: true,
+    id: 'qwen3-max',
     maxOutput: 65_536,
     organization: 'Qwen',
     pricing: {
       currency: 'CNY',
       units: [
+        {
+          lookup: {
+            prices: {
+              '[0, 0.032]': 2.5 * 0.2,
+              '[0.032, 0.128]': 4 * 0.2,
+              '[0.128, infinity]': 7 * 0.2,
+            },
+            pricingParams: ['textInputRange'],
+          },
+          name: 'textInput_cacheRead',
+          strategy: 'lookup',
+          unit: 'millionTokens',
+        },
         {
           lookup: {
             prices: {
@@ -1381,72 +1398,6 @@ const qwenChatModels: AIChatModelCard[] = [
     releasedAt: '2026-01-23',
     settings: {
       extendParams: ['enableReasoning', 'reasoningBudgetToken'],
-      searchImpl: 'params',
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      search: true,
-    },
-    config: {
-      deploymentName: 'qwen3-max', // Supports context caching
-    },
-    contextWindowTokens: 262_144,
-    description:
-      'Qwen3 Max models deliver large gains over the 2.5 series in general ability, Chinese/English understanding, complex instruction following, subjective open tasks, multilingual ability, and tool use, with fewer hallucinations. The latest qwen3-max improves agentic programming and tool use over qwen3-max-preview. This release reaches field SOTA and targets more complex agent needs.',
-    displayName: 'Qwen3 Max',
-    enabled: true,
-    id: 'qwen3-max',
-    maxOutput: 65_536,
-    organization: 'Qwen',
-    pricing: {
-      currency: 'CNY',
-      units: [
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 3.2 * 0.2,
-              '[0.032, 0.128]': 6.4 * 0.2,
-              '[0.128, infinity]': 9.6 * 0.2,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput_cacheRead',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 3.2,
-              '[0.032, 0.128]': 6.4,
-              '[0.128, infinity]': 9.6,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textInput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-        {
-          lookup: {
-            prices: {
-              '[0, 0.032]': 12.8,
-              '[0.032, 0.128]': 25.6,
-              '[0.128, infinity]': 38.4,
-            },
-            pricingParams: ['textInputRange'],
-          },
-          name: 'textOutput',
-          strategy: 'lookup',
-          unit: 'millionTokens',
-        },
-      ],
-    },
-    releasedAt: '2025-09-23',
-    settings: {
       searchImpl: 'params',
     },
     type: 'chat',

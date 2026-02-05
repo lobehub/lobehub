@@ -1036,31 +1036,6 @@ export const openaiChatModels: AIChatModelCard[] = [
       reasoning: true,
       vision: true,
     },
-    contextWindowTokens: 200_000,
-    description:
-      'codex-mini-latest is a fine-tuned o4-mini model for the Codex CLI. For direct API use, we recommend starting with gpt-4.1.',
-    displayName: 'Codex mini',
-    id: 'codex-mini-latest',
-    maxOutput: 100_000,
-    pricing: {
-      units: [
-        { name: 'textInput_cacheRead', rate: 0.375, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textInput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    releasedAt: '2025-06-01',
-    settings: {
-      extendParams: ['reasoningEffort'],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-      vision: true,
-    },
     contextWindowTokens: 8192,
     description:
       'computer-use-preview is a specialized model for the "computer use tool," trained to understand and execute computer-related tasks.',

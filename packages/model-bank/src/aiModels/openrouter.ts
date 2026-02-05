@@ -1017,23 +1017,6 @@ const openrouterChatModels: AIChatModelCard[] = [
   },
   {
     abilities: {
-      vision: true,
-    },
-    contextWindowTokens: 131_072,
-    description:
-      'LLaMA 3.2 is designed for tasks combining vision and text. It excels at image captioning and visual QA, bridging language generation and visual reasoning.',
-    displayName: 'Llama 3.2 90B Vision',
-    id: 'meta-llama/llama-3.2-90b-vision-instruct',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
       functionCall: true,
     },
     contextWindowTokens: 131_072,
