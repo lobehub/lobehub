@@ -116,19 +116,6 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = AssistantNavKey.
         <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
           {t('mcp.details.nav.needHelp')}
         </a>
-        {identifier && marketplaceLink && (
-          <a className={styles.link} href={marketplaceLink} rel="noreferrer" target="_blank">
-            {t('mcp.details.nav.viewSourceCode')}
-          </a>
-        )}
-        <a
-          className={styles.link}
-          href="https://github.com/lobehub/lobe-chat-agents/issues/new/choose"
-          rel="noreferrer"
-          target="_blank"
-        >
-          {t('mcp.details.nav.reportIssue')}
-        </a>
       </Flexbox>
     </Flexbox>
   );

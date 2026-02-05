@@ -19,6 +19,7 @@ import {
   DownloadIcon,
   Eye,
   EyeOff,
+  GitForkIcon,
   MoreVerticalIcon,
   Pencil,
   UsersIcon,
@@ -116,6 +117,7 @@ const UserGroupCard = memo<UserGroupCardProps>(
     description,
     createdAt,
     category,
+    forkCount,
     installCount,
     identifier,
     memberCount,
@@ -272,6 +274,17 @@ const UserGroupCard = memo<UserGroupCardProps>(
                 >
                   <Tag className={styles.statTag} icon={<Icon icon={UsersIcon} />}>
                     {formatIntergerNumber(memberCount)}
+                  </Tag>
+                </Tooltip>
+              )}
+              {Boolean(forkCount && forkCount > 0) && (
+                <Tooltip
+                  placement={'top'}
+                  styles={{ root: { pointerEvents: 'none' } }}
+                  title={t('fork.forksCount', { count: forkCount })}
+                >
+                  <Tag className={styles.statTag} icon={<Icon icon={GitForkIcon} />}>
+                    {formatIntergerNumber(forkCount)}
                   </Tag>
                 </Tooltip>
               )}
