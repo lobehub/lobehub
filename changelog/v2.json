@@ -1,5 +1,12 @@
 [
   {
+    "children": {
+      "fixes": ["Fixed in community pluings tab the lobehub skills not display."]
+    },
+    "date": "2026-02-06",
+    "version": "2.1.19"
+  },
+  {
     "children": {},
     "date": "2026-02-04",
     "version": "2.1.18"

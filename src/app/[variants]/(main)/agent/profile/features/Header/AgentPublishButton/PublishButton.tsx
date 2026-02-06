@@ -11,6 +11,7 @@ import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors'
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 
+import { useVersionReviewStatus } from '../AgentVersionReviewTag';
 import ForkConfirmModal from './ForkConfirmModal';
 import type { MarketPublishAction } from './types';
 import { type OriginalAgentInfo, useMarketPublish } from './useMarketPublish';
@@ -28,6 +29,9 @@ const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess
     action,
     onSuccess: onPublishSuccess,
   });
+
+  // Check if latest version is under review
+  const { isUnderReview, loading: reviewStatusLoading } = useVersionReviewStatus();
 
   // Agent data for validation
   const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
@@ -72,6 +76,16 @@ const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess
   }, [checkOwnership, publish]);
 
   const handleButtonClick = useCallback(() => {
+    // Check if version is under review
+    if (isUnderReview) {
+      message.warning({
+        content: t('marketPublish.validation.underReview', {
+          defaultValue: 'Your new version is currently under review. Please wait for approval before publishing a new version.',
+        }),
+      });
+      return;
+    }
+
     // Validate name and systemRole
     if (!meta?.title || meta.title.trim() === '') {
       message.error({ content: t('marketPublish.validation.emptyName') });
@@ -85,7 +99,7 @@ const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess
 
     // Open popconfirm for user confirmation
     setConfirmOpened(true);
-  }, [meta?.title, systemRole, t]);
+  }, [isUnderReview, meta?.title, systemRole, t]);
 
   const handleConfirmPublish = useCallback(async () => {
     setConfirmOpened(false);
@@ -123,7 +137,7 @@ const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess
   }, []);
 
   const buttonTitle = isAuthenticated ? buttonConfig.authenticated : buttonConfig.unauthenticated;
-  const loading = isLoading || isCheckingOwnership || isPublishing;
+  const loading = isLoading || isCheckingOwnership || isPublishing || reviewStatusLoading;
 
   return (
     <>

@@ -11,9 +11,11 @@ services:
     command: tail -f /dev/null
     networks:
       - lobe-network
+    env_file:
+      - .env
 
   postgresql:
-    image: paradedb/paradedb:latest-pg17
+    image: pgvector/pgvector:pg17
     container_name: lobe-postgres
     ports:
       - '5432:5432'
@@ -30,6 +32,8 @@ services:
     restart: always
     networks:
       - lobe-network
+    env_file:
+      - .env
 
   redis:
     image: redis:7-alpine
@@ -64,6 +68,8 @@ services:
       timeout: 3s
       retries: 30
     command: ["--access-key","${RUSTFS_ACCESS_KEY}","--secret-key","${RUSTFS_SECRET_KEY}","/data"]
+    env_file:
+      - .env
 
   rustfs-init:
     image: minio/mc:latest
@@ -87,10 +93,14 @@ services:
     restart: "no"
     networks:
       - lobe-network
+    env_file:
+      - .env
 
   searxng:
     image: searxng/searxng
     container_name: lobe-searxng
+    ports:
+      - '8180:8080'
     volumes:
       - './searxng-settings.yml:/etc/searxng/settings.yml'
     environment:
@@ -98,42 +108,6 @@ services:
     restart: always
     networks:
       - lobe-network
-    env_file:
-      - .env
-
-  lobe:
-    image: lobehub/lobehub
-    container_name: lobehub
-    network_mode: 'service:network-service'
-    depends_on:
-      postgresql:
-        condition: service_healthy
-      network-service:
-        condition: service_started
-      rustfs:
-        condition: service_healthy
-      rustfs-init:
-        condition: service_completed_successfully
-      redis:
-        condition: service_healthy
-    environment:
-      - 'KEY_VAULTS_SECRET=${KEY_VAULTS_SECRET}'
-      - 'AUTH_SECRET=${AUTH_SECRET}'
-      - 'DATABASE_URL=postgresql://postgres:${POSTGRES_PASSWORD}@postgresql:5432/${LOBE_DB_NAME}'
-      - 'S3_BUCKET=${RUSTFS_LOBE_BUCKET}'
-      - 'S3_ENABLE_PATH_STYLE=1'
-      - 'S3_ACCESS_KEY=${RUSTFS_ACCESS_KEY}'
-      - 'S3_ACCESS_KEY_ID=${RUSTFS_ACCESS_KEY}'
-      - 'S3_SECRET_ACCESS_KEY=${RUSTFS_SECRET_KEY}'
-      - 'LLM_VISION_IMAGE_USE_BASE64=1'
-      - 'S3_SET_ACL=0'
-      - 'SEARXNG_URL=http://searxng:8080'
-      - 'REDIS_URL=redis://redis:6379'
-      - 'REDIS_PREFIX=lobechat'
-      - 'REDIS_TLS=0'
-    env_file:
-      - .env
-    restart: always
 
 volumes:
   data:

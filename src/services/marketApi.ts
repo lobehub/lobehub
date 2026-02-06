@@ -148,6 +148,13 @@ export class MarketApiService {
 
   // ==================== Agent Group Status Management ====================
 
+  // Get agent group detail by identifier
+  async getAgentGroupDetail(identifier: string): Promise<any> {
+    return lambdaClient.market.agentGroup.getAgentGroupDetail.query({
+      identifier,
+    }) as Promise<any>;
+  }
+
   async publishAgentGroup(identifier: string): Promise<void> {
     await lambdaClient.market.agentGroup.publishAgentGroup.mutate({ identifier });
   }

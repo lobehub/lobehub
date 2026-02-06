@@ -8,6 +8,7 @@ import WideScreenButton from '@/features/WideScreenContainer/WideScreenButton';
 
 import AgentForkTag from './AgentForkTag';
 import AgentStatusTag from './AgentStatusTag';
+import AgentVersionReviewTag from './AgentVersionReviewTag';
 import AutoSaveHint from './AutoSaveHint';
 
 const Header = memo(() => {
@@ -17,6 +18,7 @@ const Header = memo(() => {
         <Flexbox gap={8} horizontal>
           <AutoSaveHint />
           <AgentStatusTag />
+          <AgentVersionReviewTag />
           <AgentForkTag />
         </Flexbox>
       }

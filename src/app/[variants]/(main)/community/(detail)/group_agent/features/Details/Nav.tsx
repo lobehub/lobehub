@@ -71,14 +71,6 @@ const Nav = memo<NavProps>(({ mobile, setActiveTab, activeTab = GroupAgentNavKey
         <a className={styles.link} href={SOCIAL_URL.discord} rel="noreferrer" target="_blank">
           {t('groupAgents.details.nav.needHelp', { defaultValue: 'Need help?' })}
         </a>
-        <a
-          className={styles.link}
-          href="https://github.com/lobehub/lobe-chat/issues/new/choose"
-          rel="noreferrer"
-          target="_blank"
-        >
-          {t('groupAgents.details.nav.reportIssue', { defaultValue: 'Report issue' })}
-        </a>
       </Flexbox>
     </Flexbox>
   );

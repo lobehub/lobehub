@@ -12,6 +12,7 @@ import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 import ContextCachingSwitch from './ContextCachingSwitch';
+import EffortSlider from './EffortSlider';
 import GPT5ReasoningEffortSlider from './GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from './GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from './GPT52ProReasoningEffortSlider';
@@ -101,6 +102,18 @@ const ControlsForm = memo(() => {
       minWidth: undefined,
       name: 'enableReasoning',
     },
+    {
+      children: <Switch />,
+      desc: isNarrow ? (
+        <span style={descNarrow}>{t('extendParams.enableAdaptiveThinking.desc')}</span>
+      ) : (
+        t('extendParams.enableAdaptiveThinking.desc')
+      ),
+      label: t('extendParams.enableAdaptiveThinking.title'),
+      layout: isNarrow ? 'vertical' : 'horizontal',
+      minWidth: undefined,
+      name: 'enableAdaptiveThinking',
+    },
     (enableReasoning || modelExtendParams?.includes('reasoningBudgetToken')) && {
       children: <ReasoningTokenSlider />,
       label: t('extendParams.reasoningBudgetToken.title'),
@@ -118,6 +131,21 @@ const ControlsForm = memo(() => {
       layout: 'horizontal',
       minWidth: undefined,
       name: 'reasoningEffort',
+      style: {
+        paddingBottom: 0,
+      },
+    },
+    {
+      children: <EffortSlider />,
+      desc: isNarrow ? (
+        <span style={descNarrow}>{t('extendParams.effort.desc')}</span>
+      ) : (
+        t('extendParams.effort.desc')
+      ),
+      label: t('extendParams.effort.title'),
+      layout: 'horizontal',
+      minWidth: undefined,
+      name: 'effort',
       style: {
         paddingBottom: 0,
       },

@@ -28,6 +28,7 @@ export const resolveMaxTokens = async ({
   if (preferredMaxTokens) return preferredMaxTokens;
 
   if (thinking?.type === 'enabled') return 32_000;
+  if (thinking?.type === 'adaptive') return 64_000;
 
   const hasSmallContextWindow = smallContextWindowPatterns.some((pattern) => pattern.test(model));
 

@@ -174,4 +174,4 @@ export const processTopicWorkflow = createWorkflow<MemoryExtractionPayloadInput,
   },
 );
 
-processTopicWorkflow.workflowId = 'process-topic/process-topic';
+processTopicWorkflow.workflowId = 'process-topic';

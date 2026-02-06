@@ -3,7 +3,7 @@ import { serveMany } from '@upstash/workflow/dist/nextjs';
 
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 
-import { processTopicWorkflow } from '../workflows/topic';
+import { processTopicWorkflow } from '../process-topic/workflows/topic';
 
 const { upstashWorkflowExtraHeaders } = parseMemoryExtractionConfig();
 

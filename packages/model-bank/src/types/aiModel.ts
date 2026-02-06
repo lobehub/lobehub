@@ -235,7 +235,9 @@ export type ModelSearchImplementType = 'tool' | 'params' | 'internal';
 export type ExtendParamsType =
   | 'reasoningBudgetToken'
   | 'enableReasoning'
+  | 'enableAdaptiveThinking'
   | 'disableContextCaching'
+  | 'effort'
   | 'reasoningEffort'
   | 'gpt5ReasoningEffort'
   | 'gpt5_1ReasoningEffort'
@@ -262,7 +264,9 @@ export interface AiModelSettings {
 export const ExtendParamsTypeSchema = z.enum([
   'reasoningBudgetToken',
   'enableReasoning',
+  'enableAdaptiveThinking',
   'disableContextCaching',
+  'effort',
   'reasoningEffort',
   'gpt5ReasoningEffort',
   'gpt5_1ReasoningEffort',

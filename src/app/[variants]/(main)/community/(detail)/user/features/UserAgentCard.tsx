@@ -18,10 +18,10 @@ import {
   AlertTriangle,
   ClockIcon,
   CoinsIcon,
-  DownloadIcon,
   ExternalLink,
   Eye,
   EyeOff,
+  GitForkIcon,
   MoreVerticalIcon,
   Pencil,
 } from 'lucide-react';
@@ -127,7 +127,7 @@ const UserAgentCard = memo<UserAgentCardProps>(
     createdAt,
     category,
     tokenUsage,
-    installCount,
+    forkCount,
     status,
     identifier,
     isValidated,
@@ -345,14 +345,14 @@ const UserAgentCard = memo<UserAgentCardProps>(
                   {formatIntergerNumber(tokenUsage)}
                 </Tag>
               </Tooltip>
-              {installCount !== undefined && (
+              {Boolean(forkCount && forkCount > 0) && (
                 <Tooltip
                   placement={'top'}
                   styles={{ root: { pointerEvents: 'none' } }}
-                  title={t('assistants.downloads')}
+                  title={t('fork.forksCount', { count: forkCount })}
                 >
-                  <Tag className={styles.statTag} icon={<Icon icon={DownloadIcon} />}>
-                    {formatIntergerNumber(installCount)}
+                  <Tag className={styles.statTag} icon={<Icon icon={GitForkIcon} />}>
+                    {formatIntergerNumber(forkCount)}
                   </Tag>
                 </Tooltip>
               )}

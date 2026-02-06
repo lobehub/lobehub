@@ -5,6 +5,7 @@ import { memo, useMemo } from 'react';
 import type { ReactNode } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 
+import EffortSlider from '@/features/ChatInput/ActionBar/Model/EffortSlider';
 import GPT5ReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT5ReasoningEffortSlider';
 import GPT51ReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT51ReasoningEffortSlider';
 import GPT52ProReasoningEffortSlider from '@/features/ChatInput/ActionBar/Model/GPT52ProReasoningEffortSlider';
@@ -34,8 +35,16 @@ const EXTEND_PARAMS_OPTIONS: ExtendParamsOption[] = [
     key: 'enableReasoning',
   },
   {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint',
+    key: 'enableAdaptiveThinking',
+  },
+  {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningBudgetToken.hint',
     key: 'reasoningBudgetToken',
+  },
+  {
+    hintKey: 'providerModels.item.modelConfig.extendParams.options.effort.hint',
+    key: 'effort',
   },
   {
     hintKey: 'providerModels.item.modelConfig.extendParams.options.reasoningEffort.hint',
@@ -110,6 +119,12 @@ type PreviewMeta = {
 
 const PREVIEW_META: Partial<Record<ExtendParamsType, PreviewMeta>> = {
   disableContextCaching: { labelSuffix: ' (Claude)', previewWidth: 400 },
+  effort: { labelSuffix: ' (Opus 4.6)', previewWidth: 280, tag: 'output_config.effort' },
+  enableAdaptiveThinking: {
+    labelSuffix: ' (Opus 4.6)',
+    previewWidth: 300,
+    tag: 'thinking.type',
+  },
   enableReasoning: { previewWidth: 300, tag: 'thinking.type' },
   gpt5ReasoningEffort: { previewWidth: 300, tag: 'reasoning_effort' },
   gpt5_1ReasoningEffort: { labelSuffix: ' (GPT-5.1)', previewWidth: 300, tag: 'reasoning_effort' },
@@ -212,6 +227,8 @@ const ExtendParamsSelect = memo<ExtendParamsSelectProps>(({ value, onChange }) =
   const previewControls = useMemo<Partial<Record<ExtendParamsType, ReactNode>>>(
     () => ({
       disableContextCaching: <Switch checked disabled />,
+      effort: <EffortSlider value="high" />,
+      enableAdaptiveThinking: <Switch checked disabled />,
       enableReasoning: <Switch checked disabled />,
       gpt5ReasoningEffort: <GPT5ReasoningEffortSlider value="medium" />,
       gpt5_1ReasoningEffort: <GPT51ReasoningEffortSlider value="none" />,
