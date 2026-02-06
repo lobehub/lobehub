@@ -78,7 +78,6 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
           // Delegate per-topic extraction to dedicated workflow for better isolation
           await Promise.all(
             payload.topicIds.map(async (topicId, index) => {
-              console.log(processTopicWorkflow.workflowId);
               await context.invoke(
                 `memory:user-memory:extract:users:${userId}:topics:${topicId}:invoke:${index}`,
                 {
