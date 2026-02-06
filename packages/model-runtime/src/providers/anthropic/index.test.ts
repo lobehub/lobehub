@@ -754,7 +754,7 @@ describe('LobeAnthropicAI', () => {
           ],
           model: 'claude-3-haiku-20240307',
           system: undefined,
-          thinking: { type: 'enabled', budget_tokens: 1024 },
+          thinking: { type: 'enabled', budget_tokens: 999 },
           tools: undefined,
         });
       });
