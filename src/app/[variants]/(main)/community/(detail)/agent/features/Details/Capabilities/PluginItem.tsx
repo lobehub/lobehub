@@ -1,4 +1,9 @@
-import { KLAVIS_SERVER_TYPES, type KlavisServerType } from '@lobechat/const';
+import {
+  KLAVIS_SERVER_TYPES,
+  getLobehubSkillProviderById,
+  type KlavisServerType,
+  type LobehubSkillProviderType,
+} from '@lobechat/const';
 import { type DiscoverPluginDetail, type PluginSource } from '@lobechat/types';
 import { Avatar, Block, Flexbox, Icon, Image, Skeleton, Tag, Text } from '@lobehub/ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -10,11 +15,13 @@ import urlJoin from 'url-join';
 import { useDiscoverStore } from '@/store/discover';
 
 /**
- * Klavis icon component
+ * Icon component for built-in tools (Klavis & LobehubSkill)
  * For string type icon, use Image component to render
  * For IconType type icon, use Icon component to render with theme fill color
  */
-const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label }) => {
+const BuiltinToolIcon = memo<
+  Pick<KlavisServerType | LobehubSkillProviderType, 'icon' | 'label'>
+>(({ icon, label }) => {
   if (typeof icon === 'string') {
     return <Image alt={label} height={40} src={icon} style={{ flex: 'none' }} width={40} />;
   }
@@ -23,7 +30,7 @@ const KlavisIcon = memo<Pick<KlavisServerType, 'icon' | 'label'>>(({ icon, label
   return <Icon fill={cssVar.colorText} icon={icon} size={40} />;
 });
 
-KlavisIcon.displayName = 'KlavisIcon';
+BuiltinToolIcon.displayName = 'BuiltinToolIcon';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {
@@ -75,27 +82,55 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
     return KLAVIS_SERVER_TYPES.find((tool) => tool.identifier === identifier);
   }, [identifier]);
 
-  // Convert Klavis tool to plugin detail format
+  // Try to get LobehubSkill info if API returns no data
+  const lobehubSkill = useMemo(() => {
+    return getLobehubSkillProviderById(identifier);
+  }, [identifier]);
+
+  // Convert built-in tools to plugin detail format
   const data: DiscoverPluginDetail | undefined = useMemo(() => {
     if (apiData) return apiData;
-    if (!klavisTool) return undefined;
 
-    return {
-      author: 'Klavis',
-      avatar: '', // Avatar will be rendered by KlavisIcon component
-      category: undefined,
-      createdAt: '',
-      description: `LobeHub Mcp Server: ${klavisTool.label}`,
-      homepage: 'https://klavis.ai',
-      identifier: klavisTool.identifier,
-      manifest: undefined,
-      related: [],
-      schemaVersion: 1,
-      source: 'builtin' as const,
-      tags: ['klavis', 'mcp'],
-      title: klavisTool.label,
-    };
-  }, [apiData, klavisTool]);
+    // Check Klavis tools
+    if (klavisTool) {
+      return {
+        author: 'Klavis',
+        avatar: '', // Avatar will be rendered by BuiltinToolIcon component
+        category: undefined,
+        createdAt: '',
+        description: `LobeHub Mcp Server: ${klavisTool.label}`,
+        homepage: 'https://klavis.ai',
+        identifier: klavisTool.identifier,
+        manifest: undefined,
+        related: [],
+        schemaVersion: 1,
+        source: 'builtin' as const,
+        tags: ['klavis', 'mcp'],
+        title: klavisTool.label,
+      };
+    }
+
+    // Check LobehubSkill providers
+    if (lobehubSkill) {
+      return {
+        author: lobehubSkill.author,
+        avatar: '', // Avatar will be rendered by BuiltinToolIcon component
+        category: undefined,
+        createdAt: '',
+        description: lobehubSkill.description,
+        homepage: lobehubSkill.authorUrl || 'https://lobehub.com',
+        identifier: lobehubSkill.id,
+        manifest: undefined,
+        related: [],
+        schemaVersion: 1,
+        source: 'builtin' as const,
+        tags: ['lobehub-skill'],
+        title: lobehubSkill.label,
+      };
+    }
+
+    return undefined;
+  }, [apiData, klavisTool, lobehubSkill]);
 
   const sourceConfig = useMemo(() => {
     const source: PluginSource = data?.source || 'market';
@@ -143,10 +178,13 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
   // If loading is complete but no data found, don't render anything
   if (!data) return null;
 
-  // Render avatar - use KlavisIcon for Klavis tools, Avatar for others
+  // Render avatar - use BuiltinToolIcon for built-in tools, Avatar for others
   const renderAvatar = () => {
     if (klavisTool) {
-      return <KlavisIcon icon={klavisTool.icon} label={klavisTool.label} />;
+      return <BuiltinToolIcon icon={klavisTool.icon} label={klavisTool.label} />;
+    }
+    if (lobehubSkill) {
+      return <BuiltinToolIcon icon={lobehubSkill.icon} label={lobehubSkill.label} />;
     }
     return <Avatar avatar={data.avatar} shape={'square'} size={40} style={{ flex: 'none' }} />;
   };
