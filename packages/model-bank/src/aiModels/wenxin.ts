@@ -452,22 +452,6 @@ const wenxinChatModels: AIChatModelCard[] = [
     type: 'chat',
   },
   {
-    contextWindowTokens: 131_072,
-    description:
-      'Qianfan Lightning 128B A19B is a high-performance Chinese general model for complex QA and large-scale reasoning.',
-    displayName: 'Qianfan Lightning 128B A19B',
-    id: 'qianfan-lightning-128b-a19b',
-    maxOutput: 16_384,
-    pricing: {
-      currency: 'CNY',
-      units: [
-        { name: 'textInput', rate: 2, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 8, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
     contextWindowTokens: 32_768,
     description:
       'Qianfan 8B is a mid-size general model balancing cost and quality for text generation and QA.',

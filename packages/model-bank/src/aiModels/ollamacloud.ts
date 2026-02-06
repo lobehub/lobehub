@@ -4,6 +4,16 @@ const ollamaCloudModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
+    },
+    contextWindowTokens: 262_144,
+    description: 'Qwen3-Coder-Next is a coding-focused language model from Alibaba\'s Qwen team, optimized for agentic coding workflows and local development. Built on top of Qwen3-Next-80B-A3B-Base with hybrid attention and MoE architecture, trained on large-scale executable tasks with environment interaction and reinforcement learning.',
+    displayName: 'Qwen3 Coder Next',
+    id: 'qwen3-coder-next',
+    type: 'chat',
+  },
+  {
+    abilities: {
+      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 204_800,
