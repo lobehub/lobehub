@@ -10,7 +10,7 @@ export const videoUrlToBase64 = async (
 
     // Use SSRF-safe fetch to prevent SSRF attacks
     const response = isServer
-      ? await import('ssrf-safe-fetch').then((m) =>
+      ? await import('@lobechat/ssrf-safe-fetch').then((m) =>
           m.ssrfSafeFetch(videoUrl, {
             signal: AbortSignal.timeout(30_000), // 30 seconds
           }),
