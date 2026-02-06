@@ -33,7 +33,7 @@ tags:
 - PNPM：我们使用 PNPM 作为管理器。你可以从 [pnpm 的官方网站](https://pnpm.io/installation) 上下载并安装。
 - Bun：我们使用 Bun 作为 npm scripts runner，你可以从 [Bun 的官方网站](https://bun.com/docs/installation) 上下载并安装。
 - Git：我们使用 Git 进行版本控制。你可以从 Git 的官方网站上下载并安装。
-- Docker：用于运行 PostgreSQL、MinIO 等服务。你可以从 [Docker 官方网站](https://www.docker.com/get-started) 下载并安装。
+- Docker：用于运行 PostgreSQL、RustFS 等服务。你可以从 [Docker 官方网站](https://www.docker.com/get-started) 下载并安装。
 - IDE：你可以选择你喜欢的集成开发环境（IDE），我们推荐使用 WebStorm/VSCode。
 
 ### VSCode 用户
@@ -91,7 +91,7 @@ bun run dev:docker
 - PostgreSQL 数据库（端口 5432）
 - Redis 缓存（端口 6379）
 - RustFS 存储（API 端口 9000，控制台端口 9001）
-- SearXNG 搜索
+- SearXNG 搜索（端口 8180）
 
 可以通过运行以下命令检查所有 Docker 服务运行状态：
 
@@ -129,6 +129,7 @@ bun run dev
 - **Redis**：`redis://localhost:6379`
 - **RustFS API**：`http://localhost:9000`
 - **RustFS 控制台**：`http://localhost:9001`
+- **SearXNG**：`http://localhost:8180`
 - **应用程序**：`http://localhost:3010`
 
 ## 故障排除
@@ -140,7 +141,6 @@ bun run dev
 ```bash
 # 完全重置 Docker 环境（删除所有数据并重新启动）
 bun run dev:docker:reset
-pnpm db:migrate
 ```
 
 ### 端口冲突
@@ -153,6 +153,7 @@ lsof -i :5432  # PostgreSQL
 lsof -i :6379  # Redis
 lsof -i :9000  # RustFS API
 lsof -i :9001  # RustFS 控制台
+lsof -i :8180  # SearXNG
 ```
 
 ### 数据库迁移

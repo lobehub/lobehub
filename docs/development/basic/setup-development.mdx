@@ -94,7 +94,7 @@ This will start the following services:
 - PostgreSQL database (port 5432)
 - Redis cache (port 6379)
 - RustFS storage (API port 9000, Console port 9001)
-- SearXNG search
+- SearXNG search (port 8180)
 
 You can check all Docker services are running by running:
 
@@ -132,6 +132,7 @@ When running with Docker Compose development setup:
 - **Redis**: `redis://localhost:6379`
 - **RustFS API**: `http://localhost:9000`
 - **RustFS Console**: `http://localhost:9001`
+- **SearXNG**: `http://localhost:8180`
 - **Application**: `http://localhost:3010`
 
 ## Troubleshooting
@@ -143,7 +144,6 @@ If you encounter issues, you can reset the entire stack:
 ```bash
 # Completely reset Docker environment (delete all data and restart)
 bun run dev:docker:reset
-pnpm db:migrate
 ```
 
 ### Port Conflicts
@@ -156,6 +156,7 @@ lsof -i :5432  # PostgreSQL
 lsof -i :6379  # Redis
 lsof -i :9000  # RustFS API
 lsof -i :9001  # RustFS Console
+lsof -i :8180  # SearXNG
 ```
 
 ### Database Migrations

@@ -99,6 +99,8 @@ services:
   searxng:
     image: searxng/searxng
     container_name: lobe-searxng
+    ports:
+      - '8180:8080'
     volumes:
       - './searxng-settings.yml:/etc/searxng/settings.yml'
     environment:
