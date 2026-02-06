@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom';
 import urlJoin from 'url-join';
 
 import { useDiscoverStore } from '@/store/discover';
+import { builtinTools } from '@/tools';
 
 /**
  * Icon component for built-in tools (Klavis & LobehubSkill)
@@ -87,6 +88,11 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
     return getLobehubSkillProviderById(identifier);
   }, [identifier]);
 
+  // Try to get builtin tool info if API returns no data
+  const builtinTool = useMemo(() => {
+    return builtinTools.find((tool) => tool.identifier === identifier);
+  }, [identifier]);
+
   // Convert built-in tools to plugin detail format
   const data: DiscoverPluginDetail | undefined = useMemo(() => {
     if (apiData) return apiData;
@@ -129,8 +135,27 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
       };
     }
 
+    // Check builtin tools (like lobe-cloud-sandbox, lobe-memory, etc.)
+    if (builtinTool) {
+      return {
+        author: 'LobeHub',
+        avatar: builtinTool.manifest.meta.avatar || '',
+        category: undefined,
+        createdAt: '',
+        description: builtinTool.manifest.meta.description || '',
+        homepage: 'https://lobehub.com',
+        identifier: builtinTool.identifier,
+        manifest: undefined,
+        related: [],
+        schemaVersion: 1,
+        source: 'builtin' as const,
+        tags: builtinTool.manifest.meta.tags || ['builtin-tool'],
+        title: builtinTool.manifest.meta.title,
+      };
+    }
+
     return undefined;
-  }, [apiData, klavisTool, lobehubSkill]);
+  }, [apiData, klavisTool, lobehubSkill, builtinTool]);
 
   const sourceConfig = useMemo(() => {
     const source: PluginSource = data?.source || 'market';
@@ -159,7 +184,7 @@ const PluginItem = memo<PluginItemProps>(({ identifier }) => {
       default: {
         return {
           clickable: true,
-          href: urlJoin('/community/plugin', identifier),
+          href: urlJoin('/community/mcp', identifier),
           isExternal: false,
           tagColor: undefined,
           tagText: undefined,
