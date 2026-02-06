@@ -24,6 +24,7 @@
     // support mdx
     "mdx"
   ],
+  "mdx.server.enable": false,
   "npm.packageManager": "pnpm",
   "search.exclude": {
     "**/node_modules": true,
@@ -51,6 +52,7 @@
     // make stylelint work with tsx antd-style css template string
     "typescriptreact"
   ],
+  "typescript.tsdk": "node_modules/typescript/lib",
   "vitest.maximumConfigs": 20,
   "workbench.editor.customLabels.patterns": {
     "**/app/**/[[]*[]]/[[]*[]]/page.tsx": "${dirname(2)}/${dirname(1)}/${dirname} • page component",
