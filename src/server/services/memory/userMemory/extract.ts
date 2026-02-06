@@ -2177,7 +2177,9 @@ export class MemoryExtractionExecutor {
 
 const WORKFLOW_PATHS = {
   personaUpdate: '/api/workflows/memory-user-memory/pipelines/persona/update-writing',
-  topic: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topic',
+  // process-topic is exposed via serveMany under a catch-all route, so it requires the extra slug
+  // segment to reach the actual workflow handler.
+  topic: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topic/process-topic',
   topicBatch: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topics',
   userTopics: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-user-topics',
   users: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-users',

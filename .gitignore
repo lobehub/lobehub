@@ -108,6 +108,9 @@ CLAUDE.local.md
 # MCP tools
 .serena/**
 
+# Docker development data
+docker-compose/dev/data/
+
 # Migration scripts data
 scripts/clerk-to-betterauth/test/*.csv
 scripts/clerk-to-betterauth/test/*.json
