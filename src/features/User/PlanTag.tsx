@@ -21,7 +21,7 @@ export interface PlanTagProps {
 const PlanTag = memo<PlanTagProps>(({ type = PlanType.Preview }) => {
   const { t } = useTranslation('common');
 
-  if (type === PlanType.Preview) {
+  if (type === PlanType.Preview || !type) {
     return (
       <Tag
         style={{ background: cssVar.colorFill, borderRadius: 12, cursor: 'pointer' }}

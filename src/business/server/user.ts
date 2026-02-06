@@ -5,8 +5,8 @@ export async function getReferralStatus(userId: string): Promise<ReferralStatusS
   return undefined;
 }
 
-export async function getSubscriptionPlan(userId: string): Promise<Plans> {
-  return Plans.Free;
+export async function getSubscriptionPlan(userId: string): Promise<Plans | undefined> {
+  return undefined;
 }
 
 export async function getIsInviteCodeRequired(userId: string): Promise<boolean> {

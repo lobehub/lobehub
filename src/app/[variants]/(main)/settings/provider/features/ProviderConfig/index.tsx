@@ -23,6 +23,7 @@ import { z } from 'zod';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
 import { SkeletonInput, SkeletonSwitch } from '@/components/Skeleton';
+import { CLOUDFLARE_GATEWAY_BASE_URL_PREFIX } from '@/config/cloudflare';
 import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import {
   type AiProviderDetailItem,
@@ -173,7 +174,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       !!formBaseURL || !!formEndpoint || !!keyVaults?.baseURL || !!keyVaults?.endpoint;
 
     const baseURL = formBaseURL || keyVaults?.baseURL;
-    const isCloudflareGateway = baseURL?.startsWith('https://gateway.ai.cloudflare.com/v1');
+    const isCloudflareGateway = baseURL?.startsWith(CLOUDFLARE_GATEWAY_BASE_URL_PREFIX);
 
     const isProviderApiKeyNotEmpty =
       isCloudflareGateway ||

@@ -1,5 +1,6 @@
 import { isProviderDisableBrowserRequest } from 'model-bank/modelProviders';
 
+import { CLOUDFLARE_GATEWAY_BASE_URL_PREFIX } from '@/config/cloudflare';
 import { type AIProviderStoreState } from '@/store/aiInfra/initialState';
 import { type AiProviderRuntimeConfig, AiProviderSourceEnum } from '@/types/aiProvider';
 import { type GlobalLLMProviderKey } from '@/types/user/settings';
@@ -52,7 +53,7 @@ const isActiveProviderEndpointNotEmpty = (s: AIProviderStoreState) => {
 
 const isActiveProviderApiKeyNotEmpty = (s: AIProviderStoreState) => {
   const vault = activeProviderKeyVaults(s);
-  if (vault?.baseURL?.startsWith('https://gateway.ai.cloudflare.com/v1')) return true;
+  if (vault?.baseURL?.startsWith(CLOUDFLARE_GATEWAY_BASE_URL_PREFIX)) return true;
   return !!vault?.apiKey || !!vault?.accessKeyId || !!vault?.secretAccessKey;
 };
 
@@ -79,7 +80,7 @@ const isProviderFetchOnClient =
     const isProviderEndpointNotEmpty = !!config?.keyVaults.baseURL;
     const isProviderApiKeyNotEmpty = !!config?.keyVaults.apiKey;
     const isCloudflareGateway = config?.keyVaults.baseURL?.startsWith(
-      'https://gateway.ai.cloudflare.com/v1',
+      CLOUDFLARE_GATEWAY_BASE_URL_PREFIX,
     );
 
     if (!isProviderEndpointNotEmpty && !isProviderApiKeyNotEmpty) return false;
