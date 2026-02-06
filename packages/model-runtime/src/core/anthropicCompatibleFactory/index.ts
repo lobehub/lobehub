@@ -166,9 +166,10 @@ export const buildDefaultAnthropicPayload = async (
     const resolvedThinking: Anthropic.MessageCreateParams['thinking'] =
       thinking.type === 'enabled'
         ? {
-            budget_tokens: thinking?.budget_tokens
-              ? Math.min(thinking.budget_tokens, resolvedMaxTokens - 1)
-              : 1024,
+            budget_tokens: Math.min(
+              thinking?.budget_tokens || 1024,
+              resolvedMaxTokens - 1,
+            ),
             type: 'enabled',
           }
         : { type: 'adaptive' as any };
