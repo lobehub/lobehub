@@ -159,15 +159,15 @@ export const buildDefaultAnthropicPayload = async (
   }
 
   if (!!thinking && (thinking.type === 'enabled' || thinking.type === 'adaptive')) {
-    const resolvedThinking =
+    const resolvedThinking: Anthropic.MessageCreateParams['thinking'] =
       thinking.type === 'enabled'
         ? {
-          ...thinking,
           budget_tokens: thinking?.budget_tokens
             ? Math.min(thinking.budget_tokens, resolvedMaxTokens - 1)
             : 1024,
+          type: 'enabled',
         }
-        : { type: thinking.type };
+        : { type: 'adaptive' as any };
 
     return {
       max_tokens: resolvedMaxTokens,
@@ -179,7 +179,7 @@ export const buildDefaultAnthropicPayload = async (
         : {}),
       thinking: resolvedThinking,
       tools: postTools as Anthropic.MessageCreateParams['tools'],
-    } satisfies Anthropic.MessageCreateParams;
+    } as Anthropic.MessageCreateParams;
   }
 
   const hasConflict = hasTemperatureTopPConflict(model);
