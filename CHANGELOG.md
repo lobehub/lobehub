@@ -4,6 +4,33 @@
 
 ### [Version 2.1.19](https://github.com/lobehub/lobe-chat/compare/v2.1.18...v2.1.19)
 
+<sup>Released on **2026-02-06**</sup>
+
+#### ♻ Code Refactoring
+
+- **docker-compose**: Restructure dev environment.
+- **misc**: Upgrade agents/group detail pages tabs、hidden like button.
+
+<br/>
+
+<details>
+<summary><kbd>Improvements and Fixes</kbd></summary>
+
+#### Code refactoring
+
+- **docker-compose**: Restructure dev environment, closes [#12132](https://github.com/lobehub/lobe-chat/issues/12132) ([7ba15cc](https://github.com/lobehub/lobe-chat/commit/7ba15cc))
+- **misc**: Upgrade agents/group detail pages tabs、hidden like button, closes [#12127](https://github.com/lobehub/lobe-chat/issues/12127) ([e402c51](https://github.com/lobehub/lobe-chat/commit/e402c51))
+
+</details>
+
+<div align="right">
+
+[![](https://img.shields.io/badge/-BACK_TO_TOP-151515?style=flat-square)](#readme-top)
+
+</div>
+
+### [Version 2.1.19](https://github.com/lobehub/lobe-chat/compare/v2.1.18...v2.1.19)
+
 <sup>Released on **2026-02-05**</sup>
 
 #### ♻ Code Refactoring

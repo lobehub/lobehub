@@ -668,10 +668,31 @@ section_regenerate_secrets() {
         echo $(show_message "security_secrect_regenerate_failed") "RUSTFS_SECRET_KEY"
         RUSTFS_SECRET_KEY="YOUR_RUSTFS_PASSWORD"
     else
-        # Search and replace the value of S3_SECRET_ACCESS_KEY in .env
         sed "${SED_INPLACE_ARGS[@]}" "s#^RUSTFS_SECRET_KEY=.*#RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}#" .env
         if [ $? -ne 0 ]; then
             echo $(show_message "security_secrect_regenerate_failed") "RUSTFS_SECRET_KEY in \`.env\`"
+        fi
+    fi
+
+    # Generate KEY_VAULTS_SECRET (base64 encoded 32 bytes)
+    KEY_VAULTS_SECRET=$(openssl rand -base64 32)
+    if [ $? -ne 0 ]; then
+        echo $(show_message "security_secrect_regenerate_failed") "KEY_VAULTS_SECRET"
+    else
+        sed "${SED_INPLACE_ARGS[@]}" "s#^KEY_VAULTS_SECRET=.*#KEY_VAULTS_SECRET=${KEY_VAULTS_SECRET}#" .env
+        if [ $? -ne 0 ]; then
+            echo $(show_message "security_secrect_regenerate_failed") "KEY_VAULTS_SECRET in \`.env\`"
+        fi
+    fi
+
+    # Generate AUTH_SECRET (base64 encoded 32 bytes)
+    AUTH_SECRET=$(openssl rand -base64 32)
+    if [ $? -ne 0 ]; then
+        echo $(show_message "security_secrect_regenerate_failed") "AUTH_SECRET"
+    else
+        sed "${SED_INPLACE_ARGS[@]}" "s#^AUTH_SECRET=.*#AUTH_SECRET=${AUTH_SECRET}#" .env
+        if [ $? -ne 0 ]; then
+            echo $(show_message "security_secrect_regenerate_failed") "AUTH_SECRET in \`.env\`"
         fi
     fi
 }
