@@ -2177,9 +2177,6 @@ export class MemoryExtractionExecutor {
 
 const WORKFLOW_PATHS = {
   personaUpdate: '/api/workflows/memory-user-memory/pipelines/persona/update-writing',
-  // process-topic is exposed via serveMany under a catch-all route, so it requires the extra slug
-  // segment to reach the actual workflow handler.
-  topic: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topic/process-topic',
   topicBatch: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-topics',
   userTopics: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-user-topics',
   users: '/api/workflows/memory-user-memory/pipelines/chat-topic/process-users',
@@ -2263,28 +2260,6 @@ export class MemoryExtractionWorkflowService {
         //
         // Currently, CEPA (context, experience, preference, activity) + identity = 5 layers.
         // and since identity requires sequential processing, we set parallelism to 5.
-        parallelism: 5,
-      },
-      headers: options?.extraHeaders,
-      url,
-    });
-  }
-
-  static triggerProcessTopic(
-    userId: string,
-    topicId: string,
-    payload: MemoryExtractionPayloadInput,
-    options?: { extraHeaders?: Record<string, string> },
-  ) {
-    if (!payload.baseUrl) {
-      throw new Error('Missing baseUrl for workflow trigger');
-    }
-
-    const url = getWorkflowUrl(WORKFLOW_PATHS.topic, payload.baseUrl);
-    return this.getClient().trigger({
-      body: { ...payload, topicIds: [topicId], userId, userIds: [userId] },
-      flowControl: {
-        key: `memory-user-memory.pipelines.chat-topic.process-topic.user.${userId}.topic.${topicId}`,
         parallelism: 5,
       },
       headers: options?.extraHeaders,
