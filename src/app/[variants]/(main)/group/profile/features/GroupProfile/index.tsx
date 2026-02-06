@@ -20,6 +20,7 @@ import GroupPublishButton from '../Header/GroupPublishButton';
 import GroupForkTag from './GroupForkTag';
 import GroupHeader from './GroupHeader';
 import GroupStatusTag from './GroupStatusTag';
+import GroupVersionReviewTag from './GroupVersionReviewTag';
 
 const GroupProfile = memo(() => {
   const { t } = useTranslation(['setting', 'chat']);
@@ -84,6 +85,7 @@ const GroupProfile = memo(() => {
           <Flexbox gap={8} horizontal paddingBlock={12}>
             <AutoSaveHint />
             <GroupStatusTag />
+            <GroupVersionReviewTag />
             <GroupForkTag />
           </Flexbox>
         </Flexbox>
