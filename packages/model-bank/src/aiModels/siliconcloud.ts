@@ -155,10 +155,11 @@ const siliconcloudChatModels: AIChatModelCard[] = [
       functionCall: true,
       reasoning: true,
       vision: true,
+      video: true,
     },
     contextWindowTokens: 131_072,
     description:
-      'GLM-4.6V 在视觉理解精度上达到同参数规模 SOTA，并首次在模型架构中将 Function Call（工具调用）能力原生融入视觉模型，打通从「视觉感知」到「可执行行动（Action）」的链路，为真实业务场景中的多模态 Agent 提供统一的技术底座。视觉上下文窗口扩展至 128k，支持长视频流处理及高分辨率多图分析。',
+      'GLM-4.6V achieves SOTA visual understanding accuracy for its parameter scale and is the first to natively integrate Function Call capabilities into the vision model architecture, bridging the gap from "visual perception" to "executable actions" and providing a unified technical foundation for multimodal agents in real business scenarios. The visual context window is extended to 128k, supporting long video stream processing and high-resolution multi-image analysis.',
     displayName: 'GLM-4.6V',
     id: 'zai-org/GLM-4.6V',
     pricing: {
