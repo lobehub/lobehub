@@ -160,6 +160,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     options?: ChatMethodOptions,
   ): Promise<Response> => {
     const {
+      effort,
       enabledContextCaching = true,
       max_tokens,
       messages,
@@ -172,13 +173,6 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     const inputStartAt = Date.now();
     const system_message = messages.find((m) => m.role === 'system');
     const user_messages = messages.filter((m) => m.role !== 'system');
-
-    // Resolve temperature and top_p parameters based on model constraints
-    const hasConflict = hasTemperatureTopPConflict(model);
-    const resolvedParams = resolveParameters(
-      { temperature, top_p },
-      { hasConflict, normalizeTemperature: true, preferTemperature: true },
-    );
 
     const { bedrock: bedrockModels } = await import('model-bank');
 
@@ -203,32 +197,54 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       enabledContextCaching,
     });
 
+    const postMessages = await buildAnthropicMessages(user_messages, { enabledContextCaching });
+
+    // Claude Opus 4.6 does not support assistant turn prefill
+    if (model.includes('opus-4-6') && postMessages.at(-1)?.role === 'assistant') {
+      postMessages.pop();
+    }
+
     const anthropicBase = {
       anthropic_version: 'bedrock-2023-05-31',
       max_tokens: resolvedMaxTokens,
-      messages: await buildAnthropicMessages(user_messages, { enabledContextCaching }),
+      messages: postMessages,
       system: systemPrompts,
       tools: postTools,
     };
 
-    const anthropicPayload =
-      thinking?.type === 'enabled'
-        ? {
-            ...anthropicBase,
-            thinking: {
-              ...thinking,
-              // `max_tokens` must be greater than `budget_tokens`
-              budget_tokens: Math.max(
-                1,
-                Math.min(thinking.budget_tokens || 1024, resolvedMaxTokens - 1),
+    let anthropicPayload;
+
+    if (!!thinking && (thinking.type === 'enabled' || thinking.type === 'adaptive')) {
+      const resolvedThinking =
+        thinking.type === 'enabled'
+          ? {
+              budget_tokens: Math.min(
+                thinking?.budget_tokens || 1024,
+                resolvedMaxTokens - 1,
               ),
-            },
-          }
-        : {
-            ...anthropicBase,
-            temperature: resolvedParams.temperature,
-            top_p: resolvedParams.top_p,
-          };
+              type: 'enabled' as const,
+            }
+          : { type: 'adaptive' as const };
+
+      anthropicPayload = {
+        ...anthropicBase,
+        ...(thinking.type === 'adaptive' && effort ? { output_config: { effort } } : {}),
+        thinking: resolvedThinking,
+      };
+    } else {
+      // Resolve temperature and top_p parameters based on model constraints
+      const hasConflict = hasTemperatureTopPConflict(model);
+      const resolvedParams = resolveParameters(
+        { temperature, top_p },
+        { hasConflict, normalizeTemperature: true, preferTemperature: true },
+      );
+
+      anthropicPayload = {
+        ...anthropicBase,
+        temperature: resolvedParams.temperature,
+        top_p: resolvedParams.top_p,
+      };
+    }
 
     const command = new InvokeModelWithResponseStreamCommand({
       accept: 'application/json',
@@ -250,7 +266,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       }
 
       const pricing = await getModelPricing(payload.model, this.id);
-      const cacheTTL = resolveCacheTTL({ ...payload, enabledContextCaching }, anthropicPayload);
+      const cacheTTL = resolveCacheTTL({ ...payload, enabledContextCaching }, anthropicBase);
       const pricingOptions = cacheTTL ? { lookupParams: { ttl: cacheTTL } } : undefined;
 
       // Respond with the stream

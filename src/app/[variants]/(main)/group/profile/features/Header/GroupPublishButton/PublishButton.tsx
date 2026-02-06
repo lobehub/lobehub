@@ -11,6 +11,7 @@ import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors'
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { agentGroupSelectors } from '@/store/agentGroup/selectors';
 
+import { useGroupVersionReviewStatus } from '../../GroupProfile/GroupVersionReviewTag';
 import GroupForkConfirmModal from './GroupForkConfirmModal';
 import type { MarketPublishAction, OriginalGroupInfo } from './types';
 import { useMarketGroupPublish } from './useMarketGroupPublish';
@@ -28,6 +29,9 @@ const PublishButton = memo<GroupPublishButtonProps>(({ action, onPublishSuccess 
     action,
     onSuccess: onPublishSuccess,
   });
+
+  // Check if the latest version is under review
+  const { isUnderReview } = useGroupVersionReviewStatus();
 
   // Group data for validation
   const currentGroupMeta = useAgentGroupStore(agentGroupSelectors.currentGroupMeta, isEqual);
@@ -72,6 +76,17 @@ const PublishButton = memo<GroupPublishButtonProps>(({ action, onPublishSuccess 
   }, [checkOwnership, publish]);
 
   const handleButtonClick = useCallback(() => {
+    // Check if the latest version is under review
+    if (isUnderReview) {
+      message.warning({
+        content: t('marketPublish.validation.underReview', {
+          defaultValue:
+            'Your new version is currently under review. Please wait for the review to complete before publishing a new version.',
+        }),
+      });
+      return;
+    }
+
     // Validate name and systemRole (stored in content)
     if (!currentGroupMeta?.title || currentGroupMeta.title.trim() === '') {
       message.error({ content: t('marketPublish.validation.emptyName') });
@@ -85,7 +100,7 @@ const PublishButton = memo<GroupPublishButtonProps>(({ action, onPublishSuccess 
 
     // Open popconfirm for user confirmation
     setConfirmOpened(true);
-  }, [currentGroupMeta?.title, currentGroup?.content, t]);
+  }, [currentGroupMeta?.title, currentGroup?.content, isUnderReview, t]);
 
   const handleConfirmPublish = useCallback(async () => {
     setConfirmOpened(false);

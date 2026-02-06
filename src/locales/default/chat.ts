@@ -75,6 +75,12 @@ export default {
   'extendParams.disableContextCaching.desc':
     'Reduce by up to 90% of the cost of generating a single conversation and bring a max of 4x speed. Enabling this will automatically disable the limit on the number of historical messages. <1>Learn more</1>',
   'extendParams.disableContextCaching.title': 'Enable Context Caching',
+  'extendParams.effort.desc':
+    'Control how many tokens Claude uses when responding with the effort parameter.',
+  'extendParams.effort.title': 'Effort',
+  'extendParams.enableAdaptiveThinking.desc':
+    'Let Claude dynamically decide when and how much to think with adaptive thinking mode.',
+  'extendParams.enableAdaptiveThinking.title': 'Enable Adaptive Thinking',
   'extendParams.enableReasoning.desc':
     'Based on the Claude Thinking mechanism limit, enabling this will automatically disable the limit on the number of historical messages. <1>Learn more</1>',
   'extendParams.enableReasoning.title': 'Enable Deep Thinking',

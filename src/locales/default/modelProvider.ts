@@ -224,6 +224,10 @@ export default {
     'Choose extended parameters supported by the model. Hover an option to preview controls. Incorrect configs may cause request failures.',
   'providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint':
     'For Claude models; can lower cost and speed up responses.',
+  'providerModels.item.modelConfig.extendParams.options.effort.hint':
+    'For Claude Opus 4.6; controls effort level (low/medium/high/max).',
+  'providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint':
+    'For Claude Opus 4.6; toggles adaptive thinking on or off.',
   'providerModels.item.modelConfig.extendParams.options.enableReasoning.hint':
     'For Claude, DeepSeek and other reasoning models; unlock deeper thinking.',
   'providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint':

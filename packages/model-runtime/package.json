@@ -12,7 +12,7 @@
     "test:update": "vitest -u"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.67.1",
+    "@anthropic-ai/sdk": "^0.73.0",
     "@aws-sdk/client-bedrock-runtime": "^3.941.0",
     "@azure-rest/ai-inference": "1.0.0-beta.5",
     "@azure/core-auth": "^1.10.1",
