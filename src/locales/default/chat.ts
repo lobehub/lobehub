@@ -76,10 +76,10 @@ export default {
     'Reduce by up to 90% of the cost of generating a single conversation and bring a max of 4x speed. Enabling this will automatically disable the limit on the number of historical messages. <1>Learn more</1>',
   'extendParams.disableContextCaching.title': 'Enable Context Caching',
   'extendParams.effort.desc':
-    'Adjust how much effort Claude Opus 4.6 uses when adaptive thinking is enabled.',
+    'Control how many tokens Claude uses when responding with the effort parameter.',
   'extendParams.effort.title': 'Effort',
   'extendParams.enableAdaptiveThinking.desc':
-    'Adaptive thinking lets Claude Opus 4.6 decide when and how much to think for each request.',
+    'Let Claude dynamically decide when and how much to think with adaptive thinking mode.',
   'extendParams.enableAdaptiveThinking.title': 'Enable Adaptive Thinking',
   'extendParams.enableReasoning.desc':
     'Based on the Claude Thinking mechanism limit, enabling this will automatically disable the limit on the number of historical messages. <1>Learn more</1>',

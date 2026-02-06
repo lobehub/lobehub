@@ -137,7 +137,11 @@ const ControlsForm = memo(() => {
     },
     {
       children: <EffortSlider />,
-      desc: 'output_config.effort',
+      desc: isNarrow ? (
+        <span style={descNarrow}>{t('extendParams.effort.desc')}</span>
+      ) : (
+        t('extendParams.effort.desc')
+      ),
       label: t('extendParams.effort.title'),
       layout: 'horizontal',
       minWidth: undefined,
