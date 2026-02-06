@@ -13,7 +13,7 @@ const bizErrorType = 'ProviderBizError';
 const invalidErrorType = 'InvalidProviderAPIKey';
 
 // Mock the console.error to avoid polluting test output
-vi.spyOn(console, 'error').mockImplementation(() => {});
+vi.spyOn(console, 'error').mockImplementation(() => { });
 
 let instance: InstanceType<typeof LobeAnthropicAI>;
 
@@ -698,6 +698,35 @@ describe('LobeAnthropicAI', () => {
           model: 'claude-3-haiku-20240307',
           system: undefined,
           thinking: { type: 'enabled', budget_tokens: 1024 },
+          tools: undefined,
+        });
+      });
+
+      it('should correctly build payload with adaptive thinking and effort', async () => {
+        const payload: ChatStreamPayload = {
+          max_tokens: 16000,
+          messages: [{ content: 'Solve this problem', role: 'user' }],
+          model: 'claude-opus-4-6',
+          effort: 'high',
+          thinking: { type: 'adaptive', budget_tokens: 0 },
+        };
+
+        const result = await buildDefaultAnthropicPayload(payload);
+
+        expect(result).toEqual({
+          max_tokens: 16000,
+          messages: [
+            {
+              content: [
+                { cache_control: { type: 'ephemeral' }, text: 'Solve this problem', type: 'text' },
+              ],
+              role: 'user',
+            },
+          ],
+          model: 'claude-opus-4-6',
+          output_config: { effort: 'high' },
+          system: undefined,
+          thinking: { type: 'adaptive' },
           tools: undefined,
         });
       });

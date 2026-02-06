@@ -120,6 +120,7 @@ export const buildDefaultAnthropicPayload = async (
     top_p,
     tools,
     thinking,
+    effort,
     enabledContextCaching = true,
     enabledSearch,
   } = payload;
@@ -138,12 +139,12 @@ export const buildDefaultAnthropicPayload = async (
 
   const systemPrompts = systemMessage?.content
     ? ([
-        {
-          cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
-          text: systemMessage.content as string,
-          type: 'text',
-        },
-      ] as Anthropic.TextBlockParam[])
+      {
+        cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
+        text: systemMessage.content as string,
+        type: 'text',
+      },
+    ] as Anthropic.TextBlockParam[])
     : undefined;
 
   const postMessages = await buildAnthropicMessages(userMessages, { enabledContextCaching });
@@ -157,18 +158,26 @@ export const buildDefaultAnthropicPayload = async (
     postTools = postTools?.length ? [...postTools, webSearchTool] : [webSearchTool];
   }
 
-  if (!!thinking && thinking.type === 'enabled') {
+  if (!!thinking && (thinking.type === 'enabled' || thinking.type === 'adaptive')) {
+    const resolvedThinking =
+      thinking.type === 'enabled'
+        ? {
+          ...thinking,
+          budget_tokens: thinking?.budget_tokens
+            ? Math.min(thinking.budget_tokens, resolvedMaxTokens - 1)
+            : 1024,
+        }
+        : { type: thinking.type };
+
     return {
       max_tokens: resolvedMaxTokens,
       messages: postMessages,
       model,
       system: systemPrompts,
-      thinking: {
-        ...thinking,
-        budget_tokens: thinking?.budget_tokens
-          ? Math.min(thinking.budget_tokens, resolvedMaxTokens - 1)
-          : 1024,
-      },
+      ...(thinking.type === 'adaptive' && effort
+        ? { output_config: { effort } }
+        : {}),
+      thinking: resolvedThinking,
       tools: postTools as Anthropic.MessageCreateParams['tools'],
     } satisfies Anthropic.MessageCreateParams;
   }
@@ -443,10 +452,10 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
           return StreamingResponse(
             chatCompletion?.handleStream
               ? chatCompletion.handleStream(prod, {
-                  callbacks: streamOptions.callbacks,
-                  inputStartAt,
-                  payload,
-                })
+                callbacks: streamOptions.callbacks,
+                inputStartAt,
+                payload,
+              })
               : AnthropicStream(prod, { ...streamOptions, inputStartAt }),
             {
               headers: options?.headers,
@@ -522,15 +531,15 @@ export const createAnthropicCompatibleRuntime = <T extends Record<string, any> =
         return StreamingResponse(
           chatCompletion?.handleStream
             ? chatCompletion.handleStream(stream, {
-                callbacks: streamOptions.callbacks,
-                inputStartAt,
-                payload,
-              })
+              callbacks: streamOptions.callbacks,
+              inputStartAt,
+              payload,
+            })
             : AnthropicStream(stream, {
-                ...streamOptions,
-                enableStreaming: false,
-                inputStartAt,
-              }),
+              ...streamOptions,
+              enableStreaming: false,
+              inputStartAt,
+            }),
           {
             headers: options?.headers,
           },

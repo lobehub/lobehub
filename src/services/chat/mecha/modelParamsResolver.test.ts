@@ -941,6 +941,56 @@ describe('resolveModelExtendParams', () => {
       });
     });
 
+    describe('adaptive thinking configuration', () => {
+      it('should set adaptive thinking when enabled', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'enableAdaptiveThinking',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            enableAdaptiveThinking: true,
+          } as any,
+          model: 'claude-opus-4-6',
+          provider: 'anthropic',
+        });
+
+        expect(result.thinking).toEqual({ type: 'adaptive' });
+      });
+
+      it('should disable adaptive thinking when off', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'enableAdaptiveThinking',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            enableAdaptiveThinking: false,
+          } as any,
+          model: 'claude-opus-4-6',
+          provider: 'anthropic',
+        });
+
+        expect(result.thinking).toEqual({ type: 'disabled' });
+      });
+
+      it('should set adaptive thinking effort when configured', () => {
+        vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
+          'effort',
+        ]);
+
+        const result = resolveModelExtendParams({
+          chatConfig: {
+            effort: 'max',
+          } as any,
+          model: 'claude-opus-4-6',
+          provider: 'anthropic',
+        });
+
+        expect(result.effort).toBe('max');
+      });
+    });
+
     describe('complex multi-parameter scenarios', () => {
       it('should handle all reasoning variants with context caching and verbosity', () => {
         vi.spyOn(aiModelSelectors.aiModelSelectors, 'modelExtendParams').mockReturnValue(() => [
