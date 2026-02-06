@@ -172,7 +172,7 @@ export const buildDefaultAnthropicPayload = async (
             ),
             type: 'enabled',
           }
-        : { type: 'adaptive' as any };
+        : { type: 'adaptive' };
 
     return {
       max_tokens: resolvedMaxTokens,
