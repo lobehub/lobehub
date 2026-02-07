@@ -8,6 +8,7 @@ import {
   ListChevronsDownUp,
   ListChevronsUpDown,
   ListRestart,
+  Play,
   RotateCcw,
   Share2,
   StepForward,
@@ -38,6 +39,7 @@ export interface GroupActions {
   regenerate: ActionItem;
   share: ActionItem;
   translate: ActionItem;
+  tts: ActionItem;
 }
 
 interface UseGroupActionsParams {
@@ -71,6 +73,7 @@ export const useGroupActions = ({
     deleteMessage,
     regenerateAssistantMessage,
     translateMessage,
+    ttsMessage,
     delAndRegenerateMessage,
     continueGenerationMessage,
   ] = useConversationStore((s) => [
@@ -79,6 +82,7 @@ export const useGroupActions = ({
     s.deleteMessage,
     s.regenerateAssistantMessage,
     s.translateMessage,
+    s.ttsMessage,
     s.delAndRegenerateMessage,
     s.continueGenerationMessage,
   ]);
@@ -172,6 +176,12 @@ export const useGroupActions = ({
         key: 'translate',
         label: t('translate.action', { ns: 'chat' }),
       },
+      tts: {
+        handleClick: () => ttsMessage(id),
+        icon: Play,
+        key: 'tts',
+        label: t('tts.action', { ns: 'chat' }),
+      },
     }),
     [
       id,
@@ -185,6 +195,7 @@ export const useGroupActions = ({
       deleteMessage,
       regenerateAssistantMessage,
       translateMessage,
+      ttsMessage,
       delAndRegenerateMessage,
       toggleMessageCollapsed,
       continueGenerationMessage,
