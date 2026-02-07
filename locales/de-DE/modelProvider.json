@@ -196,6 +196,8 @@
   "providerModels.item.modelConfig.displayName.title": "Modell-Anzeigename",
   "providerModels.item.modelConfig.extendParams.extra": "Wählen Sie erweiterte Parameter, die vom Modell unterstützt werden. Fahren Sie mit der Maus über eine Option, um die Steuerungsvorschau anzuzeigen. Falsche Konfigurationen können zu Anforderungsfehlern führen.",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "Für Claude-Modelle; kann die Kosten senken und die Antwortgeschwindigkeit erhöhen.",
+  "providerModels.item.modelConfig.extendParams.options.effort.hint": "Für Claude Opus 4.6; steuert das Anstrengungsniveau (niedrig/mittel/hoch/maximal).",
+  "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "Für Claude Opus 4.6; schaltet adaptives Denken ein oder aus.",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "Für Claude-, DeepSeek- und andere Modelle mit logischem Denken; ermöglicht tiefere Überlegungen.",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "Für die GPT-5-Serie; steuert die Intensität des logischen Denkens.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "Für die GPT-5.1-Serie; steuert die Intensität des logischen Denkens.",

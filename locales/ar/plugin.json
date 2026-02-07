@@ -1,4 +1,5 @@
 {
+  "arguments.moreParams": "إجمالي {{count}} من المعاملات",
   "arguments.title": "المعلمات",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "الحصول على النماذج المتاحة",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "الحصول على المهارات المتاحة",

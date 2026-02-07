@@ -29,6 +29,7 @@
   "internlm.description": "Eine Open-Source-Organisation für Forschung und Tools rund um große Modelle – mit einer effizienten, benutzerfreundlichen Plattform für den Zugang zu modernsten Modellen und Algorithmen.",
   "jina.description": "Jina AI wurde 2020 gegründet und ist ein führendes Unternehmen im Bereich Such-KI. Der Such-Stack umfasst Vektormodelle, Reranker und kleine Sprachmodelle für zuverlässige, hochwertige generative und multimodale Suchanwendungen.",
   "lmstudio.description": "LM Studio ist eine Desktop-App zur Entwicklung und zum Experimentieren mit LLMs auf dem eigenen Computer.",
+  "lobehub.description": "LobeHub Cloud verwendet offizielle APIs, um auf KI-Modelle zuzugreifen, und misst die Nutzung anhand von Credits, die an Modell-Token gebunden sind.",
   "minimax.description": "MiniMax wurde 2021 gegründet und entwickelt allgemeine KI mit multimodalen Foundation-Modellen, darunter Textmodelle mit Billionen Parametern, Sprach- und Bildmodelle sowie Apps wie Hailuo AI.",
   "mistral.description": "Mistral bietet fortschrittliche allgemeine, spezialisierte und Forschungsmodelle für komplexes Denken, mehrsprachige Aufgaben und Codegenerierung – inklusive Funktionsaufrufen für individuelle Integrationen.",
   "modelscope.description": "ModelScope ist die Model-as-a-Service-Plattform von Alibaba Cloud mit einer breiten Auswahl an KI-Modellen und Inferenzdiensten.",

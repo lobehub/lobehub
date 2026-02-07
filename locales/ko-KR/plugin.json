@@ -1,4 +1,5 @@
 {
+  "arguments.moreParams": "총 {{count}}개의 매개변수가 있습니다",
   "arguments.title": "매개변수 목록",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "사용 가능한 모델 가져오기",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "사용 가능한 도구 가져오기",

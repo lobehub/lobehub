@@ -1,4 +1,5 @@
 {
+  "arguments.moreParams": "合計で{{count}}個のパラメーターがあります",
   "arguments.title": "パラメーター一覧",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "利用可能なモデルを取得",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "利用可能なツールを取得",

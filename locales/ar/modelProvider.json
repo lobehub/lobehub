@@ -196,6 +196,8 @@
   "providerModels.item.modelConfig.displayName.title": "اسم عرض النموذج",
   "providerModels.item.modelConfig.extendParams.extra": "اختر المعلمات الموسعة التي يدعمها النموذج. مرّر المؤشر فوق خيار لمعاينة عناصر التحكم. قد تؤدي التهيئة غير الصحيحة إلى فشل الطلب.",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "لنماذج Claude؛ يمكن أن يقلل التكلفة ويسرّع الاستجابات.",
+  "providerModels.item.modelConfig.extendParams.options.effort.hint": "لـ Claude Opus 4.6؛ يتحكم في مستوى الجهد (منخفض/متوسط/عالٍ/أقصى).",
+  "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "لـ Claude Opus 4.6؛ يفعّل أو يعطّل التفكير التكيفي.",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "لنماذج Claude وDeepSeek وغيرها من نماذج الاستدلال؛ يفعّل التفكير العميق.",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "لسلسلة GPT-5؛ يتحكم في شدة الاستدلال.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "لسلسلة GPT-5.1؛ يتحكم في شدة الاستدلال.",

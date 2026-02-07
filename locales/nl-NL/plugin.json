@@ -1,4 +1,5 @@
 {
+  "arguments.moreParams": "{{count}} parameters in totaal",
   "arguments.title": "Argumenten",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Beschikbare modellen ophalen",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "Beschikbare Skills ophalen",

@@ -196,6 +196,8 @@
   "providerModels.item.modelConfig.displayName.title": "Nombre para mostrar del modelo",
   "providerModels.item.modelConfig.extendParams.extra": "Elige los parámetros extendidos compatibles con el modelo. Pasa el cursor sobre una opción para previsualizar los controles. Configuraciones incorrectas pueden causar errores en la solicitud.",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "Para modelos Claude; puede reducir el costo y acelerar las respuestas.",
+  "providerModels.item.modelConfig.extendParams.options.effort.hint": "Para Claude Opus 4.6; controla el nivel de esfuerzo (bajo/medio/alto/máximo).",
+  "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "Para Claude Opus 4.6; activa o desactiva el pensamiento adaptativo.",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "Para Claude, DeepSeek y otros modelos de razonamiento; permite un pensamiento más profundo.",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "Para la serie GPT-5; controla la intensidad del razonamiento.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "Para la serie GPT-5.1; controla la intensidad del razonamiento.",

@@ -196,6 +196,8 @@
   "providerModels.item.modelConfig.displayName.title": "モデル表示名",
   "providerModels.item.modelConfig.extendParams.extra": "モデルがサポートする拡張パラメータを選択してください。オプションにカーソルを合わせるとコントロールのプレビューが表示されます。不正な設定はリクエストの失敗を引き起こす可能性があります。",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "Claudeモデル向け；コストを抑え、応答速度を向上させる可能性があります。",
+  "providerModels.item.modelConfig.extendParams.options.effort.hint": "Claude Opus 4.6 用：労力レベルを制御します（低／中／高／最大）。",
+  "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "Claude Opus 4.6 用：アダプティブシンキングのオン／オフを切り替えます。",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "Claude、DeepSeekなどの推論モデル向け；より深い思考を可能にします。",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "GPT-5シリーズ向け；推論の強度を制御します。",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "GPT-5.1シリーズ向け；推論の強度を制御します。",

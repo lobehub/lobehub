@@ -150,6 +150,7 @@
   "upload.desc": "Szczegóły: {{detail}}",
   "upload.fileOnlySupportInServerMode": "Obecny tryb wdrożenia nie obsługuje przesyłania plików innych niż obrazy. Aby przesłać pliki w formacie {{ext}}, przełącz się na wdrożenie z bazą danych serwera lub skorzystaj z usługi {{cloud}}.",
   "upload.networkError": "Sprawdź połączenie sieciowe i konfigurację CORS usługi przechowywania plików.",
+  "upload.storageLimitExceeded": "Limit przestrzeni dyskowej w Twoim planie został osiągnięty. Zaktualizuj plan lub usuń nieużywane pliki, aby zwolnić miejsce.",
   "upload.title": "Przesyłanie pliku nie powiodło się. Sprawdź połączenie sieciowe lub spróbuj ponownie później.",
   "upload.unknownError": "Powód błędu: {{reason}}",
   "upload.uploadFailed": "Przesyłanie pliku nie powiodło się."

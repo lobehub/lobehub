@@ -150,6 +150,7 @@
   "upload.desc": "Detaylar: {{detail}}",
   "upload.fileOnlySupportInServerMode": "Mevcut dağıtım modu, resim dışı dosyaların yüklenmesini desteklemiyor. {{ext}} formatındaki dosyaları yüklemek için sunucu veritabanı dağıtımına geçin veya {{cloud}} hizmetini kullanın.",
   "upload.networkError": "Lütfen ağ bağlantınızı ve dosya depolama hizmetinin çapraz kaynak yapılandırmasının doğru olduğundan emin olun.",
+  "upload.storageLimitExceeded": "Dosya depolama alanınız plan sınırına ulaştı. Lütfen planınızı yükseltin veya yer açmak için kullanılmayan dosyaları silin.",
   "upload.title": "Dosya yükleme başarısız oldu. Lütfen ağ bağlantınızı kontrol edin veya daha sonra tekrar deneyin",
   "upload.unknownError": "Hata nedeni: {{reason}}",
   "upload.uploadFailed": "Dosya yükleme başarısız oldu."
