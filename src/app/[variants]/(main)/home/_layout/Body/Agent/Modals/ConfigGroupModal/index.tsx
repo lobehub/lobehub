@@ -8,7 +8,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
-import { type SessionGroupItem } from '@/types/session';
 
 import GroupItem from './GroupItem';
 
@@ -52,10 +51,10 @@ const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
       <Flexbox>
         <SortableList
           items={sessionGroupItems}
-          onChange={(items: SessionGroupItem[]) => {
+          onChange={(items) => {
             updateGroupSort(items);
           }}
-          renderItem={(item: SessionGroupItem) => (
+          renderItem={(item) => (
             <SortableList.Item
               align={'center'}
               className={styles.container}

@@ -22,7 +22,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const GroupItem = memo<SessionGroupItem>(({ id, name }) => {
+const GroupItem = memo<Omit<SessionGroupItem, 'createdAt' | 'updatedAt'>>(({ id, name }) => {
   const { t } = useTranslation('chat');
   const { message, modal } = App.useApp();
 
