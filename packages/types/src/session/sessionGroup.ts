@@ -7,12 +7,15 @@ export enum SessionDefaultGroup {
   Pinned = 'pinned',
 }
 
-export interface SessionGroupItem {
+export interface SessionGroupItem extends SessionGroupItemBase {
   createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SessionGroupItemBase {
   id: string;
   name: string;
   sort?: number | null;
-  updatedAt: Date;
 }
 
 export type SessionGroups = SessionGroupItem[];
