@@ -222,7 +222,7 @@ export class Sitemap {
 
     // If page number is not specified, return all (backward compatibility)
     const sitmap = list
-      .filter((item) => item.identifier) // 过滤掉 identifier 为空的项目
+      .filter((item) => item.identifier) // Filter out items with empty identifiers
       .map((item) =>
         this._genSitemap(urlJoin('/community/agent', item.identifier), {
           lastModified: item?.lastModified || LAST_MODIFIED,
@@ -251,7 +251,7 @@ export class Sitemap {
 
     // If page number is not specified, return all (backward compatibility)
     const sitmap = list
-      .filter((item) => item.identifier) // 过滤掉 identifier 为空的项目
+      .filter((item) => item.identifier) // Filter out items with empty identifiers
       .map((item) =>
         this._genSitemap(urlJoin('/community/plugin', item.identifier), {
           lastModified: item?.lastModified || LAST_MODIFIED,
@@ -280,7 +280,7 @@ export class Sitemap {
 
     // If page number is not specified, return all (backward compatibility)
     const sitmap = list
-      .filter((item) => item.identifier) // 过滤掉 identifier 为空的项目
+      .filter((item) => item.identifier) // Filter out items with empty identifiers
       .map((item) =>
         this._genSitemap(urlJoin('/community/model', item.identifier), {
           lastModified: item?.lastModified || LAST_MODIFIED,
@@ -292,7 +292,7 @@ export class Sitemap {
   async getProviders(): Promise<MetadataRoute.Sitemap> {
     const list = await this.discoverService.getProviderIdentifiers();
     const sitmap = list
-      .filter((item) => item.identifier) // 过滤掉 identifier 为空的项目
+      .filter((item) => item.identifier) // Filter out items with empty identifiers
       .map((item) =>
         this._genSitemap(urlJoin('/community/provider', item.identifier), {
           lastModified: item?.lastModified || LAST_MODIFIED,

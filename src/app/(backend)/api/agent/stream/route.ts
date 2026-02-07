@@ -31,7 +31,7 @@ export async function GET(request: NextRequest) {
 
   log(`Starting SSE connection for operation ${operationId} from eventId ${lastEventId}`);
 
-  // 创建 Server-Sent Events 流
+  // Create Server-Sent Events stream
   const stream = new ReadableStream({
     cancel(reason) {
       log(`SSE connection cancelled for operation ${operationId}:`, reason);
@@ -45,23 +45,23 @@ export async function GET(request: NextRequest) {
     start(controller) {
       const writer = createSSEWriter(controller);
 
-      // 发送连接确认事件
+      // Send connection confirmation event
       writer.writeConnection(operationId, lastEventId);
       log(`SSE connection established for operation ${operationId}`);
 
-      // 如果需要，先发送历史事件
+      // If needed, send historical events first
       if (includeHistory) {
         streamManager
           .getStreamHistory(operationId, 50)
           .then((history) => {
-            // 按时间顺序发送历史事件（最早的在前面）
+            // Send historical events in chronological order (earliest first)
             const sortedHistory = history.reverse();
 
             sortedHistory.forEach((event) => {
-              // 只发送比 lastEventId 更新的事件
+              // Only send events newer than lastEventId
               if (!lastEventId || lastEventId === '0' || event.timestamp.toString() > lastEventId) {
                 try {
-                  // 添加 SSE 特定的字段，保持与实时事件格式一致
+                  // Add SSE-specific fields, keeping format consistent with real-time events
                   const sseEvent = {
                     ...event,
                     operationId,
@@ -89,14 +89,14 @@ export async function GET(request: NextRequest) {
           });
       }
 
-      // 创建 AbortController 用于取消订阅
+      // Create AbortController for canceling subscription
       const abortController = new AbortController();
 
       // Track if stream has ended (agent_runtime_end received)
       // Once set to true, no more events will be sent
       let streamEnded = false;
 
-      // 定期发送心跳（每 30 秒）
+      // Send heartbeat periodically (every 30 seconds)
       const heartbeatInterval = setInterval(() => {
         // Skip heartbeat if stream has ended
         if (streamEnded) {
@@ -124,7 +124,7 @@ export async function GET(request: NextRequest) {
         log(`SSE connection closed for operation ${operationId}`);
       };
 
-      // 订阅新的流式事件
+      // Subscribe to new streaming events
       const subscribeToEvents = async () => {
         try {
           await streamManager.subscribeStreamEvents(
@@ -138,7 +138,7 @@ export async function GET(request: NextRequest) {
                 }
 
                 try {
-                  // 添加 SSE 特定的字段
+                  // Add SSE-specific fields
                   const sseEvent = {
                     ...event,
                     operationId,
@@ -158,7 +158,7 @@ export async function GET(request: NextRequest) {
                     totalLatency,
                   );
 
-                  // 如果收到 agent_runtime_end 事件，立即终止流
+                  // If agent_runtime_end event is received, terminate stream immediately
                   if (event.type === 'agent_runtime_end') {
                     log(
                       `Agent runtime ended for operation ${operationId}, terminating stream immediately`,
@@ -194,18 +194,18 @@ export async function GET(request: NextRequest) {
         }
       };
 
-      // 开始订阅
+      // Start subscription
       subscribeToEvents();
 
-      // 监听连接关闭
+      // Listen for connection close
       request.signal?.addEventListener('abort', cleanup);
 
-      // 存储清理函数以便在 cancel 时调用
+      // Store cleanup function for calling during cancel
       (controller as any)._cleanup = cleanup;
     },
   });
 
-  // 设置 SSE 响应头
+  // Set SSE response headers
   return new Response(stream, {
     headers: createSSEHeaders(),
   });

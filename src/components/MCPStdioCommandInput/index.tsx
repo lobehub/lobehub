@@ -10,9 +10,9 @@ import { AutoComplete, type AutoCompleteProps } from '@lobehub/ui';
 import { Flexbox } from '@lobehub/ui';
 import { type FC, memo } from 'react';
 
-// 定义预设的命令选项
+// Define preset command options
 const STDIO_COMMAND_OPTIONS: {
-  // 假设图标是 React 函数组件
+  // Assuming icon is a React function component
   color?: string;
   icon?: FC<{ color?: string; size?: number }>;
   value: string;

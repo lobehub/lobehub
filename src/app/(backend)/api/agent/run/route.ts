@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     const serverDB = await getServerDB();
     const agentRuntimeService = new AgentRuntimeService(serverDB, metadata.userId);
 
-    // 使用 AgentRuntimeService 执行步骤
+    // Execute step using AgentRuntimeService
     const result = await agentRuntimeService.executeStep({
       approvedToolCall,
       context,
@@ -133,7 +133,7 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * 健康检查端点
+ * Health check endpoint
  */
 export async function GET() {
   try {

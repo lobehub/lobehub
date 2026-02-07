@@ -72,7 +72,7 @@ const ComfyUIForm = memo<ComfyUIFormProps>(({ description }) => {
     username: '',
   });
 
-  // Update form values when comfyUIConfig changes (配置反读)
+  // Update form values when comfyUIConfig changes (config read-back)
   // Use individual primitive values to avoid infinite re-renders
   useEffect(() => {
     if (comfyUIConfig) {
