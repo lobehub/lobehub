@@ -13,7 +13,7 @@ tags:
 
 ## 参数标准化
 
-所有图像生成模型都必须使用 `src/libs/standard-parameters/index.ts` 中定义的标准参数。这确保了不同 Provider 之间的参数一致性，让用户体验更加统一。
+所有图像生成模型都必须使用 `packages/model-bank/src/standard-parameters/index.ts` 中定义的标准参数。这确保了不同 Provider 之间的参数一致性，让用户体验更加统一。
 
 **支持的标准参数**：
 
@@ -30,7 +30,7 @@ tags:
 
 指的是可以使用 openai SDK 进行请求，并且请求参数和和返回值和 dall-e 以及 gpt-image-x 系列一致。
 
-以智谱的 CogView-4 为例，它是一个兼容 openai 请求格式的模型。你只需要在对应的 ai models 文件 `src/config/aiModels/zhipu.ts` 中，添加模型配置，例如：
+以智谱的 CogView-4 为例，它是一个兼容 openai 请求格式的模型。你只需要在对应的 ai models 文件 `packages/model-bank/src/aiModels/zhipu.ts` 中，添加模型配置，例如：
 
 ```ts
 const zhipuImageModels: AIImageModelCard[] = [
@@ -69,7 +69,7 @@ const zhipuImageModels: AIImageModelCard[] = [
 
 1. **阅读 Provider 官方文档和标准参数定义**
    - 查看 Provider 的图像生成 API 文档，了解请求格式和响应格式
-   - 阅读 `src/libs/standard-parameters/index.ts`，了解支持的参数
+   - 阅读 `packages/model-bank/src/standard-parameters/index.ts`，了解支持的参数
    - 在对应的 ai models 文件中增加 image model 配置
 
 2. **实现自定义的 createImage 方法**
@@ -85,7 +85,7 @@ const zhipuImageModels: AIImageModelCard[] = [
 **代码示例**：
 
 ```ts
-// src/libs/model-runtime/provider-name/createImage.ts
+// packages/model-runtime/src/providers/<provider-name>/createImage.ts
 export const createProviderImage = async (
   payload: ImageGenerationPayload,
   options: any,
@@ -110,7 +110,7 @@ export const createProviderImage = async (
 ```
 
 ```ts
-// src/libs/model-runtime/provider-name/index.ts
+// packages/model-runtime/src/providers/<provider-name>/index.ts
 export const LobeProviderAI = openaiCompatibleFactory({
   constructorOptions: {
     // ... 其他配置
@@ -128,7 +128,7 @@ export const LobeProviderAI = openaiCompatibleFactory({
 
 1. **阅读 Provider 官方文档和标准参数定义**
    - 查看 Provider 的图像生成 API 文档
-   - 阅读 `src/libs/standard-parameters/index.ts`
+   - 阅读 `packages/model-bank/src/standard-parameters/index.ts`
    - 在对应的 ai models 文件中增加 image model 配置
 
 2. **在 Provider 类中实现 createImage 方法**
@@ -142,7 +142,7 @@ export const LobeProviderAI = openaiCompatibleFactory({
 **代码示例**：
 
 ```ts
-// src/libs/model-runtime/provider-name/index.ts
+// packages/model-runtime/src/providers/<provider-name>/index.ts
 export class LobeProviderAI {
   async createImage(
     payload: ImageGenerationPayload,
