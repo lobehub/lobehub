@@ -272,7 +272,7 @@ export function createCallbacksTransformer(cb: ChatStreamCallbacks | undefined) 
   let currentType = '' as unknown as StreamProtocolChunk['type'];
   const callbacks = cb || {};
 
-  return new TransformStream({
+  return new TransformStream<string, Uint8Array>({
     async flush(): Promise<void> {
       const data = {
         grounding,
