@@ -154,8 +154,6 @@ In the server-side database, we need to configure the S3 storage service to stor
   S3_BUCKET=LobeHub
   # Storage bucket request endpoint (note that the path in this link includes the bucket name, which must be removed, or use the link provided on the S3 API token application page)
   S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
-  # Public access domain for the storage bucket
-  S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com
   ```
 
   <Callout type={'warning'}>
@@ -204,9 +202,6 @@ In the server-side database, we need to configure the S3 storage service to stor
   S3_BUCKET=LobeHub
   # Bucket request endpoint
   S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
-  # Public domain for bucket access
-  S3_PUBLIC_DOMAIN=https://s3-dev.your-domain.com
-
   # Bucket region, such as us-west-1, generally not required, but some providers may need to configure
   # S3_REGION=us-west-1
   ```
@@ -288,8 +283,6 @@ S3_SECRET_ACCESS_KEY=55af75d8eb6b99f189f6a35f855336ea62cd9c4751a5cf4337c53c1d3f4
 S3_BUCKET=LobeHub
 # Bucket request endpoint
 S3_ENDPOINT=https://0b33a03b5c993fd2f453379dc36558e5.r2.cloudflarestorage.com
-# Public access domain for the bucket
-S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com
 # Bucket region, such as us-west-1, generally not needed to add, but some service providers may require configuration
 # S3_REGION=us-west-1
 ```

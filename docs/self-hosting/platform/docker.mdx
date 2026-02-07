@@ -89,7 +89,6 @@ Here is the process for deploying the LobeHub server database version on a Linux
   S3_SECRET_ACCESS_KEY=xxxxxxxxxx
   S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com
   S3_BUCKET=LobeHub
-  S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com
 
   ```
 
@@ -146,7 +145,6 @@ $ docker run -it -d --name lobehub -p 3210:3210 \
   -e S3_SECRET_ACCESS_KEY=xxxxxxxxxx \
   -e S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com \
   -e S3_BUCKET=LobeHub \
-  -e S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com \
   lobehub/lobehub
 ```
 
