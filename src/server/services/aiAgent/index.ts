@@ -231,7 +231,7 @@ export class AiAgentService {
       additionalManifests: [...lobehubSkillManifests, ...klavisManifests],
       agentConfig: {
         chatConfig: agentConfig.chatConfig ?? undefined,
-        plugins: agentConfig.plugins ?? undefined,
+        plugins: agentConfig?.plugins ?? undefined,
       },
       hasEnabledKnowledgeBases,
       model,

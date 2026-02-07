@@ -273,6 +273,11 @@ export interface CallAgentParams {
    * Timeout in milliseconds for task execution (default: 1800000 = 30 minutes)
    */
   timeout?: number;
+  /**
+   * If true (and in a group context), skip calling supervisor after agent responds.
+   * Only relevant when used within agent groups. Default: false
+   */
+  skipCallSupervisor?: boolean;
 }
 
 export interface CallAgentState {
@@ -292,4 +297,8 @@ export interface CallAgentState {
    * Task ID if running as background task
    */
   taskId?: string;
+  /**
+   * Whether to skip calling supervisor after agent responds (only relevant in group context)
+   */
+  skipCallSupervisor?: boolean;
 }

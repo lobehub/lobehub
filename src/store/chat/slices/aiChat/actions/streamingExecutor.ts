@@ -73,8 +73,9 @@ export interface StreamingExecutorAction {
     initialState?: AgentState;
     initialContext?: AgentRuntimeContext;
     /**
-     * Sub Agent ID for group orchestration scenarios
-     * Used to get Agent config (model, provider, plugins) instead of agentId
+     * Sub Agent ID - behavior depends on scope
+     * - scope: 'group' | 'group_agent': Used for agent config and changes message ownership
+     * - scope: 'sub_agent': Used for agent config but doesn't change message ownership
      */
     subAgentId?: string;
     /**
@@ -181,9 +182,9 @@ export const streamingExecutor: StateCreator<
     const agentId = paramAgentId || activeAgentId;
     const topicId = paramTopicId !== undefined ? paramTopicId : activeTopicId;
 
-    // For group orchestration scenarios:
-    // - subAgentId is used for agent config retrieval (model, provider, plugins)
-    // - agentId is used for session ID (message storage location)
+    // Determine effectiveAgentId for agent config retrieval:
+    // - paramSubAgentId: Used for agent config (behavior depends on scope)
+    // - agentId: Default
     const effectiveAgentId = paramSubAgentId || agentId;
 
     // Get scope and groupId from operation context if available
@@ -202,7 +203,12 @@ export const streamingExecutor: StateCreator<
       isSubTask, // Filter out lobe-gtd in sub-task context
       scope, // Pass scope from operation context
     });
+
     const { agentConfig: agentConfigData, plugins: pluginIds } = agentConfig;
+
+    if (!agentConfigData || !agentConfigData.model) {
+      throw new Error(`[internal_createAgentState] Agent config not found or incomplete for agentId: ${effectiveAgentId}, scope: ${scope}`);
+    }
 
     log(
       '[internal_createAgentState] resolved plugins=%o, isSubTask=%s, disableTools=%s',
@@ -615,11 +621,11 @@ export const streamingExecutor: StateCreator<
     } = params;
 
     // Extract values from context
-    const { agentId, topicId, threadId, subAgentId, groupId } = context;
+    const { agentId, topicId, threadId, subAgentId, groupId, scope } = context;
 
-    // For group orchestration scenarios:
-    // - subAgentId is used for agent config retrieval (model, provider, plugins)
-    // - agentId is used for message storage location (via messageMapKey)
+    // Determine effectiveAgentId for agent config retrieval:
+    // - subAgentId is used when present (behavior depends on scope)
+    // - agentId: Default
     const effectiveAgentId = subAgentId || agentId;
 
     // Generate message key from context
@@ -646,10 +652,11 @@ export const streamingExecutor: StateCreator<
     }
 
     log(
-      '[internal_execAgentRuntime] start, operationId: %s, agentId: %s, subAgentId: %s, effectiveAgentId: %s, topicId: %s, messageKey: %s, parentMessageId: %s, parentMessageType: %s, messages count: %d, disableTools: %s',
+      '[internal_execAgentRuntime] start, operationId: %s, agentId: %s, subAgentId: %s, scope: %s, effectiveAgentId: %s, topicId: %s, messageKey: %s, parentMessageId: %s, parentMessageType: %s, messages count: %d, disableTools: %s',
       operationId,
       agentId,
       subAgentId,
+      scope,
       effectiveAgentId,
       topicId,
       messageKey,
@@ -680,7 +687,7 @@ export const streamingExecutor: StateCreator<
       initialState: params.initialState,
       initialContext: params.initialContext,
       operationId,
-      subAgentId, // Pass subAgentId for agent config retrieval
+      subAgentId, // Pass subAgentId for agent config retrieval (behavior depends on scope)
       isSubTask, // Pass isSubTask to filter out lobe-gtd tools in sub-task context
     });
 

@@ -6,6 +6,7 @@ import { IThreadType } from './topic/thread';
  * - thread: Agent thread conversation
  * - group: Group main conversation
  * - group_agent: Agent conversation within a group
+ * - sub_agent: Agent-to-agent communication (non-group, uses subAgentId for config/display only)
  */
 export type MessageMapScope =
   | 'main'
@@ -14,7 +15,8 @@ export type MessageMapScope =
   | 'group_agent'
   | 'group_agent_builder'
   | 'page'
-  | 'agent_builder';
+  | 'agent_builder'
+  | 'sub_agent';
 
 /**
  * Context for generating message map key with scope-driven architecture
@@ -123,18 +125,22 @@ export interface ConversationContext {
    */
   groupId?: string;
   /**
-   * Sub Agent ID for group orchestration scenarios
+   * Sub Agent ID - behavior depends on scope
+   *
+   * Scope-based behavior:
+   * - scope: 'group' | 'group_agent': Changes message ownership (message.agentId = subAgentId)
+   * - scope: 'sub_agent': Only for config/display (message.agentId stays same, metadata.subAgentId recorded)
    * - Used to get Agent config (model, provider, plugins) instead of agentId
-   * - Used to set message.agentId (mark message source)
-   * - Falls back to agentId if not set
    *
    * @example
    * ```ts
-   * // Supervisor executes: no subAgentId needed
-   * { agentId: 'supervisor', groupId: 'group-1', scope: 'group' }
-   *
-   * // Agent speaks in group: use subAgentId for agent config
+   * // Group mode: subAgentId changes message ownership
    * { agentId: 'supervisor', subAgentId: 'agent-1', groupId: 'group-1', scope: 'group' }
+   * // Result: message.agentId = 'agent-1' (owned by agent-1)
+   *
+   * // Sub-agent mode: subAgentId only for config/display
+   * { agentId: 'agent-a', subAgentId: 'agent-b', topicId: 'topic-1', scope: 'sub_agent' }
+   * // Result: message.agentId = 'agent-a', message.metadata = { subAgentId: 'agent-b', scope: 'sub_agent' }
    * ```
    */
   subAgentId?: string;

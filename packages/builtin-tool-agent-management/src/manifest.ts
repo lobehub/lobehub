@@ -223,6 +223,12 @@ export const AgentManagementManifest: BuiltinToolManifest = {
               'Maximum time in milliseconds to wait for task completion (default: 1800000 = 30 minutes). Only applies when runAsTask is true.',
             type: 'number',
           },
+          skipCallSupervisor: {
+            default: false,
+            description:
+              'If true (and in a group context), the orchestration will end after this agent responds, without calling the supervisor again. Only relevant when used within agent groups.',
+            type: 'boolean',
+          },
         },
         required: ['agentId', 'instruction'],
         type: 'object',

@@ -79,13 +79,35 @@ export const createAgentExecutors = (context: {
   };
 
   /**
-   * Get effective agentId for message creation
-   * In Group Orchestration scenarios, subAgentId is the actual executing agent
-   * Falls back to agentId for normal scenarios
+   * Get effective agentId for message creation - depends on scope
+   * - scope: 'group' | 'group_agent': subAgentId changes message ownership (agentId = subAgentId)
+   * - scope: 'sub_agent': agentId stays the same (subAgentId only for config/display)
+   * - Default: use agentId
    */
   const getEffectiveAgentId = () => {
     const opContext = getOperationContext();
-    return opContext.subAgentId || opContext.agentId;
+    const isGroupScope =
+      opContext.scope === 'group' ||
+      opContext.scope === 'group_agent' ||
+      opContext.scope === 'group_agent_builder';
+
+    // Only use subAgentId for message ownership in Group scopes
+    return isGroupScope && opContext.subAgentId ? opContext.subAgentId : opContext.agentId;
+  };
+
+  /**
+   * Get subAgentId and scope for metadata (when scope is 'sub_agent')
+   */
+  const getMetadataForSubAgent = () => {
+    const opContext = getOperationContext();
+
+    if (opContext.scope === 'sub_agent' && opContext.subAgentId) {
+      return {
+        subAgentId: opContext.subAgentId,
+        scope: opContext.scope,
+      };
+    }
+    return null;
   };
 
   /* eslint-disable sort-keys-fix/sort-keys-fix */
@@ -121,8 +143,10 @@ export const createAgentExecutors = (context: {
       } else {
         // Get context from operation
         const opContext = getOperationContext();
-        // Get effective agentId (subAgentId for group orchestration, agentId otherwise)
+        // Get effective agentId (depends on scope)
         const effectiveAgentId = getEffectiveAgentId();
+        // Get subAgentId metadata (for sub_agent scope)
+        const subAgentMetadata = getMetadataForSubAgent();
 
         // If this is the first regenerated creation of userMessage, llmPayload doesn't have parentMessageId
         // So we assign it this way
@@ -130,13 +154,24 @@ export const createAgentExecutors = (context: {
         if (!llmPayload.parentMessageId) {
           llmPayload.parentMessageId = context.parentId;
         }
+
+        // Build metadata
+        const metadata: Record<string, any> = {};
+        if (opContext.isSupervisor) {
+          metadata.isSupervisor = true;
+        }
+        if (subAgentMetadata) {
+          // Store subAgentId and scope in metadata for sub_agent mode
+          // This will be used by conversation-flow to transform agentId for display
+          Object.assign(metadata, subAgentMetadata);
+        }
+
         // Create assistant message (following server-side pattern)
-        // If isSupervisor is true, add metadata.isSupervisor for UI rendering
         const assistantMessageItem = await context.get().optimisticCreateMessage(
           {
             content: LOADING_FLAT,
             groupId: opContext.groupId,
-            metadata: opContext.isSupervisor ? { isSupervisor: true } : undefined,
+            metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
             model: llmPayload.model,
             parentId: llmPayload.parentMessageId,
             provider: llmPayload.provider,

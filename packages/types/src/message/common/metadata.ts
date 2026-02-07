@@ -83,6 +83,8 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   isMultimodal: z.boolean().optional(),
   isSupervisor: z.boolean().optional(),
   pageSelections: z.array(PageSelectionSchema).optional(),
+  scope: z.string().optional(),
+  subAgentId: z.string().optional(),
 });
 
 export interface ModelUsage extends ModelTokensUsage {
@@ -139,6 +141,19 @@ export interface MessageMetadata extends ModelUsage, ModelPerformance {
    * Used by conversation-flow to transform role to 'supervisor' for UI rendering
    */
   isSupervisor?: boolean;
+  /**
+   * Message scope - indicates the context in which this message was created
+   * Used by conversation-flow to determine how to handle message grouping and display
+   * See MessageMapScope for available values
+   */
+  scope?: string;
+  /**
+   * Sub Agent ID - behavior depends on scope
+   * - scope: 'sub_agent': conversation-flow will transform message.agentId to this value for display
+   * - scope: 'group' | 'group_agent': indicates the agent that generated this message in group mode
+   * Used by callAgent tool (sub_agent) and group orchestration (group modes)
+   */
+  subAgentId?: string;
   /**
    * Flag indicating if message is pinned (excluded from compression)
    */
