@@ -141,10 +141,31 @@ app/
 
 **Data Flow:**
 
+Using a typical user action (e.g., updating Agent config) as an example, here's how data flows through each layer:
+
 ```plaintext
-React UI → Store Actions → Client Service
-  → tRPC Lambda → Server Services → DB Model → PostgreSQL
+React UI (src/features/, src/app/)
+  │  User interaction triggers event
+  ▼
+Store Actions (src/store/)
+  │  Zustand action updates local state, calls service
+  ▼
+Client Service (src/services/)
+  │  Wraps tRPC client call, prepares request params
+  ▼
+tRPC Router (src/server/routers/lambda/)
+  │  Validates input (zod), routes to service
+  ▼
+Server Service (src/server/services/)
+  │  Executes business logic, calls DB model
+  ▼
+DB Model (packages/database/src/models/)
+  │  Wraps Drizzle ORM queries
+  ▼
+PostgreSQL
 ```
+
+For data reads, the flow is reversed: UI consumes data via store selectors, and stores fetch from the backend via SWR + tRPC queries.
 
 ### Routing Architecture
 

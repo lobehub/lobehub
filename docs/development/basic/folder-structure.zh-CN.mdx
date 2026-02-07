@@ -137,10 +137,31 @@ app/
 
 **数据流：**
 
+以一个典型的用户操作（如更新 Agent 配置）为例，数据在各层之间的流转：
+
 ```plaintext
-React UI → Store Actions → Client Service
-  → tRPC Lambda → Server Services → DB Model → PostgreSQL
+React UI (src/features/, src/app/)
+  │  用户交互触发事件
+  ▼
+Store Actions (src/store/)
+  │  zustand action 更新本地状态，调用 service
+  ▼
+Client Service (src/services/)
+  │  封装 tRPC 客户端调用，处理请求参数
+  ▼
+tRPC Router (src/server/routers/lambda/)
+  │  校验输入（zod），路由到对应 service
+  ▼
+Server Service (src/server/services/)
+  │  执行业务逻辑，调用 DB model
+  ▼
+DB Model (packages/database/src/models/)
+  │  封装 Drizzle ORM 查询
+  ▼
+PostgreSQL
 ```
+
+读取数据的流程方向相反：UI 通过 store selector 消费数据，store 通过 SWR + tRPC query 从后端拉取。
 
 ### 路由架构
 
