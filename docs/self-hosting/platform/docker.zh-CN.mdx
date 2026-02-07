@@ -87,6 +87,8 @@ tags:
   # 用于 S3 API 访问的域名
   S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com
   S3_BUCKET=LobeHub
+  # 用于外网访问 S3 的公共域名，需配置 CORS
+  S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com
   # S3_REGION=ap-chengdu # 如果需要指定地域
 
   ```
@@ -144,6 +146,7 @@ $ docker run -it -d --name lobehub -p 3210:3210 \
   -e S3_SECRET_ACCESS_KEY=xxxxxxxxxx \
   -e S3_ENDPOINT=https://xxxxxxxxxx.r2.cloudflarestorage.com \
   -e S3_BUCKET=LobeHub \
+  -e S3_PUBLIC_DOMAIN=https://s3-for-LobeHub.your-domain.com \
   lobehub/lobehub
 ```
 
