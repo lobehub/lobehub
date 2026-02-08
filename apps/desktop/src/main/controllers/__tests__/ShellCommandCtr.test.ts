@@ -264,8 +264,8 @@ describe('ShellCommandCtr', () => {
         mockChildProcess.stdout.on.mockImplementation((event: string, callback: any) => {
           if (event === 'data') {
             stdoutCallback = callback;
-            // Simulate very long output (15k characters)
-            const longOutput = 'x'.repeat(15_000);
+            // Simulate very long output (100k characters, exceeding 80k MAX_OUTPUT_LENGTH)
+            const longOutput = 'x'.repeat(100_000);
             setTimeout(() => stdoutCallback(Buffer.from(longOutput)), 5);
           }
           return mockChildProcess.stdout;
@@ -279,8 +279,8 @@ describe('ShellCommandCtr', () => {
         });
 
         expect(result.success).toBe(true);
-        // Output should be truncated to ~10k + truncation message
-        expect(result.stdout!.length).toBeLessThan(15_000);
+        // Output should be truncated to 80k + truncation message
+        expect(result.stdout!.length).toBeLessThan(100_000);
         expect(result.stdout).toContain('truncated');
         expect(result.stdout).toContain('more characters');
       });
