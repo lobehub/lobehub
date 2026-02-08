@@ -36,7 +36,7 @@ export const params = {
             error: errorResponse.status,
             errorType: AgentRuntimeErrorType.ProviderBizError,
             message:
-              '请检查 API Key 余额是否充足，或者是否在用未实名的 API Key 访问需要实名的模型。',
+              'Please check if the API Key balance is sufficient, or if you are using an unverified API Key to access models that require verification.',
           };
         }
       }
@@ -57,10 +57,10 @@ export const params = {
       };
 
       if (thinking) {
-        // 只有部分模型支持指定 enable_thinking，其余一些慢思考模型只支持调节 thinking budget
+        // Only some models support specifying enable_thinking, while other slow-thinking models only support adjusting thinking budget
         const hybridThinkingModels = [
-          /GLM-4\.5(?!.*Air$)/, // GLM-4.5 和 GLM-4.5V（不包含 GLM-4.5 Air）
-          /Qwen3-(?:\d+B|\d+B-A\d+B)$/, // Qwen3-8B、Qwen3-14B、Qwen3-32B、Qwen3-30B-A3B、Qwen3-235B-A22B
+          /GLM-4\.5(?!.*Air$)/, // GLM-4.5 and GLM-4.5V (excluding GLM-4.5 Air)
+          /Qwen3-(?:\d+B|\d+B-A\d+B)$/, // Qwen3-8B, Qwen3-14B, Qwen3-32B, Qwen3-30B-A3B, Qwen3-235B-A22B
           /DeepSeek-V3\.1/,
           /Hunyuan-A13B-Instruct/,
         ];
