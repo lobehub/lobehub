@@ -459,6 +459,27 @@
     "registry": "https://registry.npmjs.org"
   },
   "pnpm": {
+    "onlyBuiltDependencies": [
+      "@lobehub/editor",
+      "@playwright/browser-chromium",
+      "@scarf/scarf",
+      "@swc/core",
+      "@tree-sitter-grammars/tree-sitter-yaml",
+      "@vercel/speed-insights",
+      "better-sqlite3",
+      "core-js",
+      "core-js-pure",
+      "electron",
+      "es5-ext",
+      "esbuild",
+      "onnxruntime-node",
+      "promptfoo",
+      "protobufjs",
+      "sharp",
+      "tree-sitter",
+      "tree-sitter-json",
+      "unrs-resolver"
+    ],
     "overrides": {
       "@lobehub/ui": "4.33.4",
       "better-auth": "1.4.6",
