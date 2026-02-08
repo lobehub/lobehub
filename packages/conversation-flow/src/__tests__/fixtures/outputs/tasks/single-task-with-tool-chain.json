@@ -16,8 +16,39 @@
       "type": "assistantGroup"
     },
     {
-      "id": "msg-task-1",
+      "id": "msg-tool-1",
       "type": "message"
+    },
+    {
+      "activeBranchIndex": 1,
+      "branches": [
+        [
+          {
+            "id": "msg-task-1",
+            "type": "message"
+          }
+        ],
+        [
+          {
+            "children": [
+              {
+                "id": "msg-assistant-2",
+                "type": "message",
+                "tools": ["msg-tool-2"]
+              },
+              {
+                "id": "msg-assistant-summary",
+                "type": "message"
+              }
+            ],
+            "id": "msg-assistant-2",
+            "type": "assistantGroup"
+          }
+        ]
+      ],
+      "id": "branch-msg-tool-1-0",
+      "parentMessageId": "msg-tool-1",
+      "type": "branch"
     }
   ],
   "flatList": [
@@ -78,7 +109,53 @@
             "totalOutputTokens": 177,
             "totalTokens": 12501
           }
-        },
+        }
+      ],
+      "performance": {
+        "ttft": 3163,
+        "duration": 5611,
+        "latency": 8774,
+        "tps": 31.55
+      },
+      "usage": {
+        "totalInputTokens": 12324,
+        "totalOutputTokens": 177,
+        "totalTokens": 12501,
+        "cost": 0.024045
+      }
+    },
+    {
+      "id": "msg-task-1",
+      "role": "task",
+      "content": "Once upon a time in a small village nestled between mountains, there lived an old watchmaker...",
+      "parentId": "msg-tool-1",
+      "createdAt": 1739032814033,
+      "updatedAt": 1739032856164,
+      "metadata": {
+        "taskTitle": "Write 400-word story and save to Notebook",
+        "instruction": "Write a ~400 word short story, then save it to Notebook."
+      },
+      "taskDetail": {
+        "duration": 36125,
+        "status": "completed",
+        "threadId": "thd_story_task",
+        "title": "Write 400-word story and save to Notebook",
+        "totalCost": 0.014107,
+        "totalMessages": 2,
+        "totalTokens": 4743,
+        "totalToolCalls": 0
+      }
+    },
+    {
+      "id": "msg-assistant-2",
+      "role": "assistantGroup",
+      "content": "",
+      "parentId": "msg-tool-1",
+      "createdAt": 1739032858762,
+      "updatedAt": 1739032876226,
+      "model": "gpt-4",
+      "provider": "openai",
+      "children": [
         {
           "content": "",
           "id": "msg-assistant-2",
@@ -135,38 +212,16 @@
         }
       ],
       "performance": {
-        "ttft": 3163,
-        "duration": 16010,
-        "latency": 25095,
-        "tps": 44.68666666666667
+        "ttft": 3135,
+        "duration": 10399,
+        "latency": 16321,
+        "tps": 51.254999999999995
       },
       "usage": {
-        "totalInputTokens": 38387,
-        "totalOutputTokens": 825,
-        "totalTokens": 39212,
-        "cost": 0.059576000000000004
-      }
-    },
-    {
-      "id": "msg-task-1",
-      "role": "task",
-      "content": "Once upon a time in a small village nestled between mountains, there lived an old watchmaker...",
-      "parentId": "msg-tool-1",
-      "createdAt": 1739032814033,
-      "updatedAt": 1739032856164,
-      "metadata": {
-        "taskTitle": "Write 400-word story and save to Notebook",
-        "instruction": "Write a ~400 word short story, then save it to Notebook."
-      },
-      "taskDetail": {
-        "duration": 36125,
-        "status": "completed",
-        "threadId": "thd_story_task",
-        "title": "Write 400-word story and save to Notebook",
-        "totalCost": 0.014107,
-        "totalMessages": 2,
-        "totalTokens": 4743,
-        "totalToolCalls": 0
+        "totalInputTokens": 26063,
+        "totalOutputTokens": 648,
+        "totalTokens": 26711,
+        "cost": 0.035531
       }
     }
   ],
