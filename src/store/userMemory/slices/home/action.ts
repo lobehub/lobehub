@@ -13,7 +13,7 @@ const FETCH_PERSONA_KEY = 'useFetchPersona';
 const n = (namespace: string) => namespace;
 
 export interface HomeAction {
-  useFetchPersona: () => SWRResponse<PersonaData>;
+  useFetchPersona: () => SWRResponse<PersonaData | null>;
   useFetchTags: () => SWRResponse<QueryIdentityRolesResult>;
 }
 
@@ -25,10 +25,10 @@ export const createHomeSlice: StateCreator<
 > = (set) => ({
   useFetchPersona: () =>
     useClientDataSWR(FETCH_PERSONA_KEY, () => userMemoryService.getPersona(), {
-      onSuccess: (data: PersonaData | undefined) => {
+      onSuccess: (data: PersonaData | null | undefined) => {
         set(
           {
-            persona: data,
+            persona: data ?? undefined,
             personaInit: true,
           },
           false,
