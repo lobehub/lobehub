@@ -308,7 +308,7 @@ export const conversationLifecycle: StateCreator<
         // Check if error is due to cancellation
         if (!isAbort) {
           get().updateOperationMetadata(operationId, { inputSendErrorMsg: e.message });
-          get().mainInputEditor?.setJSONState(jsonState);
+          get().mainInputEditor?.setDocument('markdown', message);
         }
       }
     } finally {

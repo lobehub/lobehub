@@ -9,13 +9,20 @@ export interface ChatInputEditor {
   getJSONState: () => any;
   getMarkdownContent: () => string;
   instance: IEditor;
+  setDocument: (type: string, content: any, options?: Record<string, unknown>) => void;
   setExpand: (expand: boolean) => void;
   setJSONState: (content: any) => void;
 }
 export const useChatInputEditor = () => {
-  const [editor, getMarkdownContent, getJSONState, setExpand, setJSONState] = useChatInputStore(
-    (s) => [s.editor, s.getMarkdownContent, s.getJSONState, s.setExpand, s.setJSONState],
-  );
+  const [editor, getMarkdownContent, getJSONState, setExpand, setJSONState, setDocument] =
+    useChatInputStore((s) => [
+      s.editor,
+      s.getMarkdownContent,
+      s.getJSONState,
+      s.setExpand,
+      s.setJSONState,
+      s.setDocument,
+    ]);
 
   return useMemo<ChatInputEditor>(
     () => ({
@@ -28,6 +35,7 @@ export const useChatInputEditor = () => {
       getJSONState,
       getMarkdownContent,
       instance: editor!,
+      setDocument,
       setExpand,
       setJSONState,
     }),
