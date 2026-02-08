@@ -163,6 +163,8 @@ export function defineConfig() {
     '/api/workflows(.*)',
     '/api/agent(.*)',
     '/api/dev(.*)',
+    '/api/version',
+    '/api/desktop/(.*)',
     '/webapi(.*)',
     '/trpc(.*)',
     // better auth
@@ -180,6 +182,7 @@ export function defineConfig() {
     '/market-auth-callback',
     // public share pages
     '/share(.*)',
+    // version
   ]);
 
   const betterAuthMiddleware = async (req: NextRequest) => {
