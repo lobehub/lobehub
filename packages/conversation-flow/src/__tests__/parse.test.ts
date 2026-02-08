@@ -257,6 +257,12 @@ describe('parse', () => {
       expect(result.flatList[3].content).toContain('All 10 tasks completed');
     });
 
+    it('should handle single task (execTask) with tool chain after completion', () => {
+      const result = parse(inputs.tasks.singleTaskWithToolChain);
+
+      expect(serializeParseResult(result)).toEqual(outputs.tasks.singleTaskWithToolChain);
+    });
+
     it('should merge assistant with tools after task into AssistantGroup', () => {
       const result = parse(inputs.tasks.withAssistantGroup);
 
