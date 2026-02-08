@@ -76,7 +76,7 @@ export interface OperationActions {
    *
    * Returns full MessageMapKeyInput for consistent key generation
    *
-   * Migration Note (LOBE-1086):
+   * Migration Note:
    * - Only agentId is used for message association
    * - Backend handles sessionId mapping internally based on agentId
    */
