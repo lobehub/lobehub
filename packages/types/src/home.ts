@@ -17,11 +17,15 @@ export interface GroupMemberAvatar {
 export interface SidebarAgentItem {
   /**
    * Avatar can be:
-   * - string: single avatar for agents
-   * - GroupMemberAvatar[]: array of member avatars for groups
+   * - string: single avatar for agents or custom group avatar
+   * - GroupMemberAvatar[]: array of member avatars for groups (when no custom avatar)
    * - null: no avatar
    */
   avatar?: GroupMemberAvatar[] | string | null;
+  /**
+   * Background color for the avatar (used for custom group avatars)
+   */
+  backgroundColor?: string | null;
   description?: string | null;
   id: string;
   pinned: boolean;
