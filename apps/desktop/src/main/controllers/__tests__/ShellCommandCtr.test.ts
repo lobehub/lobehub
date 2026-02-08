@@ -193,6 +193,62 @@ describe('ShellCommandCtr', () => {
         expect(result.stderr).toBe('error message\n');
       });
 
+      it('should strip ANSI escape codes from output', async () => {
+        let exitCallback: (code: number) => void;
+        let stdoutCallback: (data: Buffer) => void;
+        let stderrCallback: (data: Buffer) => void;
+
+        mockChildProcess.on.mockImplementation((event: string, callback: any) => {
+          if (event === 'exit') {
+            exitCallback = callback;
+            setTimeout(() => exitCallback(0), 10);
+          }
+          return mockChildProcess;
+        });
+
+        mockChildProcess.stdout.on.mockImplementation((event: string, callback: any) => {
+          if (event === 'data') {
+            stdoutCallback = callback;
+            // Simulate output with ANSI color codes
+            setTimeout(
+              () =>
+                stdoutCallback(
+                  Buffer.from(
+                    '\x1b[38;5;250m███████╗\x1b[0m\n\x1b[1;32mSuccess\x1b[0m\n\x1b[31mError\x1b[0m',
+                  ),
+                ),
+              5,
+            );
+          }
+          return mockChildProcess.stdout;
+        });
+
+        mockChildProcess.stderr.on.mockImplementation((event: string, callback: any) => {
+          if (event === 'data') {
+            stderrCallback = callback;
+            setTimeout(
+              () => stderrCallback(Buffer.from('\x1b[33mwarning:\x1b[0m something happened')),
+              5,
+            );
+          }
+          return mockChildProcess.stderr;
+        });
+
+        const result = await shellCommandCtr.handleRunCommand({
+          command: 'npx skills find react',
+          description: 'search skills',
+        });
+
+        expect(result.success).toBe(true);
+        // ANSI codes should be stripped
+        expect(result.stdout).not.toContain('\x1b[');
+        expect(result.stdout).toContain('███████╗');
+        expect(result.stdout).toContain('Success');
+        expect(result.stdout).toContain('Error');
+        expect(result.stderr).not.toContain('\x1b[');
+        expect(result.stderr).toContain('warning: something happened');
+      });
+
       it('should truncate long output to prevent context explosion', async () => {
         let exitCallback: (code: number) => void;
         let stdoutCallback: (data: Buffer) => void;

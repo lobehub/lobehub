@@ -16,15 +16,26 @@ import { ControllerModule, IpcMethod } from './index';
 const logger = createLogger('controllers:ShellCommandCtr');
 
 // Maximum output length to prevent context explosion
-const MAX_OUTPUT_LENGTH = 10_000;
+const MAX_OUTPUT_LENGTH = 80_000;
+
+/**
+ * Strip ANSI escape codes from terminal output
+ */
+// eslint-disable-next-line no-control-regex
+const ANSI_REGEX = /\u001B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g;
+const stripAnsi = (str: string): string => str.replaceAll(ANSI_REGEX, '');
 
 /**
  * Truncate string to max length with ellipsis indicator
  */
 const truncateOutput = (str: string, maxLength: number = MAX_OUTPUT_LENGTH): string => {
-  if (str.length <= maxLength) return str;
+  const cleaned = stripAnsi(str);
+  if (cleaned.length <= maxLength) return cleaned;
   return (
-    str.slice(0, maxLength) + '\n... [truncated, ' + (str.length - maxLength) + ' more characters]'
+    cleaned.slice(0, maxLength) +
+    '\n... [truncated, ' +
+    (cleaned.length - maxLength) +
+    ' more characters]'
   );
 };
 
