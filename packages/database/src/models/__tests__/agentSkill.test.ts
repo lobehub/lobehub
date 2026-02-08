@@ -137,7 +137,8 @@ describe('AgentSkillModel', () => {
       ]);
 
       const skills = await agentSkillModel.findAll();
-      expect(skills).toHaveLength(2);
+      expect(skills.data).toHaveLength(2);
+      expect(skills.total).toBe(2);
     });
   });
 
@@ -294,7 +295,8 @@ describe('AgentSkillModel', () => {
       ]);
 
       const results = await agentSkillModel.search('coding');
-      expect(results).toHaveLength(1);
+      expect(results.data).toHaveLength(1);
+      expect(results.total).toBe(1);
     });
   });
 });
