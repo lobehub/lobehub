@@ -11,6 +11,7 @@ import {
   ReactListPlugin,
   ReactMathPlugin,
   ReactTablePlugin,
+  ReactVirtualBlockPlugin,
 } from '@lobehub/editor';
 import { Editor, FloatMenu, SlashMenu, useEditorState } from '@lobehub/editor/react';
 import { combineKeys } from '@lobehub/ui';
@@ -99,6 +100,7 @@ const InputEditor = memo<{ defaultRows?: number }>(({ defaultRows = 2 }) => {
               ReactHRPlugin,
               ReactLinkHighlightPlugin,
               ReactTablePlugin,
+              ReactVirtualBlockPlugin,
               Editor.withProps(ReactMathPlugin, {
                 renderComp: expand
                   ? undefined
