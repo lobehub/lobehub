@@ -539,6 +539,13 @@
       "when": 1770179814971,
       "tag": "0076_add_message_group_index",
       "breakpoints": true
+    },
+    {
+      "idx": 77,
+      "version": "7",
+      "when": 1770392264696,
+      "tag": "0077_add_agent_skills",
+      "breakpoints": true
     }
   ],
   "version": "6"

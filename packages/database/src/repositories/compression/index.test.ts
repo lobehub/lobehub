@@ -315,7 +315,7 @@ describe('CompressionRepository', () => {
    * 2. Compression groups should appear as aggregated nodes
    * 3. Pinned (favorite) messages within compression groups should be extracted
    */
-  describe('MessageGroup aggregation query scenarios (LOBE-2066)', () => {
+  describe('MessageGroup aggregation query scenarios', () => {
     describe('compressed messages filtering', () => {
       it('should exclude compressed messages from uncompressed query', async () => {
         // Setup: Create 5 messages, compress 3 of them
