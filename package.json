@@ -152,7 +152,7 @@
     "@azure-rest/ai-inference": "1.0.0-beta.5",
     "@azure/core-auth": "^1.10.1",
     "@better-auth/expo": "1.4.6",
-    "@better-auth/passkey": "1.4.6",
+    "@better-auth/passkey": "1.4.18",
     "@cfworker/json-schema": "^4.1.1",
     "@codesandbox/sandpack-react": "^2.20.0",
     "@dnd-kit/core": "^6.3.1",
