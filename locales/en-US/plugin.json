@@ -171,6 +171,7 @@
   "builtins.lobe-page-agent.apiName.wrapNodes": "Wrap nodes",
   "builtins.lobe-page-agent.title": "Page",
   "builtins.lobe-skills.apiName.execScript": "Run Script",
+  "builtins.lobe-skills.apiName.exportFile": "Export File",
   "builtins.lobe-skills.apiName.importSkill": "Import Skill",
   "builtins.lobe-skills.apiName.readReference": "Read Reference",
   "builtins.lobe-skills.apiName.runSkill": "Activate Skill",

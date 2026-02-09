@@ -11,12 +11,12 @@ class CloudSandboxService {
    * Call a cloud sandbox tool
    * @param toolName - The name of the tool to call (e.g., 'runCommand', 'writeLocalFile')
    * @param params - The parameters for the tool
-   * @param context - Session context containing userId and topicId for isolation
+   * @param context - Session context containing topicId and optional userId for isolation
    */
   async callTool(
     toolName: string,
     params: Record<string, any>,
-    context: { topicId: string; userId: string },
+    context: { topicId: string; userId?: string },
   ): Promise<CallToolResult> {
     const input: CallCodeInterpreterToolInput = {
       params,

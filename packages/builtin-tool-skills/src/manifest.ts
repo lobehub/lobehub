@@ -43,7 +43,7 @@ export const SkillsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        "Execute a shell command or script specified in a skill's instructions. Use this when a skill's content instructs you to run CLI commands (e.g., npx, npm, pip). Returns the command output.",
+        "Execute a shell command or script specified in a skill's instructions. Use this when a skill's content instructs you to run CLI commands (e.g., npx, npm, pip). IMPORTANT: Always include the 'config' parameter with the current skill's id and name (obtained from runSkill's state) so the system can locate skill resources. Returns the command output.",
       humanIntervention: 'required',
       name: SkillsApiName.execScript,
       parameters: {
@@ -51,6 +51,25 @@ export const SkillsManifest: BuiltinToolManifest = {
           command: {
             description: 'The shell command to execute.',
             type: 'string',
+          },
+          config: {
+            description:
+              'REQUIRED: Current skill context. Must include the id and name from the most recent runSkill call. The server uses this to locate skill resources (e.g., ZIP package for skill files). Example: { "id": "skill_xxx", "name": "skill-name", "description": "..." }',
+            properties: {
+              description: {
+                description: "Current skill's description (optional)",
+                type: 'string',
+              },
+              id: {
+                description: "Current skill's ID from runSkill state (required for resource lookup)",
+                type: 'string',
+              },
+              name: {
+                description: "Current skill's name from runSkill state (required for resource lookup)",
+                type: 'string',
+              },
+            },
+            type: 'object',
           },
           description: {
             description:
@@ -66,6 +85,26 @@ export const SkillsManifest: BuiltinToolManifest = {
           }),
         },
         required: ['description', 'command'],
+        type: 'object',
+      },
+    },
+    {
+      description:
+        'Export a file generated during skill execution to cloud storage. Use this to save outputs, results, or generated files for the user to download. The file will be uploaded and a permanent download URL will be returned.',
+      name: SkillsApiName.exportFile,
+      parameters: {
+        properties: {
+          filename: {
+            description: 'The name for the exported file (e.g., "result.csv", "output.pdf")',
+            type: 'string',
+          },
+          path: {
+            description:
+              'The path of the file in the skill execution environment to export (e.g., "./output/result.csv")',
+            type: 'string',
+          },
+        },
+        required: ['path', 'filename'],
         type: 'object',
       },
     },

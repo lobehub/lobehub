@@ -171,6 +171,7 @@
   "builtins.lobe-page-agent.apiName.wrapNodes": "包装节点",
   "builtins.lobe-page-agent.title": "文档",
   "builtins.lobe-skills.apiName.execScript": "执行脚本",
+  "builtins.lobe-skills.apiName.exportFile": "导出文件",
   "builtins.lobe-skills.apiName.importSkill": "导入技能",
   "builtins.lobe-skills.apiName.readReference": "读取参考资料",
   "builtins.lobe-skills.apiName.runSkill": "激活技能",

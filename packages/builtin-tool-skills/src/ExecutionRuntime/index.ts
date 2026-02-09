@@ -10,6 +10,7 @@ import {
 import {
   type CommandResult,
   type ExecScriptParams,
+  type ExportFileParams,
   type ImportSkillParams,
   type ReadReferenceParams,
   type RunCommandOptions,
@@ -26,7 +27,25 @@ export interface SkillImportServiceResult {
   status: 'created' | 'updated' | 'unchanged';
 }
 
+export interface ExportFileResult {
+  fileId?: string;
+  filename: string;
+  mimeType?: string;
+  size?: number;
+  success: boolean;
+  url?: string;
+}
+
 export interface SkillRuntimeService {
+  execScript?(
+    command: string,
+    options: {
+      config?: { description?: string; id?: string; name?: string };
+      description: string;
+      runInClient?: boolean;
+    },
+  ): Promise<CommandResult>;
+  exportFile?(path: string, filename: string): Promise<ExportFileResult>;
   findAll(): Promise<{ data: SkillListItem[]; total: number }>;
   findById(id: string): Promise<SkillItem | undefined>;
   findByName(name: string): Promise<SkillItem | undefined>;
@@ -91,8 +110,37 @@ export class SkillsExecutionRuntime {
   }
 
   async execScript(args: ExecScriptParams): Promise<BuiltinServerRuntimeOutput> {
-    const { command, runInClient } = args;
+    const { command, runInClient, description, config } = args;
 
+    // Try new execScript method first (with cloud sandbox support)
+    if (this.service.execScript) {
+      try {
+        const result = await this.service.execScript(command, {
+          config,
+          description,
+          runInClient,
+        });
+
+        const output = [result.output, result.stderr].filter(Boolean).join('\n');
+
+        return {
+          content: output || '(no output)',
+          state: {
+            command,
+            exitCode: result.exitCode,
+            success: result.success,
+          },
+          success: true,
+        };
+      } catch (e) {
+        return {
+          content: `Failed to execute command: ${(e as Error).message}`,
+          success: false,
+        };
+      }
+    }
+
+    // Fallback to legacy runCommand method
     if (!this.service.runCommand) {
       return {
         content: 'Command execution is not available in this environment.',
@@ -117,6 +165,45 @@ export class SkillsExecutionRuntime {
     } catch (e) {
       return {
         content: `Failed to execute command: ${(e as Error).message}`,
+        success: false,
+      };
+    }
+  }
+
+  async exportFile(args: ExportFileParams): Promise<BuiltinServerRuntimeOutput> {
+    const { path, filename } = args;
+
+    if (!this.service.exportFile) {
+      return {
+        content: 'File export is not available in this environment.',
+        success: false,
+      };
+    }
+
+    try {
+      const result = await this.service.exportFile(path, filename);
+
+      if (!result.success) {
+        return {
+          content: `Failed to export file: ${filename}`,
+          success: false,
+        };
+      }
+
+      return {
+        content: `File exported successfully: ${filename}\nDownload URL: ${result.url || 'N/A'}`,
+        state: {
+          fileId: result.fileId,
+          filename: result.filename,
+          mimeType: result.mimeType,
+          size: result.size,
+          url: result.url,
+        },
+        success: true,
+      };
+    } catch (e) {
+      return {
+        content: `Failed to export file: ${(e as Error).message}`,
         success: false,
       };
     }

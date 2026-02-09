@@ -2,6 +2,7 @@ export const SkillsIdentifier = 'lobe-skills';
 
 export const SkillsApiName = {
   execScript: 'execScript',
+  exportFile: 'exportFile',
   importSkill: 'importSkill',
   readReference: 'readReference',
   runSkill: 'runSkill',
@@ -20,6 +21,24 @@ export interface RunSkillState {
 
 export interface ExecScriptParams {
   command: string;
+  /**
+   * Skill configuration context
+   * Used by server to locate skill resources (zipUrl will be resolved server-side)
+   */
+  config?: {
+    /**
+     * Current skill's description
+     */
+    description?: string;
+    /**
+     * Current skill's ID
+     */
+    id?: string;
+    /**
+     * Current skill's name
+     */
+    name?: string;
+  };
   description: string;
   /**
    * Whether to run on the desktop client (for local shell access).
@@ -69,4 +88,23 @@ export interface ImportSkillState {
   skillId?: string;
   status: 'created' | 'updated' | 'unchanged';
   success: boolean;
+}
+
+export interface ExportFileParams {
+  /**
+   * The filename to use for the exported file
+   */
+  filename: string;
+  /**
+   * The path of the file in the skill execution environment to export
+   */
+  path: string;
+}
+
+export interface ExportFileState {
+  fileId?: string;
+  filename: string;
+  mimeType?: string;
+  size?: number;
+  url?: string;
 }
