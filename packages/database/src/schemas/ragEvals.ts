@@ -13,7 +13,10 @@ export const evalDatasets = pgTable(
   'rag_eval_datasets',
   {
     id: integer('id').generatedAlwaysAsIdentity({ startWith: 30_000 }).primaryKey(),
-    id_nanoid: text('id_nanoid').$defaultFn(() => createNanoId(16)()),
+    id_nanoid: text('id_nanoid')
+      .$defaultFn(() => createNanoId(16)())
+      .notNull()
+      .unique(),
 
     description: text('description'),
     name: text('name').notNull(),
@@ -25,9 +28,7 @@ export const evalDatasets = pgTable(
 
     ...timestamps,
   },
-  (t) => ({
-    userIdIdx: index('rag_eval_datasets_user_id_idx').on(t.userId),
-  }),
+  (t) => [index('rag_eval_datasets_user_id_idx').on(t.userId)],
 );
 
 export type NewEvalDatasetsItem = typeof evalDatasets.$inferInsert;
@@ -37,7 +38,10 @@ export const evalDatasetRecords = pgTable(
   'rag_eval_dataset_records',
   {
     id: integer('id').generatedAlwaysAsIdentity().primaryKey(),
-    id_nanoid: text('id_nanoid').$defaultFn(() => createNanoId(32)()),
+    id_nanoid: text('id_nanoid')
+      .$defaultFn(() => createNanoId(32)())
+      .notNull()
+      .unique(),
 
     datasetId: integer('dataset_id')
       .references(() => evalDatasets.id, { onDelete: 'cascade' })
@@ -51,9 +55,7 @@ export const evalDatasetRecords = pgTable(
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
     ...timestamps,
   },
-  (t) => ({
-    userIdIdx: index('rag_eval_dataset_records_user_id_idx').on(t.userId),
-  }),
+  (t) => [index('rag_eval_dataset_records_user_id_idx').on(t.userId)],
 );
 
 export type NewEvalDatasetRecordsItem = typeof evalDatasetRecords.$inferInsert;
@@ -63,7 +65,10 @@ export const evalEvaluation = pgTable(
   'rag_eval_evaluations',
   {
     id: integer('id').generatedAlwaysAsIdentity().primaryKey(),
-    id_nanoid: text('id_nanoid').$defaultFn(() => createNanoId(32)()),
+    id_nanoid: text('id_nanoid')
+      .$defaultFn(() => createNanoId(32)())
+      .notNull()
+      .unique(),
 
     name: text('name').notNull(),
     description: text('description'),
@@ -84,9 +89,7 @@ export const evalEvaluation = pgTable(
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
     ...timestamps,
   },
-  (t) => ({
-    userIdIdx: index('rag_eval_evaluations_user_id_idx').on(t.userId),
-  }),
+  (t) => [index('rag_eval_evaluations_user_id_idx').on(t.userId)],
 );
 
 export type NewEvalEvaluationItem = typeof evalEvaluation.$inferInsert;
@@ -96,7 +99,10 @@ export const evaluationRecords = pgTable(
   'rag_eval_evaluation_records',
   {
     id: integer('id').generatedAlwaysAsIdentity().primaryKey(),
-    id_nanoid: text('id_nanoid').$defaultFn(() => createNanoId(32)()),
+    id_nanoid: text('id_nanoid')
+      .$defaultFn(() => createNanoId(32)())
+      .notNull()
+      .unique(),
 
     question: text('question').notNull(),
     answer: text('answer'),
@@ -124,9 +130,7 @@ export const evaluationRecords = pgTable(
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
     ...timestamps,
   },
-  (t) => ({
-    userIdIdx: index('rag_eval_evaluation_records_user_id_idx').on(t.userId),
-  }),
+  (t) => [index('rag_eval_evaluation_records_user_id_idx').on(t.userId)],
 );
 
 export type NewEvaluationRecordsItem = typeof evaluationRecords.$inferInsert;

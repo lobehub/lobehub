@@ -560,6 +560,13 @@
       "when": 1770621892194,
       "tag": "0079_update_id_nanoid_from_casted_id",
       "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1770624987735,
+      "tag": "0080_add_constraint_unique_not_null_to_id_nanoid",
+      "breakpoints": true
     }
   ],
   "version": "6"
