@@ -574,6 +574,13 @@
       "when": 1770626135088,
       "tag": "0081_switch_forgien_key_to_id_nanoid",
       "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1770628390927,
+      "tag": "0082_set_id_nanoid_as_primary",
+      "breakpoints": true
     }
   ],
   "version": "6"

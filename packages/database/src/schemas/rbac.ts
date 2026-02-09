@@ -16,11 +16,12 @@ import { users } from './user';
 
 // Roles table
 export const roles = pgTable('rbac_roles', {
-  id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+  id: integer('id').generatedByDefaultAsIdentity(),
   id_nanoid: text('id_nanoid')
     .$defaultFn(() => createNanoId(16)())
     .notNull()
-    .unique(),
+    .unique()
+    .primaryKey(),
 
   name: text('name').notNull().unique(), // Role name, e.g.: admin, user, guest
   displayName: text('display_name').notNull(), // Display name
@@ -37,11 +38,12 @@ export type RoleItem = typeof roles.$inferSelect;
 
 // Permissions table
 export const permissions = pgTable('rbac_permissions', {
-  id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+  id: integer('id').generatedByDefaultAsIdentity(),
   id_nanoid: text('id_nanoid')
     .$defaultFn(() => createNanoId(16)())
     .notNull()
-    .unique(),
+    .unique()
+    .primaryKey(),
 
   code: text('code').notNull().unique(), // Permission code, e.g.: chat:create, file:upload
   name: text('name').notNull(), // Permission name

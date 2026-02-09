@@ -12,11 +12,12 @@ import { users } from './user';
 export const evalDatasets = pgTable(
   'rag_eval_datasets',
   {
-    id: integer('id').generatedAlwaysAsIdentity({ startWith: 30_000 }).primaryKey(),
+    id: integer('id').generatedAlwaysAsIdentity({ startWith: 30_000 }),
     id_nanoid: text('id_nanoid')
       .$defaultFn(() => createNanoId(16)())
       .notNull()
-      .unique(),
+      .unique()
+      .primaryKey(),
 
     description: text('description'),
     name: text('name').notNull(),
@@ -37,11 +38,12 @@ export type EvalDatasetsSelectItem = typeof evalDatasets.$inferSelect;
 export const evalDatasetRecords = pgTable(
   'rag_eval_dataset_records',
   {
-    id: integer('id').generatedAlwaysAsIdentity().primaryKey(),
+    id: integer('id').generatedAlwaysAsIdentity(),
     id_nanoid: text('id_nanoid')
       .$defaultFn(() => createNanoId(32)())
       .notNull()
-      .unique(),
+      .unique()
+      .primaryKey(),
 
     datasetId: text('dataset_id')
       .references(() => evalDatasets.id_nanoid, { onDelete: 'cascade' })
@@ -64,11 +66,12 @@ export type EvalDatasetRecordsSelectItem = typeof evalDatasetRecords.$inferSelec
 export const evalEvaluation = pgTable(
   'rag_eval_evaluations',
   {
-    id: integer('id').generatedAlwaysAsIdentity().primaryKey(),
+    id: integer('id').generatedAlwaysAsIdentity(),
     id_nanoid: text('id_nanoid')
       .$defaultFn(() => createNanoId(32)())
       .notNull()
-      .unique(),
+      .unique()
+      .primaryKey(),
 
     name: text('name').notNull(),
     description: text('description'),
@@ -98,11 +101,12 @@ export type EvalEvaluationSelectItem = typeof evalEvaluation.$inferSelect;
 export const evaluationRecords = pgTable(
   'rag_eval_evaluation_records',
   {
-    id: integer('id').generatedAlwaysAsIdentity().primaryKey(),
+    id: integer('id').generatedAlwaysAsIdentity(),
     id_nanoid: text('id_nanoid')
       .$defaultFn(() => createNanoId(32)())
       .notNull()
-      .unique(),
+      .unique()
+      .primaryKey(),
 
     question: text('question').notNull(),
     answer: text('answer'),
