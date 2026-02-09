@@ -29,7 +29,6 @@
   "internlm.description": "InternLM은 대규모 모델 연구 및 도구 개발에 집중하는 오픈소스 조직으로, 최신 모델과 알고리즘을 누구나 쉽게 사용할 수 있도록 효율적인 플랫폼을 제공합니다.",
   "jina.description": "2020년에 설립된 Jina AI는 선도적인 검색 AI 기업으로, 벡터 모델, 재정렬기, 소형 언어 모델을 포함한 검색 스택을 통해 신뢰성 높고 고품질의 생성형 및 멀티모달 검색 앱을 구축합니다.",
   "lmstudio.description": "LM Studio는 데스크탑에서 LLM을 개발하고 실험할 수 있는 애플리케이션입니다.",
-  "lobehub.description": "LobeHub Cloud는 공식 API를 통해 AI 모델에 접근하며, 모델 토큰에 기반한 크레딧으로 사용량을 측정합니다.",
   "minimax.description": "2021년에 설립된 MiniMax는 텍스트, 음성, 비전 등 멀티모달 기반의 범용 AI를 개발하며, 조 단위 파라미터의 MoE 텍스트 모델과 Hailuo AI와 같은 앱을 제공합니다.",
   "mistral.description": "Mistral은 복잡한 추론, 다국어 작업, 코드 생성에 적합한 고급 범용, 특화, 연구용 모델을 제공하며, 사용자 정의 통합을 위한 함수 호출 기능도 지원합니다.",
   "modelscope.description": "ModelScope는 Alibaba Cloud의 모델 서비스 플랫폼으로, 다양한 AI 모델과 추론 서비스를 제공합니다.",
