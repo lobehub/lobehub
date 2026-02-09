@@ -2,6 +2,7 @@
 import { boolean, index, integer, pgTable, text, varchar } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
+import { createNanoId } from '../utils/idGenerator';
 import { timestamps, timestamptz } from './_helpers';
 import { users } from './user';
 
@@ -9,6 +10,7 @@ export const apiKeys = pgTable(
   'api_keys',
   {
     id: integer('id').primaryKey().generatedByDefaultAsIdentity(), // auto-increment primary key
+    id_nanoid: text('id_nanoid').$defaultFn(() => createNanoId(16)()),
     name: varchar('name', { length: 256 }).notNull(), // name of the API key
     key: varchar('key', { length: 256 }).notNull().unique(), // API key
     enabled: boolean('enabled').default(true), // whether the API key is enabled

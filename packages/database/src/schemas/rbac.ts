@@ -10,12 +10,15 @@ import {
   timestamp,
 } from 'drizzle-orm/pg-core';
 
+import { createNanoId } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
 import { users } from './user';
 
 // Roles table
 export const roles = pgTable('rbac_roles', {
   id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+  id_nanoid: text('id_nanoid').$defaultFn(() => createNanoId(16)()),
+
   name: text('name').notNull().unique(), // Role name, e.g.: admin, user, guest
   displayName: text('display_name').notNull(), // Display name
   description: text('description'), // Role description
@@ -32,6 +35,8 @@ export type RoleItem = typeof roles.$inferSelect;
 // Permissions table
 export const permissions = pgTable('rbac_permissions', {
   id: integer('id').primaryKey().generatedByDefaultAsIdentity(),
+  id_nanoid: text('id_nanoid').$defaultFn(() => createNanoId(16)()),
+
   code: text('code').notNull().unique(), // Permission code, e.g.: chat:create, file:upload
   name: text('name').notNull(), // Permission name
   description: text('description'), // Permission description

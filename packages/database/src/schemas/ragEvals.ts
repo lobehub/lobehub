@@ -3,6 +3,7 @@ import { DEFAULT_MODEL } from '@lobechat/const';
 import { EvalEvaluationStatus } from '@lobechat/types';
 import { index, integer, jsonb, pgTable, text, uuid } from 'drizzle-orm/pg-core';
 
+import { createNanoId } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
 import { knowledgeBases } from './file';
 import { embeddings } from './rag';
@@ -12,6 +13,7 @@ export const evalDatasets = pgTable(
   'rag_eval_datasets',
   {
     id: integer('id').generatedAlwaysAsIdentity({ startWith: 30_000 }).primaryKey(),
+    id_nanoid: text('id_nanoid').$defaultFn(() => createNanoId(16)()),
 
     description: text('description'),
     name: text('name').notNull(),
@@ -35,6 +37,8 @@ export const evalDatasetRecords = pgTable(
   'rag_eval_dataset_records',
   {
     id: integer('id').generatedAlwaysAsIdentity().primaryKey(),
+    id_nanoid: text('id_nanoid').$defaultFn(() => createNanoId(32)()),
+
     datasetId: integer('dataset_id')
       .references(() => evalDatasets.id, { onDelete: 'cascade' })
       .notNull(),
@@ -59,6 +63,8 @@ export const evalEvaluation = pgTable(
   'rag_eval_evaluations',
   {
     id: integer('id').generatedAlwaysAsIdentity().primaryKey(),
+    id_nanoid: text('id_nanoid').$defaultFn(() => createNanoId(32)()),
+
     name: text('name').notNull(),
     description: text('description'),
 
@@ -90,6 +96,7 @@ export const evaluationRecords = pgTable(
   'rag_eval_evaluation_records',
   {
     id: integer('id').generatedAlwaysAsIdentity().primaryKey(),
+    id_nanoid: text('id_nanoid').$defaultFn(() => createNanoId(32)()),
 
     question: text('question').notNull(),
     answer: text('answer'),
