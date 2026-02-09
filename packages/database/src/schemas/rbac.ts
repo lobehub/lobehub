@@ -10,7 +10,6 @@ export const roles = pgTable('rbac_roles', {
   id: text('id')
     .$defaultFn(() => createNanoId(16)())
     .notNull()
-    .unique()
     .primaryKey(),
 
   name: text('name').notNull().unique(), // Role name, e.g.: admin, user, guest
@@ -31,7 +30,6 @@ export const permissions = pgTable('rbac_permissions', {
   id: text('id')
     .$defaultFn(() => createNanoId(16)())
     .notNull()
-    .unique()
     .primaryKey(),
 
   code: text('code').notNull().unique(), // Permission code, e.g.: chat:create, file:upload

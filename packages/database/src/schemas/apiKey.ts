@@ -12,7 +12,6 @@ export const apiKeys = pgTable(
     id: text('id')
       .$defaultFn(() => createNanoId(16)())
       .notNull()
-      .unique()
       .primaryKey(),
     name: varchar('name', { length: 256 }).notNull(), // name of the API key
     key: varchar('key', { length: 256 }).notNull().unique(), // API key

@@ -595,6 +595,13 @@
       "when": 1770631019385,
       "tag": "0084_rename_id_nanoid_to_id",
       "breakpoints": true
+    },
+    {
+      "idx": 85,
+      "version": "7",
+      "when": 1770632176750,
+      "tag": "0085_remove_id_unique_constraint",
+      "breakpoints": true
     }
   ],
   "version": "6"

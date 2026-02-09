@@ -15,7 +15,6 @@ export const evalDatasets = pgTable(
     id: text('id')
       .$defaultFn(() => createNanoId(16)())
       .notNull()
-      .unique()
       .primaryKey(),
 
     description: text('description'),
@@ -40,7 +39,6 @@ export const evalDatasetRecords = pgTable(
     id: text('id')
       .$defaultFn(() => createNanoId(32)())
       .notNull()
-      .unique()
       .primaryKey(),
 
     datasetId: text('dataset_id')
@@ -67,7 +65,6 @@ export const evalEvaluation = pgTable(
     id: text('id')
       .$defaultFn(() => createNanoId(32)())
       .notNull()
-      .unique()
       .primaryKey(),
 
     name: text('name').notNull(),
@@ -101,7 +98,6 @@ export const evaluationRecords = pgTable(
     id: text('id')
       .$defaultFn(() => createNanoId(32)())
       .notNull()
-      .unique()
       .primaryKey(),
 
     question: text('question').notNull(),
