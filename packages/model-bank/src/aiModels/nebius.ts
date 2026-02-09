@@ -160,23 +160,6 @@ const nebiusChatModels: AIChatModelCard[] = [
       reasoning: true,
     },
     contextWindowTokens: 40_960,
-    displayName: 'Qwen3-30B-A3B',
-    id: 'Qwen/Qwen3-30B-A3B',
-    organization: 'Qwen',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 40_960,
     displayName: 'Qwen3-32B',
     id: 'Qwen/Qwen3-32B',
     organization: 'Qwen',
@@ -201,23 +184,6 @@ const nebiusChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.2, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 0.6, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 40_960,
-    displayName: 'Qwen3-14B',
-    id: 'Qwen/Qwen3-14B',
-    organization: 'Qwen',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.08, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.24, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -267,22 +233,6 @@ const nebiusChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.75, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 2.25, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 163_840,
-    displayName: 'DeepSeek-V3',
-    id: 'deepseek-ai/DeepSeek-V3',
-    organization: 'deepseek',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -355,22 +305,6 @@ const nebiusChatModels: AIChatModelCard[] = [
     abilities: {
       functionCall: true,
     },
-    contextWindowTokens: 131_072,
-    displayName: 'Meta-Llama-3.1-405B-Instruct',
-    id: 'meta-llama/Meta-Llama-3.1-405B-Instruct',
-    organization: 'meta',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
     contextWindowTokens: 32_768,
     displayName: 'Qwen2.5-Coder-7B (fast)',
     id: 'Qwen/Qwen2.5-Coder-7B-fast',
@@ -415,39 +349,6 @@ const nebiusChatModels: AIChatModelCard[] = [
   {
     abilities: {
       functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    displayName: 'Qwen2.5-72B-Instruct',
-    id: 'Qwen/Qwen2.5-72B-Instruct',
-    organization: 'Qwen',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.13, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.4, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-      reasoning: true,
-    },
-    contextWindowTokens: 131_072,
-    displayName: 'QwQ-32B',
-    id: 'Qwen/QwQ-32B',
-    organization: 'Qwen',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.15, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.45, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
       reasoning: true,
     },
     contextWindowTokens: 131_072,
@@ -458,22 +359,6 @@ const nebiusChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 0.5, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 1.5, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 131_072,
-    displayName: 'Hermes-3-Llama-3.1-405B',
-    id: 'NousResearch/Hermes-3-Llama-405B',
-    organization: 'NousResearch',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',
@@ -506,22 +391,6 @@ const nebiusChatModels: AIChatModelCard[] = [
       units: [
         { name: 'textInput', rate: 1, strategy: 'fixed', unit: 'millionTokens' },
         { name: 'textOutput', rate: 3, strategy: 'fixed', unit: 'millionTokens' },
-      ],
-    },
-    type: 'chat',
-  },
-  {
-    abilities: {
-      functionCall: true,
-    },
-    contextWindowTokens: 128_000,
-    displayName: 'Devstral-Small-2505',
-    id: 'mistralai/Devstral-Small-2505',
-    organization: 'mistralai',
-    pricing: {
-      units: [
-        { name: 'textInput', rate: 0.08, strategy: 'fixed', unit: 'millionTokens' },
-        { name: 'textOutput', rate: 0.24, strategy: 'fixed', unit: 'millionTokens' },
       ],
     },
     type: 'chat',

@@ -1,9 +1,8 @@
 ---
 title: LobeHub Model Service Providers - Environment Variables and Configuration
 description: >-
-  Learn about the environment variables and configuration settings for various
-  model service providers like OpenAI, Google AI, AWS Bedrock, Ollama,
-  Perplexity AI, Anthropic AI, Mistral AI, Groq AI, OpenRouter AI, and 01.AI.
+  Learn about the environment variables and configuration settings for various model service providers like OpenAI, Google AI, AWS Bedrock, Ollama, Perplexity AI, Anthropic AI, Mistral AI, Groq AI, OpenRouter AI, and 01.AI.
+
 tags:
   - Model Service Providers
   - Environment Variables
@@ -737,7 +736,10 @@ The above example disables all models first, then enables `fal-ai/flux/schnell` 
 - Example: `{"X-Auth-Token": "your-token", "X-Custom-Header": "value"}`
 
 <Callout type={'info'}>
-  ComfyUI supports multiple authentication methods. Please choose the appropriate authentication type and corresponding authentication parameters according to your ComfyUI service configuration. If your ComfyUI service has no authentication set up, you can skip configuring authentication-related environment variables.
+  ComfyUI supports multiple authentication methods. Please choose the appropriate authentication
+  type and corresponding authentication parameters according to your ComfyUI service configuration.
+  If your ComfyUI service has no authentication set up, you can skip configuring
+  authentication-related environment variables.
 </Callout>
 
 ## BFL
@@ -823,5 +825,21 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Description: Used to control the AiHubMix model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
 - Default: `-`
 - Example: `-all,+claude-opus-4-1-20250805,+claude-opus-4-20250514=claude-opus-4`
+
+## Straico
+
+### `STRAICO_API_KEY`
+
+- Type: Required
+- Description: This is the API key you applied for in the Straico service.
+- Default: -
+- Example: `sk-xxxxxx...xxxxxx`
+
+### `STRAICO_MODEL_LIST`
+
+- Type: Optional
+- Description: Used to control the Straico model list. Use `+` to add a model, `-` to hide a model, and `model_name=display_name` to customize the display name of a model. Separate multiple entries with commas. The definition syntax follows the same rules as other providers' model lists.
+- Default: `-`
+- Example: `-all,+straico-model-1,+straico-model-2=straico-special`
 
 [model-list]: /docs/self-hosting/advanced/model-list

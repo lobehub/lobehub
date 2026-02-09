@@ -251,7 +251,8 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 示例：`{"X-Auth-Token": "your-token", "X-Custom-Header": "value"}`
 
 <Callout type={'info'}>
-  ComfyUI 支持多种认证方式，请根据您的 ComfyUI 服务配置选择合适的认证类型和相应的认证参数。如果您的 ComfyUI 服务没有设置认证，可以不配置认证相关的环境变量。
+  ComfyUI 支持多种认证方式，请根据您的 ComfyUI 服务配置选择合适的认证类型和相应的认证参数。如果您的
+  ComfyUI 服务没有设置认证，可以不配置认证相关的环境变量。
 </Callout>
 
 ## DeepSeek AI
@@ -826,5 +827,21 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 描述：用来控制 AiHubMix 模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则与其他 provider 保持一致。
 - 默认值：`-`
 - 示例：`-all,+claude-opus-4-1-20250805,+claude-opus-4-20250514=claude-opus-4`
+
+## Straico
+
+### `STRAICO_API_KEY`
+
+- 类型：必选
+- 描述：这是你在 Straico 服务中申请的 API 密钥
+- 默认值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `STRAICO_MODEL_LIST`
+
+- 类型：可选
+- 描述：用来控制 Straico 模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则与其他 provider 保持一致。
+- 默认值：`-`
+- 示例：`-all,+straico-model-1,+straico-model-2=straico-special`
 
 [model-list]: /zh/docs/self-hosting/advanced/model-list

@@ -54,6 +54,7 @@
   "siliconcloud.description": "SiliconCloud 是基于强大开源模型构建的高性价比生成式 AI 云服务。",
   "spark.description": "讯飞星火提供强大的多语言 AI 能力，广泛应用于智能硬件、医疗、金融等垂直领域，推动创新发展。",
   "stepfun.description": "Stepfun 模型具备领先的多模态与复杂推理能力，支持长文本理解与强大的自主搜索编排。",
+  "straico.description": "Straico 致力于简化 AI 集成，通过提供一个整合了顶尖文本、图像和音频生成式 AI 模型的统一工作空间，赋能营销人员、企业家及爱好者等各类用户，实现对多样化 AI 工具的无缝访问。",
   "taichu.description": "太初是中科院自动化所与武汉人工智能研究院联合研发的新一代多模态模型，支持多轮问答、写作、图像生成、3D 理解与信号分析，具备更强的认知与创造力。",
   "tencentcloud.description": "腾讯云大模型知识引擎原子能力为企业与开发者提供端到端知识问答服务，支持文档解析、切分、向量化、多轮重写等模块化服务，助力构建定制 AI 方案。",
   "togetherai.description": "Together AI 提供领先性能的创新模型，支持广泛定制、快速扩展与简便部署，满足企业需求。",

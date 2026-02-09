@@ -54,6 +54,7 @@
   "siliconcloud.description": "SiliconCloud is a cost-effective GenAI cloud service built on strong open-source base models.",
   "spark.description": "iFLYTEK Spark provides powerful multilingual AI across domains, enabling innovations in smart hardware, healthcare, finance, and other verticals.",
   "stepfun.description": "Stepfun models offer leading multimodal and complex reasoning capabilities, with long-context understanding and powerful autonomous search orchestration.",
+  "straico.description": "Straico simplifies AI integration by providing a unified workspace that brings together top text, image, and audio generative AI models, empowering marketers, entrepreneurs, and enthusiasts with seamless access to diverse AI tools.",
   "taichu.description": "A next-generation multimodal model from CASIA and the Wuhan Institute of AI, supporting multi-turn QA, writing, image generation, 3D understanding, and signal analysis with stronger cognition and creativity.",
   "tencentcloud.description": "LLM Knowledge Engine Atomic Power provides end-to-end knowledge QA for enterprises and developers, with modular services like document parsing, chunking, embeddings, and multi-turn rewriting to assemble custom AI solutions.",
   "togetherai.description": "Together AI delivers leading performance with innovative models, broad customization, rapid scaling, and straightforward deployment for enterprise needs.",
