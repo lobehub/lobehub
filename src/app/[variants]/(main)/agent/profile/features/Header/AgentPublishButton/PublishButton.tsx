@@ -1,12 +1,17 @@
 import { Button } from '@lobehub/ui';
 import { ShapesUploadIcon } from '@lobehub/ui/icons';
+import { Popconfirm } from 'antd';
+import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { message } from '@/components/AntdStaticMethods';
 import { useMarketAuth } from '@/layout/AuthProvider/MarketAuth';
 import { resolveMarketAuthError } from '@/layout/AuthProvider/MarketAuth/errors';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 
+import { useVersionReviewStatus } from '../AgentVersionReviewTag';
 import ForkConfirmModal from './ForkConfirmModal';
 import type { MarketPublishAction } from './types';
 import { type OriginalAgentInfo, useMarketPublish } from './useMarketPublish';
@@ -25,9 +30,19 @@ const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess
     onSuccess: onPublishSuccess,
   });
 
+  // Check if latest version is under review
+  const { isUnderReview, loading: reviewStatusLoading } = useVersionReviewStatus();
+
+  // Agent data for validation
+  const meta = useAgentStore(agentSelectors.currentAgentMeta, isEqual);
+  const systemRole = useAgentStore(agentSelectors.currentAgentSystemRole);
+
   // Fork confirmation modal state
   const [showForkModal, setShowForkModal] = useState(false);
   const [originalAgentInfo, setOriginalAgentInfo] = useState<OriginalAgentInfo | null>(null);
+
+  // Publish confirmation popconfirm state
+  const [confirmOpened, setConfirmOpened] = useState(false);
 
   const buttonConfig = useMemo(() => {
     if (action === 'upload') {
@@ -60,7 +75,35 @@ const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess
     await publish();
   }, [checkOwnership, publish]);
 
-  const handleButtonClick = useCallback(async () => {
+  const handleButtonClick = useCallback(() => {
+    // Check if version is under review
+    if (isUnderReview) {
+      message.warning({
+        content: t('marketPublish.validation.underReview', {
+          defaultValue: 'Your new version is currently under review. Please wait for approval before publishing a new version.',
+        }),
+      });
+      return;
+    }
+
+    // Validate name and systemRole
+    if (!meta?.title || meta.title.trim() === '') {
+      message.error({ content: t('marketPublish.validation.emptyName') });
+      return;
+    }
+
+    if (!systemRole || systemRole.trim() === '') {
+      message.error({ content: t('marketPublish.validation.emptySystemRole') });
+      return;
+    }
+
+    // Open popconfirm for user confirmation
+    setConfirmOpened(true);
+  }, [isUnderReview, meta?.title, systemRole, t]);
+
+  const handleConfirmPublish = useCallback(async () => {
+    setConfirmOpened(false);
+
     if (!isAuthenticated) {
       try {
         await signIn();
@@ -94,18 +137,33 @@ const PublishButton = memo<MarketPublishButtonProps>(({ action, onPublishSuccess
   }, []);
 
   const buttonTitle = isAuthenticated ? buttonConfig.authenticated : buttonConfig.unauthenticated;
-  const loading = isLoading || isCheckingOwnership || isPublishing;
+  const loading = isLoading || isCheckingOwnership || isPublishing || reviewStatusLoading;
 
   return (
     <>
-      <Button
-        icon={ShapesUploadIcon}
-        loading={loading}
-        onClick={handleButtonClick}
-        title={buttonTitle}
+      <Popconfirm
+        arrow={false}
+        okButtonProps={{ type: 'primary' }}
+        onCancel={() => setConfirmOpened(false)}
+        onConfirm={handleConfirmPublish}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmOpened(false);
+          }
+        }}
+        open={confirmOpened}
+        placement="bottomRight"
+        title={t('marketPublish.validation.confirmPublish')}
       >
-        {t('publishToCommunity')}
-      </Button>
+        <Button
+          icon={ShapesUploadIcon}
+          loading={loading}
+          onClick={handleButtonClick}
+          title={buttonTitle}
+        >
+          {t('publishToCommunity')}
+        </Button>
+      </Popconfirm>
       <ForkConfirmModal
         loading={isPublishing}
         onCancel={handleForkCancel}

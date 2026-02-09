@@ -196,6 +196,8 @@
   "providerModels.item.modelConfig.displayName.title": "Model Görünen Adı",
   "providerModels.item.modelConfig.extendParams.extra": "Model tarafından desteklenen gelişmiş parametreleri seçin. Kontrolleri önizlemek için bir seçeneğin üzerine gelin. Hatalı yapılandırmalar istek hatalarına neden olabilir.",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "Claude modelleri için; maliyeti azaltabilir ve yanıtları hızlandırabilir.",
+  "providerModels.item.modelConfig.extendParams.options.effort.hint": "Claude Opus 4.6 için; çaba seviyesini kontrol eder (düşük/orta/yüksek/maksimum).",
+  "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "Claude Opus 4.6 için; uyarlanabilir düşünmeyi açar veya kapatır.",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "Claude, DeepSeek ve diğer akıl yürütme modelleri için; daha derin düşünmeyi etkinleştirir.",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "GPT-5 serisi için; akıl yürütme yoğunluğunu kontrol eder.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "GPT-5.1 serisi için; akıl yürütme yoğunluğunu kontrol eder.",

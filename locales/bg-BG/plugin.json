@@ -1,4 +1,5 @@
 {
+  "arguments.moreParams": "{{count}} параметъра общо",
   "arguments.title": "Аргументи",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Извличане на налични модели",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "Извличане на налични умения",

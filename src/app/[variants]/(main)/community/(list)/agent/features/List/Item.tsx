@@ -56,6 +56,7 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 const AssistantItem = memo<DiscoverAssistantItem>(
   ({
     createdAt,
+    updatedAt,
     author,
     avatar,
     title,
@@ -225,7 +226,7 @@ const AssistantItem = memo<DiscoverAssistantItem>(
               <Icon icon={ClockIcon} size={14} />
               <PublishedTime
                 className={styles.secondaryDesc}
-                date={createdAt}
+                date={updatedAt || createdAt}
                 template={'MMM DD, YYYY'}
               />
             </Flexbox>

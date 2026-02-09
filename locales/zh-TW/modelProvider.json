@@ -196,6 +196,8 @@
   "providerModels.item.modelConfig.displayName.title": "模型展示名稱",
   "providerModels.item.modelConfig.extendParams.extra": "選擇模型支援的擴充參數。將滑鼠懸停於選項上可預覽控制項。設定錯誤可能導致請求失敗。",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "適用於 Claude 模型；可降低成本並加快回應速度。",
+  "providerModels.item.modelConfig.extendParams.options.effort.hint": "適用於 Claude Opus 4.6；控制努力程度（低／中／高／最高）。",
+  "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "適用於 Claude Opus 4.6；切換是否啟用自適應思考。",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "適用於 Claude、DeepSeek 及其他推理模型；啟用更深入的思考能力。",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "適用於 GPT-5 系列；控制推理強度。",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "適用於 GPT-5.1 系列；控制推理強度。",

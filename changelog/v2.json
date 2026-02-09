@@ -1,6 +1,89 @@
 [
   {
     "children": {
+      "fixes": [
+        "Fix editor content missing when send error, use custom avatar for group chat in sidebar."
+      ],
+      "improvements": ["Update i18n."]
+    },
+    "date": "2026-02-09",
+    "version": "2.1.23"
+  },
+  {
+    "children": {
+      "fixes": ["Register Notebook tool in server runtime."]
+    },
+    "date": "2026-02-08",
+    "version": "2.1.22"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Add end-user info on OpenAI Responses API call, enable vertical scrolling for topic list on mobile."
+      ]
+    },
+    "date": "2026-02-08",
+    "version": "2.1.21"
+  },
+  {
+    "children": {
+      "fixes": [
+        "Add api/version and api/desktop to public routes, show notification when file upload fails due to storage plan limit."
+      ]
+    },
+    "date": "2026-02-08",
+    "version": "2.1.20"
+  },
+  {
+    "children": {
+      "fixes": ["Fixed in community pluings tab the lobehub skills not display."]
+    },
+    "date": "2026-02-06",
+    "version": "2.1.19"
+  },
+  {
+    "children": {},
+    "date": "2026-02-04",
+    "version": "2.1.18"
+  },
+  {
+    "children": {},
+    "date": "2026-02-04",
+    "version": "2.1.17"
+  },
+  {
+    "children": {
+      "fixes": ["Add the preview publish to market button preview check."]
+    },
+    "date": "2026-02-04",
+    "version": "2.1.16"
+  },
+  {
+    "children": {
+      "fixes": ["Fixed the agents list the show updateAt time error."]
+    },
+    "date": "2026-02-04",
+    "version": "2.1.15"
+  },
+  {
+    "children": {
+      "fixes": ["Fix cannot uncompressed messages."]
+    },
+    "date": "2026-02-04",
+    "version": "2.1.14"
+  },
+  {
+    "children": {},
+    "date": "2026-02-03",
+    "version": "2.1.13"
+  },
+  {
+    "children": {},
+    "date": "2026-02-03",
+    "version": "2.1.12"
+  },
+  {
+    "children": {
       "fixes": ["Hide password features when AUTH_DISABLE_EMAIL_PASSWORD is set."]
     },
     "date": "2026-02-02",

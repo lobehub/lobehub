@@ -2,7 +2,7 @@
 import type { BusinessEdgeConfigData } from '@lobechat/business-config/server';
 
 /**
- * EdgeConfig 完整配置类型
+ * EdgeConfig complete configuration type
  */
 export interface EdgeConfigData extends BusinessEdgeConfigData {
   /**

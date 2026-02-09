@@ -91,12 +91,12 @@ export interface LocalReadFilesParams {
 
 export interface WriteLocalFileParams {
   /**
-   * 要写入的内容
+   * Content to write
    */
   content: string;
 
   /**
-   * 要写入的文件路径
+   * File path to write to
    */
   path: string;
 }

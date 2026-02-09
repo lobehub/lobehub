@@ -201,7 +201,7 @@ export const messagePublicApi: StateCreator<
 
     get().internal_dispatchMessage({ type: 'deleteMessages', ids });
     const ctx = get().internal_getConversationContext();
-    // CRUD operations pass agentId - backend handles sessionId mapping (LOBE-1086)
+    // CRUD operations pass agentId - backend handles sessionId mapping
     const result = await messageService.removeMessages(ids, ctx);
 
     if (result?.success && result.messages) {

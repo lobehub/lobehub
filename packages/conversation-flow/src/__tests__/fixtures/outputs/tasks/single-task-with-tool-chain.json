@@ -1,0 +1,386 @@
+{
+  "contextTree": [
+    {
+      "id": "msg-user-1",
+      "type": "message"
+    },
+    {
+      "children": [
+        {
+          "id": "msg-assistant-1",
+          "type": "message",
+          "tools": ["msg-tool-1"]
+        }
+      ],
+      "id": "msg-assistant-1",
+      "type": "assistantGroup"
+    },
+    {
+      "id": "msg-tool-1",
+      "type": "message"
+    },
+    {
+      "activeBranchIndex": 1,
+      "branches": [
+        [
+          {
+            "id": "msg-task-1",
+            "type": "message"
+          }
+        ],
+        [
+          {
+            "children": [
+              {
+                "id": "msg-assistant-2",
+                "type": "message",
+                "tools": ["msg-tool-2"]
+              },
+              {
+                "id": "msg-assistant-summary",
+                "type": "message"
+              }
+            ],
+            "id": "msg-assistant-2",
+            "type": "assistantGroup"
+          }
+        ]
+      ],
+      "id": "branch-msg-tool-1-0",
+      "parentMessageId": "msg-tool-1",
+      "type": "branch"
+    }
+  ],
+  "flatList": [
+    {
+      "id": "msg-user-1",
+      "role": "user",
+      "content": "Help me create an async task to write a 400-word short story and save it to Notebook.",
+      "parentId": null,
+      "createdAt": 1739032787856,
+      "updatedAt": 1739032787856
+    },
+    {
+      "id": "msg-assistant-1",
+      "role": "assistantGroup",
+      "content": "",
+      "parentId": "msg-user-1",
+      "createdAt": 1739032788546,
+      "updatedAt": 1739032805810,
+      "model": "gpt-4",
+      "provider": "openai",
+      "children": [
+        {
+          "content": "",
+          "id": "msg-assistant-1",
+          "performance": {
+            "duration": 5611,
+            "latency": 8774,
+            "tps": 31.55,
+            "ttft": 3163
+          },
+          "tools": [
+            {
+              "id": "call_exec_task_1",
+              "type": "builtin",
+              "apiName": "execTask",
+              "arguments": "{\"description\":\"Write 400-word story and save to Notebook\",\"inheritMessages\":true,\"instruction\":\"Write a ~400 word short story, then save it to Notebook.\",\"timeout\":1800000}",
+              "identifier": "lobe-gtd",
+              "result": {
+                "content": "🚀 Triggered async task for execution:\n- Write 400-word story and save to Notebook",
+                "id": "msg-tool-1",
+                "state": {
+                  "task": {
+                    "timeout": 1800000,
+                    "description": "Write 400-word story and save to Notebook",
+                    "instruction": "Write a ~400 word short story, then save it to Notebook.",
+                    "inheritMessages": true
+                  },
+                  "type": "execTask",
+                  "parentMessageId": "msg-tool-1"
+                }
+              },
+              "result_msg_id": "msg-tool-1"
+            }
+          ],
+          "usage": {
+            "cost": 0.024045,
+            "totalInputTokens": 12324,
+            "totalOutputTokens": 177,
+            "totalTokens": 12501
+          }
+        }
+      ],
+      "performance": {
+        "ttft": 3163,
+        "duration": 5611,
+        "latency": 8774,
+        "tps": 31.55
+      },
+      "usage": {
+        "totalInputTokens": 12324,
+        "totalOutputTokens": 177,
+        "totalTokens": 12501,
+        "cost": 0.024045
+      }
+    },
+    {
+      "id": "msg-task-1",
+      "role": "task",
+      "content": "Once upon a time in a small village nestled between mountains, there lived an old watchmaker...",
+      "parentId": "msg-tool-1",
+      "createdAt": 1739032814033,
+      "updatedAt": 1739032856164,
+      "metadata": {
+        "taskTitle": "Write 400-word story and save to Notebook",
+        "instruction": "Write a ~400 word short story, then save it to Notebook."
+      },
+      "taskDetail": {
+        "duration": 36125,
+        "status": "completed",
+        "threadId": "thd_story_task",
+        "title": "Write 400-word story and save to Notebook",
+        "totalCost": 0.014107,
+        "totalMessages": 2,
+        "totalTokens": 4743,
+        "totalToolCalls": 0
+      }
+    },
+    {
+      "id": "msg-assistant-2",
+      "role": "assistantGroup",
+      "content": "",
+      "parentId": "msg-tool-1",
+      "createdAt": 1739032858762,
+      "updatedAt": 1739032876226,
+      "model": "gpt-4",
+      "provider": "openai",
+      "children": [
+        {
+          "content": "",
+          "id": "msg-assistant-2",
+          "performance": {
+            "duration": 7977,
+            "latency": 11112,
+            "tps": 71.96,
+            "ttft": 3135
+          },
+          "tools": [
+            {
+              "id": "call_create_doc_1",
+              "type": "builtin",
+              "apiName": "createDocument",
+              "arguments": "{\"content\":\"Once upon a time in a small village...\",\"description\":\"A short story about time and farewell.\",\"title\":\"Eleven Oh Seven\",\"type\":\"article\"}",
+              "identifier": "lobe-notebook",
+              "result": {
+                "content": "📝 Document \"Eleven Oh Seven\" created successfully",
+                "id": "msg-tool-2",
+                "state": {
+                  "document": {
+                    "id": "docs_K9OeJoIj6UV82Ac7",
+                    "title": "Eleven Oh Seven",
+                    "content": "Once upon a time in a small village...",
+                    "description": "A short story about time and farewell."
+                  }
+                }
+              },
+              "result_msg_id": "msg-tool-2"
+            }
+          ],
+          "usage": {
+            "cost": 0.011641,
+            "totalInputTokens": 13004,
+            "totalOutputTokens": 574,
+            "totalTokens": 13578
+          }
+        },
+        {
+          "content": "Async task completed. The story has been written and saved to Notebook as \"Eleven Oh Seven\".",
+          "id": "msg-assistant-summary",
+          "performance": {
+            "duration": 2422,
+            "latency": 5209,
+            "tps": 30.55,
+            "ttft": 2787
+          },
+          "usage": {
+            "cost": 0.02389,
+            "totalInputTokens": 13059,
+            "totalOutputTokens": 74,
+            "totalTokens": 13133
+          }
+        }
+      ],
+      "performance": {
+        "ttft": 3135,
+        "duration": 10399,
+        "latency": 16321,
+        "tps": 51.254999999999995
+      },
+      "usage": {
+        "totalInputTokens": 26063,
+        "totalOutputTokens": 648,
+        "totalTokens": 26711,
+        "cost": 0.035531
+      }
+    }
+  ],
+  "messageMap": {
+    "msg-user-1": {
+      "id": "msg-user-1",
+      "role": "user",
+      "content": "Help me create an async task to write a 400-word short story and save it to Notebook.",
+      "parentId": null,
+      "createdAt": 1739032787856,
+      "updatedAt": 1739032787856
+    },
+    "msg-assistant-1": {
+      "id": "msg-assistant-1",
+      "role": "assistant",
+      "content": "",
+      "parentId": "msg-user-1",
+      "createdAt": 1739032788546,
+      "updatedAt": 1739032805810,
+      "model": "gpt-4",
+      "provider": "openai",
+      "tools": [
+        {
+          "id": "call_exec_task_1",
+          "type": "builtin",
+          "apiName": "execTask",
+          "arguments": "{\"description\":\"Write 400-word story and save to Notebook\",\"inheritMessages\":true,\"instruction\":\"Write a ~400 word short story, then save it to Notebook.\",\"timeout\":1800000}",
+          "identifier": "lobe-gtd"
+        }
+      ],
+      "metadata": {
+        "tps": 31.55,
+        "cost": 0.024045,
+        "ttft": 3163,
+        "latency": 8774,
+        "duration": 5611,
+        "totalTokens": 12501,
+        "totalInputTokens": 12324,
+        "totalOutputTokens": 177
+      }
+    },
+    "msg-tool-1": {
+      "id": "msg-tool-1",
+      "role": "tool",
+      "content": "🚀 Triggered async task for execution:\n- Write 400-word story and save to Notebook",
+      "parentId": "msg-assistant-1",
+      "tool_call_id": "call_exec_task_1",
+      "createdAt": 1739032808194,
+      "updatedAt": 1739032811207,
+      "plugin": {
+        "apiName": "execTask",
+        "arguments": "{\"description\":\"Write 400-word story and save to Notebook\",\"inheritMessages\":true,\"instruction\":\"Write a ~400 word short story, then save it to Notebook.\",\"timeout\":1800000}",
+        "identifier": "lobe-gtd",
+        "type": "builtin"
+      },
+      "pluginState": {
+        "task": {
+          "timeout": 1800000,
+          "description": "Write 400-word story and save to Notebook",
+          "instruction": "Write a ~400 word short story, then save it to Notebook.",
+          "inheritMessages": true
+        },
+        "type": "execTask",
+        "parentMessageId": "msg-tool-1"
+      }
+    },
+    "msg-task-1": {
+      "id": "msg-task-1",
+      "role": "task",
+      "content": "Once upon a time in a small village nestled between mountains, there lived an old watchmaker...",
+      "parentId": "msg-tool-1",
+      "createdAt": 1739032814033,
+      "updatedAt": 1739032856164,
+      "metadata": {
+        "taskTitle": "Write 400-word story and save to Notebook",
+        "instruction": "Write a ~400 word short story, then save it to Notebook."
+      },
+      "taskDetail": {
+        "duration": 36125,
+        "status": "completed",
+        "threadId": "thd_story_task",
+        "title": "Write 400-word story and save to Notebook",
+        "totalCost": 0.014107,
+        "totalMessages": 2,
+        "totalTokens": 4743,
+        "totalToolCalls": 0
+      }
+    },
+    "msg-assistant-2": {
+      "id": "msg-assistant-2",
+      "role": "assistant",
+      "content": "",
+      "parentId": "msg-tool-1",
+      "createdAt": 1739032858762,
+      "updatedAt": 1739032876226,
+      "model": "gpt-4",
+      "provider": "openai",
+      "tools": [
+        {
+          "id": "call_create_doc_1",
+          "type": "builtin",
+          "apiName": "createDocument",
+          "arguments": "{\"content\":\"Once upon a time in a small village...\",\"description\":\"A short story about time and farewell.\",\"title\":\"Eleven Oh Seven\",\"type\":\"article\"}",
+          "identifier": "lobe-notebook"
+        }
+      ],
+      "metadata": {
+        "tps": 71.96,
+        "cost": 0.011641,
+        "ttft": 3135,
+        "latency": 11112,
+        "duration": 7977,
+        "totalTokens": 13578,
+        "totalInputTokens": 13004,
+        "totalOutputTokens": 574
+      }
+    },
+    "msg-tool-2": {
+      "id": "msg-tool-2",
+      "role": "tool",
+      "content": "📝 Document \"Eleven Oh Seven\" created successfully",
+      "parentId": "msg-assistant-2",
+      "tool_call_id": "call_create_doc_1",
+      "createdAt": 1739032879049,
+      "updatedAt": 1739032883458,
+      "plugin": {
+        "apiName": "createDocument",
+        "arguments": "{\"content\":\"Once upon a time in a small village...\",\"description\":\"A short story about time and farewell.\",\"title\":\"Eleven Oh Seven\",\"type\":\"article\"}",
+        "identifier": "lobe-notebook",
+        "type": "builtin"
+      },
+      "pluginState": {
+        "document": {
+          "id": "docs_K9OeJoIj6UV82Ac7",
+          "title": "Eleven Oh Seven",
+          "content": "Once upon a time in a small village...",
+          "description": "A short story about time and farewell."
+        }
+      }
+    },
+    "msg-assistant-summary": {
+      "id": "msg-assistant-summary",
+      "role": "assistant",
+      "content": "Async task completed. The story has been written and saved to Notebook as \"Eleven Oh Seven\".",
+      "parentId": "msg-tool-2",
+      "createdAt": 1739032886810,
+      "updatedAt": 1739032898616,
+      "model": "gpt-4",
+      "provider": "openai",
+      "metadata": {
+        "tps": 30.55,
+        "cost": 0.02389,
+        "ttft": 2787,
+        "latency": 5209,
+        "duration": 2422,
+        "totalTokens": 13133,
+        "totalInputTokens": 13059,
+        "totalOutputTokens": 74
+      }
+    }
+  }
+}

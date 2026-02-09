@@ -46,11 +46,6 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
         });
 
         try {
-          console.log('[chat-topic][batch] Starting batch topic processing workflow', {
-            topicIds: payload.topicIds,
-            userIds: payload.userIds,
-          });
-
           if (!payload.userIds.length) {
             span.setStatus({ code: SpanStatusCode.OK });
 
@@ -112,10 +107,6 @@ export const { POST } = serve<MemoryExtractionPayloadInput>(
               );
             }),
           );
-
-          console.log('[chat-topic][batch] Batch topic processing workflow completed', {
-            processedTopics: payload.topicIds.length,
-          });
 
           // Trigger user persona update after topic processing using the workflow client.
           await context.run(`memory:user-memory:users:${userId}`, async () => {

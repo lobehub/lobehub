@@ -49,7 +49,7 @@ export function attributesForEnv(): DetectedResourceAttributes {
 
 export function attributesCommon(): DetectedResourceAttributes {
   return {
-    [ATTR_SERVICE_NAME]: 'lobe-chat',
+    [ATTR_SERVICE_NAME]: 'lobehub',
     ...attributesForEnv(),
   };
 }

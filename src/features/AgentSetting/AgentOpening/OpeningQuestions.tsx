@@ -14,7 +14,7 @@ import { selectors } from '../store/selectors';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   empty: css`
     margin-block: 24px;
-    margin-inline: 0;
+    margin-inline: auto;
   `,
   questionItemContainer: css`
     padding-block: 8px;

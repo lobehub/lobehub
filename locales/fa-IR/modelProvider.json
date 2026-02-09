@@ -196,6 +196,8 @@
   "providerModels.item.modelConfig.displayName.title": "نام نمایشی مدل",
   "providerModels.item.modelConfig.extendParams.extra": "پارامترهای پیشرفته‌ای را که توسط مدل پشتیبانی می‌شوند انتخاب کنید. برای پیش‌نمایش کنترل‌ها، نشانگر را روی گزینه‌ها نگه دارید. پیکربندی‌های نادرست ممکن است باعث شکست درخواست شوند.",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "برای مدل‌های Claude؛ می‌تواند هزینه را کاهش داده و پاسخ‌ها را سریع‌تر کند.",
+  "providerModels.item.modelConfig.extendParams.options.effort.hint": "برای Claude Opus 4.6؛ سطح تلاش را کنترل می‌کند (کم/متوسط/زیاد/حداکثر).",
+  "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "برای Claude Opus 4.6؛ تفکر تطبیقی را فعال یا غیرفعال می‌کند.",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "برای مدل‌های Claude، DeepSeek و سایر مدل‌های استدلالی؛ امکان تفکر عمیق‌تر را فراهم می‌کند.",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "برای سری GPT-5؛ شدت استدلال را کنترل می‌کند.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "برای سری GPT-5.1؛ شدت استدلال را کنترل می‌کند.",

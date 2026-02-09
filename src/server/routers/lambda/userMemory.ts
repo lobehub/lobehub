@@ -21,9 +21,10 @@ import {
   UserMemoryIdentityModel,
   UserMemoryPreferenceModel,
 } from '@/database/models/userMemory/index';
+import { UserPersonaModel } from '@/database/models/userMemory/persona';
+import { appEnv } from '@/envs/app';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
-import { appEnv } from '@/envs/app';
 import { parseMemoryExtractionConfig } from '@/server/globalConfig/parseMemoryExtractionConfig';
 import {
   MemoryExtractionWorkflowService,
@@ -41,6 +42,7 @@ const userMemoryProcedure = authedProcedure.use(serverDatabase).use(async (opts)
       contextModel: new UserMemoryContextModel(ctx.serverDB, ctx.userId),
       experienceModel: new UserMemoryExperienceModel(ctx.serverDB, ctx.userId),
       identityModel: new UserMemoryIdentityModel(ctx.serverDB, ctx.userId),
+      personaModel: new UserPersonaModel(ctx.serverDB, ctx.userId),
       preferenceModel: new UserMemoryPreferenceModel(ctx.serverDB, ctx.userId),
       topicModel: new TopicModel(ctx.serverDB, ctx.userId),
       userMemoryModel: new UserMemoryModel(ctx.serverDB, ctx.userId),
@@ -77,7 +79,6 @@ export const userMemoryRouter = router({
       });
     }),
 
-
   // ============ Activity CRUD ============
   deleteActivity: userMemoryProcedure
     .input(z.object({ id: z.string() }))
@@ -99,13 +100,11 @@ export const userMemoryRouter = router({
       return ctx.experienceModel.delete(input.id);
     }),
 
-
   deleteIdentity: userMemoryProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       return ctx.userMemoryModel.removeIdentityEntry(input.id);
     }),
-
 
   // ============ Preference CRUD ============
   deletePreference: userMemoryProcedure
@@ -113,7 +112,6 @@ export const userMemoryRouter = router({
     .mutation(async ({ ctx, input }) => {
       return ctx.preferenceModel.delete(input.id);
     }),
-
 
   getActivities: userMemoryProcedure.query(async ({ ctx }) => {
     return ctx.userMemoryModel.searchActivities({});
@@ -145,16 +143,24 @@ export const userMemoryRouter = router({
       return {
         error: task.error,
         id: task.id,
-        metadata: initUserMemoryExtractionMetadata(task.metadata as UserMemoryExtractionMetadata | undefined),
+        metadata: initUserMemoryExtractionMetadata(
+          task.metadata as UserMemoryExtractionMetadata | undefined,
+        ),
         status: task.status as AsyncTaskStatus,
       };
     }),
 
   // ============ Persona ============
-getPersona: userMemoryProcedure.query(async () => {
-    return { content: '', summary: '' };
-  }),
+  getPersona: userMemoryProcedure.query(async ({ ctx }) => {
+    const latest = await ctx.personaModel.getLatestPersonaDocument();
 
+    if (!latest) return null;
+
+    return {
+      content: latest.persona ?? '',
+      summary: latest.tagline ?? '',
+    };
+  }),
 
   getPreferences: userMemoryProcedure.query(async ({ ctx }) => {
     return ctx.userMemoryModel.searchPreferences({});
@@ -199,8 +205,7 @@ getPersona: userMemoryProcedure.query(async () => {
         source: 'chat_topic',
       });
 
-      const initialStatus =
-        totalTopics === 0 ? AsyncTaskStatus.Success : AsyncTaskStatus.Pending;
+      const initialStatus = totalTopics === 0 ? AsyncTaskStatus.Success : AsyncTaskStatus.Pending;
       const taskId = await ctx.asyncTaskModel.create({
         metadata,
         status: initialStatus,

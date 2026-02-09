@@ -68,6 +68,14 @@ export interface DiscoverUserProfile {
   agentGroups?: DiscoverGroupAgentItem[];
   agents: DiscoverAssistantItem[];
   /**
+   * Agent groups favorited by the user
+   */
+  favoriteAgentGroups?: DiscoverGroupAgentItem[];
+  /**
+   * Agents favorited by the user
+   */
+  favoriteAgents?: DiscoverAssistantItem[];
+  /**
    * Agent groups forked by the user
    */
   forkedAgentGroups?: DiscoverGroupAgentItem[];

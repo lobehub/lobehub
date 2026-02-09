@@ -150,6 +150,7 @@
   "upload.desc": "Chi tiết: {{detail}}",
   "upload.fileOnlySupportInServerMode": "Chế độ triển khai hiện tại không hỗ trợ tải lên tệp không phải hình ảnh. Để tải tệp định dạng {{ext}}, vui lòng chuyển sang triển khai cơ sở dữ liệu máy chủ hoặc sử dụng dịch vụ {{cloud}}.",
   "upload.networkError": "Vui lòng kiểm tra kết nối mạng và đảm bảo cấu hình CORS của dịch vụ lưu trữ tệp là chính xác.",
+  "upload.storageLimitExceeded": "Dung lượng lưu trữ tệp của bạn đã đạt giới hạn của gói hiện tại. Vui lòng nâng cấp gói hoặc xóa các tệp không sử dụng để giải phóng dung lượng.",
   "upload.title": "Tải tệp thất bại. Vui lòng kiểm tra kết nối mạng hoặc thử lại sau",
   "upload.unknownError": "Lý do lỗi: {{reason}}",
   "upload.uploadFailed": "Tải tệp thất bại."

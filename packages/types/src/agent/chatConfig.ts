@@ -29,9 +29,14 @@ export interface LobeAgentChatConfig {
    */
   enableReasoning?: boolean;
   /**
+   * Whether to enable adaptive thinking (Claude Opus 4.6)
+   */
+  enableAdaptiveThinking?: boolean;
+  /**
    * Custom reasoning effort level
    */
   enableReasoningEffort?: boolean;
+  effort?: 'low' | 'medium' | 'high' | 'max';
   reasoningBudgetToken?: number;
   reasoningEffort?: 'low' | 'medium' | 'high';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
@@ -108,6 +113,8 @@ export const AgentChatConfigSchema = z.object({
   autoCreateTopicThreshold: z.number().default(2),
   compressionModelId: z.string().optional(),
   disableContextCaching: z.boolean().optional(),
+  effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
+  enableAdaptiveThinking: z.boolean().optional(),
   enableAutoCreateTopic: z.boolean().optional(),
   enableCompressHistory: z.boolean().optional(),
   enableContextCompression: z.boolean().optional(),

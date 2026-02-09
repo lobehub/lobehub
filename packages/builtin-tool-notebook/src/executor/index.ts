@@ -1,27 +1,55 @@
 /**
  * Lobe Notebook Executor
  *
- * Handles notebook document operations via tRPC API calls.
- * All operations are delegated to the server since they require database access.
+ * Handles notebook document operations.
+ * The NotebookService is injected via constructor so both client and server can provide their own implementation.
  *
  * Note: listDocuments is not exposed as a tool - it's automatically injected by the system.
  */
 import { BaseExecutor, type BuiltinToolContext, type BuiltinToolResult } from '@lobechat/types';
 
-import { notebookService } from '@/services/notebook';
-
 import {
   type CreateDocumentArgs,
   type DeleteDocumentArgs,
+  type DocumentType,
   type GetDocumentArgs,
   NotebookApiName,
   NotebookIdentifier,
   type UpdateDocumentArgs,
 } from '../types';
 
-class NotebookExecutor extends BaseExecutor<typeof NotebookApiName> {
+interface CreateDocumentParams {
+  content: string;
+  description: string;
+  title: string;
+  topicId: string;
+  type?: DocumentType;
+}
+
+interface UpdateDocumentParams {
+  append?: boolean;
+  content?: string;
+  id: string;
+  title?: string;
+}
+
+export interface NotebookServiceApi {
+  createDocument: (params: CreateDocumentParams) => Promise<any>;
+  deleteDocument: (id: string) => Promise<any>;
+  getDocument: (id: string) => Promise<any>;
+  updateDocument: (params: UpdateDocumentParams) => Promise<any>;
+}
+
+export class NotebookExecutor extends BaseExecutor<typeof NotebookApiName> {
   readonly identifier = NotebookIdentifier;
   protected readonly apiEnum = NotebookApiName;
+
+  private notebookService: NotebookServiceApi;
+
+  constructor(notebookService: NotebookServiceApi) {
+    super();
+    this.notebookService = notebookService;
+  }
 
   /**
    * Create a new document
@@ -42,7 +70,7 @@ class NotebookExecutor extends BaseExecutor<typeof NotebookApiName> {
         };
       }
 
-      const document = await notebookService.createDocument({
+      const document = await this.notebookService.createDocument({
         content: params.content,
         description: params.description,
         title: params.title,
@@ -80,7 +108,7 @@ class NotebookExecutor extends BaseExecutor<typeof NotebookApiName> {
         return { stop: true, success: false };
       }
 
-      const document = await notebookService.updateDocument(params);
+      const document = await this.notebookService.updateDocument(params);
 
       return {
         content: `✏️ Document updated successfully`,
@@ -112,7 +140,7 @@ class NotebookExecutor extends BaseExecutor<typeof NotebookApiName> {
         return { stop: true, success: false };
       }
 
-      const document = await notebookService.getDocument(params.id);
+      const document = await this.notebookService.getDocument(params.id);
 
       if (!document) {
         return {
@@ -151,7 +179,7 @@ class NotebookExecutor extends BaseExecutor<typeof NotebookApiName> {
         return { stop: true, success: false };
       }
 
-      await notebookService.deleteDocument(params.id);
+      await this.notebookService.deleteDocument(params.id);
 
       return {
         content: `🗑️ Document deleted successfully`,
@@ -170,6 +198,3 @@ class NotebookExecutor extends BaseExecutor<typeof NotebookApiName> {
     }
   };
 }
-
-// Export the executor instance for registration
-export const notebookExecutor = new NotebookExecutor();

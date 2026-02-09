@@ -1,4 +1,5 @@
 {
+  "arguments.moreParams": "Toplam {{count}} parametre",
   "arguments.title": "Argümanlar",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Mevcut modelleri al",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "Mevcut Yetenekleri al",

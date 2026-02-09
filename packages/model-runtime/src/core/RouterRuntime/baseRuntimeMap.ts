@@ -11,6 +11,7 @@ import { LobeOpenAI } from '../../providers/openai';
 import { LobeQwenAI } from '../../providers/qwen';
 import { LobeVertexAI } from '../../providers/vertexai';
 import { LobeXAI } from '../../providers/xai';
+import type { ApiType, RuntimeClass } from './apiTypes';
 
 export const baseRuntimeMap = {
   anthropic: LobeAnthropicAI,
@@ -26,4 +27,4 @@ export const baseRuntimeMap = {
   qwen: LobeQwenAI,
   vertexai: LobeVertexAI,
   xai: LobeXAI,
-};
+} satisfies Record<ApiType, RuntimeClass>;

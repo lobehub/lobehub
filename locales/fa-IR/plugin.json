@@ -1,4 +1,5 @@
 {
+  "arguments.moreParams": "{{count}} پارامتر در مجموع",
   "arguments.title": "آرگومان‌ها",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "دریافت مدل‌های موجود",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "دریافت مهارت‌های موجود",

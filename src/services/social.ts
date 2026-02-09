@@ -1,6 +1,6 @@
 import { lambdaClient } from '@/libs/trpc/client';
 
-export type SocialTargetType = 'agent' | 'plugin';
+export type SocialTargetType = 'agent' | 'plugin' | 'agent-group';
 
 export interface FollowStatus {
   isFollowing: boolean;

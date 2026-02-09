@@ -13,6 +13,8 @@ export interface UserDetailContextConfig {
   agentCount: number;
   agentGroups?: DiscoverGroupAgentItem[];
   agents: DiscoverAssistantItem[];
+  favoriteAgentGroups?: DiscoverGroupAgentItem[];
+  favoriteAgents?: DiscoverAssistantItem[];
   forkedAgentGroups?: DiscoverGroupAgentItem[];
   forkedAgents?: DiscoverAssistantItem[];
   groupCount: number;

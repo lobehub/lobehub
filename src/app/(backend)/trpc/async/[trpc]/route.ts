@@ -12,7 +12,7 @@ const handler = (req: NextRequest) => {
   const preparedReq = prepareRequestForTRPC(req);
 
   return fetchRequestHandler({
-    // 避免请求之间互相影响
+    // Avoid interference between requests
     // https://github.com/lobehub/lobe-chat/discussions/7442#discussioncomment-13658563
     allowBatching: false,
 

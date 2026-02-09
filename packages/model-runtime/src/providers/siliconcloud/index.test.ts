@@ -170,7 +170,7 @@ describe('LobeSiliconCloudAI - custom features', () => {
         });
       } catch (e: any) {
         expect(e.errorType).toBe(AgentRuntimeErrorType.ProviderBizError);
-        expect(e.message).toContain('请检查 API Key 余额是否充足');
+        expect(e.message).toContain('Please check if the API Key balance is sufficient');
       }
     });
   });

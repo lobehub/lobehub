@@ -29,6 +29,7 @@ export * from './search';
 export * from './serverConfig';
 export * from './service';
 export * from './session';
+export * from './skill';
 export * from './stepContext';
 export * from './tool';
 export * from './topic';

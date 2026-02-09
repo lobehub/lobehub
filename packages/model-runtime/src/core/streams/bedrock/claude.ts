@@ -18,7 +18,7 @@ export const AWSBedrockClaudeStream = (
     inputStartAt?: number;
     payload?: Parameters<typeof transformAnthropicStream>[2];
   },
-): ReadableStream<string> => {
+): ReadableStream<Uint8Array> => {
   const streamStack: StreamContext = { id: 'chat_' + nanoid() };
 
   const stream = res instanceof ReadableStream ? res : createBedrockStream(res);

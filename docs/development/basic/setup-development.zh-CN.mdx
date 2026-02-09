@@ -33,7 +33,7 @@ tags:
 - PNPM：我们使用 PNPM 作为管理器。你可以从 [pnpm 的官方网站](https://pnpm.io/installation) 上下载并安装。
 - Bun：我们使用 Bun 作为 npm scripts runner，你可以从 [Bun 的官方网站](https://bun.com/docs/installation) 上下载并安装。
 - Git：我们使用 Git 进行版本控制。你可以从 Git 的官方网站上下载并安装。
-- Docker：用于运行 PostgreSQL、MinIO 等服务。你可以从 [Docker 官方网站](https://www.docker.com/get-started) 下载并安装。
+- Docker：用于运行 PostgreSQL、RustFS 等服务。你可以从 [Docker 官方网站](https://www.docker.com/get-started) 下载并安装。
 - IDE：你可以选择你喜欢的集成开发环境（IDE），我们推荐使用 WebStorm/VSCode。
 
 ### VSCode 用户
@@ -63,38 +63,40 @@ pnpm i
 
 #### 3. 配置环境
 
-复制示例环境文件来创建你的 Docker Compose 配置：
+复制示例环境文件：
 
 ```bash
-cp docker-compose/local/.env.example docker-compose/local/.env
+# Docker 服务配置
+cp docker-compose/dev/.env.example docker-compose/dev/.env
+
+# Next.js 开发服务器配置
+cp .env.example.development .env
 ```
 
-根据需要编辑 `docker-compose/local/.env` 文件以适应你的开发设置。此文件包含 Docker 服务所需的所有环境变量，配置了：
+根据需要编辑这些文件：
 
-- **数据库**：带连接字符串的 PostgreSQL
-- **身份验证**：带 Casdoor SSO 的 Better Auth
-- **存储**：MinIO S3 兼容存储
-- **搜索**：SearXNG 搜索引擎
+- `docker-compose/dev/.env` - Docker 服务配置（PostgreSQL、Redis、RustFS、SearXNG）
+- `.env` - Next.js 开发服务器配置（数据库连接、S3 存储、认证等）
 
 #### 4. 启动 Docker 服务
 
 使用 Docker Compose 启动所有必需的服务：
 
 ```bash
-docker-compose -f docker-compose.development.yml up -d
+bun run dev:docker
 ```
 
 这将启动以下服务：
 
 - PostgreSQL 数据库（端口 5432）
-- MinIO 存储（端口 9000）
-- Casdoor 身份验证（端口 8000）
-- SearXNG 搜索（端口 8080）
+- Redis 缓存（端口 6379）
+- RustFS 存储（API 端口 9000，控制台端口 9001）
+- SearXNG 搜索（端口 8180）
 
 可以通过运行以下命令检查所有 Docker 服务运行状态：
 
 ```bash
-docker-compose -f docker-compose.development.yml ps
+docker compose -f docker-compose/dev/docker-compose.yml ps
 ```
 
 #### 5. 运行数据库迁移
@@ -119,83 +121,15 @@ bun run dev
 
 ![Chat Page](https://hub-apac-1.lobeobjects.space/docs/fc7b157a3bc016bc97719065f80c555c.png)
 
-## 图像生成开发
-
-在开发图像生成功能（文生图、图生图）时，Docker Compose 配置已经包含了处理生成图像和用户上传所需的所有存储服务。
-
-### 图像生成配置
-
-现有的 Docker Compose 配置已经包含了 MinIO 存储服务以及 `docker-compose/local/.env.example` 中的所有必要环境变量。无需额外配置。
-
-### 图像生成架构
-
-图像生成功能需要：
-
-- **PostgreSQL**：存储生成图像的元数据
-- **MinIO/S3**：存储实际的图像文件
-
-### 存储配置
-
-`docker-compose/local/.env.example` 文件包含所有必要的 S3 环境变量：
-
-```bash
-# S3 存储配置（本地开发使用 MinIO）
-S3_ACCESS_KEY_ID=${MINIO_ROOT_USER}
-S3_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
-S3_ENDPOINT=http://localhost:${MINIO_PORT}
-S3_BUCKET=${MINIO_LOBE_BUCKET}
-S3_ENABLE_PATH_STYLE=1  # MinIO 必需
-S3_SET_ACL=0  # MinIO 兼容性
-```
-
-### 文件存储结构
-
-生成的图像和用户上传在 MinIO 存储桶中按以下方式组织：
-
-```
-lobe/                # S3 存储桶 (MINIO_LOBE_BUCKET)
-├── generated/       # 生成的图像
-│   └── {userId}/
-│       └── {sessionId}/
-│           └── {imageId}.png
-└── uploads/         # 用户上传的图像处理文件
-    └── {userId}/
-        └── {fileId}.{ext}
-```
-
-### 图像开发工作流
-
-在开发图像生成功能时，生成的图像将：
-
-1. 由 AI 模型创建
-2. 通过预签名 URL 上传到 S3/MinIO
-3. 元数据存储在 PostgreSQL 中
-4. 通过公共 S3 URL 提供服务
-
-测试图像上传的示例代码：
-
-```typescript
-// 示例：上传生成的图像
-const uploadUrl = await trpc.upload.createPresignedUrl.mutate({
-  filename: 'generated-image.png',
-  contentType: 'image/png',
-});
-
-// 上传到 S3
-await fetch(uploadUrl, {
-  method: 'PUT',
-  body: imageBlob,
-  headers: { 'Content-Type': 'image/png' },
-});
-```
-
-### 服务地址
+## 服务地址
 
 运行 Docker Compose 开发环境时：
 
-- **PostgreSQL**：`postgres://postgres@localhost:5432/LobeHub`
-- **MinIO API**：`http://localhost:9000`
-- **MinIO 控制台**：`http://localhost:9001` (admin/CHANGE\_THIS\_PASSWORD\_IN\_PRODUCTION)
+- **PostgreSQL**：`postgres://postgres@localhost:5432/lobechat`
+- **Redis**：`redis://localhost:6379`
+- **RustFS API**：`http://localhost:9000`
+- **RustFS 控制台**：`http://localhost:9001`
+- **SearXNG**：`http://localhost:8180`
 - **应用程序**：`http://localhost:3010`
 
 ## 故障排除
@@ -205,15 +139,8 @@ await fetch(uploadUrl, {
 如遇到问题，可以重置整个服务堆栈：
 
 ```bash
-# 停止并删除所有容器
-docker-compose -f docker-compose.development.yml down
-
-# 删除卷（这将删除所有数据）
-docker-compose -f docker-compose.development.yml down -v
-
-# 重新启动
-docker-compose -f docker-compose.development.yml up -d
-pnpm db:migrate
+# 完全重置 Docker 环境（删除所有数据并重新启动）
+bun run dev:docker:reset
 ```
 
 ### 端口冲突
@@ -223,19 +150,19 @@ pnpm db:migrate
 ```bash
 # 检查端口使用情况
 lsof -i :5432  # PostgreSQL
-lsof -i :9000  # MinIO API
-lsof -i :9001  # MinIO 控制台
+lsof -i :6379  # Redis
+lsof -i :9000  # RustFS API
+lsof -i :9001  # RustFS 控制台
+lsof -i :8180  # SearXNG
 ```
 
 ### 数据库迁移
 
-配置脚本会自动运行迁移。如需手动运行：
+如需手动运行迁移：
 
 ```bash
 pnpm db:migrate
 ```
-
-注意：在使用 `pnpm dev:desktop` 的开发模式下，迁移也会在启动时自动运行。
 
 ---
 

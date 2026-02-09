@@ -2,9 +2,8 @@
  * React Router Link component wrapper.
  * Provides a Next.js-like API (href prop) while using React Router internally.
  *
- * @see RFC 147: LOBE-2850 - Phase 3
+ * @see RFC 147
  */
-
 import React, { memo } from 'react';
 import { Link as ReactRouterLink, type LinkProps as ReactRouterLinkProps } from 'react-router-dom';
 

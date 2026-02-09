@@ -1,4 +1,5 @@
 {
+  "arguments.moreParams": "Łącznie {{count}} parametrów",
   "arguments.title": "Argumenty",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Pobierz dostępne modele",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "Pobierz dostępne Umiejętności",

@@ -18,7 +18,6 @@ import {
   BookmarkIcon,
   DotIcon,
   GitBranchIcon,
-  HeartIcon,
   UsersIcon,
 } from 'lucide-react';
 import qs from 'query-string';
@@ -49,7 +48,6 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   const { mobile = isMobile } = useResponsive();
   const { isAuthenticated, signIn, session } = useMarketAuth();
   const [favoriteLoading, setFavoriteLoading] = useState(false);
-  const [likeLoading, setLikeLoading] = useState(false);
 
   const {
     memberAgents = [],
@@ -75,19 +73,11 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
   // Fetch favorite status
   const { data: favoriteStatus, mutate: mutateFavorite } = useSWR(
     identifier && isAuthenticated ? ['favorite-status', 'agent', identifier] : null,
-    () => socialService.checkFavoriteStatus('agent', identifier!),
+    () => socialService.checkFavoriteStatus('agent-group', identifier!),
     { revalidateOnFocus: false },
   );
 
   const isFavorited = favoriteStatus?.isFavorited ?? false;
-
-  // Fetch like status
-  const { data: likeStatus, mutate: mutateLike } = useSWR(
-    identifier && isAuthenticated ? ['like-status', 'agent', identifier] : null,
-    () => socialService.checkLikeStatus('agent', identifier!),
-    { revalidateOnFocus: false },
-  );
-  const isLiked = likeStatus?.isLiked ?? false;
 
   const handleFavoriteClick = async () => {
     if (!isAuthenticated) {
@@ -100,10 +90,10 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
     setFavoriteLoading(true);
     try {
       if (isFavorited) {
-        await socialService.removeFavorite('agent', identifier);
+        await socialService.removeFavorite('agent-group', identifier);
         message.success(t('assistant.unfavoriteSuccess'));
       } else {
-        await socialService.addFavorite('agent', identifier);
+        await socialService.addFavorite('agent-group', identifier);
         message.success(t('assistant.favoriteSuccess'));
       }
       await mutateFavorite();
@@ -111,31 +101,6 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
       message.error(t('assistant.favoriteFailed'));
     } finally {
       setFavoriteLoading(false);
-    }
-  };
-
-  const handleLikeClick = async () => {
-    if (!isAuthenticated) {
-      await signIn();
-      return;
-    }
-
-    if (!identifier) return;
-
-    setLikeLoading(true);
-    try {
-      if (isLiked) {
-        await socialService.unlike('agent', identifier);
-        message.success(t('assistant.unlikeSuccess'));
-      } else {
-        await socialService.like('agent', identifier);
-        message.success(t('assistant.likeSuccess'));
-      }
-      await mutateLike();
-    } catch {
-      message.error(t('assistant.likeFailed'));
-    } finally {
-      setLikeLoading(false);
     }
   };
 
@@ -192,14 +157,6 @@ const Header = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
                 {title}
               </Text>
             </Flexbox>
-            <Tooltip title={isLiked ? t('assistant.unlike') : t('assistant.like')}>
-              <ActionIcon
-                icon={HeartIcon}
-                loading={likeLoading}
-                onClick={handleLikeClick}
-                style={isLiked ? { color: '#ff4d4f' } : undefined}
-              />
-            </Tooltip>
             <Tooltip title={isFavorited ? t('assistant.unfavorite') : t('assistant.favorite')}>
               <ActionIcon
                 icon={isFavorited ? BookmarkCheckIcon : BookmarkIcon}

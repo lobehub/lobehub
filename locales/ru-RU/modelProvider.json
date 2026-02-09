@@ -196,6 +196,8 @@
   "providerModels.item.modelConfig.displayName.title": "Отображаемое имя модели",
   "providerModels.item.modelConfig.extendParams.extra": "Выберите расширенные параметры, поддерживаемые моделью. Наведите курсор на опцию, чтобы просмотреть элементы управления. Неверные настройки могут привести к сбоям запроса.",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "Для моделей Claude; может снизить стоимость и ускорить ответы.",
+  "providerModels.item.modelConfig.extendParams.options.effort.hint": "Для Claude Opus 4.6; управляет уровнем усилий (низкий/средний/высокий/максимальный).",
+  "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "Для Claude Opus 4.6; включает или отключает адаптивное мышление.",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "Для моделей Claude, DeepSeek и других с поддержкой рассуждений; активирует более глубокое мышление.",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "Для серии GPT-5; управляет интенсивностью рассуждений.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "Для серии GPT-5.1; управляет интенсивностью рассуждений.",

@@ -36,7 +36,7 @@ First, you need to install the following software:
 - PNPM: We use PNPM as the preferred package manager. You can download and install it from the [PNPM official website](https://pnpm.io/installation).
 - Bun: We use Bun as the npm scripts runner. You can download and install it from the [Bun official website](https://bun.com/docs/installation).
 - Git: We use Git for version control. You can download and install it from the Git official website.
-- Docker: Required for running PostgreSQL, MinIO, and other services. You can download and install it from the [Docker official website](https://www.docker.com/get-started).
+- Docker: Required for running PostgreSQL, RustFS, and other services. You can download and install it from the [Docker official website](https://www.docker.com/get-started).
 - IDE: You can choose your preferred integrated development environment (IDE). We recommend using WebStorm/VSCode.
 
 ### VSCode Users
@@ -66,38 +66,40 @@ pnpm i
 
 #### 3. Configure Environment
 
-Copy the example environment file to create your Docker Compose configuration:
+Copy the example environment files:
 
 ```bash
-cp docker-compose/local/.env.example docker-compose/local/.env
+# Docker services configuration
+cp docker-compose/dev/.env.example docker-compose/dev/.env
+
+# Next.js development server configuration
+cp .env.example.development .env
 ```
 
-Edit `docker-compose/local/.env` as needed for your development setup. This file contains all necessary environment variables for the Docker services and configures:
+Edit these files as needed:
 
-- **Database**: PostgreSQL with connection string
-- **Authentication**: Better Auth with Casdoor SSO
-- **Storage**: MinIO S3-compatible storage
-- **Search**: SearXNG search engine
+- `docker-compose/dev/.env` - Docker services (PostgreSQL, Redis, RustFS, SearXNG)
+- `.env` - Next.js dev server (database connection, S3 storage, auth, etc.)
 
 #### 4. Start Docker Services
 
 Start all required services using Docker Compose:
 
 ```bash
-docker-compose -f docker-compose.development.yml up -d
+bun run dev:docker
 ```
 
 This will start the following services:
 
 - PostgreSQL database (port 5432)
-- MinIO storage (port 9000)
-- Casdoor authentication (port 8000)
-- SearXNG search (port 8080)
+- Redis cache (port 6379)
+- RustFS storage (API port 9000, Console port 9001)
+- SearXNG search (port 8180)
 
 You can check all Docker services are running by running:
 
 ```bash
-docker-compose -f docker-compose.development.yml ps
+docker compose -f docker-compose/dev/docker-compose.yml ps
 ```
 
 #### 5. Run Database Migrations
@@ -122,83 +124,15 @@ Now, you can open `http://localhost:3010` in your browser, and you should see th
 
 ![](https://github-production-user-asset-6210df.s3.amazonaws.com/28616219/274655364-414bc31e-8511-47a3-af17-209b530effc7.png)
 
-## Image Generation Development
-
-When working with image generation features (text-to-image, image-to-image), the Docker Compose setup already includes all necessary storage services for handling generated images and user uploads.
-
-### Image Generation Configuration
-
-The existing Docker Compose configuration already includes MinIO storage service and all necessary environment variables in `docker-compose/local/.env.example`. No additional setup is required.
-
-### Image Generation Architecture
-
-The image generation feature requires:
-
-- **PostgreSQL**: Stores metadata about generated images
-- **MinIO/S3**: Stores the actual image files
-
-### Storage Configuration
-
-The `docker-compose/local/.env.example` file includes all necessary S3 environment variables:
-
-```bash
-# S3 Storage Configuration (MinIO for local development)
-S3_ACCESS_KEY_ID=${MINIO_ROOT_USER}
-S3_SECRET_ACCESS_KEY=${MINIO_ROOT_PASSWORD}
-S3_ENDPOINT=http://localhost:${MINIO_PORT}
-S3_BUCKET=${MINIO_LOBE_BUCKET}
-S3_ENABLE_PATH_STYLE=1  # Required for MinIO
-S3_SET_ACL=0  # MinIO compatibility
-```
-
-### File Storage Structure
-
-Generated images and user uploads are organized in the MinIO bucket:
-
-```
-lobe/                # S3 Bucket (MINIO_LOBE_BUCKET)
-├── generated/       # Generated images
-│   └── {userId}/
-│       └── {sessionId}/
-│           └── {imageId}.png
-└── uploads/         # User uploads for image-to-image
-    └── {userId}/
-        └── {fileId}.{ext}
-```
-
-### Development Workflow for Images
-
-When developing image generation features, generated images will be:
-
-1. Created by the AI model
-2. Uploaded to S3/MinIO via presigned URLs
-3. Metadata stored in PostgreSQL
-4. Served via the public S3 URL
-
-Example code for testing image upload:
-
-```typescript
-// Example: Upload generated image
-const uploadUrl = await trpc.upload.createPresignedUrl.mutate({
-  filename: 'generated-image.png',
-  contentType: 'image/png',
-});
-
-// Upload to S3
-await fetch(uploadUrl, {
-  method: 'PUT',
-  body: imageBlob,
-  headers: { 'Content-Type': 'image/png' },
-});
-```
-
-### Service URLs
+## Service URLs
 
 When running with Docker Compose development setup:
 
-- **PostgreSQL**: `postgres://postgres@localhost:5432/LobeHub`
-- **MinIO API**: `http://localhost:9000`
-- **MinIO Console**: `http://localhost:9001` (admin/CHANGE\_THIS\_PASSWORD\_IN\_PRODUCTION)
+- **PostgreSQL**: `postgres://postgres@localhost:5432/lobechat`
+- **Redis**: `redis://localhost:6379`
+- **RustFS API**: `http://localhost:9000`
+- **RustFS Console**: `http://localhost:9001`
+- **SearXNG**: `http://localhost:8180`
 - **Application**: `http://localhost:3010`
 
 ## Troubleshooting
@@ -208,15 +142,8 @@ When running with Docker Compose development setup:
 If you encounter issues, you can reset the entire stack:
 
 ```bash
-# Stop and remove all containers
-docker-compose -f docker-compose.development.yml down
-
-# Remove volumes (this will delete all data)
-docker-compose -f docker-compose.development.yml down -v
-
-# Start fresh
-docker-compose -f docker-compose.development.yml up -d
-pnpm db:migrate
+# Completely reset Docker environment (delete all data and restart)
+bun run dev:docker:reset
 ```
 
 ### Port Conflicts
@@ -226,19 +153,19 @@ If ports are already in use:
 ```bash
 # Check what's using the ports
 lsof -i :5432  # PostgreSQL
-lsof -i :9000  # MinIO API
-lsof -i :9001  # MinIO Console
+lsof -i :6379  # Redis
+lsof -i :9000  # RustFS API
+lsof -i :9001  # RustFS Console
+lsof -i :8180  # SearXNG
 ```
 
 ### Database Migrations
 
-The setup script runs migrations automatically. If you need to run them manually:
+Run migrations manually when needed:
 
 ```bash
 pnpm db:migrate
 ```
-
-Note: In development mode with `pnpm dev:desktop`, migrations also run automatically on startup.
 
 ---
 

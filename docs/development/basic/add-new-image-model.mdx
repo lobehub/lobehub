@@ -15,7 +15,7 @@ tags:
 
 ## Parameter Standardization
 
-All image generation models must use the standard parameters defined in `src/libs/standard-parameters/index.ts`. This ensures parameter consistency across different Providers, creating a more unified user experience.
+All image generation models must use the standard parameters defined in `packages/model-bank/src/standard-parameters/index.ts`. This ensures parameter consistency across different Providers, creating a more unified user experience.
 
 **Supported Standard Parameters**:
 
@@ -32,7 +32,7 @@ All image generation models must use the standard parameters defined in `src/lib
 
 These models can be requested using the OpenAI SDK, with request parameters and return values consistent with DALL-E and GPT-Image-X series.
 
-Taking Zhipu's CogView-4 as an example, which is an OpenAI-compatible model, you can add it by adding the model configuration in the corresponding AI models file `src/config/aiModels/zhipu.ts`:
+Taking Zhipu's CogView-4 as an example, which is an OpenAI-compatible model, you can add it by adding the model configuration in the corresponding AI models file `packages/model-bank/src/aiModels/zhipu.ts`:
 
 ```ts
 const zhipuImageModels: AIImageModelCard[] = [
@@ -71,7 +71,7 @@ Most Providers use `openaiCompatibleFactory` for OpenAI compatibility. You can p
 
 1. **Read Provider documentation and standard parameter definitions**
    - Review the Provider's image generation API documentation to understand request and response formats
-   - Read `src/libs/standard-parameters/index.ts` to understand supported parameters
+   - Read `packages/model-bank/src/standard-parameters/index.ts` to understand supported parameters
    - Add image model configuration in the corresponding AI models file
 
 2. **Implement custom createImage method**
@@ -87,7 +87,7 @@ Most Providers use `openaiCompatibleFactory` for OpenAI compatibility. You can p
 **Code Example**:
 
 ```ts
-// src/libs/model-runtime/provider-name/createImage.ts
+// packages/model-runtime/src/providers/<provider-name>/createImage.ts
 export const createProviderImage = async (
   payload: ImageGenerationPayload,
   options: any,
@@ -112,7 +112,7 @@ export const createProviderImage = async (
 ```
 
 ```ts
-// src/libs/model-runtime/provider-name/index.ts
+// packages/model-runtime/src/providers/<provider-name>/index.ts
 export const LobeProviderAI = openaiCompatibleFactory({
   constructorOptions: {
     // ... other configurations
@@ -130,7 +130,7 @@ If your Provider has an independent class implementation, you can directly add t
 
 1. **Read Provider documentation and standard parameter definitions**
    - Review the Provider's image generation API documentation
-   - Read `src/libs/standard-parameters/index.ts`
+   - Read `packages/model-bank/src/standard-parameters/index.ts`
    - Add image model configuration in the corresponding AI models file
 
 2. **Implement createImage method in Provider class**
@@ -144,7 +144,7 @@ If your Provider has an independent class implementation, you can directly add t
 **Code Example**:
 
 ```ts
-// src/libs/model-runtime/provider-name/index.ts
+// packages/model-runtime/src/providers/<provider-name>/index.ts
 export class LobeProviderAI {
   async createImage(
     payload: ImageGenerationPayload,

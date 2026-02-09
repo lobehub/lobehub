@@ -3,7 +3,7 @@
  * This module provides a unified interface that can be easily replaced
  * with React.lazy + Suspense in the future.
  *
- * @see Phase 3.3: LOBE-2990
+ * @see Phase 3.3
  */
 
 // Re-export the dynamic function

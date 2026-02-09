@@ -150,6 +150,7 @@
   "upload.desc": "詳細：{{detail}}",
   "upload.fileOnlySupportInServerMode": "現在のデプロイモードでは非画像ファイルのアップロードはサポートされていません。{{ext}} をアップロードするには、サーバーデータベースデプロイに切り替えるか、{{cloud}} サービスを使用してください",
   "upload.networkError": "ネットワーク異常または CORS 設定が正しくありません。ファイルストレージサービスの CORS 設定を確認してから再試行してください",
+  "upload.storageLimitExceeded": "ファイルストレージがご利用中のプランの上限に達しました。プランをアップグレードするか、未使用のファイルを削除して空き容量を確保してください。",
   "upload.title": "アップロードが完了できませんでした",
   "upload.unknownError": "原因：{{reason}}",
   "upload.uploadFailed": "アップロードが完了できませんでした"

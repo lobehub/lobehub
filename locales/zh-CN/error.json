@@ -150,6 +150,7 @@
   "upload.desc": "详情：{{detail}}",
   "upload.fileOnlySupportInServerMode": "当前部署模式不支持上传非图片文件。若需上传 {{ext}}，请切换到服务端数据库部署或使用 {{cloud}}",
   "upload.networkError": "网络异常或跨域配置不正确。请检查文件存储服务的 CORS 设置后重试",
+  "upload.storageLimitExceeded": "文件存储空间已达到当前套餐上限，请升级套餐或删除不需要的文件以释放空间。",
   "upload.title": "上传未能完成",
   "upload.unknownError": "原因：{{reason}}",
   "upload.uploadFailed": "上传未能完成"

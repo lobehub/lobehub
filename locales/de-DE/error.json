@@ -150,6 +150,7 @@
   "upload.desc": "Details: {{detail}}",
   "upload.fileOnlySupportInServerMode": "Im aktuellen Modus können keine Nicht-Bilddateien hochgeladen werden. Bitte wechseln Sie zum Server-Modus oder nutzen Sie den {{cloud}}-Dienst.",
   "upload.networkError": "Bitte überprüfen Sie Ihre Netzwerkverbindung und die CORS-Konfiguration des Speicherdienstes.",
+  "upload.storageLimitExceeded": "Ihr Dateispeicher hat das Limit Ihres Tarifs erreicht. Bitte upgraden Sie Ihren Tarif oder löschen Sie nicht verwendete Dateien, um Speicherplatz freizugeben.",
   "upload.title": "Datei-Upload fehlgeschlagen. Bitte Netzwerk prüfen oder später erneut versuchen.",
   "upload.unknownError": "Fehlerursache: {{reason}}",
   "upload.uploadFailed": "Datei-Upload fehlgeschlagen."

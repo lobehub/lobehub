@@ -3,13 +3,13 @@ import { authEnv } from '@/envs/auth';
 import { type OIDCProvider, createOIDCProvider } from '@/libs/oidc-provider/provider';
 
 /**
- * OIDC Provider 实例
+ * OIDC Provider instance
  */
 let provider: OIDCProvider;
 
 /**
- * 获取 OIDC Provider 实例
- * @returns OIDC Provider 实例
+ * Get OIDC Provider instance
+ * @returns OIDC Provider instance
  */
 export const getOIDCProvider = async (): Promise<OIDCProvider> => {
   if (!provider) {

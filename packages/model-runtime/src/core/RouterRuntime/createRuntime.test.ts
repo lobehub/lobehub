@@ -452,6 +452,97 @@ describe('createRouterRuntime', () => {
   });
 
   describe('router matching', () => {
+    describe('baseURLPattern matching', () => {
+      it('should match router by baseURLPattern (RegExp)', async () => {
+        const mockChatOpenAI = vi.fn().mockResolvedValue('openai-response');
+        const mockChatAnthropic = vi.fn().mockResolvedValue('anthropic-response');
+
+        class OpenAIRuntime implements LobeRuntimeAI {
+          chat = mockChatOpenAI;
+        }
+
+        class AnthropicRuntime implements LobeRuntimeAI {
+          chat = mockChatAnthropic;
+        }
+
+        const Runtime = createRouterRuntime({
+          id: 'test-runtime',
+          routers: [
+            {
+              apiType: 'anthropic',
+              baseURLPattern: /\/anthropic\/?$/,
+              options: { apiKey: 'anthropic-key' },
+              runtime: AnthropicRuntime as any,
+            },
+            {
+              apiType: 'openai',
+              options: { apiKey: 'openai-key' },
+              runtime: OpenAIRuntime as any,
+            },
+          ],
+        });
+
+        const runtime = new Runtime({
+          apiKey: 'test',
+          baseURL: 'https://api.example.com/anthropic',
+        });
+        const result = await runtime.chat({
+          model: 'test-model',
+          messages: [],
+          temperature: 0.7,
+        });
+
+        expect(result).toBe('anthropic-response');
+        expect(mockChatAnthropic).toHaveBeenCalled();
+        expect(mockChatOpenAI).not.toHaveBeenCalled();
+      });
+
+      it('should prioritize baseURLPattern over models matching', async () => {
+        const mockChatOpenAI = vi.fn().mockResolvedValue('openai-response');
+        const mockChatAnthropic = vi.fn().mockResolvedValue('anthropic-response');
+
+        class OpenAIRuntime implements LobeRuntimeAI {
+          chat = mockChatOpenAI;
+        }
+
+        class AnthropicRuntime implements LobeRuntimeAI {
+          chat = mockChatAnthropic;
+        }
+
+        const Runtime = createRouterRuntime({
+          id: 'test-runtime',
+          routers: [
+            {
+              apiType: 'anthropic',
+              baseURLPattern: /\/anthropic\/?$/,
+              options: { apiKey: 'anthropic-key' },
+              runtime: AnthropicRuntime as any,
+              models: ['claude-3'],
+            },
+            {
+              apiType: 'openai',
+              options: { apiKey: 'openai-key' },
+              runtime: OpenAIRuntime as any,
+              models: ['gpt-4', 'test-model'], // includes test-model
+            },
+          ],
+        });
+
+        // Even though 'test-model' matches OpenAI router, baseURLPattern should win
+        const runtime = new Runtime({
+          apiKey: 'test',
+          baseURL: 'https://api.example.com/anthropic',
+        });
+        const result = await runtime.chat({
+          model: 'test-model',
+          messages: [],
+          temperature: 0.7,
+        });
+
+        expect(result).toBe('anthropic-response');
+      });
+    });
+
     it('should fallback to last router when model does not match any', async () => {
       const mockChatFirst = vi.fn().mockResolvedValue('first-response');
       const mockChatLast = vi.fn().mockResolvedValue('last-response');

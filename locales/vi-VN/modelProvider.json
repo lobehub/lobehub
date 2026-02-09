@@ -196,6 +196,8 @@
   "providerModels.item.modelConfig.displayName.title": "Tên hiển thị mô hình",
   "providerModels.item.modelConfig.extendParams.extra": "Chọn các tham số mở rộng được hỗ trợ bởi mô hình. Di chuột vào một tùy chọn để xem trước điều khiển. Cấu hình sai có thể khiến yêu cầu thất bại.",
   "providerModels.item.modelConfig.extendParams.options.disableContextCaching.hint": "Dành cho các mô hình Claude; có thể giảm chi phí và tăng tốc độ phản hồi.",
+  "providerModels.item.modelConfig.extendParams.options.effort.hint": "Dành cho Claude Opus 4.6; điều chỉnh mức độ nỗ lực (thấp/trung bình/cao/tối đa).",
+  "providerModels.item.modelConfig.extendParams.options.enableAdaptiveThinking.hint": "Dành cho Claude Opus 4.6; bật hoặc tắt chế độ tư duy thích ứng.",
   "providerModels.item.modelConfig.extendParams.options.enableReasoning.hint": "Dành cho Claude, DeepSeek và các mô hình suy luận khác; mở khóa khả năng tư duy sâu hơn.",
   "providerModels.item.modelConfig.extendParams.options.gpt5ReasoningEffort.hint": "Dành cho dòng GPT-5; điều chỉnh cường độ suy luận.",
   "providerModels.item.modelConfig.extendParams.options.gpt5_1ReasoningEffort.hint": "Dành cho dòng GPT-5.1; điều chỉnh cường độ suy luận.",

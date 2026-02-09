@@ -1,4 +1,5 @@
 {
+  "arguments.moreParams": "{{count}} Parameter insgesamt",
   "arguments.title": "Argumente",
   "builtins.lobe-agent-builder.apiName.getAvailableModels": "Verfügbare Modelle abrufen",
   "builtins.lobe-agent-builder.apiName.getAvailableTools": "Verfügbare Skills abrufen",

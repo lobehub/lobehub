@@ -54,7 +54,7 @@ const transformOllamaStream = (chunk: ChatResponse, stack: StreamContext): Strea
 export const OllamaStream = (
   res: ReadableStream<ChatResponse>,
   cb?: ChatStreamCallbacks,
-): ReadableStream<string> => {
+): ReadableStream<Uint8Array> => {
   const streamStack: StreamContext = { id: 'chat_' + nanoid() };
 
   return res

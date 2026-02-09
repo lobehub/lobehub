@@ -891,6 +891,18 @@ export default {
 
   'user.publishedAgents': 'Created Agents',
 
+  'user.publishedGroups': 'Created Groups',
+
+  'user.searchPlaceholder': 'Search by name or description...',
+
+  'user.statusFilter.all': 'All',
+  'user.statusFilter.archived': 'Archived',
+  'user.statusFilter.deprecated': 'Deprecated',
+  'user.statusFilter.favorite': 'Favorite',
+  'user.statusFilter.forked': 'Forked',
+  'user.statusFilter.published': 'Published',
+  'user.statusFilter.unpublished': 'Under Review',
+
   'user.tabs.favorites': 'Favorites',
 
   'user.tabs.forkedAgents': 'Forked',

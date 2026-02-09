@@ -150,6 +150,7 @@
   "upload.desc": "Détails : {{detail}}",
   "upload.fileOnlySupportInServerMode": "Le mode de déploiement actuel ne prend pas en charge le téléversement de fichiers non image. Pour téléverser des fichiers {{ext}}, passez au mode serveur ou utilisez le service {{cloud}}.",
   "upload.networkError": "Veuillez vérifier votre connexion réseau et la configuration CORS du service de stockage.",
+  "upload.storageLimitExceeded": "Votre espace de stockage a atteint la limite de votre forfait. Veuillez mettre à niveau votre forfait ou supprimer les fichiers inutilisés pour libérer de l’espace.",
   "upload.title": "Échec du téléversement. Veuillez vérifier votre connexion ou réessayer plus tard.",
   "upload.unknownError": "Raison de l'erreur : {{reason}}",
   "upload.uploadFailed": "Échec du téléversement du fichier."

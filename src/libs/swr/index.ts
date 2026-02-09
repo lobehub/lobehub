@@ -66,6 +66,10 @@ export const useActionSWR: SWRHook = (key, fetch, config) =>
     fallbackData: {},
     refreshWhenHidden: false,
     refreshWhenOffline: false,
+    // If we disable `revalidateOnMount` but keep `revalidateIfStale` enabled (default true),
+    // SWR can infer `isValidating=true` on subsequent renders while never actually starting a request.
+    // This will lock action buttons in loading state.
+    revalidateIfStale: false,
     revalidateOnFocus: false,
     revalidateOnMount: false,
     revalidateOnReconnect: false,
