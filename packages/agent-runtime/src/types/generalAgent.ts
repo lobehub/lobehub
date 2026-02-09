@@ -1,8 +1,8 @@
-import type {
-  ChatToolPayload,
-  DynamicInterventionResolver,
-  GlobalInterventionResolverConfig,
-  MessageToolCall,
+import  {
+  type ChatToolPayload,
+  type DynamicInterventionResolver,
+  type GlobalInterventionResolverConfig,
+  type MessageToolCall,
 } from '@lobechat/types';
 
 export interface GeneralAgentCallLLMInstructionPayload {
@@ -83,10 +83,10 @@ export interface GeneralAgentConfig {
     maxWindowToken?: number;
   };
   /**
-   * Dynamic intervention resolvers registry (per-tool)
+   * Dynamic intervention audits registry (per-tool)
    * Used to evaluate runtime intervention policies for tools with dynamic config
    */
-  dynamicInterventionResolvers?: Record<string, DynamicInterventionResolver>;
+  dynamicInterventionAudits?: Record<string, DynamicInterventionResolver>;
   /**
    * Global intervention resolvers that run for EVERY tool call
    * Evaluated in array order, before per-tool dynamic resolvers.

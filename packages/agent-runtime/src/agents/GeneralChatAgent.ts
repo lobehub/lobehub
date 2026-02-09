@@ -1,31 +1,31 @@
-import type {
-  ChatToolPayload,
-  ExtendedHumanInterventionConfig,
-  HumanInterventionConfig,
-  HumanInterventionPolicy,
+import  {
+  type ChatToolPayload,
+  type ExtendedHumanInterventionConfig,
+  type HumanInterventionConfig,
+  type HumanInterventionPolicy,
 } from '@lobechat/types';
 
 import {
+  createSecurityBlacklistGlobalResolver,
   DEFAULT_SECURITY_BLACKLIST,
   InterventionChecker,
-  createSecurityBlacklistGlobalResolver,
 } from '../core';
-import type {
-  Agent,
-  AgentInstruction,
-  AgentInstructionCompressContext,
-  AgentRuntimeContext,
-  AgentState,
-  GeneralAgentCallingToolInstructionPayload,
-  GeneralAgentCallLLMInstructionPayload,
-  GeneralAgentCallLLMResultPayload,
-  GeneralAgentCallToolResultPayload,
-  GeneralAgentCallToolsBatchInstructionPayload,
-  GeneralAgentCompressionResultPayload,
-  GeneralAgentConfig,
-  HumanAbortPayload,
-  TaskResultPayload,
-  TasksBatchResultPayload,
+import  {
+  type Agent,
+  type AgentInstruction,
+  type AgentInstructionCompressContext,
+  type AgentRuntimeContext,
+  type AgentState,
+  type GeneralAgentCallingToolInstructionPayload,
+  type GeneralAgentCallLLMInstructionPayload,
+  type GeneralAgentCallLLMResultPayload,
+  type GeneralAgentCallToolResultPayload,
+  type GeneralAgentCallToolsBatchInstructionPayload,
+  type GeneralAgentCompressionResultPayload,
+  type GeneralAgentConfig,
+  type HumanAbortPayload,
+  type TaskResultPayload,
+  type TasksBatchResultPayload,
 } from '../types';
 import { shouldCompress } from '../utils/tokenCounter';
 
@@ -111,7 +111,7 @@ export class GeneralChatAgent implements Agent {
     }
 
     const { dynamic } = config;
-    const resolver = this.config.dynamicInterventionResolvers?.[dynamic.type];
+    const resolver = this.config.dynamicInterventionAudits?.[dynamic.type];
 
     if (!resolver) return dynamic.default ?? 'never';
 
@@ -142,8 +142,9 @@ export class GeneralChatAgent implements Agent {
     const { approvalMode, allowList = [] } = userConfig;
 
     // Global resolvers: default to security blacklist resolver if not provided
-    const globalResolvers =
-      this.config.globalInterventionResolvers ?? [createSecurityBlacklistGlobalResolver()];
+    const globalResolvers = this.config.globalInterventionResolvers ?? [
+      createSecurityBlacklistGlobalResolver(),
+    ];
 
     for (const toolCalling of toolsCalling) {
       const { identifier, apiName } = toolCalling;

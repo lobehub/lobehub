@@ -1,4 +1,4 @@
-export { pathScopeResolver } from './interventionResolver';
+export { pathScopeAudit } from './interventionAudit';
 export { LocalSystemManifest } from './manifest';
 export { systemPrompt } from './systemRole';
 export {
@@ -18,4 +18,3 @@ export {
   LocalSystemIdentifier,
   type RunCommandState,
 } from './types';
-export { normalizePathForScope } from './utils/path';

@@ -1,4 +1,4 @@
-import type { DynamicInterventionResolver } from '@lobechat/types';
+import { type DynamicInterventionResolver } from '@lobechat/types';
 
 import { normalizePathForScope } from './utils/path';
 
@@ -21,7 +21,15 @@ const isPathWithinWorkingDirectory = (targetPath: string, workingDirectory: stri
  */
 const extractPaths = (toolArgs: Record<string, any>): string[] => {
   const paths: string[] = [];
-  const pathParamNames = ['path', 'file_path', 'directory', 'oldPath', 'newPath'];
+  const pathParamNames = [
+    'path',
+    'file_path',
+    'directory',
+    'pattern',
+    'oldPath',
+    'newPath',
+    'scope',
+  ];
 
   for (const paramName of pathParamNames) {
     const pathValue = toolArgs[paramName];
@@ -44,10 +52,10 @@ const extractPaths = (toolArgs: Record<string, any>): string[] => {
 };
 
 /**
- * Path scope resolver for local-system tools
+ * Path scope audit for local-system tools
  * Returns true if any path is outside the working directory (requires intervention)
  */
-export const pathScopeResolver: DynamicInterventionResolver = (
+export const pathScopeAudit: DynamicInterventionResolver = (
   toolArgs: Record<string, any>,
   metadata?: Record<string, any>,
 ): boolean => {

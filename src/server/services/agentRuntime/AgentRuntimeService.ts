@@ -19,7 +19,7 @@ import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
-import { dynamicInterventionResolvers } from '@/tools/dynamicInterventionResolvers';
+import { dynamicInterventionAudits } from '@/tools/dynamicInterventionAudits';
 
 import {
   type AgentExecutionParams,
@@ -836,7 +836,7 @@ export class AgentRuntimeService {
       compressionConfig: {
         enabled: metadata?.agentConfig?.chatConfig?.enableContextCompression ?? true,
       },
-      dynamicInterventionResolvers,
+      dynamicInterventionAudits,
       modelRuntimeConfig: metadata?.modelRuntimeConfig,
       operationId,
       userId: metadata?.userId,

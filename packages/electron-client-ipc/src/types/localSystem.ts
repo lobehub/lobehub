@@ -1,4 +1,3 @@
-/* eslint-disable sort-keys-fix/sort-keys-fix, typescript-sort-keys/interface */
 // Define types for local file operations
 export interface LocalFileItem {
   contentType?: string;
@@ -123,6 +122,9 @@ export interface LocalSearchFilesParams {
   liveUpdate?: boolean;
   modifiedAfter?: string;
   modifiedBefore?: string;
+
+  /** Working directory scope. When `directory` is not specified, used as the default search location. */
+  scope?: string;
   sortBy?: 'name' | 'date' | 'size';
   sortDirection?: 'asc' | 'desc';
 }
@@ -190,6 +192,8 @@ export interface GrepContentParams {
   'output_mode'?: 'content' | 'files_with_matches' | 'count';
   'path'?: string;
   'pattern': string;
+  /** Working directory scope. When `path` is not specified, used as the default search location. */
+  'scope'?: string;
   /** Preferred search tool: 'rg' | 'ag' | 'grep' */
   'tool'?: 'rg' | 'ag' | 'grep';
   'type'?: string;
@@ -206,8 +210,9 @@ export interface GrepContentResult {
 
 // Glob types
 export interface GlobFilesParams {
-  path?: string;
   pattern: string;
+  /** Working directory scope. When `pattern` is relative, it is joined with this scope. Defaults to the current working directory. */
+  scope?: string;
 }
 
 export interface GlobFilesResult {

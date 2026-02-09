@@ -1,3 +1,4 @@
+/* eslint-disable import-x/consistent-type-specifier-style */
 import type {
   EditLocalFileParams,
   EditLocalFileResult,
@@ -39,6 +40,7 @@ import type {
   LocalRenameFileState,
   RunCommandState,
 } from '../types';
+import { resolveArgsWithScope } from '../utils/path';
 
 interface LocalFileService {
   editLocalFile: (params: EditLocalFileParams) => Promise<EditLocalFileResult>;
@@ -58,9 +60,11 @@ interface LocalFileService {
 
 export class LocalSystemExecutionRuntime {
   private localFileService: LocalFileService;
+  private workingDirectory?: string;
 
-  constructor(localFileService: LocalFileService) {
+  constructor(localFileService: LocalFileService, workingDirectory?: string) {
     this.localFileService = localFileService;
+    this.workingDirectory = workingDirectory;
   }
 
   // ==================== File Operations ====================
@@ -139,9 +143,14 @@ export class LocalSystemExecutionRuntime {
 
   async searchLocalFiles(args: LocalSearchFilesParams): Promise<BuiltinServerRuntimeOutput> {
     try {
-      const result: LocalFileItem[] = await this.localFileService.searchLocalFiles(args);
+      const resolvedArgs = resolveArgsWithScope(args, 'directory', this.workingDirectory);
 
-      const state: LocalFileSearchState = { searchResults: result };
+      const result: LocalFileItem[] = await this.localFileService.searchLocalFiles(resolvedArgs);
+
+      const state: LocalFileSearchState = {
+        resolvedPath: resolvedArgs.directory,
+        searchResults: result,
+      };
 
       const fileList = result.map((f) => `  ${f.path}`).join('\n');
       const content =
@@ -398,13 +407,15 @@ export class LocalSystemExecutionRuntime {
 
   async grepContent(args: GrepContentParams): Promise<BuiltinServerRuntimeOutput> {
     try {
-      const result: GrepContentResult = await this.localFileService.grepContent(args);
+      const resolvedArgs = resolveArgsWithScope(args, 'path', this.workingDirectory);
+
+      const result: GrepContentResult = await this.localFileService.grepContent(resolvedArgs);
 
       const message = result.success
         ? `Found ${result.total_matches} matches in ${result.matches.length} locations`
         : `Search failed: ${result.error || 'Unknown error'}`;
 
-      const state: GrepContentState = { message, result };
+      const state: GrepContentState = { message, resolvedPath: resolvedArgs.path, result };
 
       let content = message;
       if (result.success && result.matches.length > 0) {
@@ -433,13 +444,19 @@ export class LocalSystemExecutionRuntime {
 
   async globLocalFiles(args: GlobFilesParams): Promise<BuiltinServerRuntimeOutput> {
     try {
-      const result: GlobFilesResult = await this.localFileService.globFiles(args);
+      const resolvedArgs = resolveArgsWithScope(args, 'pattern', this.workingDirectory);
+
+      const result: GlobFilesResult = await this.localFileService.globFiles(resolvedArgs);
 
       const message = result.success
         ? `Found ${result.total_files} files`
         : `Glob search failed: ${result.error || 'Unknown error'}`;
 
-      const state: GlobFilesState = { message, result };
+      const state: GlobFilesState = {
+        message,
+        resolvedPath: resolvedArgs.pattern,
+        result,
+      };
 
       let content = message;
       if (result.success && result.files.length > 0) {

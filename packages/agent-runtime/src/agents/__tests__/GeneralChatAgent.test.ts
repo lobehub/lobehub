@@ -1,7 +1,7 @@
-import type { ChatToolPayload, GlobalInterventionResolverConfig } from '@lobechat/types';
+import  { type ChatToolPayload, type GlobalInterventionResolverConfig } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import type { AgentRuntimeContext, AgentState } from '../../types';
+import  { type AgentRuntimeContext, type AgentState } from '../../types';
 import { GeneralChatAgent } from '../GeneralChatAgent';
 
 describe('GeneralChatAgent', () => {
@@ -1305,8 +1305,8 @@ describe('GeneralChatAgent', () => {
     it('should require intervention when dynamic policy resolves to required', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
-        dynamicInterventionResolvers: {
-          pathScopeResolver: (toolArgs, metadata) => {
+        dynamicInterventionAudits: {
+          pathScopeAudit: (toolArgs, metadata) => {
             const workingDirectory = metadata?.workingDirectory as string | undefined;
             if (!workingDirectory) return false;
             const path = toolArgs.path as string;
@@ -1337,7 +1337,7 @@ describe('GeneralChatAgent', () => {
                   dynamic: {
                     default: 'never',
                     policy: 'required',
-                    type: 'pathScopeResolver',
+                    type: 'pathScopeAudit',
                   },
                 },
               },
@@ -1366,8 +1366,8 @@ describe('GeneralChatAgent', () => {
     it('should execute tool when dynamic policy resolves to never', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
-        dynamicInterventionResolvers: {
-          pathScopeResolver: (toolArgs, metadata) => {
+        dynamicInterventionAudits: {
+          pathScopeAudit: (toolArgs, metadata) => {
             const workingDirectory = metadata?.workingDirectory as string | undefined;
             if (!workingDirectory) return false;
             const path = toolArgs.path as string;
@@ -1398,7 +1398,7 @@ describe('GeneralChatAgent', () => {
                   dynamic: {
                     default: 'never',
                     policy: 'required',
-                    type: 'pathScopeResolver',
+                    type: 'pathScopeAudit',
                   },
                 },
               },

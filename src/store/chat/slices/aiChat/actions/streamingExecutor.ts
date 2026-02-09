@@ -37,7 +37,7 @@ import { pageAgentRuntime } from '@/store/tool/slices/builtin/executors/lobe-pag
 import { type StoreSetter } from '@/store/types';
 import { toolInterventionSelectors } from '@/store/user/selectors';
 import { getUserStoreState } from '@/store/user/store';
-import { dynamicInterventionResolvers } from '@/tools/dynamicInterventionResolvers';
+import { dynamicInterventionAudits } from '@/tools/dynamicInterventionAudits';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { topicSelectors } from '../../../selectors';
@@ -183,7 +183,7 @@ export class StreamingExecutorActionImpl {
       provider: agentConfigData.provider!,
     };
 
-    const topicWorkingDirectory = topicSelectors.currentTopicWorkingDirectory(get());
+    const topicWorkingDirectory = topicSelectors.currentTopicWorkingDirectory(this.#get());
     const agentWorkingDirectory = agentSelectors.currentAgentWorkingDirectory(getAgentStoreState());
     const workingDirectory = topicWorkingDirectory ?? agentWorkingDirectory;
 
@@ -663,7 +663,7 @@ export class StreamingExecutorActionImpl {
       compressionConfig: {
         enabled: agentConfigData.chatConfig?.enableContextCompression ?? true, // Default to enabled
       },
-      dynamicInterventionResolvers,
+      dynamicInterventionAudits,
       operationId: `${messageKey}/${params.parentMessageId}`,
       modelRuntimeConfig,
     });

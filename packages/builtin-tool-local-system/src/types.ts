@@ -1,12 +1,12 @@
-import type {
-  GetCommandOutputResult,
-  GlobFilesResult,
-  GrepContentResult,
-  KillCommandResult,
-  LocalFileItem,
-  LocalMoveFilesResultItem,
-  LocalReadFileResult,
-  RunCommandResult,
+import  {
+  type GetCommandOutputResult,
+  type GlobFilesResult,
+  type GrepContentResult,
+  type KillCommandResult,
+  type LocalFileItem,
+  type LocalMoveFilesResultItem,
+  type LocalReadFileResult,
+  type RunCommandResult,
 } from '@lobechat/electron-client-ipc';
 
 export const LocalSystemIdentifier = 'lobe-local-system';
@@ -44,6 +44,8 @@ export interface FileResult {
 export interface LocalFileSearchState {
   /** Search engine used (e.g., 'mdfind', 'fd', 'find', 'fast-glob') */
   engine?: string;
+  /** Resolved search directory after scope resolution */
+  resolvedPath?: string;
   searchResults: LocalFileItem[];
 }
 
@@ -90,11 +92,15 @@ export interface KillCommandState {
 
 export interface GrepContentState {
   message: string;
+  /** Resolved search path after scope resolution */
+  resolvedPath?: string;
   result: GrepContentResult;
 }
 
 export interface GlobFilesState {
   message: string;
+  /** Resolved full glob (path + pattern) after scope resolution. May contain glob metacharacters like `*` or `**`. */
+  resolvedPath?: string;
   result: GlobFilesResult;
 }
 

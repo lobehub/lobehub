@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react';
+import  { type ReactNode } from 'react';
 import { z } from 'zod';
 
-import type { RuntimeStepContext } from '../stepContext';
-import type { HumanInterventionConfig, HumanInterventionPolicy } from './intervention';
+import  { type RuntimeStepContext } from '../stepContext';
+import  { type HumanInterventionConfig, type HumanInterventionPolicy } from './intervention';
 import { HumanInterventionConfigSchema, HumanInterventionPolicySchema } from './intervention';
 
 interface Meta {
@@ -93,7 +93,7 @@ export interface GlobalInterventionResolverConfig {
  * Used to dynamically determine intervention policy based on runtime context
  *
  * The resolver is referenced by type identifier and looked up from
- * the dynamicInterventionResolvers registry at runtime.
+ * the dynamicInterventionAudits registry at runtime.
  */
 export interface DynamicInterventionConfig {
   /**
@@ -110,7 +110,7 @@ export interface DynamicInterventionConfig {
 
   /**
    * Resolver type identifier for external resolver lookup
-   * The resolver function is registered in dynamicInterventionResolvers
+   * The resolver function is registered in dynamicInterventionAudits
    */
   type: string;
 }
@@ -147,7 +147,7 @@ export interface LobeChatPluginApi {
    * Examples:
    * - 'always' - always require intervention
    * - [{ match: { command: "git add:*" }, policy: "never" }, { policy: "always" }]
-   * - { dynamic: { default: 'never', policy: 'required', type: 'exampleResolver' } } - exampleResolver should register in `GeneralChatAgent.dynamicInterventionResolvers`
+   * - { dynamic: { default: 'never', policy: 'required', type: 'exampleResolver' } } - exampleResolver should register in `GeneralChatAgent.dynamicInterventionAudits`
    *
    */
   humanIntervention?: ExtendedHumanInterventionConfig;

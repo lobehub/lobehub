@@ -1,4 +1,4 @@
-import type { BuiltinToolManifest } from '@lobechat/types';
+import { type BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
 import { LocalSystemApiName, LocalSystemIdentifier } from './types';
@@ -12,7 +12,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
         dynamic: {
           default: 'never',
           policy: 'required',
-          type: 'pathScopeResolver',
+          type: 'pathScopeAudit',
         },
       },
       name: LocalSystemApiName.listLocalFiles,
@@ -34,7 +34,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
         dynamic: {
           default: 'never',
           policy: 'required',
-          type: 'pathScopeResolver',
+          type: 'pathScopeAudit',
         },
       },
       name: LocalSystemApiName.readLocalFile,
@@ -64,7 +64,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
         dynamic: {
           default: 'never',
           policy: 'required',
-          type: 'pathScopeResolver',
+          type: 'pathScopeAudit',
         },
       },
       name: LocalSystemApiName.searchLocalFiles,
@@ -85,10 +85,6 @@ export const LocalSystemManifest: BuiltinToolManifest = {
             format: 'date-time',
             type: 'string',
           },
-          directory: {
-            description: 'Limit the search to this specific directory path',
-            type: 'string',
-          },
           exclude: {
             description: 'Array of file or directory paths to exclude',
             items: {
@@ -105,6 +101,11 @@ export const LocalSystemManifest: BuiltinToolManifest = {
           },
           keywords: {
             description: 'The search keywords string (can include partial names or keywords)',
+            type: 'string',
+          },
+          scope: {
+            description:
+              'Working directory scope. Limits the search to this directory. Defaults to the current working directory.',
             type: 'string',
           },
           limit: {
@@ -147,7 +148,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
         dynamic: {
           default: 'never',
           policy: 'required',
-          type: 'pathScopeResolver',
+          type: 'pathScopeAudit',
         },
       },
       name: LocalSystemApiName.moveLocalFiles,
@@ -184,7 +185,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
         dynamic: {
           default: 'never',
           policy: 'required',
-          type: 'pathScopeResolver',
+          type: 'pathScopeAudit',
         },
       },
       name: LocalSystemApiName.renameLocalFile,
@@ -210,7 +211,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
         dynamic: {
           default: 'never',
           policy: 'required',
-          type: 'pathScopeResolver',
+          type: 'pathScopeAudit',
         },
       },
       name: LocalSystemApiName.writeLocalFile,
@@ -236,7 +237,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
         dynamic: {
           default: 'never',
           policy: 'required',
-          type: 'pathScopeResolver',
+          type: 'pathScopeAudit',
         },
       },
       name: LocalSystemApiName.editLocalFile,
@@ -333,7 +334,7 @@ export const LocalSystemManifest: BuiltinToolManifest = {
         dynamic: {
           default: 'never',
           policy: 'required',
-          type: 'pathScopeResolver',
+          type: 'pathScopeAudit',
         },
       },
       name: LocalSystemApiName.grepContent,
@@ -381,11 +382,16 @@ export const LocalSystemManifest: BuiltinToolManifest = {
             type: 'string',
           },
           'path': {
-            description: 'File or directory to search in (defaults to current working directory)',
+            description: 'File or directory to search in',
             type: 'string',
           },
           'pattern': {
             description: 'The regular expression pattern to search for',
+            type: 'string',
+          },
+          'scope': {
+            description:
+              'Working directory scope for the search. When `path` is not specified, this is used as the default search location. Defaults to the current working directory.',
             type: 'string',
           },
           'type': {
@@ -404,18 +410,20 @@ export const LocalSystemManifest: BuiltinToolManifest = {
         dynamic: {
           default: 'never',
           policy: 'required',
-          type: 'pathScopeResolver',
+          type: 'pathScopeAudit',
         },
       },
       name: LocalSystemApiName.globLocalFiles,
       parameters: {
         properties: {
-          path: {
-            description: 'The directory to search in (defaults to current working directory)',
+          pattern: {
+            description:
+              'The glob pattern to match files against (e.g. "**/*.js", "src/**/*.ts"). Relative patterns are resolved against the scope.',
             type: 'string',
           },
-          pattern: {
-            description: 'The glob pattern to match files against (e.g. "**/*.js", "*.{ts,tsx}")',
+          scope: {
+            description:
+              'Working directory scope. When `pattern` is relative, it is joined with this scope. Defaults to the current working directory.',
             type: 'string',
           },
         },
