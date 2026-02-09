@@ -46,6 +46,7 @@ export const activityPrompt = [
   '## Memory Formatting Guidelines',
   '',
   '> ALL MEMORY ITEMS MUST BE SELF-CONTAINED',
+  '- Do not append date or time information to the `title`; keep timing in temporal fields or narrative instead.',
   '- Use concrete names/entities—avoid pronouns.',
   '- Preserve the original language from user input—do not translate.',
   '- Include relevant details, participants, places, timing if present, and outcomes.',

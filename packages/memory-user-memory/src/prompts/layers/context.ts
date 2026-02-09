@@ -58,6 +58,7 @@ export const contextPrompt = [
   '## Memory Formatting Guidelines',
   '',
   '> CRITICAL REQUIREMENT: ALL MEMORY ITEMS MUST BE SELF-CONTAINED',
+  '- Do not append date or time information to the `title`; keep any timing details within the body fields instead.',
   '',
   'Every memory item you create must be standalone and understandable without',
   'extra context:',

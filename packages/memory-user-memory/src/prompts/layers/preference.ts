@@ -64,6 +64,7 @@ export const preferencePrompt = [
   '## Memory Formatting Guidelines',
   '',
   '> CRITICAL REQUIREMENT: ALL MEMORY ITEMS MUST BE SELF-CONTAINED',
+  '- Do not append date or time information to the `title`; keep timing in temporal fields or narrative instead.',
   '',
   'Every memory item you create must be standalone and understandable without',
   'extra context:',
