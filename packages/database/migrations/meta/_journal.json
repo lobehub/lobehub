@@ -553,6 +553,13 @@
       "when": 1770621740632,
       "tag": "0078_added_id_nanoid_for_replacing_id",
       "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1770621892194,
+      "tag": "0079_update_id_nanoid_from_casted_id",
+      "breakpoints": true
     }
   ],
   "version": "6"
