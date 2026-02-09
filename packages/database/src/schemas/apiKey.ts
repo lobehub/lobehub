@@ -9,7 +9,7 @@ import { users } from './user';
 export const apiKeys = pgTable(
   'api_keys',
   {
-    id_nanoid: text('id_nanoid')
+    id: text('id')
       .$defaultFn(() => createNanoId(16)())
       .notNull()
       .unique()

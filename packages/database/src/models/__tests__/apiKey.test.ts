@@ -32,7 +32,7 @@ describe('ApiKeyModel', () => {
 
       const result = await apiKeyModel.create(params);
 
-      expect(result.id_nanoid).toBeDefined();
+      expect(result.id).toBeDefined();
       expect(result.name).toBe(params.name);
       expect(result.enabled).toBe(params.enabled);
       expect(result.key).toBeDefined();
@@ -40,7 +40,7 @@ describe('ApiKeyModel', () => {
       expect(result.userId).toBe(userId);
 
       const apiKey = await serverDB.query.apiKeys.findFirst({
-        where: eq(apiKeys.id_nanoid, result.id_nanoid),
+        where: eq(apiKeys.id, result.id),
       });
       expect(apiKey).toMatchObject({ ...params, userId });
     });
@@ -54,13 +54,13 @@ describe('ApiKeyModel', () => {
 
       const result = await apiKeyModel.create(params, mockEncryptor);
 
-      expect(result.id_nanoid).toBeDefined();
+      expect(result.id).toBeDefined();
       expect(result.name).toBe(params.name);
       expect(result.key).toBe('encrypted-key-value');
       expect(mockEncryptor).toHaveBeenCalledWith(expect.stringMatching(/^lb-[\da-z]{16}$/));
 
       const apiKey = await serverDB.query.apiKeys.findFirst({
-        where: eq(apiKeys.id_nanoid, result.id_nanoid),
+        where: eq(apiKeys.id, result.id),
       });
       expect(apiKey?.key).toBe('encrypted-key-value');
     });
@@ -81,21 +81,21 @@ describe('ApiKeyModel', () => {
 
   describe('delete', () => {
     it('should delete an API key by id', async () => {
-      const { id_nanoid } = await apiKeyModel.create({ name: 'Test Key', enabled: true });
+      const { id } = await apiKeyModel.create({ name: 'Test Key', enabled: true });
 
-      await apiKeyModel.delete(id_nanoid);
+      await apiKeyModel.delete(id);
 
       const apiKey = await serverDB.query.apiKeys.findFirst({
-        where: eq(apiKeys.id_nanoid, id_nanoid),
+        where: eq(apiKeys.id, id),
       });
       expect(apiKey).toBeUndefined();
     });
 
     it('should only delete API keys for the current user', async () => {
-      const { id_nanoid: key1 } = await apiKeyModel.create({ name: 'User 1 Key', enabled: true });
+      const { id: key1 } = await apiKeyModel.create({ name: 'User 1 Key', enabled: true });
 
       const anotherApiKeyModel = new ApiKeyModel(serverDB, 'user2');
-      const { id_nanoid: key2 } = await anotherApiKeyModel.create({
+      const { id: key2 } = await anotherApiKeyModel.create({
         name: 'User 2 Key',
         enabled: true,
       });
@@ -103,14 +103,14 @@ describe('ApiKeyModel', () => {
       await apiKeyModel.delete(key2);
 
       const key2Still = await serverDB.query.apiKeys.findFirst({
-        where: eq(apiKeys.id_nanoid, key2),
+        where: eq(apiKeys.id, key2),
       });
       expect(key2Still).toBeDefined();
 
       await apiKeyModel.delete(key1);
 
       const key1Deleted = await serverDB.query.apiKeys.findFirst({
-        where: eq(apiKeys.id_nanoid, key1),
+        where: eq(apiKeys.id, key1),
       });
       expect(key1Deleted).toBeUndefined();
     });
@@ -165,8 +165,8 @@ describe('ApiKeyModel', () => {
 
       const keys = await apiKeyModel.query();
       expect(keys).toHaveLength(2);
-      expect(keys[0].id_nanoid).toBe(key2.id_nanoid);
-      expect(keys[1].id_nanoid).toBe(key1.id_nanoid);
+      expect(keys[0].id).toBe(key2.id);
+      expect(keys[1].id).toBe(key1.id);
     });
 
     it('should query API keys with decryption', async () => {
@@ -318,38 +318,38 @@ describe('ApiKeyModel', () => {
 
   describe('update', () => {
     it('should update API key properties', async () => {
-      const { id_nanoid } = await apiKeyModel.create({ name: 'Test Key', enabled: true });
+      const { id } = await apiKeyModel.create({ name: 'Test Key', enabled: true });
 
-      await apiKeyModel.update(id_nanoid, { name: 'Updated Key', enabled: false });
+      await apiKeyModel.update(id, { name: 'Updated Key', enabled: false });
 
       const updated = await serverDB.query.apiKeys.findFirst({
-        where: eq(apiKeys.id_nanoid, id_nanoid),
+        where: eq(apiKeys.id, id),
       });
       expect(updated).toMatchObject({
         enabled: false,
-        id_nanoid,
+        id,
         name: 'Updated Key',
         userId,
       });
     });
 
     it('should update expiration date', async () => {
-      const { id_nanoid } = await apiKeyModel.create({ name: 'Test Key', enabled: true });
+      const { id } = await apiKeyModel.create({ name: 'Test Key', enabled: true });
 
       const newExpiresAt = new Date('2026-12-31');
-      await apiKeyModel.update(id_nanoid, { expiresAt: newExpiresAt });
+      await apiKeyModel.update(id, { expiresAt: newExpiresAt });
 
       const updated = await serverDB.query.apiKeys.findFirst({
-        where: eq(apiKeys.id_nanoid, id_nanoid),
+        where: eq(apiKeys.id, id),
       });
       expect(updated?.expiresAt).toEqual(newExpiresAt);
     });
 
     it('should only update API keys for the current user', async () => {
-      const { id_nanoid: key1 } = await apiKeyModel.create({ name: 'User 1 Key', enabled: true });
+      const { id: key1 } = await apiKeyModel.create({ name: 'User 1 Key', enabled: true });
 
       const anotherApiKeyModel = new ApiKeyModel(serverDB, 'user2');
-      const { id_nanoid: key2 } = await anotherApiKeyModel.create({
+      const { id: key2 } = await anotherApiKeyModel.create({
         name: 'User 2 Key',
         enabled: true,
       });
@@ -357,7 +357,7 @@ describe('ApiKeyModel', () => {
       await apiKeyModel.update(key2, { name: 'Attempted Update' });
 
       const key2Still = await serverDB.query.apiKeys.findFirst({
-        where: eq(apiKeys.id_nanoid, key2),
+        where: eq(apiKeys.id, key2),
       });
       expect(key2Still?.name).toBe('User 2 Key');
     });
@@ -365,13 +365,13 @@ describe('ApiKeyModel', () => {
 
   describe('findById', () => {
     it('should find API key by id', async () => {
-      const { id_nanoid } = await apiKeyModel.create({ name: 'Test Key', enabled: true });
+      const { id } = await apiKeyModel.create({ name: 'Test Key', enabled: true });
 
-      const found = await apiKeyModel.findById(id_nanoid);
+      const found = await apiKeyModel.findById(id);
 
       expect(found).toMatchObject({
         enabled: true,
-        id_nanoid,
+        id,
         name: 'Test Key',
         userId,
       });
@@ -385,7 +385,7 @@ describe('ApiKeyModel', () => {
 
     it('should only find API keys for the current user', async () => {
       const anotherApiKeyModel = new ApiKeyModel(serverDB, 'user2');
-      const { id_nanoid: key2 } = await anotherApiKeyModel.create({
+      const { id: key2 } = await anotherApiKeyModel.create({
         name: 'User 2 Key',
         enabled: true,
       });
@@ -398,24 +398,24 @@ describe('ApiKeyModel', () => {
 
   describe('updateLastUsed', () => {
     it('should update lastUsedAt timestamp', async () => {
-      const { id_nanoid } = await apiKeyModel.create({ name: 'Test Key', enabled: true });
+      const { id } = await apiKeyModel.create({ name: 'Test Key', enabled: true });
 
       const beforeUpdate = await serverDB.query.apiKeys.findFirst({
-        where: eq(apiKeys.id_nanoid, id_nanoid),
+        where: eq(apiKeys.id, id),
       });
       expect(beforeUpdate?.lastUsedAt).toBeNull();
 
-      await apiKeyModel.updateLastUsed(id_nanoid);
+      await apiKeyModel.updateLastUsed(id);
 
       const afterUpdate = await serverDB.query.apiKeys.findFirst({
-        where: eq(apiKeys.id_nanoid, id_nanoid),
+        where: eq(apiKeys.id, id),
       });
       expect(afterUpdate?.lastUsedAt).toBeInstanceOf(Date);
     });
 
     it('should only update API keys for the current user', async () => {
       const anotherApiKeyModel = new ApiKeyModel(serverDB, 'user2');
-      const { id_nanoid: key2 } = await anotherApiKeyModel.create({
+      const { id: key2 } = await anotherApiKeyModel.create({
         name: 'User 2 Key',
         enabled: true,
       });
@@ -423,28 +423,28 @@ describe('ApiKeyModel', () => {
       await apiKeyModel.updateLastUsed(key2);
 
       const key2Still = await serverDB.query.apiKeys.findFirst({
-        where: eq(apiKeys.id_nanoid, key2),
+        where: eq(apiKeys.id, key2),
       });
       expect(key2Still?.lastUsedAt).toBeNull();
     });
 
     it('should update existing lastUsedAt to a new timestamp', async () => {
-      const { id_nanoid } = await apiKeyModel.create({ name: 'Test Key', enabled: true });
+      const { id } = await apiKeyModel.create({ name: 'Test Key', enabled: true });
 
-      await apiKeyModel.updateLastUsed(id_nanoid);
+      await apiKeyModel.updateLastUsed(id);
 
       const firstUpdate = await serverDB.query.apiKeys.findFirst({
-        where: eq(apiKeys.id_nanoid, id_nanoid),
+        where: eq(apiKeys.id, id),
       });
       const firstTimestamp = firstUpdate?.lastUsedAt;
 
       // Wait to ensure different timestamp
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      await apiKeyModel.updateLastUsed(id_nanoid);
+      await apiKeyModel.updateLastUsed(id);
 
       const secondUpdate = await serverDB.query.apiKeys.findFirst({
-        where: eq(apiKeys.id_nanoid, id_nanoid),
+        where: eq(apiKeys.id, id),
       });
       const secondTimestamp = secondUpdate?.lastUsedAt;
 

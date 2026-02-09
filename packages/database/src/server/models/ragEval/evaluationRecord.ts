@@ -30,7 +30,7 @@ export class EvaluationRecordModel {
   delete = async (id: string) => {
     return this.db
       .delete(evaluationRecords)
-      .where(and(eq(evaluationRecords.id_nanoid, id), eq(evaluationRecords.userId, this.userId)));
+      .where(and(eq(evaluationRecords.id, id), eq(evaluationRecords.userId, this.userId)));
   };
 
   query = async (reportId: string) => {
@@ -44,7 +44,7 @@ export class EvaluationRecordModel {
 
   findById = async (id: string) => {
     return this.db.query.evaluationRecords.findFirst({
-      where: and(eq(evaluationRecords.id_nanoid, id), eq(evaluationRecords.userId, this.userId)),
+      where: and(eq(evaluationRecords.id, id), eq(evaluationRecords.userId, this.userId)),
     });
   };
 
@@ -61,6 +61,6 @@ export class EvaluationRecordModel {
     return this.db
       .update(evaluationRecords)
       .set(value)
-      .where(and(eq(evaluationRecords.id_nanoid, id), eq(evaluationRecords.userId, this.userId)));
+      .where(and(eq(evaluationRecords.id, id), eq(evaluationRecords.userId, this.userId)));
   };
 }

@@ -61,7 +61,7 @@ export const ragEvalRouter = router({
         name: input.name,
       });
 
-      return data?.id_nanoid;
+      return data?.id;
     }),
 
   getDatasets: ragEvalProcedure
@@ -101,7 +101,7 @@ export const ragEvalRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       const data = await ctx.datasetRecordModel.create(input);
-      return data?.id_nanoid;
+      return data?.id;
     }),
 
   getDatasetRecords: ragEvalProcedure
@@ -192,7 +192,7 @@ export const ragEvalRouter = router({
       const evalRecords = await ctx.evaluationRecordModel.batchCreate(
         datasetRecords.map((record) => ({
           evaluationId: input.id,
-          datasetRecordId: record.id_nanoid,
+          datasetRecordId: record.id,
           question: record.question!,
           ideal: record.ideal,
           status: EvalEvaluationStatus.Pending,
@@ -212,7 +212,7 @@ export const ragEvalRouter = router({
           evalRecords,
           async (record) => {
             asyncCaller.ragEval
-              .runRecordEvaluation({ evalRecordId: record.id_nanoid })
+              .runRecordEvaluation({ evalRecordId: record.id })
               .catch(async (e) => {
                 await ctx.evaluationModel.update(input.id, { status: EvalEvaluationStatus.Error });
 
@@ -260,7 +260,7 @@ export const ragEvalRouter = router({
           ground_truth: record.ideal,
         }));
         const date = dayjs().format('YYYY-MM-DD-HH-mm');
-        const filename = `${date}-eval_${evaluation.id_nanoid}-${evaluation.name}.jsonl`;
+        const filename = `${date}-eval_${evaluation.id}-${evaluation.name}.jsonl`;
         const path = `rag_eval_records/${filename}`;
 
         await ctx.fileService.uploadContent(path, JSONL.stringify(evalRecords));
@@ -284,7 +284,7 @@ export const ragEvalRouter = router({
         name: input.name,
       });
 
-      return data?.id_nanoid;
+      return data?.id;
     }),
 
   removeEvaluation: ragEvalProcedure

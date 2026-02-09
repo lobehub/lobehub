@@ -12,7 +12,7 @@ import { users } from './user';
 export const evalDatasets = pgTable(
   'rag_eval_datasets',
   {
-    id_nanoid: text('id_nanoid')
+    id: text('id')
       .$defaultFn(() => createNanoId(16)())
       .notNull()
       .unique()
@@ -37,14 +37,14 @@ export type EvalDatasetsSelectItem = typeof evalDatasets.$inferSelect;
 export const evalDatasetRecords = pgTable(
   'rag_eval_dataset_records',
   {
-    id_nanoid: text('id_nanoid')
+    id: text('id')
       .$defaultFn(() => createNanoId(32)())
       .notNull()
       .unique()
       .primaryKey(),
 
     datasetId: text('dataset_id')
-      .references(() => evalDatasets.id_nanoid, { onDelete: 'cascade' })
+      .references(() => evalDatasets.id, { onDelete: 'cascade' })
       .notNull(),
 
     ideal: text('ideal'),
@@ -64,7 +64,7 @@ export type EvalDatasetRecordsSelectItem = typeof evalDatasetRecords.$inferSelec
 export const evalEvaluation = pgTable(
   'rag_eval_evaluations',
   {
-    id_nanoid: text('id_nanoid')
+    id: text('id')
       .$defaultFn(() => createNanoId(32)())
       .notNull()
       .unique()
@@ -78,7 +78,7 @@ export const evalEvaluation = pgTable(
     error: jsonb('error'),
 
     datasetId: text('dataset_id')
-      .references(() => evalDatasets.id_nanoid, { onDelete: 'cascade' })
+      .references(() => evalDatasets.id, { onDelete: 'cascade' })
       .notNull(),
     knowledgeBaseId: text('knowledge_base_id').references(() => knowledgeBases.id, {
       onDelete: 'cascade',
@@ -98,7 +98,7 @@ export type EvalEvaluationSelectItem = typeof evalEvaluation.$inferSelect;
 export const evaluationRecords = pgTable(
   'rag_eval_evaluation_records',
   {
-    id_nanoid: text('id_nanoid')
+    id: text('id')
       .$defaultFn(() => createNanoId(32)())
       .notNull()
       .unique()
@@ -121,10 +121,10 @@ export const evaluationRecords = pgTable(
 
     duration: integer('duration'),
     datasetRecordId: text('dataset_record_id')
-      .references(() => evalDatasetRecords.id_nanoid, { onDelete: 'cascade' })
+      .references(() => evalDatasetRecords.id, { onDelete: 'cascade' })
       .notNull(),
     evaluationId: text('evaluation_id')
-      .references(() => evalEvaluation.id_nanoid, { onDelete: 'cascade' })
+      .references(() => evalEvaluation.id, { onDelete: 'cascade' })
       .notNull(),
 
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),

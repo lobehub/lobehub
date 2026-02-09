@@ -38,9 +38,7 @@ export class ApiKeyModel {
   };
 
   delete = async (id: string) => {
-    return this.db
-      .delete(apiKeys)
-      .where(and(eq(apiKeys.id_nanoid, id), eq(apiKeys.userId, this.userId)));
+    return this.db.delete(apiKeys).where(and(eq(apiKeys.id, id), eq(apiKeys.userId, this.userId)));
   };
 
   deleteAll = async () => {
@@ -100,12 +98,12 @@ export class ApiKeyModel {
     return this.db
       .update(apiKeys)
       .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(apiKeys.id_nanoid, id), eq(apiKeys.userId, this.userId)));
+      .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, this.userId)));
   };
 
   findById = async (id: string) => {
     return this.db.query.apiKeys.findFirst({
-      where: and(eq(apiKeys.id_nanoid, id), eq(apiKeys.userId, this.userId)),
+      where: and(eq(apiKeys.id, id), eq(apiKeys.userId, this.userId)),
     });
   };
 
@@ -113,6 +111,6 @@ export class ApiKeyModel {
     return this.db
       .update(apiKeys)
       .set({ lastUsedAt: new Date() })
-      .where(and(eq(apiKeys.id_nanoid, id), eq(apiKeys.userId, this.userId)));
+      .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, this.userId)));
   };
 }

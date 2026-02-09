@@ -76,7 +76,7 @@ export const ragEvalRouter = router({
             model: embeddingModel,
           });
 
-          await ctx.evalRecordModel.update(evalRecord.id_nanoid, {
+          await ctx.evalRecordModel.update(evalRecord.id, {
             questionEmbeddingId: embeddingId,
           });
 
@@ -96,7 +96,7 @@ export const ragEvalRouter = router({
           });
 
           context = chunks.map((item) => item.text).filter(Boolean) as string[];
-          await ctx.evalRecordModel.update(evalRecord.id_nanoid, { context });
+          await ctx.evalRecordModel.update(evalRecord.id, { context });
         }
 
         // Generate LLM answer

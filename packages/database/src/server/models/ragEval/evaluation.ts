@@ -29,7 +29,7 @@ export class EvalEvaluationModel {
   delete = async (id: string) => {
     return this.db
       .delete(evalEvaluation)
-      .where(and(eq(evalEvaluation.id_nanoid, id), eq(evalEvaluation.userId, this.userId)));
+      .where(and(eq(evalEvaluation.id, id), eq(evalEvaluation.userId, this.userId)));
   };
 
   queryByKnowledgeBaseId = async (knowledgeBaseId: string) => {
@@ -37,17 +37,17 @@ export class EvalEvaluationModel {
       .select({
         createdAt: evalEvaluation.createdAt,
         dataset: {
-          id: evalDatasets.id_nanoid,
+          id: evalDatasets.id,
           name: evalDatasets.name,
         },
         evalRecordsUrl: evalEvaluation.evalRecordsUrl,
-        id: evalEvaluation.id_nanoid,
+        id: evalEvaluation.id,
         name: evalEvaluation.name,
         status: evalEvaluation.status,
         updatedAt: evalEvaluation.updatedAt,
       })
       .from(evalEvaluation)
-      .leftJoin(evalDatasets, eq(evalDatasets.id_nanoid, evalEvaluation.datasetId))
+      .leftJoin(evalDatasets, eq(evalDatasets.id, evalEvaluation.datasetId))
       .orderBy(desc(evalEvaluation.createdAt))
       .where(
         and(
@@ -85,7 +85,7 @@ export class EvalEvaluationModel {
 
   findById = async (id: string) => {
     return this.db.query.evalEvaluation.findFirst({
-      where: and(eq(evalEvaluation.id_nanoid, id), eq(evalEvaluation.userId, this.userId)),
+      where: and(eq(evalEvaluation.id, id), eq(evalEvaluation.userId, this.userId)),
     });
   };
 
@@ -93,6 +93,6 @@ export class EvalEvaluationModel {
     return this.db
       .update(evalEvaluation)
       .set(value)
-      .where(and(eq(evalEvaluation.id_nanoid, id), eq(evalEvaluation.userId, this.userId)));
+      .where(and(eq(evalEvaluation.id, id), eq(evalEvaluation.userId, this.userId)));
   };
 }

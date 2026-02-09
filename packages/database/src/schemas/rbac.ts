@@ -7,7 +7,7 @@ import { users } from './user';
 
 // Roles table
 export const roles = pgTable('rbac_roles', {
-  id_nanoid: text('id_nanoid')
+  id: text('id')
     .$defaultFn(() => createNanoId(16)())
     .notNull()
     .unique()
@@ -28,7 +28,7 @@ export type RoleItem = typeof roles.$inferSelect;
 
 // Permissions table
 export const permissions = pgTable('rbac_permissions', {
-  id_nanoid: text('id_nanoid')
+  id: text('id')
     .$defaultFn(() => createNanoId(16)())
     .notNull()
     .unique()
@@ -51,10 +51,10 @@ export const rolePermissions = pgTable(
   'rbac_role_permissions',
   {
     roleId: text('role_id')
-      .references(() => roles.id_nanoid, { onDelete: 'cascade' })
+      .references(() => roles.id, { onDelete: 'cascade' })
       .notNull(),
     permissionId: text('permission_id')
-      .references(() => permissions.id_nanoid, { onDelete: 'cascade' })
+      .references(() => permissions.id, { onDelete: 'cascade' })
       .notNull(),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -77,7 +77,7 @@ export const userRoles = pgTable(
       .references(() => users.id, { onDelete: 'cascade' })
       .notNull(),
     roleId: text('role_id')
-      .references(() => roles.id_nanoid, { onDelete: 'cascade' })
+      .references(() => roles.id, { onDelete: 'cascade' })
       .notNull(),
 
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

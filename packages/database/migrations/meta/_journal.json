@@ -588,6 +588,13 @@
       "when": 1770628799077,
       "tag": "0083_remove_id_seq_identity_column",
       "breakpoints": true
+    },
+    {
+      "idx": 84,
+      "version": "7",
+      "when": 1770631019385,
+      "tag": "0084_rename_id_nanoid_to_id",
+      "breakpoints": true
     }
   ],
   "version": "6"

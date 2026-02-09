@@ -83,7 +83,7 @@ const ApiKey: FC = () => {
               return;
             }
 
-            updateMutation.mutate({ id: apiKey.id_nanoid!, params: { name: name as string } });
+            updateMutation.mutate({ id: apiKey.id!, params: { name: name as string } });
           }}
           placeholder={t('apikey.display.enterPlaceholder')}
           type="text"
@@ -107,7 +107,7 @@ const ApiKey: FC = () => {
         <Switch
           checked={!!apiKey.enabled}
           onChange={(checked) => {
-            updateMutation.mutate({ id: apiKey.id_nanoid!, params: { enabled: checked } });
+            updateMutation.mutate({ id: apiKey.id!, params: { enabled: checked } });
           }}
         />
       ),
@@ -125,7 +125,7 @@ const ApiKey: FC = () => {
             }
 
             updateMutation.mutate({
-              id: apiKey.id_nanoid!,
+              id: apiKey.id!,
               params: { expiresAt: expiresAt ? new Date(expiresAt as string) : null },
             });
           }}
@@ -151,7 +151,7 @@ const ApiKey: FC = () => {
           cancelText={t('apikey.list.actions.deleteConfirm.actions.cancel')}
           description={t('apikey.list.actions.deleteConfirm.content')}
           okText={t('apikey.list.actions.deleteConfirm.actions.ok')}
-          onConfirm={() => deleteMutation.mutate(apiKey.id_nanoid!)}
+          onConfirm={() => deleteMutation.mutate(apiKey.id!)}
           title={t('apikey.list.actions.deleteConfirm.title')}
         >
           <Button
