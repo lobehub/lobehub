@@ -30,13 +30,13 @@ export class EvalDatasetRecordModel {
     return result;
   };
 
-  delete = async (id: number) => {
+  delete = async (id: string) => {
     return this.db
       .delete(evalDatasetRecords)
-      .where(and(eq(evalDatasetRecords.id, id), eq(evalDatasetRecords.userId, this.userId)));
+      .where(and(eq(evalDatasetRecords.id_nanoid, id), eq(evalDatasetRecords.userId, this.userId)));
   };
 
-  query = async (datasetId: number) => {
+  query = async (datasetId: string) => {
     const list = await this.db.query.evalDatasetRecords.findMany({
       where: and(
         eq(evalDatasetRecords.datasetId, datasetId),
@@ -60,7 +60,7 @@ export class EvalDatasetRecordModel {
     });
   };
 
-  findByDatasetId = async (datasetId: number) => {
+  findByDatasetId = async (datasetId: string) => {
     return this.db.query.evalDatasetRecords.findMany({
       where: and(
         eq(evalDatasetRecords.datasetId, datasetId),
@@ -69,16 +69,16 @@ export class EvalDatasetRecordModel {
     });
   };
 
-  findById = async (id: number) => {
+  findById = async (id: string) => {
     return this.db.query.evalDatasetRecords.findFirst({
-      where: and(eq(evalDatasetRecords.id, id), eq(evalDatasetRecords.userId, this.userId)),
+      where: and(eq(evalDatasetRecords.id_nanoid, id), eq(evalDatasetRecords.userId, this.userId)),
     });
   };
 
-  update = async (id: number, value: Partial<NewEvalDatasetRecordsItem>) => {
+  update = async (id: string, value: Partial<NewEvalDatasetRecordsItem>) => {
     return this.db
       .update(evalDatasetRecords)
       .set(value)
-      .where(and(eq(evalDatasetRecords.id, id), eq(evalDatasetRecords.userId, this.userId)));
+      .where(and(eq(evalDatasetRecords.id_nanoid, id), eq(evalDatasetRecords.userId, this.userId)));
   };
 }

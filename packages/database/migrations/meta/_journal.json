@@ -567,6 +567,13 @@
       "when": 1770624987735,
       "tag": "0080_add_constraint_unique_not_null_to_id_nanoid",
       "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1770626135088,
+      "tag": "0081_switch_forgien_key_to_id_nanoid",
+      "breakpoints": true
     }
   ],
   "version": "6"

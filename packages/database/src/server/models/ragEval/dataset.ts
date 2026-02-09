@@ -21,10 +21,10 @@ export class EvalDatasetModel {
     return result;
   };
 
-  delete = async (id: number) => {
+  delete = async (id: string) => {
     return this.db
       .delete(evalDatasets)
-      .where(and(eq(evalDatasets.id, id), eq(evalDatasets.userId, this.userId)));
+      .where(and(eq(evalDatasets.id_nanoid, id), eq(evalDatasets.userId, this.userId)));
   };
 
   query = async (knowledgeBaseId: string): Promise<RAGEvalDataSetItem[]> => {
@@ -32,7 +32,7 @@ export class EvalDatasetModel {
       .select({
         createdAt: evalDatasets.createdAt,
         description: evalDatasets.description,
-        id: evalDatasets.id,
+        id: evalDatasets.id_nanoid,
         name: evalDatasets.name,
         updatedAt: evalDatasets.updatedAt,
       })
@@ -46,16 +46,16 @@ export class EvalDatasetModel {
       .orderBy(desc(evalDatasets.createdAt));
   };
 
-  findById = async (id: number) => {
+  findById = async (id: string) => {
     return this.db.query.evalDatasets.findFirst({
-      where: and(eq(evalDatasets.id, id), eq(evalDatasets.userId, this.userId)),
+      where: and(eq(evalDatasets.id_nanoid, id), eq(evalDatasets.userId, this.userId)),
     });
   };
 
-  update = async (id: number, value: Partial<NewEvalDatasetsItem>) => {
+  update = async (id: string, value: Partial<NewEvalDatasetsItem>) => {
     return this.db
       .update(evalDatasets)
       .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(evalDatasets.id, id), eq(evalDatasets.userId, this.userId)));
+      .where(and(eq(evalDatasets.id_nanoid, id), eq(evalDatasets.userId, this.userId)));
   };
 }

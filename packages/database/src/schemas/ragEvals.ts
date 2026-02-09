@@ -43,8 +43,8 @@ export const evalDatasetRecords = pgTable(
       .notNull()
       .unique(),
 
-    datasetId: integer('dataset_id')
-      .references(() => evalDatasets.id, { onDelete: 'cascade' })
+    datasetId: text('dataset_id')
+      .references(() => evalDatasets.id_nanoid, { onDelete: 'cascade' })
       .notNull(),
 
     ideal: text('ideal'),
@@ -77,8 +77,8 @@ export const evalEvaluation = pgTable(
     status: text('status').$defaultFn(() => EvalEvaluationStatus.Pending),
     error: jsonb('error'),
 
-    datasetId: integer('dataset_id')
-      .references(() => evalDatasets.id, { onDelete: 'cascade' })
+    datasetId: text('dataset_id')
+      .references(() => evalDatasets.id_nanoid, { onDelete: 'cascade' })
       .notNull(),
     knowledgeBaseId: text('knowledge_base_id').references(() => knowledgeBases.id, {
       onDelete: 'cascade',
@@ -120,11 +120,11 @@ export const evaluationRecords = pgTable(
     }),
 
     duration: integer('duration'),
-    datasetRecordId: integer('dataset_record_id')
-      .references(() => evalDatasetRecords.id, { onDelete: 'cascade' })
+    datasetRecordId: text('dataset_record_id')
+      .references(() => evalDatasetRecords.id_nanoid, { onDelete: 'cascade' })
       .notNull(),
-    evaluationId: integer('evaluation_id')
-      .references(() => evalEvaluation.id, { onDelete: 'cascade' })
+    evaluationId: text('evaluation_id')
+      .references(() => evalEvaluation.id_nanoid, { onDelete: 'cascade' })
       .notNull(),
 
     userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),

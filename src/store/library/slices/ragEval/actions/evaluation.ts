@@ -9,13 +9,13 @@ import { type KnowledgeBaseStore } from '@/store/library/store';
 const FETCH_EVALUATION_LIST_KEY = 'FETCH_EVALUATION_LIST_KEY';
 
 export interface RAGEvalEvaluationAction {
-  checkEvaluationStatus: (id: number) => Promise<void>;
+  checkEvaluationStatus: (id: string) => Promise<void>;
 
   createNewEvaluation: (params: CreateNewEvalEvaluation) => Promise<void>;
   refreshEvaluationList: () => Promise<void>;
 
-  removeEvaluation: (id: number) => Promise<void>;
-  runEvaluation: (id: number) => Promise<void>;
+  removeEvaluation: (id: string) => Promise<void>;
+  runEvaluation: (id: string) => Promise<void>;
 
   useFetchEvaluationList: (knowledgeBaseId: string) => SWRResponse<RAGEvalDataSetItem[]>;
 }

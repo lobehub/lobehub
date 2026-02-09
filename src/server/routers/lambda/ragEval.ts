@@ -72,7 +72,7 @@ export const ragEvalRouter = router({
     }),
 
   removeDataset: ragEvalProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.datasetModel.delete(input.id);
     }),
@@ -80,7 +80,7 @@ export const ragEvalRouter = router({
   updateDataset: ragEvalProcedure
     .input(
       z.object({
-        id: z.number(),
+        id: z.string(),
         value: insertEvalDatasetsSchema.partial(),
       }),
     )
@@ -92,7 +92,7 @@ export const ragEvalRouter = router({
   createDatasetRecords: ragEvalProcedure
     .input(
       z.object({
-        datasetId: z.number(),
+        datasetId: z.string(),
         question: z.string(),
         ideal: z.string().optional(),
         referenceFiles: z.array(z.string()).optional(),
@@ -105,13 +105,13 @@ export const ragEvalRouter = router({
     }),
 
   getDatasetRecords: ragEvalProcedure
-    .input(z.object({ datasetId: z.number() }))
+    .input(z.object({ datasetId: z.string() }))
     .query(async ({ ctx, input }): Promise<EvalDatasetRecord[]> => {
       return ctx.datasetRecordModel.query(input.datasetId);
     }),
 
   removeDatasetRecords: ragEvalProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.datasetRecordModel.delete(input.id);
     }),
@@ -119,7 +119,7 @@ export const ragEvalRouter = router({
   updateDatasetRecords: ragEvalProcedure
     .input(
       z.object({
-        id: z.number(),
+        id: z.string(),
         value: z
           .object({
             question: z.string(),
@@ -137,7 +137,7 @@ export const ragEvalRouter = router({
   importDatasetRecords: ragEvalProcedure
     .input(
       z.object({
-        datasetId: z.number(),
+        datasetId: z.string(),
         pathname: z.string(),
       }),
     )
@@ -173,7 +173,7 @@ export const ragEvalRouter = router({
 
   // Evaluation operations
   startEvaluationTask: ragEvalProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       // Start evaluation task
       const evaluation = await ctx.evaluationModel.findById(input.id);
@@ -192,7 +192,7 @@ export const ragEvalRouter = router({
       const evalRecords = await ctx.evaluationRecordModel.batchCreate(
         datasetRecords.map((record) => ({
           evaluationId: input.id,
-          datasetRecordId: record.id,
+          datasetRecordId: record.id_nanoid,
           question: record.question!,
           ideal: record.ideal,
           status: EvalEvaluationStatus.Pending,
@@ -212,7 +212,7 @@ export const ragEvalRouter = router({
           evalRecords,
           async (record) => {
             asyncCaller.ragEval
-              .runRecordEvaluation({ evalRecordId: record.id })
+              .runRecordEvaluation({ evalRecordId: record.id_nanoid })
               .catch(async (e) => {
                 await ctx.evaluationModel.update(input.id, { status: EvalEvaluationStatus.Error });
 
@@ -238,7 +238,7 @@ export const ragEvalRouter = router({
     }),
 
   checkEvaluationStatus: ragEvalProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.string() }))
     .query(async ({ input, ctx }) => {
       const evaluation = await ctx.evaluationModel.findById(input.id);
 
@@ -284,11 +284,11 @@ export const ragEvalRouter = router({
         name: input.name,
       });
 
-      return data?.id;
+      return data?.id_nanoid;
     }),
 
   removeEvaluation: ragEvalProcedure
-    .input(z.object({ id: z.number() }))
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ input, ctx }) => {
       return ctx.evaluationModel.delete(input.id);
     }),

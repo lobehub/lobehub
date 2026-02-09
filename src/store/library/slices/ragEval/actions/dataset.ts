@@ -19,10 +19,10 @@ const FETCH_DATASET_RECORD_KEY = 'FETCH_DATASET_RECORD_KEY';
 export interface RAGEvalDatasetAction {
   createNewDataset: (params: CreateNewEvalDatasets) => Promise<void>;
 
-  importDataset: (file: File, datasetId: number) => Promise<void>;
+  importDataset: (file: File, datasetId: string) => Promise<void>;
   refreshDatasetList: () => Promise<void>;
-  removeDataset: (id: number) => Promise<void>;
-  useFetchDatasetRecords: (datasetId: number | null) => SWRResponse<EvalDatasetRecord[]>;
+  removeDataset: (id: string) => Promise<void>;
+  useFetchDatasetRecords: (datasetId: string | null) => SWRResponse<EvalDatasetRecord[]>;
   useFetchDatasets: (knowledgeBaseId: string) => SWRResponse<RAGEvalDataSetItem[]>;
 }
 

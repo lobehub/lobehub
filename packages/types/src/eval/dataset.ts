@@ -33,7 +33,7 @@ export type InsertEvalDatasetRecord = z.infer<typeof insertEvalDatasetRecordSche
 export interface RAGEvalDataSetItem {
   createdAt: Date;
   description?: string | null;
-  id: number;
+  id: string;
   name: string;
   updatedAt: Date;
 }

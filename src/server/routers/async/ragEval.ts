@@ -39,7 +39,7 @@ export const ragEvalRouter = router({
   runRecordEvaluation: ragEvalProcedure
     .input(
       z.object({
-        evalRecordId: z.number(),
+        evalRecordId: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -76,7 +76,7 @@ export const ragEvalRouter = router({
             model: embeddingModel,
           });
 
-          await ctx.evalRecordModel.update(evalRecord.id, {
+          await ctx.evalRecordModel.update(evalRecord.id_nanoid, {
             questionEmbeddingId: embeddingId,
           });
 
@@ -96,7 +96,7 @@ export const ragEvalRouter = router({
           });
 
           context = chunks.map((item) => item.text).filter(Boolean) as string[];
-          await ctx.evalRecordModel.update(evalRecord.id, { context });
+          await ctx.evalRecordModel.update(evalRecord.id_nanoid, { context });
         }
 
         // Generate LLM answer
