@@ -180,8 +180,7 @@ table ai_providers {
 }
 
 table api_keys {
-  id integer [pk, not null]
-  id_nanoid text
+  id_nanoid text [pk, not null, unique]
   name varchar(256) [not null]
   key varchar(256) [not null, unique]
   enabled boolean [default: true]
@@ -964,9 +963,8 @@ table unstructured_chunks {
 }
 
 table rag_eval_dataset_records {
-  id integer [pk, not null]
-  id_nanoid text
-  dataset_id integer [not null]
+  id_nanoid text [pk, not null, unique]
+  dataset_id text [not null]
   ideal text
   question text
   reference_files text[]
@@ -982,8 +980,7 @@ table rag_eval_dataset_records {
 }
 
 table rag_eval_datasets {
-  id integer [pk, not null]
-  id_nanoid text
+  id_nanoid text [pk, not null, unique]
   description text
   name text [not null]
   knowledge_base_id text
@@ -998,14 +995,13 @@ table rag_eval_datasets {
 }
 
 table rag_eval_evaluations {
-  id integer [pk, not null]
-  id_nanoid text
+  id_nanoid text [pk, not null, unique]
   name text [not null]
   description text
   eval_records_url text
   status text
   error jsonb
-  dataset_id integer [not null]
+  dataset_id text [not null]
   knowledge_base_id text
   language_model text
   embedding_model text
@@ -1020,8 +1016,7 @@ table rag_eval_evaluations {
 }
 
 table rag_eval_evaluation_records {
-  id integer [pk, not null]
-  id_nanoid text
+  id_nanoid text [pk, not null, unique]
   question text [not null]
   answer text
   context text[]
@@ -1032,8 +1027,8 @@ table rag_eval_evaluation_records {
   embedding_model text
   question_embedding_id uuid
   duration integer
-  dataset_record_id integer [not null]
-  evaluation_id integer [not null]
+  dataset_record_id text [not null]
+  evaluation_id text [not null]
   user_id text
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
@@ -1045,8 +1040,7 @@ table rag_eval_evaluation_records {
 }
 
 table rbac_permissions {
-  id integer [pk, not null]
-  id_nanoid text
+  id_nanoid text [pk, not null, unique]
   code text [not null, unique]
   name text [not null]
   description text
@@ -1058,8 +1052,8 @@ table rbac_permissions {
 }
 
 table rbac_role_permissions {
-  role_id integer [not null]
-  permission_id integer [not null]
+  role_id text [not null]
+  permission_id text [not null]
   created_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
@@ -1070,8 +1064,7 @@ table rbac_role_permissions {
 }
 
 table rbac_roles {
-  id integer [pk, not null]
-  id_nanoid text
+  id_nanoid text [pk, not null, unique]
   name text [not null, unique]
   display_name text [not null]
   description text
@@ -1085,7 +1078,7 @@ table rbac_roles {
 
 table rbac_user_roles {
   user_id text [not null]
-  role_id integer [not null]
+  role_id text [not null]
   created_at "timestamp with time zone" [not null, default: `now()`]
   expires_at "timestamp with time zone"
 

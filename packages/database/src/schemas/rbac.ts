@@ -1,14 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
-import {
-  boolean,
-  index,
-  integer,
-  jsonb,
-  pgTable,
-  primaryKey,
-  text,
-  timestamp,
-} from 'drizzle-orm/pg-core';
+import { boolean, index, jsonb, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 
 import { createNanoId } from '../utils/idGenerator';
 import { timestamps } from './_helpers';
@@ -16,7 +7,6 @@ import { users } from './user';
 
 // Roles table
 export const roles = pgTable('rbac_roles', {
-  id: integer('id').generatedByDefaultAsIdentity(),
   id_nanoid: text('id_nanoid')
     .$defaultFn(() => createNanoId(16)())
     .notNull()
@@ -38,7 +28,6 @@ export type RoleItem = typeof roles.$inferSelect;
 
 // Permissions table
 export const permissions = pgTable('rbac_permissions', {
-  id: integer('id').generatedByDefaultAsIdentity(),
   id_nanoid: text('id_nanoid')
     .$defaultFn(() => createNanoId(16)())
     .notNull()

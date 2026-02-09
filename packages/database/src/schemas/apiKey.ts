@@ -1,5 +1,5 @@
 /* eslint-disable sort-keys-fix/sort-keys-fix  */
-import { boolean, index, integer, pgTable, text, varchar } from 'drizzle-orm/pg-core';
+import { boolean, index, pgTable, text, varchar } from 'drizzle-orm/pg-core';
 import { createInsertSchema } from 'drizzle-zod';
 
 import { createNanoId } from '../utils/idGenerator';
@@ -9,7 +9,6 @@ import { users } from './user';
 export const apiKeys = pgTable(
   'api_keys',
   {
-    id: integer('id').generatedByDefaultAsIdentity(), // auto-increment primary key
     id_nanoid: text('id_nanoid')
       .$defaultFn(() => createNanoId(16)())
       .notNull()

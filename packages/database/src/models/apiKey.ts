@@ -1,9 +1,9 @@
 import { and, desc, eq } from 'drizzle-orm';
 
-import { LobeChatDatabase } from '../type';
 import { generateApiKey, isApiKeyExpired, validateApiKeyFormat } from '@/utils/apiKey';
 
 import { ApiKeyItem, NewApiKeyItem, apiKeys } from '../schemas';
+import { LobeChatDatabase } from '../type';
 
 type EncryptAPIKeyVaults = (keyVaults: string) => Promise<string>;
 type DecryptAPIKeyVaults = (keyVaults: string) => Promise<{ plaintext: string }>;
@@ -37,8 +37,10 @@ export class ApiKeyModel {
     return result;
   };
 
-  delete = async (id: number) => {
-    return this.db.delete(apiKeys).where(and(eq(apiKeys.id, id), eq(apiKeys.userId, this.userId)));
+  delete = async (id: string) => {
+    return this.db
+      .delete(apiKeys)
+      .where(and(eq(apiKeys.id_nanoid, id), eq(apiKeys.userId, this.userId)));
   };
 
   deleteAll = async () => {
@@ -94,23 +96,23 @@ export class ApiKeyModel {
     return true;
   };
 
-  update = async (id: number, value: Partial<ApiKeyItem>) => {
+  update = async (id: string, value: Partial<ApiKeyItem>) => {
     return this.db
       .update(apiKeys)
       .set({ ...value, updatedAt: new Date() })
-      .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, this.userId)));
+      .where(and(eq(apiKeys.id_nanoid, id), eq(apiKeys.userId, this.userId)));
   };
 
-  findById = async (id: number) => {
+  findById = async (id: string) => {
     return this.db.query.apiKeys.findFirst({
-      where: and(eq(apiKeys.id, id), eq(apiKeys.userId, this.userId)),
+      where: and(eq(apiKeys.id_nanoid, id), eq(apiKeys.userId, this.userId)),
     });
   };
 
-  updateLastUsed = async (id: number) => {
+  updateLastUsed = async (id: string) => {
     return this.db
       .update(apiKeys)
       .set({ lastUsedAt: new Date() })
-      .where(and(eq(apiKeys.id, id), eq(apiKeys.userId, this.userId)));
+      .where(and(eq(apiKeys.id_nanoid, id), eq(apiKeys.userId, this.userId)));
   };
 }

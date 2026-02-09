@@ -12,7 +12,7 @@ import { uploadService } from '@/services/upload';
 
 class RAGEvalService {
   // Dataset
-  createDataset = async (params: CreateNewEvalDatasets): Promise<number | undefined> => {
+  createDataset = async (params: CreateNewEvalDatasets): Promise<string | undefined> => {
     return lambdaClient.ragEval.createDataset.mutate(params);
   };
 

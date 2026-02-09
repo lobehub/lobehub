@@ -47,7 +47,7 @@ export class EvalEvaluationModel {
         updatedAt: evalEvaluation.updatedAt,
       })
       .from(evalEvaluation)
-      .leftJoin(evalDatasets, eq(evalDatasets.id, evalEvaluation.datasetId))
+      .leftJoin(evalDatasets, eq(evalDatasets.id_nanoid, evalEvaluation.datasetId))
       .orderBy(desc(evalEvaluation.createdAt))
       .where(
         and(

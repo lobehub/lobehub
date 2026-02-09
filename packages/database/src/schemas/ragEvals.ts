@@ -12,7 +12,6 @@ import { users } from './user';
 export const evalDatasets = pgTable(
   'rag_eval_datasets',
   {
-    id: integer('id').generatedAlwaysAsIdentity({ startWith: 30_000 }),
     id_nanoid: text('id_nanoid')
       .$defaultFn(() => createNanoId(16)())
       .notNull()
@@ -38,7 +37,6 @@ export type EvalDatasetsSelectItem = typeof evalDatasets.$inferSelect;
 export const evalDatasetRecords = pgTable(
   'rag_eval_dataset_records',
   {
-    id: integer('id').generatedAlwaysAsIdentity(),
     id_nanoid: text('id_nanoid')
       .$defaultFn(() => createNanoId(32)())
       .notNull()
@@ -66,7 +64,6 @@ export type EvalDatasetRecordsSelectItem = typeof evalDatasetRecords.$inferSelec
 export const evalEvaluation = pgTable(
   'rag_eval_evaluations',
   {
-    id: integer('id').generatedAlwaysAsIdentity(),
     id_nanoid: text('id_nanoid')
       .$defaultFn(() => createNanoId(32)())
       .notNull()
@@ -101,7 +98,6 @@ export type EvalEvaluationSelectItem = typeof evalEvaluation.$inferSelect;
 export const evaluationRecords = pgTable(
   'rag_eval_evaluation_records',
   {
-    id: integer('id').generatedAlwaysAsIdentity(),
     id_nanoid: text('id_nanoid')
       .$defaultFn(() => createNanoId(32)())
       .notNull()

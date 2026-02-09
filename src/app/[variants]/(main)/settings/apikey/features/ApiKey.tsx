@@ -50,7 +50,7 @@ const ApiKey: FC = () => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, params }: { id: number; params: UpdateApiKeyParams }) =>
+    mutationFn: ({ id, params }: { id: string; params: UpdateApiKeyParams }) =>
       lambdaClient.apiKey.updateApiKey.mutate({ id, value: params }),
     onSuccess: () => {
       actionRef.current?.reload();
@@ -58,7 +58,7 @@ const ApiKey: FC = () => {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => lambdaClient.apiKey.deleteApiKey.mutate({ id }),
+    mutationFn: (id: string) => lambdaClient.apiKey.deleteApiKey.mutate({ id }),
     onSuccess: () => {
       actionRef.current?.reload();
     },
@@ -83,7 +83,7 @@ const ApiKey: FC = () => {
               return;
             }
 
-            updateMutation.mutate({ id: apiKey.id!, params: { name: name as string } });
+            updateMutation.mutate({ id: apiKey.id_nanoid!, params: { name: name as string } });
           }}
           placeholder={t('apikey.display.enterPlaceholder')}
           type="text"
@@ -107,7 +107,7 @@ const ApiKey: FC = () => {
         <Switch
           checked={!!apiKey.enabled}
           onChange={(checked) => {
-            updateMutation.mutate({ id: apiKey.id!, params: { enabled: checked } });
+            updateMutation.mutate({ id: apiKey.id_nanoid!, params: { enabled: checked } });
           }}
         />
       ),
@@ -125,7 +125,7 @@ const ApiKey: FC = () => {
             }
 
             updateMutation.mutate({
-              id: apiKey.id!,
+              id: apiKey.id_nanoid!,
               params: { expiresAt: expiresAt ? new Date(expiresAt as string) : null },
             });
           }}
@@ -151,7 +151,7 @@ const ApiKey: FC = () => {
           cancelText={t('apikey.list.actions.deleteConfirm.actions.cancel')}
           description={t('apikey.list.actions.deleteConfirm.content')}
           okText={t('apikey.list.actions.deleteConfirm.actions.ok')}
-          onConfirm={() => deleteMutation.mutate(apiKey.id!)}
+          onConfirm={() => deleteMutation.mutate(apiKey.id_nanoid!)}
           title={t('apikey.list.actions.deleteConfirm.title')}
         >
           <Button

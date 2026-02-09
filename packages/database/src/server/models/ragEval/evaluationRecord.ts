@@ -27,10 +27,10 @@ export class EvaluationRecordModel {
       .returning();
   };
 
-  delete = async (id: number) => {
+  delete = async (id: string) => {
     return this.db
       .delete(evaluationRecords)
-      .where(and(eq(evaluationRecords.id, id), eq(evaluationRecords.userId, this.userId)));
+      .where(and(eq(evaluationRecords.id_nanoid, id), eq(evaluationRecords.userId, this.userId)));
   };
 
   query = async (reportId: string) => {

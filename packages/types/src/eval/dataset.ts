@@ -7,7 +7,7 @@ export interface EvalDatasetRecordRefFile {
 }
 export interface EvalDatasetRecord {
   createdAt: Date;
-  id: number;
+  id_nanoid: string;
   ideal?: string | null;
 
   metadata: any;

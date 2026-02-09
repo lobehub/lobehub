@@ -581,6 +581,13 @@
       "when": 1770628390927,
       "tag": "0082_set_id_nanoid_as_primary",
       "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1770628799077,
+      "tag": "0083_remove_id_seq_identity_column",
+      "breakpoints": true
     }
   ],
   "version": "6"
