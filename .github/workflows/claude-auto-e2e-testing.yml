@@ -1,0 +1,131 @@
+name: Claude Auto E2E Testing
+description: Automatically add E2E tests to improve user journey coverage
+
+on:
+  schedule:
+    # Run daily at 21:00 UTC (05:00 Beijing Time)
+    - cron: '0 21 * * *'
+  workflow_dispatch:
+    inputs:
+      target_module:
+        description: 'Specific module/feature to add E2E tests (e.g., agent/conversation, knowledge/rag)'
+        required: false
+        type: string
+
+concurrency:
+  group: auto-e2e-testing
+  cancel-in-progress: false
+
+env:
+  DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+  DATABASE_DRIVER: node
+  KEY_VAULTS_SECRET: LA7n9k3JdEcbSgml2sxfw+4TV1AzaaFU5+R176aQz4s=
+  AUTH_SECRET: e2e-test-secret-key-for-better-auth-32chars!
+  AUTH_EMAIL_VERIFICATION: "0"
+  S3_ACCESS_KEY_ID: e2e-mock-access-key
+  S3_SECRET_ACCESS_KEY: e2e-mock-secret-key
+  S3_BUCKET: e2e-mock-bucket
+  S3_ENDPOINT: https://e2e-mock-s3.localhost
+
+jobs:
+  add-e2e-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+
+    services:
+      postgres:
+        image: paradedb/paradedb:latest
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright browsers (with system deps)
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run database migrations
+        run: bun run db:migrate
+
+      - name: Build application
+        run: bun run build
+        env:
+          SKIP_LINT: "1"
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "claude-bot[bot]"
+          git config --global user.email "claude-bot[bot]@users.noreply.github.com"
+
+      - name: Copy prompts
+        run: |
+          mkdir -p /tmp/claude-prompts
+          cp .claude/prompts/auto-e2e-testing.md /tmp/claude-prompts/
+          cp .claude/prompts/security-rules.md /tmp/claude-prompts/
+          cp e2e/CLAUDE.md /tmp/claude-prompts/e2e-guide.md
+
+      - name: Run Claude Code for Auto E2E Testing
+        uses: anthropics/claude-code-action@v1
+        with:
+          github_token: ${{ secrets.GH_TOKEN }}
+          allowed_non_write_users: "*"
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: |
+            --allowedTools "Bash,Read,Edit,Write,Glob,Grep"
+            --append-system-prompt "$(cat /tmp/claude-prompts/security-rules.md)"
+          prompt: |
+            Follow the auto E2E testing guide located at:
+            ```bash
+            cat /tmp/claude-prompts/auto-e2e-testing.md
+            ```
+
+            Also read the E2E testing reference guide:
+            ```bash
+            cat /tmp/claude-prompts/e2e-guide.md
+            ```
+
+            ## Task Assignment
+
+            ${{ inputs.target_module && format('Process the specified module/feature: {0}', inputs.target_module) || 'Automatically select one module/feature from the product modules table that needs E2E coverage' }}
+
+            ## Environment Information
+            - Repository: ${{ github.repository }}
+            - Branch: ${{ github.ref_name }}
+            - Target Module: ${{ inputs.target_module || 'Auto-select' }}
+            - Run ID: ${{ github.run_id }}
+
+            ## E2E Runtime Environment
+            - PostgreSQL is running at localhost:5432 (user: postgres, password: postgres)
+            - Application has been built and is ready to start
+            - Playwright chromium is installed
+            - To start the server for E2E tests, run: `bunx next start -p 3006 &` from the project root, then wait for it to be ready
+            - Run E2E tests with: `cd e2e && BASE_URL=http://localhost:3006 pnpm exec cucumber-js --config cucumber.config.js --tags "<your-tags>"`
+
+            **Start the auto E2E testing process now.**
+
+      - name: Upload E2E test artifacts (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: e2e-artifacts
+          path: |
+            e2e/reports
+            e2e/screenshots
+          if-no-files-found: ignore
