@@ -64,6 +64,31 @@ export type DynamicInterventionResolver = (
 ) => boolean;
 
 /**
+ * Global intervention resolver configuration
+ * Global resolvers run for EVERY tool call, not just tools with dynamic config.
+ * They are evaluated before per-tool dynamic resolvers in the intervention chain.
+ */
+export interface GlobalInterventionResolverConfig {
+  /**
+   * Policy to apply when resolver condition is met (returns true)
+   * - 'always': cannot be bypassed by auto-run; in headless mode the tool is skipped entirely
+   * - 'required': requires intervention but can be bypassed by auto-run
+   * @default 'always'
+   */
+  policy?: HumanInterventionPolicy;
+
+  /**
+   * The resolver function, reuses DynamicInterventionResolver signature
+   */
+  resolver: DynamicInterventionResolver;
+
+  /**
+   * Unique type identifier for this global resolver
+   */
+  type: string;
+}
+
+/**
  * Dynamic intervention configuration
  * Used to dynamically determine intervention policy based on runtime context
  *

@@ -1,6 +1,7 @@
 import type {
   ChatToolPayload,
   DynamicInterventionResolver,
+  GlobalInterventionResolverConfig,
   MessageToolCall,
 } from '@lobechat/types';
 
@@ -82,10 +83,16 @@ export interface GeneralAgentConfig {
     maxWindowToken?: number;
   };
   /**
-   * Dynamic intervention resolvers registry
-   * Used to evaluate runtime intervention policies for tools
+   * Dynamic intervention resolvers registry (per-tool)
+   * Used to evaluate runtime intervention policies for tools with dynamic config
    */
   dynamicInterventionResolvers?: Record<string, DynamicInterventionResolver>;
+  /**
+   * Global intervention resolvers that run for EVERY tool call
+   * Evaluated in array order, before per-tool dynamic resolvers.
+   * When not provided, defaults to [createSecurityBlacklistGlobalResolver()]
+   */
+  globalInterventionResolvers?: GlobalInterventionResolverConfig[];
   modelRuntimeConfig?: {
     /**
      * Compression model configuration

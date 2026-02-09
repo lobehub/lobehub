@@ -5,7 +5,11 @@ import type {
   HumanInterventionPolicy,
 } from '@lobechat/types';
 
-import { DEFAULT_SECURITY_BLACKLIST, InterventionChecker } from '../core';
+import {
+  DEFAULT_SECURITY_BLACKLIST,
+  InterventionChecker,
+  createSecurityBlacklistGlobalResolver,
+} from '../core';
 import type {
   Agent,
   AgentInstruction,
@@ -127,12 +131,19 @@ export class GeneralChatAgent implements Agent {
     const toolsNeedingIntervention: ChatToolPayload[] = [];
     const toolsToExecute: ChatToolPayload[] = [];
 
-    // Get security blacklist (use default if not provided)
+    // Get security blacklist for resolver metadata
     const securityBlacklist = state.securityBlacklist ?? DEFAULT_SECURITY_BLACKLIST;
+
+    // Build resolver metadata: merge state.metadata with security blacklist
+    const resolverMetadata = { ...state.metadata, securityBlacklist };
 
     // Get user config (default to 'manual' mode)
     const userConfig = state.userInterventionConfig || { approvalMode: 'manual' };
     const { approvalMode, allowList = [] } = userConfig;
+
+    // Global resolvers: default to security blacklist resolver if not provided
+    const globalResolvers =
+      this.config.globalInterventionResolvers ?? [createSecurityBlacklistGlobalResolver()];
 
     for (const toolCalling of toolsCalling) {
       const { identifier, apiName } = toolCalling;
@@ -146,27 +157,36 @@ export class GeneralChatAgent implements Agent {
         // Invalid JSON, treat as empty args
       }
 
-      // Priority 0: CRITICAL - Check security blacklist FIRST
-      const securityCheck = InterventionChecker.checkSecurityBlacklist(securityBlacklist, toolArgs);
+      // Phase 1: Run global resolvers (e.g., security blacklist)
+      let globalBlocked = false;
+      let globalPolicy: HumanInterventionPolicy = 'always';
 
-      // Priority 0.5: Headless mode - fully automated for async tasks
-      // In headless mode: blacklisted tools are skipped, all other tools execute directly
+      for (const globalResolver of globalResolvers) {
+        if (globalResolver.resolver(toolArgs, resolverMetadata)) {
+          globalBlocked = true;
+          globalPolicy = globalResolver.policy ?? 'always';
+          break;
+        }
+      }
+
+      // Phase 2: Headless mode - fully automated for async tasks
       if (approvalMode === 'headless') {
-        if (securityCheck.blocked) {
-          // Skip blacklisted tools entirely (don't execute, don't wait for approval)
+        if (globalBlocked && globalPolicy === 'always') {
+          // Skip 'always' blocked tools entirely (don't execute, don't wait for approval)
           continue;
         }
-        // All other tools execute directly
+        // All other tools execute directly (including overridable global blocks)
         toolsToExecute.push(toolCalling);
         continue;
       }
 
-      // For non-headless modes: security blacklist requires intervention
-      if (securityCheck.blocked) {
+      // For non-headless modes: 'always' global block requires intervention unconditionally
+      if (globalBlocked && globalPolicy === 'always') {
         toolsNeedingIntervention.push(toolCalling);
         continue;
       }
 
+      // Phase 3: Per-tool dynamic resolver
       const config = this.getToolInterventionConfig(toolCalling, state);
       const isDynamicConfig = this.isDynamicInterventionConfig(config);
       const dynamicPolicy = this.resolveDynamicPolicy(config, toolArgs, state.metadata);
@@ -174,7 +194,6 @@ export class GeneralChatAgent implements Agent {
         ? undefined
         : (config as HumanInterventionConfig | undefined);
 
-      // Priority 1: Dynamic policy (highest priority after security/headless)
       if (dynamicPolicy !== undefined) {
         if (dynamicPolicy === 'never') {
           toolsToExecute.push(toolCalling);
@@ -184,20 +203,25 @@ export class GeneralChatAgent implements Agent {
         continue;
       }
 
-      // Priority 2: Check 'always' policy - overrides auto-run mode
-      // Some sensitive operations (e.g., installPlugin) must always require user confirmation
+      // Phase 3.5: Handle overridable global block (policy !== 'always')
+      if (globalBlocked && globalPolicy !== 'always') {
+        toolsNeedingIntervention.push(toolCalling);
+        continue;
+      }
+
+      // Phase 4: Check 'always' policy - overrides auto-run mode
       if (this.matchesAlwaysPolicy(staticConfig, toolArgs)) {
         toolsNeedingIntervention.push(toolCalling);
         continue;
       }
 
-      // Priority 3: User config is 'auto-run', all tools execute directly
+      // Phase 5: User config is 'auto-run', all tools execute directly
       if (approvalMode === 'auto-run') {
         toolsToExecute.push(toolCalling);
         continue;
       }
 
-      // Priority 4: User config is 'allow-list', check if tool is in whitelist
+      // Phase 6: User config is 'allow-list', check if tool is in whitelist
       if (approvalMode === 'allow-list') {
         if (allowList.includes(toolKey)) {
           toolsToExecute.push(toolCalling);
@@ -207,8 +231,7 @@ export class GeneralChatAgent implements Agent {
         continue;
       }
 
-      // Priority 5: User config is 'manual' (default), use tool's own config
-      // Note: config is already retrieved above for 'always' policy check
+      // Phase 7: User config is 'manual' (default), use tool's own config
       const policy = InterventionChecker.shouldIntervene({
         config: staticConfig,
         securityBlacklist,
@@ -218,7 +241,6 @@ export class GeneralChatAgent implements Agent {
       if (policy === 'never') {
         toolsToExecute.push(toolCalling);
       } else {
-        // 'required' or undefined requires intervention
         toolsNeedingIntervention.push(toolCalling);
       }
     }
