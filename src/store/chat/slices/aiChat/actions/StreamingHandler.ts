@@ -417,12 +417,13 @@ export class StreamingHandler {
         : this.thinkingContent
           ? { content: this.thinkingContent, duration: this.thinkingDuration }
           : undefined,
+      hasContentImages
+        ? {
+            isMultimodal: true,
+            tempDisplayContent: serializePartsForStorage(this.contentParts),
+          }
+        : undefined,
     );
-
-    // If has content images, also notify with metadata for tempDisplayContent
-    if (hasContentImages) {
-      // This is handled in the main onContentUpdate callback
-    }
   }
 
   private buildReasoningState(): ReasoningState | undefined {

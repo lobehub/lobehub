@@ -420,12 +420,21 @@ export const streamingExecutor: StateCreator<
     const handler = new StreamingHandler(
       { messageId, operationId, agentId, groupId, topicId },
       {
-        onContentUpdate: (content, reasoning) => {
+        onContentUpdate: (content, reasoning, contentMetadata) => {
           internal_dispatchMessage(
             {
               id: messageId,
               type: 'updateMessage',
-              value: { content, reasoning },
+              value: {
+                content,
+                reasoning,
+                ...(contentMetadata && {
+                  metadata: {
+                    isMultimodal: contentMetadata.isMultimodal,
+                    tempDisplayContent: contentMetadata.tempDisplayContent,
+                  },
+                }),
+              },
             },
             { operationId },
           );

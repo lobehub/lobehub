@@ -223,7 +223,7 @@ export const messageOptimisticUpdate: StateCreator<
         {
           id,
           type: 'updateMessage',
-          value: { content },
+          value: { content, metadata: extra?.metadata },
         },
         context,
       );

@@ -1791,6 +1791,174 @@ describe('StreamingExecutor actions', () => {
     });
   });
 
+  describe('content_part multimodal streaming', () => {
+    it('should dispatch isMultimodal metadata when content_part image chunks are received', async () => {
+      // Mock file store to prevent upload from hanging
+      const fileStoreMod = await import('@/store/file/store');
+      vi.spyOn(fileStoreMod, 'getFileStoreState').mockReturnValue({
+        uploadBase64FileWithProgress: vi
+          .fn()
+          .mockResolvedValue({ id: 'img-id', url: 'https://cdn.example.com/img.png' }),
+      } as any);
+
+      const { result } = renderHook(() => useChatStore());
+      const messages = [createMockMessage({ role: 'user' })];
+      const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchMessage');
+
+      // Create operation for this test
+      const { operationId } = result.current.startOperation({
+        type: 'execAgentRuntime',
+        context: {
+          agentId: TEST_IDS.SESSION_ID,
+          topicId: null,
+          messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+        },
+        label: 'Test AI Generation',
+      });
+
+      const streamSpy = vi
+        .spyOn(chatService, 'createAssistantMessageStream')
+        .mockImplementation(async ({ onMessageHandle, onFinish }) => {
+          // Send text content_part
+          await onMessageHandle?.({
+            type: 'content_part',
+            partType: 'text',
+            content: 'Here is a cat: ',
+          } as any);
+          // Send image content_part
+          await onMessageHandle?.({
+            type: 'content_part',
+            partType: 'image',
+            content: 'base64catimage',
+            mimeType: 'image/jpeg',
+          } as any);
+          await onFinish?.('Here is a cat: ', {} as any);
+        });
+
+      await act(async () => {
+        await result.current.internal_fetchAIChatMessage({
+          messages,
+          messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          model: 'gemini-3-pro-image-preview',
+          provider: 'google',
+          operationId,
+          agentConfig: createMockResolvedAgentConfig(),
+        });
+      });
+
+      // Find dispatch calls with metadata.isMultimodal
+      const multimodalDispatches = dispatchSpy.mock.calls.filter((call) => {
+        const dispatch = call[0];
+        return (
+          dispatch?.type === 'updateMessage' &&
+          'value' in dispatch &&
+          dispatch.value?.metadata?.isMultimodal === true
+        );
+      });
+
+      // Should have dispatched at least once with isMultimodal metadata during streaming
+      expect(multimodalDispatches.length).toBeGreaterThanOrEqual(1);
+
+      // Verify the dispatch includes tempDisplayContent
+      const firstMultimodalDispatch = multimodalDispatches[0][0] as any;
+      expect(firstMultimodalDispatch.value.metadata.tempDisplayContent).toBeDefined();
+
+      streamSpy.mockRestore();
+    });
+
+    it('should call optimisticUpdateMessageContent with isMultimodal metadata for multimodal content', async () => {
+      // Mock file store to prevent upload from hanging
+      const fileStoreMod = await import('@/store/file/store');
+      vi.spyOn(fileStoreMod, 'getFileStoreState').mockReturnValue({
+        uploadBase64FileWithProgress: vi
+          .fn()
+          .mockResolvedValue({ id: 'img-id', url: 'https://cdn.example.com/img.png' }),
+      } as any);
+
+      const { result } = renderHook(() => useChatStore());
+      const messages = [createMockMessage({ role: 'user' })];
+      const updateContentSpy = vi.spyOn(result.current, 'optimisticUpdateMessageContent');
+
+      const streamSpy = vi
+        .spyOn(chatService, 'createAssistantMessageStream')
+        .mockImplementation(async ({ onMessageHandle, onFinish }) => {
+          await onMessageHandle?.({
+            type: 'content_part',
+            partType: 'text',
+            content: 'Generated image: ',
+          } as any);
+          await onMessageHandle?.({
+            type: 'content_part',
+            partType: 'image',
+            content: 'base64imagedata',
+            mimeType: 'image/png',
+          } as any);
+          await onFinish?.('Generated image: ', {} as any);
+        });
+
+      await act(async () => {
+        await result.current.internal_fetchAIChatMessage({
+          messages,
+          messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          model: 'gemini-3-pro-image-preview',
+          provider: 'google',
+          agentConfig: createMockResolvedAgentConfig(),
+        });
+      });
+
+      // optimisticUpdateMessageContent should be called with metadata containing isMultimodal
+      expect(updateContentSpy).toHaveBeenCalledWith(
+        TEST_IDS.ASSISTANT_MESSAGE_ID,
+        expect.any(String), // serialized JSON content
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            isMultimodal: true,
+          }),
+        }),
+        expect.any(Object),
+      );
+
+      streamSpy.mockRestore();
+    });
+
+    it('should NOT dispatch isMultimodal metadata for plain text streaming', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const messages = [createMockMessage({ role: 'user' })];
+      const dispatchSpy = vi.spyOn(result.current, 'internal_dispatchMessage');
+
+      const streamSpy = vi
+        .spyOn(chatService, 'createAssistantMessageStream')
+        .mockImplementation(async ({ onMessageHandle, onFinish }) => {
+          await onMessageHandle?.({ type: 'text', text: 'Hello World' } as any);
+          await onFinish?.('Hello World', {} as any);
+        });
+
+      await act(async () => {
+        await result.current.internal_fetchAIChatMessage({
+          messages,
+          messageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+          model: 'gpt-4o-mini',
+          provider: 'openai',
+          agentConfig: createMockResolvedAgentConfig(),
+        });
+      });
+
+      // No dispatch should contain isMultimodal metadata
+      const multimodalDispatches = dispatchSpy.mock.calls.filter((call) => {
+        const dispatch = call[0];
+        return (
+          dispatch?.type === 'updateMessage' &&
+          'value' in dispatch &&
+          dispatch.value?.metadata?.isMultimodal === true
+        );
+      });
+
+      expect(multimodalDispatches).toHaveLength(0);
+
+      streamSpy.mockRestore();
+    });
+  });
+
   describe('isSubTask filtering', () => {
     it('should filter out lobe-gtd tools when isSubTask is true', async () => {
       const { result } = renderHook(() => useChatStore());

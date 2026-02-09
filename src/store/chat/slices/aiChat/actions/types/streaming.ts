@@ -40,7 +40,11 @@ export type GroundingData = GroundingSearch;
  */
 export interface StreamingCallbacks {
   /** Content update */
-  onContentUpdate: (content: string, reasoning?: ReasoningState) => void;
+  onContentUpdate: (
+    content: string,
+    reasoning?: ReasoningState,
+    contentMetadata?: { isMultimodal: boolean; tempDisplayContent: string },
+  ) => void;
   /** Search grounding update */
   onGroundingUpdate: (grounding: GroundingData) => void;
   /** Image list update */
@@ -101,19 +105,19 @@ export interface StreamingResult {
  * Stream chunk types
  */
 export type StreamChunk =
-  | { text: string, type: 'text'; }
-  | { text: string, type: 'reasoning'; }
-  | { content: string; mimeType?: string, partType: 'text' | 'image'; type: 'reasoning_part'; }
-  | { content: string; mimeType?: string, partType: 'text' | 'image'; type: 'content_part'; }
+  | { text: string; type: 'text' }
+  | { text: string; type: 'reasoning' }
+  | { content: string; mimeType?: string; partType: 'text' | 'image'; type: 'reasoning_part' }
+  | { content: string; mimeType?: string; partType: 'text' | 'image'; type: 'content_part' }
   | {
       isAnimationActives?: boolean[];
       tool_calls: MessageToolCall[];
       type: 'tool_calls';
     }
-  | { grounding?: GroundingData, type: 'grounding'; }
+  | { grounding?: GroundingData; type: 'grounding' }
   | {
-      image: { data: string, id: string; };
-      images: { data: string, id: string; }[];
+      image: { data: string; id: string };
+      images: { data: string; id: string }[];
       type: 'base64_image';
     }
   | { type: 'stop' };
