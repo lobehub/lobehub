@@ -35,7 +35,7 @@ ALTER TABLE "rag_eval_evaluation_records" ADD CONSTRAINT "rag_eval_evaluation_re
 ALTER TABLE "rbac_permissions" DROP CONSTRAINT IF EXISTS "rbac_permissions_id_unique";--> statement-breakpoint
 ALTER TABLE "rbac_permissions" ADD CONSTRAINT "rbac_permissions_id_unique" UNIQUE("id");--> statement-breakpoint
 ALTER TABLE "rbac_roles" DROP CONSTRAINT IF EXISTS "rbac_roles_id_unique";--> statement-breakpoint
-ALTER TABLE "rbac_roles" ADD CONSTRAINT "rbac_roles_id_unique" UNIQUE("id");
+ALTER TABLE "rbac_roles" ADD CONSTRAINT "rbac_roles_id_unique" UNIQUE("id");--> statement-breakpoint
 
 -- Unused foreign key drop
 ALTER TABLE "rag_eval_dataset_records" DROP CONSTRAINT IF EXISTS "rag_eval_dataset_records_dataset_id_rag_eval_datasets_id_nanoid_fk";
@@ -51,4 +51,3 @@ ALTER TABLE "rbac_role_permissions" DROP CONSTRAINT IF EXISTS "rbac_role_permiss
 ALTER TABLE "rbac_role_permissions" DROP CONSTRAINT IF EXISTS "rbac_role_permissions_permission_id_rbac_permissions_id_nanoid_fk";
 --> statement-breakpoint
 ALTER TABLE "rbac_user_roles" DROP CONSTRAINT IF EXISTS "rbac_user_roles_role_id_rbac_roles_id_nanoid_fk";
---> statement-breakpoint
