@@ -180,7 +180,7 @@ table ai_providers {
 }
 
 table api_keys {
-  id_nanoid text [pk, not null, unique]
+  id text [pk, not null]
   name varchar(256) [not null]
   key varchar(256) [not null, unique]
   enabled boolean [default: true]
@@ -963,7 +963,7 @@ table unstructured_chunks {
 }
 
 table rag_eval_dataset_records {
-  id_nanoid text [pk, not null, unique]
+  id text [pk, not null]
   dataset_id text [not null]
   ideal text
   question text
@@ -980,7 +980,7 @@ table rag_eval_dataset_records {
 }
 
 table rag_eval_datasets {
-  id_nanoid text [pk, not null, unique]
+  id text [pk, not null]
   description text
   name text [not null]
   knowledge_base_id text
@@ -995,7 +995,7 @@ table rag_eval_datasets {
 }
 
 table rag_eval_evaluations {
-  id_nanoid text [pk, not null, unique]
+  id text [pk, not null]
   name text [not null]
   description text
   eval_records_url text
@@ -1016,7 +1016,7 @@ table rag_eval_evaluations {
 }
 
 table rag_eval_evaluation_records {
-  id_nanoid text [pk, not null, unique]
+  id text [pk, not null]
   question text [not null]
   answer text
   context text[]
@@ -1040,7 +1040,7 @@ table rag_eval_evaluation_records {
 }
 
 table rbac_permissions {
-  id_nanoid text [pk, not null, unique]
+  id text [pk, not null]
   code text [not null, unique]
   name text [not null]
   description text
@@ -1064,7 +1064,7 @@ table rbac_role_permissions {
 }
 
 table rbac_roles {
-  id_nanoid text [pk, not null, unique]
+  id text [pk, not null]
   name text [not null, unique]
   display_name text [not null]
   description text
