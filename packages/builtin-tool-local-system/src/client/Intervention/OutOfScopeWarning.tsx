@@ -52,6 +52,10 @@ const OutOfScopeWarning = memo<OutOfScopeWarningProps>(({ paths }) => {
 
   return (
     <Alert
+      showIcon
+      title={t('localFiles.outOfScope.warning')}
+      type="warning"
+      variant="borderless"
       description={
         <Flexbox gap={4} style={{ fontSize: 12 }}>
           <div>
@@ -70,9 +74,6 @@ const OutOfScopeWarning = memo<OutOfScopeWarningProps>(({ paths }) => {
           </ul>
         </Flexbox>
       }
-      showIcon
-      title={t('localFiles.outOfScope.warning')}
-      type="warning"
     />
   );
 });

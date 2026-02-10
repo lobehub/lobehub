@@ -22,6 +22,7 @@ const SecurityBlacklistWarning = memo<SecurityBlacklistWarningProps>(({ args }) 
       showIcon
       title={t('localFiles.securityBlacklist.warning')}
       type="error"
+      variant="borderless"
       description={
         <Flexbox gap={4} style={{ fontSize: 12 }}>
           <div>{securityCheck.reason ? t(securityCheck.reason as any) : undefined}</div>
