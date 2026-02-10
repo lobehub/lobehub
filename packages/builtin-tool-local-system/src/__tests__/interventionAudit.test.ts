@@ -15,6 +15,23 @@ describe('pathScopeAudit', () => {
       expect(pathScopeAudit({ path: '/Users/me/project/src/index.ts' }, metadata)).toBe(false);
     });
 
+    it('should return false when relative path resolves within working directory', () => {
+      expect(pathScopeAudit({ path: 'src/index.ts' }, metadata)).toBe(false);
+    });
+
+    it('should return false when relative directory resolves within working directory', () => {
+      expect(pathScopeAudit({ directory: 'src' }, metadata)).toBe(false);
+    });
+
+    it('should resolve relative paths against tool scope when provided', () => {
+      expect(
+        pathScopeAudit(
+          { scope: 'packages', path: 'a.ts' },
+          { workingDirectory: '/Users/me/project' },
+        ),
+      ).toBe(false);
+    });
+
     it('should return false when path equals working directory', () => {
       expect(pathScopeAudit({ path: '/Users/me/project' }, metadata)).toBe(false);
     });
@@ -27,6 +44,10 @@ describe('pathScopeAudit', () => {
   describe('intervention required', () => {
     it('should return true when path is outside working directory', () => {
       expect(pathScopeAudit({ path: '/Users/me/other-project/file.ts' }, metadata)).toBe(true);
+    });
+
+    it('should return true when relative path traversal escapes working directory', () => {
+      expect(pathScopeAudit({ path: '../other-project/file.ts' }, metadata)).toBe(true);
     });
 
     it('should return true when file_path is outside working directory', () => {

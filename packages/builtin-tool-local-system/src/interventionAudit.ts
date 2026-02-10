@@ -1,12 +1,17 @@
 import { type DynamicInterventionResolver } from '@lobechat/types';
 
-import { normalizePathForScope } from './utils/path';
+import { normalizePathForScope, resolvePathWithScope } from './utils/path';
 
 /**
  * Check if a path is within the working directory
  */
-const isPathWithinWorkingDirectory = (targetPath: string, workingDirectory: string): boolean => {
-  const normalizedTarget = normalizePathForScope(targetPath);
+const isPathWithinWorkingDirectory = (
+  targetPath: string,
+  workingDirectory: string,
+  resolveAgainstScope: string,
+): boolean => {
+  const resolvedTarget = resolvePathWithScope(targetPath, resolveAgainstScope) ?? targetPath;
+  const normalizedTarget = normalizePathForScope(resolvedTarget);
   const normalizedWorkingDir = normalizePathForScope(workingDirectory);
 
   return (
@@ -21,7 +26,7 @@ const isPathWithinWorkingDirectory = (targetPath: string, workingDirectory: stri
  */
 const extractPaths = (toolArgs: Record<string, any>): string[] => {
   const paths: string[] = [];
-  const pathParamNames = ['path', 'file_path', 'directory', 'oldPath', 'newPath', 'scope'];
+  const pathParamNames = ['path', 'file_path', 'directory', 'oldPath', 'newPath'];
 
   for (const paramName of pathParamNames) {
     const pathValue = toolArgs[paramName];
@@ -58,14 +63,26 @@ export const pathScopeAudit: DynamicInterventionResolver = (
   metadata?: Record<string, any>,
 ): boolean => {
   const workingDirectory = metadata?.workingDirectory as string | undefined;
+  const toolScope = toolArgs.scope as string | undefined;
 
   // If no working directory is set, no intervention needed
   if (!workingDirectory) {
     return false;
   }
 
+  // Match runtime behavior: a tool-provided scope is interpreted relative to workingDirectory.
+  // If the resolved scope escapes the workingDirectory, intervention is required.
+  if (toolScope && !isPathWithinWorkingDirectory(toolScope, workingDirectory, workingDirectory)) {
+    return true;
+  }
+
+  const effectiveScope =
+    resolvePathWithScope(toolScope, workingDirectory) ?? toolScope ?? workingDirectory;
+
   const paths = extractPaths(toolArgs);
 
   // Return true if any path is outside the working directory
-  return paths.some((path) => !isPathWithinWorkingDirectory(path, workingDirectory));
+  return paths.some(
+    (path) => !isPathWithinWorkingDirectory(path, workingDirectory, effectiveScope),
+  );
 };
