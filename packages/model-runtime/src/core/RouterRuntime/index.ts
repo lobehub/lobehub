@@ -6,5 +6,5 @@ export interface RuntimeItem {
   runtime: LobeRuntimeAI;
 }
 
-export type { CreateRouterRuntimeOptions, UniformRuntime } from './createRuntime';
+export type { CreateRouterRuntimeOptions, RouteAttemptResult, UniformRuntime } from './createRuntime';
 export { createRouterRuntime } from './createRuntime';
