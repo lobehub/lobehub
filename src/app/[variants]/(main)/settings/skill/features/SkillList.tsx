@@ -23,6 +23,7 @@ import { useFetchInstalledPlugins } from '@/hooks/useFetchInstalledPlugins';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
+  agentSkillsSelectors,
   klavisStoreSelectors,
   lobehubSkillStoreSelectors,
   pluginSelectors,
@@ -31,6 +32,7 @@ import { KlavisServerStatus } from '@/store/tool/slices/klavisStore';
 import { LobehubSkillStatus } from '@/store/tool/slices/lobehubSkillStore/types';
 import { type LobeToolType } from '@/types/tool/tool';
 
+import AgentSkillItem from './AgentSkillItem';
 import KlavisSkillItem from './KlavisSkillItem';
 import LobehubSkillItem from './LobehubSkillItem';
 import McpSkillItem from './McpSkillItem';
@@ -60,15 +62,19 @@ const SkillList = memo(() => {
   const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
   const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
   const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
+  const agentSkills = useToolStore(agentSkillsSelectors.getAgentSkills, isEqual);
 
-  const [useFetchLobehubSkillConnections, useFetchUserKlavisServers] = useToolStore((s) => [
-    s.useFetchLobehubSkillConnections,
-    s.useFetchUserKlavisServers,
-  ]);
+  const [useFetchLobehubSkillConnections, useFetchUserKlavisServers, useFetchAgentSkills] =
+    useToolStore((s) => [
+      s.useFetchLobehubSkillConnections,
+      s.useFetchUserKlavisServers,
+      s.useFetchAgentSkills,
+    ]);
 
   useFetchInstalledPlugins();
   useFetchLobehubSkillConnections(isLobehubSkillEnabled);
   useFetchUserKlavisServers(isKlavisEnabled);
+  useFetchAgentSkills(true);
 
   const getLobehubSkillServerByProvider = (providerId: string) => {
     return allLobehubSkillServers.find((server) => server.identifier === providerId);
@@ -200,7 +206,11 @@ const SkillList = memo(() => {
     allKlavisServers,
   ]);
 
-  const hasAnySkills = integrations.length > 0 || communityMCPs.length > 0 || customMCPs.length > 0;
+  const hasAnySkills =
+    integrations.length > 0 ||
+    agentSkills.length > 0 ||
+    communityMCPs.length > 0 ||
+    customMCPs.length > 0;
 
   if (!hasAnySkills) {
     return (
@@ -230,6 +240,9 @@ const SkillList = memo(() => {
         />
       );
     });
+
+  const renderAgentSkills = () =>
+    agentSkills.map((skill) => <AgentSkillItem key={skill.id} skill={skill} />);
 
   const renderCommunityMCPs = () =>
     communityMCPs.map((plugin) => (
@@ -262,9 +275,9 @@ const SkillList = memo(() => {
       {integrations.length > 0 && renderIntegrations()}
       {integrations.length > 0 && communityMCPs.length > 0 && <Divider style={{ margin: 0 }} />}
       {communityMCPs.length > 0 && renderCommunityMCPs()}
-      {(integrations.length > 0 || communityMCPs.length > 0) && customMCPs.length > 0 && (
-        <Divider style={{ margin: 0 }} />
-      )}
+      {(integrations.length > 0 || communityMCPs.length > 0) &&
+        (agentSkills.length > 0 || customMCPs.length > 0) && <Divider style={{ margin: 0 }} />}
+      {agentSkills.length > 0 && renderAgentSkills()}
       {customMCPs.length > 0 && renderCustomMCPs()}
       <div style={{ marginTop: 8 }}>
         <AddSkillButton />
