@@ -21,21 +21,19 @@ const isPathWithinWorkingDirectory = (targetPath: string, workingDirectory: stri
  */
 const extractPaths = (toolArgs: Record<string, any>): string[] => {
   const paths: string[] = [];
-  const pathParamNames = [
-    'path',
-    'file_path',
-    'directory',
-    'pattern',
-    'oldPath',
-    'newPath',
-    'scope',
-  ];
+  const pathParamNames = ['path', 'file_path', 'directory', 'oldPath', 'newPath', 'scope'];
 
   for (const paramName of pathParamNames) {
     const pathValue = toolArgs[paramName];
     if (pathValue && typeof pathValue === 'string') {
       paths.push(pathValue);
     }
+  }
+
+  // Only check 'pattern' when it's an absolute path (e.g. glob like /Users/me/**/*.ts).
+  // Relative globs (e.g. **/*.ts) and regex patterns (e.g. TODO|FIXME) are not paths.
+  if (typeof toolArgs.pattern === 'string' && toolArgs.pattern.startsWith('/')) {
+    paths.push(toolArgs.pattern);
   }
 
   // Handle 'items' array for moveLocalFiles (contains oldPath/newPath objects)

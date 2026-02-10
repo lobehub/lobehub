@@ -49,6 +49,17 @@ describe('pathScopeAudit', () => {
       expect(pathScopeAudit({ pattern: '/Users/me/project/src/**/*.ts' }, metadata)).toBe(false);
     });
 
+    it('should ignore relative glob patterns (not a path)', () => {
+      expect(pathScopeAudit({ pattern: '**/*.ts' }, metadata)).toBe(false);
+      expect(pathScopeAudit({ pattern: 'src/**/*.tsx' }, metadata)).toBe(false);
+    });
+
+    it('should ignore regex patterns from grepContent', () => {
+      expect(pathScopeAudit({ pattern: 'TODO|FIXME' }, metadata)).toBe(false);
+      expect(pathScopeAudit({ pattern: 'function\\s+\\w+' }, metadata)).toBe(false);
+      expect(pathScopeAudit({ pattern: '^import .* from' }, metadata)).toBe(false);
+    });
+
     it('should return true when any path in items is outside working directory', () => {
       expect(
         pathScopeAudit(
