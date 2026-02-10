@@ -17,24 +17,29 @@ import {
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openEditingPopover } from '@/features/EditingPopover/store';
 import { useGlobalStore } from '@/store/global';
 import { useHomeStore } from '@/store/home';
 import { homeAgentListSelectors } from '@/store/home/selectors';
 
 interface UseAgentDropdownMenuParams {
+  anchor: HTMLElement | null;
+  avatar?: string;
   group: string | undefined;
   id: string;
   openCreateGroupModal: () => void;
   pinned: boolean;
-  toggleEditing: (visible?: boolean) => void;
+  title: string;
 }
 
 export const useAgentDropdownMenu = ({
+  anchor,
+  avatar,
   group,
   id,
   openCreateGroupModal,
   pinned,
-  toggleEditing,
+  title,
 }: UseAgentDropdownMenuParams): (() => MenuProps['items']) => {
   const { t } = useTranslation('chat');
   const { modal, message } = App.useApp();
@@ -65,7 +70,9 @@ export const useAgentDropdownMenu = ({
           label: t('rename', { ns: 'common' }),
           onClick: (info: any) => {
             info.domEvent?.stopPropagation();
-            toggleEditing(true);
+            if (anchor) {
+              openEditingPopover({ anchor, avatar, id, title, type: 'agent' });
+            }
           },
         },
         {
@@ -137,9 +144,11 @@ export const useAgentDropdownMenu = ({
         },
       ] as MenuProps['items'],
     [
+      anchor,
       pinned,
       id,
-      toggleEditing,
+      avatar,
+      title,
       sessionCustomGroups,
       group,
       isDefault,
