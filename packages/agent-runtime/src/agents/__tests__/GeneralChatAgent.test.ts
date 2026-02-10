@@ -1,7 +1,7 @@
-import  { type ChatToolPayload, type GlobalInterventionResolverConfig } from '@lobechat/types';
+import { type ChatToolPayload, type GlobalInterventionAuditConfig } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import  { type AgentRuntimeContext, type AgentState } from '../../types';
+import { type AgentRuntimeContext, type AgentState } from '../../types';
 import { GeneralChatAgent } from '../GeneralChatAgent';
 
 describe('GeneralChatAgent', () => {
@@ -1875,7 +1875,7 @@ describe('GeneralChatAgent', () => {
 
   describe('global intervention resolvers', () => {
     it('should use custom global resolver with policy always to block tools', async () => {
-      const customResolver: GlobalInterventionResolverConfig = {
+      const customResolver: GlobalInterventionAuditConfig = {
         type: 'customBlocker',
         policy: 'always',
         resolver: (toolArgs) => toolArgs.dangerous === true,
@@ -1883,7 +1883,7 @@ describe('GeneralChatAgent', () => {
 
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
-        globalInterventionResolvers: [customResolver],
+        globalInterventionAudits: [customResolver],
         operationId: 'test-session',
         modelRuntimeConfig: mockModelRuntimeConfig,
       });
@@ -1920,7 +1920,7 @@ describe('GeneralChatAgent', () => {
     });
 
     it('should allow tool execution when global resolver does not trigger', async () => {
-      const customResolver: GlobalInterventionResolverConfig = {
+      const customResolver: GlobalInterventionAuditConfig = {
         type: 'customBlocker',
         policy: 'always',
         resolver: (toolArgs) => toolArgs.dangerous === true,
@@ -1928,7 +1928,7 @@ describe('GeneralChatAgent', () => {
 
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
-        globalInterventionResolvers: [customResolver],
+        globalInterventionAudits: [customResolver],
         operationId: 'test-session',
         modelRuntimeConfig: mockModelRuntimeConfig,
       });
@@ -1965,7 +1965,7 @@ describe('GeneralChatAgent', () => {
     });
 
     it('should skip tool in headless mode when global resolver with policy always triggers', async () => {
-      const customResolver: GlobalInterventionResolverConfig = {
+      const customResolver: GlobalInterventionAuditConfig = {
         type: 'customBlocker',
         policy: 'always',
         resolver: (toolArgs) => toolArgs.blocked === true,
@@ -1973,7 +1973,7 @@ describe('GeneralChatAgent', () => {
 
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
-        globalInterventionResolvers: [customResolver],
+        globalInterventionAudits: [customResolver],
         operationId: 'test-session',
         modelRuntimeConfig: mockModelRuntimeConfig,
       });
@@ -2006,7 +2006,7 @@ describe('GeneralChatAgent', () => {
     });
 
     it('should execute tool in headless mode when global resolver with policy required triggers', async () => {
-      const customResolver: GlobalInterventionResolverConfig = {
+      const customResolver: GlobalInterventionAuditConfig = {
         type: 'softBlocker',
         policy: 'required',
         resolver: () => true, // always triggers
@@ -2014,7 +2014,7 @@ describe('GeneralChatAgent', () => {
 
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
-        globalInterventionResolvers: [customResolver],
+        globalInterventionAudits: [customResolver],
         operationId: 'test-session',
         modelRuntimeConfig: mockModelRuntimeConfig,
       });
@@ -2052,7 +2052,7 @@ describe('GeneralChatAgent', () => {
     });
 
     it('should require intervention for overridable global resolver in non-headless mode', async () => {
-      const customResolver: GlobalInterventionResolverConfig = {
+      const customResolver: GlobalInterventionAuditConfig = {
         type: 'softBlocker',
         policy: 'required',
         resolver: () => true,
@@ -2060,7 +2060,7 @@ describe('GeneralChatAgent', () => {
 
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
-        globalInterventionResolvers: [customResolver],
+        globalInterventionAudits: [customResolver],
         operationId: 'test-session',
         modelRuntimeConfig: mockModelRuntimeConfig,
       });
@@ -2099,7 +2099,7 @@ describe('GeneralChatAgent', () => {
     it('should pass resolver metadata including securityBlacklist to global resolvers', async () => {
       let capturedMetadata: Record<string, any> | undefined;
 
-      const spyResolver: GlobalInterventionResolverConfig = {
+      const spyResolver: GlobalInterventionAuditConfig = {
         type: 'spy',
         policy: 'always',
         resolver: (_toolArgs, metadata) => {
@@ -2110,7 +2110,7 @@ describe('GeneralChatAgent', () => {
 
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
-        globalInterventionResolvers: [spyResolver],
+        globalInterventionAudits: [spyResolver],
         operationId: 'test-session',
         modelRuntimeConfig: mockModelRuntimeConfig,
       });
@@ -2149,7 +2149,7 @@ describe('GeneralChatAgent', () => {
     it('should evaluate global resolvers in array order and stop at first match', async () => {
       const callOrder: string[] = [];
 
-      const resolver1: GlobalInterventionResolverConfig = {
+      const resolver1: GlobalInterventionAuditConfig = {
         type: 'first',
         policy: 'always',
         resolver: () => {
@@ -2158,7 +2158,7 @@ describe('GeneralChatAgent', () => {
         },
       };
 
-      const resolver2: GlobalInterventionResolverConfig = {
+      const resolver2: GlobalInterventionAuditConfig = {
         type: 'second',
         policy: 'required',
         resolver: () => {
@@ -2169,7 +2169,7 @@ describe('GeneralChatAgent', () => {
 
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
-        globalInterventionResolvers: [resolver1, resolver2],
+        globalInterventionAudits: [resolver1, resolver2],
         operationId: 'test-session',
         modelRuntimeConfig: mockModelRuntimeConfig,
       });
@@ -2198,10 +2198,10 @@ describe('GeneralChatAgent', () => {
       expect(callOrder).toEqual(['first']);
     });
 
-    it('should use default security blacklist resolver when globalInterventionResolvers is not provided', async () => {
+    it('should use default security blacklist audit when globalInterventionAudits is not provided', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
-        // NOT providing globalInterventionResolvers → should default to security blacklist
+        // NOT providing globalInterventionAudits → should default to security blacklist
         operationId: 'test-session',
         modelRuntimeConfig: mockModelRuntimeConfig,
       });

@@ -1,16 +1,13 @@
-import  {
+import {
   type ChatToolPayload,
   type ExtendedHumanInterventionConfig,
   type HumanInterventionConfig,
   type HumanInterventionPolicy,
 } from '@lobechat/types';
 
+import { createDefaultGlobalAudits, DEFAULT_SECURITY_BLACKLIST } from '../audit';
+import { InterventionChecker } from '../core';
 import {
-  createSecurityBlacklistGlobalResolver,
-  DEFAULT_SECURITY_BLACKLIST,
-  InterventionChecker,
-} from '../core';
-import  {
   type Agent,
   type AgentInstruction,
   type AgentInstructionCompressContext,
@@ -141,10 +138,8 @@ export class GeneralChatAgent implements Agent {
     const userConfig = state.userInterventionConfig || { approvalMode: 'manual' };
     const { approvalMode, allowList = [] } = userConfig;
 
-    // Global resolvers: default to security blacklist resolver if not provided
-    const globalResolvers = this.config.globalInterventionResolvers ?? [
-      createSecurityBlacklistGlobalResolver(),
-    ];
+    // Global audits: default to security blacklist audit if not provided
+    const globalResolvers = this.config.globalInterventionAudits ?? createDefaultGlobalAudits();
 
     for (const toolCalling of toolsCalling) {
       const { identifier, apiName } = toolCalling;

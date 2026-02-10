@@ -458,12 +458,6 @@
   "src/store/chat/slices/aiChat/actions/streamingExecutor.ts": {
     "no-unused-private-class-members": {
       "count": 1
-    },
-    "sort-keys-fix/sort-keys-fix": {
-      "count": 1
-    },
-    "typescript-sort-keys/interface": {
-      "count": 1
     }
   },
   "src/store/chat/slices/message/actions/optimisticUpdate.ts": {

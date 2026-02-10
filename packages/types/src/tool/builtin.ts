@@ -1,8 +1,8 @@
-import  { type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 import { z } from 'zod';
 
-import  { type RuntimeStepContext } from '../stepContext';
-import  { type HumanInterventionConfig, type HumanInterventionPolicy } from './intervention';
+import { type RuntimeStepContext } from '../stepContext';
+import { type HumanInterventionConfig, type HumanInterventionPolicy } from './intervention';
 import { HumanInterventionConfigSchema, HumanInterventionPolicySchema } from './intervention';
 
 interface Meta {
@@ -64,13 +64,13 @@ export type DynamicInterventionResolver = (
 ) => boolean;
 
 /**
- * Global intervention resolver configuration
- * Global resolvers run for EVERY tool call, not just tools with dynamic config.
- * They are evaluated before per-tool dynamic resolvers in the intervention chain.
+ * Global intervention audit configuration
+ * Global audits run for EVERY tool call, not just tools with dynamic config.
+ * They are evaluated before per-tool dynamic audits in the intervention chain.
  */
-export interface GlobalInterventionResolverConfig {
+export interface GlobalInterventionAuditConfig {
   /**
-   * Policy to apply when resolver condition is met (returns true)
+   * Policy to apply when audit condition is met (returns true)
    * - 'always': cannot be bypassed by auto-run; in headless mode the tool is skipped entirely
    * - 'required': requires intervention but can be bypassed by auto-run
    * @default 'always'
@@ -78,12 +78,12 @@ export interface GlobalInterventionResolverConfig {
   policy?: HumanInterventionPolicy;
 
   /**
-   * The resolver function, reuses DynamicInterventionResolver signature
+   * The audit function, reuses DynamicInterventionResolver signature
    */
   resolver: DynamicInterventionResolver;
 
   /**
-   * Unique type identifier for this global resolver
+   * Unique type identifier for this global audit
    */
   type: string;
 }

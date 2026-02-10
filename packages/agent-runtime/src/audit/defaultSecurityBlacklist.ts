@@ -1,4 +1,4 @@
-import type { SecurityBlacklistConfig } from '@lobechat/types';
+import { type SecurityBlacklistConfig } from '@lobechat/types';
 
 /**
  * Default Security Blacklist
@@ -6,11 +6,14 @@ import type { SecurityBlacklistConfig } from '@lobechat/types';
  * regardless of user settings (even in auto-run mode)
  *
  * This is the last line of defense against dangerous operations
+ *
+ * Note: `description` values are i18n keys (namespace: 'tool', prefix: 'securityBlacklist.')
+ * and are translated in the intervention UI via `t(description)`.
  */
 export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
   // ==================== File System Dangers ====================
   {
-    description: 'Recursive deletion of home directory is extremely dangerous',
+    description: 'securityBlacklist.rmHomeDir',
     match: {
       command: {
         pattern: 'rm.*-r.*(~|\\$HOME|/Users/[^/]+|/home/[^/]+)/?\\s*$',
@@ -19,7 +22,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Recursive deletion of root directory will destroy the system',
+    description: 'securityBlacklist.rmRootDir',
     match: {
       command: {
         pattern: 'rm.*-r.*/\\s*$',
@@ -28,7 +31,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Force recursive deletion without specific target is too dangerous',
+    description: 'securityBlacklist.rmForceRecursive',
     match: {
       command: {
         pattern: 'rm\\s+-rf\\s+[~./]\\s*$',
@@ -39,7 +42,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
 
   // ==================== System Configuration Dangers ====================
   {
-    description: 'Modifying /etc/passwd could lock you out of the system',
+    description: 'securityBlacklist.etcPasswd',
     match: {
       command: {
         pattern: '.*(/etc/passwd|/etc/shadow).*',
@@ -48,7 +51,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Modifying sudoers file without proper validation is dangerous',
+    description: 'securityBlacklist.sudoers',
     match: {
       command: {
         pattern: '.*/etc/sudoers.*',
@@ -59,7 +62,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
 
   // ==================== Dangerous Commands ====================
   {
-    description: 'Fork bomb can crash the system',
+    description: 'securityBlacklist.forkBomb',
     match: {
       command: {
         pattern: '.*:\\(\\).*\\{.*\\|.*&.*\\};.*:.*',
@@ -68,7 +71,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Writing random data to disk devices can destroy data',
+    description: 'securityBlacklist.ddDiskWrite',
     match: {
       command: {
         pattern: 'dd.*of=/dev/(sd|hd|nvme).*',
@@ -77,7 +80,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Formatting system partitions will destroy data',
+    description: 'securityBlacklist.formatPartition',
     match: {
       command: {
         pattern: '(mkfs|fdisk|parted).*(/dev/(sd|hd|nvme)|/)',
@@ -88,7 +91,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
 
   // ==================== Network & Remote Access Dangers ====================
   {
-    description: 'Disabling firewall exposes system to attacks',
+    description: 'securityBlacklist.disableFirewall',
     match: {
       command: {
         pattern: '(ufw\\s+disable|iptables\\s+-F|systemctl\\s+stop\\s+firewalld)',
@@ -97,7 +100,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Changing SSH configuration could lock you out',
+    description: 'securityBlacklist.sshConfig',
     match: {
       command: {
         pattern: '.*(/etc/ssh/sshd_config).*',
@@ -108,7 +111,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
 
   // ==================== Package Manager Dangers ====================
   {
-    description: 'Removing essential system packages can break the system',
+    description: 'securityBlacklist.removeSystemPackages',
     match: {
       command: {
         pattern: '(apt|yum|dnf|pacman)\\s+(remove|purge|erase).*(systemd|kernel|glibc|bash|sudo)',
@@ -119,7 +122,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
 
   // ==================== Kernel & System Core Dangers ====================
   {
-    description: 'Modifying kernel parameters without understanding can crash the system',
+    description: 'securityBlacklist.kernelParams',
     match: {
       command: {
         pattern: 'echo.*>/proc/sys/.*',
@@ -128,7 +131,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Direct memory access is extremely dangerous',
+    description: 'securityBlacklist.directMemoryAccess',
     match: {
       command: {
         pattern: '.*(/dev/(mem|kmem|port)).*',
@@ -139,7 +142,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
 
   // ==================== Privilege Escalation Dangers ====================
   {
-    description: 'Changing file ownership of system directories is dangerous',
+    description: 'securityBlacklist.chownSystemDirs',
     match: {
       command: {
         pattern: 'chown.*-R.*(/(etc|bin|sbin|usr|var|sys|proc)|~).*',
@@ -148,7 +151,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Setting SUID on shells or interpreters is a security risk',
+    description: 'securityBlacklist.suidShells',
     match: {
       command: {
         pattern: 'chmod.*(4755|u\\+s).*(sh|bash|python|perl|ruby|node)',
@@ -159,7 +162,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
 
   // ==================== Sensitive Information Leakage ====================
   {
-    description: 'Reading .env files may leak sensitive credentials and API keys',
+    description: 'securityBlacklist.envFiles',
     match: {
       command: {
         pattern: '(cat|less|more|head|tail|vim|nano|vi|emacs|code).*\\.env.*',
@@ -168,7 +171,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading .env files may leak sensitive credentials and API keys',
+    description: 'securityBlacklist.envFiles',
     match: {
       path: {
         pattern: '.*\\.env.*',
@@ -177,7 +180,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading SSH private keys can compromise system security',
+    description: 'securityBlacklist.sshPrivateKeys',
     match: {
       command: {
         pattern:
@@ -187,7 +190,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading SSH private keys can compromise system security',
+    description: 'securityBlacklist.sshPrivateKeys',
     match: {
       path: {
         pattern: '.*/\\.ssh/(id_rsa|id_ed25519|id_ecdsa)$',
@@ -196,7 +199,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Accessing AWS credentials can leak cloud access keys',
+    description: 'securityBlacklist.awsCredentials',
     match: {
       command: {
         pattern: '(cat|less|more|head|tail|vim|nano|vi|emacs|code).*/\\.aws/credentials.*',
@@ -205,7 +208,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Accessing AWS credentials can leak cloud access keys',
+    description: 'securityBlacklist.awsCredentials',
     match: {
       path: {
         pattern: '.*/\\.aws/credentials.*',
@@ -214,7 +217,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading Docker config may expose registry credentials',
+    description: 'securityBlacklist.dockerConfig',
     match: {
       command: {
         pattern: '(cat|less|more|head|tail|vim|nano|vi|emacs|code).*/\\.docker/config\\.json.*',
@@ -223,7 +226,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading Docker config may expose registry credentials',
+    description: 'securityBlacklist.dockerConfig',
     match: {
       path: {
         pattern: '.*/\\.docker/config\\.json$',
@@ -232,7 +235,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading Kubernetes config may expose cluster credentials',
+    description: 'securityBlacklist.kubeConfig',
     match: {
       command: {
         pattern: '(cat|less|more|head|tail|vim|nano|vi|emacs|code).*/\\.kube/config.*',
@@ -241,7 +244,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading Kubernetes config may expose cluster credentials',
+    description: 'securityBlacklist.kubeConfig',
     match: {
       path: {
         pattern: '.*/\\.kube/config$',
@@ -250,7 +253,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading Git credentials file may leak access tokens',
+    description: 'securityBlacklist.gitCredentials',
     match: {
       command: {
         pattern: '(cat|less|more|head|tail|vim|nano|vi|emacs|code).*/\\.git-credentials.*',
@@ -259,7 +262,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading Git credentials file may leak access tokens',
+    description: 'securityBlacklist.gitCredentials',
     match: {
       path: {
         pattern: '.*/\\.git-credentials$',
@@ -268,7 +271,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading npm token file may expose package registry credentials',
+    description: 'securityBlacklist.npmrc',
     match: {
       command: {
         pattern: '(cat|less|more|head|tail|vim|nano|vi|emacs|code).*/\\.npmrc.*',
@@ -277,7 +280,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading npm token file may expose package registry credentials',
+    description: 'securityBlacklist.npmrc',
     match: {
       path: {
         pattern: '.*/\\.npmrc$',
@@ -286,7 +289,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading history files may expose sensitive commands and credentials',
+    description: 'securityBlacklist.historyFiles',
     match: {
       command: {
         pattern:
@@ -296,7 +299,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading history files may expose sensitive commands and credentials',
+    description: 'securityBlacklist.historyFiles',
     match: {
       path: {
         pattern: '.*/\\.(bash_history|zsh_history|history)$',
@@ -305,7 +308,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Accessing browser credential storage may leak passwords',
+    description: 'securityBlacklist.browserCredentials',
     match: {
       command: {
         pattern:
@@ -315,7 +318,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading GCP credentials may leak cloud service account keys',
+    description: 'securityBlacklist.gcpCredentials',
     match: {
       command: {
         pattern: '(cat|less|more|head|tail|vim|nano|vi|emacs|code).*/\\.config/gcloud/.*\\.json.*',
@@ -324,7 +327,7 @@ export const DEFAULT_SECURITY_BLACKLIST: SecurityBlacklistConfig = [
     },
   },
   {
-    description: 'Reading GCP credentials may leak cloud service account keys',
+    description: 'securityBlacklist.gcpCredentials',
     match: {
       path: {
         pattern: '.*/\\.config/gcloud/.*\\.json$',

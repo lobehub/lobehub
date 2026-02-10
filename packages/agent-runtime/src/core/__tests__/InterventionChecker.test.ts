@@ -1,7 +1,7 @@
-import type { HumanInterventionConfig, SecurityBlacklistConfig } from '@lobechat/types';
+import  { type HumanInterventionConfig, type SecurityBlacklistConfig } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULT_SECURITY_BLACKLIST } from '../defaultSecurityBlacklist';
+import { DEFAULT_SECURITY_BLACKLIST } from '../../audit/defaultSecurityBlacklist';
 import { InterventionChecker } from '../InterventionChecker';
 
 describe('InterventionChecker', () => {

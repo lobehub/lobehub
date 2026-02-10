@@ -1,7 +1,7 @@
-import  {
+import {
   type ChatToolPayload,
   type DynamicInterventionResolver,
-  type GlobalInterventionResolverConfig,
+  type GlobalInterventionAuditConfig,
   type MessageToolCall,
 } from '@lobechat/types';
 
@@ -90,9 +90,9 @@ export interface GeneralAgentConfig {
   /**
    * Global intervention resolvers that run for EVERY tool call
    * Evaluated in array order, before per-tool dynamic resolvers.
-   * When not provided, defaults to [createSecurityBlacklistGlobalResolver()]
+   * When not provided, defaults to [createSecurityBlacklistGlobalAudit()]
    */
-  globalInterventionResolvers?: GlobalInterventionResolverConfig[];
+  globalInterventionAudits?: GlobalInterventionAuditConfig[];
   modelRuntimeConfig?: {
     /**
      * Compression model configuration
