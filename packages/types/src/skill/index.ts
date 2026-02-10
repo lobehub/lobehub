@@ -81,6 +81,7 @@ export interface SkillResourceMeta {
 
 export interface SkillResourceTreeNode {
   children?: SkillResourceTreeNode[];
+  content?: string;
   name: string;
   path: string;
   type: 'file' | 'directory';

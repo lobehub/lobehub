@@ -30,7 +30,7 @@ vi.mock('@/server/services/skill/resource', () => ({
   SkillResourceService: vi.fn().mockImplementation(() => ({
     storeResources: vi.fn().mockResolvedValue({}),
     readResource: vi.fn().mockRejectedValue(new Error('Resource not found')),
-    listResources: vi.fn().mockReturnValue([]),
+    listResources: vi.fn().mockResolvedValue([]),
   })),
 }));
 

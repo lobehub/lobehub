@@ -59,8 +59,8 @@ class AgentSkillService {
 
   // ===== Resources =====
 
-  async listResources(id: string): Promise<SkillResourceTreeNode[]> {
-    return lambdaClient.agentSkills.listResources.query({ id });
+  async listResources(id: string, includeContent?: boolean): Promise<SkillResourceTreeNode[]> {
+    return lambdaClient.agentSkills.listResources.query({ id, includeContent });
   }
 
   async readResource(id: string, path: string): Promise<SkillResourceContent> {

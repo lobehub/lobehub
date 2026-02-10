@@ -112,13 +112,64 @@ export class SkillResourceService {
 
   /**
    * Build resource directory tree structure
+   * When includeContent is true, also fetches text file contents (binary files are skipped)
    */
-  listResources(resources: Record<string, SkillResourceMeta>): SkillResourceTreeNode[] {
+  async listResources(
+    resources: Record<string, SkillResourceMeta>,
+    includeContent?: boolean,
+  ): Promise<SkillResourceTreeNode[]> {
     const paths = Object.keys(resources);
-    log('listResources: building tree for %d paths', paths.length);
+    log(
+      'listResources: building tree for %d paths, includeContent=%s',
+      paths.length,
+      includeContent,
+    );
     const tree = this.buildTree(paths);
     log('listResources: built tree with %d root nodes', tree.length);
+
+    if (includeContent) {
+      await this.populateContent(tree, resources);
+    }
+
     return tree;
+  }
+
+  // ===== Content Population =====
+
+  /**
+   * Recursively populate text file content into tree nodes
+   */
+  private async populateContent(
+    nodes: SkillResourceTreeNode[],
+    resources: Record<string, SkillResourceMeta>,
+  ): Promise<void> {
+    const fileNodes: SkillResourceTreeNode[] = [];
+    const collectFiles = (items: SkillResourceTreeNode[]) => {
+      for (const node of items) {
+        if (node.type === 'file') {
+          fileNodes.push(node);
+        } else if (node.children) {
+          collectFiles(node.children);
+        }
+      }
+    };
+    collectFiles(nodes);
+
+    await Promise.all(
+      fileNodes.map(async (node) => {
+        const meta = resources[node.path];
+        if (!meta) return;
+
+        const mimeType = getMimeType(node.path);
+        if (!isTextMimeType(mimeType)) return;
+
+        try {
+          node.content = await this.fileService.getFileContentByHash(meta.fileHash);
+        } catch (error) {
+          log('populateContent: failed to read content for %s: %o', node.path, error);
+        }
+      }),
+    );
   }
 
   // ===== Private Methods =====

@@ -164,7 +164,7 @@ export const agentSkillsRouter = router({
     }),
 
   listResources: skillProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string(), includeContent: z.boolean().optional() }))
     .query(async ({ ctx, input }) => {
       const skill = await ctx.skillModel.findById(input.id);
       if (!skill) {
@@ -175,7 +175,7 @@ export const agentSkillsRouter = router({
         return [];
       }
 
-      return ctx.skillResourceService.listResources(skill.resources);
+      return ctx.skillResourceService.listResources(skill.resources, input.includeContent);
     }),
 
   readResource: skillProcedure

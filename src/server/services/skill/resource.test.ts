@@ -5,7 +5,9 @@ import { SkillResourceService } from './resource';
 // Create mock functions that can be inspected
 const mockCreateGlobalFile = vi.fn().mockResolvedValue({ fileHash: 'mock-file-hash' });
 const mockGetFileContentByHash = vi.fn().mockResolvedValue('file content');
-const mockGetFileByteArrayByHash = vi.fn().mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+const mockGetFileByteArrayByHash = vi
+  .fn()
+  .mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
 const mockUploadBuffer = vi.fn().mockResolvedValue({ key: 'mock-key' });
 
 // Mock FileService only (no longer need FileModel)
@@ -20,14 +22,14 @@ vi.mock('@/server/services/file', () => ({
 
 describe('SkillResourceService', () => {
   describe('listResources (buildTree)', () => {
-    it('should build flat file list', () => {
+    it('should build flat file list', async () => {
       const service = new SkillResourceService({} as any, 'user-1');
       const resources = {
         'README.md': { fileHash: 'hash1', size: 100 },
         'config.json': { fileHash: 'hash2', size: 200 },
       };
 
-      const tree = service.listResources(resources);
+      const tree = await service.listResources(resources);
 
       expect(tree).toHaveLength(2);
       expect(tree[0]).toEqual({
@@ -44,7 +46,7 @@ describe('SkillResourceService', () => {
       });
     });
 
-    it('should build nested directory structure', () => {
+    it('should build nested directory structure', async () => {
       const service = new SkillResourceService({} as any, 'user-1');
       const resources = {
         'lib/utils.ts': { fileHash: 'hash1', size: 100 },
@@ -52,7 +54,7 @@ describe('SkillResourceService', () => {
         'src/index.ts': { fileHash: 'hash3', size: 300 },
       };
 
-      const tree = service.listResources(resources);
+      const tree = await service.listResources(resources);
 
       expect(tree).toHaveLength(2);
 
@@ -71,13 +73,13 @@ describe('SkillResourceService', () => {
       expect(srcDir?.children?.[0].name).toBe('index.ts');
     });
 
-    it('should build deeply nested structure', () => {
+    it('should build deeply nested structure', async () => {
       const service = new SkillResourceService({} as any, 'user-1');
       const resources = {
         'a/b/c/d.txt': { fileHash: 'hash1', size: 100 },
       };
 
-      const tree = service.listResources(resources);
+      const tree = await service.listResources(resources);
 
       expect(tree).toHaveLength(1);
       expect(tree[0].name).toBe('a');
@@ -88,7 +90,7 @@ describe('SkillResourceService', () => {
       expect(tree[0].children?.[0].children?.[0].children?.[0].type).toBe('file');
     });
 
-    it('should handle mixed files and directories', () => {
+    it('should handle mixed files and directories', async () => {
       const service = new SkillResourceService({} as any, 'user-1');
       const resources = {
         'README.md': { fileHash: 'hash1', size: 100 },
@@ -96,7 +98,7 @@ describe('SkillResourceService', () => {
         'lib/utils/helper.ts': { fileHash: 'hash3', size: 300 },
       };
 
-      const tree = service.listResources(resources);
+      const tree = await service.listResources(resources);
 
       expect(tree).toHaveLength(2);
 
@@ -114,14 +116,14 @@ describe('SkillResourceService', () => {
       expect(utils?.children?.[0].name).toBe('helper.ts');
     });
 
-    it('should handle empty resources', () => {
+    it('should handle empty resources', async () => {
       const service = new SkillResourceService({} as any, 'user-1');
-      const tree = service.listResources({});
+      const tree = await service.listResources({});
 
       expect(tree).toEqual([]);
     });
 
-    it('should sort paths alphabetically', () => {
+    it('should sort paths alphabetically', async () => {
       const service = new SkillResourceService({} as any, 'user-1');
       const resources = {
         'z.txt': { fileHash: 'hash1', size: 100 },
@@ -129,7 +131,7 @@ describe('SkillResourceService', () => {
         'm.txt': { fileHash: 'hash3', size: 300 },
       };
 
-      const tree = service.listResources(resources);
+      const tree = await service.listResources(resources);
 
       expect(tree.map((n) => n.name)).toEqual(['a.txt', 'm.txt', 'z.txt']);
     });
