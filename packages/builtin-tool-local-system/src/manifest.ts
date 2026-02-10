@@ -381,17 +381,13 @@ export const LocalSystemManifest: BuiltinToolManifest = {
             enum: ['content', 'files_with_matches', 'count'],
             type: 'string',
           },
-          'path': {
-            description: 'File or directory to search in',
-            type: 'string',
-          },
           'pattern': {
             description: 'The regular expression pattern to search for',
             type: 'string',
           },
           'scope': {
             description:
-              'Working directory scope for the search. When `path` is not specified, this is used as the default search location. Defaults to the current working directory.',
+              'Working directory scope. Limits the search to this directory. Defaults to the current working directory.',
             type: 'string',
           },
           'type': {
