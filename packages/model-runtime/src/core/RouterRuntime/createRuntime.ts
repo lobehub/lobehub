@@ -136,7 +136,7 @@ export interface CreateRouterRuntimeOptions<T extends Record<string, any> = any>
     | {
         transformModel?: (model: OpenAI.Model) => ChatModelCard;
       };
-  onRouteAttempt?: (result: RouteAttemptResult) => void;
+  onRouteAttempt?: (result: RouteAttemptResult) => Promise<void>;
   responses?: {
     handlePayload?: (
       payload: ChatStreamPayload,
@@ -324,40 +324,36 @@ export const createRouterRuntime = ({
             );
           }
 
-          try {
-            params.onRouteAttempt?.({
-              apiType: resolvedApiType,
-              channelId,
-              durationMs: Date.now() - startTime,
-              model,
-              providerId: id,
-              remark,
-              routerId: matchedRouter.id,
-              success: true,
-            });
-          } catch (e) {
+          params.onRouteAttempt?.({
+            apiType: resolvedApiType,
+            channelId,
+            durationMs: Date.now() - startTime,
+            model,
+            providerId: id,
+            remark,
+            routerId: matchedRouter.id,
+            success: true,
+          }).catch((e) => {
             log('onRouteAttempt callback error: %O', e);
-          }
+          });
 
           return result;
         } catch (error) {
           lastError = error;
 
-          try {
-            params.onRouteAttempt?.({
-              apiType: resolvedApiType,
-              channelId,
-              durationMs: Date.now() - startTime,
-              error,
-              model,
-              providerId: id,
-              remark,
-              routerId: matchedRouter.id,
-              success: false,
-            });
-          } catch (e) {
+          params.onRouteAttempt?.({
+            apiType: resolvedApiType,
+            channelId,
+            durationMs: Date.now() - startTime,
+            error,
+            model,
+            providerId: id,
+            remark,
+            routerId: matchedRouter.id,
+            success: false,
+          }).catch((e) => {
             log('onRouteAttempt callback error: %O', e);
-          }
+          });
 
           if (attempt < totalOptions) {
             log(
