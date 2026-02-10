@@ -1,16 +1,17 @@
-/* eslint-disable unicorn/no-array-push-push */
-import { GlobFilesParams, GlobFilesResult } from '@lobechat/electron-client-ipc';
-import { execa } from 'execa';
-import fg from 'fast-glob';
-import { Stats } from 'node:fs';
+ 
+import { type Stats } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import * as os from 'node:os';
 
-import { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
+import { type GlobFilesParams, type GlobFilesResult } from '@lobechat/electron-client-ipc';
+import { execa } from 'execa';
+import fg from 'fast-glob';
+
+import { type ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
 import { createLogger } from '@/utils/logger';
 
 import { BaseFileSearch } from '../base';
-import { FileResult, SearchOptions } from '../types';
+import { type FileResult, type SearchOptions } from '../types';
 
 const logger = createLogger('module:FileSearch:unix');
 
@@ -190,10 +191,7 @@ export abstract class UnixFileSearch extends BaseFileSearch {
     logger.debug('Performing find search', { keywords: options.keywords, searchDir });
 
     try {
-      const args: string[] = [searchDir];
-
-      // Limit depth and exclude common directories
-      args.push(
+      const args: string[] = [searchDir, 
         '-maxdepth',
         '10',
         '-type',
@@ -209,8 +207,9 @@ export abstract class UnixFileSearch extends BaseFileSearch {
         '*/*cache*/*',
         ')',
         '-prune',
-        '-o',
-      );
+        '-o'];
+
+      // Limit depth and exclude common directories
 
       // Pattern matching
       if (options.keywords) {
@@ -337,7 +336,7 @@ export abstract class UnixFileSearch extends BaseFileSearch {
    * @returns Glob results
    */
   protected async globWithFd(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.path || process.cwd();
+    const searchPath = params.scope || process.cwd();
     const logPrefix = `[glob:fd: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fd glob`, { searchPath });
@@ -393,7 +392,7 @@ export abstract class UnixFileSearch extends BaseFileSearch {
    * @returns Glob results
    */
   protected async globWithFind(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.path || process.cwd();
+    const searchPath = params.scope || process.cwd();
     const logPrefix = `[glob:find: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting find glob`, { searchPath });
@@ -455,7 +454,7 @@ export abstract class UnixFileSearch extends BaseFileSearch {
    * @returns Glob results
    */
   protected async globWithFastGlob(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.path || process.cwd();
+    const searchPath = params.scope || process.cwd();
     const logPrefix = `[glob:fast-glob: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fast-glob`, { searchPath });

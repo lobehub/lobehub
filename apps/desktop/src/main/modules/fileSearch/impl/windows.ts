@@ -1,16 +1,17 @@
-/* eslint-disable unicorn/no-array-push-push */
-import { GlobFilesParams, GlobFilesResult } from '@lobechat/electron-client-ipc';
-import { execa } from 'execa';
-import fg from 'fast-glob';
-import { Stats } from 'node:fs';
+ 
+import { type Stats } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import * as os from 'node:os';
 
-import { ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
+import { type GlobFilesParams, type GlobFilesResult } from '@lobechat/electron-client-ipc';
+import { execa } from 'execa';
+import fg from 'fast-glob';
+
+import { type ToolDetectorManager } from '@/core/infrastructure/ToolDetectorManager';
 import { createLogger } from '@/utils/logger';
 
 import { BaseFileSearch } from '../base';
-import { FileResult, SearchOptions } from '../types';
+import { type FileResult, type SearchOptions } from '../types';
 
 const logger = createLogger('module:FileSearch:windows');
 
@@ -335,7 +336,7 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
    * @returns Glob results
    */
   private async globWithFd(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.path || process.cwd();
+    const searchPath = params.scope || process.cwd();
     const logPrefix = `[glob:fd: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fd glob`, { searchPath });
@@ -390,7 +391,7 @@ export class WindowsSearchServiceImpl extends BaseFileSearch {
    * @returns Glob results
    */
   private async globWithFastGlob(params: GlobFilesParams): Promise<GlobFilesResult> {
-    const searchPath = params.path || process.cwd();
+    const searchPath = params.scope || process.cwd();
     const logPrefix = `[glob:fast-glob: ${params.pattern}]`;
 
     logger.debug(`${logPrefix} Starting fast-glob`, { searchPath });

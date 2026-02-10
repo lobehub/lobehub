@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { App } from '@/core/App';
+import  { type App } from '@/core/App';
 
 import LocalFileCtr from '../LocalFileCtr';
 
@@ -408,7 +408,7 @@ describe('LocalFileCtr', () => {
 
       const result = await localFileCtr.handleGlobFiles({
         pattern: '*.txt',
-        path: '/test',
+        scope: '/test',
       });
 
       expect(result.success).toBe(true);
@@ -416,7 +416,7 @@ describe('LocalFileCtr', () => {
       expect(result.total_files).toBe(2);
       expect(mockSearchService.glob).toHaveBeenCalledWith({
         pattern: '*.txt',
-        path: '/test',
+        scope: '/test',
       });
     });
 
