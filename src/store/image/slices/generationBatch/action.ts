@@ -75,17 +75,17 @@ export const createGenerationBatchSlice: StateCreator<
 
     await internal_deleteGeneration(generationId);
 
-    // 检查删除后是否有batch变成空的，如果有则删除空batch
+    // Check if any batch becomes empty after deletion, and if so, delete the empty batch
     if (activeGenerationTopicId) {
       const updatedBatches = get().generationBatchesMap[activeGenerationTopicId] || [];
       const emptyBatches = updatedBatches.filter((batch) => batch.generations.length === 0);
 
-      // 删除所有空的batch
+      // Delete all empty batches
       for (const emptyBatch of emptyBatches) {
         await get().internal_deleteGenerationBatch(emptyBatch.id, activeGenerationTopicId);
       }
 
-      // 如果删除了空batch，再次刷新数据确保一致性
+      // If empty batches were deleted, refresh data again to ensure consistency
       if (emptyBatches.length > 0) {
         await refreshGenerationBatches();
       }
@@ -98,7 +98,7 @@ export const createGenerationBatchSlice: StateCreator<
 
     if (!activeGenerationTopicId) return;
 
-    // 找到包含该 generation 的 batch
+    // Find the batch containing this generation
     const currentBatches = get().generationBatchesMap[activeGenerationTopicId] || [];
     const targetBatch = currentBatches.find((batch) =>
       batch.generations.some((gen) => gen.id === generationId),
@@ -106,17 +106,17 @@ export const createGenerationBatchSlice: StateCreator<
 
     if (!targetBatch) return;
 
-    // 1. 立即更新前端状态（乐观更新）
+    // 1. Immediately update frontend state (optimistic update)
     internal_dispatchGenerationBatch(
       activeGenerationTopicId,
       { type: 'deleteGenerationInBatch', batchId: targetBatch.id, generationId },
       'internal_deleteGeneration',
     );
 
-    // 2. 调用后端服务删除generation
+    // 2. Call backend service to delete generation
     await generationService.deleteGeneration(generationId);
 
-    // 3. 刷新数据确保一致性
+    // 3. Refresh data to ensure consistency
     await refreshGenerationBatches();
   },
 
@@ -128,17 +128,17 @@ export const createGenerationBatchSlice: StateCreator<
   internal_deleteGenerationBatch: async (batchId: string, topicId: string) => {
     const { internal_dispatchGenerationBatch, refreshGenerationBatches } = get();
 
-    // 1. 立即更新前端状态（乐观更新）
+    // 1. Immediately update frontend state (optimistic update)
     internal_dispatchGenerationBatch(
       topicId,
       { type: 'deleteBatch', id: batchId },
       'internal_deleteGenerationBatch',
     );
 
-    // 2. 调用后端服务
+    // 2. Call backend service
     await generationBatchService.deleteGenerationBatch(batchId);
 
-    // 3. 刷新数据确保一致性
+    // 3. Refresh data to ensure consistency
     await refreshGenerationBatches();
   },
 
@@ -206,32 +206,32 @@ export const createGenerationBatchSlice: StateCreator<
         ? [SWR_USE_CHECK_GENERATION_STATUS, generationId, asyncTaskId]
         : null,
       async ([, generationId, asyncTaskId]: [string, string, string]) => {
-        // 增加请求计数
+        // Increment request count
         requestCountRef.current += 1;
         return generationService.getGenerationStatus(generationId, asyncTaskId);
       },
       {
         refreshWhenHidden: false,
         refreshInterval: (data: GetGenerationStatusResult | undefined) => {
-          // 如果状态是 success 或 error，停止轮询
+          // If status is success or error, stop polling
           if (data?.status === AsyncTaskStatus.Success || data?.status === AsyncTaskStatus.Error) {
-            return 0; // 停止轮询
+            return 0; // Stop polling
           }
 
-          // 根据请求次数动态调整间隔：使用指数退避算法
-          // 基础间隔 1 秒，最大间隔 30 秒
+          // Dynamically adjust interval based on request count: use exponential backoff algorithm
+          // Base interval 1 second, max interval 30 seconds
           const baseInterval = 1000;
           const maxInterval = 30_000;
           const currentCount = requestCountRef.current;
 
-          // 指数退避：每 5 次请求后间隔翻倍
+          // Exponential backoff: double the interval every 5 requests
           const backoffMultiplier = Math.floor(currentCount / 5);
           let dynamicInterval = Math.min(
             baseInterval * Math.pow(2, backoffMultiplier),
             maxInterval,
           );
 
-          // 如果之前有错误，使用更长的间隔（乘以 2）
+          // If there was a previous error, use a longer interval (multiply by 2)
           if (isErrorRef.current) {
             dynamicInterval = Math.min(dynamicInterval * 2, maxInterval);
           }
@@ -239,32 +239,32 @@ export const createGenerationBatchSlice: StateCreator<
           return dynamicInterval;
         },
         onError: (error) => {
-          // 发生错误时设置错误状态
+          // Set error state when an error occurs
           isErrorRef.current = true;
           console.error('Generation status check error:', error);
         },
         onSuccess: async (data: GetGenerationStatusResult) => {
           if (!data) return;
 
-          // 成功时重置错误状态
+          // Reset error state on success
           isErrorRef.current = false;
 
-          // 找到对应的 batch，generation 数据库记录包含 generationBatchId
+          // Find the corresponding batch, generation database record contains generationBatchId
           const currentBatches = get().generationBatchesMap[topicId] || [];
           const targetBatch = currentBatches.find((batch) =>
             batch.generations.some((gen) => gen.id === generationId),
           );
 
-          // 如果状态为成功或错误，都要更新对应的 generation
+          // If status is success or error, update the corresponding generation
           if (
             (data.status === AsyncTaskStatus.Success || data.status === AsyncTaskStatus.Error) &&
             targetBatch
           ) {
-            // 重置请求计数器，因为任务已完成
+            // Reset request counter because the task is complete
             requestCountRef.current = 0;
 
             if (data.generation) {
-              // 更新 generation 数据
+              // Update generation data
               get().internal_dispatchGenerationBatch(
                 topicId,
                 {
@@ -278,12 +278,12 @@ export const createGenerationBatchSlice: StateCreator<
                 ),
               );
 
-              // 如果生成成功且有缩略图，检查当前 topic 是否有 imageUrl
+              // If generation succeeds and has a thumbnail, check if the current topic has an imageUrl
               if (data.status === AsyncTaskStatus.Success && data.generation.asset?.thumbnailUrl) {
                 const currentTopic =
                   generationTopicSelectors.getGenerationTopicById(topicId)(get());
 
-                // 如果当前 topic 没有 imageUrl，使用这个 generation 的 thumbnailUrl 更新
+                // If the current topic doesn't have an imageUrl, update it with this generation's thumbnailUrl
                 if (currentTopic && !currentTopic.coverUrl) {
                   await get().updateGenerationTopicCover(
                     topicId,
@@ -293,7 +293,7 @@ export const createGenerationBatchSlice: StateCreator<
               }
             }
 
-            // 在成功或失败后都要 refreshGenerationBatches
+            // Refresh generation batches after success or failure
             await get().refreshGenerationBatches();
           }
         },
