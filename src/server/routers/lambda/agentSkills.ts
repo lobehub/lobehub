@@ -3,8 +3,10 @@ import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
 import { AgentSkillModel } from '@/database/models/agentSkill';
+import { FileModel } from '@/database/models/file';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { FileService } from '@/server/services/file';
 import {
   SkillImportError,
   SkillImporter,
@@ -54,6 +56,8 @@ const skillProcedure = authedProcedure.use(serverDatabase).use(async (opts) => {
 
   return opts.next({
     ctx: {
+      fileModel: new FileModel(ctx.serverDB, ctx.userId),
+      fileService: new FileService(ctx.serverDB, ctx.userId),
       skillImporter: new SkillImporter(ctx.serverDB, ctx.userId),
       skillModel: new AgentSkillModel(ctx.serverDB, ctx.userId),
       skillResourceService: new SkillResourceService(ctx.serverDB, ctx.userId),
@@ -101,6 +105,27 @@ export const agentSkillsRouter = router({
   getById: skillProcedure.input(z.object({ id: z.string() })).query(async ({ ctx, input }) => {
     return ctx.skillModel.findById(input.id);
   }),
+
+  getByIdWithZipUrl: skillProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const skill = await ctx.skillModel.findById(input.id);
+      if (!skill) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Skill not found' });
+      }
+
+      if (!skill.zipFileHash) {
+        return { name: skill.name, url: null };
+      }
+
+      const fileInfo = await ctx.fileModel.checkHash(skill.zipFileHash);
+      if (!fileInfo.isExist || !fileInfo.url) {
+        return { name: skill.name, url: null };
+      }
+
+      const fullUrl = await ctx.fileService.getFullFileUrl(fileInfo.url);
+      return { name: skill.name, url: fullUrl || null };
+    }),
 
   getByIdentifier: skillProcedure
     .input(z.object({ identifier: z.string() }))

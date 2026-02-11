@@ -4,11 +4,13 @@ import { type SkillListItem } from '@lobechat/types';
 import { Block, DropdownMenu, Flexbox, Icon, Button as LobeButton, Modal, Tag } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import { MoreHorizontalIcon, Package, PuzzleIcon, Trash2 } from 'lucide-react';
+import { DownloadIcon, MoreHorizontalIcon, Package, PuzzleIcon, Trash2 } from 'lucide-react';
 import { Suspense, lazy, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
+import { downloadFile } from '@/utils/client/downloadFile';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 
@@ -49,11 +51,26 @@ interface AgentSkillItemProps {
 
 const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
   const { t } = useTranslation('setting');
+  const { t: tc } = useTranslation('common');
   const { t: tp } = useTranslation('plugin');
   const { modal } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
+
+  const handleDownload = async () => {
+    if (!skill.zipFileHash) return;
+
+    setLoading(true);
+    try {
+      const result = await agentSkillService.getZipUrl(skill.id);
+      if (result.url) {
+        await downloadFile(result.url, `${result.name || skill.name}.zip`);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleUninstall = () => {
     modal.confirm({
@@ -97,6 +114,17 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
         </Flexbox>
         <DropdownMenu
           items={[
+            ...(skill.zipFileHash
+              ? [
+                  {
+                    icon: <DownloadIcon size={16} />,
+                    key: 'download',
+                    label: tc('download'),
+                    onClick: handleDownload,
+                  },
+                  { type: 'divider' as const },
+                ]
+              : []),
             {
               danger: true,
               icon: <Trash2 size={16} />,

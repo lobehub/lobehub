@@ -41,6 +41,10 @@ class AgentSkillService {
     return lambdaClient.agentSkills.getById.query({ id });
   }
 
+  async getZipUrl(id: string): Promise<{ name: string; url: string | null }> {
+    return lambdaClient.agentSkills.getByIdWithZipUrl.query({ id });
+  }
+
   async getByIdentifier(identifier: string): Promise<SkillItem | undefined> {
     return lambdaClient.agentSkills.getByIdentifier.query({ identifier });
   }
