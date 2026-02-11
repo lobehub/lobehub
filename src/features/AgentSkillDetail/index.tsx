@@ -49,12 +49,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow-y: auto;
     flex: 1;
   `,
-  rightInner: css`
-    max-width: 720px;
-    margin-inline: auto;
-    padding-block: 8px;
-    padding-inline: 8px;
-  `,
 }));
 
 interface AgentSkillDetailProps {
@@ -115,13 +109,11 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
         </div>
         <div className={styles.divider} />
         <div className={styles.right}>
-          <div className={styles.rightInner}>
-            <ContentViewer
-              contentMap={contentMap}
-              selectedFile={selectedFile}
-              skillDetail={skillDetail}
-            />
-          </div>
+          <ContentViewer
+            contentMap={contentMap}
+            selectedFile={selectedFile}
+            skillDetail={skillDetail}
+          />
         </div>
       </Flexbox>
     </Flexbox>

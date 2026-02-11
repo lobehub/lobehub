@@ -15,7 +15,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
 
     padding-block: 6px;
-    padding-inline: 8px;
+    padding-inline-end: 8px;
     border-radius: 6px;
 
     font-size: 13px;
@@ -68,9 +68,10 @@ const TreeNode = memo<{
         className={`${styles.item} ${isSelected ? styles.itemSelected : ''}`}
         onClick={handleClick}
         style={{ paddingInlineStart: 8 + depth * 16 }}
+        title={node.path}
       >
         {isDir && <Icon icon={isExpanded ? ChevronDown : ChevronRight} size={14} />}
-        {!isDir && <span style={{ width: 14 }} />}
+        {!isDir && <span style={{ flexShrink: 0, width: 14 }} />}
         <Icon icon={isDir ? (isExpanded ? FolderOpenIcon : FolderIcon) : FileTextIcon} size={16} />
         <span className={styles.label}>{node.name}</span>
       </div>
@@ -132,8 +133,9 @@ const FileTree = memo<FileTreeProps>(({ resourceTree, selectedFile, onSelectFile
       <div
         className={`${styles.item} ${isSkillMdSelected ? styles.itemSelected : ''}`}
         onClick={() => onSelectFile('SKILL.md')}
+        style={{ paddingInlineStart: 8 }}
       >
-        <span style={{ width: 14 }} />
+        <span style={{ flexShrink: 0, width: 14 }} />
         <Icon icon={FileTextIcon} size={16} />
         <span className={styles.label}>SKILL.md</span>
       </div>

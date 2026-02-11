@@ -1,8 +1,47 @@
 'use client';
 
 import type { SkillItem } from '@lobechat/types';
-import { Flexbox, Highlighter, Markdown } from '@lobehub/ui';
+import { Highlighter, Markdown } from '@lobehub/ui';
+import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
+
+const styles = createStaticStyles(({ css, cssVar }) => ({
+  codeWrapper: css`
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+    padding-block-end: 50vh;
+
+    pre {
+      flex: 1;
+      margin: 0;
+    }
+
+    code {
+      counter-reset: line;
+    }
+
+    .line::before {
+      content: counter(line);
+      counter-increment: line;
+      user-select: none;
+
+      display: inline-block;
+
+      width: 5ch;
+      margin-inline-end: 2.5ch;
+
+      color: ${cssVar.colorTextQuaternary};
+      text-align: end;
+    }
+  `,
+  docWrapper: css`
+    max-width: 720px;
+    margin-inline: auto;
+    padding-block: 8px;
+    padding-inline: 16px;
+  `,
+}));
 
 const getLanguage = (fileName: string): string => {
   const ext = fileName.toLowerCase().split('.').pop();
@@ -122,13 +161,13 @@ interface ContentViewerProps {
 const ContentViewer = memo<ContentViewerProps>(({ skillDetail, selectedFile, contentMap }) => {
   if (selectedFile === 'SKILL.md') {
     return (
-      <Flexbox style={{ padding: '0 8px' }}>
+      <div className={styles.docWrapper}>
         {skillDetail?.content ? (
           <Markdown variant={'chat'}>{skillDetail.content}</Markdown>
         ) : (
           <p style={{ opacity: 0.45 }}>No content</p>
         )}
-      </Flexbox>
+      </div>
     );
   }
 
@@ -140,16 +179,25 @@ const ContentViewer = memo<ContentViewerProps>(({ skillDetail, selectedFile, con
 
   if (isMarkdownFile(selectedFile)) {
     return (
-      <div style={{ padding: '0 8px' }}>
+      <div className={styles.docWrapper}>
         <Markdown variant={'chat'}>{content}</Markdown>
       </div>
     );
   }
 
   return (
-    <Highlighter language={getLanguage(selectedFile)} showLanguage={false} variant={'borderless'}>
-      {content}
-    </Highlighter>
+    <div className={styles.codeWrapper}>
+      <Highlighter
+        copyable={false}
+        language={getLanguage(selectedFile)}
+        showLanguage={false}
+        style={{ flex: 1 }}
+        styles={{ body: { flex: 1 } }}
+        variant={'borderless'}
+      >
+        {content}
+      </Highlighter>
+    </div>
   );
 });
 
