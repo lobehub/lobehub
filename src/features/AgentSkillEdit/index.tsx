@@ -1,7 +1,9 @@
 'use client';
 
+import { isDesktop } from '@lobechat/const';
+import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import type { SkillResourceTreeNode } from '@lobechat/types';
-import { Button, Flexbox, Modal } from '@lobehub/ui';
+import { Button, Drawer, Flexbox } from '@lobehub/ui';
 import { Form as AForm, Alert, App, Popconfirm, Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
@@ -134,28 +136,32 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
   );
 
   return (
-    <Modal
-      allowFullscreen
+    <Drawer
+      containerMaxWidth={'auto'}
       destroyOnHidden
       footer={footer}
-      onCancel={onClose}
+      height={isDesktop ? `calc(100vh - ${TITLE_BAR_HEIGHT}px)` : '100vh'}
+      onClose={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
       open={open}
+      placement={'bottom'}
+      push={false}
       styles={{
-        body: { height: 'min(720px, calc(100dvh - 280px))', overflow: 'hidden', padding: 0 },
-        footer: { borderBlockStart: '1px solid var(--ant-color-border-secondary)' },
+        body: { padding: 0 },
+        bodyContent: { height: '100%' },
       }}
       title={t('agentSkillEdit.title')}
-      width={960}
     >
       {isLoading ? (
         <Skeleton active paragraph={{ rows: 8 }} style={{ padding: 16 }} />
       ) : (
         <Flexbox
+          height={'100%'}
           horizontal
-          style={{
-            borderBlockStart: '1px solid var(--ant-color-border-secondary)',
-            height: '100%',
-            overflow: 'hidden',
+          onClick={(e) => {
+            e.stopPropagation();
           }}
         >
           <div className={styles.left}>
@@ -195,7 +201,7 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
           </div>
         </Flexbox>
       )}
-    </Modal>
+    </Drawer>
   );
 });
 

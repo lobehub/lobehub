@@ -1,17 +1,10 @@
 'use client';
 
 import { type SkillListItem } from '@lobechat/types';
-import {
-  Block,
-  DropdownMenu,
-  Flexbox,
-  Icon,
-  Button as LobeButton,
-  Modal,
-} from '@lobehub/ui';
-import { App, Space } from 'antd';
+import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Modal } from '@lobehub/ui';
+import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { DownloadIcon, MoreVerticalIcon, PuzzleIcon, Trash2 } from 'lucide-react';
+import { DownloadIcon, MoreVerticalIcon, PackageSearch, PuzzleIcon, Trash2 } from 'lucide-react';
 import { Suspense, lazy, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -115,10 +108,12 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
               <span className={itemStyles.description}>{skill.description}</span>
             )}
           </Flexbox>
-          <Space.Compact>
-            <LobeButton onClick={() => setEditOpen(true)}>
-              {t('store.actions.configure')}
-            </LobeButton>
+          <Flexbox horizontal>
+            <ActionIcon
+              icon={PackageSearch}
+              onClick={() => setEditOpen(true)}
+              title={t('store.actions.manifest')}
+            />
             <DropdownMenu
               items={[
                 ...(skill.zipFileHash
@@ -143,9 +138,9 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
               nativeButton={false}
               placement="bottomRight"
             >
-              <LobeButton icon={MoreVerticalIcon} loading={loading} />
+              <ActionIcon icon={MoreVerticalIcon} loading={loading} />
             </DropdownMenu>
-          </Space.Compact>
+          </Flexbox>
         </Block>
       </Flexbox>
       <Modal
