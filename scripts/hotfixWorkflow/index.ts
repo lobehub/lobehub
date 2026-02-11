@@ -214,11 +214,10 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const currentVersion = getCurrentVersion();
-
   if (isOnHotfix) {
     consola.info(`🔍 Detected existing hotfix branch: ${currentBranch}`);
 
+    const currentVersion = getCurrentVersion();
     const version = extractVersionFromBranch(currentBranch) ?? bumpPatchVersion(currentVersion);
 
     const confirmed = await confirmHotfix({
@@ -239,6 +238,7 @@ async function main(): Promise<void> {
     consola.info('📥 Pulling latest main branch...');
     execSync('git pull --rebase origin main', { stdio: 'inherit' });
 
+    const currentVersion = getCurrentVersion();
     const newVersion = bumpPatchVersion(currentVersion);
     const branchName = createHotfixBranchName(newVersion);
 

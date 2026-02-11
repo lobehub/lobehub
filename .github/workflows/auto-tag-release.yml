@@ -30,8 +30,8 @@ jobs:
           PR_TITLE="${{ github.event.pull_request.title }}"
           echo "PR Title: $PR_TITLE"
 
-          # Match "🚀 release: v{x.x.x}" format
-          if [[ "$PR_TITLE" =~ ^🚀[[:space:]]+release:[[:space:]]*v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+          # Match "🚀 release: v{x.x.x}" format (strict semver: x.y.z with optional -prerelease or +build)
+          if [[ "$PR_TITLE" =~ ^🚀[[:space:]]+release:[[:space:]]*v([0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?(\+[a-zA-Z0-9.-]+)?)$ ]]; then
             VERSION="${BASH_REMATCH[1]}"
             echo "version=$VERSION" >> $GITHUB_OUTPUT
             echo "should_tag=true" >> $GITHUB_OUTPUT
@@ -114,6 +114,12 @@ jobs:
           VERSION="${{ env.VERSION }}"
           KIND="${{ env.KIND }}"
           echo "📝 Bumping package.json version to: $VERSION"
+
+          # Validate VERSION is strict semver before writing
+          if ! npx -y semver@7 "$VERSION" >/dev/null 2>&1; then
+            echo "❌ Invalid semver version: $VERSION"
+            exit 1
+          fi
 
           # Configure git
           git config --global user.name "lobehubbot"
