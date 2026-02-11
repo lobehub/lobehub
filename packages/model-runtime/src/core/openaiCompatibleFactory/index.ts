@@ -334,7 +334,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           processedPayload = { ...payload, apiMode: 'responses' } as any;
         }
 
-        // 再进行工厂级处理
+        // Then perform factory-level processing
         const postPayload = chatCompletion?.handlePayload
           ? chatCompletion.handlePayload(processedPayload, this._options)
           : ({

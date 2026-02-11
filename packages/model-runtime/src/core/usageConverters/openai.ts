@@ -12,7 +12,7 @@ export const convertOpenAIUsage = (
   usage: OpenAI.Completions.CompletionUsage,
   payload?: ChatPayloadForTransformStream,
 ): ModelUsage => {
-  // 目前只有 pplx 才有 citation_tokens
+  // Currently only pplx has citation_tokens
   const inputTextTokens = usage.prompt_tokens || 0;
   const inputCitationTokens = (usage as any).citation_tokens || 0;
   const totalInputTokens = inputCitationTokens + inputTextTokens;
@@ -28,7 +28,7 @@ export const convertOpenAIUsage = (
   const outputAudioTokens = usage.completion_tokens_details?.audio_tokens || 0;
   const outputImageTokens = (usage.completion_tokens_details as any)?.image_tokens || 0;
 
-  // XAI 的 completion_tokens 不包含 reasoning_tokens，需要特殊处理
+  // XAI's completion_tokens does not include reasoning_tokens, requires special handling
   const outputTextTokens =
     payload?.provider === 'xai'
       ? totalOutputTokens - outputAudioTokens
