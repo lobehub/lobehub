@@ -38,6 +38,7 @@ const SkillEditForm = memo<SkillEditFormProps>(({ name, form, initialValues, onS
   const items: FormItemProps[] = [
     {
       children: <Input disabled readOnly value={name} />,
+      desc: t('agentSkillEdit.nameDesc'),
       label: t('settingAgent.name.title'),
     },
     {
@@ -47,6 +48,7 @@ const SkillEditForm = memo<SkillEditFormProps>(({ name, form, initialValues, onS
           placeholder={t('agentSkillModal.descriptionPlaceholder')}
         />
       ),
+      desc: t('agentSkillEdit.descriptionDesc'),
       label: t('agentSkillModal.description'),
       name: 'description',
     },
@@ -60,6 +62,7 @@ const SkillEditForm = memo<SkillEditFormProps>(({ name, form, initialValues, onS
           variant={'outlined'}
         />
       ),
+      desc: t('agentSkillEdit.instructionsDesc'),
       label: t('agentSkillEdit.instructions'),
       name: 'content',
     },

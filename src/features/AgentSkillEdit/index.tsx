@@ -2,7 +2,7 @@
 
 import type { SkillResourceTreeNode } from '@lobechat/types';
 import { Button, Flexbox, Modal } from '@lobehub/ui';
-import { Form as AForm, App, Popconfirm, Skeleton } from 'antd';
+import { Form as AForm, Alert, App, Popconfirm, Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -182,12 +182,15 @@ const AgentSkillEdit = memo<AgentSkillEditProps>(({ skillId, open, onClose }) =>
               />
             </div>
             {selectedFile !== 'SKILL.md' && (
-              <ContentViewer
-                contentMap={contentMap}
-                key={selectedFile}
-                selectedFile={selectedFile}
-                skillDetail={skillDetail}
-              />
+              <>
+                <Alert banner message={t('agentSkillEdit.fileReadonly')} showIcon type="info" />
+                <ContentViewer
+                  contentMap={contentMap}
+                  key={selectedFile}
+                  selectedFile={selectedFile}
+                  skillDetail={skillDetail}
+                />
+              </>
             )}
           </div>
         </Flexbox>
