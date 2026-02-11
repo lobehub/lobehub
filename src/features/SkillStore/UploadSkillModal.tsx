@@ -1,7 +1,8 @@
 'use client';
 
+import { LoadingOutlined } from '@ant-design/icons';
 import { Alert, Flexbox, Icon } from '@lobehub/ui';
-import { App, Modal, Typography, Upload } from 'antd';
+import { App, Modal, Spin, Typography, Upload } from 'antd';
 import { sha256 } from 'js-sha256';
 import { ArrowLeftRight, InboxIcon, Sparkles, Upload as UploadIcon } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -57,7 +58,16 @@ const UploadSkillModal = memo<UploadSkillModalProps>(({ open, onOpenChange }) =>
   };
 
   return (
-    <Modal destroyOnClose footer={null} onCancel={handleClose} open={open} title={null} width={480}>
+    <Modal
+      closable={!loading}
+      destroyOnClose
+      footer={null}
+      maskClosable={!loading}
+      onCancel={handleClose}
+      open={open}
+      title={null}
+      width={480}
+    >
       <Flexbox align="center" gap={16} padding={'16px 0'}>
         <Flexbox align="center" gap={8} horizontal>
           <Icon icon={UploadIcon} size={28} />
@@ -92,14 +102,25 @@ const UploadSkillModal = memo<UploadSkillModalProps>(({ open, onOpenChange }) =>
           showUploadList={false}
         >
           <Flexbox align="center" gap={8} padding={24}>
-            <Icon
-              icon={InboxIcon}
-              size={48}
-              style={{ color: 'var(--ant-color-text-quaternary)' }}
-            />
-            <Typography.Text type="secondary">
-              {t('agentSkillModal.upload.dragText')}
-            </Typography.Text>
+            {loading ? (
+              <>
+                <Spin indicator={<LoadingOutlined spin />} />
+                <Typography.Text type="secondary">
+                  {t('agentSkillModal.upload.uploading')}
+                </Typography.Text>
+              </>
+            ) : (
+              <>
+                <Icon
+                  icon={InboxIcon}
+                  size={48}
+                  style={{ color: 'var(--ant-color-text-quaternary)' }}
+                />
+                <Typography.Text type="secondary">
+                  {t('agentSkillModal.upload.dragText')}
+                </Typography.Text>
+              </>
+            )}
           </Flexbox>
         </Upload.Dragger>
 

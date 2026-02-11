@@ -148,6 +148,7 @@
   "agentSkillModal.upload.requirementZip": "根目录下包含 SKILL.md 文件的 .zip 或 .skill 文件",
   "agentSkillModal.upload.requirements": "文件要求",
   "agentSkillModal.upload.title": "上传技能",
+  "agentSkillModal.upload.uploading": "上传中...",
   "agentSkillModal.url.desc": "通过提供 SKILL.md 文件的直接链接导入技能。",
   "agentSkillModal.url.title": "从 URL 导入",
   "agentSkillModal.url.urlPlaceholder": "https://example.com/path/to/SKILL.md",

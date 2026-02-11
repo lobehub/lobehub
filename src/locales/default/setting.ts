@@ -155,6 +155,7 @@ export default {
   'agentSkillModal.upload.requirementZip': '.zip or .skill file with SKILL.md in root directory',
   'agentSkillModal.upload.requirements': 'File Requirements',
   'agentSkillModal.upload.title': 'Upload Skill',
+  'agentSkillModal.upload.uploading': 'Uploading...',
   'agentSkillModal.url.desc': 'Import a skill by providing a direct link to a SKILL.md file.',
   'agentSkillModal.url.title': 'Import from URL',
   'agentSkillModal.url.urlPlaceholder': 'https://example.com/path/to/SKILL.md',
