@@ -27,7 +27,7 @@ export const useGroupDropdownMenu = ({
 
   return useMemo(() => {
     const createAgentItem = createAgentMenuItem({ groupId: id, isPinned });
-    const createGroupChatItem = createGroupChatMenuItem();
+    const createGroupChatItem = createGroupChatMenuItem({ groupId: id });
     const configItem = configGroupMenuItem(openConfigGroupModal);
     const renameItem = toggleEditing ? renameGroupMenuItem(toggleEditing) : null;
     const deleteItem = id ? deleteGroupMenuItem(id) : null;

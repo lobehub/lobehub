@@ -1,5 +1,6 @@
-import { Input, Popover, stopPropagation } from '@lobehub/ui';
-import { memo, useCallback, useState } from 'react';
+import { Input, stopPropagation } from '@lobehub/ui';
+import { type InputRef, Popover } from 'antd';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useHomeStore } from '@/store/home';
 
@@ -16,14 +17,23 @@ const Editing = memo<EditingProps>(({ id, name, toggleEditing }) => {
     s.updateGroupName,
   ]);
 
+  const inputRef = useRef<InputRef>(null);
+
+  useEffect(() => {
+    if (editing) {
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [editing]);
+
   const handleUpdate = useCallback(async () => {
     if (newName && name !== newName) {
       try {
-        // Set loading state
         useHomeStore.getState().setGroupUpdatingId(id);
         await updateGroupName(id, newName);
       } finally {
-        // Clear loading state
         useHomeStore.getState().setGroupUpdatingId(null);
       }
     }
@@ -33,34 +43,22 @@ const Editing = memo<EditingProps>(({ id, name, toggleEditing }) => {
   return (
     <Popover
       open={editing}
+      overlayInnerStyle={{ padding: 4, width: 320 }}
       placement="bottomLeft"
       trigger="click"
       content={
         <Input
-          autoFocus
           defaultValue={name}
+          ref={inputRef}
+          onBlur={() => handleUpdate()}
           onChange={(e) => setNewName(e.target.value)}
           onClick={stopPropagation}
-          onBlur={() => {
-            handleUpdate();
-            toggleEditing(false);
-          }}
-          onPressEnter={() => {
-            handleUpdate();
-            toggleEditing(false);
+          onPressEnter={() => handleUpdate()}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') toggleEditing(false);
           }}
         />
       }
-      styles={{
-        content: {
-          padding: 4,
-          width: 320,
-        },
-      }}
-      onOpenChange={(open) => {
-        if (!open) handleUpdate();
-        toggleEditing(open);
-      }}
     >
       <div />
     </Popover>
