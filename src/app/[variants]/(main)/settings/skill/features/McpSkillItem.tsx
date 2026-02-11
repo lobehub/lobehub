@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Modal, Block } from '@lobehub/ui';
+import { Flexbox, Modal } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { Suspense, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,8 +27,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 40px;
-    height: 40px;
+    width: 48px;
+    height: 48px;
     border-radius: 12px;
 
     background: ${cssVar.colorFillTertiary};
@@ -74,9 +74,9 @@ const McpSkillItem = memo<McpSkillItemProps>(
           justify="space-between"
         >
           <Flexbox align="center" gap={12} horizontal style={{ flex: 1, overflow: 'hidden' }}>
-            <Block className={styles.icon} variant={'outlined'}>
+            <div className={styles.icon}>
               <PluginAvatar avatar={avatar} size={32} />
-            </Block>
+            </div>
             <Flexbox align="center" gap={8} horizontal style={{ overflow: 'hidden' }}>
               <span className={styles.title} onClick={() => setDetailOpen(true)}>
                 {title}

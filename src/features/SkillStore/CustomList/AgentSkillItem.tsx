@@ -1,7 +1,7 @@
 'use client';
 
 import { type SkillListItem } from '@lobechat/types';
-import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Modal, Tag } from '@lobehub/ui';
+import { ActionIcon, Avatar, Block, DropdownMenu, Flexbox, Icon, Modal, Tag } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { DownloadIcon, MoreVerticalIcon, PackageSearch, PuzzleIcon, Trash2 } from 'lucide-react';
@@ -18,18 +18,6 @@ const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
 const AgentSkillEdit = lazy(() => import('@/features/AgentSkillEdit'));
 
 const styles = createStaticStyles(({ css }) => ({
-  icon: css`
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    justify-content: center;
-
-    width: 40px;
-    height: 40px;
-    border-radius: 8px;
-
-    font-size: 20px;
-  `,
   title: css`
     cursor: pointer;
 
@@ -97,9 +85,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
           paddingInline={12}
           variant={'outlined'}
         >
-          <div className={styles.icon}>
-            <PuzzleIcon size={20} />
-          </div>
+          <Avatar avatar={'🧩'} shape={'square'} size={40} />
           <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
             <Flexbox align="center" gap={8} horizontal>
               <span className={styles.title} onClick={() => setDetailOpen(true)}>
