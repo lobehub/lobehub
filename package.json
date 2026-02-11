@@ -131,18 +131,18 @@
       "prettier --write --no-error-on-unmatched-pattern"
     ],
     "*.{mjs,cjs}": [
-      "prettier --write",
-      "eslint --fix"
+      "eslint --fix",
+      "prettier --write"
     ],
     "*.{js,jsx}": [
-      "prettier --write",
+      "eslint --fix",
       "stylelint --fix",
-      "eslint --fix"
+      "prettier --write"
     ],
     "*.{ts,tsx}": [
-      "prettier --parser=typescript --write",
       "stylelint --fix",
-      "eslint --fix"
+      "eslint --fix",
+      "prettier --parser=typescript --write"
     ]
   },
   "overrides": {
