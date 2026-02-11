@@ -340,21 +340,23 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 在 PR 上添加评论，包含构建信息和下载链接
+      # Post comment on PR with build info, release download link, and Actions artifacts link
       - name: Comment on PR
         uses: actions/github-script@v8
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const releaseUrl = "${{ steps.create_release.outputs.url }}";
+            const artifactsUrl = "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}";
             const prCommentGenerator = require('${{ github.workspace }}/.github/scripts/pr-comment.js');
 
             const result = await prCommentGenerator({
               github,
               context,
               releaseUrl,
+              artifactsUrl,
               version: "${{ needs.version.outputs.version }}",
               tag: "v${{ needs.version.outputs.version }}"
             });
 
-            console.log(`评论状态: ${result.updated ? '已更新' : '已创建'}, ID: ${result.id}`);
+            console.log(`Comment ${result.updated ? 'updated' : 'created'}, ID: ${result.id}`);
