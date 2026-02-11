@@ -1,7 +1,7 @@
 'use client';
 
 import { type SkillListItem } from '@lobechat/types';
-import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Modal } from '@lobehub/ui';
+import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Modal, Tag } from '@lobehub/ui';
 import { App } from 'antd';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { DownloadIcon, MoreVerticalIcon, PackageSearch, PuzzleIcon, Trash2 } from 'lucide-react';
@@ -101,9 +101,12 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
             <PuzzleIcon size={20} />
           </div>
           <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
-            <span className={styles.title} onClick={() => setDetailOpen(true)}>
-              {skill.name}
-            </span>
+            <Flexbox align="center" gap={8} horizontal>
+              <span className={styles.title} onClick={() => setDetailOpen(true)}>
+                {skill.name}
+              </span>
+              <Tag icon={<Icon icon={PuzzleIcon} />} size={'small'} />
+            </Flexbox>
             {skill.description && (
               <span className={itemStyles.description}>{skill.description}</span>
             )}

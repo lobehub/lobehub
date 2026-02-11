@@ -13,7 +13,7 @@ import Item from './Item';
 
 export const CustomList = memo(() => {
   const customPlugins = useToolStore(pluginSelectors.installedCustomPluginMetaList, isEqual);
-  const agentSkills = useToolStore(agentSkillsSelectors.getAgentSkills, isEqual);
+  const agentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
   const searchKeywords = useToolStore((s) => s.customPluginSearchKeywords || '');
   const useFetchAgentSkills = useToolStore((s) => s.useFetchAgentSkills);
   useFetchAgentSkills(true);
