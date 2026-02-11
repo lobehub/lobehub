@@ -1,12 +1,13 @@
 'use client';
 
 import type { SkillItem } from '@lobechat/types';
-import { Highlighter, Markdown } from '@lobehub/ui';
+import { CopyButton, Highlighter, Markdown } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   codeWrapper: css`
+    position: relative;
     margin-block-start: 16px;
     padding-block-end: calc(100cqb - 1lh);
 
@@ -195,8 +196,9 @@ const ContentViewer = memo<ContentViewerProps>(({ skillDetail, selectedFile, con
 
   return (
     <div className={styles.codeWrapper}>
+      <CopyButton content={content} style={{ position: 'absolute', right: 8, top: 0, zIndex: 1 }} />
       <Highlighter
-        copyable
+        copyable={false}
         language={getLanguage(selectedFile)}
         showLanguage={false}
         variant={'borderless'}
