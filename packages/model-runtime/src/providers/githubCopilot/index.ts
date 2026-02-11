@@ -237,8 +237,8 @@ export class LobeGithubCopilotAI implements LobeRuntimeAI {
       } catch (error: any) {
         const status = error?.status ?? error?.error?.status ?? error?.response?.status;
 
-        // 401: Refresh token once
-        if (status === 401 && !hasRefreshedAuth) {
+        // 401: Refresh token once (only if we have an exchange credential to fall back to)
+        if (status === 401 && !hasRefreshedAuth && this.githubToken) {
           hasRefreshedAuth = true;
           this.cachedBearerToken = undefined;
           tokenManager.invalidate(this.githubToken);
