@@ -131,6 +131,8 @@
   "agentInfoDescription.value.untitled": "未命名助理",
   "agentSkillDetail.addedAt": "添加于",
   "agentSkillDetail.publishedAt": "发布于",
+  "agentSkillDetail.repository": "GitHub 仓库地址",
+  "agentSkillDetail.sourceUrl": "Skill 导入路径",
   "agentSkillDetail.updatedAt": "更新于",
   "agentSkillEdit.descriptionDesc": "简要说明该技能的功能，帮助智能体判断何时使用该技能",
   "agentSkillEdit.fileReadonly": "此文件仅供查看，只有技能描述和指令可以编辑。",
