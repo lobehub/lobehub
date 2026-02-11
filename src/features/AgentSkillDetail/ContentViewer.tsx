@@ -7,6 +7,7 @@ import { memo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   codeWrapper: css`
+    margin-block-start: 16px;
     padding-block-end: calc(100cqb - 1lh);
 
     div,
@@ -189,7 +190,7 @@ const ContentViewer = memo<ContentViewerProps>(({ skillDetail, selectedFile, con
   return (
     <div className={styles.codeWrapper}>
       <Highlighter
-        copyable={false}
+        copyable
         language={getLanguage(selectedFile)}
         showLanguage={false}
         variant={'borderless'}

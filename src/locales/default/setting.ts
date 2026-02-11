@@ -134,6 +134,8 @@ export default {
   'agentInfoDescription.value.unset': 'Not Set',
 
   'agentInfoDescription.value.untitled': 'Untitled Agent',
+  'agentSkillDetail.addedAt': 'Added',
+  'agentSkillDetail.publishedAt': 'Published',
   'agentSkillItem.deleteConfirm.desc':
     'Are you sure you want to delete the agent skill "{{name}}"? This action cannot be undone.',
   'agentSkillItem.deleteConfirm.title': 'Delete Agent Skill',

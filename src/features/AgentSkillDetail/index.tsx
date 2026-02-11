@@ -1,11 +1,14 @@
 'use client';
 
 import type { SkillResourceTreeNode } from '@lobechat/types';
-import { Avatar, Flexbox, Tag } from '@lobehub/ui';
+import { Avatar, Flexbox, Icon } from '@lobehub/ui';
 import { Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
+import { DotIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
+import PublishedTime from '@/components/PublishedTime';
 import { useToolStore } from '@/store/tool';
 
 import ContentViewer from './ContentViewer';
@@ -72,6 +75,7 @@ const buildContentMap = (nodes: SkillResourceTreeNode[]): Record<string, string>
 };
 
 const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
+  const { t } = useTranslation('setting');
   const [selectedFile, setSelectedFile] = useState('SKILL.md');
   const { data, isLoading } = useToolStore((s) => s.useFetchAgentSkillDetail)(skillId);
 
@@ -90,10 +94,26 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
         <div className={styles.meta}>
           <Flexbox align={'center'} gap={12} horizontal>
             <Avatar avatar={'🧩'} shape={'square'} size={40} />
-            <Flexbox gap={4} style={{ overflow: 'hidden' }}>
-              <Flexbox align={'center'} gap={8} horizontal>
+            <Flexbox gap={4} style={{ flex: 1, overflow: 'hidden' }}>
+              <Flexbox align={'center'} className={styles.description} gap={4} horizontal>
                 <span className={styles.name}>{skillDetail.name}</span>
-                {version && <Tag size={'small'}>v{version}</Tag>}
+                {version && (
+                  <>
+                    <Icon icon={DotIcon} />
+                    <span>v{version}</span>
+                  </>
+                )}
+                <Icon icon={DotIcon} />
+                {t(
+                  skillDetail.source === 'user'
+                    ? 'agentSkillDetail.addedAt'
+                    : 'agentSkillDetail.publishedAt',
+                )}{' '}
+                <PublishedTime
+                  date={new Date(skillDetail.createdAt).toISOString()}
+                  showPrefix={false}
+                  template={'MMM DD, YYYY'}
+                />
               </Flexbox>
               {description && <p className={styles.description}>{description}</p>}
             </Flexbox>

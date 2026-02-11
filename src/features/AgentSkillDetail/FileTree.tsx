@@ -3,7 +3,7 @@
 import type { SkillResourceTreeNode } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
-import { ChevronDown, ChevronRight, FileTextIcon, FolderIcon, FolderOpenIcon } from 'lucide-react';
+import { ChevronDown, ChevronRight, File, FolderIcon, FolderOpenIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -72,7 +72,7 @@ const TreeNode = memo<{
       >
         {isDir && <Icon icon={isExpanded ? ChevronDown : ChevronRight} size={14} />}
         {!isDir && <span style={{ flexShrink: 0, width: 14 }} />}
-        <Icon icon={isDir ? (isExpanded ? FolderOpenIcon : FolderIcon) : FileTextIcon} size={16} />
+        <Icon icon={isDir ? (isExpanded ? FolderOpenIcon : FolderIcon) : File} size={16} />
         <span className={styles.label}>{node.name}</span>
       </div>
       {isDir &&
@@ -136,7 +136,7 @@ const FileTree = memo<FileTreeProps>(({ resourceTree, selectedFile, onSelectFile
         style={{ paddingInlineStart: 8 }}
       >
         <span style={{ flexShrink: 0, width: 14 }} />
-        <Icon icon={FileTextIcon} size={16} />
+        <Icon icon={File} size={16} />
         <span className={styles.label}>SKILL.md</span>
       </div>
       {hasResources &&

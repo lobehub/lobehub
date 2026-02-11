@@ -117,7 +117,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
         open={detailOpen}
         styles={{ body: { height: 'calc(100dvh - 200px)', overflow: 'hidden', padding: 0 } }}
         title={tp('dev.title.skillDetails')}
-        width={1024}
+        width={960}
       >
         <Suspense fallback={<div style={{ height: '100%' }} />}>
           <AgentSkillDetail skillId={skill.id} />

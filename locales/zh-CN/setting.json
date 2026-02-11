@@ -129,6 +129,8 @@
   "agentInfoDescription.role.title": "助理档案",
   "agentInfoDescription.value.unset": "未设置",
   "agentInfoDescription.value.untitled": "未命名助理",
+  "agentSkillDetail.addedAt": "添加于",
+  "agentSkillDetail.publishedAt": "发布于",
   "agentSkillItem.deleteConfirm.desc": "确定要删除 Agent 技能「{{name}}」吗？此操作无法撤销。",
   "agentSkillItem.deleteConfirm.title": "删除 Agent 技能",
   "agentSkillModal.content": "技能内容",
