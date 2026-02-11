@@ -562,6 +562,48 @@ describe('convertOpenAIResponseInputs', () => {
     ]);
   });
 
+  it('should preserve input order when earlier messages include async image conversion', async () => {
+    const previousUseBase64 = process.env.LLM_VISION_IMAGE_USE_BASE64;
+
+    try {
+      process.env.LLM_VISION_IMAGE_USE_BASE64 = '1';
+      vi.mocked(parseDataUri).mockReturnValue({ type: 'url', base64: null, mimeType: null });
+      vi.mocked(imageUrlToBase64).mockImplementation(async (url: string) => {
+        if (url.includes('slow')) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+
+        return { base64: 'base64String', mimeType: 'image/jpeg' };
+      });
+
+      const messages: OpenAIChatMessage[] = [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'First message' },
+            { type: 'image_url', image_url: { url: 'https://example.com/slow-image.jpg' } },
+          ],
+        },
+        { role: 'assistant', content: 'Second message' },
+      ];
+
+      const result = await convertOpenAIResponseInputs(messages);
+
+      expect(result).toEqual([
+        {
+          content: [
+            { text: 'First message', type: 'input_text' },
+            { image_url: 'data:image/jpeg;base64,base64String', type: 'input_image' },
+          ],
+          role: 'user',
+        },
+        { content: 'Second message', role: 'assistant' },
+      ]);
+    } finally {
+      process.env.LLM_VISION_IMAGE_USE_BASE64 = previousUseBase64;
+    }
+  });
+
   it('should extract reasoning.content into a separate reasoning item', async () => {
     const messages: OpenAIChatMessage[] = [
       { content: 'system prompts', role: 'system' },
