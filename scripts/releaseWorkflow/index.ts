@@ -1,6 +1,6 @@
 import { execSync } from 'node:child_process';
 import * as fs from 'node:fs';
-import * as path from 'node:path';
+import path from 'node:path';
 
 import { confirm, select } from '@inquirer/prompts';
 import { consola } from 'consola';
@@ -110,7 +110,7 @@ Target:     main
 function checkoutAndPullDev(): void {
   try {
     // Check for dev branch
-    const branches = execSync('git branch -a', { encoding: 'utf-8' });
+    const branches = execSync('git branch -a', { encoding: 'utf8' });
     const hasLocalDev = branches.includes(' dev\n') || branches.startsWith('* dev\n');
     const hasRemoteDev = branches.includes('remotes/origin/dev');
 
@@ -144,38 +144,19 @@ function checkoutAndPullDev(): void {
   }
 }
 
-// Create release branch with version marker commit
-function createReleaseBranch(version: string, versionType: VersionType): void {
+// Create release branch
+function createReleaseBranch(version: string): void {
   const branchName = `release/v${version}`;
 
   try {
     consola.info(`🌿 Creating branch: ${branchName}...`);
     execSync(`git checkout -b ${branchName}`, { stdio: 'inherit' });
     consola.success(`✅ Created and switched to branch: ${branchName}`);
-
-    // Create empty commit to mark the release
-    const markerMessage = getReleaseMarkerMessage(versionType, version);
-    consola.info(`📝 Creating version marker commit...`);
-    execSync(`git commit --allow-empty -m "${markerMessage}"`, { stdio: 'inherit' });
-    consola.success(`✅ Created version marker commit: ${markerMessage}`);
   } catch (error) {
     consola.error(`❌ Failed to create branch or commit: ${branchName}`);
     consola.error(error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
-}
-
-// Get release marker commit message
-function getReleaseMarkerMessage(versionType: VersionType, version: string): string {
-  // Use gitmoji format for commit message
-  const gitmojiMap = {
-    major: '🚀',
-    minor: '✨',
-    patch: '🔧',
-  };
-
-  const emoji = gitmojiMap[versionType];
-  return `${emoji} chore(release): prepare release v${version}`;
 }
 
 // Push branch to remote
@@ -289,8 +270,8 @@ async function main(): Promise<void> {
     process.exit(0);
   }
 
-  // 6. Create release branch (with version marker commit)
-  createReleaseBranch(newVersion, versionType);
+  // 6. Create release branch
+  createReleaseBranch(newVersion);
 
   // 7. Push to remote
   pushBranch(newVersion);

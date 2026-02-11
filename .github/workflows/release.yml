@@ -73,27 +73,21 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📦 Release version: v$VERSION"
 
-      - name: Update package.json version
+      - name: Verify package.json version matches tag
         run: |
           VERSION="${{ steps.get-version.outputs.version }}"
-          echo "📝 Updating package.json version to: $VERSION"
-          # Update package.json using Node.js
+          echo "🔎 Checking package.json version equals tag: $VERSION"
           node -e "
             const fs = require('fs');
             const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
-            pkg.version = '$VERSION';
-            fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\\n');
-            console.log('✅ package.json updated');
+            const expected = '$VERSION';
+            const actual = pkg.version;
+            if (actual !== expected) {
+              console.error('❌ Version mismatch: package.json=' + actual + ' tag=' + expected);
+              process.exit(1);
+            }
+            console.log('✅ Version OK:', actual);
           "
-
-          # Commit changes
-          git config --global user.name "lobehubbot"
-          git config --global user.email "i@lobehub.com"
-          git add package.json
-          git commit -m "🔧 chore(release): bump version to v$VERSION [skip ci]" || echo "Nothing to commit"
-          git push origin HEAD:main
-        env:
-          GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
       - name: Release
         run: bun run release

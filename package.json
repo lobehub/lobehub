@@ -70,6 +70,7 @@
     "e2e": "cd e2e && npm run test",
     "e2e:install": "playwright install",
     "e2e:ui": "playwright test --ui",
+    "hotfix:branch": "tsx ./scripts/hotfixWorkflow/index.ts",
     "i18n": "npm run workflow:i18n && lobe-i18n && prettier -c --write \"locales/**\"",
     "i18n:unused": "tsx ./scripts/i18nWorkflow/analyzeUnusedKeys.ts",
     "i18n:unused-clean": "tsx ./scripts/i18nWorkflow/cleanUnusedKeys.ts",
