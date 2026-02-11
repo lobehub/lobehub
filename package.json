@@ -404,7 +404,7 @@
     "@types/oidc-provider": "^9.5.0",
     "@types/pdfkit": "^0.17.4",
     "@types/pg": "^8.16.0",
-    "@types/react": "^19.2.9",
+    "@types/react": "19.2.13",
     "@types/react-dom": "^19.2.3",
     "@types/rtl-detect": "^1.0.3",
     "@types/semver": "^7.7.1",
@@ -470,6 +470,7 @@
   },
   "pnpm": {
     "overrides": {
+      "@types/react": "19.2.13",
       "better-auth": "1.4.6",
       "better-call": "1.1.8",
       "drizzle-orm": "0.44.7"
