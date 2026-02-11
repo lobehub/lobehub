@@ -1,7 +1,7 @@
 'use client';
 
 import type { SkillItem } from '@lobechat/types';
-import { Highlighter, Markdown } from '@lobehub/ui';
+import { Flexbox, Highlighter, Markdown } from '@lobehub/ui';
 import { memo } from 'react';
 
 const getLanguage = (fileName: string): string => {
@@ -122,16 +122,13 @@ interface ContentViewerProps {
 const ContentViewer = memo<ContentViewerProps>(({ skillDetail, selectedFile, contentMap }) => {
   if (selectedFile === 'SKILL.md') {
     return (
-      <div style={{ padding: '0 16px' }}>
-        {skillDetail?.description && (
-          <p style={{ marginBottom: 16, opacity: 0.65 }}>{skillDetail.description}</p>
-        )}
+      <Flexbox style={{ padding: '0 8px' }}>
         {skillDetail?.content ? (
           <Markdown variant={'chat'}>{skillDetail.content}</Markdown>
         ) : (
           <p style={{ opacity: 0.45 }}>No content</p>
         )}
-      </div>
+      </Flexbox>
     );
   }
 
@@ -143,7 +140,7 @@ const ContentViewer = memo<ContentViewerProps>(({ skillDetail, selectedFile, con
 
   if (isMarkdownFile(selectedFile)) {
     return (
-      <div style={{ padding: '0 16px' }}>
+      <div style={{ padding: '0 8px' }}>
         <Markdown variant={'chat'}>{content}</Markdown>
       </div>
     );

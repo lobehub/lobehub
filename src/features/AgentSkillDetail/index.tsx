@@ -1,10 +1,9 @@
 'use client';
 
 import type { SkillResourceTreeNode } from '@lobechat/types';
-import { Flexbox, Tag } from '@lobehub/ui';
+import { Avatar, Flexbox, Tag } from '@lobehub/ui';
 import { Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
-import dayjs from 'dayjs';
 import { memo, useMemo, useState } from 'react';
 
 import { useToolStore } from '@/store/tool';
@@ -13,6 +12,17 @@ import ContentViewer from './ContentViewer';
 import FileTree from './FileTree';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  description: css`
+    overflow: hidden;
+
+    margin: 0;
+
+    font-size: 13px;
+    line-height: 1.5;
+    color: ${cssVar.colorTextSecondary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
   divider: css`
     flex-shrink: 0;
     width: 1px;
@@ -29,20 +39,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding: 16px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
   `,
-  metaLabel: css`
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
-  `,
   name: css`
-    font-size: 18px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 500;
     line-height: 1.4;
     color: ${cssVar.colorText};
   `,
   right: css`
     overflow-y: auto;
     flex: 1;
-    padding-block: 16px;
+  `,
+  rightInner: css`
+    max-width: 720px;
+    margin-inline: auto;
+    padding-block: 8px;
     padding-inline: 8px;
   `,
 }));
@@ -76,32 +86,22 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
 
   if (isLoading) return <Skeleton active paragraph={{ rows: 8 }} style={{ padding: 16 }} />;
 
-  const author = skillDetail?.manifest?.author;
   const version = skillDetail?.manifest?.version;
+  const description = skillDetail?.description || skillDetail?.manifest?.description;
 
   return (
-    <Flexbox style={{ height: 600, overflow: 'hidden' }}>
+    <Flexbox style={{ height: '100%', overflow: 'hidden' }}>
       {skillDetail && (
         <div className={styles.meta}>
-          <Flexbox align={'center'} gap={8} horizontal>
-            <span className={styles.name}>{skillDetail.name}</span>
-            {version && <Tag size={'small'}>v{version}</Tag>}
-          </Flexbox>
-          <Flexbox gap={12} horizontal style={{ marginTop: 8 }}>
-            {author && (
-              <span className={styles.metaLabel}>
-                {author.url ? (
-                  <a href={author.url} rel="noopener noreferrer" target="_blank">
-                    {author.name}
-                  </a>
-                ) : (
-                  author.name
-                )}
-              </span>
-            )}
-            <span className={styles.metaLabel}>
-              {dayjs(skillDetail.createdAt).format('YYYY-MM-DD')}
-            </span>
+          <Flexbox align={'center'} gap={12} horizontal>
+            <Avatar avatar={'🧩'} shape={'square'} size={40} />
+            <Flexbox gap={4} style={{ overflow: 'hidden' }}>
+              <Flexbox align={'center'} gap={8} horizontal>
+                <span className={styles.name}>{skillDetail.name}</span>
+                {version && <Tag size={'small'}>v{version}</Tag>}
+              </Flexbox>
+              {description && <p className={styles.description}>{description}</p>}
+            </Flexbox>
           </Flexbox>
         </div>
       )}
@@ -115,11 +115,13 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
         </div>
         <div className={styles.divider} />
         <div className={styles.right}>
-          <ContentViewer
-            contentMap={contentMap}
-            selectedFile={selectedFile}
-            skillDetail={skillDetail}
-          />
+          <div className={styles.rightInner}>
+            <ContentViewer
+              contentMap={contentMap}
+              selectedFile={selectedFile}
+              skillDetail={skillDetail}
+            />
+          </div>
         </div>
       </Flexbox>
     </Flexbox>
