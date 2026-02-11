@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process';
+import { execFileSync, execSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -157,13 +157,11 @@ Created by hotfix script`;
 
   try {
     consola.info('🔀 Creating Pull Request...');
-    const cmd = `gh pr create \
-      --title "${title}" \
-      --body "${body}" \
-      --base main \
-      --head ${branchName}`;
-
-    execSync(cmd, { stdio: 'inherit' });
+    execFileSync(
+      'gh',
+      ['pr', 'create', '--title', title, '--body', body, '--base', 'main', '--head', branchName],
+      { stdio: 'inherit' },
+    );
     consola.success('✅ PR created successfully!');
   } catch (error) {
     consola.error('❌ Failed to create PR');
