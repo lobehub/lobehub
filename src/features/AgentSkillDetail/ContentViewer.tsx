@@ -23,6 +23,12 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       counter-reset: line;
     }
 
+    .line {
+      width: 100% !important;
+      margin-inline: 0 !important;
+      padding-inline: 0 !important;
+    }
+
     .line::before {
       content: counter(line);
       counter-increment: line;
