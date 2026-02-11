@@ -1,9 +1,16 @@
 'use client';
 
 import { type SkillListItem } from '@lobechat/types';
-import { ActionIcon, Block, DropdownMenu, Flexbox, Icon, Modal } from '@lobehub/ui';
-import { App } from 'antd';
-import { cssVar , createStaticStyles } from 'antd-style';
+import {
+  Block,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Button as LobeButton,
+  Modal,
+} from '@lobehub/ui';
+import { App, Space } from 'antd';
+import { createStaticStyles, cssVar } from 'antd-style';
 import { DownloadIcon, MoreVerticalIcon, PuzzleIcon, Trash2 } from 'lucide-react';
 import { Suspense, lazy, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +22,7 @@ import { downloadFile } from '@/utils/client/downloadFile';
 import { itemStyles } from '../style';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
+const AgentSkillEdit = lazy(() => import('@/features/AgentSkillEdit'));
 
 const styles = createStaticStyles(({ css }) => ({
   icon: css`
@@ -55,6 +63,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
   const { t: tc } = useTranslation('common');
   const { modal } = App.useApp();
   const [detailOpen, setDetailOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
 
@@ -106,7 +115,10 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
               <span className={itemStyles.description}>{skill.description}</span>
             )}
           </Flexbox>
-          <Flexbox horizontal>
+          <Space.Compact>
+            <LobeButton onClick={() => setEditOpen(true)}>
+              {t('store.actions.configure')}
+            </LobeButton>
             <DropdownMenu
               items={[
                 ...(skill.zipFileHash
@@ -131,9 +143,9 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
               nativeButton={false}
               placement="bottomRight"
             >
-              <ActionIcon icon={MoreVerticalIcon} loading={loading} />
+              <LobeButton icon={MoreVerticalIcon} loading={loading} />
             </DropdownMenu>
-          </Flexbox>
+          </Space.Compact>
         </Block>
       </Flexbox>
       <Modal
@@ -149,6 +161,9 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
           <AgentSkillDetail skillId={skill.id} />
         </Suspense>
       </Modal>
+      <Suspense>
+        <AgentSkillEdit onClose={() => setEditOpen(false)} open={editOpen} skillId={skill.id} />
+      </Suspense>
     </>
   );
 });

@@ -136,6 +136,10 @@ export default {
   'agentInfoDescription.value.untitled': 'Untitled Agent',
   'agentSkillDetail.addedAt': 'Added',
   'agentSkillDetail.publishedAt': 'Published',
+  'agentSkillEdit.instructions': 'Instructions',
+  'agentSkillEdit.instructionsPlaceholder': 'Enter the skill instructions in Markdown format...',
+  'agentSkillEdit.saveSuccess': 'Skill updated successfully',
+  'agentSkillEdit.title': 'Skill Settings',
   'agentSkillItem.deleteConfirm.desc':
     'Are you sure you want to delete the agent skill "{{name}}"? This action cannot be undone.',
   'agentSkillItem.deleteConfirm.title': 'Delete Agent Skill',

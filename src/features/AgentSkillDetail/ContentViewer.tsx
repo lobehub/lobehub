@@ -37,8 +37,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
       display: inline-block;
 
-      width: 5ch;
-      margin-inline-end: 2.5ch;
+      width: 4ch;
+      margin-inline-end: 2ch;
 
       color: ${cssVar.colorTextQuaternary};
       text-align: end;

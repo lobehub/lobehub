@@ -2,7 +2,7 @@
 
 import { type SkillListItem } from '@lobechat/types';
 import { Block, DropdownMenu, Flexbox, Icon, Button as LobeButton, Modal, Tag } from '@lobehub/ui';
-import { App } from 'antd';
+import { App, Space } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { DownloadIcon, MoreHorizontalIcon, Package, PuzzleIcon, Trash2 } from 'lucide-react';
 import { Suspense, lazy, memo, useState } from 'react';
@@ -13,6 +13,7 @@ import { useToolStore } from '@/store/tool';
 import { downloadFile } from '@/utils/client/downloadFile';
 
 const AgentSkillDetail = lazy(() => import('@/features/AgentSkillDetail'));
+const AgentSkillEdit = lazy(() => import('@/features/AgentSkillEdit'));
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -56,6 +57,7 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
   const { modal } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const deleteAgentSkill = useToolStore((s) => s.deleteAgentSkill);
 
   const handleDownload = async () => {
@@ -112,31 +114,34 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
             </Tag>
           </Flexbox>
         </Flexbox>
-        <DropdownMenu
-          items={[
-            ...(skill.zipFileHash
-              ? [
-                  {
-                    icon: <DownloadIcon size={16} />,
-                    key: 'download',
-                    label: tc('download'),
-                    onClick: handleDownload,
-                  },
-                  { type: 'divider' as const },
-                ]
-              : []),
-            {
-              danger: true,
-              icon: <Trash2 size={16} />,
-              key: 'uninstall',
-              label: t('store.actions.uninstall', { ns: 'plugin' }),
-              onClick: handleUninstall,
-            },
-          ]}
-          placement="bottomRight"
-        >
-          <LobeButton icon={MoreHorizontalIcon} loading={loading} />
-        </DropdownMenu>
+        <Space.Compact>
+          <LobeButton onClick={() => setEditOpen(true)}>{tp('store.actions.configure')}</LobeButton>
+          <DropdownMenu
+            items={[
+              ...(skill.zipFileHash
+                ? [
+                    {
+                      icon: <DownloadIcon size={16} />,
+                      key: 'download',
+                      label: tc('download'),
+                      onClick: handleDownload,
+                    },
+                    { type: 'divider' as const },
+                  ]
+                : []),
+              {
+                danger: true,
+                icon: <Trash2 size={16} />,
+                key: 'uninstall',
+                label: t('store.actions.uninstall', { ns: 'plugin' }),
+                onClick: handleUninstall,
+              },
+            ]}
+            placement="bottomRight"
+          >
+            <LobeButton icon={MoreHorizontalIcon} loading={loading} />
+          </DropdownMenu>
+        </Space.Compact>
       </Flexbox>
       <Modal
         destroyOnHidden
@@ -151,6 +156,9 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill }) => {
           <AgentSkillDetail skillId={skill.id} />
         </Suspense>
       </Modal>
+      <Suspense>
+        <AgentSkillEdit onClose={() => setEditOpen(false)} open={editOpen} skillId={skill.id} />
+      </Suspense>
     </>
   );
 });
