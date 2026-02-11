@@ -766,11 +766,6 @@
       "count": 1
     }
   },
-  "src/styles/global.ts": {
-    "unicorn/no-anonymous-default-export": {
-      "count": 1
-    }
-  },
   "src/utils/server/parseModels.ts": {
     "prefer-const": {
       "count": 1
