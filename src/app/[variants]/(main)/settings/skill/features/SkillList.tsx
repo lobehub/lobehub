@@ -62,7 +62,8 @@ const SkillList = memo(() => {
   const allLobehubSkillServers = useToolStore(lobehubSkillStoreSelectors.getServers, isEqual);
   const allKlavisServers = useToolStore(klavisStoreSelectors.getServers, isEqual);
   const installedPluginList = useToolStore(pluginSelectors.installedPluginMetaList, isEqual);
-  const agentSkills = useToolStore(agentSkillsSelectors.getAgentSkills, isEqual);
+  const marketAgentSkills = useToolStore(agentSkillsSelectors.getMarketAgentSkills, isEqual);
+  const userAgentSkills = useToolStore(agentSkillsSelectors.getUserAgentSkills, isEqual);
 
   const [useFetchLobehubSkillConnections, useFetchUserKlavisServers, useFetchAgentSkills] =
     useToolStore((s) => [
@@ -208,7 +209,8 @@ const SkillList = memo(() => {
 
   const hasAnySkills =
     integrations.length > 0 ||
-    agentSkills.length > 0 ||
+    marketAgentSkills.length > 0 ||
+    userAgentSkills.length > 0 ||
     communityMCPs.length > 0 ||
     customMCPs.length > 0;
 
@@ -241,8 +243,11 @@ const SkillList = memo(() => {
       );
     });
 
-  const renderAgentSkills = () =>
-    agentSkills.map((skill) => <AgentSkillItem key={skill.id} skill={skill} />);
+  const renderMarketAgentSkills = () =>
+    marketAgentSkills.map((skill) => <AgentSkillItem key={skill.id} skill={skill} />);
+
+  const renderUserAgentSkills = () =>
+    userAgentSkills.map((skill) => <AgentSkillItem key={skill.id} skill={skill} />);
 
   const renderCommunityMCPs = () =>
     communityMCPs.map((plugin) => (
@@ -270,14 +275,19 @@ const SkillList = memo(() => {
       />
     ));
 
+  const hasCommunitySection = communityMCPs.length > 0 || marketAgentSkills.length > 0;
+  const hasCustomSection = userAgentSkills.length > 0 || customMCPs.length > 0;
+
   return (
     <div className={styles.container}>
       {integrations.length > 0 && renderIntegrations()}
-      {integrations.length > 0 && communityMCPs.length > 0 && <Divider style={{ margin: 0 }} />}
+      {integrations.length > 0 && hasCommunitySection && <Divider style={{ margin: 0 }} />}
+      {marketAgentSkills.length > 0 && renderMarketAgentSkills()}
       {communityMCPs.length > 0 && renderCommunityMCPs()}
-      {(integrations.length > 0 || communityMCPs.length > 0) &&
-        (agentSkills.length > 0 || customMCPs.length > 0) && <Divider style={{ margin: 0 }} />}
-      {agentSkills.length > 0 && renderAgentSkills()}
+      {(integrations.length > 0 || hasCommunitySection) && hasCustomSection && (
+        <Divider style={{ margin: 0 }} />
+      )}
+      {userAgentSkills.length > 0 && renderUserAgentSkills()}
       {customMCPs.length > 0 && renderCustomMCPs()}
       <div style={{ marginTop: 8 }}>
         <AddSkillButton />

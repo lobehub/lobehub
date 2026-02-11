@@ -104,13 +104,9 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
                   </>
                 )}
                 <Icon icon={DotIcon} />
-                {t(
-                  skillDetail.source === 'user'
-                    ? 'agentSkillDetail.addedAt'
-                    : 'agentSkillDetail.publishedAt',
-                )}{' '}
+                {t('agentSkillDetail.updatedAt')}{' '}
                 <PublishedTime
-                  date={new Date(skillDetail.createdAt).toISOString()}
+                  date={new Date(skillDetail.updatedAt).toISOString()}
                   showPrefix={false}
                   template={'MMM DD, YYYY'}
                 />

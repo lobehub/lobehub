@@ -7,6 +7,7 @@ import { MoreVerticalIcon, Plus, Trash2 } from 'lucide-react';
 import React, { Suspense, memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import MCPTag from '@/components/Plugins/MCPTag';
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import McpDetail from '@/features/MCP/MCPDetail';
 import McpDetailLoading from '@/features/MCP/MCPDetail/Loading';
@@ -130,7 +131,10 @@ const Item = memo<DiscoverMcpItem>(({ name, description, icon, identifier }) => 
         >
           <PluginAvatar avatar={icon} size={40} />
           <Flexbox flex={1} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>
-            <span className={styles.title}>{name}</span>
+            <Flexbox align="center" gap={8} horizontal>
+              <span className={styles.title}>{name}</span>
+              <MCPTag showText={false} />
+            </Flexbox>
             {description && <span className={styles.description}>{description}</span>}
           </Flexbox>
           <div onClick={(e) => e.stopPropagation()}>{renderAction()}</div>

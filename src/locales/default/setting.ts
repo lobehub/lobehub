@@ -136,6 +136,7 @@ export default {
   'agentInfoDescription.value.untitled': 'Untitled Agent',
   'agentSkillDetail.addedAt': 'Added',
   'agentSkillDetail.publishedAt': 'Published',
+  'agentSkillDetail.updatedAt': 'Updated',
   'agentSkillEdit.descriptionDesc':
     'A brief summary of what the skill does, helping the agent understand when to use it',
   'agentSkillEdit.fileReadonly':
