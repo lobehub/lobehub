@@ -5,9 +5,8 @@ import { Flexbox, Tag } from '@lobehub/ui';
 import { Skeleton } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 
-import { agentSkillService } from '@/services/skill';
 import { useToolStore } from '@/store/tool';
 
 import ContentViewer from './ContentViewer';
@@ -69,37 +68,13 @@ const buildContentMap = (nodes: SkillResourceTreeNode[]): Record<string, string>
 
 const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
   const [selectedFile, setSelectedFile] = useState('SKILL.md');
-  const fetchAgentSkillDetail = useToolStore((s) => s.fetchAgentSkillDetail);
-  const skillDetail = useToolStore((s) => s.agentSkillDetailMap[skillId]);
-  const [loading, setLoading] = useState(true);
-  const [resourceTree, setResourceTree] = useState<SkillResourceTreeNode[]>([]);
+  const { data, isLoading } = useToolStore((s) => s.useFetchAgentSkillDetail)(skillId);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-
-    Promise.all([
-      skillDetail ? Promise.resolve() : fetchAgentSkillDetail(skillId),
-      agentSkillService.listResources(skillId, true),
-    ])
-      .then(([, tree]) => {
-        if (!cancelled) {
-          setResourceTree(tree);
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [skillId]);
-
+  const skillDetail = data?.skillDetail;
+  const resourceTree = data?.resourceTree ?? [];
   const contentMap = useMemo(() => buildContentMap(resourceTree), [resourceTree]);
 
-  if (loading) return <Skeleton active paragraph={{ rows: 8 }} />;
+  if (isLoading) return <Skeleton active paragraph={{ rows: 8 }} style={{ padding: 16 }} />;
 
   const author = skillDetail?.manifest?.author;
   const version = skillDetail?.manifest?.version;

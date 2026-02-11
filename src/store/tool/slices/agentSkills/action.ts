@@ -6,12 +6,14 @@ import type {
   SkillImportResult,
   SkillItem,
   SkillListItem,
+  SkillResourceTreeNode,
   UpdateSkillInput,
 } from '@lobechat/types';
 import { produce } from 'immer';
 import useSWR, { type SWRResponse } from 'swr';
 import type { StateCreator } from 'zustand/vanilla';
 
+import { useClientDataSWR } from '@/libs/swr';
 import { agentSkillService } from '@/services/skill';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -19,6 +21,11 @@ import type { ToolStore } from '../../store';
 import type { AgentSkillsState } from './initialState';
 
 const n = setNamespace('agentSkills');
+
+export interface AgentSkillDetailData {
+  resourceTree: SkillResourceTreeNode[];
+  skillDetail?: SkillItem;
+}
 
 export interface AgentSkillsAction {
   createAgentSkill: (params: CreateSkillInput) => Promise<SkillItem | undefined>;
@@ -29,6 +36,7 @@ export interface AgentSkillsAction {
   importAgentSkillFromZip: (params: ImportZipInput) => Promise<SkillImportResult | undefined>;
   refreshAgentSkills: () => Promise<void>;
   updateAgentSkill: (params: UpdateSkillInput) => Promise<SkillItem | undefined>;
+  useFetchAgentSkillDetail: (skillId?: string) => SWRResponse<AgentSkillDetailData>;
   useFetchAgentSkills: (enabled: boolean) => SWRResponse<SkillListItem[]>;
 }
 
@@ -116,6 +124,30 @@ export const createAgentSkillsSlice: StateCreator<
     await get().refreshAgentSkills();
     return result;
   },
+
+  useFetchAgentSkillDetail: (skillId) =>
+    useClientDataSWR<AgentSkillDetailData>(
+      skillId ? ['fetchAgentSkillDetail', skillId].join('-') : null,
+      async () => {
+        const [detail, resourceTree] = await Promise.all([
+          agentSkillService.getById(skillId!),
+          agentSkillService.listResources(skillId!, true),
+        ]);
+
+        if (detail) {
+          set(
+            produce((draft: AgentSkillsState) => {
+              draft.agentSkillDetailMap[skillId!] = detail;
+            }),
+            false,
+            n('useFetchAgentSkillDetail'),
+          );
+        }
+
+        return { resourceTree, skillDetail: detail };
+      },
+      { revalidateOnFocus: false },
+    ),
 
   useFetchAgentSkills: (enabled) =>
     useSWR<SkillListItem[]>(
