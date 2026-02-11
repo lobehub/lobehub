@@ -182,10 +182,6 @@ const ContentViewer = memo<ContentViewerProps>(({ skillDetail, selectedFile, con
 
   const content = contentMap[selectedFile];
 
-  if (content === undefined) {
-    return <p style={{ opacity: 0.45, padding: 16 }}>Binary file not displayed</p>;
-  }
-
   if (isMarkdownFile(selectedFile)) {
     return (
       <div className={styles.docWrapper}>
