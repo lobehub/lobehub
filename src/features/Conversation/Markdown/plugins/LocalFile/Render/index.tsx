@@ -3,6 +3,7 @@ import React, { memo } from 'react';
 
 import { LocalFile } from '@/features/LocalFile';
 
+import { useConversationStore } from '../../../../store';
 import { type MarkdownElementProps } from '../../type';
 
 interface LocalFileProps {
@@ -14,6 +15,7 @@ interface LocalFileProps {
 const Render = memo<MarkdownElementProps<LocalFileProps>>(({ node }) => {
   // 从 node.properties 中提取属性
   const { name, path, isDirectory } = node?.properties || {};
+  const isSharePage = useConversationStore((s) => !!s.context.topicShareId);
 
   if (!name || !path) {
     // 如果缺少必要属性，可以选择渲染错误提示或 null
@@ -24,7 +26,7 @@ const Render = memo<MarkdownElementProps<LocalFileProps>>(({ node }) => {
   // isDirectory 属性可能为 true (来自插件) 或 undefined，我们需要确保它是 boolean
   const isDir = isDirectory === true;
 
-  return <LocalFile isDirectory={isDir} name={name} path={path} />;
+  return <LocalFile isDirectory={isDir} name={name} path={path} readonly={isSharePage} />;
 }, isEqual);
 
 export default Render;
