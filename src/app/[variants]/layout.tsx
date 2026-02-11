@@ -1,4 +1,4 @@
-import './initiallize';
+import './initialize';
 
 import { ENABLE_BUSINESS_FEATURES } from '@lobechat/business-const';
 import { SpeedInsights } from '@vercel/speed-insights/next';
