@@ -55,6 +55,7 @@ const styles = createStaticStyles(({ css }) => ({
 interface DesktopChatInputProps extends ActionToolbarProps {
   extentHeaderContent?: ReactNode;
   inputContainerProps?: ChatInputProps;
+  sendAreaPrefix?: ReactNode;
   showFootnote?: boolean;
 }
 
@@ -66,6 +67,7 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
     borderRadius,
     extraActionItems,
     dropdownPlacement,
+    sendAreaPrefix,
   }) => {
     const { t } = useTranslation('chat');
     const [chatInputHeight, updateSystemStatus] = useGlobalStore((s) => [
@@ -108,7 +110,6 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
           slashMenuRef={slashMenuRef}
           footer={
             <ChatInputActionBar
-              right={<SendArea />}
               style={{ paddingRight: 8 }}
               left={
                 <ActionBar
@@ -116,6 +117,16 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
                   dropdownPlacement={dropdownPlacement}
                   extraActionItems={extraActionItems}
                 />
+              }
+              right={
+                sendAreaPrefix ? (
+                  <Flexbox horizontal align={'center'} gap={6}>
+                    {sendAreaPrefix}
+                    <SendArea />
+                  </Flexbox>
+                ) : (
+                  <SendArea />
+                )
               }
             />
           }
