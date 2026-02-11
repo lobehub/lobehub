@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { DEFAULT_SECURITY_BLACKLIST } from '../../audit/defaultSecurityBlacklist';
 import { InterventionChecker } from '../InterventionChecker';
-import { DEFAULT_SECURITY_BLACKLIST } from '../defaultSecurityBlacklist';
 
 describe('DEFAULT_SECURITY_BLACKLIST', () => {
   describe('File System Dangers', () => {
