@@ -21,8 +21,8 @@ env:
 jobs:
   build:
     name: Build ${{ matrix.platform }} Docker Image
-    # 添加 PR label 触发条件,只有添加了 trigger:build-docker 标签的 PR 才会触发构建
-    if: contains(github.event.pull_request.labels.*.name, 'trigger:build-docker')
+    # 添加 PR label 或 release/* 分支触发：有 trigger:build-docker 标签或 PR 源分支为 release/* 时触发
+    if: contains(github.event.pull_request.labels.*.name, 'trigger:build-docker') || startsWith(github.event.pull_request.head.ref, 'release/')
     strategy:
       matrix:
         include:
