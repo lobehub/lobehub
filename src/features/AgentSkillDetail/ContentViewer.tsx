@@ -7,13 +7,14 @@ import { memo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   codeWrapper: css`
-    display: flex;
-    flex-direction: column;
-    min-height: 100%;
-    padding-block-end: 50vh;
+    padding-block-end: calc(100cqb - 1lh);
+
+    div,
+    pre {
+      overflow: visible !important;
+    }
 
     pre {
-      flex: 1;
       margin: 0;
     }
 
@@ -191,8 +192,6 @@ const ContentViewer = memo<ContentViewerProps>(({ skillDetail, selectedFile, con
         copyable={false}
         language={getLanguage(selectedFile)}
         showLanguage={false}
-        style={{ flex: 1 }}
-        styles={{ body: { flex: 1 } }}
         variant={'borderless'}
       >
         {content}

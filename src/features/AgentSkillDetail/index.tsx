@@ -46,7 +46,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     color: ${cssVar.colorText};
   `,
   right: css`
-    overflow-y: auto;
+    container-type: size;
+    overflow: auto;
     flex: 1;
   `,
 }));
