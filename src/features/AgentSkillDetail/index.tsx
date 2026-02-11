@@ -129,7 +129,7 @@ const AgentSkillDetail = memo<AgentSkillDetailProps>(({ skillId }) => {
           />
         </div>
         <div className={styles.divider} />
-        <div className={styles.right}>
+        <div className={styles.right} key={selectedFile}>
           <ContentViewer
             contentMap={contentMap}
             selectedFile={selectedFile}
