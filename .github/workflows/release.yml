@@ -7,9 +7,8 @@ permissions:
 
 on:
   push:
-    branches:
-      - main
-      - next
+    tags:
+      - 'v*.*.*'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -18,7 +17,6 @@ concurrency:
 jobs:
   release:
     name: Release
-    if: github.repository == 'lobehub/lobehub'
     runs-on: ubuntu-latest
 
     services:
@@ -28,6 +26,7 @@ jobs:
           POSTGRES_PASSWORD: postgres
         options: >-
           --health-cmd pg_isready --health-interval 10s --health-timeout 5s  --health-retries 5
+
 
         ports:
           - 5432:5432
@@ -66,11 +65,43 @@ jobs:
       - name: Test App
         run: bun run test-app
 
+      - name: Extract version from tag
+        id: get-version
+        run: |
+          # Extract version from github.ref (refs/tags/v1.0.0 -> 1.0.0)
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📦 Release version: v$VERSION"
+
+      - name: Update package.json version
+        run: |
+          VERSION="${{ steps.get-version.outputs.version }}"
+          echo "📝 Updating package.json version to: $VERSION"
+          # Update package.json using Node.js
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+            pkg.version = '$VERSION';
+            fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\\n');
+            console.log('✅ package.json updated');
+          "
+
+          # Commit changes
+          git config --global user.name "lobehubbot"
+          git config --global user.email "i@lobehub.com"
+          git add package.json
+          git commit -m "🔧 chore(release): bump version to v$VERSION [skip ci]" || echo "Nothing to commit"
+          git push origin HEAD:main
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
       - name: Release
         run: bun run release
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Pass version to semantic-release
+          SEMANTIC_RELEASE_VERSION: ${{ steps.get-version.outputs.version }}
 
       - name: Workflow
         run: bun run workflow:readme

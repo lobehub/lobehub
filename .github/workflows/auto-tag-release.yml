@@ -1,0 +1,108 @@
+name: Auto Tag Release
+
+permissions:
+  contents: write
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+jobs:
+  auto-tag:
+    name: Auto Tag Release
+    runs-on: ubuntu-latest
+    # Only trigger when PR is merged
+    if: github.event.pull_request.merged == true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+          # Fetch full history for proper tagging
+          fetch-depth: 0
+
+      - name: Check and extract version from PR title
+        id: extract-version
+        run: |
+          PR_TITLE="${{ github.event.pull_request.title }}"
+          echo "PR Title: $PR_TITLE"
+
+          # Match "🚀 release: v{x.x.x}" format
+          if [[ "$PR_TITLE" =~ ^🚀[[:space:]]+release:[[:space:]]*v([0-9]+\.[0-9]+\.[0-9]+.*)$ ]]; then
+            VERSION="${BASH_REMATCH[1]}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "should_tag=true" >> $GITHUB_OUTPUT
+            echo "✅ Detected release PR, version: v$VERSION"
+          else
+            echo "should_tag=false" >> $GITHUB_OUTPUT
+            echo "⏭️ Not a release PR, skipping tag creation"
+          fi
+
+      - name: Check if tag already exists
+        if: steps.extract-version.outputs.should_tag == 'true'
+        id: check-tag
+        run: |
+          VERSION="${{ steps.extract-version.outputs.version }}"
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "⚠️ Tag v$VERSION already exists"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "✅ Tag v$VERSION does not exist, can create"
+          fi
+
+      - name: Create Tag
+        if: steps.extract-version.outputs.should_tag == 'true' && steps.check-tag.outputs.exists == 'false'
+        run: |
+          VERSION="${{ steps.extract-version.outputs.version }}"
+          echo "🏷️ Creating tag: v$VERSION"
+
+          # Configure git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Get PR merge commit SHA
+          MERGE_SHA="${{ github.event.pull_request.merge_commit_sha }}"
+
+          # Create annotated tag with single line message
+          git tag -a "v$VERSION" "$MERGE_SHA" -m "🚀 release: v$VERSION | PR #${{ github.event.pull_request.number }} | Author: ${{ github.event.pull_request.user.login }}"
+
+          # Push tag
+          git push origin "v$VERSION"
+
+          echo "✅ Tag v$VERSION created successfully!"
+
+      - name: Create GitHub Release
+        if: steps.extract-version.outputs.should_tag == 'true' && steps.check-tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.extract-version.outputs.version }}
+          name: 🚀 Release v${{ steps.extract-version.outputs.version }}
+          body: |
+            ## 📦 Release v${{ steps.extract-version.outputs.version }}
+
+            This release was automatically published from PR #${{ github.event.pull_request.number }}.
+
+            ### Changes
+            See PR description: ${{ github.event.pull_request.html_url }}
+
+            ### Commit Message
+            ${{ github.event.pull_request.body }}
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+
+      - name: Output result
+        run: |
+          if [ "${{ steps.extract-version.outputs.should_tag }}" == "true" ]; then
+            if [ "${{ steps.check-tag.outputs.exists }}" == "true" ]; then
+              echo "⚠️ Result: Tag v${{ steps.extract-version.outputs.version }} already exists, skipping creation"
+            else
+              echo "✅ Result: Tag v${{ steps.extract-version.outputs.version }} created successfully!"
+            fi
+          else
+            echo "ℹ️ Result: Not a release PR, no tag created"
+          fi
