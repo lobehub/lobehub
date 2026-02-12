@@ -1,8 +1,9 @@
-import dotenv from 'dotenv';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import dotenv from 'dotenv';
 
 import {
   copyNativeModules,
@@ -196,6 +197,7 @@ const config = {
 
   dmg: {
     artifactName: '${productName}-${version}-${arch}.${ext}',
+    background: 'resources/dmg.png',
   },
 
   electronDownload: {
@@ -208,6 +210,7 @@ const config = {
     // Ensure Next export assets are packaged
     'dist/next/**/*',
     '!resources/locales',
+    '!resources/dmg.png',
     '!dist/next/docs',
     '!dist/next/packages',
     '!dist/next/.next/server/app/sitemap',
