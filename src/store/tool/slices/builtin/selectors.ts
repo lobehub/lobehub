@@ -89,7 +89,9 @@ const metaList = (s: ToolStoreState): LobeToolMeta[] => {
     })
     .map(toBuiltinMeta);
 
-  const skillMetas = (s.builtinSkills || []).map(toSkillMeta);
+  const skillMetas = (s.builtinSkills || [])
+    .filter((skill) => !uninstalledBuiltinTools.includes(skill.identifier))
+    .map(toSkillMeta);
   const agentSkillMetas = agentSkillsSelectors.agentSkillMetaList(s);
 
   return [...skillMetas, ...agentSkillMetas, ...builtinMetas, ...getKlavisMetas(s)];
@@ -146,6 +148,12 @@ const installedAllMetaList = (s: ToolStoreState): LobeToolMetaWithAvailability[]
 };
 
 /**
+ * Get installed builtin skills (excludes uninstalled ones)
+ */
+const installedBuiltinSkills = (s: ToolStoreState): BuiltinSkill[] =>
+  (s.builtinSkills || []).filter((skill) => !s.uninstalledBuiltinTools.includes(skill.identifier));
+
+/**
  * Get uninstalled builtin tool identifiers
  */
 const uninstalledBuiltinTools = (s: ToolStoreState): string[] => s.uninstalledBuiltinTools;
@@ -159,6 +167,7 @@ const isBuiltinToolInstalled = (identifier: string) => (s: ToolStoreState) =>
 export const builtinToolSelectors = {
   allMetaList,
   installedAllMetaList,
+  installedBuiltinSkills,
   isBuiltinToolInstalled,
   metaList,
   uninstalledBuiltinTools,
