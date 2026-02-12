@@ -48,6 +48,11 @@ export type DropdownPlacement = DropdownMenuPlacement;
 export interface ModelSwitchPanelProps {
   children?: ReactNode;
   /**
+   * Render function for extra controls in the model detail popup (e.g. ControlsForm).
+   * Receives the hovered model's ID and provider ID.
+   */
+  extraControls?: (modelId: string, providerId: string) => ReactNode;
+  /**
    * Current model ID. If not provided, uses currentAgentModel from store.
    */
   model?: string;

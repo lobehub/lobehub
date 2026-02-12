@@ -26,7 +26,7 @@ const getEnableHistoryCountById = (agentId: string) => (s: AgentStoreState) => {
   if (enableContextCaching && config?.model && isContextCachingModel(config.model)) return false;
 
   // 当开启搜索时，针对 claude 3.7 sonnet 模型不开启历史记录
-  const searchMode = chatConfig.searchMode || 'off';
+  const searchMode = chatConfig.searchMode || 'auto';
   const enableSearch = searchMode !== 'off';
 
   if (enableSearch && config?.model && isThinkingWithToolClaudeModel(config.model)) return false;
@@ -43,7 +43,7 @@ const getHistoryCountById =
   };
 
 const getSearchModeById = (agentId: string) => (s: AgentStoreState) =>
-  getChatConfigById(agentId)(s).searchMode || 'off';
+  getChatConfigById(agentId)(s).searchMode || 'auto';
 
 const isEnableSearchById = (agentId: string) => (s: AgentStoreState) =>
   getSearchModeById(agentId)(s) !== 'off';

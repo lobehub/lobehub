@@ -62,13 +62,22 @@ const createProviderModelCollector = (
   };
 };
 
-export const normalizeChatModel = (model: EnabledAiModel): ProviderModelListItem => ({
-  abilities: (model.abilities || {}) as ModelAbilities,
-  contextWindowTokens: model.contextWindowTokens,
-  displayName: model.displayName ?? '',
-  id: model.id,
-  releasedAt: model.releasedAt,
-});
+export const normalizeChatModel = async (model: EnabledAiModel): Promise<ProviderModelListItem> => {
+  const [description, pricing] = await Promise.all([
+    getModelPropertyWithFallback<string | undefined>(model.id, 'description', model.providerId),
+    getModelPropertyWithFallback<Pricing | undefined>(model.id, 'pricing', model.providerId),
+  ]);
+
+  return {
+    abilities: (model.abilities || {}) as ModelAbilities,
+    contextWindowTokens: model.contextWindowTokens,
+    displayName: model.displayName ?? '',
+    id: model.id,
+    releasedAt: model.releasedAt,
+    ...(description && { description }),
+    ...(pricing && { pricing }),
+  };
+};
 
 export const normalizeImageModel = async (
   model: EnabledAiModel,

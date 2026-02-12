@@ -14,6 +14,7 @@ import { type ModelSwitchPanelProps } from './types';
 const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
   ({
     children,
+    extraControls,
     model: modelProp,
     onModelChange,
     onOpenChange,
@@ -39,6 +40,7 @@ const ModelSwitchPanel = memo<ModelSwitchPanelProps>(
           <DropdownMenuPositioner hoverTrigger placement={placement}>
             <DropdownMenuPopup className={styles.container}>
               <PanelContent
+                extraControls={extraControls}
                 model={modelProp}
                 provider={providerProp}
                 onModelChange={onModelChange}
